@@ -1,3 +1,5 @@
 /.idea/
 
 /.env
+/janus-1.0.iml
+/data/

@@ -1,11 +1,45 @@
 services:
   janus-api:
     build: .
-    container_name: janus_api_sprint1
+    container_name: janus_api
     env_file:
       - .env
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/app/app  # Monta o código local para desenvolvimento com hot-reload
+      - ./app:/app/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - neo4j
+      - chroma
+    networks:
+      - janus-net
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: janus_neo4j
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - ./data/neo4j:/data
+    environment:
+      # Use "neo4j/password" para o primeiro login
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+    networks:
+      - janus-net
+
+  chroma:
+    image: chromadb/chroma
+    container_name: janus_chroma
+    ports:
+      # Mapeamos a porta interna 8000 do Chroma para 8001 para não conflitar com nossa API
+      - "8001:8000"
+    volumes:
+      - ./data/chroma:/chroma/.chroma/index
+    networks:
+      - janus-net
+
+networks:
+  janus-net:
+    driver: bridge

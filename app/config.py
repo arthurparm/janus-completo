@@ -1,14 +1,23 @@
+# app/config.py
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class AppSettings(BaseSettings):
-    """
-    Carrega e valida as configurações da aplicação a partir de variáveis de ambiente.
-    """
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    model_config = SettingsConfigDict(extra='ignore')
 
+    # App
     APP_NAME: str = "Janus"
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = "0.2.0"
     ENVIRONMENT: str = "development"
 
-# Instância única das configurações para ser importada em outros módulos
+    # Neo4j
+    NEO4J_URI: str
+    NEO4J_USER: str
+    NEO4J_PASSWORD: str
+
+    # ChromaDB
+    CHROMA_HOST: str
+    CHROMA_PORT: int
+
+# A instância continua a mesma
 settings = AppSettings()
