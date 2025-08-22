@@ -1,0 +1,60 @@
+# Variáveis para o ambiente de teste
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Verificar o status do sistema (Health Check)
+# Este teste deve retornar um status 200 OK.
+GET {{host}}/api/v1/system/status
+Accept: application/json
+
+###
+# Teste 2: Disparar a indexação e análise completa da base de código
+# Deve retornar 200 OK e um resumo.
+POST {{host}}{{api_v1_prefix}}/knowledge/index
+Content-Type: application/json
+
+> {%
+    client.test("Indexing and Parsing request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+    client.test("Response body indicates success", function() {
+        const data = response.body;
+        client.assert(data.message === "Indexação e análise da base de código concluídas.", "Success message not found");
+        client.assert(data.summary.includes("funções"), "Summary does not mention functions");
+    });
+%}
+
+###
+# Teste 3: Listar as entidades do arquivo 'main.py'
+# Deve retornar 200 OK e uma lista que inclui a função 'lifespan'.
+GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path=/app/app/main.py
+Accept: application/json
+
+> {%
+    client.test("List entities request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+    client.test("Response contains lifespan function", function() {
+        const entities = response.body;
+        const lifespanFunc = entities.find(e => e.name === "lifespan" && e.type === "Function");
+        client.assert(lifespanFunc !== undefined, "'lifespan' function not found in main.py entities");
+    });
+%}
+
+###
+# Teste 4: Verificar as chamadas de função do endpoint 'trigger_indexing'
+# Deve retornar 200 OK e mostrar que 'trigger_indexing' chama 'index_codebase'.
+GET {{host}}{{api_v1_prefix}}/knowledge/calls?function_name=trigger_indexing
+Accept: application/json
+
+> {%
+    client.test("List calls request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+    client.test("Response shows 'trigger_indexing' calls 'index_codebase'", function() {
+        const calls = response.body;
+        const relevantCall = calls.find(c => c.caller_function === "trigger_indexing" && c.callee_function === "index_codebase");
+        client.assert(relevantCall !== undefined, "'trigger_indexing' does not call 'index_codebase'");
+    });
+%}
