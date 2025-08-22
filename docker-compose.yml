@@ -1,0 +1,11 @@
+services:
+  janus-api:
+    build: .
+    container_name: janus_api_sprint1
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app  # Monta o código local para desenvolvimento com hot-reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
