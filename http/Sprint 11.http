@@ -1,0 +1,72 @@
+# Variáveis para o ambiente de teste do Sprint 11
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Execução com Agente Padrão (TOOL_USER)
+# Objetivo: Validar que o novo AgentManager consegue executar o agente padrão (TOOL_USER)
+# para realizar uma tarefa que requer ferramentas, como escrever um ficheiro.
+# Isto garante a retrocompatibilidade com as funcionalidades das sprints anteriores.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Crie um ficheiro chamado 'sprint11_validation.txt' e escreva o texto 'O AgentManager executou o TOOL_USER com sucesso.' nele.",
+  "agent_type": "TOOL_USER"
+}
+
+> {%
+    client.test("TOOL_USER agent execution successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
+        client.assert(response.body.agent_type_used === "TOOL_USER", "Incorrect agent type was used");
+        client.log("Agent Answer: " + response.body.answer);
+    });
+%}
+
+###
+# Teste 2: Execução com Agente Específico (ORCHESTRATOR)
+# Objetivo: Verificar se a API e o AgentManager conseguem invocar um agente especializado
+# quando explicitamente solicitado. Neste caso, o ORCHESTRATOR, que tem um conjunto
+# de ferramentas mais limitado (apenas 'recall_experiences').
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Lembre-se de experiências sobre 'indexação'",
+  "agent_type": "ORCHESTRATOR"
+}
+
+> {%
+    client.test("ORCHESTRATOR agent execution successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.agent_type_used === "ORCHESTRATOR", "Incorrect agent type was used");
+        // A resposta deve ser um JSON de experiências
+        client.assert(response.body.answer.startsWith("["), "Answer does not seem to be a list of experiences");
+        client.log("Orchestrator Answer: " + response.body.answer);
+    });
+%}
+
+###
+# Teste 3 (Segurança e Especialização): Falha Esperada de Ferramenta
+# Objetivo: Confirmar que o agente ORCHESTRATOR, com seu conjunto limitado de ferramentas,
+# falha ao tentar executar uma ação para a qual não tem permissão (escrever um ficheiro).
+# Isto valida a correta aplicação do princípio do menor privilégio.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Tente criar um ficheiro chamado 'orchestrator_fail.txt'",
+  "agent_type": "ORCHESTRATOR"
+}
+
+> {%
+    client.test("ORCHESTRATOR agent fails task requiring unavailable tool", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.agent_type_used === "ORCHESTRATOR", "Incorrect agent type was used");
+        // A resposta do agente deve indicar que não conseguiu realizar a tarefa
+        const answer = response.body.answer.toLowerCase();
+        client.assert(answer.includes("não tenho uma ferramenta") || answer.includes("não consigo") || answer.includes("não posso"), "Agent should indicate inability to perform the task");
+        client.log("Agent failure response: " + response.body.answer);
+    });
+%}
