@@ -1,0 +1,40 @@
+# Variáveis
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+@summary_file = "summary.txt"
+
+###
+# Teste 1: Usar memória episódica e depois escrever em arquivo
+# O agente deve primeiro recordar a experiência da última indexação e depois salvar o resumo em um arquivo.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+    "question": "Lembre-se do resumo da última vez que a base de código foi indexada. Pegue esse resumo e salve-o em um novo arquivo chamado 'summary.txt'."
+}
+
+> {%
+    client.test("Memory to File task successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
+        client.assert(response.body.answer.toLowerCase().includes("{{summary_file}}"), "Answer does not mention the file");
+    });
+%}
+
+###
+# Teste 2: Usar o grafo de conhecimento e depois ler um arquivo
+# O agente deve primeiro descobrir onde o código do agente está e depois ler seu conteúdo.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Use o grafo de conhecimento para descobrir o caminho completo do arquivo que contém a função 'run_agent_executor'. Depois que descobrir o caminho, leia o conteúdo desse arquivo para mim."
+}
+
+> {%
+    client.test("Graph to Read task successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        // Verifica se a resposta contém um trecho do próprio código do reasoning_core
+        client.assert(response.body.answer.includes("AgentExecutor"), "Answer does not contain expected code snippet");
+    });
+%}

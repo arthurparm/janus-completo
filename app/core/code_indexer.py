@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CODEBASE_DIR = "/app/app"
+CODEBASE_DIR = "/app"
 
 class CodeParser(ast.NodeVisitor):
     def __init__(self, file_path):
