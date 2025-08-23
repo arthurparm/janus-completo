@@ -1,14 +1,17 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from app.config import settings
 
 router = APIRouter()
+
 
 class StatusResponse(BaseModel):
     app_name: str
     version: str
     environment: str
     status: str
+
 
 @router.get(
     "/status",
