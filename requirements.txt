@@ -8,6 +8,10 @@ langchain-openai>=0.1.6
 langsmith>=0.1.57
 langchain-community
 langchain-neo4j>=0.0.3
+langchain-google-genai>=0.1.0
+langchain-google-genai
+langchain-groq
+langchain-ollama
 onnxruntime
 sentence-transformers
 structlog

@@ -8,10 +8,15 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
+      - ./workspace:/app/workspace # Mapeia o workspace para o host
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       neo4j:
         condition: service_healthy
+      chroma:
+        condition: service_started
+      ollama:
+        condition: service_started
     networks:
       - janus-net
 
@@ -45,6 +50,24 @@ services:
       - ./data/chroma:/chroma/.chroma/index
     networks:
       - janus-net
+
+  # --- NOVO SERVIÇO SPRINT 10 ---
+  ollama:
+    image: ollama/ollama
+    container_name: janus_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - janus-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 networks:
   janus-net:

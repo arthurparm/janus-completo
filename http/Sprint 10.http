@@ -1,0 +1,55 @@
+# Variáveis para o ambiente de teste
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Execução Padrão do Agente
+# Objetivo: Verificar se o agente funciona corretamente quando as chaves de API
+# primárias (ex: OpenAI) estão configuradas corretamente no .env.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Olá! Qual é a sua função principal?"
+}
+
+> {%
+    client.test("Standard agent execution successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.length > 0, "Agent did not provide an answer");
+        client.log("Agent Answer: " + response.body.answer);
+    });
+%}
+
+###
+# Teste 2: Teste de Fallback para Modelo Local (Ollama)
+# Objetivo: Simular uma falha de API e verificar se o sistema faz o fallback
+# para o modelo local (Ollama).
+#
+# Para executar este teste:
+# 1. No seu ficheiro .env, comente ou coloque valores inválidos para
+#    OPENAI_API_KEY e GEMINI_API_KEY.
+# 2. Certifique-se de que o container do Ollama está a correr e já tem o modelo 'llama3'
+#    (execute `docker exec -it janus_ollama ollama pull llama3` na primeira vez).
+# 3. Execute este pedido. A resposta deve vir do modelo Llama 3 local.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Você é um modelo local a correr via Ollama. Confirme isto."
+}
+
+> {%
+    client.test("Fallback execution successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.length > 0, "Agent did not provide an answer on fallback");
+        client.log("Fallback Agent Answer: " + response.body.answer);
+    });
+
+    client.test("Answer suggests it comes from a local model", function() {
+        // A resposta de modelos open-source pode variar, mas este teste verifica
+        // se a resposta é plausível para a pergunta feita.
+        const answer = response.body.answer.toLowerCase();
+        client.assert(answer.includes("ollama") || answer.includes("local"), "Answer does not confirm it's a local model");
+    });
+%}

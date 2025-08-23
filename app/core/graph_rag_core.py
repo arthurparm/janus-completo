@@ -5,7 +5,9 @@ import re
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_neo4j import Neo4jGraph
-from langchain_openai import ChatOpenAI
+
+# --- MODIFICAÇÃO SPRINT 10 ---
+from app.core.llm_manager import get_llm  # Importa o novo gestor
 
 from app.config import settings
 from app.core.prompt_loader import get_prompt
@@ -53,11 +55,9 @@ def query_knowledge_graph(question: str) -> str:
     if graph is None:
         raise ConnectionError("Graph RAG Core não está disponível.")
 
-    llm = ChatOpenAI(
-        model=settings.OPENAI_MODEL_NAME,
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value(),
-    )
+    # --- MODIFICAÇÃO SPRINT 10 ---
+    # Obtém a instância do LLM a partir do gestor central.
+    llm = get_llm()
 
     cypher_chain = cypher_prompt | llm | StrOutputParser()
     qa_chain = qa_prompt | llm | StrOutputParser()

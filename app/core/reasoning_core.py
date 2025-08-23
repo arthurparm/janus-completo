@@ -1,10 +1,12 @@
 # app/core/reasoning_core.py
 import logging
-from langchain_openai import ChatOpenAI
 from langchain import hub
 from langchain.agents import create_openai_tools_agent, AgentExecutor
-from app.config import settings
-# MELHORIA: Importa a lista de ferramentas unificada.
+
+# --- MODIFICAÇÃO SPRINT 10 ---
+# Remove a importação direta de ChatOpenAI e settings
+# Importa o novo gestor centralizado de LLM
+from app.core.llm_manager import get_llm
 from app.core.agent_tools import unified_tools
 
 logger = logging.getLogger(__name__)
@@ -12,20 +14,16 @@ logger = logging.getLogger(__name__)
 
 def run_agent_executor(question: str) -> dict:
     """
-    Cria e executa um agente com acesso a todas as ferramentas disponíveis.
+    Cria e executa um agente com acesso a todas as ferramentas disponíveis,
+    utilizando o LLM fornecido pelo gestor central.
     """
     try:
         logger.info(f"Recebida a instrução para o agente unificado: '{question}'")
-        
-        llm = ChatOpenAI(
-            model=settings.OPENAI_MODEL_NAME,
-            temperature=0,
-            api_key=settings.OPENAI_API_KEY.get_secret_value()
-        )
+
+        llm = get_llm()
 
         prompt = hub.pull("hwchase17/openai-tools-agent")
         
-        # O agente agora é criado com o conjunto completo de ferramentas.
         agent = create_openai_tools_agent(llm, unified_tools, prompt)
         
         agent_executor = AgentExecutor(agent=agent, tools=unified_tools, verbose=True)
