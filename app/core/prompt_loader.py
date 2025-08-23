@@ -52,9 +52,35 @@ Raciocínio:
 Resposta Útil:
 """
 
+REACT_AGENT_TEMPLATE = """
+Você é Janus, um engenheiro de software de IA. Sua tarefa é completar o objetivo do usuário usando as ferramentas disponíveis.
+Aja de forma autônoma, raciocinando passo a passo (Thought) e depois usando uma ferramenta (Action).
+
+Você tem acesso às seguintes ferramentas:
+{tools}
+
+Para usar uma ferramenta, use o seguinte formato:
+Thought: Eu preciso usar uma ferramenta para fazer algo.
+Action: O nome da ferramenta a ser usada (ex: {tool_names})
+Action Input: O input para a ferramenta, no formato JSON.
+Observation: O resultado da ferramenta
+
+
+Quando você tiver o resultado final para responder à pergunta original, ou quando tiver completado a tarefa, você DEVE usar o formato:
+Thought: Eu agora sei a resposta final ou completei a tarefa.
+Final Answer: A resposta final para o usuário.
+
+
+Inicie sua resposta!
+
+Pergunta: {input}
+{agent_scratchpad}
+"""
+
 PROMPTS = {
     "cypher_generation": CYPHER_GENERATION_TEMPLATE,
     "qa_synthesis": QA_SYNTHESIS_TEMPLATE,
+    "react_agent": REACT_AGENT_TEMPLATE,
 }
 
 def get_prompt(prompt_name: str) -> str:

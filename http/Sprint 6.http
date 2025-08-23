@@ -1,0 +1,62 @@
+# Variáveis
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+@workspace_file = "plano_sprint6.txt"
+
+###
+# TESTE DE ISOLAMENTO: Enviar o JSON mais simples possível
+# Este teste confirma que a infraestrutura do agente está funcionando.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "teste"
+}
+
+###
+# Teste 1: Agente deve escrever um arquivo no workspace
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Crie um arquivo chamado 'plano_sprint6.txt' e escreva o texto 'Tarefa 1: Validar a criacao de arquivos.' nele."
+}
+
+> {%
+    client.test("Write file task successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
+    });
+%}
+
+###
+# Teste 2: Agente deve ler o arquivo que acabou de criar
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Leia o conteudo do arquivo 'plano_sprint6.txt' e me diga o que esta escrito."
+}
+
+> {%
+    client.test("Read file task successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.includes("Tarefa 1"), "Answer does not contain the file content");
+    });
+%}
+
+###
+# Teste 3 (Segurança): Agente deve falhar ao tentar ler um arquivo fora do sandbox
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Leia o conteudo do arquivo '../config.py'"
+}
+
+> {%
+    client.test("Path traversal attempt is blocked", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.answer.toLowerCase().includes("acesso negado"), "Security sandbox did not block path traversal");
+    });
+%}

@@ -1,109 +1,53 @@
-# app/core/reasoning_core.py (Versão Completa e Final com Logs)
-
+# app/core/reasoning_core.py
 import logging
-import re
-
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_neo4j import Neo4jGraph
 from langchain_openai import ChatOpenAI
-
+from langchain import hub
+from langchain.agents import create_openai_tools_agent, AgentExecutor
 from app.config import settings
-from app.core.prompt_loader import get_prompt
+# Importa a lista de ferramentas que definimos
+from app.core.agent_tools import file_system_tools
 
 logger = logging.getLogger(__name__)
 
-# --- Bloco de Inicialização (o que estava faltando) ---
-# Este código é executado uma vez quando a aplicação inicia.
-try:
-    # Cria a conexão com o grafo usando as configurações do .env
-    graph = Neo4jGraph(
-        url=settings.NEO4J_URI,
-        username=settings.NEO4J_USER,
-        password=settings.NEO4J_PASSWORD.get_secret_value()
-    )
-    # Pede ao LangChain para inspecionar o schema do banco de dados
-    graph.refresh_schema()
-    logger.info("LangChain connection to Neo4j established and schema refreshed.")
-except Exception as e:
-    logger.error(f"Failed to initialize LangChain Neo4jGraph: {e}", exc_info=True)
-    graph = None
+# NOTA: Removemos a lógica de QA do grafo por enquanto para focar na execução de ferramentas.
+# Iremos reintegrá-la como uma ferramenta na próxima sprint.
 
-try:
-    # Carrega os templates de prompt do nosso armazém de prompts
-    cypher_prompt = PromptTemplate.from_template(get_prompt("cypher_generation"))
-    qa_prompt = PromptTemplate.from_template(get_prompt("qa_synthesis"))
-    logger.info("Prompt templates loaded successfully.")
-except KeyError as e:
-    logger.critical(f"FATAL: Could not load essential prompt. Application cannot start. Error: {e}")
-    # Se os prompts não puderem ser carregados, definimos o grafo como None para
-    # impedir que a aplicação tente usá-lo em um estado inválido.
-    graph = None
-# --- Fim do Bloco de Inicialização ---
-
-
-def query_knowledge_graph(question: str) -> dict:
-    if graph is None:
-        raise ConnectionError("LangChain connection to Neo4j is not available or prompts failed to load.")
-
+def run_agent_executor(question: str) -> dict:
+    """
+    Cria e executa um agente ReAct com acesso a ferramentas do sistema de arquivos.
+    """
     try:
-        logger.info(f"--- INÍCIO DO FLUXO DE RAG ---")
-        logger.info(f"Pergunta Recebida: '{question}'")
-
+        logger.info(f"Recebida a instrução para o agente: '{question}'")
+        
         llm = ChatOpenAI(
             model=settings.OPENAI_MODEL_NAME,
             temperature=0,
             api_key=settings.OPENAI_API_KEY.get_secret_value()
         )
 
-        # Usando a sintaxe moderna LangChain Expression Language (LCEL)
-        cypher_chain = cypher_prompt | llm | StrOutputParser()
-        qa_chain = qa_prompt | llm | StrOutputParser()
+        # O prompt do ReAct define como o agente deve raciocinar e usar ferramentas.
+        # Usamos um prompt testado e aprovado do LangChain Hub.
+        prompt = hub.pull("hwchase17/openai-tools-agent")
 
-        full_schema = f"{graph.get_schema}\n(:Function)-[:CALLS]->(:Function)"
-
-        logger.info(f"\n[ETAPA 1: GERAÇÃO DE CYPHER]\nSchema enviado ao LLM:\n{full_schema}")
-
-        llm_response_cypher = cypher_chain.invoke({
-            "schema": full_schema,
-            "question": question
-        })
-
-        logger.info(f"Saída BRUTA do LLM de Cypher:\n---\n{llm_response_cypher}\n---")
-
-        cypher_match = re.search(r"```(?:cypher)?\s*(.*?)\s*```", llm_response_cypher, re.DOTALL | re.IGNORECASE)
-        cypher_query = cypher_match.group(1).strip() if cypher_match else llm_response_cypher.split("Consulta Cypher:")[-1].strip()
-
-        logger.info(f"Consulta Cypher EXTRAÍDA:\n---\n{cypher_query}\n---")
-
-        if not cypher_query or cypher_query.startswith("//"):
-            logger.warning("Consulta Cypher inválida ou vazia gerada. Encerrando o fluxo.")
-            return {"answer": "Não foi possível gerar uma consulta válida para sua pergunta.", "intermediate_steps": [{"query": cypher_query}]}
-
-        # ETAPA 2: Executar a consulta no grafo
-        graph_result = graph.query(cypher_query)
-        logger.info(f"Resultado BRUTO do Grafo:\n---\n{graph_result}\n---")
-
-        # ETAPA 3: Sintetizar a resposta final
-        llm_response_qa = qa_chain.invoke({
-            "context": str(graph_result),
-            "question": question
-        })
-
-        logger.info(f"Saída BRUTA do LLM de QA:\n---\n{llm_response_qa}\n---")
-
-        final_answer_match = re.search(r"Resposta Útil:\s*(.*)", llm_response_qa, re.DOTALL | re.IGNORECASE)
-        final_answer = final_answer_match.group(1).strip() if final_answer_match else llm_response_qa.strip()
-
-        logger.info(f"Resposta Final EXTRAÍDA:\n---\n{final_answer}\n---")
-
-        logger.info("--- FIM DO FLUXO DE RAG ---")
-
+        # Agrupamos as ferramentas que o agente pode usar.
+        tools = file_system_tools
+        
+        # Cria o agente, que é a combinação do LLM, do prompt e das ferramentas.
+        agent = create_openai_tools_agent(llm, tools, prompt)
+        
+        # O AgentExecutor é o que de fato executa o loop de Raciocínio-Ação.
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        
+        logger.info("Invocando o AgentExecutor...")
+        result = agent_executor.invoke({"input": question})
+        
+        logger.info("AgentExecutor concluiu a execução.")
+        
         return {
-            "answer": final_answer,
-            "intermediate_steps": [{"query": cypher_query}]
+            "answer": result.get("output", "A tarefa foi concluída, mas não houve uma resposta final explícita."),
+            "intermediate_steps": result.get("intermediate_steps", [])
         }
 
     except Exception as e:
-        logger.error(f"Error processing question in manual RAG chain: {e}", exc_info=True)
-        return {"error": "An error occurred while processing your question."}
+        logger.error(f"Erro ao executar o agente: {e}", exc_info=True)
+        return {"error": "Ocorreu um erro durante a execução do agente."}

@@ -10,3 +10,4 @@ langchain-community
 langchain-neo4j>=0.0.3
 onnxruntime
 sentence-transformers
+structlog
