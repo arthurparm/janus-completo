@@ -1,26 +1,32 @@
 # app/api/v1/endpoints/knowledge.py
 
-from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from app.core import code_indexer
+
+from app.core import knowledge_graph_manager
 from app.db.graph import graph_db
 
 router = APIRouter()
 
+
 class IndexResponse(BaseModel):
     message: str
     summary: str
+
 
 class CodeEntity(BaseModel):
     type: str
     name: str
     file_path: str
 
+
 class CallRelationship(BaseModel):
     caller_function: str
     caller_file: str
     callee_function: str
+
 
 @router.post(
     "/index",
@@ -30,13 +36,35 @@ class CallRelationship(BaseModel):
 )
 def trigger_indexing():
     """
-    Dispara o processo de varredura e análise do código-fonte para popular o grafo.
+    Dispara o processo de varredura do código-fonte para popular o grafo com
+    entidades de código como Funções e Classes.
     """
     try:
-        result = code_indexer.index_codebase()
+        # ATUALIZADO: Chama a função refatorada
+        result = knowledge_graph_manager.index_codebase()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# NOVO ENDPOINT PARA SPRINT 8
+@router.post(
+    "/consolidate",
+    response_model=IndexResponse,
+    summary="Inicia a consolidação de experiências no grafo de conhecimento",
+    tags=["Knowledge Graph"]
+)
+def trigger_consolidation():
+    """
+    Busca experiências da memória episódica e as transforma em conhecimento
+    estruturado no grafo semântico.
+    """
+    try:
+        result = knowledge_graph_manager.consolidate_experiences_into_graph()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get(
     "/entities",
@@ -70,13 +98,15 @@ def get_code_entities(file_path: Optional[str] = Query(None, description="Filtra
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get(
     "/calls",
     response_model=List[CallRelationship],
     summary="Lista relações de chamadas de função",
     tags=["Knowledge Graph"]
 )
-def get_function_calls(function_name: Optional[str] = Query(None, description="Filtra chamadas feitas por uma função específica.")):
+def get_function_calls(
+        function_name: Optional[str] = Query(None, description="Filtra chamadas feitas por uma função específica.")):
     """
     Consulta o grafo por relações :CALLS entre Funções.
     Pode ser filtrado pelo nome da função chamadora.
