@@ -17,20 +17,26 @@ def _initialize_workspace():
 
 def _is_path_safe(resolved_path: Path, base_dir: Path) -> bool:
     """Verifica se um caminho resolvido está contido em um diretório base."""
-    return base_dir in resolved_path.parents or resolved_path == base_dir
+    # Garante que o caminho resolvido é descendente ou o próprio diretório base.
+    try:
+        resolved_path.relative_to(base_dir)
+        return True
+    except ValueError:
+        return False
 
 
-def read_file(file_path: str) -> str:
+def read_file(file_path: str, base_dir: str = "workspace") -> str:
     """
-    Lê o conteúdo de um arquivo. Permite a leitura de qualquer arquivo dentro da base de código /app.
+    Lê o conteúdo de um arquivo. Por padrão, lê de dentro do WORKSPACE.
+    Para ler da raiz do código, use base_dir='app'.
     """
     try:
-        # Resolve o caminho a partir da raiz do app
-        absolute_path = (APP_DIR / file_path.strip("/")).resolve()
+        base_path = WORKSPACE_DIR if base_dir == "workspace" else APP_DIR
 
-        # Verificação de segurança: o caminho ainda deve estar dentro de /app
-        if not _is_path_safe(absolute_path, APP_DIR):
-            raise PermissionError(f"Acesso de leitura negado: O caminho '{file_path}' está fora do diretório do projeto.")
+        absolute_path = (base_path / file_path.strip("/")).resolve()
+
+        if not _is_path_safe(absolute_path, base_path):
+            raise PermissionError(f"Acesso de leitura negado: O caminho '{file_path}' está fora do diretório permitido ('{base_dir}').")
 
         logger.info(f"Lendo arquivo de forma segura: {absolute_path}")
         with open(absolute_path, 'r', encoding='utf-8') as f:
@@ -46,10 +52,8 @@ def write_file(file_path: str, content: str) -> str:
     Escreve conteúdo em um arquivo. A escrita é ESTRITAMENTE restrita ao /app/workspace.
     """
     try:
-        # Resolve o caminho a partir do WORKSPACE
         absolute_path = (WORKSPACE_DIR / file_path.strip("/")).resolve()
 
-        # Verificação de segurança: a escrita SÓ pode ocorrer dentro do workspace.
         if not _is_path_safe(absolute_path, WORKSPACE_DIR):
             raise PermissionError(f"Acesso de escrita negado: O caminho '{file_path}' está fora do workspace seguro.")
 
@@ -67,10 +71,8 @@ def list_directory(path: str = ".") -> str:
     Lista o conteúdo de um diretório. A listagem é ESTRITAMENTE restrita ao /app/workspace.
     """
     try:
-        # Resolve o caminho a partir do WORKSPACE
         absolute_path = (WORKSPACE_DIR / path.strip("/")).resolve()
 
-        # Verificação de segurança: a listagem SÓ pode ocorrer dentro do workspace.
         if not _is_path_safe(absolute_path, WORKSPACE_DIR):
             raise PermissionError(f"Acesso de listagem negado: O caminho '{path}' está fora do workspace seguro.")
 
@@ -86,5 +88,4 @@ def list_directory(path: str = ".") -> str:
         return f"Erro ao listar o diretório '{path}': {e}"
 
 
-# Garante que o workspace exista quando o módulo for carregado.
 _initialize_workspace()

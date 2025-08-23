@@ -1,0 +1,43 @@
+# Variáveis para o ambiente de teste
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Coleta de Dados para Treino
+# Objetivo: Acionar o data_harvester para buscar experiências na memória
+# e criar o ficheiro 'training_data.jsonl' no workspace.
+POST {{host}}{{api_v1_prefix}}/learning/harvest
+Content-Type: application/json
+
+> {%
+    client.test("Data harvesting request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response body indicates successful harvest", function() {
+        const data = response.body;
+        client.log("Summary: " + data.summary);
+        client.assert(data.message.includes("bem-sucedida"), "Success message is incorrect");
+        client.assert(data.summary.includes("exemplos de treino"), "Summary does not mention training examples");
+    });
+%}
+
+###
+# Teste 2: Início do Processo de Treino (Simulado)
+# Objetivo: Acionar o neural_trainer para ler o ficheiro de dados
+# e simular o processo de fine-tuning.
+POST {{host}}{{api_v1_prefix}}/learning/train
+Content-Type: application/json
+
+> {%
+    client.test("Model training request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response body indicates successful training", function() {
+        const data = response.body;
+        client.log("Summary: " + data.summary);
+        client.assert(data.message === "Treino concluído.", "Success message is incorrect");
+        client.assert(data.summary.includes("simulado concluído com sucesso"), "Summary does not indicate success");
+    });
+%}
