@@ -111,4 +111,19 @@ def index_codebase() -> dict:
 
     summary = f"Análise concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {total_calls} chamadas internas criadas."
     logger.info(summary)
+    
+    # INTEGRAÇÃO: Janus registra sua própria ação na memória episódica
+    try:
+        from app.core.memory_core import memory_core
+        from app.models.schemas import Experience
+        
+        index_experience = Experience(
+            type="action_success",
+            content=f"Indexação da base de código concluída com sucesso.",
+            metadata={"summary": summary, "indexed_files": total_files}
+        )
+        memory_core.memorize(index_experience)
+    except Exception as e:
+        logger.error(f"Falha ao registrar a experiência de indexação na memória: {e}")
+
     return {"message": "Indexação e análise da base de código concluídas.", "summary": summary}

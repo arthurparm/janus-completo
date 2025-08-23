@@ -1,0 +1,50 @@
+# Variáveis para o ambiente de teste
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste de Memória 1: Memorizar uma experiência
+# Deve retornar 200 OK com os detalhes da experiência criada.
+POST {{host}}{{api_v1_prefix}}/memory/memorize
+Content-Type: application/json
+
+{
+    "type": "test_event",
+    "content": "O usuário iniciou o teste da memória episódica.",
+    "metadata": {
+        "sprint": 5,
+        "test_case": "mem_1"
+    }
+}
+
+> {%
+    client.global.set("memory_id", response.body.id);
+    client.global.set("memory_content", response.body.content);
+    client.test("Memorize request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+    client.test("Response contains an ID", function() {
+        client.assert(response.body.id, "Memory ID is missing");
+    });
+%}
+
+###
+# Teste de Memória 2: Recordar a experiência
+# Deve retornar 200 OK e uma lista contendo a memória que acabamos de criar.
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=teste da memória
+Accept: application/json
+
+> {%
+    client.test("Recall request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+    client.test("Recalled memories contain the test memory", function() {
+        const memories = response.body;
+        const memory_id = client.global.get("memory_id");
+        const memory_content = client.global.get("memory_content");
+
+        const foundMemory = memories.find(m => m.id === memory_id);
+        client.assert(foundMemory, "The newly created memory was not found in recall");
+        client.assert(foundMemory.content === memory_content, "Content of recalled memory does not match");
+    });
+%}
