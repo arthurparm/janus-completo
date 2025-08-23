@@ -1,4 +1,4 @@
-# app/core/code_indexer.py
+# app/core/code_indexer.py (Versão Final Otimizada)
 
 import os
 import ast
@@ -29,20 +29,22 @@ class CodeParser(ast.NodeVisitor):
         self._current_function = previous_function
 
     def visit_Call(self, node: ast.Call):
-        if self._current_function and isinstance(node.func, ast.Name):
+        callee_name = None
+        if isinstance(node.func, ast.Name):
             callee_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            callee_name = node.func.attr
+
+        if self._current_function and callee_name:
             self.calls.append({
                 'caller': self._current_function,
                 'callee': callee_name,
-                'line': node.lineno
             })
         self.generic_visit(node)
 
 def index_codebase() -> dict:
     logger.info(f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
     total_files, total_funcs, total_classes, total_calls = 0, 0, 0, 0
-
-    # MELHORIA: Lista para armazenar todas as chamadas para a segunda passada
     all_calls_to_process = []
 
     # Limpeza do grafo
@@ -59,8 +61,7 @@ def index_codebase() -> dict:
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         source_code = f.read()
-                        tree = ast.parse(source_code)
-
+                    tree = ast.parse(source_code)
                     parser = CodeParser(file_path)
                     parser.visit(tree)
 
@@ -68,54 +69,46 @@ def index_codebase() -> dict:
 
                     for func in parser.functions:
                         graph_db.query(
-                            """
-                            MATCH (f:File {path: $file_path})
-                            MERGE (func:Function {name: $name, file_path: $file_path})
-                            MERGE (f)-[:CONTAINS]->(func)
-                            """,
+                            "MATCH (f:File {path: $file_path}) MERGE (func:Function {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(func)",
                             params={"file_path": file_path, "name": func['name']}
                         )
                     for cls in parser.classes:
                         graph_db.query(
-                            """
-                            MATCH (f:File {path: $file_path})
-                            MERGE (c:Class {name: $name, file_path: $file_path})
-                            MERGE (f)-[:CONTAINS]->(c)
-                            """,
+                            "MATCH (f:File {path: $file_path}) MERGE (c:Class {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
                             params={"file_path": file_path, "name": cls['name']}
                         )
 
-                    # Armazena as chamadas com o contexto do arquivo para a segunda passada
                     for call in parser.calls:
                         all_calls_to_process.append({
                             "caller_name": call['caller'],
                             "callee_name": call['callee'],
                             "file_path": file_path
                         })
-
                     total_files += 1
                     total_funcs += len(parser.functions)
                     total_classes += len(parser.classes)
-
                 except Exception as e:
                     logger.error(f"Falha na primeira passada para o arquivo {file_path}: {e}", exc_info=True)
 
-    # --- SEGUNDA PASSADA: Criar todas as relações de chamada ---
-    logger.info("Segunda passada: Criando relações de chamada entre funções...")
-    for call in all_calls_to_process:
-        try:
-            graph_db.query(
-                """
-                MATCH (caller:Function {name: $caller_name, file_path: $file_path})
-                MATCH (callee:Function {name: $callee_name})
-                MERGE (caller)-[:CALLS]->(callee)
-                """,
-                params=call
-            )
-            total_calls += 1
-        except Exception as e:
-            logger.error(f"Falha ao criar relação de chamada para {call}: {e}")
+    # --- SEGUNDA PASSADA OTIMIZADA: Criar relações apenas para funções conhecidas ---
+    logger.info("Segunda passada: Criando relações de chamada entre funções definidas no projeto...")
+    # Esta consulta é mais eficiente. Ela opera como um JOIN em todo o conjunto de dados.
+    # Ela encontra pares de funções (caller, callee) onde o nome da callee de uma chamada
+    # corresponde ao nome de uma função existente no grafo.
+    result = graph_db.query(
+        """
+        UNWIND $calls as call
+        MATCH (caller:Function {name: call.caller_name, file_path: call.file_path})
+        MATCH (callee:Function {name: call.callee_name})
+        MERGE (caller)-[r:CALLS]->(callee)
+        RETURN count(r) as created_relationships
+        """,
+        params={"calls": all_calls_to_process}
+    )
 
-    summary = f"Análise concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {total_calls} chamadas."
+    # O resultado será uma lista de contagens, somamos todas para ter o total.
+    total_calls = sum(res['created_relationships'] for res in result)
+
+    summary = f"Análise concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {total_calls} chamadas internas criadas."
     logger.info(summary)
     return {"message": "Indexação e análise da base de código concluídas.", "summary": summary}

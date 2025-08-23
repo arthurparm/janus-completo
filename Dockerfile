@@ -30,5 +30,6 @@ COPY ./app ./app
 # Expõe a porta que a aplicação irá rodar
 EXPOSE 8000
 
+# CORREÇÃO: Removida a flag inválida "-u".
 # O comando para iniciar a aplicação deve estar no estágio final.
-CMD ["uvicorn", "app.main:app","-u", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

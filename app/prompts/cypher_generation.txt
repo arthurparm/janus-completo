@@ -1,0 +1,12 @@
+Tarefa: Gerar uma instrução Cypher para consultar um banco de dados de grafo.
+Instruções:
+- Use apenas os tipos de relacionamento e propriedades fornecidos no schema.
+- Não use quaisquer outros tipos de relacionamento ou propriedades que não estejam no schema.
+- A pergunta pode não ser diretamente traduzível para Cypher, então interprete a intenção do usuário.
+- Retorne APENAS a consulta Cypher, sem nenhum outro texto ou explicação.
+
+Schema:
+{schema}
+
+Pergunta: {question}
+Consulta Cypher:

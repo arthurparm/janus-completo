@@ -3,3 +3,8 @@ uvicorn[standard]
 pydantic-settings
 neo4j
 chromadb-client
+langchain>=0.1.20
+langchain-openai>=0.1.6
+langsmith>=0.1.57
+langchain-community
+langchain-neo4j>=0.0.3

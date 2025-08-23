@@ -1,3 +1,5 @@
+# app/db/graph.py
+
 from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
 from app.config import settings
 import logging
@@ -12,9 +14,11 @@ class GraphDatabase:
         if self._driver is None:
             logger.info("Driver not initialized. Creating new Neo4j driver...")
             try:
+                # CORREÇÃO: Unwraps the SecretStr to a plain string before passing it to the driver.
+                password = settings.NEO4J_PASSWORD.get_secret_value()
                 self._driver = Neo4jGraphDatabase.driver(
                     settings.NEO4J_URI,
-                    auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+                    auth=(settings.NEO4J_USER, password)
                 )
                 logger.info("New Neo4j driver created successfully.")
             except Exception as e:
