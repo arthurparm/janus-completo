@@ -1,0 +1,51 @@
+# Variáveis para o ambiente de teste
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Preparação - Memorizar uma experiência rica em metadados
+# Objetivo: Inserir uma experiência na memória episódica (ChromaDB) que será
+# usada pelo novo processo de consolidação.
+# Esta experiência simula o resultado de uma indexação de código bem-sucedida.
+POST {{host}}{{api_v1_prefix}}/memory/memorize
+Content-Type: application/json
+
+{
+  "type": "action_success",
+  "content": "A tarefa de indexação da base de código foi concluída com sucesso pelo agente.",
+  "metadata": {
+    "sprint": 8,
+    "test_case": "consolidation_1",
+    "invoked_function": "index_codebase",
+    "summary": "Análise de código concluída. 35 arquivos | 150 funções | 40 classes | 300 chamadas internas criadas."
+  }
+}
+
+> {%
+    client.test("Setup experience created successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.id, "Experience ID is missing from response");
+    });
+%}
+
+###
+# Teste 2: Consolidação do Conhecimento (Core do Sprint 8)
+# Objetivo: Acionar o novo endpoint que lê da memória episódica e escreve
+# o conhecimento estruturado (nós :Experience, :Summary) no grafo semântico (Neo4j).
+POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
+Content-Type: application/json
+
+> {%
+    client.test("Knowledge consolidation request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response body indicates successful consolidation", function() {
+        const data = response.body;
+        client.log("Summary: " + data.summary);
+        client.assert(data.message === "Processo de consolidação concluído.", "Success message is incorrect");
+        client.assert(data.summary.includes("experiências processadas"), "Summary does not mention processed experiences");
+        client.assert(data.summary.includes("nós e"), "Summary does not mention created nodes");
+        client.assert(data.summary.includes("relações criadas/mescladas"), "Summary does not mention created relationships");
+    });
+%}
