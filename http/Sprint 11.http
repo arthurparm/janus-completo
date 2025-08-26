@@ -11,15 +11,15 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Crie um ficheiro chamado 'sprint11_validation.txt' e escreva o texto 'O AgentManager executou o TOOL_USER com sucesso.' nele.",
-  "agent_type": "TOOL_USER"
+  "question": "Crie um ficheiro chamado 'sprint11_validation.txt' e escreva o texto 'O AgentManager executou o tool_user com sucesso.' nele.",
+  "agent_type": "tool_user"
 }
 
 > {%
     client.test("TOOL_USER agent execution successful", function() {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
-        client.assert(response.body.agent_type_used === "TOOL_USER", "Incorrect agent type was used");
+        client.assert(response.body.agent_type_used === "tool_user", "Incorrect agent type was used");
         client.log("Agent Answer: " + response.body.answer);
     });
 %}
@@ -34,13 +34,13 @@ Content-Type: application/json
 
 {
   "question": "Lembre-se de experiências sobre 'indexação'",
-  "agent_type": "ORCHESTRATOR"
+  "agent_type": "orchestrator"
 }
 
 > {%
     client.test("ORCHESTRATOR agent execution successful", function() {
         client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.agent_type_used === "ORCHESTRATOR", "Incorrect agent type was used");
+        client.assert(response.body.agent_type_used === "orchestrator", "Incorrect agent type was used");
         // A resposta deve ser um JSON de experiências
         client.assert(response.body.answer.startsWith("["), "Answer does not seem to be a list of experiences");
         client.log("Orchestrator Answer: " + response.body.answer);
@@ -56,14 +56,14 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Tente criar um ficheiro chamado 'orchestrator_fail.txt'",
-  "agent_type": "ORCHESTRATOR"
+  "question": "Tente criar um ficheiro chamado 'orchestrator_fail.txt'.",
+  "agent_type": "orchestrator"
 }
 
 > {%
     client.test("ORCHESTRATOR agent fails task requiring unavailable tool", function() {
         client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.agent_type_used === "ORCHESTRATOR", "Incorrect agent type was used");
+        client.assert(response.body.agent_type_used === "orchestrator", "Incorrect agent type was used");
         // A resposta do agente deve indicar que não conseguiu realizar a tarefa
         const answer = response.body.answer.toLowerCase();
         client.assert(answer.includes("não tenho uma ferramenta") || answer.includes("não consigo") || answer.includes("não posso"), "Agent should indicate inability to perform the task");

@@ -4,13 +4,11 @@
 
 ###
 # Teste 1: Verificar o status do sistema (Health Check)
-# Este teste deve retornar um status 200 OK.
 GET {{host}}/api/v1/system/status
 Accept: application/json
 
 ###
 # Teste 2: Disparar a indexação e análise completa da base de código
-# Deve retornar 200 OK e um resumo.
 POST {{host}}{{api_v1_prefix}}/knowledge/index
 Content-Type: application/json
 
@@ -27,7 +25,6 @@ Content-Type: application/json
 
 ###
 # Teste 3: Listar as entidades do arquivo 'main.py'
-# Deve retornar 200 OK e uma lista que inclui a função 'lifespan'.
 GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path=/app/app/main.py
 Accept: application/json
 
@@ -44,7 +41,6 @@ Accept: application/json
 
 ###
 # Teste 4: Verificar as chamadas de função do endpoint 'trigger_indexing'
-# Deve retornar 200 OK e mostrar que 'trigger_indexing' chama 'index_codebase'.
 GET {{host}}{{api_v1_prefix}}/knowledge/calls?function_name=trigger_indexing
 Accept: application/json
 

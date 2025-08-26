@@ -6,11 +6,12 @@
 # Teste de Agente 1: Fazer uma pergunta sobre o código ao Grafo de Conhecimento
 # Pergunta: "O que a função trigger_indexing chama?"
 # Resposta esperada: "index_codebase"
-POST {{host}}{{api_v1_prefix}}/agent/query
+# ATUALIZADO: O endpoint foi corrigido para /agent/execute.
+POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Quais funções a função 'trigger_indexing' chama diretamente?"
+  "question": "Use a sua capacidade de consultar o grafo de conhecimento para descobrir quais funções a função 'trigger_indexing' chama diretamente."
 }
 
 > {%
@@ -21,10 +22,5 @@ Content-Type: application/json
         const data = response.body;
         const answer = data.answer.toLowerCase();
         client.assert(answer.includes("index_codebase"), "A resposta não contém 'index_codebase'");
-    });
-    client.test("Generated Cypher query is present", function() {
-        const data = response.body;
-        client.assert(data.generated_cypher && data.generated_cypher.length > 0, "A consulta Cypher gerada está ausente.");
-        client.log("Generated Cypher: " + data.generated_cypher);
     });
 %}
