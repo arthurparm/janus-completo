@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class AppSettings(BaseSettings):
-    # A configuração do model_config foi ajustada para carregar explicitamente do .env
     model_config = SettingsConfigDict(
         extra='ignore', env_file='.env', env_file_encoding='utf-8'
     )
@@ -15,40 +14,37 @@ class AppSettings(BaseSettings):
     APP_VERSION: str = "0.2.0"
     ENVIRONMENT: str = "development"
 
-    # Neo4j
+    # ... (Configurações de Neo4j e ChromaDB inalteradas) ...
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = "password"
 
-    # ChromaDB
     CHROMA_HOST: str = "chroma"
     CHROMA_PORT: int = 8000
 
-    # LangChain
     LANGCHAIN_TRACING_V2: str = "true"
-    # LANGCHAIN_API_KEY é mantido como opcional, mas pode ser obrigatório dependendo do seu uso
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
 
-    # --- CORREÇÃO PRINCIPAL SPRINT 10 ---
-    # As chaves de API agora são opcionais. Isso permite que a aplicação inicie
-    # mesmo que uma ou mais chaves não estejam definidas no ambiente, o que é
-    # essencial para a lógica de fallback do LLMManager.
+    # --- ARQUITETURA COGNITIVA DE MODELOS ---
 
-    # OpenAI (Provedor 1)
+    # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
 
-    # Google Gemini (Provedor 2)
     GEMINI_API_KEY: Optional[SecretStr] = None
     GEMINI_MODEL_NAME: str = "gemini-1.5-pro-latest"
 
-    # Grok (Provedor 3)
-    GROK_API_KEY: Optional[SecretStr] = None
-    GROK_MODEL_NAME: str = "llama3-8b-8192"
-
-    # Ollama (Provedor 4 - Fallback Local)
+    # 2. CÉREBRO / SISTEMA NERVOSO CENTRAL (Local via Ollama - Primário)
     OLLAMA_HOST: str = "http://ollama:11434"
-    OLLAMA_MODEL_NAME: str = "llama3"
+
+    # Modelo para o Córtex Pré-Frontal (Orquestração e Raciocínio Geral)
+    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.2:3b"
+
+    # Modelo para o Cerebelo (Geração e Análise de Código)
+    OLLAMA_CODER_MODEL: str = "codellama:7b"
+
+    # Modelo para o Lobo Temporal (Análise, Sumarização e Validação de Conhecimento)
+    OLLAMA_CURATOR_MODEL: str = "phi3:mini"
 
 
 settings = AppSettings()
