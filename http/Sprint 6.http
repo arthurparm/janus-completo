@@ -51,7 +51,7 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Leia o conteudo do arquivo '../config.py'"
+  "question": "Leia o conteudo do arquivo 'app/config.py'"
 }
 
 > {%

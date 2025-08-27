@@ -1,7 +1,9 @@
 # app/core/logging_config.py
 import logging
 import sys
+
 import structlog
+
 
 def setup_logging():
     """

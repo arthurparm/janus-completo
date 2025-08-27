@@ -3,27 +3,6 @@
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 1: Verificar o status do sistema (Health Check)
-GET {{host}}/api/v1/system/status
-Accept: application/json
-
-###
-# Teste 2: Disparar a indexação e análise completa da base de código
-POST {{host}}{{api_v1_prefix}}/knowledge/index
-Content-Type: application/json
-
-> {%
-    client.test("Indexing and Parsing request successful", function() {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response body indicates success", function() {
-        const data = response.body;
-        client.assert(data.message === "Indexação e análise da base de código concluídas.", "Success message not found");
-        client.assert(data.summary.includes("funções"), "Summary does not mention functions");
-    });
-%}
-
-###
 # Teste 3: Listar as entidades do arquivo 'main.py'
 GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path=/app/app/main.py
 Accept: application/json

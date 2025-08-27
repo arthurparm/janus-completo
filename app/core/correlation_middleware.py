@@ -1,9 +1,10 @@
 # app/core/correlation_middleware.py
 import uuid
-# CORREÇÃO: Removemos a importação de 'RequestResponseCall', que não existe mais.
+
+import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-import structlog
+
 
 class CorrelationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

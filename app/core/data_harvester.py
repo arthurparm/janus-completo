@@ -1,12 +1,14 @@
 # app/core/data_harvester.py
 import json
 import logging
+
+from app.core.filesystem_manager import write_file
 from app.core.memory_core import memory_core
-from app.core.filesystem_manager import write_file, WORKSPACE_DIR
 
 logger = logging.getLogger(__name__)
 
 TRAINING_DATA_FILE = "training_data.jsonl"
+
 
 def harvest_data_for_training(limit: int = 100) -> dict:
     """

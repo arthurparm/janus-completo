@@ -1,27 +1,22 @@
 # app/core/knowledge_graph_manager.py
 # RENOMEADO DE code_indexer.py para refletir seu novo e mais amplo escopo.
 
-import os
 import ast
 import logging
+import os
 from typing import List, Dict, Any
 
+from app.core.memory_core import memory_core  # Importa o memory_core para acessar experiências
 from app.db.graph import graph_db
-from app.core.memory_core import memory_core # Importa o memory_core para acessar experiências
-from app.models.schemas import Experience # Importa o schema de Experience
 
 logger = logging.getLogger(__name__)
 
 CODEBASE_DIR = "/app"
 
-# --- Parte 1: Análise e Parsing de Código Estático ---
-# A lógica de parsing foi mantida, mas será chamada por funções mais modulares.
 
+# --- Parte 1: Análise e Parsing de Código Estático ---
+# (Nenhuma alteração nesta seção)
 class CodeParser(ast.NodeVisitor):
-    """
-    Visita os nós de uma Abstract Syntax Tree (AST) para extrair informações
-    sobre classes, funções e chamadas de função.
-    """
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.functions: List[Dict[str, Any]] = []
@@ -54,10 +49,8 @@ class CodeParser(ast.NodeVisitor):
             })
         self.generic_visit(node)
 
+
 def _parse_python_file(file_path: str) -> CodeParser | None:
-    """
-    Lê e faz o parse de um único arquivo Python, retornando o objeto parser populado.
-    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             source_code = f.read()
@@ -69,10 +62,8 @@ def _parse_python_file(file_path: str) -> CodeParser | None:
         logger.error(f"Falha ao fazer o parse do arquivo {file_path}: {e}", exc_info=True)
         return None
 
+
 def _create_code_entities_in_graph(parser: CodeParser):
-    """
-    Cria os nós de File, Function e Class no grafo a partir de um parser populado.
-    """
     file_path = parser.file_path
     graph_db.query("MERGE (f:File {path: $path})", params={"path": file_path})
 
@@ -87,7 +78,8 @@ def _create_code_entities_in_graph(parser: CodeParser):
             params={"file_path": file_path, "name": cls['name']}
         )
 
-# --- Parte 2: A NOVA LÓGICA DE CONSOLIDAÇÃO DE CONHECIMENTO (SPRINT 8) ---
+
+# --- Parte 2: LÓGICA DE CONSOLIDAÇÃO DE CONHECIMENTO CORRIGIDA ---
 
 def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     """
@@ -96,8 +88,6 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     """
     logger.info(f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
 
-    # 1. Buscar experiências da memória episódica (Vector DB)
-    # No futuro, esta query poderia ser mais inteligente (ex: "experiências do tipo 'action_success'").
     recalled_experiences = memory_core.recall(query="ação do sistema", n_results=limit)
 
     if not recalled_experiences:
@@ -105,29 +95,35 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
         logger.warning(summary)
         return {"message": "Processo de consolidação concluído.", "summary": summary}
 
-    # 2. Processar cada experiência para criar nós e relações
     nodes_created = 0
     relationships_created = 0
 
     for exp_dict in recalled_experiences:
-        exp = Experience(**exp_dict) # Converte o dicionário de volta para um objeto Pydantic
+        # --- CORREÇÃO CRÍTICA ---
+        # Não tentamos mais converter para um objeto Pydantic `Experience`.
+        # Em vez disso, trabalhamos diretamente com o dicionário retornado pelo `memory_core`,
+        # que é mais robusto e evita o erro de validação do campo "distance".
+        exp_id = exp_dict.get("id")
+        exp_metadata = exp_dict.get("metadata", {})
+        exp_type = exp_metadata.get("type", "unknown")
+        exp_content = exp_dict.get("content", "")
+        exp_timestamp = exp_metadata.get("timestamp", "")
 
-        # 3. Criar um nó central para a Experiência
+        if not exp_id:
+            continue
+
         graph_db.query(
             """
             MERGE (e:Experience {id: $id})
             ON CREATE SET e.type = $type, e.content = $content, e.timestamp = $timestamp
             """,
-            params={"id": exp.id, "type": exp.type, "content": exp.content, "timestamp": exp.timestamp}
+            params={"id": exp_id, "type": exp_type, "content": exp_content, "timestamp": exp_timestamp}
         )
         nodes_created += 1
 
-        # 4. Extrair entidades do metadata (exemplo simples)
-        # Uma versão avançada usaria um LLM para extrair entidades do exp.content
-        if "summary" in exp.metadata:
-            # Exemplo: Se a experiência foi uma indexação, crie um nó para o sumário.
-            summary_text = exp.metadata["summary"]
-            summary_node_id = f"summary_{exp.id}"
+        if "summary" in exp_metadata:
+            summary_text = exp_metadata["summary"]
+            summary_node_id = f"summary_{exp_id}"
 
             graph_db.query(
                 """
@@ -135,7 +131,7 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
                 MERGE (s:Summary {id: $summary_id, text: $text})
                 MERGE (exp)-[:HAS_SUMMARY]->(s)
                 """,
-                params={"exp_id": exp.id, "summary_id": summary_node_id, "text": summary_text}
+                params={"exp_id": exp_id, "summary_id": summary_node_id, "text": summary_text}
             )
             nodes_created += 1
             relationships_created += 1
@@ -147,7 +143,7 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
 
 
 # --- Parte 3: Função Principal Refatorada para Indexação de Código ---
-
+# (Nenhuma alteração nesta seção)
 def index_codebase() -> dict:
     """
     Orquestra a análise completa da base de código e a (re)criação do
@@ -155,14 +151,12 @@ def index_codebase() -> dict:
     """
     logger.info(f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
 
-    # Limpeza do grafo de código (deixa outras entidades como :Experience intactas)
     logger.info("Limpando entidades de código antigas do grafo...")
     graph_db.query("MATCH (n) WHERE n:Function OR n:Class OR n:File DETACH DELETE n")
 
     total_files, total_funcs, total_classes = 0, 0, 0
     all_calls_to_process: List[Dict[str, Any]] = []
 
-    # PRIMEIRA PASSADA: Analisar arquivos e criar nós de entidade
     logger.info("Primeira passada: Analisando arquivos e criando nós de entidade...")
     for root, _, files in os.walk(CODEBASE_DIR):
         for file in files:
@@ -172,8 +166,6 @@ def index_codebase() -> dict:
 
                 if parser:
                     _create_code_entities_in_graph(parser)
-
-                    # Armazena as chamadas para processamento na segunda passada
                     for call in parser.calls:
                         all_calls_to_process.append({
                             "caller_name": call['caller'],
@@ -185,7 +177,6 @@ def index_codebase() -> dict:
                     total_funcs += len(parser.functions)
                     total_classes += len(parser.classes)
 
-    # SEGUNDA PASSADA: Criar relações de chamada
     logger.info("Segunda passada: Criando relações de chamada entre funções...")
     result = graph_db.query(
         """

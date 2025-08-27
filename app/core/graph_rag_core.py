@@ -6,15 +6,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_neo4j import Neo4jGraph
 
-# --- MODIFICAÇÃO SPRINT 10 ---
-from app.core.llm_manager import get_llm  # Importa o novo gestor
-
 from app.config import settings
+from app.core.llm_manager import get_llm, ModelRole
 from app.core.prompt_loader import get_prompt
 
 logger = logging.getLogger(__name__)
 
-# Inicializa o grafo (opcionalmente desativado se houver falhas de configuração)
+# ... (inicialização do grafo e dos prompts inalterada) ...
 try:
     graph = Neo4jGraph(
         url=settings.NEO4J_URI,
@@ -36,16 +34,35 @@ except KeyError as e:
 
 
 def _get_full_schema_text() -> str:
-    """Obtém o schema completo como texto. Compatível com diferentes versões do LangChain Neo4jGraph."""
-    if graph is None:
-        return ""
+    if graph is None: return ""
     try:
-        # Algumas versões expõem como método, outras como propriedade
-        schema_val = graph.get_schema() if callable(getattr(graph, "get_schema", None)) else getattr(graph, "schema", "")
+        schema_val = graph.get_schema if callable(getattr(graph, "get_schema", None)) else getattr(graph, "schema", "")
         return f"{schema_val}\n(:Function)-[:CALLS]->(:Function)"
     except Exception as e:
         logger.warning(f"Graph RAG Core: Não foi possível obter o schema do grafo: {e}")
         return "(:Function)-[:CALLS]->(:Function)"
+
+
+def _extract_cypher(text: str) -> str:
+    """
+    Extrai a consulta Cypher da resposta do LLM de forma robusta e agnóstica ao modelo.
+    """
+    # 1. Tenta encontrar um bloco de código específico de cypher
+    cypher_match = re.search(r"```(?:cypher)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if cypher_match:
+        return cypher_match.group(1).strip()
+
+    # 2. Se falhar, tenta encontrar qualquer linha que comece com palavras-chave Cypher
+    lines = text.splitlines()
+    for line in lines:
+        cleaned_line = line.strip()
+        if cleaned_line.upper().startswith("MATCH") or cleaned_line.upper().startswith("MERGE"):
+            # Assume que esta é a consulta e retorna-a
+            return cleaned_line
+
+    # 3. Se tudo falhar, retorna uma string vazia
+    logger.warning(f"Não foi possível extrair uma consulta Cypher da resposta: {text}")
+    return ""
 
 
 def query_knowledge_graph(question: str) -> str:
@@ -55,33 +72,30 @@ def query_knowledge_graph(question: str) -> str:
     if graph is None:
         raise ConnectionError("Graph RAG Core não está disponível.")
 
-    # --- MODIFICAÇÃO SPRINT 10 ---
-    # Obtém a instância do LLM a partir do gestor central.
-    llm = get_llm()
+    # Usa o modelo Curador para tarefas de RAG, que é mais otimizado para isto.
+    llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
 
     cypher_chain = cypher_prompt | llm | StrOutputParser()
     qa_chain = qa_prompt | llm | StrOutputParser()
 
     full_schema = _get_full_schema_text()
 
-    # Etapa 1: Gerar Cypher
     llm_response_cypher = cypher_chain.invoke({"schema": full_schema, "question": question})
 
-    cypher_match = re.search(r"```(?:cypher)?\s*(.*?)\s*```", llm_response_cypher, re.DOTALL | re.IGNORECASE)
-    cypher_query = (
-        cypher_match.group(1).strip()
-        if cypher_match
-        else llm_response_cypher.split("Consulta Cypher:")[-1].strip()
-    )
+    cypher_query = _extract_cypher(llm_response_cypher)
 
     if not cypher_query or cypher_query.startswith("//"):
         return "Não foi possível gerar uma consulta Cypher válida para esta pergunta."
 
-    # Etapa 2: Executar consulta
-    graph_result = graph.query(cypher_query)
+    logger.info(f"Executando consulta Cypher gerada: {cypher_query}")
+    try:
+        graph_result = graph.query(cypher_query)
+        if not graph_result:
+            return "A consulta ao grafo foi executada com sucesso, mas não retornou resultados."
+    except Exception as e:
+        logger.error(f"Erro ao executar a consulta Cypher: {e}", exc_info=True)
+        return f"Ocorreu um erro ao consultar o grafo: {e}"
 
-    # Etapa 3: Sintetizar resposta
     llm_response_qa = qa_chain.invoke({"context": str(graph_result), "question": question})
 
-    final_answer_match = re.search(r"Resposta Útil:\s*(.*)", llm_response_qa, re.DOTALL | re.IGNORECASE)
-    return final_answer_match.group(1).strip() if final_answer_match else llm_response_qa.strip()
+    return llm_response_qa.strip()

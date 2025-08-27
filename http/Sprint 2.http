@@ -2,9 +2,7 @@
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
-###
 # Teste 2: Disparar a indexação da base de código
-# Deve retornar 200 OK e uma mensagem de sucesso.
 POST {{host}}{{api_v1_prefix}}/knowledge/index
 Content-Type: application/json
 
@@ -18,8 +16,3 @@ Content-Type: application/json
         client.assert(data.summary.includes("arquivos"), "Summary does not mention files");
     });
 %}
-
-###
-# Teste 3: Listar as entidades do arquivo 'main.py'
-# CORREÇÃO: O endpoint /knowledge/index não suporta GET.
-# Este teste foi movido para a Sprint 3, que tem um endpoint apropriado para listar entidades.
