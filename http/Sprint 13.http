@@ -1,0 +1,7 @@
+POST http://localhost:8000/api/v1/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Use a ferramenta write_file, mas não forneça o conteúdo, apenas o file_path.",
+  "agent_type": "tool_user"
+}

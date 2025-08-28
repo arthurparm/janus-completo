@@ -1,4 +1,5 @@
 # app/main.py
+import asyncio  # <-- NOVA IMPORTAÇÃO
 import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from app.api.v1.router import api_router
 from app.config import settings
 from app.core.correlation_middleware import CorrelationMiddleware
 from app.core.logging_config import setup_logging
+from app.core.meta_agent_cycle import run_meta_agent_cycle  # <-- NOVA IMPORTAÇÃO
 from app.db.graph import graph_db
 
 # Configura o logging estruturado para toda a aplicação
@@ -18,8 +20,17 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Application startup: Initializing resources...")
     graph_db.get_driver()
-    # A lógica do Instrumentator foi REMOVIDA daqui.
+
+    # --- NOVA IMPLEMENTAÇÃO SPRINT 13: INICIAR O META-AGENTE ---
+    # Inicia o ciclo do Meta-Agente como uma tarefa de fundo.
+    # A tarefa continuará a ser executada enquanto a aplicação estiver ativa.
+    meta_agent_task = asyncio.create_task(run_meta_agent_cycle())
+    # --- FIM DA MODIFICAÇÃO ---
+    
     yield
+    
+    # Quando a aplicação desliga, podemos cancelar a tarefa.
+    meta_agent_task.cancel()
     logger.info("Application shutdown: Closing resources...")
     graph_db.close()
 

@@ -1,4 +1,5 @@
 # app/core/agent_tools.py
+
 import json
 from typing import List
 
@@ -85,6 +86,32 @@ def find_file_of_function(function_name: str) -> str:
     """
     results = graph_db.query(query, params={"function_name": function_name})
     return json.dumps(results) if results else f"Função '{function_name}' não encontrada no grafo."
+
+
+class AnalyzeMemoryInput(BaseModel):
+    last_n_experiences: int = Field(default=20, description="O número de experiências recentes a serem analisadas.")
+
+
+@tool(args_schema=AnalyzeMemoryInput)
+def analyze_memory_for_failures(last_n_experiences: int) -> str:
+    """
+    Examina as N experiências mais recentes na memória episódica para identificar e resumir padrões de falhas.
+    Esta ferramenta é essencial para a auto-otimização do sistema.
+    """
+    # logger not available here; keep simple prints or rely on memory_core logs
+    experiences = memory_core.recall(query="falha de ação do agente", n_results=last_n_experiences)
+    failures = [
+        exp for exp in experiences
+        if exp.get("metadata", {}).get("type") == "action_failure"
+    ]
+    if not failures:
+        return "Análise concluída. Nenhuma falha de ação significativa foi encontrada nas experiências recentes."
+    summary = f"Análise concluída. Foram encontradas {len(failures)} falhas nas últimas {last_n_experiences} experiências:\n"
+    for fail in failures:
+        tool_used = fail.get("metadata", {}).get("tool_used", "N/A")
+        error_observation = fail.get("content", "Erro desconhecido").split("O resultado foi: '")[-1].replace("'", "")
+        summary += f"- Ferramenta '{tool_used}' falhou com o erro: {error_observation}\n"
+    return summary
 
 
 # --- Lista de Ferramentas Unificada e Final ---

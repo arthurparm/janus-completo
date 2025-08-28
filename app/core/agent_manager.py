@@ -21,7 +21,7 @@ from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputP
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.core.agent_tools import unified_tools, recall_experiences
+from app.core.agent_tools import unified_tools, recall_experiences, analyze_memory_for_failures
 from app.core.llm_manager import get_llm
 # --- NOVA IMPORTAÇÃO PARA O CICLO DE MEMÓRIA ---
 from app.core.memory_core import memory_core
@@ -38,7 +38,7 @@ class AgentType(Enum):
     """
     ORCHESTRATOR = "orchestrator"  # Agente de alto nível para decomposição de tarefas.
     TOOL_USER = "tool_user"  # Agente genérico para execução de ferramentas.
-    # Futuros agentes podem ser adicionados aqui, ex: CODE_GENERATOR, SELF_REFLECTION
+    META_AGENT = "meta_agent"  # Novo agente supervisor
 
 
 class AgentManager:
@@ -78,6 +78,14 @@ class AgentManager:
             tools: List[BaseTool] = unified_tools
             logger.info(f"Configurando agente {agent_type.name} com o conjunto de {len(tools)} ferramentas unificadas.")
             return prompt_template, tools
+
+        # --- NOVA CONFIGURAÇÃO PARA O META-AGENTE ---
+        elif agent_type == AgentType.META_AGENT:
+            prompt_template = get_prompt("meta_agent_supervisor")
+            tools: List[BaseTool] = [analyze_memory_for_failures]
+            logger.info(f"Configurando agente {agent_type.name} com {len(tools)} ferramentas de supervisão.")
+            return prompt_template, tools
+        # --- FIM DA MODIFICAÇÃO ---
 
         else:
             raise ValueError(f"Configuração para o tipo de agente '{agent_type}' não encontrada.")
