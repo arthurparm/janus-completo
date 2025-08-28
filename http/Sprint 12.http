@@ -1,0 +1,46 @@
+# Variáveis para o ambiente de teste do Sprint 12
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Teste 1: Validação do Endpoint de Observabilidade
+# Objetivo: Confirmar que o endpoint /metrics está ativo e a expor as métricas do Prometheus.
+# Este é o principal teste de sucesso para a infraestrutura do Sprint 12.
+GET {{host}}/metrics
+Accept: text/plain
+
+> {%
+    client.test("Metrics endpoint is available", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        // O Prometheus expõe métricas como texto simples.
+        client.assert(response.contentType.mimeType.includes("text/plain"), "Content-Type is not text/plain");
+        client.log("Metrics endpoint returned successfully.");
+    });
+
+    client.test("Metrics endpoint contains our custom metric", function() {
+        // Verificamos se o corpo da resposta inclui o nome do nosso novo contador.
+        const body = response.body;
+        client.assert(body.includes("llm_router_model_selected_total"), "Custom LLM router metric not found");
+        client.log("Found custom metric 'llm_router_model_selected_total'.");
+    });
+%}
+
+###
+# Teste 2: Exercitar o Roteador de Modelos Dinâmico
+# Objetivo: Fazer uma chamada de agente simples para forçar o llm_manager a escolher um modelo.
+# A validação real deste teste não está na resposta JSON, mas em verificar se o contador
+# 'llm_router_model_selected_total' no endpoint /metrics incrementa após esta chamada.
+POST {{host}}{{api_v1_prefix}}/agent/execute
+Content-Type: application/json
+
+{
+  "question": "Olá, Janus. Como você está hoje?",
+  "agent_type": "tool_user"
+}
+
+> {%
+    client.test("Agent execution request successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.log("Agent Answer: " + response.body.answer);
+    });
+%}

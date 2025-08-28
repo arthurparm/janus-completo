@@ -35,7 +35,7 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Leia o conteudo do arquivo 'plano_sprint6.txt' e me diga o que esta escrito."
+  "question": "Leia o conteudo do arquivo 'workspace/plano_sprint6.txt' e me diga o que esta escrito."
 }
 
 > {%

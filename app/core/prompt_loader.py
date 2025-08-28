@@ -89,11 +89,11 @@ Você é um **engenheiro de software de IA altamente experiente e meticuloso**. 
 
 ---
 **<INSTRUCOES_CRUCIAIS_E_OBRIGATORIAS>**
-1.  **AVALIE O OBJETIVO:** Analise a pergunta do usuário para entender o objetivo principal.
-2.  **SELECIONE A CAPACIDADE:** Escolha **UMA ÚNICA** capacidade da sua lista de <CAPACIDADES> que corresponda diretamente ao objetivo do usuário.
-3.  **PROIBIÇÃO ESTRITA:** É **ABSOLUTAMENTE PROIBIDO** tentar qualquer ação ou usar qualquer ferramenta que não esteja descrita na sua lista de <CAPACIDADES>. NÃO INVENTE FERRAMENTAS.
-4.  **SE NÃO HOUVER CAPACIDADE ADEQUADA:** Se nenhuma das suas capacidades puder resolver diretamente o pedido do usuário, sua única ação permitida é responder com uma `Final Answer` declarando que você não possui a ferramenta necessária para completar a tarefa. NÃO TENTE usar outra ferramenta para contornar a limitação.
-5.  **TRATAMENTO DE ERROS:** Se você executar uma capacidade e a `Observation` retornar um erro, **PARE IMEDIATAMENTE**. Sua `Final Answer` deve ser informar ao usuário sobre o erro que ocorreu. NÃO TENTE NOVAMENTE nem invente uma solução.
+1.  **SEMPRE** siga o formato de saída <FORMATO> sem desvios.
+2.  Sua primeira `Thought` (Pensamento) DEVE ser analisar a consulta do usuário e identificar qual ferramenta das <CAPACIDADES> é a mais adequada.
+3.  Se uma ferramenta adequada existir, sua `Action` (Ação) deve ser usar essa ferramenta.
+4.  Se NENHUMA ferramenta em <CAPACIDADES> puder resolver a consulta, sua ÚNICA ação permitida é responder diretamente com `Final Answer`, informando que você não possui a capacidade necessária.
+5.  Se uma `Action` resultar em um erro na `Observation`, PARE IMEDIATAMENTE e forneça uma `Final Answer` que explique o erro ao usuário.
 **</INSTRUCOES_CRUCIAIS_E_OBRIGATORIAS>**
 ---
 
@@ -103,13 +103,18 @@ Você é um **engenheiro de software de IA altamente experiente e meticuloso**. 
 
 ---
 <FORMATO>
-O formato de interação é:
-Thought: [Seu raciocínio sobre qual capacidade usar. Se nenhuma for adequada, declare isso aqui.]
-Action: [O nome de uma capacidade da lista OU `Final Answer` se nenhuma ferramenta for aplicável]
+Thought: A consulta do usuário é [resumo da consulta]. Analisando minhas capacidades, a ferramenta mais adequada é `[nome_da_ferramenta]`.
+Action: [nome_da_ferramenta]
 Action Input: [O input da capacidade em JSON]
-Observation: [O resultado retornado pela capacidade]
-... (o ciclo pode repetir)
-Thought: [Seu raciocínio final sobre a conclusão da tarefa.]
+
+OU, SE NENHUMA FERRAMENTA FOR ADEQUADA:
+
+Thought: A consulta do usuário é [resumo da consulta]. Analisando minhas capacidades, nenhuma ferramenta é capaz de realizar esta tarefa. Devo informar ao usuário.
+Final Answer: Eu não possuo a capacidade de [ação solicitada pelo usuário]. Minhas ferramentas disponíveis são: [lista de nomes de ferramentas].
+
+... (o ciclo de Thought/Action/Observation pode repetir após a primeira ação)
+
+Thought: Eu completei a tarefa.
 Final Answer: [A resposta final e concisa para o usuário.]
 </FORMATO>
 
@@ -125,12 +130,12 @@ Inicie a tarefa.
 **AVISO FINAL:** A sua resposta `Final Answer` DEVE ser, sem exceção, em Português do Brasil.
 """
 
+
 PROMPTS = {
     "cypher_generation": CYPHER_GENERATION_TEMPLATE,
     "qa_synthesis": QA_SYNTHESIS_TEMPLATE,
     "react_agent": REACT_AGENT_TEMPLATE,
 }
-
 
 def get_prompt(prompt_name: str) -> str:
     try:

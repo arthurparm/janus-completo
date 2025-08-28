@@ -1,14 +1,14 @@
 # app/main.py
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from app.config import settings
-from app.api.v1.router import api_router
-from app.db.graph import graph_db
-
-# Nossas novas importações
-from app.core.logging_config import setup_logging
-from app.core.correlation_middleware import CorrelationMiddleware
 import structlog
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator  # Mantenha a importação aqui
+
+from app.api.v1.router import api_router
+from app.config import settings
+from app.core.correlation_middleware import CorrelationMiddleware
+from app.core.logging_config import setup_logging
+from app.db.graph import graph_db
 
 # Configura o logging estruturado para toda a aplicação
 setup_logging()
@@ -18,6 +18,7 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Application startup: Initializing resources...")
     graph_db.get_driver()
+    # A lógica do Instrumentator foi REMOVIDA daqui.
     yield
     logger.info("Application shutdown: Closing resources...")
     graph_db.close()
@@ -28,6 +29,8 @@ app = FastAPI(
     description="Janus: An autonomous, modular AI software architect.",
     lifespan=lifespan
 )
+
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(CorrelationMiddleware)
 

@@ -19,7 +19,7 @@ Content-Type: application/json
     client.test("TOOL_USER agent execution successful", function() {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
-        client.assert(response.body.agent_type_used === "tool_user", "Incorrect agent type was used");
+        client.assert(response.body.agent_type_used === "TOOL_USER", "Incorrect agent type was used");
         client.log("Agent Answer: " + response.body.answer);
     });
 %}
@@ -56,7 +56,7 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-  "question": "Tente criar um ficheiro chamado 'orchestrator_fail.txt'.",
+  "question": "Tente criar um ficheiro chamado 'orchestrator_fail.txt'",
   "agent_type": "orchestrator"
 }
 

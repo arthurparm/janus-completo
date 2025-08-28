@@ -38,7 +38,7 @@ class AppSettings(BaseSettings):
     OLLAMA_HOST: str = "http://ollama:11434"
 
     # Modelo para o Córtex Pré-Frontal (Orquestração e Raciocínio Geral)
-    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.2:3b"
+    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.2"
 
     # Modelo para o Cerebelo (Geração e Análise de Código)
     OLLAMA_CODER_MODEL: str = "codellama:7b"
