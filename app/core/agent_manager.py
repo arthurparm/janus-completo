@@ -5,6 +5,8 @@
 import json
 import logging
 import time
+import random  # Para adicionar jitter ao backoff
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from enum import Enum
 from typing import List, Tuple
 
@@ -148,18 +150,32 @@ class AgentManager:
 
             agent_executor = self._create_agent_executor(agent_type)
 
+            # --- POLÍTICA DE RETRY COM EXPONENTIAL BACKOFF E TIMEOUT ---
             MAX_ATTEMPTS = 3
+            INITIAL_BACKOFF = 1.0  # segundos
+            MAX_BACKOFF = 10.0     # segundos
+            OP_TIMEOUT = 30.0      # timeout por tentativa (segundos)
+            # --- FIM DA POLÍTICA ---
             result = None
             last_error = None
+            state = "INIT"
 
             start = time.time()
             for attempt in range(MAX_ATTEMPTS):
                 try:
+                    state = "RUNNING"
                     logger.info(f"Invocando AgentExecutor (tipo: {agent_type.name}), Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
-                    result = agent_executor.invoke(
-                        {"input": question},
-                        {"recursion_limit": 5}
-                    )
+
+                    # Executa com timeout usando ThreadPoolExecutor para simular uma máquina de estados com TIMEOUT
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            agent_executor.invoke,
+                            {"input": question},
+                            {"recursion_limit": 5}
+                        )
+                        result = future.result(timeout=OP_TIMEOUT)
+
+                    state = "SUCCESS"
                     logger.info(f"AgentExecutor (tipo: {agent_type.name}) concluiu a execução com sucesso.")
                     break  # Sai do loop se a execução for bem-sucedida
                 except Exception as e:
@@ -172,6 +188,7 @@ class AgentManager:
                         or ("validation error" in error_text.lower())
                     )
                     if is_validation_error:
+                        state = "VALIDATION_ERROR"
                         logger.warning(
                             f"Erro de validação ao chamar ferramenta na tentativa {attempt + 1}: {e}. Encerrando sem novas tentativas."
                         )
@@ -185,12 +202,22 @@ class AgentManager:
                             "intermediate_steps": [],
                         }
 
-                    last_error = e
-                    logger.warning(
-                        f"Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' com o erro: {e}. "
-                        f"Aguardando 2 segundos antes de tentar novamente."
+                    # Lógica de exponential backoff com jitter
+                    backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
+                    jitter = backoff_duration * 0.1 * random.random()  # 10% de jitter
+                    sleep_time = backoff_duration + jitter
+
+                    last_error = e if not isinstance(e, FuturesTimeoutError) else TimeoutError(
+                        f"Execução do agente excedeu o timeout de {OP_TIMEOUT}s na tentativa {attempt + 1}."
                     )
-                    time.sleep(2)
+
+                    reason = "timeout" if isinstance(e, FuturesTimeoutError) else "erro"
+                    state = "RETRY_WAIT"
+                    logger.warning(
+                        f"Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' por {reason}: {e}. "
+                        f"Aguardando {sleep_time:.2f} segundos antes de tentar novamente."
+                    )
+                    time.sleep(sleep_time)
             
             if result is None:
                 # Se o loop terminar sem sucesso, lança a última exceção capturada.
