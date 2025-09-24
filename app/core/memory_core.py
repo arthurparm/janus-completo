@@ -2,29 +2,40 @@
 
 import json
 import logging
+from uuid import uuid4
+from qdrant_client import QdrantClient, models
+from langchain_community.vectorstores import Qdrant  # Reserva para integrações futuras
+from langchain_openai import OpenAIEmbeddings  # Exemplo de modelo de embedding
 
-from app.db.vector_store import get_or_create_collection
+from app.db.vector_store import get_qdrant_client, get_or_create_collection
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "janus_episodic_memory"
 
+# Inicializa a coleção no início para garantir que ela exista
+try:
+    get_or_create_collection(COLLECTION_NAME)
+except ConnectionError as e:
+    logger.error(f"Não foi possível inicializar a coleção do Qdrant: {e}")
+
 
 def _sanitize_metadata(metadata: dict) -> dict:
-    """
-    Garante que todos os valores no dicionário de metadados sejam de tipos primitivos
-    suportados pelo ChromaDB (str, int, float, bool). Converte tipos complexos
-    (dict, list) para strings JSON.
-    """
+    # Esta função continua útil para garantir que os metadados são compatíveis com JSON
+    # e podem ser armazenados como payload no Qdrant.
     sanitized = {}
     for key, value in metadata.items():
         if isinstance(value, (dict, list)):
-            sanitized[key] = json.dumps(value, ensure_ascii=False)
+            # Qdrant pode lidar com objetos aninhados, mas serializar para JSON é mais seguro
+            # para evitar problemas de compatibilidade de tipos.
+            try:
+                sanitized[key] = json.dumps(value, ensure_ascii=False)
+            except (TypeError, OverflowError):
+                sanitized[key] = str(value)  # Fallback
         elif isinstance(value, (str, int, float, bool)) or value is None:
             sanitized[key] = value
         else:
-            # Converte qualquer outro tipo para string como uma salvaguarda.
             sanitized[key] = str(value)
     return sanitized
 
@@ -32,76 +43,82 @@ def _sanitize_metadata(metadata: dict) -> dict:
 class EpisodicMemory:
     def __init__(self):
         try:
-            self.collection = get_or_create_collection(COLLECTION_NAME)
-            logger.info(f"Memória episódica conectada à coleção '{COLLECTION_NAME}'.")
+            self.client: QdrantClient = get_qdrant_client()
+            # Exemplo de como inicializar um modelo de embedding. Em um projeto real,
+            # isso viria de um gerenciador centralizado.
+            self.encoder = OpenAIEmbeddings()
+            logger.info(f"Memória episódica conectada ao Qdrant, coleção '{COLLECTION_NAME}'.")
         except Exception as e:
-            self.collection = None
-            logger.error(f"Falha ao inicializar a memória episódica: {e}", exc_info=True)
+            self.client = None
+            self.encoder = None
+            logger.error(f"Falha ao inicializar a memória episódica com Qdrant: {e}", exc_info=True)
 
     def memorize(self, experience: Experience):
-        """Salva uma única experiência no banco de dados vetorial."""
-        if not self.collection:
-            logger.error("Não é possível memorizar, a coleção de memória não está disponível.")
+        """Salva uma única experiência no banco de dados vetorial Qdrant."""
+        if not self.client or not self.encoder:
+            logger.error("Não é possível memorizar, o cliente Qdrant ou o encoder não estão disponíveis.")
             return
 
         try:
-            # Junta os metadados do objeto com as suas propriedades de nível superior.
-            metadata_to_store = experience.metadata.copy()
-            metadata_to_store['type'] = experience.type
-            metadata_to_store['timestamp'] = experience.timestamp
+            # Gera o embedding para o conteúdo da experiência
+            vector = self.encoder.embed_query(experience.content)
 
-            # --- CORREÇÃO CRÍTICA ---
-            # Sanitiza os metadados para garantir a compatibilidade com o ChromaDB.
-            safe_metadata = _sanitize_metadata(metadata_to_store)
+            # Prepara o payload (metadados)
+            payload = experience.metadata.copy()
+            payload['type'] = experience.type
+            payload['timestamp'] = experience.timestamp
+            payload['content'] = experience.content  # Armazenamos o conteúdo original no payload
+            safe_payload = _sanitize_metadata(payload)
 
-            self.collection.add(
-                ids=[experience.id],
-                documents=[experience.content],
-                metadatas=[safe_metadata]
+            # Adiciona o ponto ao Qdrant
+            self.client.upsert(
+                collection_name=COLLECTION_NAME,
+                points=[
+                    models.PointStruct(
+                        id=experience.id,
+                        vector=vector,
+                        payload=safe_payload
+                    )
+                ],
+                wait=True
             )
-            logger.info(f"Experiência memorizada com sucesso (ID: {experience.id})")
+            logger.info(f"Experiência memorizada com sucesso no Qdrant (ID: {experience.id})")
         except Exception as e:
-            logger.error(f"Erro ao memorizar a experiência {experience.id}: {e}", exc_info=True)
+            logger.error(f"Erro ao memorizar a experiência {experience.id} no Qdrant: {e}", exc_info=True)
 
     def recall(self, query: str, n_results: int = 5) -> list[dict]:
-        """
-        Recupera as N experiências mais similares a uma consulta, incluindo a distância.
-        """
-        if not self.collection:
-            logger.error("Não é possível recordar, a coleção de memória não está disponível.")
+        """Recupera as N experiências mais similares a uma consulta do Qdrant."""
+        if not self.client or not self.encoder:
+            logger.error("Não é possível recordar, o cliente Qdrant ou o encoder não estão disponíveis.")
             return []
 
         try:
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                include=["metadatas", "documents", "distances"]  # Garante que a distância seja incluída
+            # Gera o embedding para a consulta
+            query_vector = self.encoder.embed_query(query)
+
+            # Executa a busca no Qdrant
+            search_results = self.client.search(
+                collection_name=COLLECTION_NAME,
+                query_vector=query_vector,
+                limit=n_results,
+                with_payload=True  # Para recuperar os metadados
             )
 
-            ids = results.get('ids', [[]])[0]
-            documents = results.get('documents', [[]])[0]
-            metadatas = results.get('metadatas', [[]])[0]
-            distances = results.get('distances', [[]])[0]
-
-            logger.info(f"Recordadas {len(ids)} experiências para a consulta: '{query}'")
-
             recalled_experiences = []
-            for i, doc_id in enumerate(ids):
-                # --- CORREÇÃO CRÍTICA ---
-                # A estrutura agora corresponde ao `RecallResponse` da API, incluindo a distância.
+            for scored_point in search_results:
                 experience_data = {
-                    "id": doc_id,
-                    "content": documents[i],
-                    "metadata": metadatas[i] or {},
-                    "distance": distances[i]
+                    "id": scored_point.id,
+                    "content": scored_point.payload.get('content', ''),
+                    "metadata": {k: v for k, v in scored_point.payload.items() if k != 'content'},
+                    "distance": 1 - scored_point.score  # Qdrant score é similaridade, distância é 1 - similaridade
                 }
                 recalled_experiences.append(experience_data)
 
+            logger.info(f"Recordadas {len(recalled_experiences)} experiências do Qdrant para a consulta: '{query}'")
             return recalled_experiences
         except Exception as e:
-            logger.error(f"Erro ao recordar experiências para a consulta '{query}': {e}", exc_info=True)
+            logger.error(f"Erro ao recordar experiências do Qdrant para a consulta '{query}': {e}", exc_info=True)
             return []
-
 
 # Instância única para ser usada na aplicação
 memory_core = EpisodicMemory()

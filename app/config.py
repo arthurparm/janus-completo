@@ -14,13 +14,15 @@ class AppSettings(BaseSettings):
     APP_VERSION: str = "0.2.0"
     ENVIRONMENT: str = "development"
 
-    # ... (Configurações de Neo4j e ChromaDB inalteradas) ...
+    # ... (Configurações de Neo4j inalteradas) ...
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = "password"
 
-    CHROMA_HOST: str = "chroma"
-    CHROMA_PORT: int = 8000
+    # --- ATUALIZAÇÃO: DE CHROMA PARA QDRANT ---
+    QDRANT_HOST: str = "qdrant"
+    QDRANT_PORT: int = 6333
+    QDRANT_API_KEY: Optional[SecretStr] = None  # Para Qdrant Cloud (opcional)
 
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
