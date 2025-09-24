@@ -13,6 +13,13 @@ from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain.tools import BaseTool
 from langchain_core.agents import AgentFinish
 
+# Import opcional para detectar erros de validação de ferramentas
+try:
+    from pydantic import ValidationError as PydanticValidationError
+except Exception:  # fallback para ambientes onde a importação não esteja disponível
+    class PydanticValidationError(Exception):
+        pass
+
 # Importações adicionais para depuração e prompts
 from langchain.agents.format_scratchpad.openai_tools import (
     format_to_openai_tool_messages,
@@ -156,6 +163,28 @@ class AgentManager:
                     logger.info(f"AgentExecutor (tipo: {agent_type.name}) concluiu a execução com sucesso.")
                     break  # Sai do loop se a execução for bem-sucedida
                 except Exception as e:
+                    # Se um erro de validação de entrada da ferramenta ocorrer, devemos PARAR imediatamente
+                    # e devolver uma resposta final explicando o erro (conforme regras do prompt do agente).
+                    error_text = str(e)
+                    is_validation_error = (
+                        isinstance(e, PydanticValidationError)
+                        or e.__class__.__name__.lower().endswith("validationerror")
+                        or ("validation error" in error_text.lower())
+                    )
+                    if is_validation_error:
+                        logger.warning(
+                            f"Erro de validação ao chamar ferramenta na tentativa {attempt + 1}: {e}. Encerrando sem novas tentativas."
+                        )
+                        final_answer = (
+                            "Thought: Uma ação resultou em erro ao usar a ferramenta. Pela regra, devo parar e explicar o erro.\n"
+                            f"Final Answer: Falha ao executar a ferramenta devido a erro de validação dos parâmetros. Detalhes: {error_text}. "
+                            "Para a ferramenta 'write_file', o campo 'content' é obrigatório além de 'file_path'."
+                        )
+                        return {
+                            "answer": final_answer,
+                            "intermediate_steps": [],
+                        }
+
                     last_error = e
                     logger.warning(
                         f"Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' com o erro: {e}. "
