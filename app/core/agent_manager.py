@@ -36,6 +36,8 @@ from app.core.llm_manager import get_llm
 from app.core.memory_core import memory_core
 from app.core.prompt_loader import get_prompt
 from app.models.schemas import Experience
+from app.core.resilience import CircuitBreaker
+from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,14 @@ class AgentType(Enum):
     ORCHESTRATOR = "orchestrator"  # Agente de alto nível para decomposição de tarefas.
     TOOL_USER = "tool_user"  # Agente genérico para execução de ferramentas.
     META_AGENT = "meta_agent"  # Novo agente supervisor
+
+
+# --- INSTÂNCIAS DE CIRCUIT BREAKER POR AGENTE ---
+agent_circuit_breakers = {
+    agent_type: CircuitBreaker(failure_threshold=3, recovery_timeout=60)
+    for agent_type in AgentType
+}
+# --- FIM ---
 
 
 class AgentManager:
@@ -139,13 +149,18 @@ class AgentManager:
             return_intermediate_steps=True
         )
 
-    def run_agent(self, question: str, agent_type: AgentType = AgentType.TOOL_USER) -> dict:
+    def run_agent(self, question: str, request: Request, agent_type: AgentType = AgentType.TOOL_USER) -> dict:
         """
         Executa um agente especializado para responder a uma pergunta ou completar uma tarefa.
         """
+        # --- TRACING: correlation ID ---
+        correlation_id = request.headers.get('X-Correlation-ID', 'no-id') if request else 'no-id'
         try:
+            # --- OBTÉM O CIRCUIT BREAKER ESPECÍFICO DO AGENTE ---
+            circuit_breaker = agent_circuit_breakers[agent_type]
+
             logger.info(
-                f"Iniciando execução do agente do tipo '{agent_type.name}' para a instrução: '{question}'"
+                f"[trace_id={correlation_id}] Iniciando execução do agente do tipo '{agent_type.name}' para a instrução: '{question}'"
             )
 
             agent_executor = self._create_agent_executor(agent_type)
@@ -164,19 +179,23 @@ class AgentManager:
             for attempt in range(MAX_ATTEMPTS):
                 try:
                     state = "RUNNING"
-                    logger.info(f"Invocando AgentExecutor (tipo: {agent_type.name}), Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
+                    logger.info(f"[trace_id={correlation_id}] Invocando AgentExecutor (tipo: {agent_type.name}), Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
+
+                    # Função protegida pelo Circuit Breaker
+                    invoke_func = lambda: agent_executor.invoke(
+                        {"input": question},
+                        {"recursion_limit": 5}
+                    )
+                    protected_invoke = circuit_breaker(invoke_func)
 
                     # Executa com timeout usando ThreadPoolExecutor para simular uma máquina de estados com TIMEOUT
                     with ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(
-                            agent_executor.invoke,
-                            {"input": question},
-                            {"recursion_limit": 5}
-                        )
+                        future = executor.submit(protected_invoke)
                         result = future.result(timeout=OP_TIMEOUT)
 
                     state = "SUCCESS"
-                    logger.info(f"AgentExecutor (tipo: {agent_type.name}) concluiu a execução com sucesso.")
+                    elapsed = time.time() - start
+                    logger.info(f"[trace_id={correlation_id}] AgentExecutor (tipo: {agent_type.name}) concluiu a execução com sucesso em {elapsed:.2f}s.")
                     break  # Sai do loop se a execução for bem-sucedida
                 except Exception as e:
                     # Se um erro de validação de entrada da ferramenta ocorrer, devemos PARAR imediatamente
@@ -190,7 +209,7 @@ class AgentManager:
                     if is_validation_error:
                         state = "VALIDATION_ERROR"
                         logger.warning(
-                            f"Erro de validação ao chamar ferramenta na tentativa {attempt + 1}: {e}. Encerrando sem novas tentativas."
+                            f"[trace_id={correlation_id}] Erro de validação ao chamar ferramenta na tentativa {attempt + 1}: {e}. Encerrando sem novas tentativas."
                         )
                         final_answer = (
                             "Thought: Uma ação resultou em erro ao usar a ferramenta. Pela regra, devo parar e explicar o erro.\n"
@@ -201,6 +220,12 @@ class AgentManager:
                             "answer": final_answer,
                             "intermediate_steps": [],
                         }
+
+                    # Se o Circuit Breaker estiver aberto, aborta novas tentativas
+                    if isinstance(e, ConnectionError) and "Circuit Breaker está ABERTO" in str(e):
+                        last_error = e
+                        logger.error(f"[trace_id={correlation_id}] O Circuit Breaker para '{agent_type.name}' está aberto. Abortando tentativas.")
+                        break
 
                     # Lógica de exponential backoff com jitter
                     backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
@@ -214,7 +239,7 @@ class AgentManager:
                     reason = "timeout" if isinstance(e, FuturesTimeoutError) else "erro"
                     state = "RETRY_WAIT"
                     logger.warning(
-                        f"Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' por {reason}: {e}. "
+                        f"[trace_id={correlation_id}] Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' por {reason}: {e}. "
                         f"Aguardando {sleep_time:.2f} segundos antes de tentar novamente."
                     )
                     time.sleep(sleep_time)
@@ -234,6 +259,7 @@ class AgentManager:
                 observations = [str(step[1])[:500] for step in intermediate_steps]
                 logger.info({
                     "event": "agent_trace",
+                    "trace_id": correlation_id,
                     "agent_type": agent_type.name,
                     "question": question[:500],
                     "tools_invoked": tools_invoked,
@@ -260,11 +286,12 @@ class AgentManager:
                             "agent_type": agent_type.name,
                             "tool_used": action.tool,
                             "tool_input": action.tool_input,
-                            "original_question": question
+                            "original_question": question,
+                            "trace_id": correlation_id
                         }
                     )
                     memory_core.memorize(experience)
-                    logger.info(f"Experiência de sucesso com a ferramenta '{action.tool}' foi memorizada.")
+                    logger.info(f"[trace_id={correlation_id}] Experiência de sucesso com a ferramenta '{action.tool}' foi memorizada.")
 
             final_answer = result.get("output", "A tarefa foi concluída.")
             if isinstance(final_answer, AgentFinish):
@@ -276,8 +303,8 @@ class AgentManager:
             }
 
         except Exception as e:
-            logger.error(f"Erro inesperado ao executar o agente '{agent_type.name}' após todas as tentativas: {e}", exc_info=True)
-            return {"error": f"Ocorreu um erro crítico e inesperado durante a execução do agente '{agent_type.name}'."}
+            logger.error(f"[trace_id={correlation_id}] Erro inesperado ao executar o agente '{agent_type.name}' após todas as tentativas: {e}", exc_info=True)
+            return {"error": f"Ocorreu um erro crítico e inesperado durante a execução do agente '{agent_type.name}'. ID de rastreamento: {correlation_id}"}
 
 
 # Instância única para ser usada na aplicação, seguindo o padrão singleton.

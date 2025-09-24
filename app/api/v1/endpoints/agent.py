@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from starlette.requests import Request
 
 # A importação agora aponta para a nova função do agente executor
 from app.core.agent_manager import agent_manager, AgentType
@@ -30,12 +31,12 @@ class AgentResponse(BaseModel):
     tags=["Agent"]
 )
 
-def agent_execute(request: AgentExecutionRequest):
+def agent_execute(request: AgentExecutionRequest, http_request: Request):
     """
     Recebe uma solicitação e a encaminha para o AgentManager executar
     com o tipo de agente especificado.
     """
-    result = agent_manager.run_agent(request.question, request.agent_type)
+    result = agent_manager.run_agent(request.question, http_request, request.agent_type)
 
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
