@@ -47,6 +47,14 @@ class EpisodicMemory:
             # Exemplo de como inicializar um modelo de embedding. Em um projeto real,
             # isso viria de um gerenciador centralizado.
             self.encoder = OpenAIEmbeddings()
+            # Determina a dimensão do embedding para garantir que a coleção está alinhada
+            try:
+                probe_vec = self.encoder.embed_query("dimension_probe")
+                vector_dim = len(probe_vec)
+                get_or_create_collection(COLLECTION_NAME, vector_size=vector_dim)
+                logger.info(f"Coleção '{COLLECTION_NAME}' verificada/criada com dimensão {vector_dim}.")
+            except Exception as e:
+                logger.warning(f"Não foi possível verificar a dimensão do embedding/coleção: {e}")
             logger.info(f"Memória episódica conectada ao Qdrant, coleção '{COLLECTION_NAME}'.")
         except Exception as e:
             self.client = None

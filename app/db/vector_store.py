@@ -13,8 +13,8 @@ try:
         port=settings.QDRANT_PORT,
         # api_key=settings.QDRANT_API_KEY.get_secret_value() if settings.QDRANT_API_KEY else None, # Descomente se usar Qdrant Cloud
     )
-    # Testa a conexão
-    qdrant_client.health_check()
+    # Testa a conexão de forma leve chamando uma listagem de coleções
+    qdrant_client.get_collections()
     logger.info(f"Conexão com o Qdrant em {settings.QDRANT_HOST}:{settings.QDRANT_PORT} estabelecida com sucesso.")
 except Exception as e:
     logger.error(f"Falha ao conectar com o Qdrant: {e}", exc_info=True)

@@ -145,6 +145,7 @@ class AgentManager:
             result = None
             last_error = None
 
+            start = time.time()
             for attempt in range(MAX_ATTEMPTS):
                 try:
                     logger.info(f"Invocando AgentExecutor (tipo: {agent_type.name}), Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
@@ -166,7 +167,27 @@ class AgentManager:
                 # Se o loop terminar sem sucesso, lança a última exceção capturada.
                 raise last_error if last_error else RuntimeError("O agente falhou em todas as tentativas sem um erro específico.")
 
+            elapsed_ms = round((time.time() - start) * 1000, 1)
             intermediate_steps = result.get("intermediate_steps", [])
+
+            # Observabilidade mínima: trace da execução
+            try:
+                tools_invoked = [getattr(step[0], 'tool', 'unknown') for step in intermediate_steps]
+                tool_inputs = [getattr(step[0], 'tool_input', {}) for step in intermediate_steps]
+                sanitized_inputs = [json.dumps(inp, ensure_ascii=False)[:500] for inp in tool_inputs]
+                observations = [str(step[1])[:500] for step in intermediate_steps]
+                logger.info({
+                    "event": "agent_trace",
+                    "agent_type": agent_type.name,
+                    "question": question[:500],
+                    "tools_invoked": tools_invoked,
+                    "inputs": sanitized_inputs,
+                    "observations": observations,
+                    "latency_ms": elapsed_ms
+                })
+            except Exception:
+                pass
+
             if intermediate_steps:
                 last_step = intermediate_steps[-1]
                 action, observation = last_step

@@ -2,9 +2,10 @@
 
 import json
 from typing import List
+from pathlib import Path
 
 from langchain.tools import tool, BaseTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from app.core import filesystem_manager
 from app.core.memory_core import memory_core
@@ -13,16 +14,41 @@ from app.db.graph import graph_db
 
 # --- Ferramentas do Sistema de Arquivos (Descrições Aprimoradas) ---
 
+WORKSPACE_ROOT = Path("/app/workspace").resolve()
+
 class WriteFileInput(BaseModel):
     file_path: str = Field(
-        description="O nome do ficheiro a ser escrito. DEVE ser um caminho relativo dentro do workspace, por exemplo: 'meu_plano.txt'.")
-    content: str = Field(description="O conteúdo a ser escrito no ficheiro.")
+        min_length=1,
+        description="Caminho do ficheiro a ser escrito. Preferencialmente relativo ao workspace (ex.: 'meu_plano.txt'). Também aceita '/app/workspace/...'."
+    )
+    content: str = Field(min_length=1, max_length=1_000_000, description="Conteúdo obrigatório (<=1MB). Se binário, usar base64.")
+    overwrite: bool = False
+
+    @validator("file_path")
+    def validate_path(cls, v: str) -> str:
+        # Normaliza e impede traversal
+        p = Path(v)
+        # Se vier absoluto em /app/workspace, mantém; senão, trata como relativo ao workspace
+        if p.is_absolute():
+            resolved = p.resolve()
+        else:
+            resolved = (WORKSPACE_ROOT / v).resolve()
+        if '..' in resolved.parts:
+            raise ValueError("path traversal não permitido")
+        if not str(resolved).startswith(str(WORKSPACE_ROOT)):
+            raise ValueError("file_path fora da allowlist (/app/workspace)")
+        # Retorna caminho relativo ao workspace para a ferramenta de escrita
+        try:
+            rel = resolved.relative_to(WORKSPACE_ROOT)
+        except Exception:
+            rel = resolved.name
+        return str(rel)
 
 
 @tool(args_schema=WriteFileInput)
-def write_file(file_path: str, content: str) -> str:
+def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
     """Use esta capacidade para escrever ou criar um ficheiro de texto no diretório 'workspace'."""
-    return filesystem_manager.write_file(file_path, content)
+    return filesystem_manager.write_file(file_path, content, overwrite=overwrite)
 
 
 class ReadFileInput(BaseModel):

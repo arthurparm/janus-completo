@@ -13,7 +13,7 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      chroma:
+      qdrant:
         condition: service_started
       ollama:
         condition: service_started
@@ -41,13 +41,13 @@ services:
       retries: 5
       start_period: 20s
 
-  chroma:
-    image: chromadb/chroma
-    container_name: janus_chroma
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: janus_qdrant
     ports:
-      - "8001:8000"
+      - "6333:6333"
     volumes:
-      - ./data/chroma:/chroma/.chroma/index
+      - ./data/qdrant:/qdrant/storage
     networks:
       - janus-net
 

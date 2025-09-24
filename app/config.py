@@ -14,6 +14,9 @@ class AppSettings(BaseSettings):
     APP_VERSION: str = "0.2.0"
     ENVIRONMENT: str = "development"
 
+    # Feature flags / modos de execução
+    DRY_RUN: bool = True  # Modo simulado: substitui operações destrutivas por no-ops com logs
+
     # ... (Configurações de Neo4j inalteradas) ...
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
@@ -40,7 +43,7 @@ class AppSettings(BaseSettings):
     OLLAMA_HOST: str = "http://ollama:11434"
 
     # Modelo para o Córtex Pré-Frontal (Orquestração e Raciocínio Geral)
-    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.2"
+    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
 
     # Modelo para o Cerebelo (Geração e Análise de Código)
     OLLAMA_CODER_MODEL: str = "codellama:7b"
