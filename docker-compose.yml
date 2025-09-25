@@ -14,7 +14,7 @@ services:
       neo4j:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
       ollama:
         condition: service_started
     networks:
@@ -35,7 +35,7 @@ services:
     networks:
       - janus-net
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      test: [ "CMD-SHELL", "cypher-shell -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1'" ]
       interval: 5s
       timeout: 10s
       retries: 5
@@ -50,8 +50,13 @@ services:
       - ./data/qdrant:/qdrant/storage
     networks:
       - janus-net
+    healthcheck:
+      test: [ "CMD-SHELL", "curl --max-time 5 -f http://localhost:6333/readyz || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
-  # --- NOVO SERVIÇO SPRINT 10 ---
   ollama:
     image: ollama/ollama
     container_name: janus_ollama
@@ -67,7 +72,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
 networks:
   janus-net:

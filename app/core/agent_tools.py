@@ -1,8 +1,8 @@
 # app/core/agent_tools.py
 
 import json
-from typing import List
 from pathlib import Path
+from typing import List
 
 from langchain.tools import tool, BaseTool
 from pydantic import BaseModel, Field, validator
@@ -11,44 +11,81 @@ from app.core import filesystem_manager
 from app.core.memory_core import memory_core
 from app.db.graph import graph_db
 
-
 # --- Ferramentas do Sistema de Arquivos (Descrições Aprimoradas) ---
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
+ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
+MAX_FILE_SIZE = 1024 * 1024  # 1 MB
+
 
 class WriteFileInput(BaseModel):
     file_path: str = Field(
-        min_length=1,
-        description="Caminho do ficheiro a ser escrito. Preferencialmente relativo ao workspace (ex.: 'meu_plano.txt'). Também aceita '/app/workspace/...'."
+        description="O caminho do arquivo, relativo ao workspace (ex: 'meu_plano.txt')."
     )
-    content: str = Field(min_length=1, max_length=1_000_000, description="Conteúdo obrigatório (<=1MB). Se binário, usar base64.")
-    overwrite: bool = False
+    content: str = Field(description="O conteúdo a ser escrito no arquivo.")
+    overwrite: bool = Field(default=False, description="Se deve sobrescrever o arquivo caso já exista.")
+    dry_run: bool = Field(default=False, description="Se True, simula a operação sem escrever no disco.")
 
+    # --- MELHORIA: VALIDAÇÃO DE SEGURANÇA NO MODELO PYDANTIC ---
     @validator("file_path")
-    def validate_path(cls, v: str) -> str:
-        # Normaliza e impede traversal
-        p = Path(v)
-        # Se vier absoluto em /app/workspace, mantém; senão, trata como relativo ao workspace
-        if p.is_absolute():
-            resolved = p.resolve()
-        else:
-            resolved = (WORKSPACE_ROOT / v).resolve()
-        if '..' in resolved.parts:
-            raise ValueError("path traversal não permitido")
-        if not str(resolved).startswith(str(WORKSPACE_ROOT)):
-            raise ValueError("file_path fora da allowlist (/app/workspace)")
-        # Retorna caminho relativo ao workspace para a ferramenta de escrita
+    def validate_path_is_safe(cls, v: str) -> str:
+        if not v:
+            raise ValueError("O caminho do arquivo não pode ser vazio.")
+
+        # Constrói o caminho absoluto e resolve (remove '..')
+        absolute_path = (WORKSPACE_ROOT / v).resolve()
+
+        # Verifica se o caminho final ainda está dentro do diretório seguro usando relative_to
         try:
-            rel = resolved.relative_to(WORKSPACE_ROOT)
-        except Exception:
-            rel = resolved.name
-        return str(rel)
+            absolute_path.relative_to(WORKSPACE_ROOT)
+        except ValueError:
+            raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido.")
+
+        return v  # Retorna o caminho original relativo se for válido
 
 
 @tool(args_schema=WriteFileInput)
-def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
-    """Use esta capacidade para escrever ou criar um ficheiro de texto no diretório 'workspace'."""
-    return filesystem_manager.write_file(file_path, content, overwrite=overwrite)
+def write_file(
+        file_path: str,
+        content: str,
+        overwrite: bool = False,
+        dry_run: bool = False,
+) -> str:
+    """
+    Escreve conteúdo em um arquivo dentro de um diretório seguro (workspace).
+    Valida o caminho do arquivo, a extensão e o tamanho do conteúdo.
+    """
+    try:
+        # A validação principal já foi feita pelo Pydantic via args_schema
+        target_path = (WORKSPACE_ROOT / file_path).resolve()
+
+        # Garante que o caminho está dentro do workspace
+        try:
+            target_path.relative_to(WORKSPACE_ROOT)
+        except ValueError:
+            return f"Erro de validação: Acesso negado. O caminho '{file_path}' está fora do diretório permitido."
+
+        if target_path.suffix not in ALLOWED_EXTENSIONS:
+            return f"Erro: Extensão de arquivo não permitida. Permitidas: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+
+        if len(content.encode("utf-8")) > MAX_FILE_SIZE:
+            return f"Erro: O conteúdo do arquivo excede o tamanho máximo de {MAX_FILE_SIZE} bytes."
+
+        if target_path.exists() and not overwrite:
+            return f"Erro: O arquivo '{file_path}' já existe. Use overwrite=True para sobrescrevê-lo."
+
+        if dry_run:
+            return f"DRY RUN: O arquivo '{file_path}' seria escrito com sucesso em '{target_path}'."
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        return f"Arquivo '{file_path}' salvo com sucesso."
+    except ValueError as e:  # Captura erros de validação do Pydantic
+        return f"Erro de validação: {e}"
+    except Exception as e:
+        return f"Erro inesperado ao salvar o arquivo: {e}"
 
 
 class ReadFileInput(BaseModel):

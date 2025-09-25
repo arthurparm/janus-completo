@@ -1,0 +1,21 @@
+###
+
+# curl -X POST http://localhost:8000/api/v1/agent/invoke
+#-H "Content-Type: application/json"
+#-d '{
+# #  "instruction": "Escreva o conteúdo `teste` no ficheiro `workspace/teste.txt`",
+#  "agent_type": "TOOL_USER"
+#}'
+POST http://localhost:8000/api/v1/agent/invoke
+Content-Type: application/json
+
+{
+  "instruction": "Escreva o conteúdo `teste` no ficheiro `workspace/teste.txt`",
+  t
+  `
+  ",
+  "agent_type": "TOOL_USER"
+}
+
+###
+

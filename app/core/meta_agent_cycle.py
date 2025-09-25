@@ -28,6 +28,7 @@ async def run_meta_agent_cycle():
             # Executa o Meta-Agente
             result = agent_manager.run_agent(
                 question=initial_prompt,
+                request=None,
                 agent_type=AgentType.META_AGENT
             )
 
