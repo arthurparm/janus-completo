@@ -40,6 +40,11 @@ class AppSettings(BaseSettings):
     MEMORY_ENCRYPTION_KEY: Optional[str] = None  # Opcional: chave de "criptografia" simples
     MEMORY_PII_REDACT: bool = True  # Se verdadeiro, redige PII detectada
 
+    # Núcleo de Raciocínio
+    REASONING_MAX_ITERATIONS: int = 3
+    REASONING_MAX_SECONDS: int = 60
+    REASONING_MAX_TOKENS: int = 8000
+
     # Meta-Agente (ciclo)
     META_AGENT_CYCLE_INTERVAL_SECONDS: int = 300
     META_AGENT_MAX_ITERATIONS: int = 3
@@ -48,6 +53,11 @@ class AppSettings(BaseSettings):
     # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
+
+    # API - Rate limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_IP_PER_MIN: int = 60
+    RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
     GEMINI_API_KEY: Optional[SecretStr] = None
     GEMINI_MODEL_NAME: str = "gemini-1.5-pro-latest"
