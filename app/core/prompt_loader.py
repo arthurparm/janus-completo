@@ -154,6 +154,13 @@ Inicie a análise.
 {agent_scratchpad}
 """
 
+from collections import OrderedDict
+import string
+import time
+from typing import Dict, Optional, Tuple, Any, Callable
+
+from prometheus_client import Counter
+
 PROMPTS = {
     "cypher_generation": CYPHER_GENERATION_TEMPLATE,
     "qa_synthesis": QA_SYNTHESIS_TEMPLATE,
@@ -161,9 +168,110 @@ PROMPTS = {
     "meta_agent_supervisor": META_AGENT_SUPERVISOR_TEMPLATE,
 }
 
+PROMPT_CACHE_HITS = Counter(
+    "prompt_cache_hits_total", "Total de hits no cache de prompts", ["namespace", "name", "version", "lang", "model"]
+)
+PROMPT_CACHE_MISSES = Counter(
+    "prompt_cache_misses_total", "Total de misses no cache de prompts", ["namespace", "name", "version", "lang", "model"]
+)
+
+
+class PromptLoader:
+    def __init__(self, max_size: int = 128, ttl_seconds: int = 300, hot_reload: bool = False):
+        self.max_size = max_size
+        self.ttl_seconds = ttl_seconds
+        self.hot_reload = hot_reload
+        self._store: Dict[str, str] = PROMPTS  # origem default em memória
+        self._external_provider: Optional[Callable[[str], Optional[str]]] = None  # gancho p/ fonte externa
+        self._cache: "OrderedDict[Tuple[str, str, str, str, str], Tuple[float, str]]" = OrderedDict()
+
+    def _make_key(self, name: str, namespace: Optional[str], version: Optional[str], lang: Optional[str], model: Optional[str]) -> Tuple[str, str, str, str, str]:
+        return (
+            namespace or "default",
+            name,
+            version or "v1",
+            (lang or "pt-BR").lower(),
+            (model or "any").lower(),
+        )
+
+    def _validate_placeholders(self, template: str, variables: Optional[Dict[str, Any]]):
+        if variables is None:
+            return
+        fmt = string.Formatter()
+        required = {fname for _, fname, _, _ in fmt.parse(template) if fname}
+        missing = [k for k in required if k not in variables]
+        if missing:
+            raise ValueError(f"Variáveis ausentes para placeholders: {missing}")
+
+    def invalidate(self, predicate: Optional[Any] = None) -> None:
+        if predicate is None:
+            self._cache.clear()
+        else:
+            for k in list(self._cache.keys()):
+                if predicate(k):
+                    self._cache.pop(k, None)
+
+    def set_external_provider(self, provider: Callable[[str], Optional[str]]) -> None:
+        """Define um provedor externo (ex.: FS/DB) e invalida o cache."""
+        self._external_provider = provider
+        self.invalidate()
+
+    def get(self, name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
+            lang: Optional[str] = None, model: Optional[str] = None, variables: Optional[Dict[str, Any]] = None,
+            hot_reload: Optional[bool] = None) -> str:
+        key = self._make_key(name, namespace, version, lang, model)
+        now = time.time()
+        use_hot = self.hot_reload if hot_reload is None else hot_reload
+
+        if not use_hot:
+            if key in self._cache:
+                ts, value = self._cache[key]
+                if now - ts <= self.ttl_seconds:
+                    # hit
+                    PROMPT_CACHE_HITS.labels(*key).inc()
+                    # move to end (LRU)
+                    self._cache.move_to_end(key)
+                    return value
+                else:
+                    # expirado
+                    self._cache.pop(key, None)
+
+        # miss (ou hot reload): tenta provider externo primeiro
+        PROMPT_CACHE_MISSES.labels(*key).inc()
+        template: Optional[str] = None
+        if self._external_provider is not None:
+            try:
+                candidate = self._external_provider(name)
+                if isinstance(candidate, str) and candidate:
+                    template = candidate
+            except Exception:
+                template = None
+        if template is None:
+            try:
+                template = self._store[name]
+            except KeyError:
+                raise KeyError(f"Prompt '{name}' não encontrado.")
+
+        self._validate_placeholders(template, variables)
+
+        # manter cache dentro do tamanho
+        self._cache[key] = (now, template)
+        if len(self._cache) > self.max_size:
+            self._cache.popitem(last=False)
+        return template
+
+
+# Instância singleton para uso global
+prompt_loader = PromptLoader()
+
 
 def get_prompt(prompt_name: str) -> str:
-    try:
-        return PROMPTS[prompt_name]
-    except KeyError:
-        raise KeyError(f"Prompt com o nome '{prompt_name}' não encontrado no armazém de prompts.")
+    # compatibilidade retro
+    return prompt_loader.get(prompt_name)
+
+
+def get_prompt_advanced(prompt_name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
+                         lang: Optional[str] = None, model: Optional[str] = None, variables: Optional[Dict[str, Any]] = None,
+                         hot_reload: Optional[bool] = None) -> str:
+    return prompt_loader.get(prompt_name, namespace=namespace, version=version, lang=lang, model=model,
+                             variables=variables, hot_reload=hot_reload)
