@@ -1,13 +1,17 @@
 import logging
+import time
 from enum import Enum
+from typing import Any, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from prometheus_client import Counter
+from prometheus_client import Counter, Histogram
 
 from app.config import settings
+from app.core.resilience import resilient, CircuitBreaker
 
 LLM_ROUTER_COUNTER = Counter(
     "llm_router_model_selected_total",
@@ -15,10 +19,29 @@ LLM_ROUTER_COUNTER = Counter(
     ["role", "priority", "model_name", "provider"]
 )
 
+LLM_REQUESTS = Counter(
+    "llm_requests_total",
+    "Total de requisições ao provedor LLM",
+    ["provider", "model", "role", "outcome", "exception_type"],
+)
+LLM_LATENCY = Histogram(
+    "llm_request_latency_seconds",
+    "Latência por requisição LLM",
+    ["provider", "model", "role", "outcome"],
+)
+LLM_TOKENS = Counter(
+    "llm_tokens_total",
+    "Tokens contabilizados (aprox.) por direção",
+    ["provider", "model", "role", "direction"],  # direction in|out
+)
+
 logger = logging.getLogger(__name__)
 
 # Cache para as instâncias de LLM
-_llm_instances = {}
+_llm_instances: Dict[str, BaseChatModel] = {}
+
+_DEFAULT_TIMEOUT_S = getattr(settings, "LLM_TIMEOUT_SECONDS", 60)
+_CB = CircuitBreaker(failure_threshold=3, recovery_timeout=30)
 
 
 class ModelRole(Enum):
@@ -120,3 +143,109 @@ def get_llm(
         raise RuntimeError(
             f"FALHA CRÍTICA: Nenhum provedor de LLM (nem nuvem, nem local) pôde ser inicializado. Erro final: {e}"
         )
+
+
+class LLMClient:
+    """Cliente unificado para invocar LLMs com métricas, timeouts e resiliência."""
+
+    def __init__(self, base: BaseChatModel, provider: str, model: str, role: "ModelRole"):
+        self.base = base
+        self.provider = provider
+        self.model = model
+        self.role = role
+
+    def _estimate_tokens(self, text: str) -> int:
+        # Aproximação simples
+        return max(1, len(text) // 4)
+
+    def _invoke(self, prompt: str) -> Any:
+        # Chamada direta; LangChain lida com serialização
+        return self.base.invoke(prompt)
+
+    def send(self, prompt: str, timeout_s: Optional[int] = None) -> str:
+        operation = f"llm_send_{self.provider}"
+        timeout = timeout_s or _DEFAULT_TIMEOUT_S
+
+        # Wrapper para aplicar decorador por chamada (com CB + retry exponencial)
+        decorated = resilient(
+            max_attempts=3,
+            initial_backoff=0.5,
+            max_backoff=5.0,
+            circuit_breaker=_CB,
+            retry_on=(Exception,),
+            operation_name=operation,
+        )(self._invoke)
+
+        start = time.perf_counter()
+        try:
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
+
+            # Aplica timeout efetivo usando ThreadPoolExecutor
+            if timeout and timeout > 0:
+                with ThreadPoolExecutor(max_workers=1) as ex:
+                    future = ex.submit(decorated, prompt)
+                    try:
+                        result = future.result(timeout=timeout)
+                    except FuturesTimeoutError:
+                        future.cancel()
+                        raise TimeoutError(f"LLM request timeout after {timeout}s")
+            else:
+                result = decorated(prompt)
+
+            elapsed = time.perf_counter() - start
+            LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(elapsed)
+
+            # Extrai texto
+            output_text = None
+            try:
+                # langchain returns BaseMessage or str depending on backend
+                output_text = getattr(result, "content", None) or str(result)
+            except Exception:
+                output_text = str(result)
+
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "success", "").inc()
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "in").inc(self._estimate_tokens(prompt))
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "out").inc(self._estimate_tokens(output_text))
+            return output_text
+        except Exception as e:
+            elapsed = time.perf_counter() - start
+            LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
+            raise
+
+    def health_check(self) -> bool:
+        try:
+            _ = self.send("ping", timeout_s=10)
+            return True
+        except Exception:
+            return False
+
+
+def _infer_provider(llm: BaseChatModel) -> str:
+    if isinstance(llm, ChatOllama):
+        return "ollama"
+    if isinstance(llm, ChatOpenAI):
+        return "openai"
+    if isinstance(llm, ChatGoogleGenerativeAI):
+        return "google_gemini"
+    return "unknown"
+
+
+def _infer_model_name(llm: BaseChatModel) -> str:
+    for attr in ("model", "model_name", "model_id"):
+        if hasattr(llm, attr):
+            try:
+                val = getattr(llm, attr)
+                if isinstance(val, str):
+                    return val
+            except Exception:
+                pass
+    return "unknown"
+
+
+def get_llm_client(role: ModelRole = ModelRole.ORCHESTRATOR, priority: ModelPriority = ModelPriority.LOCAL_ONLY) -> LLMClient:
+    """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
+    llm = get_llm(role=role, priority=priority)
+    provider = _infer_provider(llm)
+    model_name = _infer_model_name(llm)
+    return LLMClient(llm, provider, model_name, role)
