@@ -2,14 +2,61 @@
 import ast
 import logging
 import os
-from typing import List, Dict, Any
+import time
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, Protocol
+
+from prometheus_client import Counter, Histogram
 
 from app.core.memory_core import memory_core  # Importa o memory_core para acessar experiências
 from app.db.graph import graph_db
+from app.core.resilience import resilient, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
 CODEBASE_DIR = "/app"
+
+# Metrics
+_KG_QUERIES = Counter("kg_queries_total", "Total de queries ao grafo", ["operation", "outcome", "exception_type"])
+_KG_LATENCY = Histogram("kg_query_latency_seconds", "Latência por query ao grafo", ["operation", "outcome"])
+
+_CB = CircuitBreaker(failure_threshold=3, recovery_timeout=15)
+
+
+class GraphPort(Protocol):
+    def query(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:  # pragma: no cover - interface
+        ...
+
+
+class Neo4jRepository:
+    def __init__(self, port: GraphPort):
+        self.port = port
+
+    def _do_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        return self.port.query(query, params=params or {})
+
+    def query(self, operation: str, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        wrapped = resilient(
+            max_attempts=3,
+            initial_backoff=0.25,
+            max_backoff=2.0,
+            circuit_breaker=_CB,
+            retry_on=(Exception,),
+            operation_name=f"kg_{operation}",
+        )(self._do_query)
+        start = time.perf_counter()
+        try:
+            result = wrapped(query, params)
+            _KG_QUERIES.labels(operation, "success", "").inc()
+            _KG_LATENCY.labels(operation, "success").observe(time.perf_counter() - start)
+            return result
+        except Exception as e:
+            _KG_QUERIES.labels(operation, "failure", type(e).__name__).inc()
+            _KG_LATENCY.labels(operation, "failure").observe(time.perf_counter() - start)
+            raise
+
+
+repo = Neo4jRepository(graph_db)
 
 
 class CodeParser(ast.NodeVisitor):
@@ -61,16 +108,18 @@ def _parse_python_file(file_path: str) -> CodeParser | None:
 
 def _create_code_entities_in_graph(parser: CodeParser):
     file_path = parser.file_path
-    graph_db.query("MERGE (f:File {path: $path})", params={"path": file_path})
+    repo.query("merge_file", "MERGE (f:File:CodeFile {path: $path})", params={"path": file_path})
 
     for func in parser.functions:
-        graph_db.query(
-            "MATCH (f:File {path: $file_path}) MERGE (func:Function {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(func)",
+        repo.query(
+            "merge_function",
+            "MATCH (f:File:CodeFile {path: $file_path}) MERGE (func:Function:CodeFunction {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(func)",
             params={"file_path": file_path, "name": func['name']}
         )
     for cls in parser.classes:
-        graph_db.query(
-            "MATCH (f:File {path: $file_path}) MERGE (c:Class {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
+        repo.query(
+            "merge_class",
+            "MATCH (f:File:CodeFile {path: $file_path}) MERGE (c:Class:CodeClass {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
             params={"file_path": file_path, "name": cls['name']}
         )
 
@@ -106,7 +155,8 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
         if not exp_id:
             continue
 
-        graph_db.query(
+        repo.query(
+            "merge_experience",
             """
             MERGE (e:Experience {id: $id})
             ON CREATE SET e.type = $type, e.content = $content, e.timestamp = $timestamp
@@ -119,7 +169,8 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
             summary_text = exp_metadata["summary"]
             summary_node_id = f"summary_{exp_id}"
 
-            graph_db.query(
+            repo.query(
+                "merge_summary",
                 """
                 MATCH (exp:Experience {id: $exp_id})
                 MERGE (s:Summary {id: $summary_id, text: $text})
@@ -144,7 +195,7 @@ def index_codebase() -> dict:
     logger.info(f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
 
     logger.info("Limpando entidades de código antigas do grafo...")
-    graph_db.query("MATCH (n) WHERE n:Function OR n:Class OR n:File DETACH DELETE n")
+    repo.query("cleanup_code_entities", "MATCH (n) WHERE n:CodeFunction OR n:CodeClass OR n:CodeFile DETACH DELETE n")
 
     total_files, total_funcs, total_classes = 0, 0, 0
     all_calls_to_process: List[Dict[str, Any]] = []
@@ -170,11 +221,12 @@ def index_codebase() -> dict:
                     total_classes += len(parser.classes)
 
     logger.info("Segunda passada: Criando relações de chamada entre funções...")
-    result = graph_db.query(
+    result = repo.query(
+        "merge_calls",
         """
         UNWIND $calls as call
-        MATCH (caller:Function {name: call.caller_name, file_path: call.file_path})
-        MATCH (callee:Function {name: call.callee_name})
+        MATCH (caller:Function:CodeFunction {name: call.caller_name, file_path: call.file_path})
+        MATCH (callee:Function:CodeFunction {name: call.callee_name})
         MERGE (caller)-[r:CALLS]->(callee)
         RETURN count(r) as created_relationships
         """,
