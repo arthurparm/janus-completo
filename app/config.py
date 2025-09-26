@@ -30,6 +30,20 @@ class AppSettings(BaseSettings):
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
 
+    # Memória (short/long-term)
+    MEMORY_SHORT_TTL_SECONDS: int = 600  # TTL para memória de curto prazo
+    MEMORY_SHORT_MAX_ITEMS: int = 512    # Capacidade LRU para curto prazo
+    MEMORY_MAX_CONTENT_CHARS: int = 20000
+    MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
+    MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
+    MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN: int = 5_000_000
+    MEMORY_ENCRYPTION_KEY: Optional[str] = None  # Opcional: chave de "criptografia" simples
+    MEMORY_PII_REDACT: bool = True  # Se verdadeiro, redige PII detectada
+
+    # Meta-Agente (ciclo)
+    META_AGENT_CYCLE_INTERVAL_SECONDS: int = 300
+    META_AGENT_MAX_ITERATIONS: int = 3
+    META_AGENT_MAX_SECONDS: int = 60
 
     # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
     OPENAI_API_KEY: Optional[SecretStr] = None
