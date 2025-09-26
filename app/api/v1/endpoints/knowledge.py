@@ -1,4 +1,3 @@
-# app/api/v1/endpoints/knowledge.py
 
 from typing import List, Optional
 
@@ -40,14 +39,12 @@ def trigger_indexing():
     entidades de código como Funções e Classes.
     """
     try:
-        # ATUALIZADO: Chama a função refatorada
         result = knowledge_graph_manager.index_codebase()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# NOVO ENDPOINT PARA SPRINT 8
 @router.post(
     "/consolidate",
     response_model=IndexResponse,

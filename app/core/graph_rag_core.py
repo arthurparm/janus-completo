@@ -1,4 +1,3 @@
-# app/core/graph_rag_core.py
 import logging
 import re
 
@@ -12,7 +11,6 @@ from app.core.prompt_loader import get_prompt
 
 logger = logging.getLogger(__name__)
 
-# ... (inicialização do grafo e dos prompts inalterada) ...
 try:
     graph = Neo4jGraph(
         url=settings.NEO4J_URI,
@@ -47,12 +45,10 @@ def _extract_cypher(text: str) -> str:
     """
     Extrai a consulta Cypher da resposta do LLM de forma robusta e agnóstica ao modelo.
     """
-    # 1. Tenta encontrar um bloco de código específico de cypher
     cypher_match = re.search(r"```(?:cypher)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     if cypher_match:
         return cypher_match.group(1).strip()
 
-    # 2. Se falhar, tenta encontrar qualquer linha que comece com palavras-chave Cypher
     lines = text.splitlines()
     for line in lines:
         cleaned_line = line.strip()
@@ -60,7 +56,6 @@ def _extract_cypher(text: str) -> str:
             # Assume que esta é a consulta e retorna-a
             return cleaned_line
 
-    # 3. Se tudo falhar, retorna uma string vazia
     logger.warning(f"Não foi possível extrair uma consulta Cypher da resposta: {text}")
     return ""
 

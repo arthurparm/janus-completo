@@ -1,4 +1,3 @@
-# app/core/data_harvester.py
 import json
 import logging
 

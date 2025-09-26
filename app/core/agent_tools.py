@@ -1,4 +1,3 @@
-# app/core/agent_tools.py
 
 import json
 from pathlib import Path
@@ -11,7 +10,6 @@ from app.core import filesystem_manager
 from app.core.memory_core import memory_core
 from app.db.graph import graph_db
 
-# --- Ferramentas do Sistema de Arquivos (Descrições Aprimoradas) ---
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
 ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
@@ -26,7 +24,6 @@ class WriteFileInput(BaseModel):
     overwrite: bool = Field(default=False, description="Se deve sobrescrever o arquivo caso já exista.")
     dry_run: bool = Field(default=False, description="Se True, simula a operação sem escrever no disco.")
 
-    # --- MELHORIA: VALIDAÇÃO DE SEGURANÇA NO MODELO PYDANTIC ---
     @validator("file_path")
     def validate_path_is_safe(cls, v: str) -> str:
         if not v:
@@ -110,7 +107,6 @@ def list_directory(path: str = ".") -> str:
     return filesystem_manager.list_directory(path)
 
 
-# --- Ferramentas de Memória ---
 
 class RecallInput(BaseModel):
     query: str = Field(description="A pergunta em linguagem natural para buscar memórias relevantes.")
@@ -123,7 +119,6 @@ def recall_experiences(query: str) -> str:
     return json.dumps(experiences, indent=2, ensure_ascii=False)
 
 
-# --- NOVAS Ferramentas do Grafo de Conhecimento (Especializadas) ---
 
 class FunctionInput(BaseModel):
     function_name: str = Field(description="O nome exato da função a ser procurada.")
@@ -161,7 +156,6 @@ def analyze_memory_for_failures(last_n_experiences: int) -> str:
     Examina as N experiências mais recentes na memória episódica para identificar e resumir padrões de falhas.
     Esta ferramenta é essencial para a auto-otimização do sistema.
     """
-    # logger not available here; keep simple prints or rely on memory_core logs
     experiences = memory_core.recall(query="falha de ação do agente", n_results=last_n_experiences)
     failures = [
         exp for exp in experiences
@@ -177,7 +171,6 @@ def analyze_memory_for_failures(last_n_experiences: int) -> str:
     return summary
 
 
-# --- Lista de Ferramentas Unificada e Final ---
 unified_tools: List[BaseTool] = [
     write_file,
     read_file,

@@ -1,14 +1,16 @@
-# app/api/v1/endpoints/learning.py
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from app.core import data_harvester, neural_trainer
 
 router = APIRouter()
 
+
 class LearningResponse(BaseModel):
     message: str
     summary: str
+
 
 @router.post(
     "/harvest",
@@ -26,6 +28,7 @@ def trigger_harvesting():
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post(
     "/train",

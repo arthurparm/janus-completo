@@ -10,14 +10,14 @@ GET {{host}}/metrics
 Accept: text/plain
 
 > {%
-    client.test("Metrics endpoint is available", function() {
+    client.test("Metrics endpoint is available", function () {
         client.assert(response.status === 200, "Response status is not 200");
         // O Prometheus expõe métricas como texto simples.
         client.assert(response.contentType.mimeType.includes("text/plain"), "Content-Type is not text/plain");
         client.log("Metrics endpoint returned successfully.");
     });
 
-    client.test("Metrics endpoint contains our custom metric", function() {
+    client.test("Metrics endpoint contains our custom metric", function () {
         // Verificamos se o corpo da resposta inclui o nome do nosso novo contador.
         const body = response.body;
         client.assert(body.includes("llm_router_model_selected_total"), "Custom LLM router metric not found");
@@ -39,7 +39,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Agent execution request successful", function() {
+    client.test("Agent execution request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.log("Agent Answer: " + response.body.answer);
     });

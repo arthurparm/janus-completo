@@ -16,7 +16,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("TOOL_USER agent execution successful", function() {
+    client.test("TOOL_USER agent execution successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
         client.assert(response.body.agent_type_used === "TOOL_USER", "Incorrect agent type was used");
@@ -38,7 +38,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("ORCHESTRATOR agent execution successful", function() {
+    client.test("ORCHESTRATOR agent execution successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.agent_type_used === "orchestrator", "Incorrect agent type was used");
         // A resposta deve ser um JSON de experiências
@@ -61,7 +61,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("ORCHESTRATOR agent fails task requiring unavailable tool", function() {
+    client.test("ORCHESTRATOR agent fails task requiring unavailable tool", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.agent_type_used === "orchestrator", "Incorrect agent type was used");
         // A resposta do agente deve indicar que não conseguiu realizar a tarefa

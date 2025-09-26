@@ -1,4 +1,3 @@
-# app/core/filesystem_manager.py
 
 import logging
 import os

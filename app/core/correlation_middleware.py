@@ -1,4 +1,3 @@
-# app/core/correlation_middleware.py
 import uuid
 
 import structlog

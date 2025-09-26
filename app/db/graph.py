@@ -1,10 +1,12 @@
-# app/db/graph.py
 
-from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
-from app.config import settings
 import logging
 
+from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
+
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
 
 class GraphDatabase:
     _driver: Neo4jDriver = None
@@ -14,7 +16,6 @@ class GraphDatabase:
         if self._driver is None:
             logger.info("Driver not initialized. Creating new Neo4j driver...")
             try:
-                # CORREÇÃO: Unwraps the SecretStr to a plain string before passing it to the driver.
                 password = settings.NEO4J_PASSWORD.get_secret_value()
                 self._driver = Neo4jGraphDatabase.driver(
                     settings.NEO4J_URI,
@@ -44,5 +45,5 @@ class GraphDatabase:
             logger.error(f"Error executing Cypher query: {cypher_query}", exc_info=True)
             raise
 
-# A single instance to be used throughout the app
+
 graph_db = GraphDatabase()

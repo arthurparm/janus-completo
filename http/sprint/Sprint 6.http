@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Write file task successful", function() {
+    client.test("Write file task successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
     });
@@ -39,7 +39,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Read file task successful", function() {
+    client.test("Read file task successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.includes("Tarefa 1"), "Answer does not contain the file content");
     });
@@ -55,7 +55,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Path traversal attempt is blocked", function() {
+    client.test("Path traversal attempt is blocked", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("acesso negado"), "Security sandbox did not block path traversal");
     });

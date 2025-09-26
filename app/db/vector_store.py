@@ -1,4 +1,3 @@
-# app/db/vector_store.py
 import logging
 
 import requests
@@ -12,20 +11,18 @@ logger = logging.getLogger(__name__)
 
 qdrant_client = None
 qdrant_cb = CircuitBreaker(failure_threshold=2, recovery_timeout=60)
-# --- MELHORIA: ESPECIFICAR EXCEÇÕES RETRIÁVEIS ---
 RETRIABLE_QDRANT_ERRORS = (
     ConnectionError,
     TimeoutError,
     requests.exceptions.RequestException,
     urllib3.exceptions.HTTPError,
-)  # Erros de rede comuns para retry
+)
 
 try:
     qdrant_client = QdrantClient(
         host=settings.QDRANT_HOST,
         port=settings.QDRANT_PORT,
     )
-    # --- MELHORIA: VERIFICAÇÃO DE READINESS CORRETA ---
     qdrant_client.get_collections()
     logger.info(f"Conexão com o Qdrant em {settings.QDRANT_HOST}:{settings.QDRANT_PORT} estabelecida com sucesso.")
 except Exception as e:
@@ -54,7 +51,6 @@ def check_qdrant_readiness() -> bool:
     """Verifica a prontidão do Qdrant chamando uma operação leve."""
     if not qdrant_client:
         raise ConnectionError("Cliente Qdrant não está disponível.")
-    # --- MELHORIA: USA get_collections() PARA VERIFICAÇÃO ---
     qdrant_client.get_collections()
     logger.info("Qdrant readiness check PASSED.")
     return True

@@ -22,7 +22,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Setup experience created successfully", function() {
+    client.test("Setup experience created successfully", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.id, "Experience ID is missing from response");
     });
@@ -36,11 +36,11 @@ POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
 Content-Type: application/json
 
 > {%
-    client.test("Knowledge consolidation request successful", function() {
+    client.test("Knowledge consolidation request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response body indicates successful consolidation", function() {
+    client.test("Response body indicates successful consolidation", function () {
         const data = response.body;
         client.log("Summary: " + data.summary);
         client.assert(data.message === "Processo de consolidação concluído.", "Success message is incorrect");

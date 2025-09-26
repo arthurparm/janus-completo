@@ -1,4 +1,3 @@
-# app/core/resilience.py
 import logging
 import random
 import time
@@ -14,7 +13,6 @@ class CircuitBreakerState(Enum):
     HALF_OPEN = "HALF_OPEN"
 
 
-# --- MELHORIA: EXCEÇÃO DEDICADA ---
 class CircuitOpenError(ConnectionError):
     """Lançada quando o Circuit Breaker está ABERTO e bloqueia a chamada."""
     pass
@@ -41,7 +39,6 @@ class CircuitBreaker:
                         "Circuit Breaker transitou para HALF_OPEN. Permitindo uma chamada de teste."
                     )
                 else:
-                    # --- MELHORIA: USA A EXCEÇÃO DEDICADA ---
                     raise CircuitOpenError("Circuit Breaker está ABERTO. Chamada bloqueada.")
             try:
                 result = func(*args, **kwargs)
@@ -73,7 +70,6 @@ class CircuitBreaker:
             )
 
 
-# --- MELHORIA: DECORADOR DE RETRY MAIS ROBUSTO ---
 def resilient(
         max_attempts: int = 3,
         initial_backoff: float = 1.0,

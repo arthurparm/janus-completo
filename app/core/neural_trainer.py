@@ -1,4 +1,3 @@
-# app/core/neural_trainer.py
 import logging
 import os
 
@@ -14,8 +13,6 @@ def start_training_process() -> dict:
     """
     logger.info("Iniciando o processo de treino de modelo neural...")
 
-    # --- CORREÇÃO DO CAMINHO ---
-    # Construímos o caminho completo para o ficheiro de treino dentro do workspace.
     training_file_path = os.path.join("workspace", TRAINING_DATA_FILE)
 
     training_data_content = read_file(training_file_path)

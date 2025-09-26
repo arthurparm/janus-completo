@@ -1,5 +1,3 @@
-# app/core/knowledge_graph_manager.py
-# RENOMEADO DE code_indexer.py para refletir seu novo e mais amplo escopo.
 
 import ast
 import logging
@@ -14,8 +12,6 @@ logger = logging.getLogger(__name__)
 CODEBASE_DIR = "/app"
 
 
-# --- Parte 1: Análise e Parsing de Código Estático ---
-# (Nenhuma alteração nesta seção)
 class CodeParser(ast.NodeVisitor):
     def __init__(self, file_path: str):
         self.file_path = file_path
@@ -79,7 +75,6 @@ def _create_code_entities_in_graph(parser: CodeParser):
         )
 
 
-# --- Parte 2: LÓGICA DE CONSOLIDAÇÃO DE CONHECIMENTO CORRIGIDA ---
 
 def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     """
@@ -99,7 +94,6 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     relationships_created = 0
 
     for exp_dict in recalled_experiences:
-        # --- CORREÇÃO CRÍTICA ---
         # Não tentamos mais converter para um objeto Pydantic `Experience`.
         # Em vez disso, trabalhamos diretamente com o dicionário retornado pelo `memory_core`,
         # que é mais robusto e evita o erro de validação do campo "distance".
@@ -142,8 +136,6 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     return {"message": "Processo de consolidação concluído.", "summary": summary}
 
 
-# --- Parte 3: Função Principal Refatorada para Indexação de Código ---
-# (Nenhuma alteração nesta seção)
 def index_codebase() -> dict:
     """
     Orquestra a análise completa da base de código e a (re)criação do

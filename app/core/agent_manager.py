@@ -1,10 +1,7 @@
-# app/core/agent_manager.py
-# REFATORAÇÃO SPRINT 11: Evoluído de 'reasoning_core.py' para suportar uma arquitetura multiagente.
-# Este módulo agora atua como uma fábrica e executor para diferentes tipos de agentes especializados.
 
 import json
 import logging
-import random  # Para adicionar jitter ao backoff
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from enum import Enum
@@ -15,19 +12,14 @@ from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain.tools import BaseTool
 from langchain_core.agents import AgentFinish
 
-# Import opcional para detectar erros de validação de ferramentas
 try:
     from pydantic import ValidationError as PydanticValidationError
-except Exception:  # fallback para ambientes onde a importação não esteja disponível
+except Exception:
     class PydanticValidationError(Exception):
         pass
 
-# Importações adicionais para depuração e prompts
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-
 from app.core.agent_tools import unified_tools, recall_experiences, analyze_memory_for_failures
 from app.core.llm_manager import get_llm
-# --- NOVA IMPORTAÇÃO PARA O CICLO DE MEMÓRIA ---
 from app.core.memory_core import memory_core
 from app.core.prompt_loader import get_prompt
 from app.models.schemas import Experience
@@ -42,19 +34,15 @@ class AgentType(Enum):
     Define os papéis especializados dos agentes dentro do ecossistema Janus.
     Isso permite a criação de agentes com diferentes prompts e conjuntos de ferramentas.
     """
-    ORCHESTRATOR = "orchestrator"  # Agente de alto nível para decomposição de tarefas.
-    TOOL_USER = "tool_user"  # Agente genérico para execução de ferramentas.
-    META_AGENT = "meta_agent"  # Novo agente supervisor
+    ORCHESTRATOR = "orchestrator"
+    TOOL_USER = "tool_user"
+    META_AGENT = "meta_agent"
 
 
-# --- INSTÂNCIAS DE CIRCUIT BREAKER POR AGENTE ---
 agent_circuit_breakers = {
     agent_type: CircuitBreaker(failure_threshold=3, recovery_timeout=60)
     for agent_type in AgentType
 }
-
-
-# --- FIM ---
 
 
 class AgentManager:
@@ -95,13 +83,11 @@ class AgentManager:
             logger.info(f"Configurando agente {agent_type.name} com o conjunto de {len(tools)} ferramentas unificadas.")
             return prompt_template, tools
 
-        # --- NOVA CONFIGURAÇÃO PARA O META-AGENTE ---
         elif agent_type == AgentType.META_AGENT:
             prompt_template = get_prompt("meta_agent_supervisor")
             tools: List[BaseTool] = [analyze_memory_for_failures]
             logger.info(f"Configurando agente {agent_type.name} com {len(tools)} ferramentas de supervisão.")
             return prompt_template, tools
-        # --- FIM DA MODIFICAÇÃO ---
 
         else:
             raise ValueError(f"Configuração para o tipo de agente '{agent_type}' não encontrada.")
@@ -112,20 +98,6 @@ class AgentManager:
         """
         prompt_template_str, tools = self._get_agent_config(agent_type)
 
-        debug_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", prompt_template_str),
-                MessagesPlaceholder("chat_history", optional=True),
-                ("human", "{input}"),
-                MessagesPlaceholder("agent_scratchpad"),
-            ]
-        )
-        rendered_tools = "\n".join([f"{tool.name}: {tool.description}" for tool in tools])
-        full_prompt_template = debug_prompt.partial(tools=rendered_tools)
-
-        print("--- INÍCIO DO PROMPT DO AGENTE (PARA DEPURAÇÃO) ---")
-        print(full_prompt_template.format(input="Exemplo de Pergunta", agent_scratchpad=[]))
-        print("--- FIM DO PROMPT DO AGENTE (PARA DEPURAÇÃO) ---")
 
         # 3. Usar o método original e estável do hub para criar o prompt REAL.
         prompt = hub.pull("hwchase17/openai-tools-agent")
@@ -151,10 +123,8 @@ class AgentManager:
         Executa um agente especializado para responder a uma pergunta ou completar uma tarefa.
         O parâmetro 'request' é opcional para permitir invocações internas (ex.: Meta-Agente).
         """
-        # --- TRACING: correlation ID ---
         correlation_id = request.headers.get('X-Correlation-ID', 'no-id') if request else 'no-id'
         try:
-            # --- OBTÉM O CIRCUIT BREAKER ESPECÍFICO DO AGENTE ---
             circuit_breaker = agent_circuit_breakers[agent_type]
 
             logger.info(
@@ -163,12 +133,10 @@ class AgentManager:
 
             agent_executor = self._create_agent_executor(agent_type)
 
-            # --- POLÍTICA DE RETRY COM EXPONENTIAL BACKOFF E TIMEOUT ---
             MAX_ATTEMPTS = 3
             INITIAL_BACKOFF = 1.0  # segundos
             MAX_BACKOFF = 10.0  # segundos
             OP_TIMEOUT = 30.0  # timeout por tentativa (segundos)
-            # --- FIM DA POLÍTICA ---
             result = None
             last_error = None
             state = "INIT"

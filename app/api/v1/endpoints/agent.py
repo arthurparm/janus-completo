@@ -1,10 +1,8 @@
-# app/api/v1/endpoints/agent.py
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from starlette.requests import Request
 
-# A importação agora aponta para a nova função do agente executor
 from app.core.agent_manager import agent_manager, AgentType
 
 router = APIRouter()
@@ -12,8 +10,6 @@ router = APIRouter()
 
 class AgentExecutionRequest(BaseModel):
     question: str
-    # Opcional: permite que o cliente solicite um tipo de agente específico.
-    # Em um sistema real, essa decisão seria provavelmente tomada pelo Orquestrador.
     agent_type: AgentType = AgentType.TOOL_USER
 
 
@@ -30,7 +26,6 @@ class AgentResponse(BaseModel):
     summary="Envia uma instrução para um agente Janus executar",
     tags=["Agent"]
 )
-
 def agent_execute(request: AgentExecutionRequest, http_request: Request):
     """
     Recebe uma solicitação e a encaminha para o AgentManager executar

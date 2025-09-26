@@ -8,10 +8,10 @@ GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path=/app/app/main.py
 Accept: application/json
 
 > {%
-    client.test("List entities request successful", function() {
+    client.test("List entities request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
-    client.test("Response contains lifespan function", function() {
+    client.test("Response contains lifespan function", function () {
         const entities = response.body;
         const lifespanFunc = entities.find(e => e.name === "lifespan" && e.type === "Function");
         client.assert(lifespanFunc !== undefined, "'lifespan' function not found in main.py entities");
@@ -24,10 +24,10 @@ GET {{host}}{{api_v1_prefix}}/knowledge/calls?function_name=trigger_indexing
 Accept: application/json
 
 > {%
-    client.test("List calls request successful", function() {
+    client.test("List calls request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
-    client.test("Response shows 'trigger_indexing' calls 'index_codebase'", function() {
+    client.test("Response shows 'trigger_indexing' calls 'index_codebase'", function () {
         const calls = response.body;
         const relevantCall = calls.find(c => c.caller_function === "trigger_indexing" && c.callee_function === "index_codebase");
         client.assert(relevantCall !== undefined, "'trigger_indexing' does not call 'index_codebase'");

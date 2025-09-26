@@ -9,21 +9,21 @@ POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
-    "type": "test_event",
-    "content": "O usuário iniciou o teste da memória episódica.",
-    "metadata": {
-        "sprint": 5,
-        "test_case": "mem_1"
-    }
+  "type": "test_event",
+  "content": "O usuário iniciou o teste da memória episódica.",
+  "metadata": {
+    "sprint": 5,
+    "test_case": "mem_1"
+  }
 }
 
 > {%
     client.global.set("memory_id", response.body.id);
     client.global.set("memory_content", response.body.content);
-    client.test("Memorize request successful", function() {
+    client.test("Memorize request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
-    client.test("Response contains an ID", function() {
+    client.test("Response contains an ID", function () {
         client.assert(response.body.id, "Memory ID is missing");
     });
 %}
@@ -35,10 +35,10 @@ GET {{host}}{{api_v1_prefix}}/memory/recall?query=teste da memória
 Accept: application/json
 
 > {%
-    client.test("Recall request successful", function() {
+    client.test("Recall request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
-    client.test("Recalled memories contain the test memory", function() {
+    client.test("Recalled memories contain the test memory", function () {
         const memories = response.body;
         const memory_id = client.global.get("memory_id");
         const memory_content = client.global.get("memory_content");

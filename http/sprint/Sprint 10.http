@@ -14,7 +14,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Standard agent execution successful", function() {
+    client.test("Standard agent execution successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.length > 0, "Agent did not provide an answer");
         client.log("Agent Answer: " + response.body.answer);
@@ -40,13 +40,13 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Fallback execution successful", function() {
+    client.test("Fallback execution successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.length > 0, "Agent did not provide an answer on fallback");
         client.log("Fallback Agent Answer: " + response.body.answer);
     });
 
-    client.test("Answer suggests it comes from a local model", function() {
+    client.test("Answer suggests it comes from a local model", function () {
         // A resposta de modelos open-source pode variar, mas este teste verifica
         // se a resposta é plausível para a pergunta feita.
         const answer = response.body.answer.toLowerCase();

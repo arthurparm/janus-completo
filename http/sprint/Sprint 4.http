@@ -15,10 +15,10 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Agent query request successful", function() {
+    client.test("Agent query request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
-    client.test("Agent response contains the correct answer", function() {
+    client.test("Agent response contains the correct answer", function () {
         const data = response.body;
         const answer = data.answer.toLowerCase();
         client.assert(answer.includes("index_codebase"), "A resposta não contém 'index_codebase'");

@@ -1,8 +1,9 @@
-# app/config.py
 
-from pydantic import SecretStr, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -22,7 +23,6 @@ class AppSettings(BaseSettings):
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = "password"
 
-    # --- ATUALIZAÇÃO: DE CHROMA PARA QDRANT ---
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
     QDRANT_API_KEY: Optional[SecretStr] = None  # Para Qdrant Cloud (opcional)
@@ -30,7 +30,6 @@ class AppSettings(BaseSettings):
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
 
-    # --- ARQUITETURA COGNITIVA DE MODELOS ---
 
     # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
     OPENAI_API_KEY: Optional[SecretStr] = None

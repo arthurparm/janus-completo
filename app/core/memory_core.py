@@ -1,11 +1,9 @@
-# app/core/memory_core.py
 
 import json
 import logging
-from uuid import uuid4
-from qdrant_client import QdrantClient, models
-from langchain_community.vectorstores import Qdrant  # Reserva para integrações futuras
+
 from langchain_openai import OpenAIEmbeddings  # Exemplo de modelo de embedding
+from qdrant_client import QdrantClient, models
 
 from app.db.vector_store import get_qdrant_client, get_or_create_collection
 from app.models.schemas import Experience
@@ -127,6 +125,7 @@ class EpisodicMemory:
         except Exception as e:
             logger.error(f"Erro ao recordar experiências do Qdrant para a consulta '{query}': {e}", exc_info=True)
             return []
+
 
 # Instância única para ser usada na aplicação
 memory_core = EpisodicMemory()

@@ -9,11 +9,11 @@ POST {{host}}{{api_v1_prefix}}/agent/execute
 Content-Type: application/json
 
 {
-    "question": "Lembre-se do resumo da última vez que a base de código foi indexada. Pegue esse resumo e salve-o em um novo arquivo chamado 'summary.txt'."
+  "question": "Lembre-se do resumo da última vez que a base de código foi indexada. Pegue esse resumo e salve-o em um novo arquivo chamado 'summary.txt'."
 }
 
 > {%
-    client.test("Memory to File task successful", function() {
+    client.test("Memory to File task successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
     });
@@ -29,7 +29,7 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("Graph to Read task successful", function() {
+    client.test("Graph to Read task successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.body.answer.includes("AgentExecutor"), "Answer does not contain expected code snippet");
     });

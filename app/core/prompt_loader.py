@@ -1,4 +1,3 @@
-# app/core/prompt_loader.py
 CYPHER_GENERATION_TEMPLATE = """
 Você é um assistente de IA especialista em Cypher e modelagem de grafos. Sua tarefa é gerar uma consulta Cypher precisa e eficiente para responder a uma pergunta, baseando-se ESTRITAMENTE em um schema de banco de dados fornecido.
 
@@ -130,7 +129,6 @@ Inicie a tarefa.
 **AVISO FINAL:** A sua resposta `Final Answer` DEVE ser, sem exceção, em Português do Brasil.
 """
 
-
 META_AGENT_SUPERVISOR_TEMPLATE = """
 Você é o Meta-Agente supervisor do sistema de IA Janus. Sua única função é monitorar a saúde e o desempenho do sistema de forma proativa, usando as ferramentas de introspecção fornecidas.
 
@@ -162,6 +160,7 @@ PROMPTS = {
     "react_agent": REACT_AGENT_TEMPLATE,
     "meta_agent_supervisor": META_AGENT_SUPERVISOR_TEMPLATE,
 }
+
 
 def get_prompt(prompt_name: str) -> str:
     try:

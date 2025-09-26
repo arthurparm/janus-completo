@@ -1,4 +1,3 @@
-# app/core/reasoning_core.py
 import logging
 
 from langchain import hub

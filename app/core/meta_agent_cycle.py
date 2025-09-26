@@ -1,4 +1,3 @@
-# app/core/meta_agent_cycle.py
 import asyncio
 import logging
 
@@ -6,8 +5,6 @@ from app.core.agent_manager import agent_manager, AgentType
 
 logger = logging.getLogger(__name__)
 
-# O intervalo, em segundos, com que o Meta-Agente irá verificar o sistema.
-# Para produção, este valor seria mais alto (ex: 3600 para 1 hora).
 CYCLE_INTERVAL_SECONDS = 300  # 5 minutos para fins de teste
 
 
@@ -37,8 +34,6 @@ async def run_meta_agent_cycle():
             logger.info(f"META-AGENTE: Análise concluída. Relatório: {final_answer}")
             logger.info("=" * 80)
 
-            # Aqui, no futuro, poderíamos adicionar lógica para pegar a "recomendação de tarefa"
-            # do Meta-Agente e criar uma nova tarefa para o TOOL_USER.
 
         except Exception as e:
             logger.error(f"Ocorreu um erro crítico no ciclo do Meta-Agente: {e}", exc_info=True)

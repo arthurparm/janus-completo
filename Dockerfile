@@ -1,4 +1,3 @@
-# --- Estágio 1: Builder ---
 # Usando uma tag de imagem específica e estável para reprodutibilidade.
 FROM python:3.11-slim-bookworm AS builder
 
@@ -14,7 +13,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
-# --- Estágio 2: Final ---
 # Usando a mesma tag de imagem específica e estável.
 FROM python:3.11-slim-bookworm
 

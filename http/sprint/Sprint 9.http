@@ -10,11 +10,11 @@ POST {{host}}{{api_v1_prefix}}/learning/harvest
 Content-Type: application/json
 
 > {%
-    client.test("Data harvesting request successful", function() {
+    client.test("Data harvesting request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response body indicates successful harvest", function() {
+    client.test("Response body indicates successful harvest", function () {
         const data = response.body;
         client.log("Summary: " + data.summary);
         client.assert(data.message.includes("bem-sucedida"), "Success message is incorrect");
@@ -30,11 +30,11 @@ POST {{host}}{{api_v1_prefix}}/learning/train
 Content-Type: application/json
 
 > {%
-    client.test("Model training request successful", function() {
+    client.test("Model training request successful", function () {
         client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response body indicates successful training", function() {
+    client.test("Response body indicates successful training", function () {
         const data = response.body;
         client.log("Summary: " + data.summary);
         client.assert(data.message === "Treino concluído.", "Success message is incorrect");
