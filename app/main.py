@@ -15,6 +15,7 @@ from app.core.meta_agent_cycle import run_meta_agent_cycle
 from app.db.graph import graph_db
 from app.db.vector_store import check_qdrant_readiness
 from app.core.llm_manager import get_llm_client, ModelRole
+from app.core.data_harvester import harvester
 
 setup_logging()
 logger = structlog.get_logger(__name__)
@@ -36,10 +37,20 @@ async def lifespan(app: FastAPI):
 
     # Start meta agent cycle
     meta_agent_task = asyncio.create_task(run_meta_agent_cycle())
+    # Start data harvester
+    try:
+        await harvester.start()
+    except Exception:
+        logger.warning("Harvester failed to start; continuing without it.")
 
     yield
 
     meta_agent_task.cancel()
+    # Stop data harvester
+    try:
+        await harvester.stop()
+    except Exception:
+        pass
     logger.info("Application shutdown: Closing resources...")
     graph_db.close()
 
@@ -85,8 +96,7 @@ def readyz():
     # Neo4j
     neo4j_ok = False
     try:
-        res = graph_db.query("RETURN 1 as one")
-        neo4j_ok = bool(res and res[0].get("one") == 1)
+        neo4j_ok = graph_db.health_check()
     except Exception:
         neo4j_ok = False
     # Qdrant
