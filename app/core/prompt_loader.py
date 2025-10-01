@@ -254,6 +254,10 @@ class PromptLoader:
 
         self._validate_placeholders(template, variables)
 
+        # Formata o template se variáveis forem fornecidas
+        if variables:
+            template = template.format(**variables)
+
         # manter cache dentro do tamanho
         self._cache[key] = (now, template)
         if len(self._cache) > self.max_size:

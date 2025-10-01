@@ -1,5 +1,6 @@
 
 import json
+import logging
 from pathlib import Path
 from typing import List
 
@@ -12,10 +13,34 @@ from app.db.graph import graph_db
 # Import AgentType from agent_manager to avoid circular dependency issues
 from app.core.agent_manager import AgentType
 
+logger = logging.getLogger(__name__)
+
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
 ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
 MAX_FILE_SIZE = 1024 * 1024  # 1 MB
+
+
+def _secure_path_resolve(file_path: str) -> Path:
+    """
+    Resolve um caminho de arquivo de forma segura, garantindo que ele esteja
+    dentro do diretório de workspace permitido.
+
+    Raises:
+        ValueError: Se o caminho for inválido ou estiver fora do workspace.
+    """
+    if not file_path or ".." in file_path:
+        raise ValueError(f"Caminho inválido ou malicioso detectado: '{file_path}'")
+
+    absolute_path = (WORKSPACE_ROOT / file_path).resolve()
+
+    try:
+        # A verificação mais robusta: o caminho resolvido deve ser um subdiretório do workspace.
+        absolute_path.relative_to(WORKSPACE_ROOT)
+    except ValueError:
+        raise ValueError(f"Acesso negado. O caminho '{file_path}' está fora do diretório permitido.")
+
+    return absolute_path
 
 
 class WriteFileInput(BaseModel):
@@ -28,16 +53,7 @@ class WriteFileInput(BaseModel):
 
     @validator("file_path")
     def validate_path_is_safe(cls, v: str) -> str:
-        if not v:
-            raise ValueError("O caminho do arquivo não pode ser vazio.")
-
-        absolute_path = (WORKSPACE_ROOT / v).resolve()
-
-        try:
-            absolute_path.relative_to(WORKSPACE_ROOT)
-        except ValueError:
-            raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido.")
-
+        _secure_path_resolve(v)  # Reutiliza a lógica de validação centralizada
         return v
 
 
@@ -50,12 +66,7 @@ def write_file(
 ) -> str:
     """Escreve conteúdo em um arquivo dentro de um diretório seguro (workspace)."""
     try:
-        target_path = (WORKSPACE_ROOT / file_path).resolve()
-
-        try:
-            target_path.relative_to(WORKSPACE_ROOT)
-        except ValueError:
-            return f"Erro de validação: Acesso negado. O caminho '{file_path}' está fora do diretório permitido."
+        target_path = _secure_path_resolve(file_path)
 
         if target_path.suffix not in ALLOWED_EXTENSIONS:
             return f"Erro: Extensão de arquivo não permitida. Permitidas: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
@@ -77,7 +88,8 @@ def write_file(
     except ValueError as e:
         return f"Erro de validação: {e}"
     except Exception as e:
-        return f"Erro inesperado ao salvar o arquivo: {e}"
+        logger.error(f"Erro inesperado ao salvar o arquivo '{file_path}': {e}", exc_info=True)
+        return f"Erro inesperado ao salvar o arquivo. Consulte os logs."
 
 
 class ReadFileInput(BaseModel):
