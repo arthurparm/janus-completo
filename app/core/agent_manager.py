@@ -1,11 +1,12 @@
 
 import json
 import logging
+import asyncio
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from langchain import hub
 from langchain.agents import create_openai_tools_agent, AgentExecutor
@@ -14,12 +15,12 @@ from langchain_core.agents import AgentFinish
 
 try:
     from pydantic import ValidationError as PydanticValidationError
-except Exception:
+except ImportError:
     class PydanticValidationError(Exception):
         pass
 
-from app.core.agent_tools import unified_tools, recall_experiences, analyze_memory_for_failures
-from app.core.llm_manager import get_llm
+from app.core.agent_tools import get_tools_for_agent
+from app.core.llm_manager import get_llm_client, ModelRole, ModelPriority
 from app.core.memory_core import memory_core
 from app.core.prompt_loader import get_prompt
 from app.models.schemas import Experience
@@ -28,12 +29,16 @@ from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
+# Constantes configuráveis
+MAX_ATTEMPTS = 3
+INITIAL_BACKOFF = 1.0  # segundos
+MAX_BACKOFF = 10.0  # segundos
+OP_TIMEOUT = 30.0  # timeout por tentativa (segundos)
+MAX_QUESTION_LENGTH = 10000  # caracteres
+
 
 class AgentType(Enum):
-    """
-    Define os papéis especializados dos agentes dentro do ecossistema Janus.
-    Isso permite a criação de agentes com diferentes prompts e conjuntos de ferramentas.
-    """
+    """Define os papéis especializados dos agentes."""
     ORCHESTRATOR = "orchestrator"
     TOOL_USER = "tool_user"
     META_AGENT = "meta_agent"
@@ -48,65 +53,51 @@ agent_circuit_breakers = {
 class AgentManager:
     """
     Centraliza a criação, configuração e execução de agentes especializados.
-    Atua como uma fábrica, garantindo que cada agente seja instanciado com o
-    prompt e as ferramentas corretas para sua função.
     """
 
     def __init__(self):
         """
-        Inicializa o gerenciador de agentes, carregando o LLM centralizado.
+        Inicializa o gerenciador de agentes, carregando o cliente LLM centralizado.
         """
-        self.llm = get_llm()
-        if not self.llm:
-            raise RuntimeError("LLM não pôde ser inicializado. O AgentManager não pode operar.")
+        try:
+            # Usa um modelo de alta qualidade para as tarefas de orquestração do agente
+            self.llm_client = get_llm_client(
+                role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY
+            )
+            if not self.llm_client:
+                raise RuntimeError("LLM client retornou None.")
+        except Exception as e:
+            logger.critical(f"Falha crítica ao inicializar LLM Client: {e}", exc_info=True)
+            raise RuntimeError(
+                f"AgentManager não pode operar sem LLM. Causa: {e}"
+            ) from e
+
+    def _validate_question(self, question: str):
+        """Valida a pergunta/instrução antes de processar."""
+        if not question or not question.strip():
+            raise ValueError("A pergunta não pode ser vazia.")
+        if len(question) > MAX_QUESTION_LENGTH:
+            raise ValueError(f"Pergunta excede o tamanho máximo de {MAX_QUESTION_LENGTH} caracteres.")
 
     def _get_agent_config(self, agent_type: AgentType) -> Tuple[str, List[BaseTool]]:
-        """
-        Retorna a configuração (prompt e ferramentas) para um tipo de agente específico.
-        Esta função é o núcleo da especialização de agentes.
-
-        Args:
-            agent_type: O tipo de agente a ser configurado.
-
-        Returns:
-            Uma tupla contendo o template do prompt e a lista de ferramentas.
-        """
-        if agent_type == AgentType.ORCHESTRATOR:
-            prompt_template = get_prompt("react_agent")
-            tools: List[BaseTool] = [recall_experiences]
-            logger.info(f"Configurando agente {agent_type.name} com {len(tools)} ferramentas especializadas.")
-            return prompt_template, tools
-
-        elif agent_type == AgentType.TOOL_USER:
-            prompt_template = get_prompt("react_agent")
-            tools: List[BaseTool] = unified_tools
-            logger.info(f"Configurando agente {agent_type.name} com o conjunto de {len(tools)} ferramentas unificadas.")
-            return prompt_template, tools
-
+        """Retorna a configuração (prompt e ferramentas) para um tipo de agente."""
+        if agent_type in [AgentType.ORCHESTRATOR, AgentType.TOOL_USER]:
+            return get_prompt("react_agent"), get_tools_for_agent(agent_type)
         elif agent_type == AgentType.META_AGENT:
-            prompt_template = get_prompt("meta_agent_supervisor")
-            tools: List[BaseTool] = [analyze_memory_for_failures]
-            logger.info(f"Configurando agente {agent_type.name} com {len(tools)} ferramentas de supervisão.")
-            return prompt_template, tools
-
+            return get_prompt("meta_agent_supervisor"), get_tools_for_agent(agent_type)
         else:
             raise ValueError(f"Configuração para o tipo de agente '{agent_type}' não encontrada.")
 
     def _create_agent_executor(self, agent_type: AgentType) -> AgentExecutor:
-        """
-        Cria uma instância de AgentExecutor para um tipo de agente específico.
-        """
+        """Cria uma instância de AgentExecutor para um tipo de agente específico."""
         prompt_template_str, tools = self._get_agent_config(agent_type)
-
-
-        # 3. Usar o método original e estável do hub para criar o prompt REAL.
         prompt = hub.pull("hwchase17/openai-tools-agent")
-
-        agent = create_openai_tools_agent(self.llm, tools, prompt)
+        
+        # Usa o LLM base do nosso cliente, que é a instância do BaseChatModel
+        agent = create_openai_tools_agent(self.llm_client.base, tools, prompt)
 
         error_handler = lambda error: (
-            "Erro: Essa ferramenta não está disponível para mim. "
-            f"Detalhes: {error}. Por favor, escolha uma das ferramentas disponíveis."
+            f"Erro: Ferramenta indisponível. Detalhes: {error}. Use uma das ferramentas disponíveis."
         )
 
         return AgentExecutor(
@@ -117,169 +108,183 @@ class AgentManager:
             return_intermediate_steps=True
         )
 
-    def run_agent(self, question: str, request: Request | None = None,
-                  agent_type: AgentType = AgentType.TOOL_USER) -> dict:
-        """
-        Executa um agente especializado para responder a uma pergunta ou completar uma tarefa.
-        O parâmetro 'request' é opcional para permitir invocações internas (ex.: Meta-Agente).
-        """
-        correlation_id = request.headers.get('X-Correlation-ID', 'no-id') if request else 'no-id'
+    async def run_agent_async(
+        self,
+        question: str,
+        request: Optional[Request] = None,
+        agent_type: AgentType = AgentType.TOOL_USER
+    ) -> dict:
+        """Executa um agente de forma totalmente assíncrona."""
+        self._validate_question(question)
+        correlation_id = getattr(request, "state", {}).correlation_id or "no-id"
+        circuit_breaker = agent_circuit_breakers[agent_type]
+
+        logger.info(f"[trace_id={correlation_id}] Iniciando execução async do agente '{agent_type.name}'")
+
+        agent_executor = self._create_agent_executor(agent_type)
+        last_error = None
+
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                async def protected_invoke():
+                    return await agent_executor.ainvoke({"input": question}, {"recursion_limit": 5})
+
+                protected_call = circuit_breaker(protected_invoke)
+                result = await asyncio.wait_for(protected_call(), timeout=OP_TIMEOUT)
+
+                logger.info(f"[trace_id={correlation_id}] Agente async '{agent_type.name}' concluiu com sucesso.")
+                self._handle_successful_run(result, agent_type, question, correlation_id)
+                return self._format_success_response(result)
+
+            except asyncio.TimeoutError as e:
+                last_error = e
+                logger.warning(f"[trace_id={correlation_id}] Timeout na tentativa {attempt + 1} do agente async.")
+                await self._handle_retry_backoff(attempt, correlation_id)
+
+            except CircuitOpenError as e:
+                last_error = e
+                logger.error(f"[trace_id={correlation_id}] Circuit Breaker aberto para '{agent_type.name}'. Abortando.")
+                break
+
+            except (PydanticValidationError, ValueError, TypeError) as e:
+                logger.warning(f"[trace_id={correlation_id}] Erro de validação na ferramenta: {e}. Abortando.")
+                return self._format_validation_error_response(e)
+
+            except Exception as e:
+                last_error = e
+                logger.error(f"[trace_id={correlation_id}] Erro inesperado na tentativa {attempt + 1}: {e}", exc_info=True)
+                await self._handle_retry_backoff(attempt, correlation_id)
+
+        return self._format_failure_response(last_error, agent_type, correlation_id)
+
+    async def _handle_retry_backoff(self, attempt: int, correlation_id: str):
+        if attempt + 1 >= MAX_ATTEMPTS:
+            return
+        backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
+        jitter = backoff_duration * 0.1 * random.random()
+        sleep_time = backoff_duration + jitter
+        logger.warning(f"[trace_id={correlation_id}] Aguardando {sleep_time:.2f}s antes de tentar novamente.")
+        await asyncio.sleep(sleep_time)
+
+    def _format_success_response(self, result: dict) -> dict:
+        final_answer = result.get("output", "A tarefa foi concluída.")
+        if isinstance(final_answer, AgentFinish):
+            final_answer = final_answer.return_values.get("output", str(final_answer))
+        return {"answer": final_answer, "intermediate_steps": result.get("intermediate_steps", [])}
+
+    def _format_validation_error_response(self, error: Exception) -> dict:
+        error_text = str(error)
+        final_answer = (
+            "Thought: A ação falhou devido a um erro de validação. Devo parar e informar o erro.\n"
+            f"Final Answer: Falha ao usar a ferramenta. Detalhes: {error_text}. "
+            "Verifique se todos os argumentos obrigatórios foram fornecidos."
+        )
+        return {"answer": final_answer, "intermediate_steps": []}
+
+    def _format_failure_response(self, error: Optional[Exception], agent_type: AgentType, correlation_id: str) -> dict:
+        error_msg = str(error) if error else "O agente falhou em todas as tentativas."
+        logger.error(f"[trace_id={correlation_id}] Todas as {MAX_ATTEMPTS} tentativas falharam. Último erro: {error_msg}")
+        return {
+            "error": f"Falha ao executar agente '{agent_type.name}' após {MAX_ATTEMPTS} tentativas. Último erro: {error_msg}",
+            "trace_id": correlation_id
+        }
+
+    def run_agent(
+        self,
+        question: str,
+        request: Optional[Request] = None,
+        agent_type: AgentType = AgentType.TOOL_USER
+    ) -> dict:
+        """Executa um agente especializado para responder a uma pergunta ou completar uma tarefa."""
+        try:
+            self._validate_question(question)
+        except ValueError as e:
+            logger.error(f"Validação de entrada falhou: {e}")
+            return {"error": str(e)}
+
+        correlation_id = getattr(request, "state", {}).correlation_id or "no-id"
+
         try:
             circuit_breaker = agent_circuit_breakers[agent_type]
-
-            logger.info(
-                f"[trace_id={correlation_id}] Iniciando execução do agente do tipo '{agent_type.name}' para a instrução: '{question}'"
-            )
-
+            logger.info(f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
             agent_executor = self._create_agent_executor(agent_type)
 
-            MAX_ATTEMPTS = 3
-            INITIAL_BACKOFF = 1.0  # segundos
-            MAX_BACKOFF = 10.0  # segundos
-            OP_TIMEOUT = 30.0  # timeout por tentativa (segundos)
-            result = None
             last_error = None
-            state = "INIT"
-
-            start = time.time()
             for attempt in range(MAX_ATTEMPTS):
+                executor = None
                 try:
-                    state = "RUNNING"
-                    logger.info(
-                        f"[trace_id={correlation_id}] Invocando AgentExecutor (tipo: {agent_type.name}), Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
+                    logger.info(f"[trace_id={correlation_id}] Invocando AgentExecutor, Tentativa {attempt + 1}/{MAX_ATTEMPTS}...")
 
-                    # Função protegida pelo Circuit Breaker
-                    invoke_func = lambda: agent_executor.invoke(
-                        {"input": question},
-                        {"recursion_limit": 5}
-                    )
+                    invoke_func = lambda: agent_executor.invoke({"input": question}, {"recursion_limit": 5})
                     protected_invoke = circuit_breaker(invoke_func)
 
-                    # Executa com timeout usando ThreadPoolExecutor para simular uma máquina de estados com TIMEOUT
-                    with ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(protected_invoke)
-                        result = future.result(timeout=OP_TIMEOUT)
+                    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"agent_{agent_type.name}")
+                    future = executor.submit(protected_invoke)
+                    result = future.result(timeout=OP_TIMEOUT)
+                    
+                    logger.info(f"[trace_id={correlation_id}] Agente '{agent_type.name}' concluiu com sucesso.")
+                    self._handle_successful_run(result, agent_type, question, correlation_id)
+                    return self._format_success_response(result)
 
-                    state = "SUCCESS"
-                    elapsed = time.time() - start
-                    logger.info(
-                        f"[trace_id={correlation_id}] AgentExecutor (tipo: {agent_type.name}) concluiu a execução com sucesso em {elapsed:.2f}s.")
-                    break  # Sai do loop se a execução for bem-sucedida
-                except Exception as e:
-                    # Se um erro de validação de entrada da ferramenta ocorrer, devemos PARAR imediatamente
-                    # e devolver uma resposta final explicando o erro (conforme regras do prompt do agente).
-                    error_text = str(e)
-                    is_validation_error = (
-                            isinstance(e, PydanticValidationError)
-                            or e.__class__.__name__.lower().endswith("validationerror")
-                            or ("validation error" in error_text.lower())
-                    )
-                    if is_validation_error:
-                        state = "VALIDATION_ERROR"
-                        logger.warning(
-                            f"[trace_id={correlation_id}] Erro de validação ao chamar ferramenta na tentativa {attempt + 1}: {e}. Encerrando sem novas tentativas."
-                        )
-                        final_answer = (
-                            "Thought: Uma ação resultou em erro ao usar a ferramenta. Pela regra, devo parar e explicar o erro.\n"
-                            f"Final Answer: Falha ao executar a ferramenta devido a erro de validação dos parâmetros. Detalhes: {error_text}. "
-                            "Para a ferramenta 'write_file', o campo 'content' é obrigatório além de 'file_path'."
-                        )
-                        return {
-                            "answer": final_answer,
-                            "intermediate_steps": [],
-                        }
-
-                    # Se o Circuit Breaker estiver aberto, aborta novas tentativas
+                except (PydanticValidationError, ValueError, TypeError) as e:
+                    logger.warning(f"[trace_id={correlation_id}] Erro de validação na ferramenta: {e}. Abortando.")
+                    return self._format_validation_error_response(e)
+                
+                except (CircuitOpenError, TimeoutError) as e:
+                    last_error = e
+                    logger.warning(f"[trace_id={correlation_id}] Erro na tentativa {attempt + 1}: {e}")
                     if isinstance(e, CircuitOpenError):
-                        last_error = e
-                        logger.error(
-                            f"[trace_id={correlation_id}] O Circuit Breaker para '{agent_type.name}' está aberto. Abortando tentativas.")
-                        break
-
-                    # Lógica de exponential backoff com jitter
+                        break # Aborta se o circuito estiver aberto
+                    
                     backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
-                    jitter = backoff_duration * 0.1 * random.random()  # 10% de jitter
-                    sleep_time = backoff_duration + jitter
+                    time.sleep(backoff_duration + random.uniform(0, backoff_duration * 0.1))
 
-                    last_error = e if not isinstance(e, FuturesTimeoutError) else TimeoutError(
-                        f"Execução do agente excedeu o timeout de {OP_TIMEOUT}s na tentativa {attempt + 1}."
-                    )
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"[trace_id={correlation_id}] Erro inesperado na tentativa {attempt + 1}: {e}", exc_info=True)
+                    backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
+                    time.sleep(backoff_duration + random.uniform(0, backoff_duration * 0.1))
 
-                    reason = "timeout" if isinstance(e, FuturesTimeoutError) else "erro"
-                    state = "RETRY_WAIT"
-                    logger.warning(
-                        f"[trace_id={correlation_id}] Tentativa {attempt + 1} falhou para o agente '{agent_type.name}' por {reason}: {e}. "
-                        f"Aguardando {sleep_time:.2f} segundos antes de tentar novamente."
-                    )
-                    time.sleep(sleep_time)
+                finally:
+                    if executor:
+                        executor.shutdown(wait=False, cancel_futures=True)
 
-            if result is None:
-                # Se o loop terminar sem sucesso, lança a última exceção capturada.
-                raise last_error if last_error else RuntimeError(
-                    "O agente falhou em todas as tentativas sem um erro específico.")
-
-            elapsed_ms = round((time.time() - start) * 1000, 1)
-            intermediate_steps = result.get("intermediate_steps", [])
-
-            # Observabilidade mínima: trace da execução
-            try:
-                tools_invoked = [getattr(step[0], 'tool', 'unknown') for step in intermediate_steps]
-                tool_inputs = [getattr(step[0], 'tool_input', {}) for step in intermediate_steps]
-                sanitized_inputs = [json.dumps(inp, ensure_ascii=False)[:500] for inp in tool_inputs]
-                observations = [str(step[1])[:500] for step in intermediate_steps]
-                logger.info({
-                    "event": "agent_trace",
-                    "trace_id": correlation_id,
-                    "agent_type": agent_type.name,
-                    "question": question[:500],
-                    "tools_invoked": tools_invoked,
-                    "inputs": sanitized_inputs,
-                    "observations": observations,
-                    "latency_ms": elapsed_ms
-                })
-            except Exception:
-                pass
-
-            if intermediate_steps:
-                last_step = intermediate_steps[-1]
-                action, observation = last_step
-                if "Erro:" not in str(observation):
-                    experience_content = (
-                        f"Ao receber a tarefa '{question}', "
-                        f"usei a ferramenta '{action.tool}' com os parâmetros '{json.dumps(action.tool_input, ensure_ascii=False)}'. "
-                        f"O resultado foi: '{observation}'"
-                    )
-                    experience = Experience(
-                        type="action_success",
-                        content=experience_content,
-                        metadata={
-                            "agent_type": agent_type.name,
-                            "tool_used": action.tool,
-                            "tool_input": action.tool_input,
-                            "original_question": question,
-                            "trace_id": correlation_id
-                        }
-                    )
-                    memory_core.memorize(experience)
-                    logger.info(
-                        f"[trace_id={correlation_id}] Experiência de sucesso com a ferramenta '{action.tool}' foi memorizada.")
-
-            final_answer = result.get("output", "A tarefa foi concluída.")
-            if isinstance(final_answer, AgentFinish):
-                final_answer = final_answer.return_values.get("output", str(final_answer))
-
-            return {
-                "answer": final_answer,
-                "intermediate_steps": intermediate_steps,
-            }
+            return self._format_failure_response(last_error, agent_type, correlation_id)
 
         except Exception as e:
-            logger.error(
-                f"[trace_id={correlation_id}] Erro inesperado ao executar o agente '{agent_type.name}' após todas as tentativas: {e}",
-                exc_info=True)
-            return {
-                "error": f"Ocorreu um erro crítico e inesperado durante a execução do agente '{agent_type.name}'. ID de rastreamento: {correlation_id}"}
+            logger.critical(f"[trace_id={correlation_id}] Erro CRÍTICO ao executar o agente '{agent_type.name}': {e}", exc_info=True)
+            return self._format_failure_response(e, agent_type, correlation_id)
 
+    def _handle_successful_run(self, result: dict, agent_type: AgentType, question: str, correlation_id: str):
+        """Memoriza experiências de sucesso."""
+        intermediate_steps = result.get("intermediate_steps", [])
+        if not intermediate_steps:
+            return
 
-# Instância única para ser usada na aplicação, seguindo o padrão singleton.
+        try:
+            last_step = intermediate_steps[-1]
+            action, observation = last_step
+            if "Erro:" not in str(observation):
+                experience_content = (
+                    f"Ao receber a tarefa '{question}', "
+                    f"usei a ferramenta '{action.tool}' com os parâmetros '{json.dumps(action.tool_input, ensure_ascii=False)}'. "
+                    f"O resultado foi: '{observation}'"
+                )
+                experience = Experience(
+                    type="action_success",
+                    content=experience_content,
+                    metadata={
+                        "agent_type": agent_type.name,
+                        "tool_used": action.tool,
+                        "tool_input": action.tool_input,
+                        "original_question": question,
+                        "trace_id": correlation_id
+                    }
+                )
+                memory_core.memorize(experience)
+                logger.info(f"[trace_id={correlation_id}] Experiência de sucesso com '{action.tool}' foi memorizada.")
+        except Exception as e:
+            logger.warning(f"[trace_id={correlation_id}] Falha ao memorizar experiência: {e}", exc_info=False)
+
+# Instância única para ser usada na aplicação
 agent_manager = AgentManager()
