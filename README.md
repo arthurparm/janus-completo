@@ -3,144 +3,191 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Janus** é uma aplicação de arquitetura de software de IA autônoma e modular, projetada para analisar bases de código, gerenciar conhecimento e executar tarefas de forma proativa. O sistema utiliza uma combinação de Grafos de Conhecimento, Memória Vetorial e Agentes de IA especializados para entender e operar sobre um ambiente de software.
+Janus é uma aplicação de arquitetura de software de IA autônoma e modular. O sistema analisa bases de código, constrói conhecimento e executa tarefas de forma proativa usando:
+- Grafo de Conhecimento (Neo4j)
+- Memória Vetorial (Qdrant)
+- Agentes de IA especializados (LangChain) com acesso a ferramentas
+- Observabilidade profunda com métricas Prometheus e dashboards Grafana
 
-## ✨ Principais Funcionalidades
+## Visão Geral do Stack
 
--   **Arquitetura Modular**: O sistema é construído com uma clara separação de responsabilidades (`api`, `core`, `db`, `models`), facilitando a manutenção e a escalabilidade.
--   **Agentes de IA Especializados**: Utiliza diferentes tipos de agentes (`TOOL_USER`, `ORCHESTRATOR`, `META_AGENT`) com prompts e ferramentas distintas para realizar tarefas específicas com o princípio do menor privilégio.
--   **Ciclo de Autoanálise (Meta-Agente)**: Um agente supervisor monitora proativamente a saúde do sistema, analisando experiências passadas para detectar padrões de falha e sugerir correções.
--   **Grafo de Conhecimento (Neo4j)**: Realiza uma análise estática da base de código, mapeando arquivos, classes, funções e suas inter-relações (`CALLS`, `CONTAINS`) em um grafo de conhecimento.
--   **Memória Episódica (Qdrant)**: Armazena o histórico de ações e observações dos agentes como "experiências" em um banco de dados vetorial, permitindo buscas por similaridade semântica.
--   **Observabilidade Avançada**: Expõe métricas detalhadas para o Prometheus (latência, erros, estado de Circuit Breakers) e inclui um dashboard Grafana pré-configurado para visualização.
--   **Resiliência e Segurança**: Implementa padrões como Circuit Breaker para chamadas a serviços externos, Rate Limiting na API, validação de caminhos para prevenir *Path Traversal* e redação de segredos em logs.
+- Linguagem: Python 3.11
+- Framework Web: FastAPI (totalmente assíncrono)
+- Servidor ASGI: Uvicorn
+- Gerenciador de pacotes: pip (requirements.txt)
+- Orquestração local: Docker e Docker Compose
+- Vetor/embedding: sentence-transformers, Qdrant
+- Grafo: Neo4j 5 Community (com plugin APOC)
+- LLM Router e Integrações: LangChain (OpenAI, Google Gemini, Groq, Ollama)
+- Observabilidade: prometheus-fastapi-instrumentator + dashboard Grafana
 
-## 🏗️ Arquitetura
+Pontos de entrada:
+- ASGI app: app.main:app
+- API base: http://localhost:8000 (Swagger em /docs)
 
-O sistema é orquestrado em torno de uma API FastAPI que serve como ponto de entrada. As requisições são processadas pelo `AgentManager`, que seleciona o agente de IA apropriado com base na tarefa. Os agentes utilizam um conjunto de ferramentas (`agent_tools`) para interagir com os subsistemas principais:
+## Principais Funcionalidades
 
-1.  **LLM Manager**: Um roteador dinâmico que seleciona o modelo de linguagem (local via Ollama ou na nuvem como OpenAI/Gemini) com base em critérios de prioridade e função.
-2.  **Knowledge Graph Core (Neo4j)**: A base de conhecimento de longo prazo sobre a estrutura do código.
-3.  **Episodic Memory Core (Qdrant)**: A memória de curto e médio prazo sobre eventos e ações.
-4.  **Filesystem Manager**: Uma camada segura para interações com o sistema de arquivos, restrita a um *workspace*.
+- **Arquitetura Altamente Robusta:** Sistema projetado para produção, com 9 arquivos críticos otimizados para alta confiabilidade.
+- **Padrões de Resiliência:** Implementação nativa de Circuit Breakers, retries com backoff exponencial e timeouts em todos os componentes críticos (LLMs, Agentes, Banco de Dados).
+- **API Totalmente Assíncrona:** Endpoints de alta performance que não bloqueiam o event loop, garantindo máxima concorrência.
+- **Agentes de IA Especializados:** Múltiplos agentes com papéis distintos (Orchestrator, Tool User, Meta-Agent) e princípio do menor privilégio.
+- **Ciclo de Auto-Otimização (Meta-Agente):** Um agente supervisor que monitora a saúde do sistema, analisa falhas e propõe correções de forma autônoma.
+- **Roteador Dinâmico de LLMs:** Gerenciamento inteligente de modelos (Ollama, Gemini, OpenAI) com base em prioridade (custo vs. qualidade) e com fallback para o "Cérebro Soberano" local.
+- **Observabilidade Profunda:** Métricas Prometheus detalhadas para latência, erros e estado de Circuit Breakers, com um dashboard Grafana pré-configurado.
 
-```plaintext
-                   +-------------------+
-                   |   FastAPI (API)   |
-                   +-------------------+
-                           |
-            +--------------+---------------+
-            |        Agent Manager         |
-            | (TOOL_USER, META_AGENT, etc.)|
-            +--------------+---------------+
-                           |
-            +--------------+---------------+
-            |         LLM Manager          |
-            | (Router: Ollama, OpenAI, ...) |
-            +------------------------------+
-                           |
-      +--------------------+--------------------+
-      |                    |                    |
-+-----+------+      +------+-----+       +------+-------+
-| Knowledge  |      | Episodic   |       | Filesystem   |
-| Graph Core |      | Memory Core|       | Manager      |
-|  (Neo4j)   |      |  (Qdrant)  |       | (Workspace)  |
-+------------+      +------------+       +--------------+
+## Requisitos
+
+- Docker e Docker Compose (recomendado)
+- OU Python 3.11 com pip para execução local
+
+## 1. Configuração
+
+Copie o arquivo `.env.example` para `.env` e ajuste as variáveis conforme necessário.
+
+# App
+APP_NAME=Janus
+APP_VERSION=0.2.0
+ENVIRONMENT=development
+DRY_RUN=true
+
+# Neo4j
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+
+# Qdrant
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+# QDRANT_API_KEY= (opcional para Qdrant Cloud)
+
+# LangSmith/Chain (opcional)
+LANGCHAIN_TRACING_V2=true
+# LANGCHAIN_API_KEY=
+
+# Limites de taxa da API
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_IP_PER_MIN=60
+RATE_LIMIT_PER_KEY_PER_MIN=300
+
+# Provedores LLM (preencha o que usar)
+# OpenAI (nuvem)
+# OPENAI_API_KEY=
+OPENAI_MODEL_NAME=gpt-4o
+
+# Google Gemini (nuvem)
+# GEMINI_API_KEY=
+GEMINI_MODEL_NAME=gemini-1.5-pro-latest
+
+# Ollama (local)
+OLLAMA_HOST=http://ollama:11434
+OLLAMA_ORCHESTRATOR_MODEL=llama3.1:8b
+OLLAMA_CODER_MODEL=codellama:7b
+OLLAMA_CURATOR_MODEL=phi3:mini
+
+Variáveis avançadas também suportadas via app/config.py (ajustes finos de memória e raciocínio):
+- MEMORY_SHORT_TTL_SECONDS, MEMORY_SHORT_MAX_ITEMS, MEMORY_MAX_CONTENT_CHARS
+- MEMORY_QUOTA_WINDOW_SECONDS, MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN, MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN, MEMORY_ENCRYPTION_KEY, MEMORY_PII_REDACT
+- REASONING_MAX_ITERATIONS, REASONING_MAX_SECONDS, REASONING_MAX_TOKENS
+- META_AGENT_CYCLE_INTERVAL_SECONDS, META_AGENT_MAX_ITERATIONS, META_AGENT_MAX_SECONDS
+
+## 2. Como Executar
+
+Opção A) Docker Compose (recomendado)
+1. docker-compose up -d --build
+2. Acesse: http://localhost:8000 (Swagger em /docs)
+3. Serviços:
+   - API: 8000/tcp
+   - Neo4j: 7474 (HTTP) e 7687 (Bolt)
+   - Qdrant: 6333
+   - Ollama: 11434
+
+Opção B) Local (sem Docker)
+1. Python 3.11 instalado
+2. pip install -r requirements.txt
+3. Configure o .env (ver seção anterior)
+4. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+### Primeira Execução (Ollama)
+
+Na primeira vez que você executar o sistema com Docker, os modelos do Ollama (nosso "Cérebro Soberano" local) precisarão ser baixados. Isso pode levar alguns minutos. Você pode fazer isso manualmente com os seguintes comandos:
+
+```sh
+docker-compose exec ollama ollama pull llama3.1:8b
+docker-compose exec ollama ollama pull codellama:7b
+docker-compose exec ollama ollama pull phi3:mini
 ```
 
-## 🚀 Começando
+Dica: Em Windows, se make não estiver disponível, use os comandos diretos acima. Para quem tem Make, há alvos úteis (ver próxima seção).
 
-### Pré-requisitos
+## Scripts e Tarefas (Makefile)
 
-- Docker
-- Docker Compose
+- make run — inicia a API com autoreload
+- make test — executa testes (pytest, se instalado)
+- make lint — roda ruff/flake8/pyflakes (fallback: verificação de sintaxe)
+- make format — formata com ruff/black
+- make install-dev — instala ruff, black, pytest
 
-### Instalação e Configuração
+Equivalentes diretos:
+- uvicorn app.main:app --reload
+- pytest (se existir suíte de testes)
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone <URL_DO_REPOSITORIO>
-    cd janus-1.0
-    ```
+## Endpoints úteis
 
-2.  **Crie o arquivo de ambiente:**
-    Copie o arquivo de exemplo para criar seu ambiente local.
-    ```bash
-    cp .env.example .env
-    ```
-    Agora, edite o arquivo `.env` e preencha as credenciais necessárias, como `OPENAI_API_KEY` ou `GEMINI_API_KEY`. As configurações padrão para Neo4j, Qdrant e Ollama já estão definidas para o ambiente Docker.
+- Saúde básica: GET /healthz
+- Liveness: GET /livez
+- Readiness: GET /readyz (verifica Neo4j, Qdrant e LLM best-effort)
+- API v1 (prefixo): /api/v1
+  - /system/status
+  - /knowledge/index
+  - /agent/execute
+  - /memory/..., /learning/..., etc. (veja /docs)
 
-3.  **Inicie os serviços:**
-    Use o Docker Compose para construir as imagens e iniciar todos os contêineres em modo detached.
-    ```bash
-    docker-compose up -d --build
-    ```
-    Isso iniciará a API do Janus, o banco de dados Neo4j, o banco vetorial Qdrant e o servidor local de LLMs Ollama.
+Coleções HTTP para testes manuais: pasta http/ contém exemplos .http.
 
-## ⚙️ Uso da Aplicação
+## Observabilidade
 
-Após a inicialização, os seguintes serviços estarão disponíveis:
+- Métricas Prometheus: /metrics na API
+- Dashboard Grafana: Importe o arquivo `dashboards/janus_component_resilience_dashboard.json` para visualizar a latência (p95/p99), taxa de erros e o estado dos Circuit Breakers de cada componente.
 
--   **API do Janus**: `http://localhost:8000`
--   **Documentação da API (Swagger UI)**: `http://localhost:8000/docs`
--   **Painel do Neo4j Browser**: `http://localhost:7474`
--   **API do Ollama**: `http://localhost:11434`
--   **Métricas do Prometheus**: `http://localhost:8000/metrics`
+## Estrutura do Projeto
 
-### Exemplos de Requisições
-
-1.  **Verificar o Status do Sistema**
-    Confirma se a aplicação está operacional.
-    ```bash
-    curl -X GET "http://localhost:8000/api/v1/system/status"
-    ```
-
-2.  **Indexar a Base de Código**
-    Dispara o processo de análise do código-fonte para popular o Grafo de Conhecimento.
-    ```bash
-    curl -X POST "http://localhost:8000/api/v1/knowledge/index" -H "Content-Type: application/json" -d '{}'
-    ```
-
-3.  **Executar um Agente**
-    Envia uma instrução para um agente executar uma tarefa. Neste exemplo, o agente escreve um arquivo no workspace.
-    ```bash
-    curl -X POST "http://localhost:8000/api/v1/agent/execute" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "question": "Crie um arquivo chamado '\''exemplo.txt'\'' e escreva o texto '\''Olá, Janus!'\'' nele.",
-      "agent_type": "tool_user"
-    }'
-    ```
-
-## 📊 Observabilidade
-
--   **Métricas**: Todas as métricas da aplicação são expostas no endpoint `http://localhost:8000/metrics` e podem ser coletadas por um servidor Prometheus.
--   **Dashboard**: Um dashboard pré-configurado para Grafana está disponível em `dashboards/janus_component_resilience_dashboard.json`. Ele monitora a latência, taxa de erros e o estado dos Circuit Breakers dos componentes.
-
-## 📁 Estrutura do Projeto
-
-```
 .
-├── app/                  # Código fonte da aplicação
-│   ├── api/              # Módulos da API (endpoints, routers)
-│   ├── core/             # Lógica de negócio principal (agentes, memória, etc.)
-│   ├── db/               # Abstrações de banco de dados (graph, vector_store)
-│   ├── models/           # Esquemas de dados Pydantic
-│   └── main.py           # Ponto de entrada da aplicação FastAPI
+├── app/                  # Código-fonte
+│   ├── api/              # Endpoints FastAPI (v1)
+│   ├── core/             # Agentes, LLM manager, memória, prompts, resiliência, etc.
+│   ├── db/               # Integrações Neo4j e Qdrant
+│   ├── models/           # Schemas Pydantic
+│   └── main.py           # Ponto de entrada ASGI (uvicorn app.main:app)
 ├── dashboards/           # Dashboards Grafana
-├── http/                 # Coleção de requisições para testes manuais
-├── .env.example          # Arquivo de exemplo para variáveis de ambiente
-├── docker-compose.yml    # Orquestração dos serviços
-├── Dockerfile            # Definição da imagem da aplicação
-└── requirements.txt      # Dependências Python
-```
+├── http/                 # Requisições para testes (HTTP Client)
+├── tests/                # Testes automatizados (atualmente vazio)
+├── Dockerfile            # Imagem da API
+├── docker-compose.yml    # Orquestração: API, Neo4j, Qdrant, Ollama
+├── Makefile              # Tarefas de dev
+├── requirements.txt      # Dependências Python
+├── .env.example          # Exemplo de arquivo de configuração
+├── GEMINI.md             # Guia de uso do co-processador Gemini (detalhado)
+└── README.md             # Este arquivo
 
-## 🤝 Contribuições
+Nota: volumes de dados (data/neo4j, data/qdrant, data/ollama) serão criados pelo Docker quando necessário.
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir uma issue para relatar bugs ou sugerir novas funcionalidades. Se desejar contribuir com código, por favor, abra um Pull Request.
+## Testes
 
-Áreas que precisam de ajuda:
+- Framework sugerido: pytest
+- Estado atual: existe apenas um placeholder (tests/unit/.gitkeep)
+- Como rodar:
+  - pip install pytest ou make install-dev
+  - pytest ou make test
 
--   Expansão da suíte de testes de unidade.
--   Melhoria da documentação de código.
--   Criação de novos `agent_tools`.
+TODO:
+- Adicionar testes unitários de módulos core (LLM manager, agent_manager, graph_rag_core, etc.)
+- Adicionar testes de API (FastAPI TestClient)
+- Configurar cobertura (pytest-cov)
+
+## Licença
+
+Este projeto está licenciado sob a Licença MIT. Veja o arquivo `LICENSE` para mais detalhes. (TODO: Adicionar o arquivo `LICENSE` ao repositório).
+
+## Notas e TODOs
+
+- Para uso de provedores em nuvem (OpenAI, Gemini), é necessário definir as chaves no .env. Veja também GEMINI.md para detalhes de ativação e estratégia de roteamento.
