@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, validator
 from app.core import filesystem_manager
 from app.core.memory_core import memory_core
 from app.db.graph import graph_db
+# Import AgentType from agent_manager to avoid circular dependency issues
+from app.core.agent_manager import AgentType
 
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
@@ -29,16 +31,14 @@ class WriteFileInput(BaseModel):
         if not v:
             raise ValueError("O caminho do arquivo não pode ser vazio.")
 
-        # Constrói o caminho absoluto e resolve (remove '..')
         absolute_path = (WORKSPACE_ROOT / v).resolve()
 
-        # Verifica se o caminho final ainda está dentro do diretório seguro usando relative_to
         try:
             absolute_path.relative_to(WORKSPACE_ROOT)
         except ValueError:
             raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido.")
 
-        return v  # Retorna o caminho original relativo se for válido
+        return v
 
 
 @tool(args_schema=WriteFileInput)
@@ -48,15 +48,10 @@ def write_file(
         overwrite: bool = False,
         dry_run: bool = False,
 ) -> str:
-    """
-    Escreve conteúdo em um arquivo dentro de um diretório seguro (workspace).
-    Valida o caminho do arquivo, a extensão e o tamanho do conteúdo.
-    """
+    """Escreve conteúdo em um arquivo dentro de um diretório seguro (workspace)."""
     try:
-        # A validação principal já foi feita pelo Pydantic via args_schema
         target_path = (WORKSPACE_ROOT / file_path).resolve()
 
-        # Garante que o caminho está dentro do workspace
         try:
             target_path.relative_to(WORKSPACE_ROOT)
         except ValueError:
@@ -72,40 +67,37 @@ def write_file(
             return f"Erro: O arquivo '{file_path}' já existe. Use overwrite=True para sobrescrevê-lo."
 
         if dry_run:
-            return f"DRY RUN: O arquivo '{file_path}' seria escrito com sucesso em '{target_path}'."
+            return f"DRY RUN: O arquivo '{file_path}' seria escrito com sucesso."
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(content)
 
         return f"Arquivo '{file_path}' salvo com sucesso."
-    except ValueError as e:  # Captura erros de validação do Pydantic
+    except ValueError as e:
         return f"Erro de validação: {e}"
     except Exception as e:
         return f"Erro inesperado ao salvar o arquivo: {e}"
 
 
 class ReadFileInput(BaseModel):
-    file_path: str = Field(
-        description="O caminho do ficheiro a ser lido, a partir da raiz do projeto, por exemplo: 'app/main.py' ou 'workspace/meu_plano.txt'.")
+    file_path: str = Field(description="O caminho do ficheiro a ser lido, a partir da raiz do projeto.")
 
 
 @tool(args_schema=ReadFileInput)
 def read_file(file_path: str) -> str:
-    """Use esta capacidade para ler o conteúdo de QUALQUER ficheiro dentro do projeto. A ferramenta lida com a resolução de caminhos de forma segura."""
+    """Lê o conteúdo de QUALQUER ficheiro dentro do projeto."""
     return filesystem_manager.read_file(file_path)
 
 
 class ListDirectoryInput(BaseModel):
-    path: str = Field(default=".",
-                      description="O subdiretório DENTRO do 'workspace' a ser listado. Use '.' para a raiz do workspace.")
+    path: str = Field(default=".", description="O subdiretório DENTRO do 'workspace' a ser listado.")
 
 
 @tool(args_schema=ListDirectoryInput)
 def list_directory(path: str = ".") -> str:
-    """Use esta capacidade para listar ficheiros e pastas dentro do 'workspace'."""
+    """Lista ficheiros e pastas dentro do 'workspace'."""
     return filesystem_manager.list_directory(path)
-
 
 
 class RecallInput(BaseModel):
@@ -119,29 +111,22 @@ def recall_experiences(query: str) -> str:
     return json.dumps(experiences, indent=2, ensure_ascii=False)
 
 
-
 class FunctionInput(BaseModel):
     function_name: str = Field(description="O nome exato da função a ser procurada.")
 
 
 @tool(args_schema=FunctionInput)
 def find_function_calls(function_name: str) -> str:
-    """Use esta capacidade para descobrir quais outras funções uma função específica chama diretamente."""
-    query = """
-        MATCH (caller:Function {name: $function_name})-[:CALLS]->(callee:Function)
-        RETURN caller.name as caller_function, callee.name as callee_function
-    """
+    """Descobre quais outras funções uma função específica chama diretamente."""
+    query = "MATCH (caller:Function {name: $function_name})-[:CALLS]->(callee:Function) RETURN callee.name as called_function"
     results = graph_db.query(query, params={"function_name": function_name})
     return json.dumps(results) if results else f"Nenhuma chamada encontrada para a função '{function_name}'."
 
 
 @tool(args_schema=FunctionInput)
 def find_file_of_function(function_name: str) -> str:
-    """Use esta capacidade para encontrar em qual ficheiro uma função específica está definida."""
-    query = """
-        MATCH (f:File)-[:CONTAINS]->(func:Function {name: $function_name})
-        RETURN f.path as file_path
-    """
+    """Encontra em qual ficheiro uma função específica está definida."""
+    query = "MATCH (f:File)-[:CONTAINS]->(func:Function {name: $function_name}) RETURN f.path as file_path"
     results = graph_db.query(query, params={"function_name": function_name})
     return json.dumps(results) if results else f"Função '{function_name}' não encontrada no grafo."
 
@@ -152,24 +137,20 @@ class AnalyzeMemoryInput(BaseModel):
 
 @tool(args_schema=AnalyzeMemoryInput)
 def analyze_memory_for_failures(last_n_experiences: int) -> str:
-    """
-    Examina as N experiências mais recentes na memória episódica para identificar e resumir padrões de falhas.
-    Esta ferramenta é essencial para a auto-otimização do sistema.
-    """
+    """Examina as N experiências mais recentes para identificar e resumir padrões de falhas."""
     experiences = memory_core.recall(query="falha de ação do agente", n_results=last_n_experiences)
-    failures = [
-        exp for exp in experiences
-        if exp.get("metadata", {}).get("type") == "action_failure"
-    ]
+    failures = [exp for exp in experiences if exp.get("metadata", {}).get("type") == "action_failure"]
     if not failures:
-        return "Análise concluída. Nenhuma falha de ação significativa foi encontrada nas experiências recentes."
-    summary = f"Análise concluída. Foram encontradas {len(failures)} falhas nas últimas {last_n_experiences} experiências:\n"
+        return "Análise concluída. Nenhuma falha de ação significativa foi encontrada."
+    summary = f"Análise concluída. {len(failures)} falhas encontradas:\n"
     for fail in failures:
         tool_used = fail.get("metadata", {}).get("tool_used", "N/A")
         error_observation = fail.get("content", "Erro desconhecido").split("O resultado foi: '")[-1].replace("'", "")
         summary += f"- Ferramenta '{tool_used}' falhou com o erro: {error_observation}\n"
     return summary
 
+
+# --- Tool Factories ---
 
 unified_tools: List[BaseTool] = [
     write_file,
@@ -179,3 +160,19 @@ unified_tools: List[BaseTool] = [
     find_function_calls,
     find_file_of_function,
 ]
+
+meta_agent_tools: List[BaseTool] = [
+    analyze_memory_for_failures,
+    recall_experiences,
+]
+
+def get_tools_for_agent(agent_type: AgentType) -> List[BaseTool]:
+    """
+    Retorna a lista de ferramentas apropriada para o tipo de agente especificado.
+    """
+    if agent_type == AgentType.META_AGENT:
+        return meta_agent_tools
+    elif agent_type in [AgentType.TOOL_USER, AgentType.ORCHESTRATOR]:
+        return unified_tools
+    else:
+        return []

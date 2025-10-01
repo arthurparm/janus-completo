@@ -1,6 +1,7 @@
 
 import logging
 import time
+import threading
 
 from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
 from prometheus_client import Counter, Histogram
@@ -19,31 +20,55 @@ _DB_CB = CircuitBreaker(failure_threshold=3, recovery_timeout=20)
 
 
 class GraphDatabase:
-    _driver: Neo4jDriver = None
+    _driver: Neo4jDriver | None = None
+    _driver_lock = threading.Lock()
 
     def get_driver(self) -> Neo4jDriver:
-        """Returns the existing driver or creates a new one."""
-        if self._driver is None:
-            logger.info("Driver not initialized. Creating new Neo4j driver...")
-            try:
-                password = settings.NEO4J_PASSWORD.get_secret_value()
-                self._driver = Neo4jGraphDatabase.driver(
-                    settings.NEO4J_URI,
-                    auth=(settings.NEO4J_USER, password),
-                    connection_timeout=15.0,  # seconds
-                )
-                logger.info("New Neo4j driver created successfully.")
-            except Exception as e:
-                logger.critical(f"FATAL: Could not create Neo4j driver: {e}", exc_info=True)
-                raise
+        """
+        Retorna o driver Neo4j, inicializando-o de forma thread-safe se necessário.
+        Garante que o driver seja criado apenas uma vez.
+        """
+        # Double-checked locking para performance
+        if self._driver is not None:
+            return self._driver
+
+        with self._driver_lock:
+            if self._driver is None:
+                logger.info("Driver not initialized. Creating new Neo4j driver...")
+                try:
+                    password = settings.NEO4J_PASSWORD.get_secret_value()
+                    driver = Neo4jGraphDatabase.driver(
+                        settings.NEO4J_URI,
+                        auth=(settings.NEO4J_USER, password),
+                        connection_timeout=15.0,
+                        max_connection_lifetime=3600,  # 1 hour
+                    )
+                    # Verifica a conectividade antes de atribuir
+                    driver.verify_connectivity()
+                    self._driver = driver
+                    logger.info("New Neo4j driver created and verified successfully.")
+                except Exception as e:
+                    logger.critical(f"FATAL: Could not create or verify Neo4j driver: {e}", exc_info=True)
+                    raise ConnectionError(f"Failed to connect to Neo4j: {e}") from e
+
         return self._driver
 
     def close(self):
         """Closes the driver connection."""
-        if self._driver is not None:
-            self._driver.close()
-            self._driver = None
-            logger.info("Neo4j connection closed.")
+        with self._driver_lock:
+            if self._driver is not None:
+                try:
+                    self._driver.close()
+                    logger.info("Neo4j driver closed.")
+                except Exception as e:
+                    logger.error(f"Error while closing Neo4j driver: {e}", exc_info=True)
+                finally:
+                    self._driver = None
+
+    def reset(self):
+        """Força o fechamento e a recriação do driver na próxima chamada."""
+        logger.warning("Resetting Neo4j driver connection.")
+        self.close()
 
     def _do_query(self, cypher_query: str, params: dict | None = None):
         driver = self.get_driver()
@@ -76,9 +101,12 @@ class GraphDatabase:
 
     def health_check(self) -> bool:
         try:
-            res = self.query("RETURN 1 as one", {}, operation="health")
-            return bool(res and res[0].get("one") == 1)
-        except Exception:
+            driver = self.get_driver()
+            driver.verify_connectivity()
+            logger.debug("Neo4j health check passed via verify_connectivity.")
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j health check failed: {e}")
             return False
 
 

@@ -50,6 +50,16 @@ class AppSettings(BaseSettings):
     META_AGENT_MAX_ITERATIONS: int = 3
     META_AGENT_MAX_SECONDS: int = 60
 
+    # LLM Resilience & Timeouts
+    LLM_DEFAULT_TIMEOUT_SECONDS: int = 60
+    LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
+    LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
+    LLM_RETRY_MAX_ATTEMPTS: int = 3
+    LLM_RETRY_INITIAL_BACKOFF_SECONDS: float = 0.5
+    LLM_RETRY_MAX_BACKOFF_SECONDS: float = 5.0
+    LLM_CACHE_TTL_SECONDS: int = 3600
+    LLM_MAX_PROMPT_LENGTH: int = 100000
+
     # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
