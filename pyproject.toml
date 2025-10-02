@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "janus-api"
+version = "0.1.0"
+description = "Janus Agentic System API"
+authors = ["arthur.paraiso.mar@gmail.com"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+pydantic-settings = "*"
+neo4j = ">=5.19.0"
+qdrant-client = "1.9.2" # Fixando a versão para corresponder ao docker-compose
+langchain = ">=0.1.20"
+langchain-openai = ">=0.1.6"
+langsmith = ">=0.1.57"
+langchain-community = "*"
+langchain-neo4j = ">=0.0.3"
+langchain-google-genai = ">=0.1.0"
+langchain-groq = "*"
+langchain-ollama = "*"
+onnxruntime = "*"
+sentence-transformers = "*"
+structlog = "*"
+prometheus-fastapi-instrumentator = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

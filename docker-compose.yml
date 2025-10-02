@@ -12,11 +12,9 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude /app/workspace/
     depends_on:
       neo4j:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
+        condition: service_healthy # Espera o Neo4j estar totalmente operacional
       ollama:
-        condition: service_started
+        condition: service_healthy # Espera a API do Ollama estar pronta
     networks:
       - janus-net
 
@@ -27,11 +25,11 @@ services:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - ./data/neo4j:/data
+      - ./data/neo4j:/data # Persiste os dados do Neo4j
     environment:
-      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
-      # This line enables the APOC plugin (Correct from last fix)
-      NEO4J_PLUGINS: '["apoc"]'
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+      # Habilita plugins essenciais. APOC é fundamental para muitas operações complexas.
+      - NEO4J_PLUGINS=["apoc"]
     networks:
       - janus-net
     healthcheck:
@@ -42,37 +40,49 @@ services:
       start_period: 20s
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.9.2
     container_name: janus_qdrant
     ports:
       - "6333:6333"
     volumes:
-      - ./data/qdrant:/qdrant/storage
+      - ./data/qdrant:/qdrant/storage # Persiste os dados do Qdrant
     networks:
       - janus-net
     healthcheck:
-      test: [ "CMD-SHELL", "curl --max-time 5 -f http://localhost:6333/readyz || exit 1" ]
+      # Usa o endpoint /healthz que é mais apropriado para checagem de saúde
+      test: [ "CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
 
   ollama:
-    image: ollama/ollama
+    build:
+      context: .
+      dockerfile: ollama.Dockerfile
     container_name: janus_ollama
     ports:
       - "11434:11434"
     volumes:
       - ./data/ollama:/root/.ollama
+      - ./init-ollama.sh:/init-ollama.sh
     networks:
       - janus-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
+    entrypoint: ["/bin/sh", "/init-ollama.sh"]
+    # Use the modern and more compatible way to request GPU resources
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Use 'all' available GPUs, or '1' if you prefer
+    #           capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      interval: 15s   # Check less frequently
+      timeout: 10s    # Allow more time for the command to respond
+      retries: 10     # Try more times
+      start_period: 60s # Grace period for the container to initialize before healthchecks start
 
 networks:
   janus-net:
