@@ -1,7 +1,6 @@
-
 import logging
-import time
 import threading
+import time
 
 from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
 from prometheus_client import Counter, Histogram
@@ -12,8 +11,10 @@ from app.core.resilience import resilient, CircuitBreaker
 logger = logging.getLogger(__name__)
 
 # Metrics
-_DB_QUERIES = Counter("neo4j_queries_total", "Total de queries ao Neo4j", ["operation", "outcome", "exception_type"])  # type: ignore
-_DB_LATENCY = Histogram("neo4j_query_latency_seconds", "Latência por query ao Neo4j", ["operation", "outcome"])  # type: ignore
+_DB_QUERIES = Counter("neo4j_queries_total", "Total de queries ao Neo4j",
+                      ["operation", "outcome", "exception_type"])  # type: ignore
+_DB_LATENCY = Histogram("neo4j_query_latency_seconds", "Latência por query ao Neo4j",
+                        ["operation", "outcome"])  # type: ignore
 
 # Circuit Breaker for DB operations
 _DB_CB = CircuitBreaker(failure_threshold=3, recovery_timeout=20)

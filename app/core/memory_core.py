@@ -1,13 +1,12 @@
-
+import asyncio
 import base64
 import json
 import logging
 import math
 import re
-import asyncio
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from langchain_openai import OpenAIEmbeddings
 from prometheus_client import Counter, Histogram
@@ -31,14 +30,17 @@ _MEM_BYTES = Counter("memory_bytes_total", "Bytes processados pela memória", ["
 _MEM_OPS = Counter("memory_ops_total", "Operações de memória", ["op", "layer", "outcome"])
 _MEM_LAT = Histogram("memory_latency_seconds", "Latência por operação de memória", ["op", "layer", "outcome"])
 
+
 def _now() -> float:
     return time.time()
+
 
 def _approx_bytes(s: str) -> int:
     try:
         return len(s.encode("utf-8"))
     except Exception:
         return len(s)
+
 
 def _detect_pii(text: str) -> Tuple[bool, List[str]]:
     types: List[str] = []
@@ -54,6 +56,7 @@ def _detect_pii(text: str) -> Tuple[bool, List[str]]:
         types.append("ssn")
     return (len(types) > 0, types)
 
+
 def _mask_pii(text: str) -> str:
     text = re.sub(r"([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+)\.[A-Za-z]{2,}", "***@***.***", text)
     text = re.sub(r"\b\+?\d[\d\s().-]{7,}\b", "[REDACTED_PHONE]", text)
@@ -62,6 +65,7 @@ def _mask_pii(text: str) -> str:
     text = re.sub(r"\b\d{3}-\d{2}-\d{4}\b", "[REDACTED_SSN]", text)
     return text
 
+
 def _xor_bytes(data: bytes, key: bytes) -> bytes:
     if not key:
         return data
@@ -69,6 +73,7 @@ def _xor_bytes(data: bytes, key: bytes) -> bytes:
     for i, b in enumerate(data):
         out.append(b ^ key[i % len(key)])
     return bytes(out)
+
 
 def encrypt_text(text: str) -> str:
     """
@@ -87,6 +92,7 @@ def encrypt_text(text: str) -> str:
     enc = _xor_bytes(raw, key)
     return "enc::" + base64.b64encode(enc).decode("ascii")
 
+
 def decrypt_text(text: str) -> str:
     """
     Desfaz a ofuscação do texto. Veja o aviso de segurança em `encrypt_text`.
@@ -104,6 +110,7 @@ def decrypt_text(text: str) -> str:
         logger.warning(f"Falha ao descriptografar texto: {e}")
         return text
 
+
 def _sanitize_metadata(metadata: dict) -> dict:
     sanitized = {}
     for key, value in metadata.items():
@@ -117,6 +124,7 @@ def _sanitize_metadata(metadata: dict) -> dict:
         else:
             sanitized[key] = str(value)
     return sanitized
+
 
 class ShortTermMemory:
     def __init__(self, ttl_seconds: int, max_items: int, encoder: Optional[OpenAIEmbeddings]):
@@ -176,10 +184,14 @@ class ShortTermMemory:
                 score = self._cosine(qv, vec) if qv and vec else (1.0 if query.lower() in content.lower() else 0.0)
                 scored.append((exp_id, score, content, metadata))
         scored.sort(key=lambda x: x[1], reverse=True)
-        top = [{"id": exp_id, "content": content, "metadata": metadata, "distance": 1 - min(max(score, 0.0), 1.0)} for exp_id, score, content, metadata in scored[:n_results]]
-        if top: _MEM_HITS.labels("short").inc()
-        else: _MEM_MISSES.labels("short").inc()
+        top = [{"id": exp_id, "content": content, "metadata": metadata, "distance": 1 - min(max(score, 0.0), 1.0)} for
+               exp_id, score, content, metadata in scored[:n_results]]
+        if top:
+            _MEM_HITS.labels("short").inc()
+        else:
+            _MEM_MISSES.labels("short").inc()
         return top
+
 
 class EpisodicMemory:
     """Sistema de memória episódica com camadas short-term e long-term (Qdrant)."""
@@ -273,7 +285,8 @@ class EpisodicMemory:
                 try:
                     vector = await self.encoder.aembed_query(experience.content)
                     payload = experience.metadata.copy()
-                    payload.update({'type': experience.type, 'timestamp': experience.timestamp, 'content': encrypt_text(experience.content)})
+                    payload.update({'type': experience.type, 'timestamp': experience.timestamp,
+                                    'content': encrypt_text(experience.content)})
                     safe_payload = _sanitize_metadata(payload)
 
                     await self.async_client.upsert(
@@ -321,7 +334,9 @@ class EpisodicMemory:
                 for sp in search_results:
                     if str(sp.id) not in seen:
                         content = decrypt_text(sp.payload.get('content', ''))
-                        item = {"id": str(sp.id), "content": content, "metadata": {k: v for k, v in sp.payload.items() if k != 'content'}, "distance": 1 - sp.score}
+                        item = {"id": str(sp.id), "content": content,
+                                "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
+                                "distance": 1 - sp.score}
                         long_items.append(item)
                         if len(combined) + len(long_items) >= n_results:
                             break
@@ -333,13 +348,13 @@ class EpisodicMemory:
         return combined
 
     async def arecall_filtered(
-        self,
-        query: str,
-        n_results: int = 5,
-        filter_by_type: Optional[str] = None,
-        filter_by_origin: Optional[str] = None,
-        min_score: float = 0.0,
-        time_range: Optional[tuple[float, float]] = None
+            self,
+            query: str,
+            n_results: int = 5,
+            filter_by_type: Optional[str] = None,
+            filter_by_origin: Optional[str] = None,
+            min_score: float = 0.0,
+            time_range: Optional[tuple[float, float]] = None
     ) -> List[dict]:
         """
         Busca avançada com filtros por tipo, origem, score mínimo e intervalo de tempo.
@@ -430,10 +445,10 @@ class EpisodicMemory:
             return await self.arecall(query, n_results)
 
     async def arecall_by_timeframe(
-        self,
-        query: str,
-        hours_ago: int = 24,
-        n_results: int = 5
+            self,
+            query: str,
+            hours_ago: int = 24,
+            n_results: int = 5
     ) -> List[dict]:
         """
         Busca memórias dentro de um período de tempo específico.
@@ -471,7 +486,9 @@ class EpisodicMemory:
             filter_by_type="action_failure"
         )
 
+
 memory_core = EpisodicMemory()
+
 
 async def initialize_memory_core():
     await memory_core.ainit()

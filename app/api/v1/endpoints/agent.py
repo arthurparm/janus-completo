@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 from typing import Optional
@@ -60,8 +59,8 @@ class AgentResponse(BaseModel):
     }
 )
 async def agent_execute(
-    request: AgentExecutionRequest,
-    http_request: Request
+        request: AgentExecutionRequest,
+        http_request: Request
 ):
     """
     Recebe uma solicitação e a encaminha para o AgentManager executar
@@ -84,7 +83,7 @@ async def agent_execute(
         if "error" in result:
             error_msg = result["error"]
             logger.error(f"[{correlation_id}] Erro na execução do agente: {error_msg}")
-            
+
             status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
             if "timeout" in error_msg.lower():
                 status_code = status.HTTP_408_REQUEST_TIMEOUT

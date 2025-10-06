@@ -1,6 +1,6 @@
-import time
 import threading
-from typing import Dict, Tuple, Optional
+import time
+from typing import Dict, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware

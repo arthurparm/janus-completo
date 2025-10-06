@@ -88,10 +88,10 @@ class ContextManager:
         )
 
     def search_web(
-        self,
-        query: str,
-        max_results: int = 5,
-        search_depth: str = "basic"
+            self,
+            query: str,
+            max_results: int = 5,
+            search_depth: str = "basic"
     ) -> WebSearchResult:
         """
         Realiza busca na web usando Tavily.
@@ -151,10 +151,10 @@ class ContextManager:
             )
 
     def get_enriched_context(
-        self,
-        query: Optional[str] = None,
-        include_web_search: bool = False,
-        max_web_results: int = 3
+            self,
+            query: Optional[str] = None,
+            include_web_search: bool = False,
+            max_web_results: int = 3
     ) -> Dict[str, Any]:
         """
         Retorna contexto enriquecido, opcionalmente incluindo busca na web.
@@ -179,10 +179,10 @@ class ContextManager:
         return context
 
     def format_context_for_prompt(
-        self,
-        include_datetime: bool = True,
-        include_system: bool = False,
-        web_results: Optional[WebSearchResult] = None
+            self,
+            include_datetime: bool = True,
+            include_system: bool = False,
+            web_results: Optional[WebSearchResult] = None
     ) -> str:
         """
         Formata o contexto como string para inclusão em prompts.

@@ -5,7 +5,6 @@ Worker assíncrono que consome mensagens de consolidação de conhecimento do Ra
 Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -81,11 +80,11 @@ async def process_consolidation_task(task: TaskMessage) -> None:
 
 
 async def publish_consolidation_task(
-    mode: str = "batch",
-    limit: int = 10,
-    experience_id: str = None,
-    experience_content: str = None,
-    metadata: Dict[str, Any] = None
+        mode: str = "batch",
+        limit: int = 10,
+        experience_id: str = None,
+        experience_content: str = None,
+        metadata: Dict[str, Any] = None
 ) -> str:
     """
     Publica uma tarefa de consolidação no RabbitMQ.

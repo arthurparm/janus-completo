@@ -9,9 +9,11 @@ import structlog
 # Prometheus metrics (optional)
 try:
     from prometheus_client import Counter, Gauge, Histogram  # type: ignore
+
     _PROM_ENABLED = True
 except Exception:  # pragma: no cover - fallback if not installed
     _PROM_ENABLED = False
+
 
     class _NoopMetric:
         def labels(self, *_, **__):
@@ -25,6 +27,7 @@ except Exception:  # pragma: no cover - fallback if not installed
 
         def observe(self, *_args, **_kwargs):
             return None
+
 
     Counter = Gauge = Histogram = _NoopMetric  # type: ignore
 
@@ -126,6 +129,7 @@ class CircuitBreaker:
         Returns:
             Função decorada
         """
+
         def wrapper(*args, **kwargs) -> Any:
             operation = getattr(func, "__name__", "unknown")
             self._last_operation = operation
@@ -138,7 +142,7 @@ class CircuitBreaker:
 
             if self.state == CircuitBreakerState.OPEN:
                 if self.last_failure_time is not None and (
-                    time.time() - self.last_failure_time > self.recovery_timeout
+                        time.time() - self.last_failure_time > self.recovery_timeout
                 ):
                     self.state = CircuitBreakerState.HALF_OPEN
                     self._set_state_gauges(operation)
@@ -184,7 +188,7 @@ class CircuitBreaker:
 
         if self.state == CircuitBreakerState.OPEN:
             if self.last_failure_time is not None and (
-                time.time() - self.last_failure_time > self.recovery_timeout
+                    time.time() - self.last_failure_time > self.recovery_timeout
             ):
                 self.state = CircuitBreakerState.HALF_OPEN
                 self._set_state_gauges(operation)
@@ -273,12 +277,12 @@ class CircuitBreaker:
 
 
 def resilient(
-    max_attempts: int = 3,
-    initial_backoff: float = 1.0,
-    max_backoff: float = 10.0,
-    circuit_breaker: Optional[CircuitBreaker] = None,
-    retry_on: Tuple[Type[BaseException], ...] = (Exception,),
-    operation_name: Optional[str] = None,
+        max_attempts: int = 3,
+        initial_backoff: float = 1.0,
+        max_backoff: float = 10.0,
+        circuit_breaker: Optional[CircuitBreaker] = None,
+        retry_on: Tuple[Type[BaseException], ...] = (Exception,),
+        operation_name: Optional[str] = None,
 ) -> Callable:
     """
     Decorador que aplica retry com exponential backoff + jitter e, opcionalmente, Circuit Breaker.
@@ -320,6 +324,7 @@ def resilient(
                 if circuit_breaker:
                     async def protected_call():
                         return await func(*args, **kwargs)
+
                     call = lambda: circuit_breaker.call_async(protected_call)
                 else:
                     call = lambda: func(*args, **kwargs)

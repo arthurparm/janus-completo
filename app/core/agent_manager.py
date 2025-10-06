@@ -1,7 +1,5 @@
-
-import json
-import logging
 import asyncio
+import logging
 import random
 from typing import List, Tuple, Optional
 
@@ -38,6 +36,7 @@ agent_circuit_breakers = {
     agent_type: CircuitBreaker(failure_threshold=3, recovery_timeout=60)
     for agent_type in AgentType
 }
+
 
 class AgentManager:
     """Centraliza a criação, configuração e execução de agentes especializados."""
@@ -80,17 +79,18 @@ class AgentManager:
         )
 
     async def arun_agent(
-        self,
-        question: str,
-        request: Optional[Request] = None,
-        agent_type: AgentType = AgentType.TOOL_USER
+            self,
+            question: str,
+            request: Optional[Request] = None,
+            agent_type: AgentType = AgentType.TOOL_USER
     ) -> dict:
         """Executa um agente especializado de forma assíncrona com resiliência."""
         self._validate_question(question)
         correlation_id = getattr(request, "state", {}).correlation_id or "no-id"
         circuit_breaker = agent_circuit_breakers[agent_type]
-        logger.info(f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
-        
+        logger.info(
+            f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
+
         agent_executor = self._create_agent_executor(agent_type)
         last_error = None
 
@@ -103,7 +103,7 @@ class AgentManager:
                     agent_executor.ainvoke({"input": question}, {"recursion_limit": 5}),
                     timeout=OP_TIMEOUT
                 )
-                
+
                 circuit_breaker.record_success()
                 logger.info(f"[trace_id={correlation_id}] Agente '{agent_type.name}' concluiu com sucesso.")
                 await self._ahandle_successful_run(result, agent_type, question, correlation_id)
@@ -112,21 +112,22 @@ class AgentManager:
             except (PydanticValidationError, ValueError, TypeError) as e:
                 logger.warning(f"[trace_id={correlation_id}] Erro de validação na ferramenta: {e}. Abortando.")
                 return self._format_validation_error_response(e)
-            
+
             except (CircuitOpenError, asyncio.TimeoutError) as e:
                 circuit_breaker.record_failure()
                 last_error = e
                 logger.warning(f"[trace_id={correlation_id}] Erro na tentativa {attempt + 1}: {type(e).__name__}")
                 if isinstance(e, CircuitOpenError):
                     break
-                
+
                 backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
                 await asyncio.sleep(backoff_duration + random.uniform(0, backoff_duration * 0.1))
 
             except Exception as e:
                 circuit_breaker.record_failure()
                 last_error = e
-                logger.error(f"[trace_id={correlation_id}] Erro inesperado na tentativa {attempt + 1}: {e}", exc_info=True)
+                logger.error(f"[trace_id={correlation_id}] Erro inesperado na tentativa {attempt + 1}: {e}",
+                             exc_info=True)
                 backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
                 await asyncio.sleep(backoff_duration + random.uniform(0, backoff_duration * 0.1))
 
@@ -151,7 +152,7 @@ class AgentManager:
                         "trace_id": correlation_id
                     }
                 )
-                await memory_core.amemorize(experience) # Assume async version
+                await memory_core.amemorize(experience)  # Assume async version
                 logger.info(f"[trace_id={correlation_id}] Experiência de sucesso com '{action.tool}' foi memorizada.")
         except Exception as e:
             logger.warning(f"[trace_id={correlation_id}] Falha ao memorizar experiência: {e}", exc_info=False)
@@ -167,7 +168,9 @@ class AgentManager:
 
     def _format_failure_response(self, error: Optional[Exception], agent_type: AgentType, correlation_id: str) -> dict:
         error_msg = str(error) if error else "O agente falhou em todas as tentativas."
-        logger.error(f"[trace_id={correlation_id}] Todas as {MAX_ATTEMPTS} tentativas falharam. Último erro: {error_msg}")
+        logger.error(
+            f"[trace_id={correlation_id}] Todas as {MAX_ATTEMPTS} tentativas falharam. Último erro: {error_msg}")
         return {"error": f"Falha ao executar agente '{agent_type.name}'. Último erro: {error_msg}"}
+
 
 agent_manager = AgentManager()

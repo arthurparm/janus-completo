@@ -6,15 +6,14 @@ Executa código Python de forma isolada e segura usando RestrictedPython.
 import ast
 import io
 import logging
-import sys
 import time
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Dict, Any, Optional
 
 from RestrictedPython import compile_restricted, safe_globals, limited_builtins
-from RestrictedPython.Guards import safe_builtins, guarded_iter_unpack_sequence
 from RestrictedPython.Eval import default_guarded_getitem, default_guarded_getiter
+from RestrictedPython.Guards import safe_builtins, guarded_iter_unpack_sequence
 
 from app.config import settings
 
@@ -44,9 +43,9 @@ class PythonSandbox:
     """
 
     def __init__(
-        self,
-        timeout_seconds: int = 5,
-        max_output_length: int = 10000
+            self,
+            timeout_seconds: int = 5,
+            max_output_length: int = 10000
     ):
         self.timeout_seconds = timeout_seconds
         self.max_output_length = max_output_length
@@ -151,8 +150,8 @@ class PythonSandbox:
                 logger.warning(f"Código contém padrão perigoso: {pattern}")
                 # Permite se for um import permitido
                 if pattern.startswith('import') and any(
-                    allowed in code_lower
-                    for allowed in ['math', 'random', 'datetime', 'json', 're']
+                        allowed in code_lower
+                        for allowed in ['math', 'random', 'datetime', 'json', 're']
                 ):
                     continue
                 return False
@@ -168,9 +167,9 @@ class PythonSandbox:
             return f"Erro de sintaxe: {e}"
 
     def execute(
-        self,
-        code: str,
-        context: Optional[Dict[str, Any]] = None
+            self,
+            code: str,
+            context: Optional[Dict[str, Any]] = None
     ) -> ExecutionResult:
         """
         Executa código Python de forma segura.

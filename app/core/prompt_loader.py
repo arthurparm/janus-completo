@@ -154,9 +154,9 @@ Inicie a análise.
 {agent_scratchpad}
 """
 
-from collections import OrderedDict
 import string
 import time
+from collections import OrderedDict
 from typing import Dict, Optional, Tuple, Any, Callable
 
 from prometheus_client import Counter
@@ -172,7 +172,8 @@ PROMPT_CACHE_HITS = Counter(
     "prompt_cache_hits_total", "Total de hits no cache de prompts", ["namespace", "name", "version", "lang", "model"]
 )
 PROMPT_CACHE_MISSES = Counter(
-    "prompt_cache_misses_total", "Total de misses no cache de prompts", ["namespace", "name", "version", "lang", "model"]
+    "prompt_cache_misses_total", "Total de misses no cache de prompts",
+    ["namespace", "name", "version", "lang", "model"]
 )
 
 
@@ -185,7 +186,8 @@ class PromptLoader:
         self._external_provider: Optional[Callable[[str], Optional[str]]] = None  # gancho p/ fonte externa
         self._cache: "OrderedDict[Tuple[str, str, str, str, str], Tuple[float, str]]" = OrderedDict()
 
-    def _make_key(self, name: str, namespace: Optional[str], version: Optional[str], lang: Optional[str], model: Optional[str]) -> Tuple[str, str, str, str, str]:
+    def _make_key(self, name: str, namespace: Optional[str], version: Optional[str], lang: Optional[str],
+                  model: Optional[str]) -> Tuple[str, str, str, str, str]:
         return (
             namespace or "default",
             name,
@@ -275,7 +277,8 @@ def get_prompt(prompt_name: str) -> str:
 
 
 def get_prompt_advanced(prompt_name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
-                         lang: Optional[str] = None, model: Optional[str] = None, variables: Optional[Dict[str, Any]] = None,
-                         hot_reload: Optional[bool] = None) -> str:
+                        lang: Optional[str] = None, model: Optional[str] = None,
+                        variables: Optional[Dict[str, Any]] = None,
+                        hot_reload: Optional[bool] = None) -> str:
     return prompt_loader.get(prompt_name, namespace=namespace, version=version, lang=lang, model=model,
                              variables=variables, hot_reload=hot_reload)

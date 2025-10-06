@@ -7,7 +7,7 @@ authors = ["arthur.paraiso.mar@gmail.com"]
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "*"
-uvicorn = {extras = ["standard"], version = "*"}
+uvicorn = { extras = ["standard"], version = "*" }
 pydantic-settings = "*"
 neo4j = ">=5.19.0"
 qdrant-client = "1.9.2" # Fixando a versão para corresponder ao docker-compose

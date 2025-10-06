@@ -9,16 +9,14 @@ import asyncio
 import json
 import logging
 import time
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from prometheus_client import Counter, Histogram
 from qdrant_client import QdrantClient
 
-from app.config import settings
 from app.core.llm_manager import get_llm_for_role, ModelRole, ModelPriority
 from app.core.memory_core import COLLECTION_NAME, decrypt_text
 from app.core.resilience import resilient, CircuitBreaker
@@ -126,9 +124,9 @@ class KnowledgeConsolidator:
         self._initialized = True
 
     async def _extract_knowledge_with_llm(
-        self,
-        experience_content: str,
-        metadata: Dict[str, Any]
+            self,
+            experience_content: str,
+            metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Usa LLM para extrair conhecimento estruturado de uma experiência.
@@ -198,10 +196,10 @@ class KnowledgeConsolidator:
             return {"entities": [], "relationships": [], "insights": []}
 
     def _persist_to_neo4j(
-        self,
-        experience_id: str,
-        extracted_data: Dict[str, Any],
-        source_metadata: Dict[str, Any]
+            self,
+            experience_id: str,
+            extracted_data: Dict[str, Any],
+            source_metadata: Dict[str, Any]
     ) -> Tuple[int, int]:
         """
         Persiste entidades e relacionamentos extraídos no Neo4j.
@@ -342,10 +340,10 @@ class KnowledgeConsolidator:
         operation_name="knowledge_consolidation"
     )
     async def consolidate_experience(
-        self,
-        experience_id: str,
-        experience_content: str,
-        metadata: Dict[str, Any]
+            self,
+            experience_id: str,
+            experience_content: str,
+            metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Consolida uma experiência episódica em conhecimento semântico.
@@ -404,9 +402,9 @@ class KnowledgeConsolidator:
             raise
 
     async def consolidate_batch(
-        self,
-        limit: int = 10,
-        min_score: float = 0.0
+            self,
+            limit: int = 10,
+            min_score: float = 0.0
     ) -> Dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.

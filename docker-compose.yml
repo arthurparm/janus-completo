@@ -70,7 +70,7 @@ services:
       - ./init-ollama.sh:/init-ollama.sh
     networks:
       - janus-net
-    entrypoint: ["/bin/sh", "/init-ollama.sh"]
+    entrypoint: [ "/bin/sh", "/init-ollama.sh" ]
     # Use the modern and more compatible way to request GPU resources
     # deploy:
     #   resources:
@@ -102,7 +102,7 @@ services:
     networks:
       - janus-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5

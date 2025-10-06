@@ -48,8 +48,17 @@ Content-Type: application/json
   "content": "O sistema implementou o padrão Circuit Breaker para proteger a conexão com Neo4j. O LLM Manager utiliza Ollama como fallback quando OpenAI falha. Prometheus coleta métricas de todos os componentes.",
   "type": "system_architecture",
   "metadata": {
-    "patterns": ["circuit_breaker", "fallback", "observability"],
-    "components": ["Neo4j", "LLM Manager", "Prometheus", "Ollama"],
+    "patterns": [
+      "circuit_breaker",
+      "fallback",
+      "observability"
+    ],
+    "components": [
+      "Neo4j",
+      "LLM Manager",
+      "Prometheus",
+      "Ollama"
+    ],
     "timestamp": "2025-10-06T14:40:00Z"
   }
 }

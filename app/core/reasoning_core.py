@@ -85,7 +85,8 @@ class ReasoningSession:
     def _time_left(self) -> float:
         return max(0.0, self.limits.max_seconds - (time.perf_counter() - self._start_time))
 
-    def _record_step(self, step: Step, prompt: str, output: str, ok: bool, extra: Optional[Dict[str, Any]] = None) -> None:
+    def _record_step(self, step: Step, prompt: str, output: str, ok: bool,
+                     extra: Optional[Dict[str, Any]] = None) -> None:
         try:
             self.steps.append({
                 "step": step.value,
@@ -137,8 +138,8 @@ class ReasoningSession:
 
             # PLAN
             plan_prompt = (
-                "Você é um engenheiro de software meticuloso. Crie um plano objetivo, com 3-6 passos, para resolver: "
-                f"\n" + self.question + "\nRegras: seja específico, cite verificações e critérios de sucesso ao final."
+                    "Você é um engenheiro de software meticuloso. Crie um plano objetivo, com 3-6 passos, para resolver: "
+                    f"\n" + self.question + "\nRegras: seja específico, cite verificações e critérios de sucesso ao final."
             )
             plan = self._run_llm(Step.PLAN, plan_prompt)
             self._record_step(Step.PLAN, plan_prompt, plan, ok=True)
@@ -146,8 +147,8 @@ class ReasoningSession:
 
             # CRITIQUE
             critique_prompt = (
-                "Analise criticamente o plano abaixo, procurando riscos, ambiguidade e passos faltantes. "
-                "Sugira correções e melhore os critérios de sucesso.\n---\nPlano:\n" + plan
+                    "Analise criticamente o plano abaixo, procurando riscos, ambiguidade e passos faltantes. "
+                    "Sugira correções e melhore os critérios de sucesso.\n---\nPlano:\n" + plan
             )
             critique = self._run_llm(Step.CRITIQUE, critique_prompt)
             self._record_step(Step.CRITIQUE, critique_prompt, critique, ok=True)
@@ -155,8 +156,8 @@ class ReasoningSession:
 
             # SOLVE
             solve_prompt = (
-                "Execute o plano revisado de forma objetiva. Forneça a solução final no final sob o marcador 'FINAL'. "
-                "Inclua, se aplicável, snippets de código formatados e explicações sucintas.\n---\nPlano revisado:\n" + critique
+                    "Execute o plano revisado de forma objetiva. Forneça a solução final no final sob o marcador 'FINAL'. "
+                    "Inclua, se aplicável, snippets de código formatados e explicações sucintas.\n---\nPlano revisado:\n" + critique
             )
             solution = self._run_llm(Step.SOLVE, solve_prompt)
             self._record_step(Step.SOLVE, solve_prompt, solution, ok=True)
@@ -164,11 +165,11 @@ class ReasoningSession:
 
             # VERIFY
             verify_prompt = (
-                "Verifique automaticamente a solução a seguir.\n"
-                "- Valide consistência com os critérios do plano.\n"
-                "- Se JSON, valide sintaxe. Se Python, valide sintaxe AST.\n"
-                "- Liste evidências/checagens realizadas.\n"
-                "- Responda com um veredito: PASS ou FAIL, e correções se necessárias.\n---\nSolução:\n" + solution
+                    "Verifique automaticamente a solução a seguir.\n"
+                    "- Valide consistência com os critérios do plano.\n"
+                    "- Se JSON, valide sintaxe. Se Python, valide sintaxe AST.\n"
+                    "- Liste evidências/checagens realizadas.\n"
+                    "- Responda com um veredito: PASS ou FAIL, e correções se necessárias.\n---\nSolução:\n" + solution
             )
             verify_text = self._run_llm(Step.VERIFY, verify_prompt)
             verify_report = self._run_verify_hooks(solution, plan=plan, critique=critique, llm_verification=verify_text)
@@ -233,7 +234,9 @@ class ReasoningSession:
                 report["checks"].append(f"custom_verifier_error:{e}")
         # PASS se não houver falhas nos checks sintáticos básicos e sem indicadores de FAIL no texto do veredito LLM
         llm_verdict = (ctx.get("llm_verification") or "").lower()
-        syntactic_ok = all(not str(c).startswith(("json_syntax_fail", "python_ast_fail", "custom_verifier_error")) for c in report["checks"])  # noqa: E501
+        syntactic_ok = all(
+            not str(c).startswith(("json_syntax_fail", "python_ast_fail", "custom_verifier_error")) for c in
+            report["checks"])  # noqa: E501
         llm_ok = ("pass" in llm_verdict) and ("fail" not in llm_verdict)
         report["pass"] = bool(syntactic_ok and llm_ok) or report.get("pass", False)
         return report

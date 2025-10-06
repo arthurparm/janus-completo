@@ -46,9 +46,9 @@ def get_current_context():
     tags=["Context"]
 )
 def search_web(
-    query: str = Query(..., description="Query de busca"),
-    max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
-    search_depth: str = Query("basic", regex="^(basic|advanced)$", description="Profundidade da busca")
+        query: str = Query(..., description="Query de busca"),
+        max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
+        search_depth: str = Query("basic", regex="^(basic|advanced)$", description="Profundidade da busca")
 ):
     """
     Realiza busca na web usando Tavily API.
@@ -94,9 +94,9 @@ def get_enriched_context(request: EnrichedContextRequest):
     tags=["Context"]
 )
 def format_context_for_prompt(
-    include_datetime: bool = Query(True, description="Incluir data/hora"),
-    include_system: bool = Query(False, description="Incluir informações do sistema"),
-    web_query: Optional[str] = Query(None, description="Query opcional para busca web")
+        include_datetime: bool = Query(True, description="Incluir data/hora"),
+        include_system: bool = Query(False, description="Incluir informações do sistema"),
+        web_query: Optional[str] = Query(None, description="Query opcional para busca web")
 ):
     """
     Formata o contexto como string otimizada para inclusão em prompts de LLM.

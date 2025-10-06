@@ -1,17 +1,14 @@
-
 import ast
 import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Protocol
 
 from prometheus_client import Counter, Histogram
 
-from app.core.memory_core import memory_core  # Importa o memory_core para acessar experiências
-from app.db.graph import graph_db
 from app.core.resilience import resilient, CircuitBreaker
+from app.db.graph import graph_db
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +120,6 @@ def _create_code_entities_in_graph(parser: CodeParser):
             "MATCH (f:File:CodeFile {path: $file_path}) MERGE (c:Class:CodeClass {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
             params={"file_path": file_path, "name": cls['name']}
         )
-
 
 
 def consolidate_experiences_into_graph(limit: int = 10) -> dict:

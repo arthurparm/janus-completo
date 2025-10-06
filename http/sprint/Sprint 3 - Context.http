@@ -141,7 +141,8 @@ Accept: application/json
 
 ###
 # Teste 7: Formatar contexto para prompt COM busca web
-GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=false&web_query=Langchain documentation
+GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=false&
+    web_query=Langchain documentation
 Accept: application/json
 
 > {%

@@ -5,24 +5,24 @@ import structlog
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from app.api.v1.router import api_router
 from app.api.problem_details import add_problem_handlers
+from app.api.v1.router import api_router
 from app.config import settings
 from app.core.correlation_middleware import CorrelationMiddleware
-from app.core.rate_limit_middleware import RateLimitMiddleware
+from app.core.data_harvester import harvester
 from app.core.logging_config import setup_logging
+from app.core.memory_core import initialize_memory_core
 from app.core.meta_agent_cycle import run_meta_agent_cycle
+from app.core.rate_limit_middleware import RateLimitMiddleware
 from app.db.graph import graph_db
 from app.db.vector_store import check_qdrant_readiness
-from app.core.llm_manager import get_llm_client, ModelRole
-from app.core.data_harvester import harvester
-from app.core.memory_core import initialize_memory_core
 
 setup_logging()
 logger = structlog.get_logger(__name__)
 
 # Constantes
 _HEALTH_CHECK_TIMEOUT = 10  # segundos
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,6 +71,7 @@ async def lifespan(app: FastAPI):
     graph_db.close()
     logger.info("Application shutdown complete.")
 
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -85,17 +86,21 @@ app.add_middleware(RateLimitMiddleware)
 add_problem_handlers(app)
 app.include_router(api_router, prefix="/api/v1")
 
+
 @app.get("/", include_in_schema=False)
 def read_root():
     return {"message": f"Welcome to {settings.APP_NAME}. Docs available at /docs"}
+
 
 @app.get("/healthz", tags=["System"], summary="Health (basic)")
 def healthz():
     return {"status": "ok"}
 
+
 @app.get("/livez", tags=["System"], summary="Liveness")
 def livez():
     return {"alive": True}
+
 
 @app.get("/readyz", tags=["System"], summary="Readiness")
 async def readyz():
@@ -111,7 +116,9 @@ async def readyz():
     return {
         "ready": neo4j_ok and qdrant_ok,
         "dependencies": {
-            "neo4j": {"status": "healthy" if neo4j_ok else "unhealthy", "error": str(deps[0]) if not neo4j_ok else None},
-            "qdrant": {"status": "healthy" if qdrant_ok else "unhealthy", "error": str(deps[1]) if not qdrant_ok else None},
+            "neo4j": {"status": "healthy" if neo4j_ok else "unhealthy",
+                      "error": str(deps[0]) if not neo4j_ok else None},
+            "qdrant": {"status": "healthy" if qdrant_ok else "unhealthy",
+                       "error": str(deps[1]) if not qdrant_ok else None},
         }
     }

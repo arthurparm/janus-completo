@@ -202,7 +202,7 @@ class MessageBroker:
             durable=True,
             arguments={
                 "x-message-ttl": 86400000,  # 24 horas
-                "x-max-length": 10000,      # Limite de mensagens
+                "x-max-length": 10000,  # Limite de mensagens
             }
         )
 
@@ -220,10 +220,10 @@ class MessageBroker:
         operation_name="rabbitmq_publish"
     )
     async def publish(
-        self,
-        queue_name: str,
-        message: TaskMessage,
-        priority: int = 0
+            self,
+            queue_name: str,
+            message: TaskMessage,
+            priority: int = 0
     ) -> None:
         """
         Publica uma mensagem em uma fila.
@@ -276,10 +276,10 @@ class MessageBroker:
             raise
 
     async def consume(
-        self,
-        queue_name: str,
-        callback: Callable[[TaskMessage], Any],
-        prefetch_count: int = 10
+            self,
+            queue_name: str,
+            callback: Callable[[TaskMessage], Any],
+            prefetch_count: int = 10
     ) -> None:
         """
         Consome mensagens de uma fila de forma contínua.
@@ -345,10 +345,10 @@ class MessageBroker:
         logger.info(f"✓ Consumidor ativo para fila {queue_name}")
 
     def start_consumer(
-        self,
-        queue_name: str,
-        callback: Callable[[TaskMessage], Any],
-        prefetch_count: int = 10
+            self,
+            queue_name: str,
+            callback: Callable[[TaskMessage], Any],
+            prefetch_count: int = 10
     ) -> asyncio.Task:
         """
         Inicia um consumidor em background.
@@ -361,6 +361,7 @@ class MessageBroker:
         Returns:
             Task do consumidor
         """
+
         async def consumer_wrapper():
             try:
                 await self.consume(queue_name, callback, prefetch_count)

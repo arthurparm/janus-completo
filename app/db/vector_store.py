@@ -1,5 +1,4 @@
 import logging
-import time
 from typing import Optional
 
 import requests
@@ -36,6 +35,7 @@ _MIN_VECTOR_SIZE = 1
 _MAX_VECTOR_SIZE = 10000
 _DEFAULT_VECTOR_SIZE = 1536
 
+
 def _lazy_init_client() -> Optional[QdrantClient]:
     global _qdrant_client, _client_initialized, _init_error
     if _client_initialized:
@@ -58,11 +58,13 @@ def _lazy_init_client() -> Optional[QdrantClient]:
         logger.error(f"Falha ao conectar com o Qdrant: {e}", exc_info=True)
         return None
 
+
 def get_qdrant_client() -> QdrantClient:
     client = _lazy_init_client()
     if not client:
         raise ConnectionError(f"Cliente Qdrant não está disponível. Erro: {_init_error}")
     return client
+
 
 def get_async_qdrant_client() -> AsyncQdrantClient:
     """Retorna uma instância do cliente Qdrant assíncrono."""
@@ -76,10 +78,12 @@ def get_async_qdrant_client() -> AsyncQdrantClient:
         logger.info("Instância do AsyncQdrantClient criada.")
     return _async_qdrant_client
 
+
 def _validate_vector_size(vector_size: int) -> int:
     if not isinstance(vector_size, int) or not (_MIN_VECTOR_SIZE <= vector_size <= _MAX_VECTOR_SIZE):
         raise ValueError(f"vector_size deve estar entre {_MIN_VECTOR_SIZE} e {_MAX_VECTOR_SIZE}.")
     return vector_size
+
 
 def _validate_collection_name(collection_name: str) -> str:
     if not collection_name or not collection_name.strip() or len(collection_name) > 255:
@@ -89,8 +93,10 @@ def _validate_collection_name(collection_name: str) -> str:
         raise ValueError("collection_name contém caracteres inválidos.")
     return collection_name
 
+
 @resilient(
-    max_attempts=3, initial_backoff=1.0, max_backoff=5.0, circuit_breaker=_qdrant_ops_cb, retry_on=RETRIABLE_QDRANT_ERRORS
+    max_attempts=3, initial_backoff=1.0, max_backoff=5.0, circuit_breaker=_qdrant_ops_cb,
+    retry_on=RETRIABLE_QDRANT_ERRORS
 )
 def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE) -> str:
     collection_name = _validate_collection_name(collection_name)
@@ -109,13 +115,16 @@ def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_V
             )
             logger.info(f"Coleção '{collection_name}' criada.")
             # Criar índices de payload para metadados importantes
-            client.create_payload_index(collection_name=collection_name, field_name="metadata.type", field_schema=PayloadSchemaType.KEYWORD)
-            client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp", field_schema=PayloadSchemaType.INTEGER)
+            client.create_payload_index(collection_name=collection_name, field_name="metadata.type",
+                                        field_schema=PayloadSchemaType.KEYWORD)
+            client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
+                                        field_schema=PayloadSchemaType.INTEGER)
             logger.info(f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp.")
         except Exception as create_error:
             logger.error(f"Falha ao criar coleção '{collection_name}': {create_error}", exc_info=True)
             raise ConnectionError(f"Não foi possível criar a coleção: {create_error}") from create_error
     return collection_name
+
 
 async def aget_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE) -> str:
     """Versão assíncrona para obter ou criar uma coleção no Qdrant."""
@@ -135,16 +144,21 @@ async def aget_or_create_collection(collection_name: str, vector_size: int = _DE
             )
             logger.info(f"Coleção '{collection_name}' criada via async.")
             # Criar índices de payload para metadados importantes
-            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.type", field_schema=PayloadSchemaType.KEYWORD)
-            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp", field_schema=PayloadSchemaType.INTEGER)
-            logger.info(f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async.")
+            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.type",
+                                                    field_schema=PayloadSchemaType.KEYWORD)
+            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
+                                                    field_schema=PayloadSchemaType.INTEGER)
+            logger.info(
+                f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async.")
         except Exception as create_error:
             logger.error(f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True)
             raise ConnectionError(f"Não foi possível criar a coleção async: {create_error}") from create_error
     return collection_name
 
+
 @resilient(
-    max_attempts=5, initial_backoff=2.0, max_backoff=10.0, circuit_breaker=_qdrant_init_cb, retry_on=RETRIABLE_QDRANT_ERRORS
+    max_attempts=5, initial_backoff=2.0, max_backoff=10.0, circuit_breaker=_qdrant_init_cb,
+    retry_on=RETRIABLE_QDRANT_ERRORS
 )
 def check_qdrant_readiness() -> bool:
     try:
@@ -156,19 +170,25 @@ def check_qdrant_readiness() -> bool:
         logger.error(f"Qdrant readiness check FAILED: {e}", exc_info=True)
         raise ConnectionError(f"Qdrant não está pronto: {e}") from e
 
+
 def reset_client():
     global _qdrant_client, _client_initialized, _init_error, _async_qdrant_client
     if _qdrant_client:
-        try: _qdrant_client.close()
-        except: pass
+        try:
+            _qdrant_client.close()
+        except:
+            pass
     if _async_qdrant_client:
-        try: asyncio.run(_async_qdrant_client.close())
-        except: pass
+        try:
+            asyncio.run(_async_qdrant_client.close())
+        except:
+            pass
     _qdrant_client = None
     _client_initialized = False
     _init_error = None
     _async_qdrant_client = None
     logger.info("Clientes Qdrant resetados.")
+
 
 def get_collection_info(collection_name: str) -> dict:
     collection_name = _validate_collection_name(collection_name)

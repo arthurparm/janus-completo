@@ -1,10 +1,10 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -39,6 +39,7 @@ LLM_TOKENS = Counter(
 
 logger = logging.getLogger(__name__)
 
+
 # --- Configuração de Cache e Resiliência ---
 
 @dataclass
@@ -48,6 +49,7 @@ class CachedLLM:
     created_at: datetime
     provider: str
     consecutive_failures: int = 0
+
 
 _llm_cache: Dict[str, CachedLLM] = {}
 _MAX_CACHE_FAILURES = 3  # Limite de falhas para evicção do cache
@@ -61,15 +63,18 @@ _provider_circuit_breakers: Dict[str, CircuitBreaker] = {
     for provider in ["ollama", "openai", "google_gemini", "unknown"]
 }
 
+
 class ModelRole(Enum):
     ORCHESTRATOR = "orchestrator"
     CODE_GENERATOR = "code_generator"
     KNOWLEDGE_CURATOR = "knowledge_curator"
 
+
 class ModelPriority(Enum):
     LOCAL_ONLY = "local_only"
     FAST_AND_CHEAP = "fast_and_cheap"
     HIGH_QUALITY = "high_quality"
+
 
 # --- Funções de Validação e Health Check ---
 
@@ -79,11 +84,13 @@ def _validate_gemini_key(key: Optional[str]) -> bool:
         return False
     return True
 
+
 def _validate_openai_key(key: Optional[str]) -> bool:
     if not key or not key.startswith("sk-") or len(key) < 20:
         logger.warning("OPENAI_API_KEY parece inválido.")
         return False
     return True
+
 
 def _health_check_ollama(llm: ChatOllama, timeout_s: int = 10) -> bool:
     executor = None
@@ -99,6 +106,7 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 10) -> bool:
     finally:
         if executor:
             executor.shutdown(wait=False, cancel_futures=True)
+
 
 # --- Gerenciamento de Cache ---
 
@@ -119,11 +127,13 @@ def _get_from_cache(cache_key: str) -> Optional[CachedLLM]:
     logger.debug(f"Retornando LLM do cache: {cache_key}")
     return cached
 
+
 def _add_to_cache(cache_key: str, llm: BaseChatModel, provider: str):
     _llm_cache[cache_key] = CachedLLM(
         instance=llm, created_at=datetime.now(), provider=provider
     )
     logger.debug(f"LLM adicionado ao cache: {cache_key}")
+
 
 def invalidate_cache(provider: Optional[str] = None):
     if provider:
@@ -135,12 +145,13 @@ def invalidate_cache(provider: Optional[str] = None):
         _llm_cache.clear()
         logger.info("Cache de LLMs completamente invalidado.")
 
+
 # --- Roteador Dinâmico de LLM (get_llm) ---
 
 def get_llm(
-    role: ModelRole = ModelRole.ORCHESTRATOR,
-    priority: ModelPriority = ModelPriority.LOCAL_ONLY,
-    cache_key: str = ""
+        role: ModelRole = ModelRole.ORCHESTRATOR,
+        priority: ModelPriority = ModelPriority.LOCAL_ONLY,
+        cache_key: str = ""
 ) -> BaseChatModel:
     """Obtém uma instância de um modelo de linguagem com base no papel e na prioridade."""
     if not cache_key:
@@ -164,7 +175,7 @@ def get_llm(
             llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=local_model_name, temperature=0)
             if not _health_check_ollama(llm):
                 raise RuntimeError(f"Health check falhou para modelo '{local_model_name}'")
-            
+
             logger.info(f"Modelo local '{local_model_name}' inicializado com sucesso.")
             LLM_ROUTER_COUNTER.labels(role.value, priority.value, local_model_name, "ollama").inc()
             _add_to_cache(cache_key, llm, "ollama")
@@ -197,7 +208,8 @@ def get_llm(
                 try:
                     llm = provider["initializer"]()
                     logger.info(f"LLM do provedor '{provider['name']}' inicializado com sucesso.")
-                    LLM_ROUTER_COUNTER.labels(role.value, priority.value, provider["model_name"], provider["provider_key"]).inc()
+                    LLM_ROUTER_COUNTER.labels(role.value, priority.value, provider["model_name"],
+                                              provider["provider_key"]).inc()
                     _add_to_cache(cache_key, llm, provider["provider_key"])
                     return llm
                 except Exception as e:
@@ -209,13 +221,14 @@ def get_llm(
         llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=local_model_name, temperature=0)
         if not _health_check_ollama(llm):
             raise RuntimeError(f"Health check falhou para modelo local '{local_model_name}' no fallback")
-        
+
         LLM_ROUTER_COUNTER.labels(role.value, "fallback", local_model_name, "ollama").inc()
         _add_to_cache(cache_key, llm, "ollama")
         return llm
     except Exception as e:
         logger.critical(f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}", exc_info=True)
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e
+
 
 # --- Cliente LLM Unificado ---
 
@@ -281,18 +294,18 @@ class LLMClient:
             output_text = getattr(result, "content", None) or str(result)
             LLM_TOKENS.labels(self.provider, self.model, self.role.value, "in").inc(self._estimate_tokens(prompt))
             LLM_TOKENS.labels(self.provider, self.model, self.role.value, "out").inc(self._estimate_tokens(output_text))
-            
+
             return output_text
 
         except (ValueError, TimeoutError, CircuitOpenError, FuturesTimeoutError) as e:
             # Falha: incrementa o contador de falhas e propaga o erro
             if self.cache_key in _llm_cache:
                 _llm_cache[self.cache_key].consecutive_failures += 1
-            
+
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
-            
+
             logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
             if isinstance(e, FuturesTimeoutError):
                 raise TimeoutError(f"LLM request timeout after {timeout}s") from e
@@ -300,6 +313,7 @@ class LLMClient:
         finally:
             if executor:
                 executor.shutdown(wait=False, cancel_futures=True)
+
 
 # --- Funções de Inferência e Factory ---
 
@@ -309,15 +323,17 @@ def _infer_provider(llm: BaseChatModel) -> str:
     if isinstance(llm, ChatGoogleGenerativeAI): return "google_gemini"
     return "unknown"
 
+
 def _infer_model_name(llm: BaseChatModel) -> str:
     for attr in ("model", "model_name"):
         if hasattr(llm, attr):
             return getattr(llm, attr, "unknown")
     return "unknown"
 
+
 def get_llm_client(
-    role: ModelRole = ModelRole.ORCHESTRATOR,
-    priority: ModelPriority = ModelPriority.LOCAL_ONLY
+        role: ModelRole = ModelRole.ORCHESTRATOR,
+        priority: ModelPriority = ModelPriority.LOCAL_ONLY
 ) -> LLMClient:
     """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
     cache_key = f"{role.value}_{priority.value}"

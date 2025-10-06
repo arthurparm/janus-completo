@@ -1,7 +1,7 @@
-import logging
-import sys
-import random
 import contextvars
+import logging
+import random
+import sys
 from typing import Any, Dict, Optional
 
 import structlog
@@ -9,6 +9,7 @@ import structlog
 try:
     # Optional OpenTelemetry correlation
     from opentelemetry import trace  # type: ignore
+
     _OTEL = True
 except Exception:  # pragma: no cover
     _OTEL = False
