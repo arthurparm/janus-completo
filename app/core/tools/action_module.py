@@ -14,14 +14,13 @@ Funcionalidades:
 
 import logging
 import time
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Callable, Any, Type
 
 from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

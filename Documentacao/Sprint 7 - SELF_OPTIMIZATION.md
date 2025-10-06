@@ -53,9 +53,9 @@ Analisa problemas e planeja melhorias específicas:
 ```python
 class ImprovementPlanner:
     async def plan_improvements(
-        self,
-        issues: List[DetectedIssue],
-        metrics: SystemMetrics
+            self,
+            issues: List[DetectedIssue],
+            metrics: SystemMetrics
     ) -> List[PlannedImprovement]:
         """Planeja melhorias baseadas em problemas"""
 ```
@@ -89,8 +89,8 @@ Executa melhorias de forma autônoma e segura:
 ```python
 class ImprovementExecutor:
     async def execute_improvement(
-        self,
-        improvement: PlannedImprovement
+            self,
+            improvement: PlannedImprovement
     ) -> AppliedImprovement:
         """Executa melhoria usando agente"""
 ```
@@ -346,10 +346,28 @@ Severity: 0.5
 ```python
 ImprovementType.ADD_CACHING
 Steps:
-1. Identificar consultas frequentes
-2. Implementar cache LRU com TTL=300s
-3. Validar que cache não quebra resultados
-4. Monitorar hit rate
+1.
+Identificar
+consultas
+frequentes
+2.
+Implementar
+cache
+LRU
+com
+TTL = 300
+s
+3.
+Validar
+que
+cache
+não
+quebra
+resultados
+4.
+Monitorar
+hit
+rate
 ```
 
 **Resultado Esperado:**
@@ -365,7 +383,7 @@ Steps:
 
 ```python
 IssueType.HIGH_ERROR_RATE
-Severity: 0.8 (crítico!)
+Severity: 0.8(crítico!)
 ```
 
 **Melhoria Planejada:**
@@ -373,10 +391,29 @@ Severity: 0.8 (crítico!)
 ```python
 ImprovementType.REFACTOR_LOGIC
 Steps:
-1. Analisar padrões de erro mais comuns
-2. Implementar retry logic com exponential backoff
-3. Melhorar validação de inputs
-4. Adicionar fallbacks apropriados
+1.
+Analisar
+padrões
+de
+erro
+mais
+comuns
+2.
+Implementar
+retry
+logic
+com
+exponential
+backoff
+3.
+Melhorar
+validação
+de
+inputs
+4.
+Adicionar
+fallbacks
+apropriados
 ```
 
 **Resultado Esperado:**
@@ -395,7 +432,8 @@ IssueType.PERFORMANCE_DEGRADATION
 Severity: 0.6
 Evidence: {
     "current": 1.2s,
-    "historical_avg": 0.8s
+"historical_avg": 0.8
+s
 }
 ```
 
@@ -404,10 +442,25 @@ Evidence: {
 ```python
 ImprovementType.REDUCE_COMPLEXITY
 Steps:
-1. Profiling para identificar gargalos
-2. Otimizar queries/operações mais pesadas
-3. Reduzir complexidade algorítmica
-4. Adicionar índices/otimizações de BD
+1.
+Profiling
+para
+identificar
+gargalos
+2.
+Otimizar
+queries / operações
+mais
+pesadas
+3.
+Reduzir
+complexidade
+algorítmica
+4.
+Adicionar
+índices / otimizações
+de
+BD
 ```
 
 ## 🔄 Integração com Outras Sprints

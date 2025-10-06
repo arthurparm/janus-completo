@@ -22,7 +22,6 @@ from typing import List, Dict, Any, Optional
 
 from prometheus_client import Counter, Histogram, Gauge
 
-from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
 from app.core.memory.memory_core import memory_core
 from app.core.tools.action_module import action_registry

@@ -2,7 +2,8 @@
 
 ## 📋 Visão Geral
 
-A Sprint 6 implementa o **Action Module**, um sistema extensível de gerenciamento de ferramentas (tools) que permite ao Janus interagir com o mundo externo de forma dinâmica, organizada e monitorada.
+A Sprint 6 implementa o **Action Module**, um sistema extensível de gerenciamento de ferramentas (tools) que permite ao
+Janus interagir com o mundo externo de forma dinâmica, organizada e monitorada.
 
 ## 🎯 Objetivos Alcançados
 
@@ -13,6 +14,7 @@ Sistema centralizado de registro e gerenciamento de ferramentas com funcionalida
 #### Componentes Principais:
 
 ##### **ActionRegistry**
+
 - Registro centralizado de todas as ferramentas disponíveis
 - Categorização por tipo (filesystem, api, database, computation, web, system, custom)
 - Controle de permissões (read_only, safe, write, dangerous)
@@ -21,9 +23,11 @@ Sistema centralizado de registro e gerenciamento de ferramentas com funcionalida
 - Histórico de chamadas
 
 ##### **DynamicToolGenerator**
+
 Permite criar ferramentas em runtime de três formas:
 
 1. **A partir de função Python:**
+
 ```python
 def my_custom_function(x: int, y: int) -> int:
     return x + y
@@ -36,6 +40,7 @@ tool = DynamicToolGenerator.from_function_spec(
 ```
 
 2. **A partir de endpoint HTTP:**
+
 ```python
 tool = DynamicToolGenerator.from_api_endpoint(
     name="get_users",
@@ -47,6 +52,7 @@ tool = DynamicToolGenerator.from_api_endpoint(
 ```
 
 3. **A partir de código Python (string):**
+
 ```python
 code = """
 def execute(temperature_celsius: float) -> float:
@@ -152,14 +158,17 @@ def _register_all_tools_in_action_module():
 Endpoints completos para gerenciar ferramentas via API:
 
 #### `GET /api/v1/tools/`
+
 Lista todas as ferramentas com filtros opcionais.
 
 **Query Parameters:**
+
 - `category`: Filtrar por categoria
 - `permission_level`: Filtrar por nível de permissão
 - `tags`: Filtrar por tags (separadas por vírgula)
 
 **Response:**
+
 ```json
 {
   "total": 15,
@@ -180,19 +189,26 @@ Lista todas as ferramentas com filtros opcionais.
       "permission_level": "safe",
       "rate_limit_per_minute": 20,
       "requires_confirmation": false,
-      "tags": ["context", "search", "external"]
+      "tags": [
+        "context",
+        "search",
+        "external"
+      ]
     }
   ]
 }
 ```
 
 #### `GET /api/v1/tools/{tool_name}`
+
 Obtém detalhes de uma ferramenta específica.
 
 #### `GET /api/v1/tools/stats/usage`
+
 Estatísticas de uso de ferramentas.
 
 **Response:**
+
 ```json
 {
   "total_tools_registered": 15,
@@ -215,9 +231,11 @@ Estatísticas de uso de ferramentas.
 ```
 
 #### `POST /api/v1/tools/create/from-function`
+
 Cria ferramenta dinamicamente a partir de código Python.
 
 **Request:**
+
 ```json
 {
   "name": "calculate_fibonacci",
@@ -234,9 +252,11 @@ Cria ferramenta dinamicamente a partir de código Python.
 ⚠️ **Atenção:** Esta funcionalidade permite execução de código arbitrário. Use apenas em ambientes confiáveis.
 
 #### `POST /api/v1/tools/create/from-api`
+
 Cria ferramenta que chama endpoint HTTP.
 
 **Request:**
+
 ```json
 {
   "name": "get_github_user",
@@ -252,14 +272,17 @@ Cria ferramenta que chama endpoint HTTP.
 ```
 
 #### `DELETE /api/v1/tools/{tool_name}`
+
 Remove uma ferramenta dinamicamente criada.
 
 **Nota:** Ferramentas built-in são protegidas e não podem ser removidas.
 
 #### `GET /api/v1/tools/categories/list`
+
 Lista todas as categorias disponíveis.
 
 #### `GET /api/v1/tools/permissions/list`
+
 Lista todos os níveis de permissão.
 
 ### 4. **Métricas Prometheus**
@@ -335,28 +358,33 @@ else:
 ## 📊 Benefícios Implementados
 
 ### 1. **Extensibilidade**
+
 - Adicionar novas ferramentas em runtime sem reiniciar o sistema
 - Três métodos diferentes de criação de ferramentas
 - Suporte a ferramentas customizadas e APIs externas
 
 ### 2. **Segurança**
+
 - Controle granular de permissões
 - Rate limiting por ferramenta
 - Proteção de ferramentas built-in contra remoção
 - Confirmação do usuário para operações perigosas
 
 ### 3. **Observabilidade**
+
 - Telemetria completa com Prometheus
 - Histórico de chamadas
 - Estatísticas de uso e performance
 - Rastreamento de erros
 
 ### 4. **Organização**
+
 - Categorização clara por tipo de operação
 - Sistema de tags para busca avançada
 - Filtragem flexível
 
 ### 5. **Performance**
+
 - Rate limiting evita sobrecarga
 - Métricas para identificar gargalos
 - Controle de recursos
@@ -460,18 +488,22 @@ for tool_name, usage in sorted_tools:
 ## 🔄 Integração com Outras Sprints
 
 ### Sprint 2 (Memória Episódica)
+
 - Ferramentas de memória registradas e monitoradas
 - Histórico de uso de ferramentas pode ser memorizado
 
 ### Sprint 3 (Contexto Ambiental)
+
 - Ferramentas de busca web e contexto categorizadas como WEB
 - Rate limiting para APIs externas
 
 ### Sprint 4 (Sandbox Python)
+
 - Ferramentas de execução de código categorizadas como COMPUTATION
 - Sandbox garante segurança mesmo com código dinâmico
 
 ### Sprint 5 (Reflexion)
+
 - Ferramentas defeituosas marcadas com tags
 - Sistema pode aprender quais ferramentas são confiáveis
 
@@ -508,9 +540,11 @@ for tool_name, usage in sorted_tools:
 
 ## 🏆 Status: ✅ SPRINT 6 COMPLETA
 
-A Sprint 6 implementa com sucesso o Action Module, transformando o Janus em um agente verdadeiramente multitarefa com capacidade de criar, gerenciar e monitorar ferramentas dinamicamente.
+A Sprint 6 implementa com sucesso o Action Module, transformando o Janus em um agente verdadeiramente multitarefa com
+capacidade de criar, gerenciar e monitorar ferramentas dinamicamente.
 
 O sistema agora possui:
+
 - **Gateway de Ferramentas** extensível e organizado
 - **Criação Dinâmica** de ferramentas em runtime
 - **Telemetria Completa** para observabilidade

@@ -1,7 +1,7 @@
 """
 Módulo de memória - Memória episódica, semântica e consolidação.
 """
-from .memory_core import MemoryManager
 from .knowledge_graph_manager import KnowledgeGraphManager
+from .memory_core import MemoryManager
 
 __all__ = ["MemoryManager", "KnowledgeGraphManager"]

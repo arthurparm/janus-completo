@@ -8,8 +8,8 @@ from prometheus_client import Counter, Histogram
 
 from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
-from app.core.memory.memory_core import memory_core
 from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError
+from app.core.memory.memory_core import memory_core
 
 logger = logging.getLogger(__name__)
 

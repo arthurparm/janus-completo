@@ -6,11 +6,12 @@ API REST para monitorar e controlar o sistema de auto-otimização do Janus.
 
 import logging
 from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.optimization import self_optimization_cycle
 from app.api.problem_details import ProblemDetails
+from app.core.optimization import self_optimization_cycle
 
 logger = logging.getLogger(__name__)
 

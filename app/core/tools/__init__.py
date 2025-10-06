@@ -1,6 +1,7 @@
 """
 Módulo de ferramentas - Tools para agentes e Action Module.
 """
+from .action_module import ActionModule, get_action_module
 from .agent_tools import (
     get_agent_tools,
     search_knowledge_graph_tool,
@@ -10,7 +11,6 @@ from .agent_tools import (
     read_file_tool,
     write_file_tool
 )
-from .action_module import ActionModule, get_action_module
 from .faulty_tools import (
     get_faulty_tools,
     broken_calculation_tool,

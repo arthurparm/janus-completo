@@ -25,9 +25,7 @@ from typing import List, Dict, Any, Optional
 
 from prometheus_client import Counter, Histogram, Gauge
 
-from app.config import settings
-from app.core.workers.data_harvester import TRAINING_DATA_FILE
-from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.filesystem_manager import write_file
 from app.core.memory.memory_core import memory_core
 from app.models.schemas import Experience
 

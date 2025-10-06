@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.infrastructure.filesystem_manager import write_file
-from app.core.memory.memory_core import memory_core
 from app.core.infrastructure.resilience import resilient, CircuitBreaker, CircuitOpenError
+from app.core.memory.memory_core import memory_core
 
 logger = logging.getLogger(__name__)
 

@@ -5,10 +5,10 @@ Implementa detecção e isolamento de "poison pills" - mensagens que causam
 falhas repetidas e podem travar o sistema.
 """
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, Callable
-from collections import defaultdict
 
 from prometheus_client import Counter, Gauge
 

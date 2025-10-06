@@ -17,9 +17,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from prometheus_client import Counter, Histogram
 from qdrant_client import QdrantClient
 
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.llm.llm_manager import get_llm_for_role, ModelRole, ModelPriority
 from app.core.memory.memory_core import COLLECTION_NAME, decrypt_text
-from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.db.graph import graph_db
 from app.db.vector_store import get_qdrant_client
 

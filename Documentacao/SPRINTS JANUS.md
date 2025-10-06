@@ -10,6 +10,7 @@ no [Relatório de Projeto Arquitetural](DOCUMENTACAO%20JANUS.md).
 **Foco:** Estabelecer a fundação da comunicação distribuída e da memória de longo prazo.
 
 ### Sprint 1: Espinha Dorsal do Sistema – Fundamentos de Comunicação Distribuída
+
 Foco Principal: Estabelecer uma arquitetura de comunicação assíncrona e distribuída, crucial para a escalabilidade e
 resiliência do sistema Janus.
 Implementações-chave:
@@ -31,6 +32,7 @@ Remoção do PostgreSQL como componente primário de armazenamento, optando por 
 vetoriais e relações complexas.
 
 ### Sprint 3: Inteligência e Consciência - Despertar – Uso da Memória e Percepção Ambiental
+
 Foco Principal: Habilitar o Janus a utilizar sua memória episódica e a perceber o ambiente externo para contextualizar
 suas ações e respostas.
 Implementações-chave:
@@ -46,6 +48,7 @@ a percepção ambiental do agente.
 **Foco:** Implementar a capacidade de raciocínio (ReAct), execução segura (Sandbox) e aprendizado com erros (Reflexion).
 
 ### Sprint 4: Autonomia e Segurança - Agente Funcional – Ciclo de Raciocínio e Ambiente Controlado
+
 Foco Principal: Estabelecer um ciclo de raciocínio robusto para o agente e garantir um ambiente seguro para a execução
 de ações.
 Implementações-chave:
@@ -55,6 +58,7 @@ Criação de um sandbox Python (Langchain, Epicbox) para execução segura de c�
 principal do sistema.
 
 ### Sprint 5: Auto-otimização e Aprendizado com Erros (Reflexion) – Aprimoramento Contínuo
+
 Foco Principal: Capacitar o Janus a aprender com suas falhas e otimizar seu desempenho de forma autônoma.
 Implementações-chave:
 Implementação do padrão Reflexion, onde o agente analisa seus próprios resultados e identifica pontos de melhoria.
@@ -63,6 +67,7 @@ correção de falhas em um ambiente simulado.
 Criação de um Agente de Autorreflexão dedicado à análise de falhas e à extração de "lições aprendidas".
 
 ### Sprint 6: Agente Multitarefa e Gateway de Ferramentas – Expansão de Capacidades
+
 Foco Principal: Ampliar a capacidade do Janus de interagir com o mundo externo e executar múltiplas tarefas.
 Implementações-chave:
 Desenvolvimento do action_module, que provê um conjunto dinâmico de ferramentas que o agente pode utilizar, como
@@ -71,6 +76,7 @@ Refatoração do janus_core para melhorar a orquestração de tarefas, incluindo
 arquivos e a geração dinâmica de ferramentas Python.
 
 ### Sprint 7: Despertar da Proatividade – Ciclo de Auto-Otimização – Iniciativa Autônoma
+
 Foco Principal: Habilitar o Janus a tomar a iniciativa para se aperfeiçoar, sem intervenção externa.
 Implementações-chave:
 Criação de um "Meta-Agente de Auto-Otimização" que monitora o desempenho do sistema e planeja melhorias.
@@ -84,6 +90,7 @@ soluções.
 **Foco:** Transformar experiências em sabedoria (Memória Semântica), coletar dados e hibridizar a inteligência (LLMs).
 
 ### Sprint 8: Consolidação do Conhecimento – Memória à Sabedoria – Transformação de Experiências
+
 Foco Principal: Transformar as experiências brutas armazenadas em conhecimento estruturado e interconectado.
 Implementações-chave:
 Integração de uma Memória Semântica utilizando Neo4j, um banco de dados de grafos, para representar relações complexas
@@ -94,6 +101,7 @@ Aprimoramento do agente principal para consultar e utilizar o conhecimento estru
 raciocínio.
 
 ### Sprint 9: Gênese Neural – Infraestrutura para Aprendizagem Autônoma – Coleta de Dados e Treinamento
+
 Foco Principal: Estabelecer a infraestrutura para a coleta de dados de experiência e o treinamento autônomo de redes
 neurais.
 Implementações-chave:
@@ -125,6 +133,7 @@ superação dos limites mensais gratuitos.
 auto-otimização.
 
 ### Sprint 11: Colaboração Agêntica – Sociedade de Mentes – Sistema Colaborativo Dinâmico
+
 Foco Principal: Evoluir o Janus para um sistema colaborativo, onde múltiplos agentes podem trabalhar em conjunto.
 Implementações-chave:
 Criação de um Agente "Gestor de Projetos" para coordenar as atividades dos demais agentes.
@@ -133,6 +142,7 @@ Implementação de fluxos de trabalho colaborativos, permitindo que os agentes d
 coordenada.
 
 ### Sprint 12: Resiliência e Maturidade – Operação Contínua – Solidez do Sistema
+
 Foco Principal: Garantir a solidez, estabilidade e eficiência do sistema Janus para operação autônoma e ininterrupta.
 Implementações-chave:
 Integração de observabilidade (Prometheus, Grafana) para monitoramento proativo do desempenho e identificação de

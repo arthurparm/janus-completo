@@ -1,8 +1,8 @@
 import logging
 import os
 
-from app.core.workers.data_harvester import TRAINING_DATA_FILE
 from app.core.infrastructure.filesystem_manager import read_file
+from app.core.workers.data_harvester import TRAINING_DATA_FILE
 
 logger = logging.getLogger(__name__)
 

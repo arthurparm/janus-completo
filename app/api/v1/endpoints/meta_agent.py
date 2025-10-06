@@ -2,7 +2,6 @@
 API endpoints para o Meta-Agente de Auto-Otimização (Sprint 13).
 """
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel

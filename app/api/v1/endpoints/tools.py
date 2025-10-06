@@ -6,16 +6,17 @@ API REST para gerenciar, listar e criar ferramentas dinamicamente.
 
 import logging
 from typing import Optional, List, Dict, Any
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.problem_details import ProblemDetails
 from app.core.tools import (
     action_registry,
     DynamicToolGenerator,
     ToolCategory,
     PermissionLevel
 )
-from app.api.problem_details import ProblemDetails
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,9 @@ class CreateToolFromAPIRequest(BaseModel):
     description="Retorna lista completa de ferramentas disponíveis com metadados"
 )
 async def list_tools(
-    category: Optional[str] = None,
-    permission_level: Optional[str] = None,
-    tags: Optional[str] = None
+        category: Optional[str] = None,
+        permission_level: Optional[str] = None,
+        tags: Optional[str] = None
 ):
     """
     Lista ferramentas com filtros opcionais.
@@ -210,8 +211,8 @@ async def get_tool_statistics():
     status_code=status.HTTP_201_CREATED,
     summary="Cria ferramenta a partir de código Python",
     description=(
-        "Cria dinamicamente uma ferramenta a partir de código Python fornecido. "
-        "⚠️ Use com cuidado! Apenas em ambientes confiáveis."
+            "Cria dinamicamente uma ferramenta a partir de código Python fornecido. "
+            "⚠️ Use com cuidado! Apenas em ambientes confiáveis."
     )
 )
 async def create_tool_from_function(request: CreateToolFromFunctionRequest):

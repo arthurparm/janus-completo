@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, Optional, Any, Callable
 
 from prometheus_client import Gauge, Info
 
