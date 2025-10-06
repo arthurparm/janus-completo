@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context
+from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox
 
 api_router = APIRouter()
 
@@ -11,3 +11,4 @@ api_router.include_router(memory.router, prefix="/memory")
 api_router.include_router(learning.router, prefix="/learning")
 api_router.include_router(tasks.router, prefix="/tasks")  # Sprint 1: Task management
 api_router.include_router(context.router, prefix="/context")  # Sprint 3: Environmental context
+api_router.include_router(sandbox.router, prefix="/sandbox")  # Sprint 4: Python sandbox

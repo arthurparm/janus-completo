@@ -10,6 +10,7 @@ from app.core import filesystem_manager
 from app.core.enums import AgentType  # <-- Corrigido
 from app.core.memory_core import memory_core
 from app.core.context_manager import context_manager
+from app.core.python_sandbox import python_sandbox
 from app.db.graph import graph_db
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
@@ -124,6 +125,78 @@ def get_enriched_context(query: str = "", include_web: bool = False) -> str:
     )
     return json.dumps(ctx, indent=2, ensure_ascii=False)
 
+# --- Sprint 4: Sandbox Python Seguro ---
+
+@tool
+def execute_python_code(code: str) -> str:
+    """
+    Executa código Python de forma segura em um sandbox isolado.
+
+    O sandbox tem as seguintes restrições:
+    - Sem acesso ao filesystem
+    - Sem acesso à network
+    - Imports limitados (math, random, datetime, json, re, collections, itertools, functools, statistics)
+    - Timeout de 5 segundos
+    - Output limitado a 10000 caracteres
+
+    Útil para: cálculos, processamento de dados, testes de lógica.
+
+    Exemplo de uso:
+    code = '''
+result = sum([1, 2, 3, 4, 5])
+print(f"A soma é: {result}")
+'''
+    """
+    try:
+        result = python_sandbox.execute(code)
+
+        if result.success:
+            response = {
+                "success": True,
+                "output": result.output,
+                "execution_time": result.execution_time,
+                "variables": {k: str(v) for k, v in (result.variables or {}).items()}
+            }
+        else:
+            response = {
+                "success": False,
+                "error": result.error,
+                "output": result.output,
+                "execution_time": result.execution_time
+            }
+
+        return json.dumps(response, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({
+            "success": False,
+            "error": f"Erro inesperado: {str(e)}",
+            "output": ""
+        }, indent=2, ensure_ascii=False)
+
+@tool
+def execute_python_expression(expression: str) -> str:
+    """
+    Avalia uma expressão Python e retorna o resultado.
+
+    Mais simples que execute_python_code, útil para cálculos rápidos.
+
+    Exemplos:
+    - "2 + 2" -> 4
+    - "sum([1,2,3,4,5])" -> 15
+    - "[x**2 for x in range(5)]" -> [0, 1, 4, 9, 16]
+    """
+    try:
+        result = python_sandbox.execute_expression(expression)
+
+        if result.success:
+            return result.output
+        else:
+            return f"Erro: {result.error}"
+
+    except Exception as e:
+        return f"Erro inesperado: {str(e)}"
+
 # --- Fábrica de Ferramentas ---
 
 unified_tools: List[BaseTool] = [
@@ -134,7 +207,9 @@ unified_tools: List[BaseTool] = [
     get_current_datetime,
     get_system_info,
     search_web,
-    get_enriched_context
+    get_enriched_context,
+    execute_python_code,
+    execute_python_expression
 ]
 
 meta_agent_tools: List[BaseTool] = [

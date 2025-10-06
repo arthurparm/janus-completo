@@ -96,5 +96,9 @@ class AppSettings(BaseSettings):
     # Sprint 3: Web Search (Tavily)
     TAVILY_API_KEY: Optional[SecretStr] = None
 
+    # Sprint 4: Python Sandbox
+    SANDBOX_TIMEOUT_SECONDS: int = 5
+    SANDBOX_MAX_OUTPUT_LENGTH: int = 10000
+
 
 settings = AppSettings()
