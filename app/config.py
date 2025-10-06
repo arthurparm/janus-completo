@@ -93,5 +93,8 @@ class AppSettings(BaseSettings):
     RABBITMQ_PASSWORD: str = "janus_pass"
     RABBITMQ_MANAGEMENT_PORT: int = 15672
 
+    # Sprint 3: Web Search (Tavily)
+    TAVILY_API_KEY: Optional[SecretStr] = None
+
 
 settings = AppSettings()

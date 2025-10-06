@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, validator
 from app.core import filesystem_manager
 from app.core.enums import AgentType  # <-- Corrigido
 from app.core.memory_core import memory_core
+from app.core.context_manager import context_manager
 from app.db.graph import graph_db
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
@@ -84,10 +85,63 @@ def analyze_memory_for_failures(last_n_experiences: int = 20) -> str:
         summary += f"- Ferramenta '{tool_used}' falhou com o erro: {error}\n"
     return summary
 
+# --- Sprint 3: Ferramentas de Contexto Ambiental ---
+
+@tool
+def get_current_datetime() -> str:
+    """Retorna a data e hora atual."""
+    ctx = context_manager.get_current_context()
+    return json.dumps(ctx.datetime_info, indent=2, ensure_ascii=False)
+
+@tool
+def get_system_info() -> str:
+    """Retorna informações sobre o sistema operacional e ambiente."""
+    ctx = context_manager.get_current_context()
+    return json.dumps({
+        "system": ctx.system_info,
+        "environment": ctx.environment
+    }, indent=2, ensure_ascii=False)
+
+@tool
+def search_web(query: str, max_results: int = 3) -> str:
+    """
+    Busca informações na web usando Tavily.
+    Útil para obter informações atualizadas e contexto externo.
+    """
+    result = context_manager.search_web(query, max_results=max_results)
+    return json.dumps(result.model_dump(), indent=2, ensure_ascii=False)
+
+@tool
+def get_enriched_context(query: str = "", include_web: bool = False) -> str:
+    """
+    Retorna contexto completo: data/hora, sistema e opcionalmente busca web.
+    Use quando precisar de contexto ambiental completo para tomar decisões.
+    """
+    ctx = context_manager.get_enriched_context(
+        query=query if query else None,
+        include_web_search=include_web,
+        max_web_results=3
+    )
+    return json.dumps(ctx, indent=2, ensure_ascii=False)
+
 # --- Fábrica de Ferramentas ---
 
-unified_tools: List[BaseTool] = [write_file, read_file, list_directory, recall_experiences]
-meta_agent_tools: List[BaseTool] = [analyze_memory_for_failures, recall_experiences]
+unified_tools: List[BaseTool] = [
+    write_file,
+    read_file,
+    list_directory,
+    recall_experiences,
+    get_current_datetime,
+    get_system_info,
+    search_web,
+    get_enriched_context
+]
+
+meta_agent_tools: List[BaseTool] = [
+    analyze_memory_for_failures,
+    recall_experiences,
+    get_current_datetime
+]
 
 def get_tools_for_agent(agent_type: AgentType) -> List[BaseTool]:
     """Retorna a lista de ferramentas apropriada para o tipo de agente."""

@@ -18,3 +18,5 @@ prometheus-fastapi-instrumentator
 # Sprint 1: Message Broker
 aio-pika>=9.0.0
 pika>=1.3.0
+# Sprint 3: Web Search & Context
+tavily-python>=0.3.0

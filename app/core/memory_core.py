@@ -298,7 +298,7 @@ class EpisodicMemory:
         if not self.short:
             logger.error("EpisodicMemory não inicializada. Chame ainit() primeiro.")
             return []
-            
+
         t0 = time.perf_counter()
         combined: List[dict] = []
         seen: set[str] = set()
@@ -331,6 +331,145 @@ class EpisodicMemory:
 
         logger.info(f"Recordadas {len(combined)} experiências para a consulta: '{query[:100]}...'")
         return combined
+
+    async def arecall_filtered(
+        self,
+        query: str,
+        n_results: int = 5,
+        filter_by_type: Optional[str] = None,
+        filter_by_origin: Optional[str] = None,
+        min_score: float = 0.0,
+        time_range: Optional[tuple[float, float]] = None
+    ) -> List[dict]:
+        """
+        Busca avançada com filtros por tipo, origem, score mínimo e intervalo de tempo.
+
+        Args:
+            query: Query de busca
+            n_results: Número de resultados
+            filter_by_type: Filtro por tipo de experiência
+            filter_by_origin: Filtro por origem
+            min_score: Score mínimo de similaridade (0.0 a 1.0)
+            time_range: Tupla (timestamp_inicio, timestamp_fim)
+
+        Returns:
+            Lista de experiências filtradas
+        """
+        if not self.async_client or not self.encoder:
+            logger.warning("Cliente Qdrant ou encoder não disponível para busca filtrada.")
+            return await self.arecall(query, n_results)
+
+        try:
+            query_vector = await self.encoder.aembed_query(query)
+
+            # Constrói filtros Qdrant
+            filter_conditions = []
+
+            if filter_by_type:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="type",
+                        match=models.MatchValue(value=filter_by_type)
+                    )
+                )
+
+            if filter_by_origin:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="origin",
+                        match=models.MatchValue(value=filter_by_origin)
+                    )
+                )
+
+            if time_range:
+                start_ts, end_ts = time_range
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="timestamp",
+                        range=models.Range(
+                            gte=start_ts,
+                            lte=end_ts
+                        )
+                    )
+                )
+
+            # Busca com filtros
+            search_params = {
+                "collection_name": settings.QDRANT_COLLECTION_EPISODIC,
+                "query_vector": query_vector,
+                "limit": n_results * 2,
+                "with_payload": True,
+                "score_threshold": min_score
+            }
+
+            if filter_conditions:
+                search_params["query_filter"] = models.Filter(
+                    must=filter_conditions
+                )
+
+            search_results = await self.async_client.search(**search_params)
+
+            # Processa resultados
+            results = []
+            for sp in search_results[:n_results]:
+                content = decrypt_text(sp.payload.get('content', ''))
+                item = {
+                    "id": str(sp.id),
+                    "content": content,
+                    "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
+                    "distance": 1 - sp.score,
+                    "score": sp.score
+                }
+                results.append(item)
+
+            logger.info(f"Busca filtrada: {len(results)} resultados para '{query[:50]}...'")
+            return results
+
+        except Exception as e:
+            logger.error(f"Erro na busca filtrada: {e}", exc_info=True)
+            return await self.arecall(query, n_results)
+
+    async def arecall_by_timeframe(
+        self,
+        query: str,
+        hours_ago: int = 24,
+        n_results: int = 5
+    ) -> List[dict]:
+        """
+        Busca memórias dentro de um período de tempo específico.
+
+        Args:
+            query: Query de busca
+            hours_ago: Quantas horas atrás buscar
+            n_results: Número de resultados
+
+        Returns:
+            Lista de experiências no período
+        """
+        now = _now()
+        start_time = now - (hours_ago * 3600)
+
+        return await self.arecall_filtered(
+            query=query,
+            n_results=n_results,
+            time_range=(start_time, now)
+        )
+
+    async def arecall_recent_failures(self, n_results: int = 10) -> List[dict]:
+        """
+        Busca especificamente por falhas recentes para análise.
+
+        Args:
+            n_results: Número de falhas a retornar
+
+        Returns:
+            Lista de experiências de falha
+        """
+        return await self.arecall_filtered(
+            query="error failure exception falha erro",
+            n_results=n_results,
+            filter_by_type="action_failure"
+        )
 
 memory_core = EpisodicMemory()
 
