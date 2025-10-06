@@ -272,7 +272,7 @@ class SystemMonitor:
         # 4. Degradação de performance (comparando com média histórica)
         if len(self._metrics_history) >= 10:
             avg_historical = sum(m.avg_response_time for m in self._metrics_history[:-1]) / (
-                        len(self._metrics_history) - 1)
+                    len(self._metrics_history) - 1)
 
             if latest.avg_response_time > avg_historical * 1.5:  # 50% mais lento
                 issues.append(DetectedIssue(

@@ -25,7 +25,6 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-
 # ==================== MÉTRICAS ====================
 
 _TOOL_CALLS = Counter(
@@ -99,10 +98,10 @@ class DynamicToolGenerator:
 
     @staticmethod
     def from_function_spec(
-        name: str,
-        description: str,
-        func: Callable,
-        args_schema: Optional[Type[BaseModel]] = None
+            name: str,
+            description: str,
+            func: Callable,
+            args_schema: Optional[Type[BaseModel]] = None
     ) -> BaseTool:
         """
         Cria uma ferramenta LangChain a partir de uma função Python.
@@ -135,11 +134,11 @@ class DynamicToolGenerator:
 
     @staticmethod
     def from_api_endpoint(
-        name: str,
-        description: str,
-        endpoint_url: str,
-        method: str = "GET",
-        headers: Optional[Dict[str, str]] = None
+            name: str,
+            description: str,
+            endpoint_url: str,
+            method: str = "GET",
+            headers: Optional[Dict[str, str]] = None
     ) -> BaseTool:
         """
         Cria ferramenta que chama um endpoint HTTP.
@@ -189,10 +188,10 @@ class DynamicToolGenerator:
 
     @staticmethod
     def from_python_code(
-        name: str,
-        description: str,
-        code: str,
-        function_name: str = "execute"
+            name: str,
+            description: str,
+            code: str,
+            function_name: str = "execute"
     ) -> BaseTool:
         """
         Cria ferramenta a partir de código Python fornecido como string.
@@ -209,6 +208,7 @@ class DynamicToolGenerator:
         Returns:
             BaseTool que executa o código
         """
+
         def execute_code(**kwargs) -> str:
             try:
                 # Cria namespace isolado
@@ -260,13 +260,13 @@ class ActionRegistry:
         self._rate_limits: Dict[str, List[float]] = {}  # tool_name -> timestamps
 
     def register(
-        self,
-        tool: BaseTool,
-        category: ToolCategory = ToolCategory.CUSTOM,
-        permission_level: PermissionLevel = PermissionLevel.SAFE,
-        rate_limit_per_minute: Optional[int] = None,
-        requires_confirmation: bool = False,
-        tags: Optional[List[str]] = None
+            self,
+            tool: BaseTool,
+            category: ToolCategory = ToolCategory.CUSTOM,
+            permission_level: PermissionLevel = PermissionLevel.SAFE,
+            rate_limit_per_minute: Optional[int] = None,
+            requires_confirmation: bool = False,
+            tags: Optional[List[str]] = None
     ) -> None:
         """
         Registra uma ferramenta no sistema.
@@ -313,10 +313,10 @@ class ActionRegistry:
         return self._metadata.get(name)
 
     def list_tools(
-        self,
-        category: Optional[ToolCategory] = None,
-        permission_level: Optional[PermissionLevel] = None,
-        tags: Optional[List[str]] = None
+            self,
+            category: Optional[ToolCategory] = None,
+            permission_level: Optional[PermissionLevel] = None,
+            tags: Optional[List[str]] = None
     ) -> List[BaseTool]:
         """
         Lista ferramentas com filtros opcionais.
@@ -376,12 +376,12 @@ class ActionRegistry:
         return current_calls < metadata.rate_limit_per_minute
 
     def record_call(
-        self,
-        tool_name: str,
-        duration: float,
-        success: bool,
-        error: Optional[str] = None,
-        input_args: Optional[Dict[str, Any]] = None
+            self,
+            tool_name: str,
+            duration: float,
+            success: bool,
+            error: Optional[str] = None,
+            input_args: Optional[Dict[str, Any]] = None
     ) -> None:
         """Registra uma chamada de ferramenta para telemetria."""
         now = time.time()
@@ -455,20 +455,20 @@ action_registry = ActionRegistry()
 # ==================== FUNÇÕES DE CONVENIÊNCIA ====================
 
 def register_tool(
-    tool: BaseTool,
-    category: ToolCategory = ToolCategory.CUSTOM,
-    **kwargs
+        tool: BaseTool,
+        category: ToolCategory = ToolCategory.CUSTOM,
+        **kwargs
 ) -> None:
     """Atalho para registrar ferramenta no registro global."""
     action_registry.register(tool, category=category, **kwargs)
 
 
 def create_tool_from_function(
-    name: str,
-    description: str,
-    func: Callable,
-    category: ToolCategory = ToolCategory.CUSTOM,
-    **kwargs
+        name: str,
+        description: str,
+        func: Callable,
+        category: ToolCategory = ToolCategory.CUSTOM,
+        **kwargs
 ) -> BaseTool:
     """
     Cria e registra ferramenta a partir de função Python.
