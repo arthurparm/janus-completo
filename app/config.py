@@ -1,4 +1,3 @@
-
 from typing import Optional
 
 from pydantic import SecretStr
@@ -34,7 +33,7 @@ class AppSettings(BaseSettings):
 
     # Memória (short/long-term)
     MEMORY_SHORT_TTL_SECONDS: int = 600  # TTL para memória de curto prazo
-    MEMORY_SHORT_MAX_ITEMS: int = 512    # Capacidade LRU para curto prazo
+    MEMORY_SHORT_MAX_ITEMS: int = 512  # Capacidade LRU para curto prazo
     MEMORY_MAX_CONTENT_CHARS: int = 20000
     MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
     MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
@@ -99,6 +98,11 @@ class AppSettings(BaseSettings):
     # Sprint 4: Python Sandbox
     SANDBOX_TIMEOUT_SECONDS: int = 5
     SANDBOX_MAX_OUTPUT_LENGTH: int = 10000
+
+    # Sprint 5: Reflexion (Auto-otimização e Aprendizado com Erros)
+    REFLEXION_MAX_ITERATIONS: int = 3
+    REFLEXION_MAX_TIME_SECONDS: int = 180
+    REFLEXION_SUCCESS_THRESHOLD: float = 0.8  # Score mínimo para considerar sucesso (0.0-1.0)
 
 
 settings = AppSettings()
