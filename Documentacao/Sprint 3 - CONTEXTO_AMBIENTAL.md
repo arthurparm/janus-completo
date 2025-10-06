@@ -28,19 +28,19 @@ Módulo central responsável por fornecer consciência ambiental ao agente.
 
 ```python
 class ContextInfo(BaseModel):
-    timestamp: str              # Timestamp UTC atual
-    datetime_info: Dict         # Informações detalhadas de data/hora
-    system_info: Dict          # Informações do sistema operacional
-    environment: str           # Ambiente de execução (dev/prod)
+    timestamp: str  # Timestamp UTC atual
+    datetime_info: Dict  # Informações detalhadas de data/hora
+    system_info: Dict  # Informações do sistema operacional
+    environment: str  # Ambiente de execução (dev/prod)
 ```
 
 #### 1.2 WebSearchResult
 
 ```python
 class WebSearchResult(BaseModel):
-    query: str                 # Query utilizada
-    results: List[Dict]        # Resultados da busca (título, URL, conteúdo, score)
-    timestamp: str             # Timestamp da busca
+    query: str  # Query utilizada
+    results: List[Dict]  # Resultados da busca (título, URL, conteúdo, score)
+    timestamp: str  # Timestamp da busca
 ```
 
 #### 1.3 ContextManager
@@ -71,12 +71,12 @@ Busca com múltiplos filtros:
 
 ```python
 async def arecall_filtered(
-    query: str,
-    n_results: int = 5,
-    filter_by_type: Optional[str] = None,      # Filtra por tipo de experiência
-    filter_by_origin: Optional[str] = None,    # Filtra por origem
-    min_score: float = 0.0,                    # Score mínimo de similaridade
-    time_range: Optional[tuple] = None         # Intervalo de tempo (start, end)
+        query: str,
+        n_results: int = 5,
+        filter_by_type: Optional[str] = None,  # Filtra por tipo de experiência
+        filter_by_origin: Optional[str] = None,  # Filtra por origem
+        min_score: float = 0.0,  # Score mínimo de similaridade
+        time_range: Optional[tuple] = None  # Intervalo de tempo (start, end)
 ) -> List[dict]
 ```
 
@@ -93,9 +93,9 @@ Busca memórias em período específico:
 
 ```python
 async def arecall_by_timeframe(
-    query: str,
-    hours_ago: int = 24,
-    n_results: int = 5
+        query: str,
+        hours_ago: int = 24,
+        n_results: int = 5
 ) -> List[dict]
 ```
 
@@ -105,7 +105,7 @@ Busca específica por falhas para análise:
 
 ```python
 async def arecall_recent_failures(
-    n_results: int = 10
+        n_results: int = 10
 ) -> List[dict]
 ```
 

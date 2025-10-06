@@ -95,7 +95,7 @@ qdrant:
   volumes:
     - ./data/qdrant:/qdrant/storage
   healthcheck:
-    test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+    test: [ "CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1" ]
 ```
 
 **Features:**
@@ -134,10 +134,13 @@ check_qdrant_readiness() -> bool
 
 ```python
 class ShortTermMemory:
-    - TTL: 600 segundos (10 minutos)
-    - Max: 512 itens
-    - Estrutura: OrderedDict (LRU)
-    - Embeddings: In-memory
+    - TTL: 600
+    segundos(10
+    minutos)
+    - Max: 512
+    itens
+    - Estrutura: OrderedDict(LRU)
+    - Embeddings: In - memory
 ```
 
 **Características:**
@@ -152,9 +155,12 @@ class ShortTermMemory:
 ```python
 # Armazenamento persistente
 - Collection: "janus_episodic_memory"
-- Vector Distance: COSINE
-- Embedding Model: OpenAI text-embedding-ada-002
-- Dimension: 1536 (auto-detectado)
+- Vector
+Distance: COSINE
+- Embedding
+Model: OpenAI
+text - embedding - ada - 002
+- Dimension: 1536(auto - detectado)
 ```
 
 **Características:**
@@ -170,27 +176,76 @@ class ShortTermMemory:
 
 ```python
 # Armazena experiência em ambas camadas
-1. Validação de conteúdo (max 20k chars)
-2. Verificação de quota
-3. Detecção e mascaramento de PII
-4. Geração de embedding (timeout: 30s)
-5. Persistência em short-term (RAM)
-6. Persistência em long-term (Qdrant)
-7. Consumo de quota
-8. Métricas Prometheus
+1.
+Validação
+de
+conteúdo(max
+20
+k
+chars)
+2.
+Verificação
+de
+quota
+3.
+Detecção
+e
+mascaramento
+de
+PII
+4.
+Geração
+de
+embedding(timeout: 30
+s)
+5.
+Persistência
+em
+short - term(RAM)
+6.
+Persistência
+em
+long - term(Qdrant)
+7.
+Consumo
+de
+quota
+8.
+Métricas
+Prometheus
 ```
 
 **recall(query: str, n_results: int) -> List[dict]**
 
 ```python
 # Busca experiências por similaridade
-1. Busca em short-term (rápida)
-2. Busca em long-term (Qdrant)
-3. Merge de resultados
-4. Deduplicação por ID
-5. Ordenação por relevância
-6. Decriptação de conteúdo
-7. Métricas Prometheus
+1.
+Busca
+em
+short - term(rápida)
+2.
+Busca
+em
+long - term(Qdrant)
+3.
+Merge
+de
+resultados
+4.
+Deduplicação
+por
+ID
+5.
+Ordenação
+por
+relevância
+6.
+Decriptação
+de
+conteúdo
+7.
+Métricas
+Prometheus
 ```
 
 ### 4. **API Endpoints** (`app/api/v1/endpoints/memory.py`)
@@ -215,7 +270,9 @@ class ShortTermMemory:
   {
     "id": "uuid",
     "content": "O agente executou a ferramenta de busca...",
-    "metadata": {...},
+    "metadata": {
+      ...
+    },
     "distance": 0.15
   }
 ]
@@ -227,7 +284,9 @@ class ShortTermMemory:
 {
   "content": "Experiência detalhada...",
   "type": "system_event",
-  "metadata": {"component": "Neo4j"}
+  "metadata": {
+    "component": "Neo4j"
+  }
 }
 ```
 

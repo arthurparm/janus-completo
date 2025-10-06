@@ -222,6 +222,7 @@ open http://localhost:15672
 # Em app/main.py ou script separado
 from app.core.async_consolidation_worker import start_all_workers
 
+
 @app.on_event("startup")
 async def startup_workers():
     await start_all_workers()
@@ -431,4 +432,5 @@ no sistema Janus. O RabbitMQ atua como o **sistema nervoso central**, permitindo
 desacoplada, escalável e resiliente.
 
 **Próximo passo recomendado**: Implementar workers adicionais para Data Harvesting (Sprint 9) e Meta-Agent Cycle (Sprint
+
 13) usando a mesma arquitetura de message broker.

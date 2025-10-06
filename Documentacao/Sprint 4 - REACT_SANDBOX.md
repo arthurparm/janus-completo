@@ -69,20 +69,20 @@ Módulo de execução segura de código Python usando **RestrictedPython**.
 ```python
 class PythonSandbox:
     def __init__(
-        self,
-        timeout_seconds: int = 5,
-        max_output_length: int = 10000
+            self,
+            timeout_seconds: int = 5,
+            max_output_length: int = 10000
     )
 
     def execute(
-        self,
-        code: str,
-        context: Optional[Dict[str, Any]] = None
+            self,
+            code: str,
+            context: Optional[Dict[str, Any]] = None
     ) -> ExecutionResult
 
     def execute_expression(
-        self,
-        expression: str
+            self,
+            expression: str
     ) -> ExecutionResult
 ```
 
@@ -91,11 +91,11 @@ class PythonSandbox:
 ```python
 @dataclass
 class ExecutionResult:
-    success: bool                      # Sucesso ou falha
-    output: str                        # Output do código
-    error: Optional[str] = None        # Mensagem de erro (se houver)
-    execution_time: float = 0.0        # Tempo de execução
-    variables: Dict[str, Any] = None   # Variáveis definidas
+    success: bool  # Sucesso ou falha
+    output: str  # Output do código
+    error: Optional[str] = None  # Mensagem de erro (se houver)
+    execution_time: float = 0.0  # Tempo de execução
+    variables: Dict[str, Any] = None  # Variáveis definidas
 ```
 
 #### 2.3 Restrições de Segurança
@@ -237,9 +237,17 @@ Lista capacidades e restrições do sandbox.
 ```json
 {
   "allowed_modules": [
-    "math", "random", "datetime", "json", "re",
-    "collections", "itertools", "functools",
-    "statistics", "decimal", "fractions"
+    "math",
+    "random",
+    "datetime",
+    "json",
+    "re",
+    "collections",
+    "itertools",
+    "functools",
+    "statistics",
+    "decimal",
+    "fractions"
   ],
   "restrictions": {
     "filesystem_access": false,

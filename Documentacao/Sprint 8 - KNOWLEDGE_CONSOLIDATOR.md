@@ -252,16 +252,52 @@ Metadados: {
 ```json
 {
   "entities": [
-    {"name": "Circuit Breaker", "type": "PATTERN", "properties": {}},
-    {"name": "Neo4j", "type": "TECHNOLOGY", "properties": {}},
-    {"name": "LLM Manager", "type": "CONCEPT", "properties": {}},
-    {"name": "Ollama", "type": "TECHNOLOGY", "properties": {"role": "local"}},
-    {"name": "OpenAI", "type": "TECHNOLOGY", "properties": {"role": "cloud"}}
+    {
+      "name": "Circuit Breaker",
+      "type": "PATTERN",
+      "properties": {}
+    },
+    {
+      "name": "Neo4j",
+      "type": "TECHNOLOGY",
+      "properties": {}
+    },
+    {
+      "name": "LLM Manager",
+      "type": "CONCEPT",
+      "properties": {}
+    },
+    {
+      "name": "Ollama",
+      "type": "TECHNOLOGY",
+      "properties": {
+        "role": "local"
+      }
+    },
+    {
+      "name": "OpenAI",
+      "type": "TECHNOLOGY",
+      "properties": {
+        "role": "cloud"
+      }
+    }
   ],
   "relationships": [
-    {"from": "Circuit Breaker", "to": "Neo4j", "type": "PROTECTS"},
-    {"from": "LLM Manager", "to": "Ollama", "type": "USES"},
-    {"from": "Ollama", "to": "OpenAI", "type": "FALLBACK_FOR"}
+    {
+      "from": "Circuit Breaker",
+      "to": "Neo4j",
+      "type": "PROTECTS"
+    },
+    {
+      "from": "LLM Manager",
+      "to": "Ollama",
+      "type": "USES"
+    },
+    {
+      "from": "Ollama",
+      "to": "OpenAI",
+      "type": "FALLBACK_FOR"
+    }
   ],
   "insights": [
     {
