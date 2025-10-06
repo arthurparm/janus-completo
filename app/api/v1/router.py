@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
-from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools
+from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools, \
+    optimization
 
 api_router = APIRouter()
 
@@ -14,3 +15,4 @@ api_router.include_router(context.router, prefix="/context")  # Sprint 3: Enviro
 api_router.include_router(sandbox.router, prefix="/sandbox")  # Sprint 4: Python sandbox
 api_router.include_router(reflexion.router, prefix="/reflexion")  # Sprint 5: Reflexion & self-optimization
 api_router.include_router(tools.router, prefix="/tools")  # Sprint 6: Dynamic tool management
+api_router.include_router(optimization.router, prefix="/optimization")  # Sprint 7: Proactive self-optimization
