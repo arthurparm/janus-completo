@@ -97,6 +97,130 @@ def analyze_memory_for_failures(last_n_experiences: int = 20) -> str:
     return summary
 
 
+# --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
+
+@tool
+def query_knowledge_graph(query: str) -> str:
+    """
+    Consulta o grafo de conhecimento semântico para obter informações estruturadas.
+
+    Use esta ferramenta para:
+    - Encontrar conceitos relacionados
+    - Descobrir padrões e conexões entre entidades
+    - Acessar conhecimento consolidado de experiências passadas
+
+    O grafo contém entidades (Concept, Entity, Tool, Error, etc) e seus relacionamentos.
+
+    Exemplo: "Quais ferramentas estão relacionadas a erros de timeout?"
+    """
+    try:
+        from app.core.knowledge_graph_manager import knowledge_graph_manager
+
+        result = knowledge_graph_manager.semantic_search(query, limit=5)
+
+        if not result:
+            return "Nenhum conhecimento relevante encontrado no grafo."
+
+        response = f"Conhecimento encontrado ({len(result)} resultados):\n\n"
+        for item in result:
+            response += f"- {item.get('summary', item)}\n"
+
+        return response
+
+    except Exception as e:
+        return f"Erro ao consultar grafo de conhecimento: {e}"
+
+
+@tool
+def find_related_concepts(concept: str, max_depth: int = 2) -> str:
+    """
+    Encontra conceitos relacionados a partir de um conceito inicial.
+
+    Explora o grafo de conhecimento para descobrir conexões e relacionamentos.
+
+    Args:
+        concept: Conceito inicial (ex: "Python", "erro de timeout", "API")
+        max_depth: Profundidade máxima da busca (padrão: 2)
+
+    Retorna conceitos conectados e seus relacionamentos.
+    """
+    try:
+        # Consulta Neo4j para encontrar conceitos relacionados
+        query = """
+        MATCH path = (c:Concept {name: $concept})-[*1..%d]-(related)
+        RETURN related.name as concept,
+               type(last(relationships(path))) as relationship,
+               length(path) as distance
+        ORDER BY distance
+        LIMIT 10
+        """ % max_depth
+
+        results = graph_db.query(query, {"concept": concept})
+
+        if not results:
+            return f"Nenhum conceito relacionado encontrado para '{concept}'."
+
+        response = f"Conceitos relacionados a '{concept}':\n\n"
+        for row in results:
+            response += f"- {row['concept']} (relação: {row['relationship']}, distância: {row['distance']})\n"
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar conceitos relacionados: {e}", exc_info=True)
+        return f"Erro ao buscar conceitos relacionados: {e}"
+
+
+@tool
+def get_entity_details(entity_name: str) -> str:
+    """
+    Obtém detalhes completos sobre uma entidade no grafo de conhecimento.
+
+    Args:
+        entity_name: Nome da entidade (ferramenta, conceito, erro, etc)
+
+    Retorna:
+        - Propriedades da entidade
+        - Relacionamentos com outras entidades
+        - Contexto e metadados
+    """
+    try:
+        query = """
+        MATCH (e)
+        WHERE e.name = $entity_name OR e.id = $entity_name
+        OPTIONAL MATCH (e)-[r]->(related)
+        RETURN e as entity,
+               collect({type: type(r), target: related.name}) as relationships
+        LIMIT 1
+        """
+
+        results = graph_db.query(query, {"entity_name": entity_name})
+
+        if not results or not results[0]["entity"]:
+            return f"Entidade '{entity_name}' não encontrada no grafo."
+
+        entity = results[0]["entity"]
+        relationships = results[0]["relationships"]
+
+        response = f"Detalhes da entidade '{entity_name}':\n\n"
+        response += "Propriedades:\n"
+        for key, value in entity.items():
+            if key not in ["id", "elementId"]:
+                response += f"  - {key}: {value}\n"
+
+        if relationships and relationships[0]:
+            response += "\nRelacionamentos:\n"
+            for rel in relationships[:10]:  # Limita a 10
+                if rel.get("target"):
+                    response += f"  - {rel['type']} → {rel['target']}\n"
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Erro ao obter detalhes da entidade: {e}", exc_info=True)
+        return f"Erro ao obter detalhes: {e}"
+
+
 # --- Sprint 3: Ferramentas de Contexto Ambiental ---
 
 @tool
@@ -221,6 +345,9 @@ unified_tools: List[BaseTool] = [
     read_file,
     list_directory,
     recall_experiences,
+    query_knowledge_graph,  # Sprint 8: Consulta grafo de conhecimento
+    find_related_concepts,  # Sprint 8: Busca conceitos relacionados
+    get_entity_details,  # Sprint 8: Detalhes de entidades
     get_current_datetime,
     get_system_info,
     search_web,
@@ -232,6 +359,7 @@ unified_tools: List[BaseTool] = [
 meta_agent_tools: List[BaseTool] = [
     analyze_memory_for_failures,
     recall_experiences,
+    query_knowledge_graph,  # Sprint 8: Meta-agente pode consultar conhecimento consolidado
     get_current_datetime
 ]
 
@@ -285,6 +413,26 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
         tags=["memory", "analysis", "meta"]
+    )
+
+    # Ferramentas de memória semântica (Sprint 8)
+    action_registry.register(
+        query_knowledge_graph,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "semantic", "knowledge", "graph"]
+    )
+    action_registry.register(
+        find_related_concepts,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "semantic", "concepts", "relationships"]
+    )
+    action_registry.register(
+        get_entity_details,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "semantic", "entities"]
     )
 
     # Ferramentas de contexto ambiental (Sprint 3)
