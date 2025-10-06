@@ -7,8 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core.health_monitor import get_health_monitor
-from app.core.poison_pill_handler import get_poison_pill_handler
+from app.core.monitoring import get_health_monitor
+from app.core.monitoring import get_poison_pill_handler
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -186,8 +186,8 @@ async def get_metrics_summary():
     - Poison pills
     """
     try:
-        from app.core.llm_manager import _provider_circuit_breakers, _llm_cache
-        from app.core.multi_agent_system import get_multi_agent_system
+        from app.core.llm import _provider_circuit_breakers, _llm_cache
+        from app.core.agents import get_multi_agent_system
 
         # LLM metrics
         llm_stats = {

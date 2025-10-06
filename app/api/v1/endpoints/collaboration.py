@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.multi_agent_system import (
+from app.core.agents import (
     get_multi_agent_system,
     AgentRole,
     TaskStatus,

@@ -17,9 +17,9 @@ from typing import Optional, Dict, Any, List, Callable
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.agent_manager import agent_manager, AgentType
-from app.core.llm_manager import get_llm_client, ModelRole
-from app.core.memory_core import memory_core
+from app.core.agents.agent_manager import agent_manager, AgentType
+from app.core.llm.llm_manager import get_llm_client, ModelRole
+from app.core.memory.memory_core import memory_core
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)

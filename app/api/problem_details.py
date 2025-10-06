@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.logging_config import TRACE_ID
+from core.infrastructure.logging_config import TRACE_ID
 
 
 def _problem_response(status: int, title: str, detail: str, instance: str) -> JSONResponse:

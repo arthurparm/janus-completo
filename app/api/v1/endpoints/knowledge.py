@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.core import knowledge_graph_manager
+from app.core.memory import knowledge_graph_manager
 from app.db.graph import graph_db
 
 router = APIRouter()

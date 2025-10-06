@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core import data_harvester, neural_trainer
+from app.core.workers import data_harvester, neural_trainer
 
 router = APIRouter()
 

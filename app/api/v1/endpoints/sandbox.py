@@ -5,7 +5,7 @@ Endpoints de Sandbox Python - Sprint 4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.python_sandbox import python_sandbox
+from app.core.infrastructure import python_sandbox
 
 router = APIRouter()
 

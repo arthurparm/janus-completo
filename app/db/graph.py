@@ -6,7 +6,7 @@ from neo4j import GraphDatabase as Neo4jGraphDatabase, Neo4jDriver
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

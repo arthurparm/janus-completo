@@ -7,9 +7,9 @@ from typing import Optional, Dict, Any, Callable
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.agent_manager import agent_manager, AgentType
-from app.core.memory_core import memory_core
-from app.core.resilience import CircuitBreaker, CircuitOpenError
+from app.core.agents.agent_manager import agent_manager, AgentType
+from app.core.memory.memory_core import memory_core
+from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError
 
 logger = logging.getLogger(__name__)
 

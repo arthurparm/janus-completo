@@ -10,9 +10,9 @@ from langchain_neo4j import Neo4jGraph
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.llm_manager import get_llm, ModelRole
-from app.core.memory_core import memory_core
-from app.core.prompt_loader import get_prompt
+from app.core.llm.llm_manager import get_llm, ModelRole
+from app.core.memory.memory_core import memory_core
+from app.core.infrastructure.prompt_loader import get_prompt
 
 logger = logging.getLogger(__name__)
 

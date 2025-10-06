@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.problem_details import ProblemDetails
-from app.core.reflexion_core import run_with_reflexion, ReflexionConfig
+from app.core.optimization import run_with_reflexion, ReflexionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +164,8 @@ async def reflexion_health():
     """Health check do módulo Reflexion."""
     try:
         # Verifica se consegue importar módulos necessários
-        from app.core.reflexion_core import ReflexionSession
-        from app.core.faulty_tools import get_faulty_tools
+        from app.core.optimization import ReflexionSession
+        from app.core.tools import get_faulty_tools
 
         return {
             "status": "healthy",

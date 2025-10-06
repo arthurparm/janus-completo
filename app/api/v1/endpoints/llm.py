@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.llm_manager import (
+from app.core.llm import (
     get_llm_client,
     ModelRole,
     ModelPriority,

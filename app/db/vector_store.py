@@ -7,7 +7,7 @@ from qdrant_client import QdrantClient, models, AsyncQdrantClient
 from qdrant_client.http.models import PayloadSchemaType
 
 from app.config import settings
-from app.core.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

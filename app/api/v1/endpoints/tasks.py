@@ -10,8 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.async_consolidation_worker import publish_consolidation_task
-from app.core.message_broker import message_broker
+from app.core.workers import publish_consolidation_task
+from app.core.infrastructure import message_broker
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

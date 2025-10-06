@@ -17,8 +17,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 from prometheus_client import Counter, Gauge, Histogram
 
-from app.core.llm_manager import get_llm, ModelRole, ModelPriority
-from app.core.health_monitor import get_health_monitor
+from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
+from app.core.monitoring.health_monitor import get_health_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -222,9 +222,9 @@ def get_system_health_metrics() -> str:
     """
     try:
         import json
-        from app.core.llm_manager import _provider_circuit_breakers, _llm_cache
-        from app.core.multi_agent_system import get_multi_agent_system
-        from app.core.poison_pill_handler import get_poison_pill_handler
+        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_cache
+        from app.core.agents.multi_agent_system import get_multi_agent_system
+        from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 
         health_monitor = get_health_monitor()
         system_health = health_monitor.get_system_health()

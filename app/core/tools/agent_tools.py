@@ -6,18 +6,18 @@ from typing import List
 from langchain.tools import tool, BaseTool
 from pydantic import BaseModel, Field, validator
 
-from app.core import filesystem_manager
-from app.core.action_module import (
+from app.core.infrastructure import filesystem_manager
+from app.core.tools.action_module import (
     action_registry,
     create_tool_from_function,
     ToolCategory,
     PermissionLevel
 )
-from app.core.context_manager import context_manager
-from app.core.enums import AgentType  # <-- Corrigido
-from app.core.faulty_tools import get_faulty_tools
-from app.core.memory_core import memory_core
-from app.core.python_sandbox import python_sandbox
+from app.core.infrastructure.context_manager import context_manager
+from app.core.infrastructure.enums import AgentType
+from app.core.tools.faulty_tools import get_faulty_tools
+from app.core.memory.memory_core import memory_core
+from app.core.infrastructure.python_sandbox import python_sandbox
 from app.db.graph import graph_db
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ def query_knowledge_graph(query: str) -> str:
     Exemplo: "Quais ferramentas estão relacionadas a erros de timeout?"
     """
     try:
-        from app.core.knowledge_graph_manager import knowledge_graph_manager
+        from app.core.memory.knowledge_graph_manager import knowledge_graph_manager
 
         result = knowledge_graph_manager.semantic_search(query, limit=5)
 

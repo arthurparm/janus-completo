@@ -4,7 +4,7 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.core.logging_config import TRACE_ID
+from app.core.infrastructure.logging_config import TRACE_ID
 
 
 class CorrelationMiddleware(BaseHTTPMiddleware):

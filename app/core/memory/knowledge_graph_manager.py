@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Protocol
 
 from prometheus_client import Counter, Histogram
 
-from app.core.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.db.graph import graph_db
 
 logger = logging.getLogger(__name__)
@@ -130,7 +130,7 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     logger.info(f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
 
     # Importa o worker (lazy import para evitar dependências circulares)
-    from app.core.knowledge_consolidator_worker import knowledge_consolidator
+    from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 
     # Executa consolidação em lote de forma assíncrona
     try:

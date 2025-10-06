@@ -20,7 +20,7 @@ from aio_pika.abc import AbstractIncomingMessage
 from prometheus_client import Counter, Histogram, Gauge
 
 from app.config import settings
-from app.core.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

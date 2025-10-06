@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, validator
 from starlette.requests import Request
 
-from app.core.agent_manager import agent_manager, AgentType
+from app.core.agents import agent_manager, AgentType
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

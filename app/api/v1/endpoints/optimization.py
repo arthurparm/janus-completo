@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.self_optimization import self_optimization_cycle
+from app.core.optimization import self_optimization_cycle
 from app.api.problem_details import ProblemDetails
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ async def get_metrics_history(limit: int = 20):
 async def get_optimization_status():
     """Health check e status do módulo de auto-otimização."""
     try:
-        from app.core.self_optimization import SystemMonitor
+        from app.core.optimization import SystemMonitor
 
         return {
             "status": "healthy",

@@ -8,12 +8,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.problem_details import add_problem_handlers
 from app.api.v1.router import api_router
 from app.config import settings
-from app.core.correlation_middleware import CorrelationMiddleware
-from app.core.data_harvester import harvester
-from app.core.logging_config import setup_logging
-from app.core.memory_core import initialize_memory_core
-from app.core.meta_agent_cycle import run_meta_agent_cycle
-from app.core.rate_limit_middleware import RateLimitMiddleware
+from app.core.infrastructure import CorrelationMiddleware, RateLimitMiddleware, setup_logging
+from app.core.workers import harvester
+from app.core.memory import initialize_memory_core
+from app.core.agents import run_meta_agent_cycle
 from app.db.graph import graph_db
 from app.db.vector_store import check_qdrant_readiness
 

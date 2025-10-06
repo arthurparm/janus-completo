@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.resilience import resilient, CircuitBreaker, CircuitOpenError
+from app.core.infrastructure.resilience import resilient, CircuitBreaker, CircuitOpenError
 
 # Métricas
 LLM_ROUTER_COUNTER = Counter(

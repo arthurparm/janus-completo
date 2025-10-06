@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.action_module import (
+from app.core.tools import (
     action_registry,
     DynamicToolGenerator,
     ToolCategory,

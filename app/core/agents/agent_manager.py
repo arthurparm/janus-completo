@@ -14,13 +14,13 @@ except ImportError:
     class PydanticValidationError(Exception):
         pass
 
-from app.core.agent_tools import get_tools_for_agent
-from app.core.enums import AgentType
-from app.core.llm_manager import get_llm_client, ModelRole, ModelPriority
-from app.core.memory_core import memory_core
-from app.core.prompt_loader import get_prompt
+from app.core.tools.agent_tools import get_tools_for_agent
+from app.core.infrastructure.enums import AgentType
+from app.core.llm.llm_manager import get_llm_client, ModelRole, ModelPriority
+from app.core.memory.memory_core import memory_core
+from app.core.infrastructure.prompt_loader import get_prompt
 from app.models.schemas import Experience
-from app.core.resilience import CircuitBreaker, CircuitOpenError
+from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError
 from starlette.requests import Request
 
 logger = logging.getLogger(__name__)

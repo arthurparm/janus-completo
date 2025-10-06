@@ -316,7 +316,7 @@ class HealthMonitor:
 async def check_llm_manager_health() -> Dict[str, Any]:
     """Health check do LLM Manager."""
     try:
-        from app.core.llm_manager import _provider_circuit_breakers, _llm_cache
+        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_cache
 
         open_circuits = sum(
             1 for cb in _provider_circuit_breakers.values()
@@ -363,7 +363,7 @@ async def check_llm_manager_health() -> Dict[str, Any]:
 async def check_multi_agent_system_health() -> Dict[str, Any]:
     """Health check do sistema multi-agente."""
     try:
-        from app.core.multi_agent_system import get_multi_agent_system
+        from app.core.agents.multi_agent_system import get_multi_agent_system
 
         system = get_multi_agent_system()
         active_agents = len(system.agents)
@@ -389,7 +389,7 @@ async def check_multi_agent_system_health() -> Dict[str, Any]:
 async def check_poison_pill_handler_health() -> Dict[str, Any]:
     """Health check do poison pill handler."""
     try:
-        from app.core.poison_pill_handler import get_poison_pill_handler
+        from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 
         handler = get_poison_pill_handler()
         health_status = handler.get_health_status()

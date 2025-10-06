@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core.meta_agent import get_meta_agent
+from app.core.agents import get_meta_agent
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
