@@ -2,7 +2,8 @@
 
 ## Visão Geral
 
-O **Knowledge Consolidator Worker** é o componente responsável por transformar a **memória episódica** (experiências brutas armazenadas no Qdrant) em **memória semântica** (conhecimento estruturado no Neo4j).
+O **Knowledge Consolidator Worker** é o componente responsável por transformar a **memória episódica** (experiências
+brutas armazenadas no Qdrant) em **memória semântica** (conhecimento estruturado no Neo4j).
 
 Este worker implementa a funcionalidade-chave da **Sprint 8: Consolidação do Conhecimento – Memória à Sabedoria**.
 
@@ -73,6 +74,7 @@ O worker utiliza um **LLM especializado** (Knowledge Curator) para analisar cada
 #### Nós Criados
 
 **Experience**
+
 ```cypher
 (:Experience {
   id: "uuid",
@@ -84,6 +86,7 @@ O worker utiliza um **LLM especializado** (Knowledge Curator) para analisar cada
 ```
 
 **Entidades (diversos tipos)**
+
 ```cypher
 (:TECHNOLOGY {
   name: "Neo4j",
@@ -95,11 +98,13 @@ O worker utiliza um **LLM especializado** (Knowledge Curator) para analisar cada
 #### Relacionamentos Criados
 
 **MENTIONS** (Experiência menciona Entidade)
+
 ```cypher
 (e:Experience)-[:MENTIONS]->(n:TECHNOLOGY)
 ```
 
 **Relacionamentos entre Entidades**
+
 ```cypher
 (a:TECHNOLOGY)-[:USES {
   discovered_at: datetime(),
@@ -116,6 +121,7 @@ O worker utiliza um **LLM especializado** (Knowledge Curator) para analisar cada
 Aciona o processo de consolidação em lote.
 
 **Response:**
+
 ```json
 {
   "message": "Processo de consolidação concluído.",
@@ -203,32 +209,33 @@ QDRANT_PORT = 6333
 ## Fluxo de Consolidação
 
 1. **Inicialização**
-   - Conecta ao Qdrant (memória episódica)
-   - Conecta ao Neo4j (memória semântica)
-   - Inicializa LLM (Knowledge Curator)
+    - Conecta ao Qdrant (memória episódica)
+    - Conecta ao Neo4j (memória semântica)
+    - Inicializa LLM (Knowledge Curator)
 
 2. **Recuperação de Experiências**
-   - Busca experiências não consolidadas no Qdrant
-   - Verifica se já foram processadas (evita duplicação)
+    - Busca experiências não consolidadas no Qdrant
+    - Verifica se já foram processadas (evita duplicação)
 
 3. **Extração de Conhecimento**
-   - Envia experiência ao LLM com prompt especializado
-   - Parseia resposta JSON com entidades, relacionamentos e insights
+    - Envia experiência ao LLM com prompt especializado
+    - Parseia resposta JSON com entidades, relacionamentos e insights
 
 4. **Persistência no Grafo**
-   - Cria nó da experiência
-   - Cria/atualiza nós de entidades
-   - Cria relacionamentos `MENTIONS`
-   - Cria relacionamentos entre entidades
-   - Armazena insights como propriedades
+    - Cria nó da experiência
+    - Cria/atualiza nós de entidades
+    - Cria relacionamentos `MENTIONS`
+    - Cria relacionamentos entre entidades
+    - Armazena insights como propriedades
 
 5. **Estatísticas e Logging**
-   - Registra métricas Prometheus
-   - Loga resultado da consolidação
+    - Registra métricas Prometheus
+    - Loga resultado da consolidação
 
 ## Exemplo de Extração
 
 **Entrada (Experiência):**
+
 ```
 Conteúdo: "O sistema implementou o padrão Circuit Breaker para proteger
 a conexão com Neo4j. O LLM Manager utiliza Ollama como fallback quando
@@ -241,6 +248,7 @@ Metadados: {
 ```
 
 **Saída (Conhecimento Extraído):**
+
 ```json
 {
   "entities": [
@@ -267,6 +275,7 @@ Metadados: {
 ## Queries Úteis
 
 ### Ver todas as tecnologias mencionadas
+
 ```cypher
 MATCH (t:TECHNOLOGY)
 RETURN t.name, t.last_seen
@@ -274,6 +283,7 @@ ORDER BY t.last_seen DESC
 ```
 
 ### Ver relacionamentos entre componentes
+
 ```cypher
 MATCH (a)-[r]->(b)
 WHERE NOT a:Experience
@@ -281,6 +291,7 @@ RETURN type(r) as rel, a.name as from, b.name as to
 ```
 
 ### Encontrar experiências sobre uma tecnologia
+
 ```cypher
 MATCH (tech:TECHNOLOGY {name: "Neo4j"})<-[:MENTIONS]-(e:Experience)
 RETURN e.id, e.type, e.timestamp
@@ -288,6 +299,7 @@ ORDER BY e.timestamp DESC
 ```
 
 ### Ver insights descobertos
+
 ```cypher
 MATCH (e:Experience)
 WHERE e.insights IS NOT NULL

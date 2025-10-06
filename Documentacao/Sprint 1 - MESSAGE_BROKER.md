@@ -2,13 +2,15 @@
 
 ## ✅ Status: **IMPLEMENTADA E APRIMORADA**
 
-A Sprint 1 foi **completamente implementada** com arquitetura moderna usando **RabbitMQ** como message broker central para comunicação assíncrona e distribuída entre componentes do sistema Janus.
+A Sprint 1 foi **completamente implementada** com arquitetura moderna usando **RabbitMQ** como message broker central
+para comunicação assíncrona e distribuída entre componentes do sistema Janus.
 
 ---
 
 ## Visão Geral
 
-A Sprint 1 estabelece a **espinha dorsal de comunicação assíncrona** do sistema, permitindo que diferentes componentes trabalhem de forma desacoplada e escalável.
+A Sprint 1 estabelece a **espinha dorsal de comunicação assíncrona** do sistema, permitindo que diferentes componentes
+trabalhem de forma desacoplada e escalável.
 
 ### Arquitetura
 
@@ -61,6 +63,7 @@ rabbitmq:
 ```
 
 **Features:**
+
 - ✅ Management UI (http://localhost:15672)
 - ✅ Health checks integrados
 - ✅ Persistência de dados
@@ -71,6 +74,7 @@ rabbitmq:
 Cliente RabbitMQ assíncrono robusto com:
 
 **Features principais:**
+
 - ✅ **Conexão resiliente** com retry e circuit breaker
 - ✅ **Publicação de mensagens** com prioridades
 - ✅ **Consumo assíncrono** com prefetch configurável
@@ -79,6 +83,7 @@ Cliente RabbitMQ assíncrono robusto com:
 - ✅ **Filas pré-configuradas** com TTL e limites
 
 **Métricas exportadas:**
+
 ```
 message_broker_published_total{queue, outcome}
 message_broker_consumed_total{queue, outcome}
@@ -92,10 +97,12 @@ message_broker_active_consumers{queue}
 Worker que **integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8)**.
 
 **Modos de operação:**
+
 - **Batch**: Processa múltiplas experiências da memória episódica
 - **Single**: Processa uma experiência específica
 
 **Recursos:**
+
 - ✅ Processamento assíncrono em background
 - ✅ Logging detalhado de cada tarefa
 - ✅ Tratamento robusto de erros
@@ -106,6 +113,7 @@ Worker que **integra o Message Broker (Sprint 1) com o Knowledge Consolidator (S
 Endpoints REST para interagir com o message broker:
 
 **POST** `/api/v1/tasks/consolidation`
+
 ```json
 {
   "mode": "batch",
@@ -114,6 +122,7 @@ Endpoints REST para interagir com o message broker:
 ```
 
 **GET** `/api/v1/tasks/queue/{queue_name}`
+
 ```json
 {
   "name": "janus.knowledge.consolidation",
@@ -123,6 +132,7 @@ Endpoints REST para interagir com o message broker:
 ```
 
 **GET** `/api/v1/tasks/health/rabbitmq`
+
 ```json
 {
   "status": "healthy",
@@ -134,13 +144,13 @@ Endpoints REST para interagir com o message broker:
 
 ## Filas Disponíveis
 
-| Fila | Propósito | Worker |
-|------|-----------|--------|
-| `janus.knowledge.consolidation` | Consolidação de conhecimento | ✅ Implementado |
-| `janus.data.harvesting` | Coleta de dados de treinamento | ⏳ Futuro |
-| `janus.agent.tasks` | Tarefas de agentes | ⏳ Futuro |
-| `janus.meta_agent.cycle` | Ciclo do meta-agente | ⏳ Futuro |
-| `janus.neural.training` | Treinamento de redes neurais | ⏳ Futuro |
+| Fila                            | Propósito                      | Worker         |
+|---------------------------------|--------------------------------|----------------|
+| `janus.knowledge.consolidation` | Consolidação de conhecimento   | ✅ Implementado |
+| `janus.data.harvesting`         | Coleta de dados de treinamento | ⏳ Futuro       |
+| `janus.agent.tasks`             | Tarefas de agentes             | ⏳ Futuro       |
+| `janus.meta_agent.cycle`        | Ciclo do meta-agente           | ⏳ Futuro       |
+| `janus.neural.training`         | Treinamento de redes neurais   | ⏳ Futuro       |
 
 ---
 
@@ -224,16 +234,19 @@ async def startup_workers():
 O sistema implementa múltiplas camadas de resiliência:
 
 ### 1. **Conexão Robusta**
+
 - Retry com backoff exponencial (5 tentativas)
 - Circuit breaker para evitar sobrecarga
 - Auto-reconexão em caso de falha
 
 ### 2. **Processamento Seguro**
+
 - Mensagens persistentes (survive restart)
 - Dead Letter Queue (DLQ) para mensagens com erro
 - Prefetch limit para controlar carga
 
 ### 3. **Observabilidade**
+
 - Logs estruturados em cada etapa
 - Métricas Prometheus detalhadas
 - Health checks proativos
@@ -285,6 +298,7 @@ Execute os testes de integração:
 ```
 
 Os testes cobrem:
+
 1. ✅ Health check do RabbitMQ
 2. ✅ Publicação de tarefas
 3. ✅ Monitoramento de filas
@@ -299,11 +313,13 @@ Os testes cobrem:
 A implementação vai **além dos requisitos originais da Sprint 1**:
 
 ### Requisitos Originais ✅
+
 - [x] Integração com RabbitMQ
 - [x] Módulos de publicação e consumo
 - [x] Comunicação assíncrona entre componentes
 
 ### Aprimoramentos Adicionais ✅
+
 - [x] **Circuit Breakers** em conexão e operações
 - [x] **Retry com backoff exponencial**
 - [x] **Métricas Prometheus** completas
@@ -326,10 +342,12 @@ Acesse o painel de administração do RabbitMQ:
 **URL**: http://localhost:15672
 
 **Credenciais:**
+
 - User: `janus`
 - Password: `janus_pass`
 
 **Funcionalidades:**
+
 - Visualizar filas e exchanges
 - Monitorar taxa de mensagens
 - Ver consumidores ativos
@@ -343,20 +361,20 @@ Acesse o painel de administração do RabbitMQ:
 ### Workers Adicionais a Implementar:
 
 1. **Data Harvesting Worker** (Sprint 9)
-   - Coleta dados de interações
-   - Prepara dataset para treinamento
+    - Coleta dados de interações
+    - Prepara dataset para treinamento
 
 2. **Meta-Agent Worker** (Sprint 13)
-   - Executa ciclo de auto-otimização
-   - Analisa falhas e propõe melhorias
+    - Executa ciclo de auto-otimização
+    - Analisa falhas e propõe melhorias
 
 3. **Neural Training Worker** (Sprint 9)
-   - Treina modelos de IA
-   - Atualiza pesos automaticamente
+    - Treina modelos de IA
+    - Atualiza pesos automaticamente
 
 4. **Agent Task Worker**
-   - Executa tarefas de agentes em background
-   - Desacopla execução da API
+    - Executa tarefas de agentes em background
+    - Desacopla execução da API
 
 ---
 
@@ -408,6 +426,9 @@ docker-compose logs janus-api | grep ERROR
 
 ## Conclusão
 
-A Sprint 1 está **100% implementada e aprimorada**, fornecendo uma base sólida para comunicação assíncrona e distribuída no sistema Janus. O RabbitMQ atua como o **sistema nervoso central**, permitindo que componentes trabalhem de forma desacoplada, escalável e resiliente.
+A Sprint 1 está **100% implementada e aprimorada**, fornecendo uma base sólida para comunicação assíncrona e distribuída
+no sistema Janus. O RabbitMQ atua como o **sistema nervoso central**, permitindo que componentes trabalhem de forma
+desacoplada, escalável e resiliente.
 
-**Próximo passo recomendado**: Implementar workers adicionais para Data Harvesting (Sprint 9) e Meta-Agent Cycle (Sprint 13) usando a mesma arquitetura de message broker.
+**Próximo passo recomendado**: Implementar workers adicionais para Data Harvesting (Sprint 9) e Meta-Agent Cycle (Sprint
+13) usando a mesma arquitetura de message broker.

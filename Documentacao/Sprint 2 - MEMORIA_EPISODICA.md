@@ -2,13 +2,15 @@
 
 ## ✅ Status: **COMPLETAMENTE IMPLEMENTADA E APRIMORADA**
 
-A Sprint 2 foi **totalmente implementada** com uma arquitetura sofisticada de memória episódica usando **Qdrant** como banco vetorial e sistema de camadas (short-term + long-term).
+A Sprint 2 foi **totalmente implementada** com uma arquitetura sofisticada de memória episódica usando **Qdrant** como
+banco vetorial e sistema de camadas (short-term + long-term).
 
 ---
 
 ## Visão Geral
 
 A Sprint 2 estabelece o **núcleo cognitivo** do Janus, permitindo aprendizagem baseada em experiências através de:
+
 - Armazenamento eficiente de experiências com embeddings
 - Busca por similaridade semântica
 - Gestão inteligente de memória em múltiplas camadas
@@ -57,27 +59,27 @@ A Sprint 2 estabelece o **núcleo cognitivo** do Janus, permitindo aprendizagem 
 
 ### ✅ Requisitos Originais
 
-| Requisito | Status | Implementação |
-|-----------|--------|---------------|
-| Implementação do Qdrant | ✅ | `docker-compose.yml`, `app/db/vector_store.py` |
-| Armazenamento de embeddings | ✅ | `OpenAIEmbeddings` + Qdrant |
-| Busca por similaridade | ✅ | `memory_core.recall()` com cosine similarity |
-| Módulo de gestão de memória | ✅ | `app/core/memory_core.py` (645 linhas) |
-| Remoção do PostgreSQL | ✅ | Não há PostgreSQL no projeto |
+| Requisito                   | Status | Implementação                                  |
+|-----------------------------|--------|------------------------------------------------|
+| Implementação do Qdrant     | ✅      | `docker-compose.yml`, `app/db/vector_store.py` |
+| Armazenamento de embeddings | ✅      | `OpenAIEmbeddings` + Qdrant                    |
+| Busca por similaridade      | ✅      | `memory_core.recall()` com cosine similarity   |
+| Módulo de gestão de memória | ✅      | `app/core/memory_core.py` (645 linhas)         |
+| Remoção do PostgreSQL       | ✅      | Não há PostgreSQL no projeto                   |
 
 ### ✅ Melhorias Implementadas (Além do Escopo)
 
-| Feature | Descrição |
-|---------|-----------|
-| **Sistema de Camadas** | Short-term (RAM) + Long-term (Qdrant) |
-| **PII Detection** | Detecta e mascara CPF, email, telefone, cartão de crédito |
-| **Content Encryption** | Criptografia XOR simples para dados em repouso |
-| **Quota Management** | Limites por origem (200 itens/5MB por hora) |
+| Feature                 | Descrição                                                   |
+|-------------------------|-------------------------------------------------------------|
+| **Sistema de Camadas**  | Short-term (RAM) + Long-term (Qdrant)                       |
+| **PII Detection**       | Detecta e mascara CPF, email, telefone, cartão de crédito   |
+| **Content Encryption**  | Criptografia XOR simples para dados em repouso              |
+| **Quota Management**    | Limites por origem (200 itens/5MB por hora)                 |
 | **Métricas Prometheus** | 5 métricas customizadas (hits, misses, latency, bytes, ops) |
-| **Async/Await** | 100% assíncrono para alta performance |
-| **Circuit Breakers** | Resiliência em operações Qdrant |
-| **Health Checks** | Validação de conectividade |
-| **Deduplication** | Evita duplicação de resultados |
+| **Async/Await**         | 100% assíncrono para alta performance                       |
+| **Circuit Breakers**    | Resiliência em operações Qdrant                             |
+| **Health Checks**       | Validação de conectividade                                  |
+| **Deduplication**       | Evita duplicação de resultados                              |
 
 ---
 
@@ -97,6 +99,7 @@ qdrant:
 ```
 
 **Features:**
+
 - ✅ Versão específica (v1.9.2) para compatibilidade
 - ✅ Persistência de dados em `./data/qdrant`
 - ✅ Health check automático
@@ -107,6 +110,7 @@ qdrant:
 Cliente Qdrant robusto com:
 
 **Funções principais:**
+
 ```python
 get_qdrant_client() -> QdrantClient
 get_async_qdrant_client() -> AsyncQdrantClient
@@ -115,6 +119,7 @@ check_qdrant_readiness() -> bool
 ```
 
 **Features:**
+
 - ✅ Lazy initialization (thread-safe)
 - ✅ Circuit breaker dedicado
 - ✅ Retry com backoff exponencial
@@ -136,6 +141,7 @@ class ShortTermMemory:
 ```
 
 **Características:**
+
 - ✅ Cache rápido em RAM
 - ✅ Eviction automática (TTL + LRU)
 - ✅ Busca com embeddings ou substring
@@ -152,6 +158,7 @@ class ShortTermMemory:
 ```
 
 **Características:**
+
 - ✅ Persistência durável
 - ✅ Busca vetorial escalável
 - ✅ Suporte a metadados complexos
@@ -160,6 +167,7 @@ class ShortTermMemory:
 #### 3.3 Operações Principais
 
 **memorize(experience: Experience)**
+
 ```python
 # Armazena experiência em ambas camadas
 1. Validação de conteúdo (max 20k chars)
@@ -173,6 +181,7 @@ class ShortTermMemory:
 ```
 
 **recall(query: str, n_results: int) -> List[dict]**
+
 ```python
 # Busca experiências por similaridade
 1. Busca em short-term (rápida)
@@ -187,6 +196,7 @@ class ShortTermMemory:
 ### 4. **API Endpoints** (`app/api/v1/endpoints/memory.py`)
 
 **POST** `/api/v1/memory/memorize`
+
 ```json
 {
   "type": "agent_action",
@@ -199,6 +209,7 @@ class ShortTermMemory:
 ```
 
 **GET** `/api/v1/memory/recall?query=busca+web`
+
 ```json
 [
   {
@@ -211,6 +222,7 @@ class ShortTermMemory:
 ```
 
 **POST** `/api/v1/memory/experience` (alias)
+
 ```json
 {
   "content": "Experiência detalhada...",
@@ -220,6 +232,7 @@ class ShortTermMemory:
 ```
 
 **POST** `/api/v1/memory/search` (alias)
+
 ```json
 {
   "query": "falhas de conexão",
@@ -268,6 +281,7 @@ sentence-transformers  # Fallback local (não usado)
 ### 1. **PII Detection & Masking**
 
 Detecta e mascara automaticamente:
+
 - ✅ Emails → `***@***.***`
 - ✅ Telefones → `[REDACTED_PHONE]`
 - ✅ Cartões de crédito → `[REDACTED_CC]`
@@ -306,6 +320,7 @@ MAX_BYTES_PER_ORIGIN = 5_000_000  # 5MB
 ```
 
 Se excedido:
+
 - ❌ Experiência rejeitada
 - 📊 Métrica incrementada
 - 📝 Log de warning
@@ -343,6 +358,7 @@ curl http://localhost:6333/healthz
 ### 2. Armazenar Experiência
 
 **Via API:**
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/memory/experience \
   -H "Content-Type: application/json" \
@@ -354,6 +370,7 @@ curl -X POST http://localhost:8000/api/v1/memory/experience \
 ```
 
 **Via Python:**
+
 ```python
 from app.core.memory_core import memory_core
 from app.models.schemas import Experience
@@ -370,11 +387,13 @@ memory_core.memorize(exp)
 ### 3. Buscar Experiências
 
 **Via API:**
+
 ```bash
 curl "http://localhost:8000/api/v1/memory/recall?query=timeout+Neo4j"
 ```
 
 **Via Python:**
+
 ```python
 results = memory_core.recall(query="erros de timeout", n_results=5)
 
@@ -612,21 +631,25 @@ if re.search(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", text):
 ## Próximos Passos (Melhorias Futuras)
 
 ### 1. Embeddings Locais (Sprint 9)
+
 - [ ] Integrar `sentence-transformers` para embeddings offline
 - [ ] Fallback automático quando OpenAI não disponível
 - [ ] Modelo multilingual (paraphrase-multilingual)
 
 ### 2. Memória Semântica (Sprint 8) ✅
+
 - [x] Consolidação de experiências em grafo Neo4j
 - [x] Extração de entidades e relacionamentos
 - [x] Worker assíncrono de consolidação
 
 ### 3. Memória de Trabalho (Working Memory)
+
 - [ ] Cache ultra-rápido para contexto atual do agente
 - [ ] Integração com reasoning cycles
 - [ ] Auto-refresh baseado em prioridade
 
 ### 4. Compressão de Memórias
+
 - [ ] Sumarização de experiências antigas
 - [ ] Arquivamento inteligente
 - [ ] Compactação de embeddings
@@ -656,4 +679,5 @@ A **Sprint 2 está 100% implementada e vai muito além dos requisitos originais*
 ✅ **Observabilidade** (Prometheus, logs estruturados)
 ✅ **API REST** completa
 
-O sistema agora possui **memória de longo prazo**, permitindo que o Janus aprenda com experiências passadas e evolua continuamente! 🧠
+O sistema agora possui **memória de longo prazo**, permitindo que o Janus aprenda com experiências passadas e evolua
+continuamente! 🧠

@@ -2,14 +2,17 @@
 
 ## Status: ✅ IMPLEMENTADA
 
-A Sprint 3 foi **totalmente implementada** com funcionalidades avançadas de **contexto ambiental** e **busca sofisticada de memórias**, permitindo ao Janus ter consciência temporal e percepção do ambiente externo.
+A Sprint 3 foi **totalmente implementada** com funcionalidades avançadas de **contexto ambiental** e **busca sofisticada
+de memórias**, permitindo ao Janus ter consciência temporal e percepção do ambiente externo.
 
 ---
 
 ## 🎯 Objetivos da Sprint
 
-1. **Habilitar uso da memória episódica**: Implementar funções sofisticadas de busca que permitem ao agente recuperar experiências passadas relevantes com base no contexto atual
-2. **Criar percepção ambiental**: Desenvolver módulo de contexto que integra data/hora atual e busca na web para enriquecer a consciência do agente
+1. **Habilitar uso da memória episódica**: Implementar funções sofisticadas de busca que permitem ao agente recuperar
+   experiências passadas relevantes com base no contexto atual
+2. **Criar percepção ambiental**: Desenvolver módulo de contexto que integra data/hora atual e busca na web para
+   enriquecer a consciência do agente
 
 ---
 
@@ -22,6 +25,7 @@ Módulo central responsável por fornecer consciência ambiental ao agente.
 **Componentes:**
 
 #### 1.1 ContextInfo
+
 ```python
 class ContextInfo(BaseModel):
     timestamp: str              # Timestamp UTC atual
@@ -31,6 +35,7 @@ class ContextInfo(BaseModel):
 ```
 
 #### 1.2 WebSearchResult
+
 ```python
 class WebSearchResult(BaseModel):
     query: str                 # Query utilizada
@@ -39,6 +44,7 @@ class WebSearchResult(BaseModel):
 ```
 
 #### 1.3 ContextManager
+
 Classe principal com métodos:
 
 - **`get_current_context()`**: Retorna contexto completo (data/hora + sistema)
@@ -47,6 +53,7 @@ Classe principal com métodos:
 - **`format_context_for_prompt()`**: Formata contexto como string para prompts de LLM
 
 **Integração Tavily:**
+
 - Busca inteligente na web
 - Suporte a diferentes profundidades (basic/advanced)
 - Tratamento robusto de erros
@@ -59,7 +66,9 @@ Classe principal com métodos:
 Novas funções adicionadas à classe `EpisodicMemory`:
 
 #### 2.1 `arecall_filtered()`
+
 Busca com múltiplos filtros:
+
 ```python
 async def arecall_filtered(
     query: str,
@@ -72,13 +81,16 @@ async def arecall_filtered(
 ```
 
 **Recursos:**
+
 - Filtros compostos usando Qdrant Filter API
 - Score threshold para garantir relevância
 - Filtro temporal para memórias recentes
 - Fallback para busca simples em caso de erro
 
 #### 2.2 `arecall_by_timeframe()`
+
 Busca memórias em período específico:
+
 ```python
 async def arecall_by_timeframe(
     query: str,
@@ -88,7 +100,9 @@ async def arecall_by_timeframe(
 ```
 
 #### 2.3 `arecall_recent_failures()`
+
 Busca específica por falhas para análise:
+
 ```python
 async def arecall_recent_failures(
     n_results: int = 10
@@ -102,18 +116,23 @@ async def arecall_recent_failures(
 Novas ferramentas adicionadas para uso pelos agentes:
 
 #### 3.1 `get_current_datetime()`
+
 Retorna data e hora atual formatadas
 
 #### 3.2 `get_system_info()`
+
 Retorna informações do sistema e ambiente
 
 #### 3.3 `search_web(query, max_results)`
+
 Busca informações na web via Tavily
 
 #### 3.4 `get_enriched_context(query, include_web)`
+
 Retorna contexto completo com busca web opcional
 
 **Integração com Agentes:**
+
 - Tools adicionadas ao `unified_tools` (agentes normais)
 - `get_current_datetime` adicionada ao `meta_agent_tools`
 - Fábrica `get_tools_for_agent()` atualizada
@@ -125,6 +144,7 @@ Retorna contexto completo com busca web opcional
 Novos endpoints REST para contexto ambiental:
 
 #### 4.1 `GET /api/v1/context/current`
+
 ```json
 {
   "timestamp": "2025-10-06T14:30:00.000Z",
@@ -148,12 +168,15 @@ Novos endpoints REST para contexto ambiental:
 ```
 
 #### 4.2 `GET /api/v1/context/web-search`
+
 Query params:
+
 - `query` (required): Texto de busca
 - `max_results` (1-10): Número de resultados
 - `search_depth` (basic/advanced): Profundidade
 
 Response:
+
 ```json
 {
   "query": "latest AI developments",
@@ -170,7 +193,9 @@ Response:
 ```
 
 #### 4.3 `POST /api/v1/context/enriched`
+
 Body:
+
 ```json
 {
   "query": "optional search query",
@@ -180,6 +205,7 @@ Body:
 ```
 
 #### 4.4 `GET /api/v1/context/format-prompt`
+
 Retorna contexto formatado para inclusão em prompts
 
 ---
@@ -187,11 +213,13 @@ Retorna contexto formatado para inclusão em prompts
 ## 📦 Dependências Adicionadas
 
 ### requirements.txt
+
 ```txt
 tavily-python>=0.3.0
 ```
 
 ### pyproject.toml
+
 ```toml
 tavily-python = ">=0.3.0"
 ```
@@ -284,25 +312,33 @@ failures = await memory_core.arecall_recent_failures(n_results=20)
 ## 🎯 Casos de Uso
 
 ### 1. Consciência Temporal
+
 O agente agora sabe a data/hora atual, permitindo:
+
 - Agendar tarefas
 - Entender contexto temporal de eventos
 - Diferenciar entre manhã/tarde/noite
 
 ### 2. Busca Contextualizada na Web
+
 O agente pode buscar informações atualizadas:
+
 - Verificar documentação recente
 - Pesquisar soluções para erros
 - Obter informações sobre tecnologias
 
 ### 3. Memória Inteligente
+
 Busca sofisticada de experiências passadas:
+
 - Filtrar por tipo de evento
 - Buscar apenas em período específico
 - Analisar padrões de falhas
 
 ### 4. Enriquecimento de Prompts
+
 Contexto ambiental em prompts LLM:
+
 ```python
 context_str = context_manager.format_context_for_prompt(
     include_datetime=True,
@@ -316,18 +352,21 @@ prompt = f"{context_str}\n\n{user_question}"
 ## 🧪 Testes
 
 ### Teste de Contexto Atual
+
 ```http
 GET http://localhost:8000/api/v1/context/current
 Accept: application/json
 ```
 
 ### Teste de Busca Web
+
 ```http
 GET http://localhost:8000/api/v1/context/web-search?query=FastAPI&max_results=3
 Accept: application/json
 ```
 
 ### Teste de Contexto Enriquecido
+
 ```http
 POST http://localhost:8000/api/v1/context/enriched
 Content-Type: application/json
@@ -344,6 +383,7 @@ Content-Type: application/json
 ## 📊 Métricas e Observabilidade
 
 O sistema mantém as métricas existentes:
+
 - Latência de busca de memória
 - Taxa de acerto/erro em buscas
 - Uso de APIs externas (Tavily)
@@ -386,16 +426,19 @@ O sistema mantém as métricas existentes:
 ## 📝 Notas Técnicas
 
 ### Segurança
+
 - API key do Tavily armazenada como `SecretStr`
 - Fallback gracioso se API não disponível
 - Validação de queries antes de buscar
 
 ### Performance
+
 - Busca web assíncrona
 - Cache de contexto (pode ser implementado)
 - Filtros no nível do Qdrant (eficiente)
 
 ### Resiliência
+
 - Try/except em todas as chamadas externas
 - Logs estruturados para debugging
 - Timeout configurável para buscas

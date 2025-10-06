@@ -2,14 +2,17 @@
 
 ## Status: ✅ IMPLEMENTADA
 
-A Sprint 4 foi **totalmente implementada** com o **Ciclo ReAct** (Reasoning and Acting) e um **Sandbox Python Seguro**, permitindo ao Janus raciocinar de forma estruturada e executar código de forma isolada e protegida.
+A Sprint 4 foi **totalmente implementada** com o **Ciclo ReAct** (Reasoning and Acting) e um **Sandbox Python Seguro**,
+permitindo ao Janus raciocinar de forma estruturada e executar código de forma isolada e protegida.
 
 ---
 
 ## 🎯 Objetivos da Sprint
 
-1. **Ciclo de Raciocínio ReAct**: Implementar o padrão Reasoning and Acting para permitir ao agente pensar antes de agir de forma iterativa
-2. **Sandbox Python Seguro**: Criar ambiente isolado para execução segura de código Python, protegendo o sistema principal
+1. **Ciclo de Raciocínio ReAct**: Implementar o padrão Reasoning and Acting para permitir ao agente pensar antes de agir
+   de forma iterativa
+2. **Sandbox Python Seguro**: Criar ambiente isolado para execução segura de código Python, protegendo o sistema
+   principal
 
 ---
 
@@ -98,13 +101,16 @@ class ExecutionResult:
 #### 2.3 Restrições de Segurança
 
 **✅ Permitido:**
-- Módulos seguros: `math`, `random`, `datetime`, `json`, `re`, `collections`, `itertools`, `functools`, `statistics`, `decimal`, `fractions`
+
+- Módulos seguros: `math`, `random`, `datetime`, `json`, `re`, `collections`, `itertools`, `functools`, `statistics`,
+  `decimal`, `fractions`
 - Builtins básicos: `print`, `len`, `sum`, `range`, `list`, `dict`, etc.
 - Definição de variáveis e funções
 - Loops e condicionais
 - List/dict comprehensions
 
 **❌ Bloqueado:**
+
 - Acesso ao filesystem (`open`, `file`, `os`)
 - Acesso à network (`socket`, `urllib`, `requests`)
 - Subprocess (`subprocess`, `os.system`)
@@ -130,12 +136,14 @@ class ExecutionResult:
 Executa código Python completo no sandbox.
 
 **Casos de Uso:**
+
 - Processamento de dados
 - Cálculos complexos
 - Algoritmos e lógica
 - Testes de código
 
 **Exemplo:**
+
 ```python
 code = """
 numbers = [1, 2, 3, 4, 5]
@@ -151,11 +159,13 @@ result = execute_python_code(code)
 Avalia uma expressão Python simples.
 
 **Casos de Uso:**
+
 - Cálculos rápidos
 - Avaliação de expressões
 - Conversões
 
 **Exemplos:**
+
 ```python
 "2 + 2"  # → 4
 "sum([1,2,3,4,5])"  # → 15
@@ -171,6 +181,7 @@ Avalia uma expressão Python simples.
 Executa código Python no sandbox.
 
 **Request:**
+
 ```json
 {
   "code": "result = sum([1, 2, 3, 4, 5])\nprint(f'Soma: {result}')",
@@ -181,6 +192,7 @@ Executa código Python no sandbox.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -198,6 +210,7 @@ Executa código Python no sandbox.
 Avalia uma expressão Python.
 
 **Request:**
+
 ```json
 {
   "expression": "2 + 2"
@@ -205,6 +218,7 @@ Avalia uma expressão Python.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -219,6 +233,7 @@ Avalia uma expressão Python.
 Lista capacidades e restrições do sandbox.
 
 **Response:**
+
 ```json
 {
   "allowed_modules": [
@@ -247,11 +262,13 @@ Lista capacidades e restrições do sandbox.
 ## 📦 Dependências Adicionadas
 
 ### requirements.txt
+
 ```txt
 RestrictedPython>=6.0
 ```
 
 ### pyproject.toml
+
 ```toml
 RestrictedPython = ">=6.0"
 ```
@@ -343,6 +360,7 @@ print(result.output)  # "5050"
 ## 🎯 Casos de Uso
 
 ### 1. Cálculos Matemáticos
+
 ```python
 code = """
 import math
@@ -356,6 +374,7 @@ print(f"Hipotenusa: {c}")
 ```
 
 ### 2. Processamento de Dados
+
 ```python
 code = """
 dados = [10, 25, 30, 15, 40, 35, 20]
@@ -371,6 +390,7 @@ print(f"Mínimo: {minimo}")
 ```
 
 ### 3. Algoritmos
+
 ```python
 code = """
 def fibonacci(n):
@@ -384,6 +404,7 @@ print(f"Fibonacci: {resultado}")
 ```
 
 ### 4. Análise de Texto
+
 ```python
 code = """
 import re
@@ -463,6 +484,7 @@ Content-Type: application/json
 ## 📊 Métricas e Observabilidade
 
 O sistema registra:
+
 - Tempo de execução de cada código
 - Sucessos e falhas
 - Erros de compilação e runtime
