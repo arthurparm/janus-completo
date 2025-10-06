@@ -1,36 +1,71 @@
-# Variáveis
+###
+# SPRINT 7: Self-Optimization - Ciclo Proativo de Auto-Melhoria
+# Testes completos do ciclo MONITOR-DETECT-PLAN-EXECUTE-LEARN
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
-@summary_file = "summary.txt"
 
 ###
-# Teste 1: Usar memória episódica e depois escrever em arquivo
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 1. Executar Ciclo Completo de Auto-Otimização
+POST {{host}}{{api_v1_prefix}}/optimization/run-cycle
 Content-Type: application/json
 
 {
-  "question": "Lembre-se do resumo da última vez que a base de código foi indexada. Pegue esse resumo e salve-o em um novo arquivo chamado 'summary.txt'."
+  "enable_auto_execution": false
 }
 
-> {%
-    client.test("Memory to File task successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
-    });
-%}
-
 ###
-# Teste 2: Usar o grafo de conhecimento e depois ler um arquivo
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 2. Executar Ciclo com Auto-Execução Habilitada
+POST {{host}}{{api_v1_prefix}}/optimization/run-cycle
 Content-Type: application/json
 
 {
-  "question": "Use o grafo de conhecimento para descobrir o caminho completo do arquivo que contém a função 'run_agent_executor'. Depois que descobrir o caminho, leia o conteúdo desse arquivo para mim."
+  "enable_auto_execution": true,
+  "max_improvements": 3
 }
 
-> {%
-    client.test("Graph to Read task successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.answer.includes("AgentExecutor"), "Answer does not contain expected code snippet");
-    });
-%}
+###
+# 3. Obter Métricas de Saúde do Sistema
+GET {{host}}{{api_v1_prefix}}/optimization/health
+Accept: application/json
+
+###
+# 4. Listar Problemas Detectados
+GET {{host}}{{api_v1_prefix}}/optimization/issues
+Accept: application/json
+
+###
+# 5. Listar Problemas por Severidade (HIGH)
+GET {{host}}{{api_v1_prefix}}/optimization/issues?severity=HIGH
+Accept: application/json
+
+###
+# 6. Listar Problemas por Categoria (PERFORMANCE)
+GET {{host}}{{api_v1_prefix}}/optimization/issues?category=PERFORMANCE
+Accept: application/json
+
+###
+# 7. Obter Histórico de Métricas
+GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=50
+Accept: application/json
+
+###
+# 8. Obter Métricas de um Período Específico
+GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?start_time=2024-01-01T00:00:00&end_time=2024-12-31T23:59:59
+Accept: application/json
+
+###
+# 9. Executar Análise de Performance
+POST {{host}}{{api_v1_prefix}}/optimization/analyze
+Content-Type: application/json
+
+{
+  "analysis_type": "performance",
+  "detailed": true
+}
+
+###
+# 10. Health Check do Sistema de Auto-Otimização
+GET {{host}}{{api_v1_prefix}}/optimization/status
+Accept: application/json

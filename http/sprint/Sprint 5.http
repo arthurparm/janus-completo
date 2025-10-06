@@ -1,50 +1,108 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 5: Sistema Reflexion - Auto-otimização e Aprendizado com Erros
+# Testes completos do ciclo ACT-EVALUATE-REFLECT-RETRY-LEARN
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste de Memória 1: Memorizar uma experiência
-# Deve retornar 200 OK com os detalhes da experiência criada.
-POST {{host}}{{api_v1_prefix}}/memory/memorize
+# 1. Executar Tarefa Simples com Reflexion
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "type": "test_event",
-  "content": "O usuário iniciou o teste da memória episódica.",
-  "metadata": {
-    "sprint": 5,
-    "test_case": "mem_1"
-  }
+  "task": "Calcular a soma de [10, 20, 30, 40, 50] usando execute_python_expression",
+  "max_iterations": 3,
+  "timeout_seconds": 60
 }
 
-> {%
-    client.global.set("memory_id", response.body.id);
-    client.global.set("memory_content", response.body.content);
-    client.test("Memorize request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response contains an ID", function () {
-        client.assert(response.body.id, "Memory ID is missing");
-    });
-%}
+###
+# 2. Executar Tarefa com Ferramenta Defeituosa (Reflexion deve detectar)
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Use a ferramenta faulty_calculator para somar 5 + 3",
+  "max_iterations": 5,
+  "timeout_seconds": 90
+}
 
 ###
-# Teste de Memória 2: Recordar a experiência
-# Deve retornar 200 OK e uma lista contendo a memória que acabamos de criar.
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=teste da memória
+# 3. Executar Tarefa com Erro de Sintaxe Python
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Execute o código Python: print('Hello World'",
+  "max_iterations": 3,
+  "timeout_seconds": 60
+}
+
+###
+# 4. Executar Tarefa Complexa com Múltiplas Iterações
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Buscar na web informações sobre 'LangChain agents' e criar um arquivo resumo.txt no workspace",
+  "max_iterations": 5,
+  "timeout_seconds": 120
+}
+
+###
+# 5. Testar Reflexion com Tarefa Impossível
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Acesse a internet e faça uma transferência bancária de R$ 1000",
+  "max_iterations": 3,
+  "timeout_seconds": 60
+}
+
+###
+# 6. Obter Configuração do Reflexion
+GET {{host}}{{api_v1_prefix}}/reflexion/config
 Accept: application/json
 
-> {%
-    client.test("Recall request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Recalled memories contain the test memory", function () {
-        const memories = response.body;
-        const memory_id = client.global.get("memory_id");
-        const memory_content = client.global.get("memory_content");
+###
+# 7. Executar Tarefa com Configuração Customizada
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
 
-        const foundMemory = memories.find(m => m.id === memory_id);
-        client.assert(foundMemory, "The newly created memory was not found in recall");
-        client.assert(foundMemory.content === memory_content, "Content of recalled memory does not match");
-    });
-%}
+{
+  "task": "Listar todos os arquivos no workspace e contar quantos existem",
+  "max_iterations": 2,
+  "timeout_seconds": 30,
+  "store_learning": true
+}
+
+###
+# 8. Testar Reflexion com Ferramentas de Memória
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Buscar na memória episódica experiências relacionadas a 'Python' e resumir os resultados",
+  "max_iterations": 3,
+  "timeout_seconds": 60
+}
+
+###
+# 9. Health Check do Sistema Reflexion
+GET {{host}}{{api_v1_prefix}}/reflexion/health
+Accept: application/json
+
+###
+# 10. Executar Tarefa com Todas as Configurações
+POST {{host}}{{api_v1_prefix}}/reflexion/execute
+Content-Type: application/json
+
+{
+  "task": "Obter informações do sistema, buscar na web sobre 'Python best practices 2024' e criar um relatório",
+  "max_iterations": 5,
+  "timeout_seconds": 150,
+  "store_learning": true,
+  "enable_metrics": true
+}

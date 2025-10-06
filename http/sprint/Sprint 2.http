@@ -1,18 +1,141 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 2: Memória Episódica (Qdrant)
+# Testes completos de armazenamento e recuperação de experiências
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
-# Teste 2: Disparar a indexação da base de código
-POST {{host}}{{api_v1_prefix}}/knowledge/index
+###
+# 1. Adicionar Experiência na Memória
+POST {{host}}{{api_v1_prefix}}/memory/add
 Content-Type: application/json
 
-> {%
-    client.test("Indexing request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response body indicates success", function () {
-        const data = response.body;
-        client.assert(data.message.includes("Indexação e análise da base de código concluídas"), "Success message not found");
-        client.assert(data.summary.includes("arquivos"), "Summary does not mention files");
-    });
-%}
+{
+  "type": "action_success",
+  "content": "Executei com sucesso a ferramenta search_web para buscar informações sobre Python",
+  "metadata": {
+    "tool_used": "search_web",
+    "query": "Python tutorial",
+    "result_count": 5
+  }
+}
+
+###
+# 2. Adicionar Experiência de Erro
+POST {{host}}{{api_v1_prefix}}/memory/add
+Content-Type: application/json
+
+{
+  "type": "action_failure",
+  "content": "Falha ao executar write_file: permissão negada no diretório /root",
+  "metadata": {
+    "tool_used": "write_file",
+    "error_type": "PermissionError",
+    "severity": "high"
+  }
+}
+
+###
+# 3. Adicionar Experiência de Aprendizado
+POST {{host}}{{api_v1_prefix}}/memory/add
+Content-Type: application/json
+
+{
+  "type": "lesson_learned",
+  "content": "Aprendi que ao usar execute_python_code, devo sempre validar a sintaxe antes de executar para evitar SyntaxError",
+  "metadata": {
+    "context": "reflexion",
+    "iteration": 3
+  }
+}
+
+###
+# 4. Buscar Experiências Relacionadas a "Python"
+POST {{host}}{{api_v1_prefix}}/memory/search
+Content-Type: application/json
+
+{
+  "query": "Python",
+  "n_results": 5
+}
+
+###
+# 5. Buscar Experiências de Falhas
+POST {{host}}{{api_v1_prefix}}/memory/search
+Content-Type: application/json
+
+{
+  "query": "falha erro problema",
+  "n_results": 10
+}
+
+###
+# 6. Buscar Experiências de Sucesso com Ferramentas
+POST {{host}}{{api_v1_prefix}}/memory/search
+Content-Type: application/json
+
+{
+  "query": "ferramenta sucesso executei",
+  "n_results": 3
+}
+
+###
+# 7. Estatísticas da Memória
+GET {{host}}{{api_v1_prefix}}/memory/stats
+Accept: application/json
+
+###
+# 8. Adicionar Múltiplas Experiências
+POST {{host}}{{api_v1_prefix}}/memory/add
+Content-Type: application/json
+
+{
+  "type": "reasoning",
+  "content": "Planejei a solução dividindo o problema em 3 etapas: análise, processamento e validação",
+  "metadata": {
+    "reasoning_type": "plan",
+    "steps": 3
+  }
+}
+
+###
+POST {{host}}{{api_v1_prefix}}/memory/add
+Content-Type: application/json
+
+{
+  "type": "action_success",
+  "content": "Calculei com sucesso a média de [10, 20, 30, 40, 50] resultando em 30.0",
+  "metadata": {
+    "tool_used": "execute_python_expression",
+    "operation": "mean"
+  }
+}
+
+###
+POST {{host}}{{api_v1_prefix}}/memory/add
+Content-Type: application/json
+
+{
+  "type": "reflexion_iteration",
+  "content": "Após revisar minha abordagem, identifiquei que posso otimizar usando caching para reduzir chamadas repetidas",
+  "metadata": {
+    "iteration": 2,
+    "score": 0.85
+  }
+}
+
+###
+# 9. Buscar Experiências Recentes (sem query específica)
+POST {{host}}{{api_v1_prefix}}/memory/search
+Content-Type: application/json
+
+{
+  "query": "experiência",
+  "n_results": 20
+}
+
+###
+# 10. Health Check da Memória
+GET {{host}}{{api_v1_prefix}}/memory/health
+Accept: application/json

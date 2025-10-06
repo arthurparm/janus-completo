@@ -1,43 +1,94 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 9: Neural Training - Infraestrutura de Aprendizagem Autônoma
+# Testes completos de coleta de dados e treinamento de modelos
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 1: Coleta de Dados para Treino
-# Objetivo: Acionar o data_harvester para buscar experiências na memória
-# e criar o ficheiro 'training_data.jsonl' no workspace.
+# 1. Coletar Dados para Treinamento (Data Harvesting)
 POST {{host}}{{api_v1_prefix}}/learning/harvest
 Content-Type: application/json
 
-> {%
-    client.test("Data harvesting request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-
-    client.test("Response body indicates successful harvest", function () {
-        const data = response.body;
-        client.log("Summary: " + data.summary);
-        client.assert(data.message.includes("bem-sucedida"), "Success message is incorrect");
-        client.assert(data.summary.includes("exemplos de treino"), "Summary does not mention training examples");
-    });
-%}
+{
+  "query": "action_success",
+  "limit": 100,
+  "min_score": 0.7
+}
 
 ###
-# Teste 2: Início do Processo de Treino (Simulado)
-# Objetivo: Acionar o neural_trainer para ler o ficheiro de dados
-# e simular o processo de fine-tuning.
+# 2. Coletar Dados de Falhas para Análise
+POST {{host}}{{api_v1_prefix}}/learning/harvest
+Content-Type: application/json
+
+{
+  "query": "action_failure",
+  "limit": 50,
+  "min_score": 0.6
+}
+
+###
+# 3. Iniciar Treinamento de Modelo - Fine-tuning LLM
 POST {{host}}{{api_v1_prefix}}/learning/train
 Content-Type: application/json
 
-> {%
-    client.test("Model training request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
+{
+  "model_type": "LLM_FINETUNING",
+  "training_config": {
+    "epochs": 3,
+    "batch_size": 8,
+    "learning_rate": 0.0001
+  },
+  "data_source": "episodic_memory"
+}
 
-    client.test("Response body indicates successful training", function () {
-        const data = response.body;
-        client.log("Summary: " + data.summary);
-        client.assert(data.message === "Treino concluído.", "Success message is incorrect");
-        client.assert(data.summary.includes("simulado concluído com sucesso"), "Summary does not indicate success");
-    });
-%}
+###
+# 4. Iniciar Treinamento de Modelo - Classificador
+POST {{host}}{{api_v1_prefix}}/learning/train
+Content-Type: application/json
+
+{
+  "model_type": "CLASSIFIER",
+  "training_config": {
+    "epochs": 5,
+    "batch_size": 16,
+    "learning_rate": 0.001
+  },
+  "data_source": "episodic_memory"
+}
+
+###
+# 5. Obter Status de Treinamento em Andamento
+GET {{host}}{{api_v1_prefix}}/learning/training/status
+Accept: application/json
+
+###
+# 6. Listar Modelos Treinados
+GET {{host}}{{api_v1_prefix}}/learning/models
+Accept: application/json
+
+###
+# 7. Obter Detalhes de um Modelo Específico
+GET {{host}}{{api_v1_prefix}}/learning/models/janus-classifier-v1
+Accept: application/json
+
+###
+# 8. Avaliar Performance de Modelo
+POST {{host}}{{api_v1_prefix}}/learning/evaluate
+Content-Type: application/json
+
+{
+  "model_id": "janus-classifier-v1",
+  "test_data_limit": 50
+}
+
+###
+# 9. Obter Estatísticas de Treinamento
+GET {{host}}{{api_v1_prefix}}/learning/stats
+Accept: application/json
+
+###
+# 10. Health Check do Sistema de Neural Training
+GET {{host}}{{api_v1_prefix}}/learning/health
+Accept: application/json

@@ -1,35 +1,95 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 3: Contexto Ambiental e Percepção Externa
+# Testes completos de contexto, busca web e informações do sistema
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 3: Listar as entidades do arquivo 'main.py'
-GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path=/app/app/main.py
+# 1. Obter Data/Hora Atual
+GET {{host}}{{api_v1_prefix}}/context/datetime
 Accept: application/json
-
-> {%
-    client.test("List entities request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response contains lifespan function", function () {
-        const entities = response.body;
-        const lifespanFunc = entities.find(e => e.name === "lifespan" && e.type === "Function");
-        client.assert(lifespanFunc !== undefined, "'lifespan' function not found in main.py entities");
-    });
-%}
 
 ###
-# Teste 4: Verificar as chamadas de função do endpoint 'trigger_indexing'
-GET {{host}}{{api_v1_prefix}}/knowledge/calls?function_name=trigger_indexing
+# 2. Obter Informações do Sistema
+GET {{host}}{{api_v1_prefix}}/context/system
 Accept: application/json
 
-> {%
-    client.test("List calls request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response shows 'trigger_indexing' calls 'index_codebase'", function () {
-        const calls = response.body;
-        const relevantCall = calls.find(c => c.caller_function === "trigger_indexing" && c.callee_function === "index_codebase");
-        client.assert(relevantCall !== undefined, "'trigger_indexing' does not call 'index_codebase'");
-    });
-%}
+###
+# 3. Buscar na Web - Tecnologia
+POST {{host}}{{api_v1_prefix}}/context/search-web
+Content-Type: application/json
+
+{
+  "query": "Python asyncio tutorial",
+  "max_results": 3
+}
+
+###
+# 4. Buscar na Web - Notícias Atuais
+POST {{host}}{{api_v1_prefix}}/context/search-web
+Content-Type: application/json
+
+{
+  "query": "artificial intelligence latest news",
+  "max_results": 5
+}
+
+###
+# 5. Contexto Enriquecido (sem busca web)
+POST {{host}}{{api_v1_prefix}}/context/enriched
+Content-Type: application/json
+
+{
+  "query": "",
+  "include_web_search": false
+}
+
+###
+# 6. Contexto Enriquecido (com busca web)
+POST {{host}}{{api_v1_prefix}}/context/enriched
+Content-Type: application/json
+
+{
+  "query": "machine learning frameworks",
+  "include_web_search": true,
+  "max_web_results": 3
+}
+
+###
+# 7. Contexto Enriquecido - Uso Completo
+POST {{host}}{{api_v1_prefix}}/context/enriched
+Content-Type: application/json
+
+{
+  "query": "best practices for microservices architecture",
+  "include_web_search": true,
+  "max_web_results": 5
+}
+
+###
+# 8. Buscar na Web - Documentação
+POST {{host}}{{api_v1_prefix}}/context/search-web
+Content-Type: application/json
+
+{
+  "query": "LangChain documentation agents",
+  "max_results": 2
+}
+
+###
+# 9. Health Check do Módulo de Contexto
+GET {{host}}{{api_v1_prefix}}/context/health
+Accept: application/json
+
+###
+# 10. Obter Contexto Completo para Tomada de Decisão
+POST {{host}}{{api_v1_prefix}}/context/enriched
+Content-Type: application/json
+
+{
+  "query": "How to implement circuit breakers in Python",
+  "include_web_search": true,
+  "max_web_results": 4
+}

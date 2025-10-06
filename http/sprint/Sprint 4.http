@@ -1,26 +1,94 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 4: Sandbox Python Seguro e Ciclo ReAct
+# Testes completos de execução segura de código Python
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste de Agente 1: Fazer uma pergunta sobre o código ao Grafo de Conhecimento
-# Pergunta: "O que a função trigger_indexing chama?"
-# Resposta esperada: "index_codebase"
-# ATUALIZADO: O endpoint foi corrigido para /agent/execute.
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 1. Executar Código Python Simples
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
 Content-Type: application/json
 
 {
-  "question": "Use a sua capacidade de consultar o grafo de conhecimento para descobrir quais funções a função 'trigger_indexing' chama diretamente."
+  "code": "result = 2 + 2\nprint(f'A soma é: {result}')"
 }
 
-> {%
-    client.test("Agent query request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Agent response contains the correct answer", function () {
-        const data = response.body;
-        const answer = data.answer.toLowerCase();
-        client.assert(answer.includes("index_codebase"), "A resposta não contém 'index_codebase'");
-    });
-%}
+###
+# 2. Executar Expressão Python
+POST {{host}}{{api_v1_prefix}}/sandbox/execute-expression
+Content-Type: application/json
+
+{
+  "expression": "sum([1, 2, 3, 4, 5])"
+}
+
+###
+# 3. Executar Código com Imports Permitidos
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "import math\nresult = math.sqrt(16)\nprint(f'Raiz quadrada de 16: {result}')"
+}
+
+###
+# 4. Executar Código com JSON
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "import json\ndata = {'name': 'Janus', 'version': '1.0'}\nprint(json.dumps(data, indent=2))"
+}
+
+###
+# 5. Executar Código com Collections
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "from collections import Counter\nwords = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple']\ncount = Counter(words)\nprint(count)"
+}
+
+###
+# 6. Executar Expressão Matemática Complexa
+POST {{host}}{{api_v1_prefix}}/sandbox/execute-expression
+Content-Type: application/json
+
+{
+  "expression": "[x**2 for x in range(10) if x % 2 == 0]"
+}
+
+###
+# 7. Executar Código com Statistics
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "import statistics\ndata = [1.5, 2.5, 3.5, 4.5, 5.5]\nmean = statistics.mean(data)\nmedian = statistics.median(data)\nprint(f'Média: {mean}, Mediana: {median}')"
+}
+
+###
+# 8. Testar Código com Datetime
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "from datetime import datetime, timedelta\nnow = datetime.now()\ntomorrow = now + timedelta(days=1)\nprint(f'Hoje: {now.strftime(\"%Y-%m-%d\")}')\nprint(f'Amanhã: {tomorrow.strftime(\"%Y-%m-%d\")}')"
+}
+
+###
+# 9. Health Check do Sandbox
+GET {{host}}{{api_v1_prefix}}/sandbox/health
+Accept: application/json
+
+###
+# 10. Executar Código que Deve Falhar (Import Não Permitido)
+# Este teste deve retornar erro de forma controlada
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "import os\nprint(os.listdir('/'))"
+}

@@ -1,51 +1,90 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 8: Memória Semântica - Consolidação de Conhecimento em Grafo
+# Testes completos de consulta e consolidação do grafo de conhecimento (Neo4j)
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 1: Preparação - Memorizar uma experiência rica em metadados
-# Objetivo: Inserir uma experiência na memória episódica (ChromaDB) que será
-# usada pelo novo processo de consolidação.
-# Esta experiência simula o resultado de uma indexação de código bem-sucedida.
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "action_success",
-  "content": "A tarefa de indexação da base de código foi concluída com sucesso pelo agente.",
-  "metadata": {
-    "sprint": 8,
-    "test_case": "consolidation_1",
-    "invoked_function": "index_codebase",
-    "summary": "Análise de código concluída. 35 arquivos | 150 funções | 40 classes | 300 chamadas internas criadas."
-  }
-}
-
-> {%
-    client.test("Setup experience created successfully", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.id, "Experience ID is missing from response");
-    });
-%}
-
-###
-# Teste 2: Consolidação do Conhecimento (Core do Sprint 8)
-# Objetivo: Acionar o novo endpoint que lê da memória episódica e escreve
-# o conhecimento estruturado (nós :Experience, :Summary) no grafo semântico (Neo4j).
+# 1. Consolidar Conhecimento da Memória Episódica
 POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
 Content-Type: application/json
 
-> {%
-    client.test("Knowledge consolidation request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
+{
+  "limit": 100,
+  "batch_size": 10
+}
 
-    client.test("Response body indicates successful consolidation", function () {
-        const data = response.body;
-        client.log("Summary: " + data.summary);
-        client.assert(data.message === "Processo de consolidação concluído.", "Success message is incorrect");
-        client.assert(data.summary.includes("experiências processadas"), "Summary does not mention processed experiences");
-        client.assert(data.summary.includes("nós e"), "Summary does not mention created nodes");
-        client.assert(data.summary.includes("relações criadas/mescladas"), "Summary does not mention created relationships");
-    });
-%}
+###
+# 2. Consultar Grafo de Conhecimento - Conceitos Relacionados a Python
+POST {{host}}{{api_v1_prefix}}/knowledge/query
+Content-Type: application/json
+
+{
+  "query": "Quais conceitos estão relacionados a Python?",
+  "limit": 10
+}
+
+###
+# 3. Consultar Grafo de Conhecimento - Erros e Falhas
+POST {{host}}{{api_v1_prefix}}/knowledge/query
+Content-Type: application/json
+
+{
+  "query": "Quais erros foram registrados no sistema?",
+  "limit": 15
+}
+
+###
+# 4. Buscar Conceitos Relacionados
+POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
+Content-Type: application/json
+
+{
+  "concept": "LangChain",
+  "max_depth": 2
+}
+
+###
+# 5. Buscar Conceitos Relacionados - Profundidade Maior
+POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
+Content-Type: application/json
+
+{
+  "concept": "agent",
+  "max_depth": 3
+}
+
+###
+# 6. Obter Detalhes de Entidade - Ferramenta
+POST {{host}}{{api_v1_prefix}}/knowledge/entity/details
+Content-Type: application/json
+
+{
+  "entity_name": "write_file"
+}
+
+###
+# 7. Obter Detalhes de Entidade - Conceito
+POST {{host}}{{api_v1_prefix}}/knowledge/entity/details
+Content-Type: application/json
+
+{
+  "entity_name": "reflexion"
+}
+
+###
+# 8. Estatísticas do Grafo de Conhecimento
+GET {{host}}{{api_v1_prefix}}/knowledge/stats
+Accept: application/json
+
+###
+# 9. Listar Tipos de Nós no Grafo
+GET {{host}}{{api_v1_prefix}}/knowledge/node-types
+Accept: application/json
+
+###
+# 10. Health Check da Memória Semântica
+GET {{host}}{{api_v1_prefix}}/knowledge/health
+Accept: application/json

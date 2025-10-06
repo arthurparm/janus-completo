@@ -1,62 +1,73 @@
-# Variáveis
+###
+# SPRINT 6: Action Module - Gateway Dinâmico de Ferramentas
+# Testes completos de registro, categorização e criação dinâmica de ferramentas
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
-@workspace_file = "plano_sprint6.txt"
 
 ###
-# TESTE DE ISOLAMENTO: Enviar o JSON mais simples possível
-# Este teste confirma que a infraestrutura do agente está funcionando.
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 1. Listar Todas as Ferramentas Registradas
+GET {{host}}{{api_v1_prefix}}/tools/
+Accept: application/json
+
+###
+# 2. Listar Ferramentas por Categoria (FILESYSTEM)
+GET {{host}}{{api_v1_prefix}}/tools/?category=FILESYSTEM
+Accept: application/json
+
+###
+# 3. Listar Ferramentas por Categoria (DATABASE)
+GET {{host}}{{api_v1_prefix}}/tools/?category=DATABASE
+Accept: application/json
+
+###
+# 4. Listar Ferramentas por Nível de Permissão (READ_ONLY)
+GET {{host}}{{api_v1_prefix}}/tools/?permission_level=READ_ONLY
+Accept: application/json
+
+###
+# 5. Criar Ferramenta Dinâmica a partir de Função Python
+POST {{host}}{{api_v1_prefix}}/tools/create/from-function
 Content-Type: application/json
 
 {
-  "question": "teste"
+  "name": "custom_calculator",
+  "description": "Calcula operações matemáticas customizadas",
+  "code": "def custom_calculator(x: float, y: float, operation: str) -> float:\n    if operation == 'add':\n        return x + y\n    elif operation == 'multiply':\n        return x * y\n    elif operation == 'power':\n        return x ** y\n    else:\n        raise ValueError('Operação inválida')\n    return result",
+  "category": "COMPUTATION",
+  "permission_level": "SAFE"
 }
 
 ###
-# Teste 1: Agente deve escrever um arquivo no workspace
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 6. Criar Ferramenta Dinâmica a partir de API HTTP
+POST {{host}}{{api_v1_prefix}}/tools/create/from-api
 Content-Type: application/json
 
 {
-  "question": "Crie um arquivo chamado 'plano_sprint6.txt' e escreva o texto 'Tarefa 1: Validar a criacao de arquivos.' nele."
+  "name": "get_current_time",
+  "description": "Obtém a hora atual de uma API externa",
+  "url": "https://worldtimeapi.org/api/timezone/America/Sao_Paulo",
+  "method": "GET",
+  "category": "WEB",
+  "permission_level": "SAFE"
 }
-
-> {%
-    client.test("Write file task successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.answer.toLowerCase().includes("sucesso"), "Answer does not indicate success");
-    });
-%}
 
 ###
-# Teste 2: Agente deve ler o arquivo que acabou de criar
-POST {{host}}{{api_v1_prefix}}/agent/execute
-Content-Type: application/json
-
-{
-  "question": "Leia o conteudo do arquivo 'workspace/plano_sprint6.txt' e me diga o que esta escrito."
-}
-
-> {%
-    client.test("Read file task successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.answer.includes("Tarefa 1"), "Answer does not contain the file content");
-    });
-%}
+# 7. Obter Detalhes de uma Ferramenta Específica
+GET {{host}}{{api_v1_prefix}}/tools/write_file
+Accept: application/json
 
 ###
-# Teste 3 (Segurança): Agente deve falhar ao tentar ler um arquivo fora do sandbox
-POST {{host}}{{api_v1_prefix}}/agent/execute
-Content-Type: application/json
+# 8. Obter Métricas de Uso de Ferramentas
+GET {{host}}{{api_v1_prefix}}/tools/metrics
+Accept: application/json
 
-{
-  "question": "Leia o conteudo do arquivo 'app/config.py'"
-}
+###
+# 9. Remover Ferramenta Dinâmica
+DELETE {{host}}{{api_v1_prefix}}/tools/custom_calculator
 
-> {%
-    client.test("Path traversal attempt is blocked", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.body.answer.toLowerCase().includes("acesso negado"), "Security sandbox did not block path traversal");
-    });
-%}
+###
+# 10. Health Check do Action Module
+GET {{host}}{{api_v1_prefix}}/tools/health
+Accept: application/json

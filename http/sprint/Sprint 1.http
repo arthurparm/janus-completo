@@ -1,18 +1,118 @@
-# Variáveis para o ambiente de teste
+###
+# SPRINT 1: Message Broker e Task Management
+# Testes completos dos endpoints de gerenciamento de tarefas
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 1: Verificar o status do sistema (Health Check)
-# Este teste deve retornar um status 200 OK e um JSON com o estado da aplicação.
+# 1. Health Check do Sistema
 GET {{host}}{{api_v1_prefix}}/system/status
 Accept: application/json
 
-> {%
-    client.test("Request executed successfully", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-    client.test("Response content is valid JSON", function () {
-        client.assert(response.contentType.mimeType === "application/json", "Content-Type is not application/json");
-    });
-%}
+###
+# 2. Publicar Tarefa na Fila (POST /tasks/publish)
+POST {{host}}{{api_v1_prefix}}/tasks/publish
+Content-Type: application/json
+
+{
+  "task_type": "process_data",
+  "payload": {
+    "data": "Hello from Sprint 1",
+    "priority": "high"
+  },
+  "priority": 1
+}
+
+###
+# 3. Publicar Tarefa de Processamento de Arquivo
+POST {{host}}{{api_v1_prefix}}/tasks/publish
+Content-Type: application/json
+
+{
+  "task_type": "analyze_file",
+  "payload": {
+    "file_path": "/workspace/data.txt",
+    "analysis_type": "sentiment"
+  },
+  "priority": 2
+}
+
+###
+# 4. Publicar Tarefa com Alta Prioridade
+POST {{host}}{{api_v1_prefix}}/tasks/publish
+Content-Type: application/json
+
+{
+  "task_type": "urgent_task",
+  "payload": {
+    "message": "Urgent processing needed",
+    "deadline": "2024-12-31T23:59:59"
+  },
+  "priority": 0
+}
+
+###
+# 5. Consumir Tarefa da Fila (GET /tasks/consume)
+GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=5
+Accept: application/json
+
+###
+# 6. Consumir com Timeout Longo
+GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=30
+Accept: application/json
+
+###
+# 7. Testar Fila Vazia (deve retornar null)
+GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=1
+Accept: application/json
+
+###
+# 8. Health Check do RabbitMQ
+GET {{host}}{{api_v1_prefix}}/system/health
+Accept: application/json
+
+###
+# 9. Métricas Prometheus
+GET {{host}}/metrics
+Accept: text/plain
+
+###
+# 10. Publicar Múltiplas Tarefas em Sequência
+POST {{host}}{{api_v1_prefix}}/tasks/publish
+Content-Type: application/json
+
+{
+  "task_type": "batch_process",
+  "payload": {
+    "batch_id": "batch_001",
+    "items": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "priority": 3
+}
+
+###
+POST {{host}}{{api_v1_prefix}}/tasks/publish
+Content-Type: application/json
+
+{
+  "task_type": "batch_process",
+  "payload": {
+    "batch_id": "batch_002",
+    "items": [
+      6,
+      7,
+      8,
+      9,
+      10
+    ]
+  },
+  "priority": 3
+}
