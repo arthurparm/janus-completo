@@ -1,7 +1,65 @@
-POST http://localhost:8000/api/v1/agent/execute
+###
+# SPRINT 13: Meta-Agente - A Consciência Proativa
+# Testes completos do supervisor autônomo com análise diagnóstica
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# 1. Health Check do Meta-Agente
+GET {{host}}{{api_v1_prefix}}/meta-agent/health
+Accept: application/json
+
+###
+# 2. Executar Análise Manual do Sistema
+POST {{host}}{{api_v1_prefix}}/meta-agent/analyze
+Content-Type: application/json
+
+###
+# 3. Obter Relatório Mais Recente
+GET {{host}}{{api_v1_prefix}}/meta-agent/report/latest
+Accept: application/json
+
+###
+# 4. Obter Estatísticas do Meta-Agente
+GET {{host}}{{api_v1_prefix}}/meta-agent/stats
+Accept: application/json
+
+###
+# 5. Verificar Status do Heartbeat
+GET {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/status
+Accept: application/json
+
+###
+# 6. Iniciar Heartbeat (Intervalo 60 min)
+POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
 Content-Type: application/json
 
 {
-  "question": "Use a ferramenta write_file, mas não forneça o conteúdo, apenas o file_path.",
-  "agent_type": "tool_user"
+  "interval_minutes": 60
 }
+
+###
+# 7. Iniciar Heartbeat (Intervalo 30 min - mais frequente)
+POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
+Content-Type: application/json
+
+{
+  "interval_minutes": 30
+}
+
+###
+# 8. Parar Heartbeat
+POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/stop
+Content-Type: application/json
+
+###
+# 9. Executar Nova Análise Após Mudanças no Sistema
+POST {{host}}{{api_v1_prefix}}/meta-agent/analyze
+Content-Type: application/json
+
+###
+# 10. Verificar Relatório Atualizado
+GET {{host}}{{api_v1_prefix}}/meta-agent/report/latest
+Accept: application/json
