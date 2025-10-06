@@ -6,6 +6,12 @@ from langchain.tools import tool, BaseTool
 from pydantic import BaseModel, Field, validator
 
 from app.core import filesystem_manager
+from app.core.action_module import (
+    action_registry,
+    create_tool_from_function,
+    ToolCategory,
+    PermissionLevel
+)
 from app.core.context_manager import context_manager
 from app.core.enums import AgentType  # <-- Corrigido
 from app.core.faulty_tools import get_faulty_tools
@@ -240,3 +246,100 @@ def get_tools_for_agent(agent_type: AgentType) -> List[BaseTool]:
     elif agent_type == AgentType.REFLEXION_AGENT:
         return reflexion_tools
     return unified_tools
+
+
+# ==================== SPRINT 6: REGISTRO NO ACTION MODULE ====================
+
+def _register_all_tools_in_action_module():
+    """
+    Registra todas as ferramentas existentes no Action Module para
+    gerenciamento centralizado e telemetria.
+    """
+    # Ferramentas de filesystem
+    action_registry.register(
+        write_file,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.WRITE,
+        rate_limit_per_minute=30
+    )
+    action_registry.register(
+        read_file,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.READ_ONLY
+    )
+    action_registry.register(
+        list_directory,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.READ_ONLY
+    )
+
+    # Ferramentas de memória
+    action_registry.register(
+        recall_experiences,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "episodic"]
+    )
+    action_registry.register(
+        analyze_memory_for_failures,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "analysis", "meta"]
+    )
+
+    # Ferramentas de contexto ambiental (Sprint 3)
+    action_registry.register(
+        get_current_datetime,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["context", "time"]
+    )
+    action_registry.register(
+        get_system_info,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["context", "system"]
+    )
+    action_registry.register(
+        search_web,
+        category=ToolCategory.WEB,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=20,
+        tags=["context", "search", "external"]
+    )
+    action_registry.register(
+        get_enriched_context,
+        category=ToolCategory.WEB,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=10,
+        tags=["context", "enriched"]
+    )
+
+    # Ferramentas de sandbox Python (Sprint 4)
+    action_registry.register(
+        execute_python_code,
+        category=ToolCategory.COMPUTATION,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=30,
+        tags=["python", "sandbox", "computation"]
+    )
+    action_registry.register(
+        execute_python_expression,
+        category=ToolCategory.COMPUTATION,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=60,
+        tags=["python", "sandbox", "computation"]
+    )
+
+    # Ferramentas defeituosas (Sprint 5) - apenas para Reflexion
+    for faulty_tool in get_faulty_tools():
+        action_registry.register(
+            faulty_tool,
+            category=ToolCategory.CUSTOM,
+            permission_level=PermissionLevel.SAFE,
+            tags=["faulty", "training", "reflexion"]
+        )
+
+
+# Executa registro automático ao importar o módulo
+_register_all_tools_in_action_module()
