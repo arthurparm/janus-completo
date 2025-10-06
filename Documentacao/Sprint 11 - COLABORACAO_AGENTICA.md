@@ -26,24 +26,24 @@ através de um **Workspace comum**.
 ┌─────────────────────────────────────────────────────────────┐
 │            Sistema Multi-Agente (MultiAgentSystem)          │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │         Agente Gestor de Projetos (PM)               │  │
+│  │         Agente Gestor de Projetos (PM)                │  │
 │  │  - Analisa requisitos                                 │  │
-│  │  - Decompõe em tarefas                               │  │
-│  │  - Delega para agentes especializados               │  │
-│  │  - Monitora progresso                                │  │
+│  │  - Decompõe em tarefas                                │  │
+│  │  - Delega para agentes especializados                 │  │
+│  │  - Monitora progresso                                 │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │          Workspace Compartilhado                       │  │
+│  │          Workspace Compartilhado                      │  │
 │  │  - Tarefas (Task Queue)                               │  │
 │  │  - Artefatos (Arquivos, Dados)                        │  │
 │  │  - Mensagens (Inter-agent Communication)              │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
-│  │Researcher│  Coder   │  Tester  │Documenter│Optimizer │  │
-│  │  Agent   │  Agent   │  Agent   │  Agent   │  Agent   │  │
-│  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
+│                           ↓                                 │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐   │
+│  │Researcher│  Coder   │  Tester  │Documenter│Optimizer │   │
+│  │  Agent   │  Agent   │  Agent   │  Agent   │  Agent   │   │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
