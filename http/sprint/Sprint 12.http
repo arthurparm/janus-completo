@@ -1,46 +1,57 @@
-# Variáveis para o ambiente de teste do Sprint 12
+###
+# SPRINT 12: Resiliência e Maturidade - Observabilidade e Operação Contínua
+# Testes completos de health checks, poison pills e métricas
+###
+
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# Teste 1: Validação do Endpoint de Observabilidade
-# Objetivo: Confirmar que o endpoint /metrics está ativo e a expor as métricas do Prometheus.
-# Este é o principal teste de sucesso para a infraestrutura do Sprint 12.
-GET {{host}}/metrics
-Accept: text/plain
-
-> {%
-    client.test("Metrics endpoint is available", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        // O Prometheus expõe métricas como texto simples.
-        client.assert(response.contentType.mimeType.includes("text/plain"), "Content-Type is not text/plain");
-        client.log("Metrics endpoint returned successfully.");
-    });
-
-    client.test("Metrics endpoint contains our custom metric", function () {
-        // Verificamos se o corpo da resposta inclui o nome do nosso novo contador.
-        const body = response.body;
-        client.assert(body.includes("llm_router_model_selected_total"), "Custom LLM router metric not found");
-        client.log("Found custom metric 'llm_router_model_selected_total'.");
-    });
-%}
+# 1. Health Check do Sistema Completo
+GET {{host}}{{api_v1_prefix}}/observability/health/system
+Accept: application/json
 
 ###
-# Teste 2: Exercitar o Roteador de Modelos Dinâmico
-# Objetivo: Fazer uma chamada de agente simples para forçar o llm_manager a escolher um modelo.
-# A validação real deste teste não está na resposta JSON, mas em verificar se o contador
-# 'llm_router_model_selected_total' no endpoint /metrics incrementa após esta chamada.
-POST {{host}}{{api_v1_prefix}}/agent/execute
+# 2. Health Check do LLM Manager
+GET {{host}}{{api_v1_prefix}}/observability/health/components/llm_manager
+Accept: application/json
+
+###
+# 3. Health Check do Sistema Multi-Agente
+GET {{host}}{{api_v1_prefix}}/observability/health/components/multi_agent_system
+Accept: application/json
+
+###
+# 4. Health Check do Poison Pill Handler
+GET {{host}}{{api_v1_prefix}}/observability/health/components/poison_pill_handler
+Accept: application/json
+
+###
+# 5. Forçar Execução de Todos os Health Checks
+POST {{host}}{{api_v1_prefix}}/observability/health/check-all
 Content-Type: application/json
 
-{
-  "question": "Olá, Janus. Como você está hoje?",
-  "agent_type": "tool_user"
-}
+###
+# 6. Listar Mensagens em Quarentena
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/quarantined
+Accept: application/json
 
-> {%
-    client.test("Agent execution request successful", function () {
-        client.assert(response.status === 200, "Response status is not 200");
-        client.log("Agent Answer: " + response.body.answer);
-    });
-%}
+###
+# 7. Estatísticas de Poison Pills
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/stats
+Accept: application/json
+
+###
+# 8. Limpar Quarentena Expirada
+POST {{host}}{{api_v1_prefix}}/observability/poison-pills/cleanup
+Content-Type: application/json
+
+###
+# 9. Resumo de Métricas do Sistema
+GET {{host}}{{api_v1_prefix}}/observability/metrics/summary
+Accept: application/json
+
+###
+# 10. Métricas Prometheus (endpoint padrão)
+GET {{host}}/metrics
+Accept: text/plain

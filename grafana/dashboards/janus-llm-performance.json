@@ -1,0 +1,301 @@
+{
+  "dashboard": {
+    "title": "Janus - LLM Performance & Cost",
+    "tags": [
+      "janus",
+      "llm",
+      "performance"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Provider Selection Distribution",
+        "type": "piechart",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum by (provider) (increase(llm_router_model_selected_total[1h]))",
+            "refId": "A",
+            "legendFormat": "{{provider}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Requests by Priority",
+        "type": "piechart",
+        "gridPos": {
+          "x": 8,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum by (priority) (increase(llm_router_model_selected_total[1h]))",
+            "refId": "A",
+            "legendFormat": "{{priority}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Requests by Role",
+        "type": "piechart",
+        "gridPos": {
+          "x": 16,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum by (role) (increase(llm_requests_total[1h]))",
+            "refId": "A",
+            "legendFormat": "{{role}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Success Rate by Provider",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(llm_requests_total{outcome=\"success\"}[5m]) / rate(llm_requests_total[5m]) * 100",
+            "refId": "A",
+            "legendFormat": "{{provider}} - {{model}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Success Rate",
+            "min": 0,
+            "max": 100
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Failure Distribution by Exception Type",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(llm_requests_total{outcome=\"failure\"}[5m])",
+            "refId": "A",
+            "legendFormat": "{{provider}} - {{exception_type}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Failures/sec"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Latency Heatmap by Provider",
+        "type": "heatmap",
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(llm_request_latency_seconds_bucket[5m])",
+            "refId": "A",
+            "format": "heatmap",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "yAxis": {
+          "format": "s"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Token Consumption Rate",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 24,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(llm_tokens_total{direction=\"in\"}[5m])",
+            "refId": "A",
+            "legendFormat": "{{provider}} - Input"
+          },
+          {
+            "expr": "rate(llm_tokens_total{direction=\"out\"}[5m])",
+            "refId": "B",
+            "legendFormat": "{{provider}} - Output"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Tokens/sec"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Estimated Cost (Tokens/Hour)",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 24,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum(increase(llm_tokens_total[1h])) by (provider)",
+            "refId": "A",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "horizontal"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": 0,
+                  "color": "green"
+                },
+                {
+                  "value": 100000,
+                  "color": "yellow"
+                },
+                {
+                  "value": 500000,
+                  "color": "orange"
+                },
+                {
+                  "value": 1000000,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Fallback Events",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 32,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(llm_router_model_selected_total{priority=\"fallback\"}[5m])",
+            "refId": "A",
+            "legendFormat": "Fallback to {{provider}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Fallbacks/sec"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 32,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "(sum(rate(llm_cache_hits_total[5m])) / sum(rate(llm_cache_requests_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": 0,
+                  "color": "red"
+                },
+                {
+                  "value": 50,
+                  "color": "yellow"
+                },
+                {
+                  "value": 80,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

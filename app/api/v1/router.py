@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools, \
-    optimization, llm, collaboration
+    optimization, llm, collaboration, observability
 
 api_router = APIRouter()
 
@@ -18,3 +18,4 @@ api_router.include_router(tools.router, prefix="/tools")  # Sprint 6: Dynamic to
 api_router.include_router(optimization.router, prefix="/optimization")  # Sprint 7: Proactive self-optimization
 api_router.include_router(llm.router, prefix="/llm")  # Sprint 10: Hybrid Brain & LLM resilience
 api_router.include_router(collaboration.router, prefix="/collaboration")  # Sprint 11: Multi-agent collaboration
+api_router.include_router(observability.router, prefix="/observability")  # Sprint 12: Resilience & observability
