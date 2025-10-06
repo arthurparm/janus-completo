@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from typing import List
 
@@ -17,6 +18,9 @@ from app.core.enums import AgentType  # <-- Corrigido
 from app.core.faulty_tools import get_faulty_tools
 from app.core.memory_core import memory_core
 from app.core.python_sandbox import python_sandbox
+from app.db.graph import graph_db
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_ROOT = Path("/app/workspace").resolve()
 ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
