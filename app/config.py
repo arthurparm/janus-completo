@@ -23,9 +23,11 @@ class AppSettings(BaseSettings):
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = "password"
 
+    # Qdrant
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
     QDRANT_API_KEY: Optional[SecretStr] = None  # Para Qdrant Cloud (opcional)
+    QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
 
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
@@ -83,6 +85,13 @@ class AppSettings(BaseSettings):
 
     # Modelo para o Lobo Temporal (Análise, Sumarização e Validação de Conhecimento)
     OLLAMA_CURATOR_MODEL: str = "phi3:mini"
+
+    # Sprint 1: RabbitMQ (Message Broker)
+    RABBITMQ_HOST: str = "rabbitmq"
+    RABBITMQ_PORT: int = 5672
+    RABBITMQ_USER: str = "janus"
+    RABBITMQ_PASSWORD: str = "janus_pass"
+    RABBITMQ_MANAGEMENT_PORT: int = 15672
 
 
 settings = AppSettings()

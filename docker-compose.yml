@@ -15,6 +15,8 @@ services:
         condition: service_healthy # Espera o Neo4j estar totalmente operacional
       ollama:
         condition: service_healthy # Espera a API do Ollama estar pronta
+      rabbitmq:
+        condition: service_healthy # Sprint 1: Espera RabbitMQ estar operacional
     networks:
       - janus-net
 
@@ -83,6 +85,28 @@ services:
       timeout: 10s    # Allow more time for the command to respond
       retries: 10     # Try more times
       start_period: 60s # Grace period for the container to initialize before healthchecks start
+
+  # Sprint 1: Message Broker para Comunicação Distribuída
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: janus_rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    volumes:
+      - ./data/rabbitmq:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-janus}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-janus_pass}
+      - RABBITMQ_DEFAULT_VHOST=/
+    networks:
+      - janus-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 networks:
   janus-net:
