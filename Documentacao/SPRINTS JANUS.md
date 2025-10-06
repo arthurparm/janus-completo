@@ -1,6 +1,15 @@
 Projeto Janus: Sprints de Desenvolvimento Detalhados
 
-Sprint 1: Espinha Dorsal do Sistema – Fundamentos de Comunicação Distribuída
+Este documento é o diário de bordo do desenvolvimento do Projeto Janus, organizado de acordo com as fases definidas
+no [Relatório de Projeto Arquitetural](DOCUMENTACAO%20JANUS.md).
+
+---
+
+## Fase 1: A Espinha Dorsal (Sprints 1-3)
+
+**Foco:** Estabelecer a fundação da comunicação distribuída e da memória de longo prazo.
+
+### Sprint 1: Espinha Dorsal do Sistema – Fundamentos de Comunicação Distribuída
 Foco Principal: Estabelecer uma arquitetura de comunicação assíncrona e distribuída, crucial para a escalabilidade e
 resiliência do sistema Janus.
 Implementações Chave:
@@ -8,7 +17,8 @@ Integração e configuração do RabbitMQ como o principal message broker para t
 sistema.
 Desenvolvimento de módulos de publicação e consumo de tarefas, permitindo que diferentes partes do Janus possam enviar e
 receber requisições de forma desacoplada e eficiente.
-Sprint 2: Núcleo Cognitivo - Mente Inicial – Aprendizagem Baseada em Experiências
+
+### Sprint 2: Núcleo Cognitivo - Mente Inicial – Aprendizagem Baseada em Experiências
 Foco Principal: Desenvolver a capacidade de aprendizagem do Janus através de uma "Memória Episódica", armazenando e
 recuperando experiências passadas.
 Implementações Chave:
@@ -18,7 +28,8 @@ Criação de um módulo de gestão de memória, responsável por adicionar, busc
 Remoções Importantes:
 Remoção do PostgreSQL como componente primário de armazenamento, optando por soluções mais adequadas para dados
 vetoriais e relações complexas.
-Sprint 3: Inteligência e Consciência - Despertar – Uso da Memória e Percepção Ambiental
+
+### Sprint 3: Inteligência e Consciência - Despertar – Uso da Memória e Percepção Ambiental
 Foco Principal: Habilitar o Janus a utilizar sua memória episódica e a perceber o ambiente externo para contextualizar
 suas ações e respostas.
 Implementações Chave:
@@ -26,7 +37,14 @@ Desenvolvimento de funções de busca de memórias mais sofisticadas, permitindo
 passadas com base no contexto atual.
 Criação de um módulo de contexto que integra informações como data/hora atual e resultados de busca na web, enriquecendo
 a percepção ambiental do agente.
-Sprint 4: Autonomia e Segurança - Agente Funcional – Ciclo de Raciocínio e Ambiente Controlado
+
+---
+
+## Fase 2: O Núcleo Cognitivo (Sprints 4-7)
+
+**Foco:** Implementar a capacidade de raciocínio (ReAct), execução segura (Sandbox) e aprendizado com erros (Reflexion).
+
+### Sprint 4: Autonomia e Segurança - Agente Funcional – Ciclo de Raciocínio e Ambiente Controlado
 Foco Principal: Estabelecer um ciclo de raciocínio robusto para o agente e garantir um ambiente seguro para a execução
 de ações.
 Implementações Chave:
@@ -34,27 +52,37 @@ Adoção e implementação do Ciclo ReAct (Reasoning and Acting), que permite ao
 executá-la de forma iterativa.
 Criação de um sandbox Python (Langchain, Epicbox) para execução segura de código gerado ou externo, isolando o ambiente
 principal do sistema.
-Sprint 5: Auto-otimização e Aprendizado com Erros (Reflexion) – Aprimoramento Contínuo
+
+### Sprint 5: Auto-otimização e Aprendizado com Erros (Reflexion) – Aprimoramento Contínuo
 Foco Principal: Capacitar o Janus a aprender com suas falhas e otimizar seu desempenho de forma autônoma.
 Implementações Chave:
 Implementação do padrão Reflexion, onde o agente analisa seus próprios resultados e identifica pontos de melhoria.
 Desenvolvimento de ferramentas "defeituosas" para erros controlados, permitindo ao agente praticar a identificação e
 correção de falhas em um ambiente simulado.
 Criação de um Agente de Autorreflexão dedicado à análise de falhas e à extração de "lições aprendidas".
-Sprint 6: Agente Multitarefa e Gateway de Ferramentas – Expansão de Capacidades
+
+### Sprint 6: Agente Multitarefa e Gateway de Ferramentas – Expansão de Capacidades
 Foco Principal: Ampliar a capacidade do Janus de interagir com o mundo externo e executar múltiplas tarefas.
 Implementações Chave:
 Desenvolvimento do action_module, que provê um conjunto dinâmico de ferramentas que o agente pode utilizar, como
 interação com o sistema de arquivos ou acesso a APIs.
 Refatoração do janus_core para melhorar a orquestração de tarefas, incluindo a capacidade de interagir com o sistema de
 arquivos e a geração dinâmica de ferramentas Python.
-Sprint 7: Despertar da Proatividade – Ciclo de Auto-Otimização – Iniciativa Autônoma
+
+### Sprint 7: Despertar da Proatividade – Ciclo de Auto-Otimização – Iniciativa Autônoma
 Foco Principal: Habilitar o Janus a tomar a iniciativa para se aperfeiçoar, sem intervenção externa.
 Implementações Chave:
 Criação de um "Meta-Agente de Auto-Otimização" que monitora o desempenho do sistema e planeja melhorias.
 Implementação de um ciclo de planejamento e execução autônoma de melhorias, onde o agente identifica gargalos e aplica
 soluções.
-Sprint 8: Consolidação do Conhecimento – Memória à Sabedoria – Transformação de Experiências
+
+---
+
+## Fase 3: Inteligência e Expansão (Sprints 8-10)
+
+**Foco:** Transformar experiências em sabedoria (Memória Semântica), coletar dados e hibridizar a inteligência (LLMs).
+
+### Sprint 8: Consolidação do Conhecimento – Memória à Sabedoria – Transformação de Experiências
 Foco Principal: Transformar as experiências brutas armazenadas em conhecimento estruturado e interconectado.
 Implementações Chave:
 Integração de uma Memória Semântica utilizando Neo4j, um banco de dados de grafos, para representar relações complexas
@@ -63,14 +91,16 @@ Desenvolvimento de um worker knowledge_consolidator responsável por extrair e o
 para a memória semântica.
 Aprimoramento do agente principal para consultar e utilizar o conhecimento estruturado da memória semântica em seu
 raciocínio.
-Sprint 9: Gênese Neural – Infraestrutura para Aprendizagem Autônoma – Coleta de Dados e Treinamento
+
+### Sprint 9: Gênese Neural – Infraestrutura para Aprendizagem Autônoma – Coleta de Dados e Treinamento
 Foco Principal: Estabelecer a infraestrutura para a coleta de dados de experiência e o treinamento autônomo de redes
 neurais.
 Implementações-chave:
 Desenvolvimento de workers data_harvester (coleta de dados de interação) e neural_trainer (treinamento de modelos de
 IA).
 Integração da rede neural ao janus_core, permitindo que o agente utilize e atualize seus modelos de aprendizado.
-Sprint 10: Cérebro Híbrido e Resiliência de APIs
+
+### Sprint 10: Cérebro Híbrido e Resiliência de APIs
 
 O objetivo principal deste sprint é aprimorar a inteligência do Projeto Janus na utilização de Modelos de Linguagem (
 LLMs). Para isso, será implementado um sistema capaz de alternar dinamicamente entre diferentes provedores de API (como
@@ -85,14 +115,22 @@ sistema automaticamente tentará executar a mesma tarefa utilizando um modelo de
 Monitoramento do Uso de API: O Janus passará a registrar a frequência de uso de cada API paga, a fim de evitar a
 superação dos limites mensais gratuitos.
 
-Sprint 11: Colaboração Agêntica – Sociedade de Mentes – Sistema Colaborativo Dinâmico
+---
+
+## Fase 4: Maturidade e Proatividade (Sprints 11-13)
+
+**Foco:** Habilitar a colaboração entre agentes, garantir a resiliência do sistema e lançar o Meta-Agente de
+auto-otimização.
+
+### Sprint 11: Colaboração Agêntica – Sociedade de Mentes – Sistema Colaborativo Dinâmico
 Foco Principal: Evoluir o Janus para um sistema colaborativo, onde múltiplos agentes podem trabalhar em conjunto.
 Implementações Chave:
 Criação de um Agente "Gestor de Projetos" para coordenar as atividades dos demais agentes.
 Desenvolvimento de um Espaço de Trabalho Compartilhado, onde os agentes podem trocar informações e recursos.
 Implementação de fluxos de trabalho colaborativos, permitindo que os agentes dividam e executem tarefas de forma
 coordenada.
-Sprint 12: Resiliência e Maturidade – Operação Contínua – Solidez do Sistema
+
+### Sprint 12: Resiliência e Maturidade – Operação Contínua – Solidez do Sistema
 Foco Principal: Garantir a solidez, estabilidade e eficiência do sistema Janus para operação autônoma e ininterrupta.
 Implementações Chave:
 Integração de observabilidade (Prometheus, Grafana) para monitoramento proativo do desempenho e identificação de
@@ -101,7 +139,8 @@ Implementação de gestão eficiente de falhas (tentativas com recuo exponencial
 recuperação e resiliência do sistema diante de erros.
 Otimização de custos através de um Roteador de Modelos Dinâmico para LLMs, que seleciona o modelo de linguagem mais
 adequado (e de menor custo) para cada tarefa.
-Sprint 13: Gênese do Meta-Agente – A Consciência Proativa
+
+### Sprint 13: Gênese do Meta-Agente – A Consciência Proativa
 
 Foco Principal: Lançar a primeira versão do "Meta-Agente de Auto-Otimização", marcando a transição do Janus de um
 sistema reativo para uma entidade com autoconsciência diagnóstica.
@@ -112,10 +151,7 @@ em vez de servir o utilizador diretamente. Desenvolvimento do prompt meta_agent_
 constituição" do agente, instruindo-o a analisar desempenho, identificar padrões de falhas e formular hipóteses sobre
 suas causas.
 Criação de Ferramentas de Introspecção: Equipar o Meta-Agente com ferramentas de supervisão, sendo a principal
-analyze_memory_for_failures, para consultar a memória episódica (ChromaDB) e filtrar falhas.
+analyze_memory_for_failures, para consultar a memória episódica (Qdrant) e filtrar falhas.
 Implementação do Ciclo de Vida Proativo: Estabelecimento de um processo de fundo ("batimento cardíaco") que ativa o
 Meta-Agente regularmente para monitorização contínua. Geração de um "relatório de estado" ao final de cada ciclo,
 registado em logs, indicando padrões de falha ou operação normal.
-
-
-
