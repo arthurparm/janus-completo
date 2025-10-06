@@ -1,5 +1,6 @@
 
 import ast
+import asyncio
 import logging
 import os
 import time
@@ -128,63 +129,58 @@ def _create_code_entities_in_graph(parser: CodeParser):
 def consolidate_experiences_into_graph(limit: int = 10) -> dict:
     """
     Busca as experiências mais recentes da memória episódica, extrai conhecimento
-    e o insere no grafo semântico (Neo4j).
+    e o insere no grafo semântico (Neo4j) usando o Knowledge Consolidator Worker.
     """
     logger.info(f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
 
-    recalled_experiences = memory_core.recall(query="ação do sistema", n_results=limit)
+    # Importa o worker (lazy import para evitar dependências circulares)
+    from app.core.knowledge_consolidator_worker import knowledge_consolidator
 
-    if not recalled_experiences:
-        summary = "Nenhuma experiência encontrada para consolidação."
-        logger.warning(summary)
+    # Executa consolidação em lote de forma assíncrona
+    try:
+        # Cria event loop se não existir (para chamadas síncronas)
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Executa consolidação
+        if loop.is_running():
+            # Se loop já está rodando (contexto async), cria task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    knowledge_consolidator.consolidate_batch(limit=limit)
+                )
+                stats = future.result(timeout=300)  # 5 minutos de timeout
+        else:
+            # Executa diretamente
+            stats = loop.run_until_complete(
+                knowledge_consolidator.consolidate_batch(limit=limit)
+            )
+
+        summary = (
+            f"Consolidação concluída. {stats['successful']}/{stats['total_processed']} "
+            f"experiências processadas com sucesso. "
+            f"{stats['total_entities']} entidades e {stats['total_relationships']} "
+            f"relacionamentos criados no grafo em {stats['elapsed_seconds']:.2f}s."
+        )
+
+        if stats['failed'] > 0:
+            summary += f" {stats['failed']} experiências falharam."
+
+        logger.info(summary)
+
         return {"message": "Processo de consolidação concluído.", "summary": summary}
 
-    nodes_created = 0
-    relationships_created = 0
-
-    for exp_dict in recalled_experiences:
-        # Não tentamos mais converter para um objeto Pydantic `Experience`.
-        # Em vez disso, trabalhamos diretamente com o dicionário retornado pelo `memory_core`,
-        # que é mais robusto e evita o erro de validação do campo "distance".
-        exp_id = exp_dict.get("id")
-        exp_metadata = exp_dict.get("metadata", {})
-        exp_type = exp_metadata.get("type", "unknown")
-        exp_content = exp_dict.get("content", "")
-        exp_timestamp = exp_metadata.get("timestamp", "")
-
-        if not exp_id:
-            continue
-
-        repo.query(
-            "merge_experience",
-            """
-            MERGE (e:Experience {id: $id})
-            ON CREATE SET e.type = $type, e.content = $content, e.timestamp = $timestamp
-            """,
-            params={"id": exp_id, "type": exp_type, "content": exp_content, "timestamp": exp_timestamp}
-        )
-        nodes_created += 1
-
-        if "summary" in exp_metadata:
-            summary_text = exp_metadata["summary"]
-            summary_node_id = f"summary_{exp_id}"
-
-            repo.query(
-                "merge_summary",
-                """
-                MATCH (exp:Experience {id: $exp_id})
-                MERGE (s:Summary {id: $summary_id, text: $text})
-                MERGE (exp)-[:HAS_SUMMARY]->(s)
-                """,
-                params={"exp_id": exp_id, "summary_id": summary_node_id, "text": summary_text}
-            )
-            nodes_created += 1
-            relationships_created += 1
-
-    summary = f"Consolidação concluída. {len(recalled_experiences)} experiências processadas. {nodes_created} nós e {relationships_created} relações criadas/mescladas no grafo."
-    logger.info(summary)
-
-    return {"message": "Processo de consolidação concluído.", "summary": summary}
+    except Exception as e:
+        logger.error(f"Erro na consolidação de experiências: {e}", exc_info=True)
+        return {
+            "message": "Erro na consolidação de experiências.",
+            "summary": f"Erro: {str(e)}"
+        }
 
 
 def index_codebase() -> dict:
