@@ -17,9 +17,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from prometheus_client import Counter, Histogram
 from qdrant_client import QdrantClient
 
+from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
-from app.core.llm.llm_manager import get_llm_for_role, ModelRole, ModelPriority
-from app.core.memory.memory_core import COLLECTION_NAME, decrypt_text
+from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
+from app.core.memory.memory_core import decrypt_text
 from app.db.graph import graph_db
 from app.db.vector_store import get_qdrant_client
 
@@ -108,7 +109,7 @@ class KnowledgeConsolidator:
 
         try:
             # LLM para extração
-            self.llm = get_llm_for_role(
+            self.llm = get_llm(
                 role=ModelRole.KNOWLEDGE_CURATOR,
                 priority=ModelPriority.FAST_AND_CHEAP
             )
@@ -436,7 +437,7 @@ class KnowledgeConsolidator:
             logger.info(f"Buscando até {limit} experiências para consolidação...")
 
             scroll_result = self.qdrant_client.scroll(
-                collection_name=COLLECTION_NAME,
+                collection_name=settings.QDRANT_COLLECTION_EPISODIC,
                 limit=limit,
                 with_payload=True,
                 with_vectors=False

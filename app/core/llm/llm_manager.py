@@ -189,7 +189,10 @@ def get_llm(
         {
             "name": "Google Gemini", "provider_key": "google_gemini",
             "enabled": _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()),
-            "initializer": lambda: ChatGoogleGenerativeAI(model=settings.GEMINI_MODEL_NAME, temperature=0),
+            "initializer": lambda: ChatGoogleGenerativeAI(model=settings.GEMINI_MODEL_NAME, temperature=0,
+                                                          google_api_key=(getattr(settings.GEMINI_API_KEY,
+                                                                                  'get_secret_value',
+                                                                                  lambda: None)() or None)),
             "model_name": settings.GEMINI_MODEL_NAME,
         },
         {

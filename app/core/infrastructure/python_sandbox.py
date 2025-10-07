@@ -1,19 +1,14 @@
 """
-Módulo de Sandbox Python Seguro - Sprint 4
-Executa código Python de forma isolada e segura usando RestrictedPython.
+Modulo de Sandbox Python Seguro - Sprint 4
+Executa código Python de forma isolada e segura usando epicbox.
 """
 
-import ast
-import io
 import logging
 import time
-from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
-from RestrictedPython import compile_restricted, safe_globals, limited_builtins
-from RestrictedPython.Eval import default_guarded_getitem, default_guarded_getiter
-from RestrictedPython.Guards import safe_builtins, guarded_iter_unpack_sequence
+import epicbox
 
 from app.config import settings
 
@@ -25,295 +20,88 @@ class ExecutionResult:
     """Resultado da execução de código Python."""
     success: bool
     output: str
+    exit_code: int
     error: Optional[str] = None
     execution_time: float = 0.0
-    variables: Dict[str, Any] = None
+    timeout: bool = False
 
 
 class PythonSandbox:
     """
-    Sandbox seguro para execução de código Python.
-
-    Usa RestrictedPython para limitar o que o código pode fazer:
-    - Sem acesso a imports perigosos
-    - Sem acesso ao filesystem
-    - Sem acesso a network
-    - Timeout configurável
-    - Memória limitada
+    Sandbox seguro para execução de código Python usando Docker via epicbox.
+    
+    Isso fornece isolamento de processo, filesystem e network.
     """
 
-    def __init__(
-            self,
-            timeout_seconds: int = 5,
-            max_output_length: int = 10000
-    ):
-        self.timeout_seconds = timeout_seconds
-        self.max_output_length = max_output_length
-        self._setup_safe_globals()
+    def __init__(self):
+        self.profile_name = "janus_sandbox"
+        epicbox.configure(profiles=[
+            epicbox.Profile(self.profile_name,
+                            settings.SANDBOX_DOCKER_IMAGE,
+                            network_disabled=True)
+        ])
+        logger.info(
+            f"Sandbox epicbox configurado com perfil '{self.profile_name}' e imagem '{settings.SANDBOX_DOCKER_IMAGE}'.")
 
-    def _setup_safe_globals(self):
-        """Configura o ambiente global seguro para execução."""
-        # Builtins seguros do RestrictedPython
-        self.safe_globals = {
-            '__builtins__': {
-                **limited_builtins,
-                # Funções seguras permitidas
-                'abs': abs,
-                'all': all,
-                'any': any,
-                'chr': chr,
-                'divmod': divmod,
-                'enumerate': enumerate,
-                'filter': filter,
-                'float': float,
-                'format': format,
-                'hex': hex,
-                'int': int,
-                'isinstance': isinstance,
-                'issubclass': issubclass,
-                'len': len,
-                'list': list,
-                'map': map,
-                'max': max,
-                'min': min,
-                'oct': oct,
-                'ord': ord,
-                'pow': pow,
-                'range': range,
-                'reversed': reversed,
-                'round': round,
-                'set': set,
-                'slice': slice,
-                'sorted': sorted,
-                'str': str,
-                'sum': sum,
-                'tuple': tuple,
-                'type': type,
-                'zip': zip,
-                # Matemática
-                '__import__': self._safe_import,
-            },
-            # Guards do RestrictedPython
-            '_getiter_': default_guarded_getiter,
-            '_getitem_': default_guarded_getitem,
-            '_iter_unpack_sequence_': guarded_iter_unpack_sequence,
-            '_print_': self._safe_print,
-            '_write_': self._safe_write,
-        }
-
-    def _safe_import(self, name, *args, **kwargs):
+    def execute(self, code: str) -> ExecutionResult:
         """
-        Import controlado - permite apenas módulos seguros.
-        """
-        # Whitelist de módulos permitidos
-        ALLOWED_MODULES = {
-            'math', 'random', 'datetime', 'json', 're',
-            'collections', 'itertools', 'functools',
-            'statistics', 'decimal', 'fractions'
-        }
-
-        if name in ALLOWED_MODULES:
-            return __import__(name, *args, **kwargs)
-        else:
-            raise ImportError(f"Import de '{name}' não é permitido no sandbox")
-
-    def _safe_print(self, *args, **kwargs):
-        """Print seguro que respeita limites."""
-        return print(*args, **kwargs)
-
-    def _safe_write(self, obj):
-        """Write seguro."""
-        return obj
-
-    def _validate_code(self, code: str) -> bool:
-        """
-        Valida o código antes da execução.
-        Verifica por padrões perigosos.
-        """
-        dangerous_patterns = [
-            'import os',
-            'import sys',
-            'import subprocess',
-            'import socket',
-            '__import__',
-            'eval(',
-            'exec(',
-            'compile(',
-            'open(',
-            'file(',
-            '__builtins__',
-        ]
-
-        code_lower = code.lower()
-        for pattern in dangerous_patterns:
-            if pattern.lower() in code_lower:
-                logger.warning(f"Código contém padrão perigoso: {pattern}")
-                # Permite se for um import permitido
-                if pattern.startswith('import') and any(
-                        allowed in code_lower
-                        for allowed in ['math', 'random', 'datetime', 'json', 're']
-                ):
-                    continue
-                return False
-
-        return True
-
-    def _check_syntax(self, code: str) -> Optional[str]:
-        """Verifica a sintaxe do código Python."""
-        try:
-            ast.parse(code)
-            return None
-        except SyntaxError as e:
-            return f"Erro de sintaxe: {e}"
-
-    def execute(
-            self,
-            code: str,
-            context: Optional[Dict[str, Any]] = None
-    ) -> ExecutionResult:
-        """
-        Executa código Python de forma segura.
+        Executa um bloco de código Python no sandbox.
 
         Args:
-            code: Código Python a ser executado
-            context: Variáveis adicionais no contexto de execução
+            code: O código a ser executado.
 
         Returns:
-            ExecutionResult com sucesso/falha e output
+            ExecutionResult com o resultado da execução.
         """
         start_time = time.time()
 
-        # Validações iniciais
         if not code or not code.strip():
-            return ExecutionResult(
-                success=False,
-                output="",
-                error="Código vazio fornecido",
-                execution_time=0.0
-            )
-
-        # Verifica sintaxe
-        syntax_error = self._check_syntax(code)
-        if syntax_error:
-            return ExecutionResult(
-                success=False,
-                output="",
-                error=syntax_error,
-                execution_time=time.time() - start_time
-            )
-
-        # Valida padrões perigosos
-        if not self._validate_code(code):
-            return ExecutionResult(
-                success=False,
-                output="",
-                error="Código contém operações não permitidas",
-                execution_time=time.time() - start_time
-            )
-
-        # Compila código restrito
-        try:
-            byte_code = compile_restricted(
-                code,
-                filename='<sandboxed>',
-                mode='exec'
-            )
-
-            if byte_code.errors:
-                error_msg = "; ".join(byte_code.errors)
-                return ExecutionResult(
-                    success=False,
-                    output="",
-                    error=f"Erros de compilação RestrictedPython: {error_msg}",
-                    execution_time=time.time() - start_time
-                )
-
-        except Exception as e:
-            return ExecutionResult(
-                success=False,
-                output="",
-                error=f"Erro ao compilar código: {str(e)}",
-                execution_time=time.time() - start_time
-            )
-
-        # Prepara contexto de execução
-        exec_globals = self.safe_globals.copy()
-        if context:
-            # Adiciona variáveis do contexto (sanitizadas)
-            for key, value in context.items():
-                if isinstance(key, str) and not key.startswith('_'):
-                    exec_globals[key] = value
-
-        # Captura output
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
+            return ExecutionResult(success=False, output="", error="Código vazio fornecido", exit_code=-1)
 
         try:
-            # Executa com timeout
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                exec(byte_code.code, exec_globals)
-
-            output = stdout_capture.getvalue()
-            stderr_output = stderr_capture.getvalue()
-
-            if stderr_output:
-                output += f"\n[STDERR]: {stderr_output}"
-
-            # Limita tamanho do output
-            if len(output) > self.max_output_length:
-                output = output[:self.max_output_length] + "\n... (output truncado)"
-
-            # Extrai variáveis definidas
-            user_variables = {
-                k: v for k, v in exec_globals.items()
-                if not k.startswith('_') and k not in self.safe_globals
-            }
+            result = epicbox.run(self.profile_name,
+                                 command=f"python -c '''{code}'''",
+                                 timeout=settings.SANDBOX_TIMEOUT_SECONDS)
 
             execution_time = time.time() - start_time
+            output = result['stdout'].decode('utf-8', errors='ignore')
+            stderr = result['stderr'].decode('utf-8', errors='ignore')
+
+            if len(output) > settings.SANDBOX_MAX_OUTPUT_LENGTH:
+                output = output[:settings.SANDBOX_MAX_OUTPUT_LENGTH] + "\n... (output truncado)"
+
+            success = result['exit_code'] == 0 and not result['timeout']
+            error_message = stderr if stderr else None
+            if result['timeout']:
+                error_message = "Timeout: A execução do código excedeu o tempo limite."
 
             return ExecutionResult(
-                success=True,
-                output=output or "(código executado sem output)",
-                error=None,
+                success=success,
+                output=output,
+                error=error_message,
+                exit_code=result['exit_code'],
                 execution_time=execution_time,
-                variables=user_variables
+                timeout=result['timeout']
             )
 
         except Exception as e:
-            stderr_output = stderr_capture.getvalue()
-            error_msg = f"{type(e).__name__}: {str(e)}"
-            if stderr_output:
-                error_msg += f"\n[STDERR]: {stderr_output}"
-
+            logger.error(f"Erro inesperado ao executar sandbox: {e}", exc_info=True)
             return ExecutionResult(
                 success=False,
-                output=stdout_capture.getvalue(),
-                error=error_msg,
+                output="",
+                error=f"Erro do sistema de sandbox: {e}",
+                exit_code=-1,
                 execution_time=time.time() - start_time
             )
 
     def execute_expression(self, expression: str) -> ExecutionResult:
         """
-        Executa uma expressão Python e retorna o resultado.
-
-        Args:
-            expression: Expressão Python (ex: "2 + 2", "sum([1,2,3])")
-
-        Returns:
-            ExecutionResult com o resultado da expressão
+        Avalia uma única expressão Python e retorna o resultado.
         """
-        code = f"__result__ = {expression}"
-        result = self.execute(code)
-
-        if result.success and result.variables:
-            result_value = result.variables.get('__result__')
-            result.output = str(result_value)
-
-        return result
+        # Envolve a expressão em um print para capturar o resultado no stdout
+        code = f"print({expression})"
+        return self.execute(code)
 
 
 # Instância global do sandbox
-python_sandbox = PythonSandbox(
-    timeout_seconds=getattr(settings, 'SANDBOX_TIMEOUT_SECONDS', 5),
-    max_output_length=getattr(settings, 'SANDBOX_MAX_OUTPUT_LENGTH', 10000)
-)
+python_sandbox = PythonSandbox()
