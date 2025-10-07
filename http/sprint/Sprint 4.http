@@ -17,7 +17,7 @@ Content-Type: application/json
 
 ###
 # 2. Executar Expressão Python
-POST {{host}}{{api_v1_prefix}}/sandbox/execute-expression
+POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
 Content-Type: application/json
 
 {
@@ -53,7 +53,7 @@ Content-Type: application/json
 
 ###
 # 6. Executar Expressão Matemática Complexa
-POST {{host}}{{api_v1_prefix}}/sandbox/execute-expression
+POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
 Content-Type: application/json
 
 {
@@ -79,8 +79,8 @@ Content-Type: application/json
 }
 
 ###
-# 9. Health Check do Sandbox
-GET {{host}}{{api_v1_prefix}}/sandbox/health
+# 9. Listar Capacidades do Sandbox
+GET {{host}}{{api_v1_prefix}}/sandbox/capabilities
 Accept: application/json
 
 ###
@@ -91,4 +91,26 @@ Content-Type: application/json
 
 {
   "code": "import os\nprint(os.listdir('/'))"
+}
+
+###
+# 11. Avaliar Expressão com List Comprehension
+POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
+Content-Type: application/json
+
+{
+  "expression": "[x for x in range(20) if x % 3 == 0]"
+}
+
+###
+# 12. Executar Código com Context Variables
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+
+{
+  "code": "result = base_value * multiplier\nprint(f'Resultado: {result}')",
+  "context": {
+    "base_value": 10,
+    "multiplier": 5
+  }
 }

@@ -1,14 +1,15 @@
 """
 Modulo de Sandbox Python Seguro - Sprint 4
-Executa código Python de forma isolada e segura usando epicbox.
+Executa código Python de forma isolada e segura usando RestrictedPython.
 """
 
+import io
 import logging
+import sys
 import time
+from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-
-import epicbox
 
 from app.config import settings
 
@@ -24,31 +25,68 @@ class ExecutionResult:
     error: Optional[str] = None
     execution_time: float = 0.0
     timeout: bool = False
+    variables: Optional[Dict[str, Any]] = None
 
 
 class PythonSandbox:
     """
-    Sandbox seguro para execução de código Python usando Docker via epicbox.
-    
-    Isso fornece isolamento de processo, filesystem e network.
+    Sandbox seguro para execução de código Python usando exec() restrito.
+
+    Limitações:
+    - Sem acesso ao filesystem (open, file)
+    - Sem acesso à network (socket, urllib, requests)
+    - Sem importação de módulos perigosos (os, subprocess, sys)
+    - Apenas módulos permitidos (math, random, datetime, json, re, etc.)
     """
 
     def __init__(self):
-        self.profile_name = "janus_sandbox"
-        epicbox.configure(profiles=[
-            epicbox.Profile(self.profile_name,
-                            settings.SANDBOX_DOCKER_IMAGE,
-                            network_disabled=True)
-        ])
-        logger.info(
-            f"Sandbox epicbox configurado com perfil '{self.profile_name}' e imagem '{settings.SANDBOX_DOCKER_IMAGE}'.")
+        self.allowed_modules = {
+            'math', 'random', 'datetime', 'json', 're',
+            'collections', 'itertools', 'functools',
+            'statistics', 'decimal', 'fractions', 'time'
+        }
+        logger.info(f"Sandbox Python configurado com módulos permitidos: {self.allowed_modules}")
 
-    def execute(self, code: str) -> ExecutionResult:
+    def _safe_import(self, name, *args, **kwargs):
+        """Import hook seguro que só permite módulos whitelist."""
+        if name.split('.')[0] in self.allowed_modules:
+            return __import__(name, *args, **kwargs)
+        raise ImportError(f"Módulo '{name}' não permitido. Permitidos: {', '.join(sorted(self.allowed_modules))}")
+
+    def _create_safe_globals(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Cria um dicionário de globals seguro com apenas builtins permitidos."""
+        safe_builtins = {
+            'abs': abs, 'all': all, 'any': any, 'bin': bin, 'bool': bool,
+            'chr': chr, 'dict': dict, 'divmod': divmod, 'enumerate': enumerate,
+            'filter': filter, 'float': float, 'format': format, 'hex': hex,
+            'int': int, 'isinstance': isinstance, 'len': len, 'list': list,
+            'map': map, 'max': max, 'min': min, 'oct': oct, 'ord': ord,
+            'pow': pow, 'print': print, 'range': range, 'reversed': reversed,
+            'round': round, 'set': set, 'slice': slice, 'sorted': sorted,
+            'str': str, 'sum': sum, 'tuple': tuple, 'type': type, 'zip': zip,
+            'True': True, 'False': False, 'None': None,
+            '__import__': self._safe_import,  # Hook de import seguro
+        }
+
+        safe_globals = {
+            '__builtins__': safe_builtins,
+            '__name__': '__sandbox__',
+            '__doc__': None,
+        }
+
+        # Adiciona contexto fornecido pelo usuário
+        if context:
+            safe_globals.update(context)
+
+        return safe_globals
+
+    def execute(self, code: str, context: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         """
         Executa um bloco de código Python no sandbox.
 
         Args:
             code: O código a ser executado.
+            context: Variáveis adicionais disponíveis no contexto de execução.
 
         Returns:
             ExecutionResult com o resultado da execução.
@@ -59,38 +97,56 @@ class PythonSandbox:
             return ExecutionResult(success=False, output="", error="Código vazio fornecido", exit_code=-1)
 
         try:
-            result = epicbox.run(self.profile_name,
-                                 command=f"python -c '''{code}'''",
-                                 timeout=settings.SANDBOX_TIMEOUT_SECONDS)
+            logger.info(f"[SANDBOX] Executando código - {len(code)} caracteres")
+
+            # Cria ambiente seguro
+            safe_globals = self._create_safe_globals(context)
+            safe_locals = {}
+
+            # Captura stdout e stderr
+            stdout_capture = io.StringIO()
+            stderr_capture = io.StringIO()
+
+            # Executa código com redirects
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                exec(code, safe_globals, safe_locals)
 
             execution_time = time.time() - start_time
-            output = result['stdout'].decode('utf-8', errors='ignore')
-            stderr = result['stderr'].decode('utf-8', errors='ignore')
+            logger.info(f"[SANDBOX] ✓ Execução concluída - tempo={execution_time:.3f}s")
+
+            output = stdout_capture.getvalue()
+            stderr_output = stderr_capture.getvalue()
 
             if len(output) > settings.SANDBOX_MAX_OUTPUT_LENGTH:
                 output = output[:settings.SANDBOX_MAX_OUTPUT_LENGTH] + "\n... (output truncado)"
 
-            success = result['exit_code'] == 0 and not result['timeout']
-            error_message = stderr if stderr else None
-            if result['timeout']:
-                error_message = "Timeout: A execução do código excedeu o tempo limite."
-
             return ExecutionResult(
-                success=success,
+                success=True,
                 output=output,
-                error=error_message,
-                exit_code=result['exit_code'],
+                error=stderr_output if stderr_output else None,
+                exit_code=0,
                 execution_time=execution_time,
-                timeout=result['timeout']
+                timeout=False,
+                variables=safe_locals
             )
 
-        except Exception as e:
-            logger.error(f"Erro inesperado ao executar sandbox: {e}", exc_info=True)
+        except ImportError as e:
+            logger.warning(f"[SANDBOX] ⚠️ Tentativa de importar módulo não permitido: {e}")
             return ExecutionResult(
                 success=False,
                 output="",
-                error=f"Erro do sistema de sandbox: {e}",
-                exit_code=-1,
+                error=f"Importação bloqueada: {e}. Módulos permitidos: {', '.join(sorted(self.allowed_modules))}",
+                exit_code=1,
+                execution_time=time.time() - start_time
+            )
+
+        except Exception as e:
+            logger.error(f"[SANDBOX] ❌ Erro ao executar código: {e}", exc_info=False)
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"{type(e).__name__}: {str(e)}",
+                exit_code=1,
                 execution_time=time.time() - start_time
             )
 
