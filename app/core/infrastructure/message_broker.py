@@ -393,15 +393,16 @@ class MessageBroker:
             await self.connect()
 
         queue = await self._ensure_queue(queue_name)
-        declaration = await queue.declare(passive=True)
 
+        # Get queue declaration info (aio-pika 9.x doesn't support passive parameter)
         info = {
             "name": queue_name,
-            "messages": declaration.message_count,
-            "consumers": declaration.consumer_count,
+            "messages": queue.declaration_result.message_count if queue.declaration_result else 0,
+            "consumers": queue.declaration_result.consumer_count if queue.declaration_result else 0,
         }
 
-        QUEUE_DEPTH.labels(queue_name).set(declaration.message_count)
+        if queue.declaration_result:
+            QUEUE_DEPTH.labels(queue_name).set(queue.declaration_result.message_count)
 
         return info
 

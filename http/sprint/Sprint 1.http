@@ -1,118 +1,157 @@
 ###
 # SPRINT 1: Message Broker e Task Management
-# Testes completos dos endpoints de gerenciamento de tarefas
+# Testes completos dos endpoints de gerenciamento de tarefas e RabbitMQ
 ###
 
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
 
 ###
-# 1. Health Check do Sistema
+# 1. Health Check do Sistema - Status Geral
 GET {{host}}{{api_v1_prefix}}/system/status
 Accept: application/json
 
 ###
-# 2. Publicar Tarefa na Fila (POST /tasks/publish)
-POST {{host}}{{api_v1_prefix}}/tasks/publish
+# 2. Health Check do RabbitMQ
+GET {{host}}{{api_v1_prefix}}/tasks/health/rabbitmq
+Accept: application/json
+
+###
+# 3. Publicar Tarefa de Consolidação - Modo Batch
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
 Content-Type: application/json
 
 {
-  "task_type": "process_data",
-  "payload": {
-    "data": "Hello from Sprint 1",
-    "priority": "high"
-  },
-  "priority": 1
+  "mode": "batch",
+  "limit": 10
 }
 
 ###
-# 3. Publicar Tarefa de Processamento de Arquivo
-POST {{host}}{{api_v1_prefix}}/tasks/publish
+# 4. Publicar Tarefa de Consolidação - Modo Batch (50 experiências)
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
 Content-Type: application/json
 
 {
-  "task_type": "analyze_file",
-  "payload": {
-    "file_path": "/workspace/data.txt",
-    "analysis_type": "sentiment"
-  },
-  "priority": 2
+  "mode": "batch",
+  "limit": 50
 }
 
 ###
-# 4. Publicar Tarefa com Alta Prioridade
-POST {{host}}{{api_v1_prefix}}/tasks/publish
+# 5. Publicar Tarefa de Consolidação - Modo Single
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
 Content-Type: application/json
 
 {
-  "task_type": "urgent_task",
-  "payload": {
-    "message": "Urgent processing needed",
-    "deadline": "2024-12-31T23:59:59"
-  },
-  "priority": 0
+  "mode": "single",
+  "experience_id": "exp_001",
+  "experience_content": "Executei com sucesso a ferramenta search_web para buscar informações sobre Python",
+  "metadata": {
+    "tool_used": "search_web",
+    "query": "Python tutorial",
+    "result_count": 5
+  }
 }
 
 ###
-# 5. Consumir Tarefa da Fila (GET /tasks/consume)
-GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=5
+# 6. Publicar Tarefa de Consolidação - Modo Single (experiência de erro)
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+Content-Type: application/json
+
+{
+  "mode": "single",
+  "experience_id": "exp_002",
+  "experience_content": "Falha ao executar write_file: permissão negada no diretório /root",
+  "metadata": {
+    "tool_used": "write_file",
+    "error_type": "PermissionError",
+    "severity": "high"
+  }
+}
+
+###
+# 7. Obter Informações da Fila de Consolidação
+GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation
 Accept: application/json
 
 ###
-# 6. Consumir com Timeout Longo
-GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=30
+# 8. Obter Informações de Fila Customizada (se existir)
+GET {{host}}{{api_v1_prefix}}/tasks/queue/default
 Accept: application/json
 
 ###
-# 7. Testar Fila Vazia (deve retornar null)
-GET {{host}}{{api_v1_prefix}}/tasks/consume?queue=default&timeout=1
-Accept: application/json
-
-###
-# 8. Health Check do RabbitMQ
-GET {{host}}{{api_v1_prefix}}/system/health
-Accept: application/json
-
-###
-# 9. Métricas Prometheus
+# 9. Métricas Prometheus - Message Broker
 GET {{host}}/metrics
 Accept: text/plain
 
 ###
-# 10. Publicar Múltiplas Tarefas em Sequência
-POST {{host}}{{api_v1_prefix}}/tasks/publish
+# 10. Publicar Múltiplas Tarefas em Sequência - Batch Processing
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
 Content-Type: application/json
 
 {
-  "task_type": "batch_process",
-  "payload": {
-    "batch_id": "batch_001",
-    "items": [
-      1,
-      2,
-      3,
-      4,
-      5
-    ]
-  },
-  "priority": 3
+  "mode": "batch",
+  "limit": 20
 }
 
 ###
-POST {{host}}{{api_v1_prefix}}/tasks/publish
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
 Content-Type: application/json
 
 {
-  "task_type": "batch_process",
-  "payload": {
-    "batch_id": "batch_002",
-    "items": [
-      6,
-      7,
-      8,
-      9,
-      10
-    ]
-  },
-  "priority": 3
+  "mode": "batch",
+  "limit": 30
 }
+
+###
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+Content-Type: application/json
+
+{
+  "mode": "batch",
+  "limit": 15
+}
+
+###
+# 11. Verificar Status do Sistema Após Múltiplas Publicações
+GET {{host}}{{api_v1_prefix}}/system/status
+Accept: application/json
+
+###
+# 12. Verificar Saúde do RabbitMQ Após Carga
+GET {{host}}{{api_v1_prefix}}/tasks/health/rabbitmq
+Accept: application/json
+
+###
+# 13. Verificar Profundidade da Fila de Consolidação
+GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation
+Accept: application/json
+
+###
+# 14. Teste de Consolidação com Metadados Complexos
+POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+Content-Type: application/json
+
+{
+  "mode": "single",
+  "experience_id": "exp_complex_001",
+  "experience_content": "Após 3 iterações de reflexion, consegui otimizar o algoritmo de busca reduzindo o tempo de execução em 40%",
+  "metadata": {
+    "tool_used": "reflexion",
+    "iterations": 3,
+    "improvement": 0.4,
+    "context": "optimization",
+    "tags": [
+      "performance",
+      "reflexion",
+      "success"
+    ]
+  }
+}
+
+###
+# 15. Teste Final - Status Geral do Sistema
+GET {{host}}{{api_v1_prefix}}/system/status
+Accept: application/json
+
+
+### RESULTADO ATUAL
