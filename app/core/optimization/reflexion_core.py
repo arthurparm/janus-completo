@@ -140,10 +140,11 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
                 best_score = score
                 best_result = action_result
 
-            await memory_core.amemorize(Experience(type="reflexion_iteration",
-                                                   content=f"Tarefa: {self.task}\nScore: {score:.2f}\nReflexão: {reflection}",
-                                                   metadata={"iteration": iteration, "score": score,
-                                                             "origin": "reflexion_core"}))
+            await memory_core.amemorize(
+                Experience(type="reflexion_iteration",
+                           content=f"Tarefa: {self.task}\nScore: {score:.2f}\nReflexão: {reflection}",
+                           metadata={"iteration": iteration, "score": score, "origin": "reflexion_core"})
+            )
 
             if score >= self.config.success_threshold:
                 logger.info(f"[Reflexion] ✓ Sucesso atingido na iteração {iteration}!")

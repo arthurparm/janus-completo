@@ -122,40 +122,18 @@ def _create_code_entities_in_graph(parser: CodeParser):
         )
 
 
-def consolidate_experiences_into_graph(limit: int = 10) -> dict:
+async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
     """
     Busca as experiências mais recentes da memória episódica, extrai conhecimento
     e o insere no grafo semântico (Neo4j) usando o Knowledge Consolidator Worker.
+    Esta função agora é assíncrona.
     """
     logger.info(f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
 
-    # Importa o worker (lazy import para evitar dependências circulares)
-    from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
-
-    # Executa consolidação em lote de forma assíncrona
     try:
-        # Cria event loop se não existir (para chamadas síncronas)
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        # Executa consolidação
-        if loop.is_running():
-            # Se loop já está rodando (contexto async), cria task
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    asyncio.run,
-                    knowledge_consolidator.consolidate_batch(limit=limit)
-                )
-                stats = future.result(timeout=300)  # 5 minutos de timeout
-        else:
-            # Executa diretamente
-            stats = loop.run_until_complete(
-                knowledge_consolidator.consolidate_batch(limit=limit)
-            )
+        # Lazy import para evitar carga na inicialização e dependências circulares
+        from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+        stats = await knowledge_consolidator.consolidate_batch(limit=limit)
 
         summary = (
             f"Consolidação concluída. {stats['successful']}/{stats['total_processed']} "
@@ -163,7 +141,6 @@ def consolidate_experiences_into_graph(limit: int = 10) -> dict:
             f"{stats['total_entities']} entidades e {stats['total_relationships']} "
             f"relacionamentos criados no grafo em {stats['elapsed_seconds']:.2f}s."
         )
-
         if stats['failed'] > 0:
             summary += f" {stats['failed']} experiências falharam."
 

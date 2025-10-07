@@ -451,21 +451,6 @@ class MemoryConnector:
             logger.error(f"Erro ao coletar de MemoryConnector: {e}")
             return []
 
-    def fetch_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Coleta experiências da memória (wrapper sync para compatibilidade).
-        DEPRECATED: Use fetch_batch_async quando possível.
-
-        Args:
-            limit: Número máximo de experiências
-
-        Returns:
-            Lista de experiências
-        """
-        logger.warning("MemoryConnector.fetch_batch está obsoleto, use fetch_batch_async")
-        return asyncio.run(self.fetch_batch_async(limit))
-
-
 # Singleton harvester
 harvester = Harvester()
 

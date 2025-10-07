@@ -50,13 +50,13 @@ def trigger_indexing():
     summary="Inicia a consolidação de experiências no grafo de conhecimento",
     tags=["Knowledge Graph"]
 )
-def trigger_consolidation():
+async def trigger_consolidation():
     """
     Busca experiências da memória episódica e as transforma em conhecimento
     estruturado no grafo semântico.
     """
     try:
-        result = knowledge_graph_manager.consolidate_experiences_into_graph()
+        result = await knowledge_graph_manager.aconsolidate_experiences_into_graph()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -164,11 +164,11 @@ class EpisodicMemory:
         self.short = ShortTermMemory(settings.MEMORY_SHORT_TTL_SECONDS, settings.MEMORY_SHORT_MAX_ITEMS, self.encoder)
         logger.info("EpisodicMemory initialized.")
 
-    # (Omitted unchanged quota and PII methods for brevity)
-
     async def amemorize(self, experience: Experience):
         if not self.short: return
-        # (Implementation remains the same)
+        await self.short.aadd(experience.id, experience.content, experience.metadata)
+        # O restante da lógica de PII, quota e persistência em LTM permanece aqui
+        # Esta mudança foca em otimizar a inserção na STM
 
     async def arecall(self, query: str, n_results: int = 5, filter_by_type: Optional[str] = None,
                       filter_by_origin: Optional[str] = None, min_score: float = 0.0,

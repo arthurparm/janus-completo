@@ -86,7 +86,7 @@ class AgentManager:
     ) -> dict:
         """Executa um agente especializado de forma assíncrona com resiliência."""
         self._validate_question(question)
-        correlation_id = getattr(request, "state", {}).correlation_id or "no-id"
+        correlation_id = getattr(getattr(request, "state", None), "correlation_id", None) or "no-id"
         circuit_breaker = agent_circuit_breakers[agent_type]
         logger.info(
             f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
@@ -152,7 +152,7 @@ class AgentManager:
                         "trace_id": correlation_id
                     }
                 )
-                await memory_core.amemorize(experience)  # Assume async version
+                await memory_core.amemorize(experience)
                 logger.info(f"[trace_id={correlation_id}] Experiência de sucesso com '{action.tool}' foi memorizada.")
         except Exception as e:
             logger.warning(f"[trace_id={correlation_id}] Falha ao memorizar experiência: {e}", exc_info=False)

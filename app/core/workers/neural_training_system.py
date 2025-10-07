@@ -445,7 +445,7 @@ class NeuralTrainer:
     ):
         """Memoriza resultado do treinamento."""
         try:
-            memory_core.memorize(Experience(
+            await memory_core.amemorize(Experience(
                 type="neural_training",
                 content=f"Modelo '{config.model_name}' treinado com sucesso\n"
                         f"Acurácia: {result.accuracy:.2%}\n"

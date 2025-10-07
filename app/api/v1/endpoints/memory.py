@@ -28,14 +28,14 @@ class RecallResponse(BaseModel):
     summary="Adiciona uma nova experiência à memória episódica",
     tags=["Memory"]
 )
-def add_memory(request: MemorizeRequest):
+async def add_memory(request: MemorizeRequest):
     try:
         experience = Experience(
             type=request.type,
             content=request.content,
             metadata=request.metadata
         )
-        memory_core.memorize(experience)
+        await memory_core.amemorize(experience)
         return experience
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
