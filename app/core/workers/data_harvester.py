@@ -273,21 +273,37 @@ class Harvester:
             start = time.perf_counter()
 
             try:
-                # Apply resilience wrapper com timeout
-                wrapped = resilient(
-                    max_attempts=3,
-                    initial_backoff=0.25,
-                    max_backoff=2.0,
-                    circuit_breaker=_CB,
-                    retry_on=(Exception,),
-                    operation_name=f"harvest_fetch_{name}",
-                )(connector.fetch_batch)
+                # Check if connector has async method
+                if hasattr(connector, 'fetch_batch_async'):
+                    # Use async method directly
+                    wrapped_async = resilient(
+                        max_attempts=3,
+                        initial_backoff=0.25,
+                        max_backoff=2.0,
+                        circuit_breaker=_CB,
+                        retry_on=(Exception,),
+                        operation_name=f"harvest_fetch_{name}",
+                    )(connector.fetch_batch_async)
 
-                # Executa fetch com timeout
-                items = await asyncio.wait_for(
-                    asyncio.get_running_loop().run_in_executor(None, wrapped, self._batch_size),
-                    timeout=_FETCH_TIMEOUT
-                )
+                    items = await asyncio.wait_for(
+                        wrapped_async(self._batch_size),
+                        timeout=_FETCH_TIMEOUT
+                    )
+                else:
+                    # Fallback to sync method in executor
+                    wrapped = resilient(
+                        max_attempts=3,
+                        initial_backoff=0.25,
+                        max_backoff=2.0,
+                        circuit_breaker=_CB,
+                        retry_on=(Exception,),
+                        operation_name=f"harvest_fetch_{name}",
+                    )(connector.fetch_batch)
+
+                    items = await asyncio.wait_for(
+                        asyncio.get_running_loop().run_in_executor(None, wrapped, self._batch_size),
+                        timeout=_FETCH_TIMEOUT
+                    )
 
                 if not items:
                     _HARV_LAT.labels(name, "empty").observe(time.perf_counter() - start)
@@ -418,9 +434,9 @@ class MemoryConnector:
     """Conector que extrai dados da memória episódica."""
     name = "memory"
 
-    def fetch_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
+    async def fetch_batch_async(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Coleta experiências da memória.
+        Coleta experiências da memória (versão async).
 
         Args:
             limit: Número máximo de experiências
@@ -429,11 +445,25 @@ class MemoryConnector:
             Lista de experiências
         """
         try:
-            results = memory_core.recall(query="experiência do agente", n_results=limit)
+            results = await memory_core.arecall(query="experiência do agente", n_results=limit)
             return results or []
         except Exception as e:
             logger.error(f"Erro ao coletar de MemoryConnector: {e}")
             return []
+
+    def fetch_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Coleta experiências da memória (wrapper sync para compatibilidade).
+        DEPRECATED: Use fetch_batch_async quando possível.
+
+        Args:
+            limit: Número máximo de experiências
+
+        Returns:
+            Lista de experiências
+        """
+        logger.warning("MemoryConnector.fetch_batch está obsoleto, use fetch_batch_async")
+        return asyncio.run(self.fetch_batch_async(limit))
 
 
 # Singleton harvester
@@ -447,7 +477,7 @@ except Exception as e:
 
 
 # Backwards-compatible one-shot export remains available
-def harvest_data_for_training(limit: int = 100) -> dict:
+async def harvest_data_for_training(limit: int = 100) -> dict:
     """
     Coleta experiências da memória episódica e as formata num ficheiro
     JSONL, adequado para o fine-tuning de modelos de linguagem.
@@ -461,7 +491,7 @@ def harvest_data_for_training(limit: int = 100) -> dict:
     logger.info(f"Iniciando a coleta de dados de {limit} experiências para treino.")
 
     try:
-        experiences = memory_core.recall(query="experiência do agente", n_results=limit)
+        experiences = await memory_core.arecall(query="experiência do agente", n_results=limit)
 
         if not experiences:
             summary = "Nenhuma experiência encontrada para a coleta."

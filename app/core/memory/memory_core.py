@@ -216,7 +216,8 @@ class EpisodicMemory:
 
             return [{
                 "id": str(sp.id),
-                "content": decrypt_text(sp.payload.get('content', '')),
+                "content": decrypt_text(sp.payload.get('content', ''),
+                                        settings.MEMORY_ENCRYPTION_KEY.get_secret_value()),
                 "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
                 "score": sp.score
             } for sp in search_results]

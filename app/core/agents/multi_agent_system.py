@@ -17,7 +17,7 @@ from langchain_core.prompts import PromptTemplate
 from prometheus_client import Counter, Histogram, Gauge
 
 from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
-from app.core.tools.agent_tools import get_all_tools
+from app.core.tools import get_all_tools
 
 logger = logging.getLogger(__name__)
 

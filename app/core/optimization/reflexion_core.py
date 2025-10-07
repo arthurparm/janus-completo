@@ -6,6 +6,7 @@ Implementa o padrão Reflexion de forma assíncrona.
 
 import logging
 import time
+import json
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 
@@ -18,7 +19,6 @@ from app.core.memory.memory_core import memory_core
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
-
 
 # (Omitted metrics for brevity)
 
@@ -76,7 +76,6 @@ RESULTADO: {result}
 Forneça uma avaliação estruturada em JSON com as chaves: "score" (float 0.0-1.0), "strengths" (list[str]), "issues" (list[str]), "suggestions" (list[str])."""
         try:
             evaluation_str = await self._llm.send(prompt, timeout_s=30)
-            # Basic parsing for JSON-like structures
             evaluation = json.loads(evaluation_str)
             return evaluation
         except Exception as e:
@@ -115,7 +114,6 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             return f"Reflexão falhou: {e}."
 
     async def arun(self) -> Dict[str, Any]:
-        """Executa o ciclo completo de Reflexion de forma assíncrona."""
         iteration = 0
         best_result = None
         best_score = 0.0
@@ -152,7 +150,6 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
                 break
 
         await self._extract_lessons()
-        # (Metrics and final logging omitted for brevity)
         return {"success": best_score >= self.config.success_threshold, "best_result": best_result,
                 "best_score": best_score, "steps": self._steps, "lessons_learned": self._lessons_learned}
 
@@ -160,12 +157,11 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
         if not self._steps: return
         all_reflections = "\n\n".join(
             [f"Iteração {s.iteration} (score: {s.score:.2f}):\n{s.reflection}" for s in self._steps])
-        lesson_prompt = f"Analise estas reflexões e extraia 3-5 LIÇÕES GERAIS e acionáveis em formato de lista.
+        lesson_prompt = f"""Analise estas reflexões e extraia 3-5 LIÇÕES GERAIS e acionáveis em formato de lista.
 
 {all_reflections}
 
-LIÇÕES
-APRENDIDAS: "
+LIÇÕES APRENDIDAS:"""
         try:
             lessons_text = await self._llm.send(lesson_prompt, timeout_s=30)
             self._lessons_learned = [line.strip("- ") for line in lessons_text.split('\n') if
@@ -181,6 +177,5 @@ APRENDIDAS: "
 
 async def arun_with_reflexion(task: str, evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
                               config: Optional[ReflexionConfig] = None) -> Dict[str, Any]:
-    """API assíncrona para executar uma tarefa com o padrão Reflexion."""
     session = ReflexionSession(task=task, evaluator=evaluator, config=config)
     return await session.arun()

@@ -47,9 +47,9 @@ def add_memory(request: MemorizeRequest):
     summary="Recupera experiências da memória",
     tags=["Memory"]
 )
-def recall_memories(query: str = Query(..., description="Consulta em linguagem natural para buscar memórias.")):
+async def recall_memories(query: str = Query(..., description="Consulta em linguagem natural para buscar memórias.")):
     try:
-        results = memory_core.recall(query=query)
+        results = await memory_core.arecall(query=query)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

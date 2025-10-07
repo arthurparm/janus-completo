@@ -79,10 +79,10 @@ _CONTEXT_CACHE = _ContextCache()
 
 
 class VectorRetriever:
-    def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    async def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         t0 = time.perf_counter()
         try:
-            res = memory_core.recall(query=query, n_results=k)
+            res = await memory_core.arecall(query=query, n_results=k)
             _RAG_EVENTS.labels("vector_retrieval", "success").inc()
             _RAG_STAGE_LAT.labels("vector_retrieval", "success").observe(time.perf_counter() - t0)
             return res or []
@@ -175,7 +175,7 @@ def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]]):
         return graph_ctx, vector_ctx
 
 
-def query_knowledge_graph(question: str) -> str:
+async def query_knowledge_graph(question: str) -> str:
     """
     Pipeline Graph RAG com estágios: cache -> (graph_retrieval + opcional vector_retrieval) -> rerank -> síntese -> guardas.
     Mantém a assinatura anterior e retorna resposta em texto.
@@ -197,7 +197,7 @@ def query_knowledge_graph(question: str) -> str:
         graph_ctx = graph_ret.retrieve_with_llm(question)
         # Optional: additional vector retrieval from episodic memory
         vector_ret = VectorRetriever()
-        vector_ctx = vector_ret.retrieve(question, k=5)
+        vector_ctx = await vector_ret.retrieve(question, k=5)
         # Simple fusion: keep both; store compact context in cache
         fused_ctx = {
             "graph": graph_ctx,

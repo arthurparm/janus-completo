@@ -1,9 +1,23 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+class ProblemDetails(BaseModel):
+    """
+    RFC 7807 Problem Details for HTTP APIs
+    https://tools.ietf.org/html/rfc7807
+    """
+    type: str = Field(default="about:blank", description="URI reference that identifies the problem type")
+    title: str = Field(..., description="Short, human-readable summary of the problem")
+    status: int = Field(..., description="HTTP status code")
+    detail: str = Field(..., description="Human-readable explanation specific to this occurrence")
+    instance: str = Field(..., description="URI reference that identifies the specific occurrence")
+    trace_id: Optional[str] = Field(default=None, description="Correlation ID for tracing")
 
 
 def _problem_response(status: int, title: str, detail: str, instance: str, trace_id: str) -> JSONResponse:

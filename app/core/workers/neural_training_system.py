@@ -326,7 +326,7 @@ class NeuralTrainer:
         try:
             # Busca experiências relevantes na memória
             query = "experiência de uso de ferramentas e aprendizado"
-            experiences = memory_core.recall(
+            experiences = await memory_core.arecall(
                 query=query,
                 n_results=config.max_examples or 1000
             )
