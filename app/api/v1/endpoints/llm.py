@@ -13,7 +13,7 @@ from app.core.llm import (
     ModelPriority,
     invalidate_cache,
     _llm_cache,
-    _provider_circuit_breakers,
+    _provider_circuit_breakers
 )
 
 router = APIRouter()

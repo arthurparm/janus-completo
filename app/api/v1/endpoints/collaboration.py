@@ -7,13 +7,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.agents import (
-    get_multi_agent_system,
-    AgentRole,
-    TaskStatus,
-    TaskPriority,
-    Task
-)
+from app.core.agents import AgentRole, get_multi_agent_system
+from app.core.agents.multi_agent_system import TaskStatus, TaskPriority, Task
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

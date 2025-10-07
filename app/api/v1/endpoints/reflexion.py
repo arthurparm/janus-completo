@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.problem_details import ProblemDetails
-from app.core.optimization import run_with_reflexion, ReflexionConfig
+from app.core.optimization import arun_with_reflexion, ReflexionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def execute_with_reflexion(request: ReflexionRequest):
             config.success_threshold = request.success_threshold
 
         # Executa Reflexion
-        result = run_with_reflexion(
+        result = await arun_with_reflexion(
             task=request.task,
             evaluator=None,  # Usa avaliador padrão
             config=config

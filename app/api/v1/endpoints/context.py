@@ -7,7 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.core.infrastructure import context_manager, ContextInfo, WebSearchResult
+from app.core.infrastructure import context_manager
+from app.core.infrastructure.context_manager import ContextInfo, WebSearchResult
 
 router = APIRouter()
 
