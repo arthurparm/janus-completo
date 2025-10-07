@@ -89,6 +89,7 @@ class ShortTermMemory:
                 self._store.popitem(last=False)
 
     async def aadd(self, exp_id: str, content: str, metadata: dict):
+        """Adiciona experiência à STM gerando embedding."""
         ts = _now()
         vec: Optional[List[float]] = None
         try:
@@ -100,6 +101,14 @@ class ShortTermMemory:
             self._store[exp_id] = (ts, vec, content, metadata)
             self._store.move_to_end(exp_id)
             await self._prune()
+
+    async def aadd_with_vector(self, exp_id: str, content: str, metadata: dict, vector: List[float]):
+        """Adiciona experiência à STM com embedding já gerado (otimizado)."""
+        ts = _now()
+        async with self._lock:
+            self._store[exp_id] = (ts, vector, content, metadata)
+            self._store.move_to_end(exp_id)
+        await self._prune()
 
     @staticmethod
     def _cosine(a: List[float], b: List[float]) -> float:
@@ -165,10 +174,50 @@ class EpisodicMemory:
         logger.info("EpisodicMemory initialized.")
 
     async def amemorize(self, experience: Experience):
-        if not self.short: return
-        await self.short.aadd(experience.id, experience.content, experience.metadata)
-        # O restante da lógica de PII, quota e persistência em LTM permanece aqui
-        # Esta mudança foca em otimizar a inserção na STM
+        """
+        Memoriza uma experiência nas memórias de curto prazo (STM) e longo prazo (LTM/Qdrant).
+
+        Args:
+            experience: Experiência a ser memorizada
+        """
+
+        if not self.short or not self.async_client or not self.encoder:
+            return
+
+        content = experience.content
+        if _detect_pii(content):
+            content = _mask_pii(content)
+
+        try:
+            embedding = await self.encoder.aembed_query(content)
+        except Exception as e:
+            return
+
+        await self.short.aadd_with_vector(experience.id, content, experience.metadata, embedding)
+
+        metadata = _sanitize_metadata({
+            "type": experience.type,
+            "timestamp": experience.timestamp,
+            "origin": experience.metadata.get("origin", "api"),
+            **experience.metadata
+        })
+        try:
+            point = models.PointStruct(
+                id=experience.id,
+                vector=embedding,
+                payload={
+                    "content": content,
+                    "metadata": metadata
+                }
+            )
+
+            await self.async_client.upsert(
+                collection_name=settings.QDRANT_COLLECTION_EPISODIC,
+                points=[point]
+            )
+
+        except Exception as e:
+            raise
 
     async def arecall(self, query: str, n_results: int = 5, filter_by_type: Optional[str] = None,
                       filter_by_origin: Optional[str] = None, min_score: float = 0.0,
@@ -214,13 +263,25 @@ class EpisodicMemory:
             }
             search_results = await self.async_client.search(**{k: v for k, v in search_params.items() if v is not None})
 
-            return [{
-                "id": str(sp.id),
-                "content": decrypt_text(sp.payload.get('content', ''),
-                                        settings.MEMORY_ENCRYPTION_KEY.get_secret_value()),
-                "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
-                "score": sp.score
-            } for sp in search_results]
+            # Decrypt content if encryption key is configured
+            results = []
+            for sp in search_results:
+                content = sp.payload.get('content', '')
+                # Only decrypt if encryption key is set
+                if settings.MEMORY_ENCRYPTION_KEY:
+                    try:
+                        content = decrypt_text(content, settings.MEMORY_ENCRYPTION_KEY.get_secret_value())
+                    except Exception:
+                        # If decryption fails, use content as-is (might not be encrypted)
+                        pass
+
+                results.append({
+                    "id": str(sp.id),
+                    "content": content,
+                    "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
+                    "score": sp.score
+                })
+            return results
         except Exception as e:
             logger.error(f"Long-term memory search failed: {e}", exc_info=True)
             return []

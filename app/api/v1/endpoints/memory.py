@@ -19,7 +19,7 @@ class RecallResponse(BaseModel):
     id: str
     content: str
     metadata: dict
-    distance: float
+    score: float  # Similarity score (higher is better)
 
 
 @router.post(

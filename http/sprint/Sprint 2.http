@@ -7,8 +7,8 @@
 @api_v1_prefix = /api/v1
 
 ###
-# 1. Adicionar Experiência na Memória
-POST {{host}}{{api_v1_prefix}}/memory/add
+# 1. Adicionar Experiência na Memória - Sucesso com Ferramenta
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -23,7 +23,7 @@ Content-Type: application/json
 
 ###
 # 2. Adicionar Experiência de Erro
-POST {{host}}{{api_v1_prefix}}/memory/add
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -38,7 +38,7 @@ Content-Type: application/json
 
 ###
 # 3. Adicionar Experiência de Aprendizado
-POST {{host}}{{api_v1_prefix}}/memory/add
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -51,43 +51,8 @@ Content-Type: application/json
 }
 
 ###
-# 4. Buscar Experiências Relacionadas a "Python"
-POST {{host}}{{api_v1_prefix}}/memory/search
-Content-Type: application/json
-
-{
-  "query": "Python",
-  "n_results": 5
-}
-
-###
-# 5. Buscar Experiências de Falhas
-POST {{host}}{{api_v1_prefix}}/memory/search
-Content-Type: application/json
-
-{
-  "query": "falha erro problema",
-  "n_results": 10
-}
-
-###
-# 6. Buscar Experiências de Sucesso com Ferramentas
-POST {{host}}{{api_v1_prefix}}/memory/search
-Content-Type: application/json
-
-{
-  "query": "ferramenta sucesso executei",
-  "n_results": 3
-}
-
-###
-# 7. Estatísticas da Memória
-GET {{host}}{{api_v1_prefix}}/memory/stats
-Accept: application/json
-
-###
-# 8. Adicionar Múltiplas Experiências
-POST {{host}}{{api_v1_prefix}}/memory/add
+# 4. Adicionar Experiência de Raciocínio
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -100,7 +65,8 @@ Content-Type: application/json
 }
 
 ###
-POST {{host}}{{api_v1_prefix}}/memory/add
+# 5. Adicionar Experiência de Cálculo
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -113,7 +79,8 @@ Content-Type: application/json
 }
 
 ###
-POST {{host}}{{api_v1_prefix}}/memory/add
+# 6. Adicionar Experiência de Reflexion
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
@@ -126,16 +93,100 @@ Content-Type: application/json
 }
 
 ###
-# 9. Buscar Experiências Recentes (sem query específica)
-POST {{host}}{{api_v1_prefix}}/memory/search
+# 7. Buscar Experiências Relacionadas a "Python"
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=Python
+Accept: application/json
+
+###
+# 8. Buscar Experiências de Falhas e Erros
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=falha%20erro%20problema
+Accept: application/json
+
+###
+# 9. Buscar Experiências de Sucesso com Ferramentas
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=ferramenta%20sucesso%20executei
+Accept: application/json
+
+###
+# 10. Buscar Experiências de Aprendizado
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=aprendi%20lição
+Accept: application/json
+
+###
+# 11. Buscar Experiências de Reflexion
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=reflexion%20otimizar
+Accept: application/json
+
+###
+# 12. Buscar Experiências Genéricas
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=experiência
+Accept: application/json
+
+###
+# 13. Adicionar Experiência de Multi-Agent Collaboration
+POST {{host}}{{api_v1_prefix}}/memory/memorize
 Content-Type: application/json
 
 {
-  "query": "experiência",
-  "n_results": 20
+  "type": "collaboration",
+  "content": "Coordenei com sucesso 3 agentes especializados para resolver tarefa complexa de análise de dados",
+  "metadata": {
+    "agents": [
+      "data_analyst",
+      "code_executor",
+      "validator"
+    ],
+    "task_type": "data_analysis",
+    "duration_seconds": 45
+  }
 }
 
 ###
-# 10. Health Check da Memória
-GET {{host}}{{api_v1_prefix}}/memory/health
+# 14. Adicionar Experiência de Meta-Agent
+POST {{host}}{{api_v1_prefix}}/memory/memorize
+Content-Type: application/json
+
+{
+  "type": "meta_optimization",
+  "content": "Meta-agente identificou padrão de falhas repetitivas em operações de arquivo e sugeriu implementação de retry automático",
+  "metadata": {
+    "pattern": "file_operation_failures",
+    "suggestion": "implement_auto_retry",
+    "confidence": 0.92
+  }
+}
+
+###
+# 15. Buscar Todas as Experiências Recentes
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=agente%20sistema
 Accept: application/json
+
+###
+# 16. Adicionar Experiência com Metadados Complexos
+POST {{host}}{{api_v1_prefix}}/memory/memorize
+Content-Type: application/json
+
+{
+  "type": "neural_training",
+  "content": "Treinamento do modelo de classificação completado com acurácia de 87% após 5 épocas",
+  "metadata": {
+    "model_name": "intent_classifier_v1",
+    "accuracy": 0.87,
+    "epochs": 5,
+    "training_samples": 1000,
+    "validation_samples": 200,
+    "training_time_seconds": 320
+  }
+}
+
+###
+# 17. Buscar Experiências de Treinamento Neural
+GET {{host}}{{api_v1_prefix}}/memory/recall?query=treinamento%20modelo%20neural
+Accept: application/json
+
+###
+# 18. Verificar Sistema (Health Check via System Status)
+GET {{host}}{{api_v1_prefix}}/system/status
+Accept: application/json
+
+
