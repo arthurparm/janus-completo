@@ -65,9 +65,10 @@ class ContextManager:
         Returns:
             ContextInfo com timestamp, data/hora e informações do sistema
         """
+        logger.info("[GET_CURRENT_CONTEXT] Iniciando obtenção de contexto atual")
         now = datetime.now(timezone.utc)
 
-        return ContextInfo(
+        context = ContextInfo(
             timestamp=now.isoformat(),
             datetime_info={
                 "utc": now.strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -86,6 +87,10 @@ class ContextManager:
             },
             environment=settings.ENVIRONMENT
         )
+
+        logger.info(
+            f"[GET_CURRENT_CONTEXT] ✓ Contexto obtido - {context.datetime_info['utc']}, {context.system_info['platform']}")
+        return context
 
     def search_web(
             self,
@@ -107,8 +112,10 @@ class ContextManager:
         Raises:
             RuntimeError: Se o cliente Tavily não estiver disponível
         """
+        logger.info(f"[SEARCH_WEB] Iniciando busca - query='{query}', max_results={max_results}, depth={search_depth}")
+
         if not self._tavily_client:
-            logger.warning("Tavily não disponível. Retornando resultados vazios.")
+            logger.warning("[SEARCH_WEB] ⚠️ Tavily não disponível. Retornando resultados vazios.")
             return WebSearchResult(
                 query=query,
                 results=[],
@@ -116,16 +123,22 @@ class ContextManager:
             )
 
         try:
-            # Tavily API call
-            raw_results = self._tavily_client.results(
+            logger.info(f"[SEARCH_WEB] Chamando Tavily API para '{query}'")
+            # Tavily API call - usa método run() que retorna string formatada
+            raw_results = self._tavily_client.raw_results(
                 query=query,
                 max_results=max_results,
                 search_depth=search_depth
             )
 
+            logger.info(f"[SEARCH_WEB] Tavily API respondeu - tipo: {type(raw_results)}")
+            logger.info(
+                f"[SEARCH_WEB] Raw results keys: {raw_results.keys() if isinstance(raw_results, dict) else 'N/A'}")
+
             # Estrutura os resultados
             results = []
             if isinstance(raw_results, dict) and "results" in raw_results:
+                logger.info(f"[SEARCH_WEB] Encontrado campo 'results' com {len(raw_results['results'])} itens")
                 for item in raw_results["results"][:max_results]:
                     results.append({
                         "title": item.get("title", ""),
@@ -133,8 +146,11 @@ class ContextManager:
                         "content": item.get("content", ""),
                         "score": item.get("score", 0.0)
                     })
+            else:
+                logger.warning(
+                    f"[SEARCH_WEB] ⚠️ Formato inesperado - tipo={type(raw_results)}, conteúdo={str(raw_results)[:200]}")
 
-            logger.info(f"Busca web concluída: '{query}' - {len(results)} resultados")
+            logger.info(f"[SEARCH_WEB] ✓ Busca concluída: '{query}' - {len(results)} resultados")
 
             return WebSearchResult(
                 query=query,
@@ -143,7 +159,7 @@ class ContextManager:
             )
 
         except Exception as e:
-            logger.error(f"Erro ao buscar na web: {e}", exc_info=True)
+            logger.error(f"[SEARCH_WEB] ❌ Erro ao buscar na web: {e}", exc_info=True)
             return WebSearchResult(
                 query=query,
                 results=[],
@@ -167,15 +183,23 @@ class ContextManager:
         Returns:
             Dict com contexto completo
         """
+        logger.info(f"[GET_ENRICHED_CONTEXT] Iniciando - include_web={include_web_search}, query='{query}'")
+
+        logger.info("[GET_ENRICHED_CONTEXT] Obtendo contexto ambiental")
         context = {
             "environmental": self.get_current_context().model_dump(),
             "web_search": None
         }
 
         if include_web_search and query:
+            logger.info(f"[GET_ENRICHED_CONTEXT] Incluindo busca web para '{query}'")
             web_results = self.search_web(query, max_results=max_web_results)
             context["web_search"] = web_results.model_dump()
+            logger.info(f"[GET_ENRICHED_CONTEXT] ✓ Busca web incluída - {len(web_results.results)} resultados")
+        else:
+            logger.info("[GET_ENRICHED_CONTEXT] Busca web não solicitada")
 
+        logger.info("[GET_ENRICHED_CONTEXT] ✓ Contexto enriquecido completo")
         return context
 
     def format_context_for_prompt(
@@ -195,26 +219,34 @@ class ContextManager:
         Returns:
             String formatada com o contexto
         """
+        logger.info(
+            f"[FORMAT_CONTEXT] Iniciando formatação - datetime={include_datetime}, system={include_system}, has_web={web_results is not None}")
+
         parts = []
 
         if include_datetime:
+            logger.info("[FORMAT_CONTEXT] Incluindo informações de data/hora")
             ctx = self.get_current_context()
             parts.append(f"Data/Hora Atual: {ctx.datetime_info['utc']}")
             parts.append(f"Dia da Semana: {ctx.datetime_info['day_of_week']}")
 
         if include_system:
+            logger.info("[FORMAT_CONTEXT] Incluindo informações do sistema")
             ctx = self.get_current_context()
             parts.append(f"Sistema: {ctx.system_info['platform']}")
             parts.append(f"Ambiente: {ctx.environment}")
 
         if web_results and web_results.results:
+            logger.info(f"[FORMAT_CONTEXT] Incluindo {len(web_results.results)} resultados de busca web")
             parts.append(f"\nResultados da Busca Web ('{web_results.query}'):")
             for i, result in enumerate(web_results.results, 1):
                 parts.append(f"{i}. {result['title']}")
                 parts.append(f"   {result['content'][:200]}...")
                 parts.append(f"   URL: {result['url']}")
 
-        return "\n".join(parts)
+        formatted = "\n".join(parts)
+        logger.info(f"[FORMAT_CONTEXT] ✓ Contexto formatado - {len(formatted)} caracteres")
+        return formatted
 
 
 # Instância global

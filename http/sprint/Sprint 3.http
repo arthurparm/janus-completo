@@ -7,37 +7,23 @@
 @api_v1_prefix = /api/v1
 
 ###
-# 1. Obter Data/Hora Atual
-GET {{host}}{{api_v1_prefix}}/context/datetime
+# 1. Obter Contexto Atual (Data/Hora + Sistema)
+GET {{host}}{{api_v1_prefix}}/context/current
 Accept: application/json
 
 ###
-# 2. Obter Informações do Sistema
-GET {{host}}{{api_v1_prefix}}/context/system
+# 2. Buscar na Web - Tecnologia
+GET {{host}}{{api_v1_prefix}}/context/web-search?query=Python%20asyncio%20tutorial&max_results=3&search_depth=basic
 Accept: application/json
 
 ###
-# 3. Buscar na Web - Tecnologia
-POST {{host}}{{api_v1_prefix}}/context/search-web
-Content-Type: application/json
-
-{
-  "query": "Python asyncio tutorial",
-  "max_results": 3
-}
+# 3. Buscar na Web - Notícias Atuais
+GET {{host}}{{api_v1_prefix}}/context/web-search?query=artificial%20intelligence%20latest%20news&max_results=5&
+    search_depth=basic
+Accept: application/json
 
 ###
-# 4. Buscar na Web - Notícias Atuais
-POST {{host}}{{api_v1_prefix}}/context/search-web
-Content-Type: application/json
-
-{
-  "query": "artificial intelligence latest news",
-  "max_results": 5
-}
-
-###
-# 5. Contexto Enriquecido (sem busca web)
+# 4. Contexto Enriquecido (sem busca web)
 POST {{host}}{{api_v1_prefix}}/context/enriched
 Content-Type: application/json
 
@@ -47,7 +33,7 @@ Content-Type: application/json
 }
 
 ###
-# 6. Contexto Enriquecido (com busca web)
+# 5. Contexto Enriquecido (com busca web)
 POST {{host}}{{api_v1_prefix}}/context/enriched
 Content-Type: application/json
 
@@ -58,7 +44,7 @@ Content-Type: application/json
 }
 
 ###
-# 7. Contexto Enriquecido - Uso Completo
+# 6. Contexto Enriquecido - Uso Completo
 POST {{host}}{{api_v1_prefix}}/context/enriched
 Content-Type: application/json
 
@@ -69,27 +55,40 @@ Content-Type: application/json
 }
 
 ###
-# 8. Buscar na Web - Documentação
-POST {{host}}{{api_v1_prefix}}/context/search-web
-Content-Type: application/json
-
-{
-  "query": "LangChain documentation agents",
-  "max_results": 2
-}
-
-###
-# 9. Health Check do Módulo de Contexto
-GET {{host}}{{api_v1_prefix}}/context/health
+# 7. Buscar na Web - Documentação
+GET {{host}}{{api_v1_prefix}}/context/web-search?query=LangChain%20documentation%20agents&max_results=2&
+    search_depth=basic
 Accept: application/json
 
 ###
-# 10. Obter Contexto Completo para Tomada de Decisão
+# 8. Buscar na Web - Busca Avançada
+GET {{host}}{{api_v1_prefix}}/context/web-search?query=microservices%20design%20patterns&max_results=5&
+    search_depth=advanced
+Accept: application/json
+
+###
+# 9. Formatar Contexto para Prompt - Somente Data/Hora
+GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=false
+Accept: application/json
+
+###
+# 10. Formatar Contexto para Prompt - Completo com Busca Web
+GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=true&
+    web_query=circuit%20breakers%20Python
+Accept: application/json
+
+###
+# 11. Obter Contexto Atual para Tomada de Decisão
+GET {{host}}{{api_v1_prefix}}/context/current
+Accept: application/json
+
+###
+# 12. Contexto Enriquecido - Caso Complexo
 POST {{host}}{{api_v1_prefix}}/context/enriched
 Content-Type: application/json
 
 {
-  "query": "How to implement circuit breakers in Python",
+  "query": "distributed systems consensus algorithms",
   "include_web_search": true,
   "max_web_results": 4
 }
