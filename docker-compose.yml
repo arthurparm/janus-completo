@@ -71,14 +71,13 @@ services:
     networks:
       - janus-net
     entrypoint: [ "/bin/sh", "/init-ollama.sh" ]
-    # Use the modern and more compatible way to request GPU resources
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all # Use 'all' available GPUs, or '1' if you prefer
-    #           capabilities: [ gpu ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
       interval: 15s   # Check less frequently

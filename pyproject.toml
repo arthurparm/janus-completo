@@ -5,12 +5,12 @@ description = "Janus Agentic System API"
 authors = ["arthur.paraiso.mar@gmail.com"]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.13"
 fastapi = "*"
 uvicorn = { extras = ["standard"], version = "*" }
 pydantic-settings = "*"
 neo4j = ">=5.19.0"
-qdrant-client = "1.9.2" # Fixando a versão para corresponder ao docker-compose
+qdrant-client = "1.9.2"
 langchain = ">=0.1.20"
 langchain-openai = ">=0.1.6"
 langsmith = ">=0.1.57"
@@ -23,12 +23,10 @@ onnxruntime = "*"
 sentence-transformers = "*"
 structlog = "*"
 prometheus-fastapi-instrumentator = "*"
-# Sprint 1: Message Broker
+epicbox = "*"
 aio-pika = ">=9.0.0"
 pika = ">=1.3.0"
-# Sprint 3: Web Search & Context
 tavily-python = ">=0.3.0"
-# Sprint 4: Python Sandbox
 RestrictedPython = ">=6.0"
 
 [build-system]

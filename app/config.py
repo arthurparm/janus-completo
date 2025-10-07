@@ -11,13 +11,13 @@ class AppSettings(BaseSettings):
 
     # App
     APP_NAME: str = "Janus"
-    APP_VERSION: str = "0.2.0"
+    APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
 
     # Feature flags / modos de execução
-    DRY_RUN: bool = True  # Modo simulado: substitui operações destrutivas por no-ops com logs
+    DRY_RUN: bool = True
 
-    # ... (Configurações de Neo4j inalteradas) ...
+    # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = "password"
@@ -25,33 +25,34 @@ class AppSettings(BaseSettings):
     # Qdrant
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
-    QDRANT_API_KEY: Optional[SecretStr] = None  # Para Qdrant Cloud (opcional)
+    QDRANT_API_KEY: Optional[SecretStr] = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
 
+    # LangSmith
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
 
-    # Memória (short/long-term)
-    MEMORY_SHORT_TTL_SECONDS: int = 600  # TTL para memória de curto prazo
-    MEMORY_SHORT_MAX_ITEMS: int = 512  # Capacidade LRU para curto prazo
+    # Memória
+    MEMORY_SHORT_TTL_SECONDS: int = 600
+    MEMORY_SHORT_MAX_ITEMS: int = 512
     MEMORY_MAX_CONTENT_CHARS: int = 20000
     MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
     MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
     MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN: int = 5_000_000
-    MEMORY_ENCRYPTION_KEY: Optional[str] = None  # Opcional: chave de "criptografia" simples
-    MEMORY_PII_REDACT: bool = True  # Se verdadeiro, redige PII detectada
+    MEMORY_ENCRYPTION_KEY: Optional[str] = None
+    MEMORY_PII_REDACT: bool = True
 
-    # Núcleo de Raciocínio
+    # Raciocínio
     REASONING_MAX_ITERATIONS: int = 3
     REASONING_MAX_SECONDS: int = 60
     REASONING_MAX_TOKENS: int = 8000
 
-    # Meta-Agente (ciclo)
+    # Meta-Agente
     META_AGENT_CYCLE_INTERVAL_SECONDS: int = 300
     META_AGENT_MAX_ITERATIONS: int = 3
     META_AGENT_MAX_SECONDS: int = 60
 
-    # LLM Resilience & Timeouts
+    # LLM
     LLM_DEFAULT_TIMEOUT_SECONDS: int = 60
     LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
     LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
@@ -61,48 +62,40 @@ class AppSettings(BaseSettings):
     LLM_CACHE_TTL_SECONDS: int = 3600
     LLM_MAX_PROMPT_LENGTH: int = 100000
 
-    # 1. CO-PROCESSADOR DE ELITE (Nuvem - Fallback Estratégico)
+    # LLM Providers
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
+    GEMINI_API_KEY: Optional[SecretStr] = None
+    GEMINI_MODEL_NAME: str = "gemini-1.5-pro-latest"
+    OLLAMA_HOST: str = "http://ollama:11434"
+    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
+    OLLAMA_CODER_MODEL: str = "codellama:7b"
+    OLLAMA_CURATOR_MODEL: str = "phi3:mini"
 
-    # API - Rate limiting
+    # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_IP_PER_MIN: int = 60
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
-    GEMINI_API_KEY: Optional[SecretStr] = None
-    GEMINI_MODEL_NAME: str = "gemini-1.5-pro-latest"
-
-    # 2. CÉREBRO / SISTEMA NERVOSO CENTRAL (Local via Ollama - Primário)
-    OLLAMA_HOST: str = "http://ollama:11434"
-
-    # Modelo para o Córtex Pré-Frontal (Orquestração e Raciocínio Geral)
-    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
-
-    # Modelo para o Cerebelo (Geração e Análise de Código)
-    OLLAMA_CODER_MODEL: str = "codellama:7b"
-
-    # Modelo para o Lobo Temporal (Análise, Sumarização e Validação de Conhecimento)
-    OLLAMA_CURATOR_MODEL: str = "phi3:mini"
-
-    # Sprint 1: RabbitMQ (Message Broker)
+    # Sprint 1: RabbitMQ
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
     RABBITMQ_PASSWORD: str = "janus_pass"
-    RABBITMQ_MANAGEMENT_PORT: int = 15672
 
-    # Sprint 3: Web Search (Tavily)
+    # Sprint 3: Web Search
     TAVILY_API_KEY: Optional[SecretStr] = None
 
-    # Sprint 4: Python Sandbox
-    SANDBOX_TIMEOUT_SECONDS: int = 5
-    SANDBOX_MAX_OUTPUT_LENGTH: int = 10000
+    # Sprint 4: Python Sandbox (epicbox)
+    SANDBOX_DOCKER_IMAGE: str = "python:3.11-slim"
+    SANDBOX_TIMEOUT_SECONDS: int = 15
+    SANDBOX_MEM_LIMIT_MB: int = 128
+    SANDBOX_CPU_LIMIT: float = 0.5
+    SANDBOX_MAX_OUTPUT_LENGTH: int = 25000
 
-    # Sprint 5: Reflexion (Auto-otimização e Aprendizado com Erros)
+    # Sprint 5: Reflexion
     REFLEXION_MAX_ITERATIONS: int = 3
     REFLEXION_MAX_TIME_SECONDS: int = 180
-    REFLEXION_SUCCESS_THRESHOLD: float = 0.8  # Score mínimo para considerar sucesso (0.0-1.0)
-
+    REFLEXION_SUCCESS_THRESHOLD: float = 0.8
 
 settings = AppSettings()
