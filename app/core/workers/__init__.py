@@ -1,21 +1,19 @@
 """
 Módulo de workers - Workers assíncronos e tarefas em background.
 """
-from .async_consolidation_worker import AsyncConsolidationWorker, get_consolidation_worker
-from .data_harvester import DataHarvester, get_data_harvester
-from .knowledge_consolidator_worker import KnowledgeConsolidatorWorker, get_knowledge_consolidator
-from .neural_trainer import NeuralTrainer, get_neural_trainer
-from .neural_training_system import NeuralTrainingSystem, get_neural_training_system
+from .async_consolidation_worker import publish_consolidation_task
+from .data_harvester import Harvester, harvester
+from .knowledge_consolidator_worker import KnowledgeConsolidator, knowledge_consolidator
+from .neural_trainer import start_training_process
+from .neural_training_system import NeuralTrainer, neural_trainer
 
 __all__ = [
-    "AsyncConsolidationWorker",
-    "get_consolidation_worker",
-    "KnowledgeConsolidatorWorker",
-    "get_knowledge_consolidator",
-    "DataHarvester",
-    "get_data_harvester",
+    "publish_consolidation_task",
+    "KnowledgeConsolidator",
+    "knowledge_consolidator",
+    "Harvester",
+    "harvester",
     "NeuralTrainer",
-    "get_neural_trainer",
-    "NeuralTrainingSystem",
-    "get_neural_training_system"
+    "neural_trainer",
+    "start_training_process"
 ]

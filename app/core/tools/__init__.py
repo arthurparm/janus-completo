@@ -1,35 +1,50 @@
 """
 Módulo de ferramentas - Tools para agentes e Action Module.
 """
-from .action_module import ActionModule, get_action_module
+from .action_module import (
+    ActionRegistry,
+    action_registry,
+    DynamicToolGenerator,
+    ToolCategory,
+    PermissionLevel,
+    get_tools_by_category
+)
 from .agent_tools import (
-    get_agent_tools,
-    search_knowledge_graph_tool,
-    retrieve_episodic_memory_tool,
-    store_episodic_memory_tool,
-    execute_python_code_tool,
-    read_file_tool,
-    write_file_tool
+    recall_experiences,
+    unified_tools,
+    meta_agent_tools,
+    get_tools_for_agent
 )
 from .faulty_tools import (
     get_faulty_tools,
-    broken_calculation_tool,
-    timeout_tool,
-    random_error_tool
+    faulty_calculator,
+    unreliable_weather_api,
+    slow_database_query,
+    inconsistent_file_reader,
+    flaky_api_call,
+    memory_leaking_processor,
+    validate_tool_output,
+    reset_faulty_tools
 )
 
 __all__ = [
-    "get_agent_tools",
-    "search_knowledge_graph_tool",
-    "retrieve_episodic_memory_tool",
-    "store_episodic_memory_tool",
-    "execute_python_code_tool",
-    "read_file_tool",
-    "write_file_tool",
-    "ActionModule",
-    "get_action_module",
+    "ActionRegistry",
+    "action_registry",
+    "DynamicToolGenerator",
+    "ToolCategory",
+    "PermissionLevel",
+    "get_tools_by_category",
+    "recall_experiences",
+    "unified_tools",
+    "meta_agent_tools",
+    "get_tools_for_agent",
     "get_faulty_tools",
-    "broken_calculation_tool",
-    "timeout_tool",
-    "random_error_tool"
+    "faulty_calculator",
+    "unreliable_weather_api",
+    "slow_database_query",
+    "inconsistent_file_reader",
+    "flaky_api_call",
+    "memory_leaking_processor",
+    "validate_tool_output",
+    "reset_faulty_tools"
 ]

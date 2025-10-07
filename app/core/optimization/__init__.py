@@ -1,12 +1,14 @@
 """
 Módulo de otimização - Auto-otimização, Reflexion e aprendizado.
 """
-from .reflexion_core import ReflexionCore, get_reflexion_core
-from .self_optimization import SelfOptimizationEngine, get_self_optimization_engine
+from .reflexion_core import ReflexionSession, ReflexionConfig, arun_with_reflexion
+from .self_optimization import SelfOptimizationCycle, self_optimization_cycle, SystemMonitor
 
 __all__ = [
-    "SelfOptimizationEngine",
-    "get_self_optimization_engine",
-    "ReflexionCore",
-    "get_reflexion_core"
+    "ReflexionSession",
+    "ReflexionConfig",
+    "arun_with_reflexion",
+    "SelfOptimizationCycle",
+    "self_optimization_cycle",
+    "SystemMonitor"
 ]
