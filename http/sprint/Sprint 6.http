@@ -17,8 +17,8 @@ GET {{host}}{{api_v1_prefix}}/tools/?category=FILESYSTEM
 Accept: application/json
 
 ###
-# 3. Listar Ferramentas por Categoria (DATABASE)
-GET {{host}}{{api_v1_prefix}}/tools/?category=DATABASE
+# 3. Listar Ferramentas por Categoria (COMPUTATION)
+GET {{host}}{{api_v1_prefix}}/tools/?category=COMPUTATION
 Accept: application/json
 
 ###
@@ -33,10 +33,15 @@ Content-Type: application/json
 
 {
   "name": "custom_calculator",
-  "description": "Calcula operações matemáticas customizadas",
-  "code": "def custom_calculator(x: float, y: float, operation: str) -> float:\n    if operation == 'add':\n        return x + y\n    elif operation == 'multiply':\n        return x * y\n    elif operation == 'power':\n        return x ** y\n    else:\n        raise ValueError('Operação inválida')\n    return result",
+  "description": "Calcula operações matemáticas customizadas entre dois números",
+  "code": "def execute(x: float, y: float, operation: str) -> float:\n    if operation == 'add':\n        return x + y\n    elif operation == 'multiply':\n        return x * y\n    elif operation == 'power':\n        return x ** y\n    else:\n        raise ValueError('Operação inválida')",
+  "function_name": "execute",
   "category": "COMPUTATION",
-  "permission_level": "SAFE"
+  "permission_level": "SAFE",
+  "tags": [
+    "math",
+    "calculator"
+  ]
 }
 
 ###
@@ -46,28 +51,38 @@ Content-Type: application/json
 
 {
   "name": "get_current_time",
-  "description": "Obtém a hora atual de uma API externa",
-  "url": "https://worldtimeapi.org/api/timezone/America/Sao_Paulo",
+  "description": "Obtém a hora atual de uma API externa de fuso horário",
+  "endpoint_url": "https://worldtimeapi.org/api/timezone/America/Sao_Paulo",
   "method": "GET",
-  "category": "WEB",
-  "permission_level": "SAFE"
+  "category": "API",
+  "rate_limit_per_minute": 20
 }
 
 ###
 # 7. Obter Detalhes de uma Ferramenta Específica
-GET {{host}}{{api_v1_prefix}}/tools/write_file
+GET {{host}}{{api_v1_prefix}}/tools/execute_python_code
 Accept: application/json
 
 ###
-# 8. Obter Métricas de Uso de Ferramentas
-GET {{host}}{{api_v1_prefix}}/tools/metrics
+# 8. Obter Estatísticas de Uso de Ferramentas
+GET {{host}}{{api_v1_prefix}}/tools/stats/usage
 Accept: application/json
 
 ###
-# 9. Remover Ferramenta Dinâmica
+# 9. Listar Categorias Disponíveis
+GET {{host}}{{api_v1_prefix}}/tools/categories/list
+Accept: application/json
+
+###
+# 10. Listar Níveis de Permissão
+GET {{host}}{{api_v1_prefix}}/tools/permissions/list
+Accept: application/json
+
+###
+# 11. Obter Detalhes da Ferramenta Customizada
+GET {{host}}{{api_v1_prefix}}/tools/custom_calculator
+Accept: application/json
+
+###
+# 12. Remover Ferramenta Dinâmica
 DELETE {{host}}{{api_v1_prefix}}/tools/custom_calculator
-
-###
-# 10. Health Check do Action Module
-GET {{host}}{{api_v1_prefix}}/tools/health
-Accept: application/json

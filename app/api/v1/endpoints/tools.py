@@ -100,7 +100,8 @@ async def list_tools(
         cat_filter = None
         if category:
             try:
-                cat_filter = ToolCategory(category)
+                # Converte para lowercase para match com enum values
+                cat_filter = ToolCategory(category.lower())
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,7 +111,8 @@ async def list_tools(
         perm_filter = None
         if permission_level:
             try:
-                perm_filter = PermissionLevel(permission_level)
+                # Converte para lowercase para match com enum values
+                perm_filter = PermissionLevel(permission_level.lower())
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

@@ -115,14 +115,20 @@ class DynamicToolGenerator:
             BaseTool pronta para uso
         """
         try:
+            # LangChain @tool não aceita 'name', usa o nome da função
+            # Vamos criar a função com o nome correto dinamicamente
             if args_schema:
-                @tool(name=name, description=description, args_schema=args_schema)
+                @tool(description=description, args_schema=args_schema)
                 def dynamic_tool(*args, **kwargs):
                     return func(*args, **kwargs)
             else:
-                @tool(name=name, description=description)
+                @tool(description=description)
                 def dynamic_tool(*args, **kwargs):
                     return func(*args, **kwargs)
+
+            # Renomeia a ferramenta para o nome desejado
+            dynamic_tool.name = name
+            dynamic_tool.__name__ = name
 
             logger.info(f"[ActionModule] Ferramenta dinâmica criada: {name}")
             return dynamic_tool

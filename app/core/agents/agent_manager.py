@@ -124,15 +124,10 @@ class AgentManager:
         self._validate_question(question)
         correlation_id = getattr(getattr(request, "state", None), "correlation_id", None) or "no-id"
         circuit_breaker = agent_circuit_breakers[agent_type]
-        logger.info(
-            f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
-        logger.info(
-            f"[trace_id={correlation_id}] Circuit breaker estado: {circuit_breaker.state.value}, failures: {circuit_breaker.failure_count}, id={id(circuit_breaker)}")
+        logger.debug(f"[trace_id={correlation_id}] Agente '{agent_type.name}': {question[:50]}...")
 
         try:
-            logger.info(f"[trace_id={correlation_id}] Criando agent executor...")
             agent_executor = self._create_agent_executor(agent_type)
-            logger.info(f"[trace_id={correlation_id}] Agent executor criado com sucesso")
         except Exception as e:
             logger.error(f"[trace_id={correlation_id}] Falha ao criar agent executor: {e}", exc_info=True)
             circuit_breaker._on_failure(agent_type.name)
