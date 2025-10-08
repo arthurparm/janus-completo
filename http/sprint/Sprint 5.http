@@ -7,58 +7,70 @@
 @api_v1_prefix = /api/v1
 
 ###
+# 1. Resetar o circuit breaker
+POST http://localhost:8000/api/v1/reflexion/reset-circuit-breaker
+
+###
+# 2. Verificar health (deve mostrar CLOSED)
+GET http://localhost:8000/api/v1/reflexion/health
+Accept: application/json
+
+
+###
 # 1. Executar Tarefa Simples com Reflexion
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Calcular a soma de [10, 20, 30, 40, 50] usando execute_python_expression",
+  "task": "Calcular a soma de [10, 20, 30, 40, 50]",
   "max_iterations": 3,
-  "timeout_seconds": 60
+  "max_time_seconds": 60
 }
 
 ###
-# 2. Executar Tarefa com Ferramenta Defeituosa (Reflexion deve detectar)
+# 2. Executar Tarefa com Múltiplas Iterações
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Use a ferramenta faulty_calculator para somar 5 + 3",
+  "task": "Listar todos os números primos entre 1 e 100",
   "max_iterations": 5,
-  "timeout_seconds": 90
+  "max_time_seconds": 90
 }
 
 ###
-# 3. Executar Tarefa com Erro de Sintaxe Python
+# 3. Executar Tarefa Simples de Cálculo
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Execute o código Python: print('Hello World'",
+  "task": "Calcular a média de [15, 25, 35, 45, 55] e explicar o método",
   "max_iterations": 3,
-  "timeout_seconds": 60
+  "max_time_seconds": 60
 }
 
 ###
-# 4. Executar Tarefa Complexa com Múltiplas Iterações
+# 4. Executar Tarefa com Threshold Customizado
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Buscar na web informações sobre 'LangChain agents' e criar um arquivo resumo.txt no workspace",
-  "max_iterations": 5,
-  "timeout_seconds": 120
+  "task": "Gerar os primeiros 10 números da sequência de Fibonacci",
+  "max_iterations": 4,
+  "max_time_seconds": 80,
+  "success_threshold": 0.9
 }
 
 ###
-# 5. Testar Reflexion com Tarefa Impossível
+# 5. Executar Tarefa com Threshold Baixo
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Acesse a internet e faça uma transferência bancária de R$ 1000",
-  "max_iterations": 3,
-  "timeout_seconds": 60
+  "task": "Criar uma lista com os quadrados dos números de 1 a 10",
+  "max_iterations": 2,
+  "max_time_seconds": 40,
+  "success_threshold": 0.6
 }
 
 ###
@@ -67,26 +79,25 @@ GET {{host}}{{api_v1_prefix}}/reflexion/config
 Accept: application/json
 
 ###
-# 7. Executar Tarefa com Configuração Customizada
+# 7. Executar Tarefa com Configuração Mínima
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Listar todos os arquivos no workspace e contar quantos existem",
+  "task": "Calcular o fatorial de 5",
   "max_iterations": 2,
-  "timeout_seconds": 30,
-  "store_learning": true
+  "max_time_seconds": 30
 }
 
 ###
-# 8. Testar Reflexion com Ferramentas de Memória
+# 8. Executar Tarefa de Processamento de String
 POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Buscar na memória episódica experiências relacionadas a 'Python' e resumir os resultados",
+  "task": "Inverter a string 'Hello World' e converter para maiúsculas",
   "max_iterations": 3,
-  "timeout_seconds": 60
+  "max_time_seconds": 60
 }
 
 ###
@@ -100,9 +111,10 @@ POST {{host}}{{api_v1_prefix}}/reflexion/execute
 Content-Type: application/json
 
 {
-  "task": "Obter informações do sistema, buscar na web sobre 'Python best practices 2024' e criar um relatório",
+  "task": "Criar um dicionário com as vogais do alfabeto como chaves e suas posições como valores",
   "max_iterations": 5,
-  "timeout_seconds": 150,
-  "store_learning": true,
-  "enable_metrics": true
+  "max_time_seconds": 120,
+  "success_threshold": 0.85
 }
+
+

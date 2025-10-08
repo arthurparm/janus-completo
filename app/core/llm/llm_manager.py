@@ -257,6 +257,12 @@ class LLMClient:
     def _invoke(self, prompt: str) -> Any:
         return self.base.invoke(prompt)
 
+    async def asend(self, prompt: str, timeout_s: Optional[int] = None) -> str:
+        """Envia um prompt para o LLM de forma assíncrona."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.send, prompt, timeout_s)
+
     def send(self, prompt: str, timeout_s: Optional[int] = None) -> str:
         """Envia um prompt para o LLM com resiliência e observabilidade."""
         self._validate_prompt(prompt)

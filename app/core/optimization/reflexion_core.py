@@ -14,7 +14,7 @@ from prometheus_client import Counter, Histogram
 
 from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
-from app.core.llm.llm_manager import get_llm_client, ModelRole
+from app.core.llm.llm_manager import get_llm_client, ModelRole, ModelPriority
 from app.core.memory.memory_core import memory_core
 from app.models.schemas import Experience
 
@@ -58,7 +58,7 @@ class ReflexionSession:
         self.task = task.strip()
         self.evaluator = evaluator or self._default_evaluator
         self.config = config or ReflexionConfig.from_settings()
-        self._llm = get_llm_client(role=ModelRole.ORCHESTRATOR)
+        self._llm = get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP)
         self._start_time = time.perf_counter()
         self._steps: List[ReflexionStep] = []
         self._lessons_learned: List[str] = []
@@ -68,19 +68,40 @@ class ReflexionSession:
         return max(0.0, self.config.max_time_seconds - elapsed)
 
     async def _default_evaluator(self, task: str, result: str) -> Dict[str, Any]:
-        prompt = f"""Avalie criticamente o resultado da seguinte tarefa:
+        prompt = f"""Avalie criticamente o resultado da seguinte tarefa.
 
 TAREFA: {task}
 RESULTADO: {result}
 
-Forneça uma avaliação estruturada em JSON com as chaves: "score" (float 0.0-1.0), "strengths" (list[str]), "issues" (list[str]), "suggestions" (list[str])."""
+Responda APENAS com um objeto JSON válido (sem markdown, sem explicações). Use este formato exato:
+{{"score": 0.8, "strengths": ["lista de pontos fortes"], "issues": ["lista de problemas"], "suggestions": ["lista de sugestões"]}}
+
+Seu JSON:"""
         try:
-            evaluation_str = await self._llm.send(prompt, timeout_s=30)
+            evaluation_str = await self._llm.asend(prompt, timeout_s=30)
+            # Remove markdown code blocks se houver
+            evaluation_str = evaluation_str.strip()
+            if evaluation_str.startswith('```'):
+                lines = evaluation_str.split('\n')
+                evaluation_str = '\n'.join([l for l in lines if not l.startswith('```')])
+            evaluation_str = evaluation_str.strip()
+
             evaluation = json.loads(evaluation_str)
+            # Garante que tem as keys necessárias
+            if "score" not in evaluation:
+                evaluation["score"] = 0.5
+            if "strengths" not in evaluation:
+                evaluation["strengths"] = []
+            if "issues" not in evaluation:
+                evaluation["issues"] = []
+            if "suggestions" not in evaluation:
+                evaluation["suggestions"] = []
             return evaluation
         except Exception as e:
-            logger.error(f"Erro no avaliador: {e}", exc_info=True)
-            return {"score": 0.3, "issues": ["Falha na avaliação"], "suggestions": ["Tente novamente"]}
+            logger.error(
+                f"Erro no avaliador: {e}. Response: {evaluation_str if 'evaluation_str' in locals() else 'N/A'}",
+                exc_info=False)
+            return {"score": 0.3, "issues": ["Falha na avaliação"], "suggestions": ["Tente novamente"], "strengths": []}
 
     async def _execute_action(self, iteration: int, previous_reflections: List[str]) -> str:
         context = ""
@@ -106,7 +127,7 @@ AVALIAÇÃO: {evaluation}
 
 REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o score? Seja específico e acionável."""
         try:
-            reflection = await self._llm.send(reflection_prompt, timeout_s=30)
+            reflection = await self._llm.asend(reflection_prompt, timeout_s=30)
             logger.info(f"[Reflexion] Iteração {iteration}: Reflexão gerada")
             return reflection
         except Exception as e:
@@ -164,7 +185,7 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
 
 LIÇÕES APRENDIDAS:"""
         try:
-            lessons_text = await self._llm.send(lesson_prompt, timeout_s=30)
+            lessons_text = await self._llm.asend(lesson_prompt, timeout_s=30)
             self._lessons_learned = [line.strip("- ") for line in lessons_text.split('\n') if
                                      line.strip().startswith("-")]
             if self._lessons_learned:

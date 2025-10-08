@@ -66,7 +66,7 @@ class AppSettings(BaseSettings):
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
     GEMINI_API_KEY: Optional[SecretStr] = None
-    GEMINI_MODEL_NAME: str = "gemini-1.5-pro-latest"
+    GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
     OLLAMA_CODER_MODEL: str = "codellama:7b"

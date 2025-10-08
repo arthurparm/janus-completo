@@ -20,7 +20,7 @@ from app.core.llm.llm_manager import get_llm_client, ModelRole, ModelPriority
 from app.core.memory.memory_core import memory_core
 from app.core.infrastructure.prompt_loader import get_prompt
 from app.models.schemas import Experience
-from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError
+from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError, CircuitBreakerState
 from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
@@ -38,13 +38,32 @@ agent_circuit_breakers = {
 }
 
 
+def reset_agent_circuit_breaker(agent_type: Optional[AgentType] = None):
+    """Reseta o circuit breaker de um agente específico ou de todos."""
+    if agent_type:
+        cb = agent_circuit_breakers.get(agent_type)
+        if cb:
+            cb.state = CircuitBreakerState.CLOSED
+            cb.failure_count = 0
+            cb.last_failure_time = None
+            cb._open_since = None
+            logger.info(f"Circuit breaker resetado para agente: {agent_type.name}")
+    else:
+        for agent_t, cb in agent_circuit_breakers.items():
+            cb.state = CircuitBreakerState.CLOSED
+            cb.failure_count = 0
+            cb.last_failure_time = None
+            cb._open_since = None
+        logger.info("Todos os circuit breakers de agentes foram resetados")
+
+
 class AgentManager:
     """Centraliza a criação, configuração e execução de agentes especializados."""
 
     def __init__(self):
         try:
             self.llm_client = get_llm_client(
-                role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY
+                role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP
             )
             if not self.llm_client:
                 raise RuntimeError("LLM client retornou None.")
@@ -67,16 +86,33 @@ class AgentManager:
             raise ValueError(f"Configuração para o tipo de agente '{agent_type}' não encontrada.")
 
     def _create_agent_executor(self, agent_type: AgentType) -> AgentExecutor:
+        logger.info(f"[Agent] Getting config for {agent_type.name}...")
         _, tools = self._get_agent_config(agent_type)
-        prompt = hub.pull("hwchase17/openai-tools-agent")
-        agent = create_openai_tools_agent(self.llm_client.base, tools, prompt)
-        return AgentExecutor(
+        logger.info(f"[Agent] Got {len(tools)} tools, pulling prompt from hub...")
+
+        try:
+            prompt = hub.pull("hwchase17/openai-tools-agent")
+            logger.info(f"[Agent] Prompt pulled successfully")
+        except Exception as e:
+            logger.error(f"[Agent] Failed to pull prompt: {e}", exc_info=True)
+            raise
+
+        try:
+            agent = create_openai_tools_agent(self.llm_client.base, tools, prompt)
+            logger.info(f"[Agent] Agent created successfully")
+        except Exception as e:
+            logger.error(f"[Agent] Failed to create agent: {e}", exc_info=True)
+            raise
+
+        executor = AgentExecutor(
             agent=agent,
             tools=tools,
             verbose=True,
             handle_parsing_errors=lambda error: f"Erro de parsing: {error}",
             return_intermediate_steps=True
         )
+        logger.info(f"[Agent] Executor ready")
+        return executor
 
     async def arun_agent(
             self,
@@ -90,13 +126,26 @@ class AgentManager:
         circuit_breaker = agent_circuit_breakers[agent_type]
         logger.info(
             f"[trace_id={correlation_id}] Iniciando execução do agente '{agent_type.name}' para: '{question[:200]}...'")
+        logger.info(
+            f"[trace_id={correlation_id}] Circuit breaker estado: {circuit_breaker.state.value}, failures: {circuit_breaker.failure_count}, id={id(circuit_breaker)}")
 
-        agent_executor = self._create_agent_executor(agent_type)
+        try:
+            logger.info(f"[trace_id={correlation_id}] Criando agent executor...")
+            agent_executor = self._create_agent_executor(agent_type)
+            logger.info(f"[trace_id={correlation_id}] Agent executor criado com sucesso")
+        except Exception as e:
+            logger.error(f"[trace_id={correlation_id}] Falha ao criar agent executor: {e}", exc_info=True)
+            circuit_breaker._on_failure(agent_type.name)
+            return {"answer": f"Erro ao inicializar agente: {e}"}
+
         last_error = None
 
         for attempt in range(MAX_ATTEMPTS):
             try:
-                if circuit_breaker.is_open:
+                logger.info(
+                    f"[trace_id={correlation_id}] ANTES do check: CB state={circuit_breaker.state.value}, failures={circuit_breaker.failure_count}")
+                if circuit_breaker.is_open():
+                    logger.warning(f"[trace_id={correlation_id}] Circuit breaker is OPEN, abortando")
                     raise CircuitOpenError("Circuit breaker is open.")
 
                 result = await asyncio.wait_for(
@@ -104,7 +153,7 @@ class AgentManager:
                     timeout=OP_TIMEOUT
                 )
 
-                circuit_breaker.record_success()
+                circuit_breaker._on_success(agent_type.name)
                 logger.info(f"[trace_id={correlation_id}] Agente '{agent_type.name}' concluiu com sucesso.")
                 await self._ahandle_successful_run(result, agent_type, question, correlation_id)
                 return self._format_success_response(result)
@@ -114,11 +163,14 @@ class AgentManager:
                 return self._format_validation_error_response(e)
 
             except (CircuitOpenError, asyncio.TimeoutError) as e:
-                circuit_breaker.record_failure()
                 last_error = e
                 logger.warning(f"[trace_id={correlation_id}] Erro na tentativa {attempt + 1}: {type(e).__name__}")
                 if isinstance(e, CircuitOpenError):
+                    # Não registra falha adicional - circuit breaker já está aberto
                     break
+                else:
+                    # Apenas timeout deve registrar falha
+                    circuit_breaker._on_failure(agent_type.name)
 
                 backoff_duration = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
                 await asyncio.sleep(backoff_duration + random.uniform(0, backoff_duration * 0.1))

@@ -117,7 +117,13 @@ class CircuitBreaker:
         Returns:
             True se o circuito está OPEN
         """
-        return self.state == CircuitBreakerState.OPEN
+        result = self.state == CircuitBreakerState.OPEN
+        if result:
+            import traceback
+            logger.warning(
+                f"[CircuitBreaker] is_open=True! state={self.state.value}, failures={self.failure_count}, last_failure={self.last_failure_time}")
+            logger.warning(f"[CircuitBreaker] Call stack:\n{''.join(traceback.format_stack()[-5:])}")
+        return result
 
     def __call__(self, func: Callable) -> Callable:
         """
@@ -247,6 +253,9 @@ class CircuitBreaker:
             self.state = CircuitBreakerState.OPEN
             self._open_since = time.time()
             logger.error("circuit_back_to_open_after_failed_test", operation=operation)
+            import traceback
+            logger.warning(
+                f"[CircuitBreaker] State changed to OPEN from HALF_OPEN. Stack:\n{''.join(traceback.format_stack()[-8:])}")
         elif self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
             self._open_since = time.time()
@@ -255,6 +264,9 @@ class CircuitBreaker:
                 operation=operation,
                 failure_threshold=self.failure_threshold,
             )
+            import traceback
+            logger.warning(
+                f"[CircuitBreaker] State changed to OPEN (threshold reached). failures={self.failure_count}, threshold={self.failure_threshold}. Stack:\n{''.join(traceback.format_stack()[-8:])}")
 
         self._set_state_gauges(operation)
 

@@ -5,6 +5,7 @@ Expõe funcionalidades do sistema Reflexion via API REST.
 """
 
 import logging
+from dataclasses import asdict
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.api.problem_details import ProblemDetails
 from app.core.optimization import arun_with_reflexion, ReflexionConfig
+from app.core.agents.agent_manager import reset_agent_circuit_breaker, AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -88,16 +90,20 @@ async def execute_with_reflexion(request: ReflexionRequest):
             config=config
         )
 
-        logger.info(f"[Reflexion] Concluído: {result['iterations']} iterações, score: {result['best_score']:.2f}")
+        iterations = len(result.get("steps", []))
+        logger.info(f"[Reflexion] Concluído: {iterations} iterações, score: {result['best_score']:.2f}")
+
+        # Converte ReflexionStep dataclasses para dicts
+        steps_as_dicts = [asdict(step) for step in result["steps"]]
 
         return ReflexionResponse(
             success=result["success"],
             best_result=result["best_result"],
             best_score=result["best_score"],
-            iterations=result["iterations"],
+            iterations=iterations,
             lessons_learned=result["lessons_learned"],
-            elapsed_seconds=result["elapsed_seconds"],
-            steps=result["steps"]
+            elapsed_seconds=0.0,  # TODO: calcular elapsed_seconds no ReflexionSession
+            steps=steps_as_dicts
         )
 
     except ValueError as e:
@@ -155,6 +161,27 @@ async def get_reflexion_config():
     }
 
 
+@router.post(
+    "/reset-circuit-breaker",
+    summary="Reseta o circuit breaker dos agentes",
+    description="Força o reset do circuit breaker para permitir novas tentativas"
+)
+async def reset_circuit_breaker():
+    """Reseta o circuit breaker de todos os agentes."""
+    try:
+        reset_agent_circuit_breaker()  # Reset todos
+        return {
+            "status": "success",
+            "message": "Circuit breakers resetados com sucesso"
+        }
+    except Exception as e:
+        logger.error(f"[Reflexion] Erro ao resetar circuit breaker: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 @router.get(
     "/health",
     summary="Verifica saúde do módulo Reflexion",
@@ -166,11 +193,18 @@ async def reflexion_health():
         # Verifica se consegue importar módulos necessários
         from app.core.optimization import ReflexionSession
         from app.core.tools import get_faulty_tools
+        from app.core.agents.agent_manager import agent_circuit_breakers
+
+        cb_states = {
+            agent_type.name: {"state": cb.state.value, "failures": cb.failure_count}
+            for agent_type, cb in agent_circuit_breakers.items()
+        }
 
         return {
             "status": "healthy",
             "module": "reflexion",
             "faulty_tools_count": len(get_faulty_tools()),
+            "circuit_breakers": cb_states,
             "sprint": 5
         }
     except Exception as e:
