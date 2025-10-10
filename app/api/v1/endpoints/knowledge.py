@@ -26,6 +26,11 @@ class CallRelationship(BaseModel):
     callee_function: str
 
 
+class ConsolidateRequest(BaseModel):
+    limit: int = 10  # Reduzido de 100 para 10 - cada experiência leva ~5-20s para processar
+    batch_size: int = 10
+
+
 @router.post(
     "/index",
     response_model=IndexResponse,
@@ -50,13 +55,18 @@ def trigger_indexing():
     summary="Inicia a consolidação de experiências no grafo de conhecimento",
     tags=["Knowledge Graph"]
 )
-async def trigger_consolidation():
+async def trigger_consolidation(request: ConsolidateRequest = ConsolidateRequest()):
     """
     Busca experiências da memória episódica e as transforma em conhecimento
     estruturado no grafo semântico.
+
+    Parâmetros:
+    - limit: Número de experiências a processar (padrão: 100)
+    - batch_size: Tamanho do lote para processamento (padrão: 10)
     """
     try:
-        result = await knowledge_graph_manager.aconsolidate_experiences_into_graph()
+        # Note: batch_size is accepted but not yet used by the underlying implementation
+        result = await knowledge_graph_manager.aconsolidate_experiences_into_graph(limit=request.limit)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -133,11 +143,6 @@ def get_function_calls(
 class KnowledgeQueryRequest(BaseModel):
     query: str
     limit: int = 10
-
-
-class ConsolidateRequest(BaseModel):
-    limit: int = 100
-    batch_size: int = 10
 
 
 class RelatedConceptsRequest(BaseModel):
@@ -229,3 +234,26 @@ async def knowledge_health():
                 "total_nodes": count_result[0]["total"] if count_result else 0, "sprint": 8}
     except Exception as e:
         raise HTTPException(status_code=503, detail={"status": "unhealthy", "error": str(e)})
+
+
+@router.delete("/clear", summary="Limpa todo o grafo de conhecimento", tags=["Knowledge Graph - Maintenance"])
+async def clear_knowledge_graph():
+    """
+    **ATENÇÃO**: Remove TODOS os nós e relacionamentos do grafo Neo4j.
+    Use apenas para desenvolvimento/testes ou para reiniciar o sistema.
+    """
+    try:
+        # Deleta todos os nós e relacionamentos
+        result = graph_db.query("MATCH (n) DETACH DELETE n", {})
+
+        # Verifica se limpou
+        count_result = graph_db.query("MATCH (n) RETURN count(n) as total", {})
+        remaining_nodes = count_result[0]["total"] if count_result else 0
+
+        return {
+            "status": "success",
+            "message": "Grafo de conhecimento limpo com sucesso",
+            "remaining_nodes": remaining_nodes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})

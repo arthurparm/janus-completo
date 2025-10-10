@@ -7,13 +7,20 @@
 @api_v1_prefix = /api/v1
 
 ###
+# 0. LIMPAR Grafo de Conhecimento (Use com cuidado!)
+#DELETE {{host}}{{api_v1_prefix}}/knowledge/clear
+#Accept: application/json
+
+###
 # 1. Consolidar Conhecimento da Memória Episódica
+# ATENÇÃO: Cada experiência leva ~5-20s para processar (chamada LLM)
+# Com limit=5, espere ~25-100s (até 2 minutos)
 POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
 Content-Type: application/json
 
 {
-  "limit": 100,
-  "batch_size": 10
+  "limit": 5,
+  "batch_size": 5
 }
 
 ###

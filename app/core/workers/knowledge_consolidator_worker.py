@@ -459,7 +459,7 @@ class KnowledgeConsolidator:
                     content = raw_content
                     if settings.MEMORY_ENCRYPTION_KEY:
                         try:
-                            content = decrypt_text(raw_content, settings.MEMORY_ENCRYPTION_KEY)
+                            content = decrypt_text(raw_content, settings.MEMORY_ENCRYPTION_KEY.get_secret_value())
                         except Exception as e:
                             logger.warning(f"Failed to decrypt experience {exp_id}: {e}. Using raw content.")
                             content = raw_content

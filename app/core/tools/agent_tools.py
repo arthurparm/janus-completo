@@ -66,44 +66,115 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
 
 @tool
 def read_file(file_path: str) -> str:
-    """Lê o conteúdo de um arquivo no projeto."""
+    """
+    Lê o conteúdo completo de um arquivo do sistema de arquivos.
+
+    Use esta ferramenta para:
+    - Ler código-fonte, arquivos de configuração, logs
+    - Examinar conteúdo de arquivos de dados (JSON, CSV, TXT)
+    - Verificar conteúdo antes de modificar
+
+    Args:
+        file_path: Caminho do arquivo a ser lido (ex: 'src/main.py', 'config.json')
+
+    Returns:
+        Conteúdo do arquivo ou mensagem de erro se não encontrado
+    """
     return filesystem_manager.read_file(file_path)
 
 
 @tool
 def list_directory(path: str = ".") -> str:
-    """Lista arquivos e pastas no workspace."""
+    """
+    Lista todos os arquivos e diretórios em um caminho específico.
+
+    Use esta ferramenta para:
+    - Explorar a estrutura de diretórios do projeto
+    - Encontrar arquivos disponíveis antes de ler
+    - Verificar se um arquivo ou pasta existe
+
+    Args:
+        path: Caminho do diretório (padrão: "." para diretório atual)
+
+    Returns:
+        Lista formatada de arquivos e diretórios
+    """
     return filesystem_manager.list_directory(path)
 
 
 @tool
 async def recall_experiences(query: str) -> str:
-    """Busca na memória por experiências passadas relevantes."""
+    """
+    Busca na memória episódica por experiências passadas relevantes usando similaridade semântica.
+
+    Use esta ferramenta para:
+    - Lembrar de ações similares executadas anteriormente
+    - Recuperar contexto de tarefas passadas
+    - Aprender com sucessos e falhas anteriores
+    - Encontrar exemplos de como resolver um problema
+
+    Args:
+        query: Descrição do que você quer lembrar (ex: "como escrever arquivos", "erros com API")
+
+    Returns:
+        JSON com até 3 experiências mais relevantes encontradas
+    """
     try:
         experiences = await memory_core.arecall(query=query, n_results=3)
         return json.dumps(experiences, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Error recalling experiences: {e}", exc_info=True)
-        return f"An error occurred while trying to recall experiences: {e}"
+        return f"Erro ao buscar experiências na memória: {e}"
 
 
 @tool
-async def analyze_memory_for_failures(last_n_experiences: int = 20) -> str:
-    """Examina as N experiências mais recentes para identificar padrões de falhas."""
+async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
+    """
+    Analisa as N experiências mais recentes armazenadas na memória episódica
+    para identificar padrões de falhas, erros recorrentes e problemas do sistema.
+
+    Use esta ferramenta quando precisar:
+    - Detectar padrões de falhas recorrentes
+    - Identificar ferramentas problemáticas
+    - Analisar erros recentes do sistema
+    - Fazer diagnóstico de problemas
+
+    Args:
+        last_n_experiences: Número de experiências a analisar (padrão: 100)
+
+    Returns:
+        Resumo das falhas encontradas ou mensagem indicando ausência de falhas.
+    """
     try:
-        experiences = await memory_core.arecall(query="falha", n_results=last_n_experiences)
+        experiences = await memory_core.arecall(query="falha erro error exception", n_results=last_n_experiences)
         failures = [exp for exp in experiences if exp.get("metadata", {}).get("type") == "action_failure"]
         if not failures:
-            return "Análise concluída. Nenhuma falha significativa encontrada."
-        summary = f"Análise de {len(failures)} falhas recentes:\n"
+            return f"Análise concluída. Nenhuma falha significativa encontrada nas últimas {last_n_experiences} experiências."
+
+        summary = f"Análise de {len(failures)} falhas encontradas nas últimas {last_n_experiences} experiências:\n\n"
+
+        # Agrupa falhas por ferramenta
+        failures_by_tool = {}
         for fail in failures:
             tool_used = fail.get("metadata", {}).get("tool_used", "N/A")
-            error = fail.get("content", "Erro desconhecido")
-            summary += f"- Ferramenta '{tool_used}' falhou com o erro: {error}\n"
+            if tool_used not in failures_by_tool:
+                failures_by_tool[tool_used] = []
+            failures_by_tool[tool_used].append(fail)
+
+        # Gera resumo por ferramenta
+        for tool, tool_failures in sorted(failures_by_tool.items(), key=lambda x: len(x[1]), reverse=True):
+            summary += f"\n🔴 Ferramenta '{tool}' - {len(tool_failures)} falha(s):\n"
+            for fail in tool_failures[:3]:  # Mostra até 3 exemplos
+                error = fail.get("content", "Erro desconhecido")[:150]
+                timestamp = fail.get("metadata", {}).get("timestamp", "N/A")
+                summary += f"  - [{timestamp}] {error}\n"
+            if len(tool_failures) > 3:
+                summary += f"  ... e mais {len(tool_failures) - 3} falha(s)\n"
+
         return summary
     except Exception as e:
         logger.error(f"Error analyzing memory for failures: {e}", exc_info=True)
-        return f"An error occurred while analyzing memory: {e}"
+        return f"Erro ao analisar memória para falhas: {e}"
 
 
 # --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
@@ -111,32 +182,41 @@ async def analyze_memory_for_failures(last_n_experiences: int = 20) -> str:
 @tool
 def query_knowledge_graph(query: str) -> str:
     """
-    Consulta o grafo de conhecimento semântico para obter informações estruturadas.
+    Consulta o grafo de conhecimento semântico (Neo4j) para obter informações estruturadas
+    sobre conceitos, ferramentas, erros e relacionamentos consolidados de experiências passadas.
 
-    Use esta ferramenta para:
-    - Encontrar conceitos relacionados
-    - Descobrir padrões e conexões entre entidades
-    - Acessar conhecimento consolidado de experiências passadas
+    Use esta ferramenta quando precisar:
+    - Encontrar conceitos relacionados a uma tecnologia, ferramenta ou problema
+    - Descobrir padrões e conexões entre entidades do sistema
+    - Acessar conhecimento consolidado e estruturado
+    - Investigar causas conhecidas de problemas recorrentes
+    - Entender relacionamentos entre componentes do sistema
 
-    O grafo contém entidades (Concept, Entity, Tool, Error, etc) e seus relacionamentos.
+    O grafo contém nós de tipos: Concept, Tool, Error, Solution, Pattern, Technology
+    E relacionamentos: USES, RELATES_TO, CAUSES, SOLVES, DEPENDS_ON, IMPLEMENTS
 
-    Exemplo: "Quais ferramentas estão relacionadas a erros de timeout?"
+    Args:
+        query: Consulta em linguagem natural (ex: "Quais ferramentas causam erros de timeout?")
+
+    Returns:
+        Resultados estruturados do grafo de conhecimento
     """
     try:
-        from app.core.knowledge_graph_manager import knowledge_graph_manager
+        from app.core.memory.knowledge_graph_manager import knowledge_graph_manager
 
-        result = knowledge_graph_manager.semantic_search(query, limit=5)
+        result = knowledge_graph_manager.semantic_search(query, limit=10)
 
         if not result:
-            return "Nenhum conhecimento relevante encontrado no grafo."
+            return f"Nenhum conhecimento relevante encontrado no grafo para a consulta: '{query}'"
 
-        response = f"Conhecimento encontrado ({len(result)} resultados):\n\n"
-        for item in result:
-            response += f"- {item.get('summary', item)}\n"
+        response = f"📊 Conhecimento encontrado no grafo ({len(result)} resultados):\n\n"
+        for idx, item in enumerate(result, 1):
+            response += f"{idx}. {item.get('summary', item)}\n"
 
         return response
 
     except Exception as e:
+        logger.error(f"Erro ao consultar grafo de conhecimento: {e}", exc_info=True)
         return f"Erro ao consultar grafo de conhecimento: {e}"
 
 
@@ -234,14 +314,35 @@ def get_entity_details(entity_name: str) -> str:
 
 @tool
 def get_current_datetime() -> str:
-    """Retorna a data e hora atual."""
+    """
+    Retorna a data e hora atual do sistema com informações detalhadas.
+
+    Use esta ferramenta para:
+    - Saber a data/hora atual para timestamping
+    - Verificar dia da semana, mês, ano
+    - Obter informações temporais para contexto
+
+    Returns:
+        JSON com data, hora, timestamp, dia da semana, etc
+    """
     ctx = context_manager.get_current_context()
     return json.dumps(ctx.datetime_info, indent=2, ensure_ascii=False)
 
 
 @tool
 def get_system_info() -> str:
-    """Retorna informações sobre o sistema operacional e ambiente."""
+    """
+    Retorna informações detalhadas sobre o sistema operacional e ambiente de execução.
+
+    Use esta ferramenta para:
+    - Verificar plataforma (Windows, Linux, Mac)
+    - Obter versão do Python
+    - Consultar variáveis de ambiente
+    - Adaptar comportamento ao sistema
+
+    Returns:
+        JSON com informações do sistema operacional e ambiente
+    """
     ctx = context_manager.get_current_context()
     return json.dumps({
         "system": ctx.system_info,
@@ -252,8 +353,20 @@ def get_system_info() -> str:
 @tool
 def search_web(query: str, max_results: int = 3) -> str:
     """
-    Busca informações na web usando Tavily.
-    Útil para obter informações atualizadas e contexto externo.
+    Busca informações atualizadas na web usando Tavily Search API.
+
+    Use esta ferramenta quando precisar:
+    - Informações atualizadas sobre eventos recentes
+    - Documentação técnica online
+    - Verificar fatos ou dados atuais
+    - Pesquisar soluções para problemas
+
+    Args:
+        query: Termo de busca (ex: "Python async best practices 2024")
+        max_results: Número máximo de resultados (padrão: 3)
+
+    Returns:
+        JSON com resultados da busca web
     """
     result = context_manager.search_web(query, max_results=max_results)
     return json.dumps(result.model_dump(), indent=2, ensure_ascii=False)
@@ -262,8 +375,19 @@ def search_web(query: str, max_results: int = 3) -> str:
 @tool
 def get_enriched_context(query: str = "", include_web: bool = False) -> str:
     """
-    Retorna contexto completo: data/hora, sistema e opcionalmente busca web.
-    Use quando precisar de contexto ambiental completo para tomar decisões.
+    Retorna contexto ambiental completo: data/hora, sistema e opcionalmente busca web.
+
+    Use esta ferramenta quando precisar:
+    - Contexto completo do ambiente de execução
+    - Combinar informações locais e web
+    - Tomar decisões baseadas em contexto amplo
+
+    Args:
+        query: Consulta para busca web opcional
+        include_web: Se True, inclui resultados de busca web
+
+    Returns:
+        JSON com contexto completo (datetime, system, environment, web results se solicitado)
     """
     ctx = context_manager.get_enriched_context(
         query=query if query else None,

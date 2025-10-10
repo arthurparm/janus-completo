@@ -84,6 +84,7 @@ def read_file(file_path: str) -> str:
     Lê o conteúdo de QUALQUER ficheiro dentro do diretório do projeto /app.
     Esta é a implementação da "Liberdade de Leitura".
     O caminho deve ser fornecido a partir da raiz do projeto, ex: 'app/main.py'.
+    Inclui retry automático para lidar com falhas temporárias.
     """
     try:
         absolute_path = (APP_DIR / file_path.lstrip('/')).resolve()
@@ -93,16 +94,47 @@ def read_file(file_path: str) -> str:
                 f"Acesso de leitura negado: O caminho '{file_path}' está fora da área segura da aplicação (/app).")
 
         logger.info(f"Lendo ficheiro de forma segura: {absolute_path}")
-        with open(absolute_path, 'r', encoding='utf-8', newline='') as f:
-            data = f.read()
-        _FS_OPS.labels("read", "success", absolute_path.suffix.lower()).inc()
-        _FS_BYTES.labels("read").inc(len(data.encode('utf-8')))
-        return data
+
+        # Retry aprimorado: até 3 tentativas para leitura
+        max_attempts = 3
+        attempt = 0
+        last_err: Optional[Exception] = None
+
+        while attempt < max_attempts:
+            try:
+                with open(absolute_path, 'r', encoding='utf-8', newline='') as f:
+                    data = f.read()
+                _FS_OPS.labels("read", "success", absolute_path.suffix.lower()).inc()
+                _FS_BYTES.labels("read").inc(len(data.encode('utf-8')))
+
+                if attempt > 0:
+                    logger.info(f"Leitura bem-sucedida após {attempt} tentativa(s)")
+
+                return data
+
+            except FileNotFoundError:
+                # FileNotFoundError não deve fazer retry
+                raise
+
+            except Exception as e:
+                last_err = e
+                attempt += 1
+
+                if attempt < max_attempts:
+                    backoff = 0.02 * (2 ** (attempt - 1))  # 20ms, 40ms, 80ms
+                    logger.warning(
+                        f"Tentativa de leitura {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}")
+                    time.sleep(backoff)
+
+        # Se chegou aqui, falhou
+        raise last_err if last_err else RuntimeError("Falha desconhecida na leitura")
+
     except FileNotFoundError:
         _FS_OPS.labels("read", "not_found", Path(file_path).suffix.lower()).inc()
         return f"Erro: O ficheiro '{file_path}' não foi encontrado."
     except Exception as e:
         _FS_OPS.labels("read", "error", Path(file_path).suffix.lower()).inc()
+        logger.error(f"Erro ao ler ficheiro após retries: {e}")
         return f"Erro ao ler o ficheiro '{file_path}': {e}"
 
 
@@ -174,10 +206,12 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
         logger.info(f"Escrevendo em ficheiro de forma segura: {absolute_path}")
         absolute_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Retry simples até 2 tentativas
+        # Retry aprimorado: até 3 tentativas com backoff exponencial
+        max_attempts = 3
         attempt = 0
         last_err: Optional[Exception] = None
-        while attempt < 2:
+
+        while attempt < max_attempts:
             try:
                 with open(absolute_path, 'w', encoding='utf-8', newline='\n') as f:
                     f.write(normalized)
@@ -186,21 +220,35 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
                 bytes_len = len(normalized.encode('utf-8'))
                 _FS_OPS.labels("write", "success", ext).inc()
                 _FS_BYTES.labels("write").inc(bytes_len)
-                logger.info({
+
+                # Log sucesso com info sobre tentativas se houver retry
+                log_data = {
                     "event": "write_file_success",
                     "path": str(absolute_path),
                     "bytes": bytes_len,
                     "overwrite": overwrite,
                     "latency_ms": round(elapsed, 1)
-                })
+                }
+                if attempt > 0:
+                    log_data["retries"] = attempt
+                    logger.info(f"Escrita bem-sucedida após {attempt} tentativa(s)")
+
+                logger.info(log_data)
                 return f"Ficheiro '{file_path}' escrito com sucesso no workspace."
+
             except Exception as e:
                 last_err = e
                 attempt += 1
-                time.sleep(0.05 * attempt)
 
-        # Se chegou aqui, falhou
+                if attempt < max_attempts:
+                    # Backoff exponencial: 50ms, 200ms, 800ms
+                    backoff = 0.05 * (4 ** (attempt - 1))
+                    logger.warning(f"Tentativa {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}")
+                    time.sleep(backoff)
+
+        # Se chegou aqui, falhou todas as tentativas
         _record_failure()
+        logger.error(f"Escrita falhou após {max_attempts} tentativas: {last_err}")
         raise last_err if last_err else RuntimeError("Falha desconhecida na escrita")
 
     except Exception as e:
