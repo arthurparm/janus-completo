@@ -92,7 +92,7 @@ def _validate_openai_key(key: Optional[str]) -> bool:
     return True
 
 
-def _health_check_ollama(llm: ChatOllama, timeout_s: int = 10) -> bool:
+def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ollama_health")

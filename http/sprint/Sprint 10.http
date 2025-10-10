@@ -8,6 +8,7 @@
 
 ###
 # 1. Invocar LLM com Estratégia Local Only
+# NOTA: Primeira invocação pode demorar 20-30s (carregamento do modelo)
 POST {{host}}{{api_v1_prefix}}/llm/invoke
 Content-Type: application/json
 
@@ -15,7 +16,7 @@ Content-Type: application/json
   "prompt": "Explique em uma frase o que é um circuit breaker",
   "role": "orchestrator",
   "priority": "local_only",
-  "timeout_seconds": 30
+  "timeout_seconds": 45
 }
 
 ###
