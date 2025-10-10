@@ -454,7 +454,15 @@ class KnowledgeConsolidator:
                 try:
                     exp_id = str(point.id)
                     raw_content = point.payload.get("content", "")
-                    content = decrypt_text(raw_content)
+
+                    # Decrypt content if encryption key is configured
+                    content = raw_content
+                    if settings.MEMORY_ENCRYPTION_KEY:
+                        try:
+                            content = decrypt_text(raw_content, settings.MEMORY_ENCRYPTION_KEY)
+                        except Exception as e:
+                            logger.warning(f"Failed to decrypt experience {exp_id}: {e}. Using raw content.")
+                            content = raw_content
 
                     # Filtra conteúdo vazio
                     if not content or len(content.strip()) < 10:

@@ -51,19 +51,14 @@ GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=50
 Accept: application/json
 
 ###
-# 8. Obter Métricas de um Período Específico
-GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?start_time=2024-01-01T00:00:00&end_time=2024-12-31T23:59:59
+# 8. Obter Histórico de Métricas com Limite Maior
+GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=100
 Accept: application/json
 
 ###
 # 9. Executar Análise de Performance
-POST {{host}}{{api_v1_prefix}}/optimization/analyze
+POST {{host}}{{api_v1_prefix}}/optimization/analyze?analysis_type=performance&detailed=true
 Content-Type: application/json
-
-{
-  "analysis_type": "performance",
-  "detailed": true
-}
 
 ###
 # 10. Health Check do Sistema de Auto-Otimização

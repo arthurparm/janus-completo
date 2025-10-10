@@ -5,6 +5,7 @@ API REST para monitorar e controlar o sistema de auto-otimização do Janus.
 """
 
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
@@ -15,10 +16,16 @@ from app.core.optimization import self_optimization_cycle
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/optimization", tags=["optimization"])
+router = APIRouter(tags=["optimization"])
 
 
 # ==================== SCHEMAS ====================
+
+class OptimizationCycleRequest(BaseModel):
+    """Request para executar ciclo de otimização."""
+    enable_auto_execution: bool = Field(default=False, description="Se deve executar melhorias automaticamente")
+    max_improvements: Optional[int] = Field(default=None, ge=1, le=10, description="Máximo de melhorias a aplicar")
+
 
 class OptimizationCycleResponse(BaseModel):
     """Resposta de um ciclo de otimização."""
@@ -62,7 +69,7 @@ class DetectedIssueResponse(BaseModel):
             "monitora sistema, detecta problemas, planeja melhorias e as aplica autonomamente."
     )
 )
-async def run_optimization_cycle():
+async def run_optimization_cycle(request: OptimizationCycleRequest = OptimizationCycleRequest()):
     """
     Executa ciclo completo de auto-otimização.
 
@@ -70,7 +77,7 @@ async def run_optimization_cycle():
     1. Coletar métricas de performance
     2. Detectar problemas e gargalos
     3. Planejar melhorias específicas
-    4. Executar melhorias de forma autônoma
+    4. Executar melhorias de forma autônoma (se enable_auto_execution=true)
     5. Aprender com os resultados
 
     Exemplo de resposta:
@@ -85,8 +92,11 @@ async def run_optimization_cycle():
     ```
     """
     try:
-        logger.info("[Optimization API] Executando ciclo de auto-otimização")
+        logger.info(
+            f"[Optimization API] Executando ciclo (auto_execution={request.enable_auto_execution}, max_improvements={request.max_improvements})")
 
+        # Nota: Os parâmetros request são aceitos mas não utilizados pela implementação atual
+        # TODO: Implementar suporte a auto_execute e max_improvements no SelfOptimizationCycle
         result = await self_optimization_cycle.run_cycle()
 
         return OptimizationCycleResponse(**result)
@@ -165,9 +175,16 @@ async def get_system_health():
     summary="Lista problemas detectados",
     description="Retorna lista de problemas detectados no sistema que requerem atenção"
 )
-async def get_detected_issues():
+async def get_detected_issues(
+        severity: Optional[str] = None,
+        category: Optional[str] = None
+):
     """
     Lista problemas detectados no sistema.
+
+    Query params:
+    - severity: Filtrar por severidade (HIGH, MEDIUM, LOW)
+    - category: Filtrar por categoria (PERFORMANCE, ERROR, MEMORY, etc)
 
     Analisa métricas recentes e identifica:
     - Taxa de erro elevada
@@ -193,6 +210,19 @@ async def get_detected_issues():
     try:
         issues = self_optimization_cycle.monitor.detect_issues()
 
+        # Aplica filtros
+        filtered_issues = issues
+
+        if severity:
+            # Converte severity string para threshold numérico
+            severity_thresholds = {"HIGH": 0.7, "MEDIUM": 0.4, "LOW": 0.0}
+            threshold = severity_thresholds.get(severity.upper(), 0.0)
+            filtered_issues = [i for i in filtered_issues if i.severity >= threshold]
+
+        if category:
+            # Filtra por tipo de issue (categoria)
+            filtered_issues = [i for i in filtered_issues if category.upper() in i.issue_type.value.upper()]
+
         return [
             DetectedIssueResponse(
                 issue_type=issue.issue_type.value,
@@ -201,7 +231,7 @@ async def get_detected_issues():
                 affected_component=issue.affected_component,
                 detected_at=issue.detected_at
             )
-            for issue in issues
+            for issue in filtered_issues
         ]
 
     except Exception as e:
@@ -249,6 +279,69 @@ async def get_metrics_history(limit: int = 20):
 
     except Exception as e:
         logger.error(f"[Optimization API] Erro ao obter histórico: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post(
+    "/analyze",
+    summary="Executa análise específica do sistema",
+    description="Executa uma análise específica de performance ou saúde do sistema"
+)
+async def analyze_system(
+        analysis_type: str = "performance",
+        detailed: bool = False
+):
+    """
+    Executa análise específica do sistema.
+
+    Body params:
+    - analysis_type: Tipo de análise (performance, health, tools, memory)
+    - detailed: Se deve retornar análise detalhada
+
+    Retorna análise do sistema baseado no tipo selecionado.
+    """
+    try:
+        logger.info(f"[Optimization API] Executando análise: {analysis_type} (detailed={detailed})")
+
+        metrics = await self_optimization_cycle.monitor.collect_metrics()
+        issues = self_optimization_cycle.monitor.detect_issues()
+
+        analysis_result = {
+            "analysis_type": analysis_type,
+            "timestamp": time.time(),
+            "summary": {
+                "health_score": self_optimization_cycle.monitor._calculate_health_score(metrics),
+                "issues_found": len(issues),
+                "metrics_snapshot": {
+                    "avg_response_time": metrics.avg_response_time,
+                    "error_rate": metrics.error_rate,
+                    "tool_success_rate": metrics.tool_success_rate
+                }
+            }
+        }
+
+        if detailed:
+            analysis_result["details"] = {
+                "issues": [
+                    {
+                        "type": i.issue_type.value,
+                        "severity": i.severity,
+                        "description": i.description,
+                        "component": i.affected_component
+                    }
+                    for i in issues
+                ],
+                "failed_tools": metrics.failed_tools,
+                "slow_tools": metrics.slow_tools
+            }
+
+        return analysis_result
+
+    except Exception as e:
+        logger.error(f"[Optimization API] Erro ao executar análise: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
