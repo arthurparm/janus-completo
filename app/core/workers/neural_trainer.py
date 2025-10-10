@@ -13,11 +13,20 @@ def start_training_process() -> dict:
     """
     logger.info("Iniciando o processo de treino de modelo neural...")
 
+    # Verifica se está em DRY_RUN mode
+    from app.config import settings
+    if settings.DRY_RUN:
+        logger.info("Modo DRY_RUN: simulando treinamento sem arquivo real.")
+        import time
+        time.sleep(2)
+        summary = "Processo de treino simulado concluído com sucesso (DRY_RUN mode - 100 exemplos mock)."
+        return {"message": "Treino concluído.", "summary": summary}
+
     training_file_path = os.path.join("workspace", TRAINING_DATA_FILE)
 
     training_data_content = read_file(training_file_path)
 
-    if "Erro: O arquivo" in training_data_content:
+    if "Erro: O ficheiro" in training_data_content or "Erro: O arquivo" in training_data_content:
         summary = f"Ficheiro de dados de treino '{TRAINING_DATA_FILE}' não encontrado no workspace. Execute o processo de coleta primeiro."
         logger.error(summary)
         # Retorna uma estrutura que a API pode usar para retornar um erro 404

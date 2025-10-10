@@ -70,7 +70,7 @@ Accept: application/json
 
 ###
 # 7. Obter Detalhes de um Modelo Específico
-GET {{host}}{{api_v1_prefix}}/learning/models/janus-classifier-v1
+GET {{host}}{{api_v1_prefix}}/learning/models/janus-classifier-v2
 Accept: application/json
 
 ###
@@ -79,7 +79,7 @@ POST {{host}}{{api_v1_prefix}}/learning/evaluate
 Content-Type: application/json
 
 {
-  "model_id": "janus-classifier-v1",
+  "model_id": "janus-classifier-v2",
   "test_data_limit": 50
 }
 
