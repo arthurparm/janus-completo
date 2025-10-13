@@ -4,22 +4,23 @@ import time
 from enum import Enum
 from typing import Optional, Dict, Any, Callable
 
+import structlog
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
-from app.core.infrastructure.resilience import CircuitBreaker, CircuitOpenError
+from app.core.infrastructure.resilience import CircuitBreaker
 from app.core.memory.memory_core import memory_core
+from app.db.graph import graph_db
 from app.models.schemas import Experience
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class Phase(Enum):
     PLAN = "plan"
     ACT = "act"
     OBSERVE = "observe"
     REFINE = "refine"
-
 
 _META_EVENTS = Counter("meta_agent_events_total", "Eventos do meta-agente por fase", ["phase", "outcome"])
 _META_LAT = Histogram("meta_agent_phase_latency_seconds", "Latência por fase do meta-agente", ["phase", "outcome"])
@@ -28,7 +29,7 @@ _interrupt_event: Optional[asyncio.Event] = None
 _meta_agent_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=300)
 
 _MAX_CONSECUTIVE_FAILURES = 10
-_PHASE_TIMEOUT = getattr(settings, "META_AGENT_PHASE_TIMEOUT", 120)
+_PHASE_TIMEOUT = getattr(settings, "META_AGENT_PHASE_TIMEOUT", 180)
 
 def request_stop_current_cycle():
     global _interrupt_event
@@ -63,58 +64,70 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
     iteration = shared.get("iteration", 0)
 
     async def _phase_plan() -> Dict[str, Any]:
-        prompt = "Você é o supervisor. Crie um plano conciso para analisar logs/experiências recentes e detectar padrões de falha recorrentes."
+        prompt = "Você é o supervisor do sistema Janus. Seu objetivo é garantir a saúde e eficiência do sistema. Formule um plano para analisar o conhecimento consolidado do sistema em busca de padrões de falha."
         result = await agent_manager.arun_agent(question=prompt, request=None, agent_type=AgentType.META_AGENT)
-        if not result or "error" in result:
-            plan = "Falha ao gerar plano. Analisar últimas experiências e métricas como fallback."
-            logger.warning(
-                f"META-AGENT (PLAN): Falha na execução do agente: {result.get('error', 'Erro desconhecido') if result else 'None'}")
-        else:
-            plan = result.get("answer") or "Analisar últimas experiências e métricas."
+        plan = result.get(
+            "answer") if result and "answer" in result else "Plano padrão: Consultar o Grafo de Conhecimento por lições aprendidas (Reflections) e analisar padrões."
         return {"plan": plan}
 
     async def _phase_act() -> Dict[str, Any]:
-        query = "experiência do agente"
-        experiences = await memory_core.arecall(query, 10)
+        logger.info("Consultando Grafo de Conhecimento por lições aprendidas (Reflections).")
+        reflections = []
+        try:
+            async with graph_db.get_driver().session() as session:
+                # Esta consulta busca os 15 insights mais recentes dos nós de Reflexão.
+                query = "MATCH (r:Reflection) RETURN r.insight as insight ORDER BY r.createdAt DESC LIMIT 15"
+                result = await session.run(query)
+                reflections = [record["insight"] for record in await result.list()]
+        except Exception as e:
+            logger.error(f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True)
+            return {"analysis": "Falha crítica ao acessar a Memória Semântica (Grafo de Conhecimento)."}
 
-        # Limita o tamanho das experiências para não ultrapassar o limite de 10000 caracteres
-        experiences_str = str(experiences)
-        max_exp_length = 8000  # Deixa espaço para o prompt
-        if len(experiences_str) > max_exp_length:
-            experiences_str = experiences_str[:max_exp_length] + "... [truncado]"
+        if not reflections:
+            analysis = "Nenhuma reflexão (lição aprendida) encontrada no Grafo de Conhecimento. O sistema parece estável ou ainda não consolidou novas falhas."
+            logger.info(analysis)
+            return {"analysis": analysis, "has_issue": False}
 
+        reflections_str = "\n- ".join(reflections)
+        prompt = f"""Analise estas lições aprendidas (Reflections) extraídas da Memória Semântica do sistema. Existem padrões recorrentes ou uma causa raiz comum que precise de atenção?
+
+        Lições Aprendidas Recentes:
+        - {reflections_str}
+
+        Forneça uma análise concisa e, se aplicável, sugira uma hipótese para a causa raiz.
+        """
+        
         result = await agent_manager.arun_agent(
-            question=f"Analise estas experiências e aponte padrões de falha ou ineficiências. {experiences_str}",
+            question=prompt,
             request=None,
             agent_type=AgentType.META_AGENT,
         )
-        if not result or "error" in result:
-            analysis = "Falha ao analisar experiências."
-            logger.warning(
-                f"META-AGENT (ACT): Falha na execução do agente: {result.get('error', 'Erro desconhecido') if result else 'None'}")
-        else:
-            analysis = result.get("answer", "")
-        return {"analysis": analysis}
+
+        analysis = result.get("answer", "Falha ao analisar as reflexões.") if result else "Nenhuma resposta do agente."
+        return {"analysis": analysis, "has_issue": True}
 
     async def _phase_observe(act_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not act_result:
             return {"has_issue": True, "analysis": "Fase ACT falhou, impossível observar."}
+
         analysis = act_result.get("analysis", "")
-        has_issue = any(k in analysis.lower() for k in ["falha", "erro", "ineficiência", "caiu", "timeout"])
+        # A decisão de 'has_issue' agora é primariamente determinada pela fase ACT.
+        has_issue = act_result.get("has_issue", False)
         return {"has_issue": has_issue, "analysis": analysis}
 
     async def _phase_refine(obs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not obs:
             return {"refinement": "Fase OBSERVE falhou, impossível refinar."}
         if obs.get("has_issue"):
-            refinement = "Recomendar tarefa para TOOL_USER investigar e corrigir causa raiz."
+            refinement = f"Hipótese de problema detectada com base na análise do Grafo de Conhecimento. Análise: {obs.get('analysis', '')}. Recomendar investigação humana ou criação de um agente corretivo."
         else:
-            refinement = "Sem problemas críticos detectados; registrar status saudável."
+            refinement = "Nenhum problema crítico detectado na Memória Semântica. O sistema está operando conforme as lições aprendidas."
         return {"refinement": refinement}
 
+    # ... (o resto do ciclo permanece o mesmo)
+
     res_plan = await _run_phase(Phase.PLAN, _phase_plan)
-    if res_plan.get("ok"):
-        shared["hypothesis"] = res_plan.get("result", {}).get("plan")
+    if res_plan.get("ok"): shared["hypothesis"] = res_plan.get("result", {}).get("plan")
 
     try:
         await memory_core.amemorize(
