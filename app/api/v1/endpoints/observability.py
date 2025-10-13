@@ -1,89 +1,52 @@
-"""
-API endpoints para observabilidade e resiliência (Sprint 12).
-"""
-import logging
+import structlog
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from app.core.monitoring import get_health_monitor
-from app.core.monitoring import get_poison_pill_handler
+from app.services.observability_service import (
+    observability_service,
+    ObservabilityServiceError,
+    MessageNotFoundError
+)
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/observability", tags=["Observability"])
+logger = structlog.get_logger(__name__)
 
 
-# --- Schemas ---
+# --- Pydantic Models (DTOs) ---
 
 class ReleaseQuarantineRequest(BaseModel):
     message_id: str
     allow_retry: bool = False
 
-
 # --- Endpoints ---
 
-@router.get("/health/system")
+@router.get("/health/system", summary="Retorna a saúde agregada do sistema")
 async def get_system_health():
-    """
-    Retorna visão agregada da saúde de todos os componentes do sistema.
-
-    Inclui:
-    - Status geral (healthy/degraded/unhealthy)
-    - Score de saúde (0-100)
-    - Status individual de cada componente
-    """
+    """Delega a busca da saúde do sistema para o ObservabilityService."""
     try:
-        monitor = get_health_monitor()
-        return monitor.get_system_health()
-    except Exception as e:
-        logger.error(f"Erro ao obter saúde do sistema: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return await observability_service.get_system_health()
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço de observabilidade ao buscar saúde do sistema", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/health/components/{component}")
-async def check_component_health(component: str):
-    """
-    Executa health check de um componente específico.
-    """
-    try:
-        monitor = get_health_monitor()
-        result = await monitor.check_component(component)
-        return result.to_dict()
-    except Exception as e:
-        logger.error(f"Erro ao verificar componente {component}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/health/check-all")
+@router.post("/health/check-all", summary="Força a execução de todos os health checks")
 async def check_all_components():
-    """
-    Força execução imediata de health checks em todos os componentes.
-    """
+    """Delega a execução de todos os health checks para o ObservabilityService."""
     try:
-        monitor = get_health_monitor()
-        results = await monitor.check_all_components()
-        return {
-            "total_components": len(results),
-            "results": {name: r.to_dict() for name, r in results.items()}
-        }
-    except Exception as e:
-        logger.error(f"Erro ao executar health checks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return await observability_service.check_all_components()
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço de observabilidade ao executar health checks", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/poison-pills/quarantined")
+@router.get("/poison-pills/quarantined", summary="Retorna mensagens em quarentena")
 async def get_quarantined_messages(queue: Optional[str] = None):
-    """
-    Retorna mensagens em quarentena.
-
-    Query params:
-    - queue: Filtrar por fila específica
-    """
+    """Delega a busca de mensagens em quarentena para o ObservabilityService."""
     try:
-        handler = get_poison_pill_handler()
-        messages = handler.get_quarantined_messages(queue=queue)
-
+        messages = observability_service.get_quarantined_messages(queue=queue)
         return {
             "total_quarantined": len(messages),
             "messages": [
@@ -93,132 +56,43 @@ async def get_quarantined_messages(queue: Optional[str] = None):
                     "reason": msg.reason,
                     "failure_count": msg.failure_record.failure_count,
                     "quarantined_at": msg.quarantined_at.isoformat(),
-                    "first_failure": msg.failure_record.first_failure.isoformat(),
-                    "last_failure": msg.failure_record.last_failure.isoformat()
                 }
                 for msg in messages
             ]
         }
-    except Exception as e:
-        logger.error(f"Erro ao obter mensagens em quarentena: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço ao buscar mensagens em quarentena", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/poison-pills/release")
+@router.post("/poison-pills/release", summary="Libera uma mensagem da quarentena")
 async def release_from_quarantine(request: ReleaseQuarantineRequest):
-    """
-    Remove uma mensagem da quarentena.
-
-    Útil para liberar manualmente mensagens após correção do problema.
-    """
+    """Delega a liberação de uma mensagem para o ObservabilityService."""
     try:
-        handler = get_poison_pill_handler()
-        msg = handler.release_from_quarantine(
-            request.message_id,
-            allow_retry=request.allow_retry
-        )
-
-        if not msg:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Mensagem {request.message_id} não encontrada em quarentena"
-            )
-
-        return {
-            "message": "Mensagem liberada da quarentena",
-            "message_id": msg.message_id,
-            "queue": msg.queue,
-            "allow_retry": request.allow_retry
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao liberar mensagem: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = observability_service.release_from_quarantine(request.message_id, request.allow_retry)
+        return {"message": "Mensagem liberada com sucesso", "message_id": msg.message_id}
+    except MessageNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço ao liberar mensagem", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/poison-pills/cleanup")
-async def cleanup_expired_quarantine():
-    """
-    Remove mensagens expiradas da quarentena.
-
-    Mensagens que ultrapassaram o tempo de quarentena são automaticamente liberadas.
-    """
-    try:
-        handler = get_poison_pill_handler()
-        removed_count = handler.cleanup_expired_quarantine()
-
-        return {
-            "message": "Limpeza de quarentena concluída",
-            "removed_count": removed_count
-        }
-    except Exception as e:
-        logger.error(f"Erro ao limpar quarentena: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/poison-pills/stats")
+@router.get("/poison-pills/stats", summary="Retorna estatísticas de poison pills")
 async def get_poison_pill_stats(queue: Optional[str] = None):
-    """
-    Retorna estatísticas de poison pills.
-
-    Query params:
-    - queue: Filtrar por fila específica
-    """
+    """Delega a busca de estatísticas de poison pills para o ObservabilityService."""
     try:
-        handler = get_poison_pill_handler()
-        stats = handler.get_failure_stats(queue=queue)
-        return stats
-    except Exception as e:
-        logger.error(f"Erro ao obter estatísticas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return observability_service.get_poison_pill_stats(queue=queue)
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço ao buscar estatísticas de poison pills", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/metrics/summary")
+@router.get("/metrics/summary", summary="Retorna um resumo de métricas chave do sistema")
 async def get_metrics_summary():
-    """
-    Retorna resumo de métricas chave do sistema.
-
-    Agrega métricas de:
-    - LLM usage
-    - Circuit breakers
-    - Multi-agent tasks
-    - Poison pills
-    """
+    """Delega a geração do resumo de métricas para o ObservabilityService."""
     try:
-        from app.core.llm import _provider_circuit_breakers, _llm_cache
-        from app.core.agents import get_multi_agent_system
-
-        # LLM metrics
-        llm_stats = {
-            "cached_llms": len(_llm_cache),
-            "circuit_breakers": {
-                provider: {
-                    "state": cb.state.value,
-                    "failure_count": cb.failure_count
-                }
-                for provider, cb in _provider_circuit_breakers.items()
-            }
-        }
-
-        # Multi-agent metrics
-        ma_system = get_multi_agent_system()
-        ma_stats = {
-            "active_agents": len(ma_system.agents),
-            "workspace_tasks": len(ma_system.workspace.tasks),
-            "workspace_artifacts": len(ma_system.workspace.artifacts)
-        }
-
-        # Poison pill metrics
-        pp_handler = get_poison_pill_handler()
-        pp_stats = pp_handler.get_health_status()
-
-        return {
-            "timestamp": "now",
-            "llm": llm_stats,
-            "multi_agent": ma_stats,
-            "poison_pills": pp_stats
-        }
-    except Exception as e:
-        logger.error(f"Erro ao obter resumo de métricas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return observability_service.get_metrics_summary()
+    except ObservabilityServiceError as e:
+        logger.error("Erro no serviço ao gerar resumo de métricas", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
