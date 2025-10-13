@@ -1,159 +1,69 @@
-"""
-Sprint 5: Endpoint de Reflexion - Auto-otimização e Aprendizado com Erros
-
-Expõe funcionalidades do sistema Reflexion via API REST.
-"""
-
-import logging
-from dataclasses import asdict
+import structlog
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.problem_details import ProblemDetails
-from app.core.optimization import arun_with_reflexion, ReflexionConfig
-from app.core.agents.agent_manager import reset_agent_circuit_breaker, AgentType
+from app.services.reflexion_service import (
+    reflexion_service,
+    ReflexionServiceError,
+    ReflexionValidationError,
+    ReflexionTimeoutError
+)
 
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/reflexion", tags=["Reflexion"])
+logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/reflexion", tags=["reflexion"])
 
+# --- Pydantic Models (DTOs) ---
 
 class ReflexionRequest(BaseModel):
-    """Request para executar tarefa com Reflexion."""
-    task: str = Field(..., description="Tarefa a ser executada com autocrítica e refinamento", min_length=1)
-    max_iterations: Optional[int] = Field(None, description="Número máximo de iterações (padrão: 3)", ge=1, le=10)
-    max_time_seconds: Optional[int] = Field(None, description="Tempo máximo em segundos (padrão: 180)", ge=30, le=600)
-    success_threshold: Optional[float] = Field(None, description="Score mínimo para sucesso (0.0-1.0, padrão: 0.8)",
-                                               ge=0.0, le=1.0)
-
+    task: str = Field(..., min_length=1)
+    max_iterations: Optional[int] = Field(None, ge=1, le=10)
+    max_time_seconds: Optional[int] = Field(None, ge=30, le=600)
+    success_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class ReflexionResponse(BaseModel):
-    """Resposta da execução Reflexion."""
-    success: bool = Field(..., description="Se a tarefa atingiu o threshold de sucesso")
-    best_result: str = Field(..., description="Melhor resultado obtido")
-    best_score: float = Field(..., description="Melhor score alcançado (0.0-1.0)")
-    iterations: int = Field(..., description="Número de iterações executadas")
-    lessons_learned: list[str] = Field(..., description="Lições gerais extraídas do processo")
-    elapsed_seconds: float = Field(..., description="Tempo total de execução")
-    steps: list[dict] = Field(..., description="Histórico detalhado de todas as iterações")
+    success: bool
+    best_result: str
+    best_score: float
+    iterations: int
+    lessons_learned: list[str]
+    elapsed_seconds: float
+    steps: list[dict]
 
 
-@router.post(
-    "/execute",
-    response_model=ReflexionResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Executa tarefa com Reflexion",
-    description=(
-            "Executa uma tarefa usando o padrão Reflexion: o agente tenta, avalia criticamente, "
-            "reflete sobre erros e tenta novamente com melhorias até atingir sucesso ou limite de iterações."
-    )
-)
+# --- Endpoints ---
+
+@router.post("/execute", response_model=ReflexionResponse, summary="Executa tarefa com o ciclo Reflexion")
 async def execute_with_reflexion(request: ReflexionRequest):
-    """
-    Executa uma tarefa com o ciclo completo de Reflexion.
-
-    O sistema irá:
-    1. Executar a tarefa
-    2. Avaliar criticamente o resultado
-    3. Refletir sobre o que deu errado
-    4. Tentar novamente incorporando os aprendizados
-    5. Repetir até atingir sucesso ou limite de iterações
-    6. Extrair lições aprendidas para uso futuro
-
-    Exemplo:
-    ```json
-    {
-        "task": "Calcule a média de [10, 20, 30, 40] e explique o método usado",
-        "max_iterations": 3,
-        "success_threshold": 0.8
-    }
-    ```
-    """
+    """Delega a execução de uma tarefa com o ciclo de auto-otimização para o ReflexionService."""
     try:
-        logger.info(f"[Reflexion] Iniciando execução para tarefa: {request.task[:100]}...")
+        config_overrides = {
+            "max_iterations": request.max_iterations,
+            "max_time_seconds": request.max_time_seconds,
+            "success_threshold": request.success_threshold,
+        }
+        result = await reflexion_service.run_reflexion_cycle(request.task, config_overrides)
 
-        # Monta configuração
-        config = ReflexionConfig()
-        if request.max_iterations is not None:
-            config.max_iterations = request.max_iterations
-        if request.max_time_seconds is not None:
-            config.max_time_seconds = request.max_time_seconds
-        if request.success_threshold is not None:
-            config.success_threshold = request.success_threshold
+        # O serviço já retorna um dict serializável, então podemos passar diretamente
+        return ReflexionResponse(**result)
 
-        # Executa Reflexion
-        result = await arun_with_reflexion(
-            task=request.task,
-            evaluator=None,  # Usa avaliador padrão
-            config=config
-        )
-
-        iterations = len(result.get("steps", []))
-        logger.info(f"[Reflexion] Concluído: {iterations} iterações, score: {result['best_score']:.2f}")
-
-        # Converte ReflexionStep dataclasses para dicts
-        steps_as_dicts = [asdict(step) for step in result["steps"]]
-
-        return ReflexionResponse(
-            success=result["success"],
-            best_result=result["best_result"],
-            best_score=result["best_score"],
-            iterations=iterations,
-            lessons_learned=result["lessons_learned"],
-            elapsed_seconds=0.0,  # TODO: calcular elapsed_seconds no ReflexionSession
-            steps=steps_as_dicts
-        )
-
-    except ValueError as e:
-        logger.warning(f"[Reflexion] Erro de validação: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ProblemDetails(
-                type="validation_error",
-                title="Entrada Inválida",
-                status=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
-                instance="/api/v1/reflexion/execute"
-            ).model_dump()
-        )
-
-    except TimeoutError as e:
-        logger.error(f"[Reflexion] Timeout: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=ProblemDetails(
-                type="timeout_error",
-                title="Tempo Limite Excedido",
-                status=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail=f"A execução excedeu o tempo limite: {e}",
-                instance="/api/v1/reflexion/execute"
-            ).model_dump()
-        )
-
-    except Exception as e:
-        logger.error(f"[Reflexion] Erro inesperado: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ProblemDetails(
-                type="internal_error",
-                title="Erro Interno",
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erro ao executar Reflexion: {str(e)}",
-                instance="/api/v1/reflexion/execute"
-            ).model_dump()
-        )
+    except ReflexionValidationError as e:
+        logger.warning("Erro de validação no serviço de Reflexion", error=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ReflexionTimeoutError as e:
+        logger.error("Timeout no serviço de Reflexion", error=str(e))
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(e))
+    except ReflexionServiceError as e:
+        logger.error("Erro no serviço de Reflexion", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get(
-    "/config",
-    summary="Obtém configuração atual do Reflexion",
-    description="Retorna as configurações padrão do sistema Reflexion"
-)
+@router.get("/config", summary="Obtém configuração padrão do Reflexion")
 async def get_reflexion_config():
-    """Retorna a configuração atual do sistema Reflexion."""
-    config = ReflexionConfig.from_settings()
+    """Retorna a configuração padrão do sistema Reflexion, via serviço."""
+    config = reflexion_service.get_config()
     return {
         "max_iterations": config.max_iterations,
         "max_time_seconds": config.max_time_seconds,
@@ -161,55 +71,25 @@ async def get_reflexion_config():
     }
 
 
-@router.post(
-    "/reset-circuit-breaker",
-    summary="Reseta o circuit breaker dos agentes",
-    description="Força o reset do circuit breaker para permitir novas tentativas"
-)
+@router.post("/reset-circuit-breaker", summary="Reseta o circuit breaker dos agentes")
 async def reset_circuit_breaker():
-    """Reseta o circuit breaker de todos os agentes."""
+    """Delega o reset dos circuit breakers para o ReflexionService."""
     try:
-        reset_agent_circuit_breaker()  # Reset todos
-        return {
-            "status": "success",
-            "message": "Circuit breakers resetados com sucesso"
-        }
+        reflexion_service.reset_agent_breakers()
+        return {"status": "success", "message": "Circuit breakers dos agentes resetados."}
     except Exception as e:
-        logger.error(f"[Reflexion] Erro ao resetar circuit breaker: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        logger.error("Erro ao resetar circuit breakers via serviço", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Falha ao resetar circuit breakers.")
 
 
-@router.get(
-    "/health",
-    summary="Verifica saúde do módulo Reflexion",
-    description="Endpoint de health check para o sistema de auto-otimização"
-)
+@router.get("/health", summary="Verifica saúde do módulo Reflexion")
 async def reflexion_health():
-    """Health check do módulo Reflexion."""
+    """Delega a verificação de saúde do módulo para o ReflexionService."""
     try:
-        # Verifica se consegue importar módulos necessários
-        from app.core.optimization import ReflexionSession
-        from app.core.tools import get_faulty_tools
-        from app.core.agents.agent_manager import agent_circuit_breakers
-
-        cb_states = {
-            agent_type.name: {"state": cb.state.value, "failures": cb.failure_count}
-            for agent_type, cb in agent_circuit_breakers.items()
-        }
-
-        return {
-            "status": "healthy",
-            "module": "reflexion",
-            "faulty_tools_count": len(get_faulty_tools()),
-            "circuit_breakers": cb_states,
-            "sprint": 5
-        }
+        health_status = reflexion_service.get_health_status()
+        health_status["sprint"] = 5  # Adiciona o número do sprint para compatibilidade
+        return health_status
     except Exception as e:
-        logger.error(f"[Reflexion] Health check falhou: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "unhealthy", "error": str(e)}
-        )
+        logger.error("Falha no health check do serviço de Reflexion", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
