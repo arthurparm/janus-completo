@@ -21,6 +21,7 @@ from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
 from app.core.memory.memory_core import decrypt_text
+from app.core.memory.graph_guardian import graph_guardian
 from app.db.graph import graph_db
 from app.db.vector_store import get_qdrant_client
 
@@ -235,15 +236,25 @@ class KnowledgeConsolidator:
         except Exception as e:
             logger.error(f"Erro ao criar nó de experiência: {e}")
 
-        # Cria entidades
+        # Cria entidades (com normalização via Graph Guardian)
         for entity in extracted_data.get("entities", []):
             if not entity.get("name"):
                 continue
 
             try:
-                entity_name = str(entity["name"]).strip()
-                entity_type = str(entity.get("type", "CONCEPT")).strip().upper()
-                entity_props = entity.get("properties", {})
+                # GUARDIÃO DO GRAFO: Normaliza e valida entidade
+                normalized_entity = graph_guardian.validate_and_normalize_entity(
+                    name=entity["name"],
+                    entity_type=entity.get("type", "CONCEPT"),
+                    properties=entity.get("properties", {})
+                )
+
+                entity_name = normalized_entity["name"]
+                entity_type = normalized_entity["type"]
+                entity_props = normalized_entity["properties"]
+
+                # Adiciona nome original como propriedade (útil para auditoria)
+                entity_props["original_name"] = normalized_entity.get("original_name", entity_name)
 
                 # Cria ou atualiza entidade
                 graph_db.query(
@@ -266,19 +277,38 @@ class KnowledgeConsolidator:
                 entities_created += 1
                 ENTITIES_EXTRACTED.inc()
 
+            except ValueError as ve:
+                logger.warning(f"Entidade inválida ignorada: {entity.get('name')} - {ve}")
             except Exception as e:
                 logger.error(f"Erro ao criar entidade {entity.get('name')}: {e}")
 
-        # Cria relacionamentos
+        # Cria relacionamentos (com normalização via Graph Guardian)
         for rel in extracted_data.get("relationships", []):
             if not rel.get("from") or not rel.get("to"):
                 continue
 
             try:
-                from_entity = str(rel["from"]).strip()
-                to_entity = str(rel["to"]).strip()
-                rel_type = str(rel.get("type", "RELATES_TO")).strip().upper()
-                rel_props = rel.get("properties", {})
+                # GUARDIÃO DO GRAFO: Normaliza e valida relacionamento
+                normalized_rel = graph_guardian.validate_and_normalize_relationship(
+                    from_entity=rel["from"],
+                    to_entity=rel["to"],
+                    rel_type=rel.get("type", "RELATES_TO"),
+                    properties=rel.get("properties", {})
+                )
+
+                # Se a normalização retornou None, o relacionamento é inválido
+                if normalized_rel is None:
+                    logger.debug(f"Relacionamento inválido ignorado: {rel}")
+                    continue
+
+                from_name = normalized_rel["from"]
+                to_name = normalized_rel["to"]
+                rel_type = normalized_rel["type"]
+                rel_props = normalized_rel["properties"]
+
+                # Adiciona metadados para auditoria
+                rel_props["original_from"] = normalized_rel.get("original_from", from_name)
+                rel_props["original_to"] = normalized_rel.get("original_to", to_name)
 
                 # Cria relacionamento (permite qualquer tipo de nó de origem/destino)
                 graph_db.query(
@@ -291,8 +321,8 @@ class KnowledgeConsolidator:
                         r.source_experience = $exp_id
                     """,
                     params={
-                        "from_name": from_entity,
-                        "to_name": to_entity,
+                        "from_name": from_name,
+                        "to_name": to_name,
                         "properties": rel_props,
                         "exp_id": experience_id
                     },

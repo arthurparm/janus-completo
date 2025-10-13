@@ -434,6 +434,31 @@ class MemoryConnector:
     """Conector que extrai dados da memória episódica."""
     name = "memory"
 
+    def fetch_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Coleta experiências da memória (versão síncrona - wrapper).
+
+        Args:
+            limit: Número máximo de experiências
+
+        Returns:
+            Lista de experiências
+        """
+        try:
+            # Cria um event loop se necessário (para compatibilidade sync)
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # Se já há um loop rodando, agenda a corrotina
+                future = asyncio.ensure_future(self.fetch_batch_async(limit))
+                return loop.run_until_complete(future)
+            except RuntimeError:
+                # Não há loop rodando, cria um novo
+                return asyncio.run(self.fetch_batch_async(limit))
+        except Exception as e:
+            logger.error(f"Erro ao coletar de MemoryConnector (sync): {e}")
+            return []
+
     async def fetch_batch_async(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Coleta experiências da memória (versão async).
