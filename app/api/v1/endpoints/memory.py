@@ -1,26 +1,31 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
+import structlog
 
-from app.core.memory import memory_core
+from app.services.memory_service import memory_service, MemoryServiceError
 from app.models.schemas import Experience
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
+
+# --- Pydantic Models (DTOs) ---
 
 class MemorizeRequest(BaseModel):
     type: str
     content: str
-    metadata: Optional[dict] = {}
-
+    metadata: Optional[Dict[str, Any]] = {}
 
 class RecallResponse(BaseModel):
     id: str
     content: str
-    metadata: dict
-    score: float  # Similarity score (higher is better)
+    metadata: Dict[str, Any]
+    score: float
 
+
+# --- Endpoint ---
 
 @router.post(
     "/memorize",
@@ -29,17 +34,21 @@ class RecallResponse(BaseModel):
     tags=["Memory"]
 )
 async def add_memory(request: MemorizeRequest):
+    """Recebe e delega a criação de uma nova experiência para o MemoryService."""
     try:
-        experience = Experience(
+        experience = await memory_service.add_experience(
             type=request.type,
             content=request.content,
             metadata=request.metadata
         )
-        await memory_core.amemorize(experience)
         return experience
+    except MemoryServiceError as e:
+        logger.error("Erro no serviço de memória ao adicionar experiência", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        logger.critical("Erro inesperado na API de memorização", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Ocorreu um erro inesperado no servidor.")
 
 @router.get(
     "/recall",
@@ -48,8 +57,13 @@ async def add_memory(request: MemorizeRequest):
     tags=["Memory"]
 )
 async def recall_memories(query: str = Query(..., description="Consulta em linguagem natural para buscar memórias.")):
+    """Recebe uma consulta e delega a busca para o MemoryService."""
     try:
-        results = await memory_core.arecall(query=query)
-        return results
+        return await memory_service.recall_experiences(query=query)
+    except MemoryServiceError as e:
+        logger.error("Erro no serviço de memória ao buscar experiências", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.critical("Erro inesperado na API de busca de memória", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Ocorreu um erro inesperado no servidor.")
