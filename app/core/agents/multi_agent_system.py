@@ -5,7 +5,9 @@ Implementa uma "Sociedade de Mentes" onde múltiplos agentes especializados
 trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 """
 import asyncio
+import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,6 +15,8 @@ from enum import Enum
 from typing import Dict, List, Optional, Any
 
 from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents.output_parsers import ReActSingleInputOutputParser
+from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.prompts import PromptTemplate
 from prometheus_client import Counter, Histogram, Gauge
 
@@ -20,6 +24,148 @@ from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
 from app.core.tools import get_all_tools
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_json_output(text: str) -> str:
+    """
+    Remove markdown code blocks e limpa o output para parsing JSON.
+
+    Args:
+        text: Texto que pode conter JSON envolto em markdown
+
+    Returns:
+        JSON limpo sem markdown
+    """
+    if not text:
+        return text
+
+    # Remove markdown code blocks (```json ... ``` ou ``` ... ```)
+    text = re.sub(r'^```(?:json)?\s*\n', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n```\s*$', '', text, flags=re.MULTILINE)
+    text = text.strip()
+
+    return text
+
+
+def _create_tool_wrapper(tool):
+    """
+    Cria um wrapper para ferramentas que trata o input corretamente.
+
+    O LangChain às vezes passa o JSON inteiro como string no primeiro parâmetro.
+    Este wrapper detecta isso e faz o parse correto, suportando sync e async.
+    """
+    from functools import wraps
+    from langchain.tools import BaseTool, StructuredTool
+    import inspect
+
+    logger.info(f"[WRAPPER INIT] Criando wrapper para {tool.name} - type={type(tool)}")
+
+    # Detecta qual método usar
+    if hasattr(tool, 'func') and callable(tool.func):
+        original_func = tool.func
+        logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool.func")
+    elif hasattr(tool, '_run') and callable(tool._run):
+        original_func = tool._run
+        logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool._run")
+    else:
+        logger.warning(f"[WRAPPER INIT] {tool.name} - Nenhum método encontrado, retornando original")
+        return tool
+
+    is_async = inspect.iscoroutinefunction(original_func)
+
+    if is_async:
+        @wraps(original_func)
+        async def async_wrapper(*args, **kwargs):
+            tool_name = getattr(tool, 'name', 'unknown')
+            logger.debug(f"[WRAPPER ASYNC] {tool_name} - args={args}, kwargs={kwargs}")
+
+            # Se recebeu apenas 1 argumento e ele parece ser um JSON string
+            if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], str):
+                arg = args[0]
+                logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
+
+                try:
+                    # Limpa o argumento de forma agressiva
+                    cleaned = arg.strip()
+
+                    # Remove markdown code fences (```json, ```, etc)
+                    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+                    cleaned = re.sub(r'\s*```$', '', cleaned)
+                    cleaned = cleaned.strip()
+
+                    # Remove quebras de linha e espaços extras dentro do JSON
+                    # (mas preserva \n dentro de strings)
+                    if cleaned.startswith('{') and cleaned.endswith('}'):
+                        logger.debug(f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}")
+                        parsed = json.loads(cleaned)
+
+                        if isinstance(parsed, dict):
+                            logger.info(f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}")
+                            # Chama a função com os parâmetros corretos
+                            return await original_func(**parsed)
+
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
+                    logger.debug(f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
+
+            # Se não conseguiu fazer parse ou não era JSON, chama normalmente
+            return await original_func(*args, **kwargs)
+
+        # Substitui AMBOS func e _run
+        if hasattr(tool, 'func'):
+            tool.func = async_wrapper
+            logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (async)")
+        if hasattr(tool, '_run'):
+            tool._run = async_wrapper
+            logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (async)")
+
+    else:
+        @wraps(original_func)
+        def sync_wrapper(*args, **kwargs):
+            tool_name = getattr(tool, 'name', 'unknown')
+            logger.debug(f"[WRAPPER SYNC] {tool_name} - args={args}, kwargs={kwargs}")
+
+            # Se recebeu apenas 1 argumento e ele parece ser um JSON string
+            if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], str):
+                arg = args[0]
+                logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
+
+                try:
+                    # Limpa o argumento de forma agressiva
+                    cleaned = arg.strip()
+
+                    # Remove markdown code fences (```json, ```, etc)
+                    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+                    cleaned = re.sub(r'\s*```$', '', cleaned)
+                    cleaned = cleaned.strip()
+
+                    # Remove quebras de linha e espaços extras dentro do JSON
+                    # (mas preserva \n dentro de strings)
+                    if cleaned.startswith('{') and cleaned.endswith('}'):
+                        logger.debug(f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}")
+                        parsed = json.loads(cleaned)
+
+                        if isinstance(parsed, dict):
+                            logger.info(f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}")
+                            # Chama a função com os parâmetros corretos
+                            return original_func(**parsed)
+
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
+                    logger.debug(f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
+
+            # Se não conseguiu fazer parse ou não era JSON, chama normalmente
+            return original_func(*args, **kwargs)
+
+        # Substitui AMBOS func e _run
+        if hasattr(tool, 'func'):
+            tool.func = sync_wrapper
+            logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (sync)")
+        if hasattr(tool, '_run'):
+            tool._run = sync_wrapper
+            logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (sync)")
+
+    return tool
 
 # --- Métricas ---
 AGENT_TASKS_COUNTER = Counter(
@@ -191,23 +337,40 @@ class SpecializedAgent:
             AgentRole.PROJECT_MANAGER: """Você é um Gerente de Projetos especializado em coordenar equipes de agentes.
 
 Suas responsabilidades:
-- Analisar requisitos e dividir projetos em tarefas menores
+- Analisar requisitos e dividir projetos em tarefas menores e específicas
 - Atribuir tarefas aos agentes especializados apropriados
 - Monitorar o progresso e identificar bloqueios
 - Facilitar a comunicação entre agentes
 - Garantir a qualidade e completude do trabalho
 
-Você tem acesso a ferramentas para: {tools}
+IMPORTANTE: Ao usar ferramentas:
+- Para list_directory: Use path="/app/workspace"
+- Para write_file: Forneça file_path, content, overwrite
 
-Use este formato:
-Question: a pergunta ou solicitação
-Thought: pense sobre o que fazer
-Action: a ação a tomar, deve ser uma de [{tool_names}]
-Action Input: o input para a ação
-Observation: o resultado da ação
-... (repita Thought/Action/Action Input/Observation conforme necessário)
+Ferramentas disponíveis: {tools}
+Nomes das ferramentas: {tool_names}
+
+==== FORMATO OBRIGATÓRIO (SIGA EXATAMENTE) ====
+VOCÊ DEVE SEMPRE USAR ESTE FORMATO:
+
+Thought: [seu raciocínio sobre o que fazer]
+Action: [nome_da_ferramenta - deve ser UMA de {tool_names}]
+Action Input: {{"parametro": "valor"}}
+
+... aguarde a Observation ...
+
+Observation: [resultado da ferramenta]
+Thought: [continue raciocinando ou conclua]
+... repita Thought/Action/Observation quantas vezes necessário ...
+
 Thought: Eu sei a resposta final
-Final Answer: a resposta final
+Final Answer: [resposta em texto puro, SEM ```]
+
+REGRAS ABSOLUTAS:
+1. Action Input DEVE ser JSON válido em UMA linha
+2. NUNCA use ``` (code blocks) em Action Input ou Final Answer
+3. Se precisar retornar JSON, coloque direto no Final Answer SEM ```
+4. Escape strings corretamente: use \\n para quebras de linha
 
 Question: {input}
 {agent_scratchpad}""",
@@ -238,18 +401,34 @@ Suas responsabilidades:
 - Implementar funcionalidades conforme especificado
 - Escrever código limpo e bem documentado
 - Seguir best practices e padrões
-- Usar o sandbox Python para execução segura
+- Criar arquivos usando write_file
 
-Ferramentas: {tools}
+Ferramentas disponíveis: {tools}
+Nomes: {tool_names}
 
-Formato:
-Question: {input}
-Thought: [raciocínio]
-Action: [{tool_names}]
-Action Input: [input]
+==== FORMATO OBRIGATÓRIO (CRÍTICO) ====
+
+Thought: [seu raciocínio]
+Action: [nome_ferramenta]
+Action Input: {{"parametro": "valor"}}
+
 Observation: [resultado]
-...
-Final Answer: [código/resultado]
+... repita ...
+
+Final Answer: [resposta SEM ```]
+
+REGRAS PARA write_file:
+1. Sempre forneça: file_path, content, overwrite
+2. content deve ser STRING com \\n para quebras de linha
+3. JSON em UMA linha
+4. Use ' (aspas simples) dentro de strings Python
+5. NUNCA use ``` em nenhum lugar
+
+EXEMPLO PERFEITO:
+Action: write_file
+Action Input: {{"file_path": "app.py", "content": "def hello():\\n    print('Hello World')\\n\\nif __name__ == '__main__':\\n    hello()", "overwrite": false}}
+
+Question: {input}
 {agent_scratchpad}""",
 
             AgentRole.TESTER: """Você é um Agente de Testes especializado em validação e qualidade.
@@ -305,12 +484,44 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
         llm_role, llm_priority = llm_mapping.get(self.role, (ModelRole.ORCHESTRATOR, ModelPriority.LOCAL_ONLY))
         llm = get_llm(role=llm_role, priority=llm_priority)
 
+        # Pega as ferramentas e adiciona wrapper para corrigir parsing
         tools = get_all_tools()
-        agent = create_react_agent(llm, tools, prompt)
-        self.executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=10)
+        wrapped_tools = [_create_tool_wrapper(tool) for tool in tools]
 
-    async def execute_task(self, task: Task) -> Dict[str, Any]:
-        """Executa uma tarefa atribuída ao agente."""
+        agent = create_react_agent(llm, wrapped_tools, prompt)
+
+        # Mensagem de erro personalizada para parsing
+        parsing_error_message = """Erro no formato da sua resposta. Use EXATAMENTE este formato:
+
+Thought: [seu raciocínio]
+Action: [nome_da_ferramenta]
+Action Input: {{"parametro": "valor"}}
+
+IMPORTANTE: O Action Input deve ser JSON VÁLIDO em UMA LINHA.
+Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "overwrite": false}}
+"""
+
+        self.executor = AgentExecutor(
+            agent=agent,
+            tools=wrapped_tools,  # Usa as ferramentas com wrapper
+            verbose=True,
+            max_iterations=15,
+            max_execution_time=180,  # 3 minutos de timeout
+            early_stopping_method="generate",
+            handle_parsing_errors=parsing_error_message
+        )
+
+    async def execute_task(self, task: Task, max_retries: int = 2) -> Dict[str, Any]:
+        """
+        Executa uma tarefa atribuída ao agente com retry automático.
+
+        Args:
+            task: Tarefa a ser executada
+            max_retries: Número máximo de tentativas (padrão: 2)
+
+        Returns:
+            Dicionário com resultado da execução
+        """
         if task.status != TaskStatus.PENDING:
             raise ValueError(f"Tarefa {task.id} não está em estado PENDING")
 
@@ -320,45 +531,83 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
 
         logger.info(f"Agente {self.agent_id} iniciando tarefa: {task.description}")
 
-        try:
-            # Executar a tarefa
-            start_time = asyncio.get_event_loop().time()
-            result = await asyncio.to_thread(
-                self.executor.invoke,
-                {"input": task.description}
-            )
-            duration = asyncio.get_event_loop().time() - start_time
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.warning(f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}")
+                    await asyncio.sleep(2 ** attempt)  # Backoff exponencial
 
-            # Atualizar task
-            task.status = TaskStatus.COMPLETED
-            task.result = result.get("output", "")
-            task.completed_at = datetime.now()
+                # Executar a tarefa
+                start_time = asyncio.get_event_loop().time()
+                result = await asyncio.to_thread(
+                    self.executor.invoke,
+                    {"input": task.description}
+                )
+                duration = asyncio.get_event_loop().time() - start_time
 
-            # Métricas
-            AGENT_TASKS_COUNTER.labels(agent_role=self.role.value, status="completed").inc()
-            AGENT_TASK_DURATION.labels(agent_role=self.role.value).observe(duration)
+                # Limpar output (remover markdown se presente)
+                output = result.get("output", "")
+                cleaned_output = _clean_json_output(output)
 
-            logger.info(f"Tarefa {task.id} concluída com sucesso")
+                # Validar que o resultado não está vazio
+                if not cleaned_output or cleaned_output.strip() == "":
+                    raise ValueError("Agente retornou output vazio")
 
-            return {
-                "task_id": task.id,
-                "status": "completed",
-                "result": task.result,
-                "duration_seconds": duration
-            }
+                # Atualizar task
+                task.status = TaskStatus.COMPLETED
+                task.result = cleaned_output
+                task.completed_at = datetime.now()
 
-        except Exception as e:
-            logger.error(f"Erro ao executar tarefa {task.id}: {e}", exc_info=True)
-            task.status = TaskStatus.FAILED
-            task.error = str(e)
-            task.completed_at = datetime.now()
-            AGENT_TASKS_COUNTER.labels(agent_role=self.role.value, status="failed").inc()
+                # Métricas
+                AGENT_TASKS_COUNTER.labels(agent_role=self.role.value, status="completed").inc()
+                AGENT_TASK_DURATION.labels(agent_role=self.role.value).observe(duration)
 
-            return {
-                "task_id": task.id,
-                "status": "failed",
-                "error": str(e)
-            }
+                logger.info(f"Tarefa {task.id} concluída com sucesso (tentativa {attempt + 1})")
+
+                return {
+                    "task_id": task.id,
+                    "status": "completed",
+                    "result": task.result,
+                    "duration_seconds": duration,
+                    "attempts": attempt + 1
+                }
+
+            except asyncio.TimeoutError as e:
+                last_error = f"Timeout ao executar tarefa: {e}"
+                logger.warning(f"Timeout na tentativa {attempt + 1} para tarefa {task.id}")
+                if attempt == max_retries:
+                    break
+                continue
+
+            except ValueError as e:
+                # Erros de validação (parsing, output vazio, etc)
+                last_error = f"Erro de validação: {e}"
+                logger.warning(f"Erro de validação na tentativa {attempt + 1} para tarefa {task.id}: {e}")
+                if attempt == max_retries:
+                    break
+                continue
+
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"Erro na tentativa {attempt + 1} para tarefa {task.id}: {e}", exc_info=True)
+                if attempt == max_retries:
+                    break
+                continue
+
+        # Se chegou aqui, todas as tentativas falharam
+        logger.error(f"Tarefa {task.id} falhou após {max_retries + 1} tentativas: {last_error}")
+        task.status = TaskStatus.FAILED
+        task.error = last_error
+        task.completed_at = datetime.now()
+        AGENT_TASKS_COUNTER.labels(agent_role=self.role.value, status="failed").inc()
+
+        return {
+            "task_id": task.id,
+            "status": "failed",
+            "error": last_error,
+            "attempts": max_retries + 1
+        }
 
     def communicate(self, to_agent_id: str, message: str):
         """Envia uma mensagem para outro agente."""
@@ -383,7 +632,18 @@ class MultiAgentSystem:
         self.workspace = SharedWorkspace()
         self.agents: Dict[str, SpecializedAgent] = {}
         self.project_manager: Optional[SpecializedAgent] = None
+        self._ensure_workspace_directory()
         logger.info("Sistema Multi-Agente inicializado")
+
+    def _ensure_workspace_directory(self):
+        """Garante que o diretório workspace existe."""
+        from pathlib import Path
+        workspace_path = Path("/app/workspace")
+        if not workspace_path.exists():
+            workspace_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Diretório workspace criado em: {workspace_path}")
+        else:
+            logger.info(f"Diretório workspace já existe: {workspace_path}")
 
     def create_agent(self, role: AgentRole) -> SpecializedAgent:
         """Cria um novo agente especializado."""

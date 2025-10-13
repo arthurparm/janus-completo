@@ -88,13 +88,15 @@ Accept: application/json
 
 ###
 # 12. Adicionar Artefato ao Workspace
+# NOTA: Use o agent_id real retornado no teste #4 (coder)
+# Exemplo: substitua CODER_AGENT_ID pelo ID retornado
 POST {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/add
 Content-Type: application/json
 
 {
   "key": "example_code.py",
   "value": "def hello_world():\n    print('Hello, World!')",
-  "author": "coder_test"
+  "author": "CODER_AGENT_ID"
 }
 
 ###
@@ -103,13 +105,14 @@ GET {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/example_code.py
 Accept: application/json
 
 ###
-# 14. Enviar Mensagem Entre Agentes (Manual)
+# 14. Enviar Mensagem Entre Agentes
+# NOTA: Use os agent_ids reais retornados nos testes #4 (coder) e #5 (tester)
 POST {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/send
 Content-Type: application/json
 
 {
-  "from_agent": "coder_abc123",
-  "to_agent": "tester_def456",
+  "from_agent": "CODER_AGENT_ID",
+  "to_agent": "TESTER_AGENT_ID",
   "content": "Código implementado e pronto para testes"
 }
 

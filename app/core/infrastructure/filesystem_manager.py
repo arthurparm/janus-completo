@@ -189,7 +189,7 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
 
         if settings.DRY_RUN:
             bytes_len = len(normalized.encode('utf-8'))
-            logger.info(
+            logger.debug(
                 {
                     "event": "write_file_dry_run",
                     "path": str(absolute_path),

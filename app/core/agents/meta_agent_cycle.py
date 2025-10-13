@@ -76,8 +76,15 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
     async def _phase_act() -> Dict[str, Any]:
         query = "experiência do agente"
         experiences = await memory_core.arecall(query, 10)
+
+        # Limita o tamanho das experiências para não ultrapassar o limite de 10000 caracteres
+        experiences_str = str(experiences)
+        max_exp_length = 8000  # Deixa espaço para o prompt
+        if len(experiences_str) > max_exp_length:
+            experiences_str = experiences_str[:max_exp_length] + "... [truncado]"
+
         result = await agent_manager.arun_agent(
-            question=f"Analise estas experiências e aponte padrões de falha ou ineficiências. {experiences}",
+            question=f"Analise estas experiências e aponte padrões de falha ou ineficiências. {experiences_str}",
             request=None,
             agent_type=AgentType.META_AGENT,
         )

@@ -41,9 +41,23 @@ class WriteFileInput(BaseModel):
             raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido.")
 
 
-@tool(args_schema=WriteFileInput)
+@tool  # Removido args_schema temporariamente para permitir que o wrapper funcione
 def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
-    """Escreve conteúdo em um arquivo dentro do workspace seguro."""
+    """
+    Escreve conteúdo em um arquivo dentro do workspace seguro (/app/workspace).
+
+    IMPORTANTE: Você DEVE fornecer os três parâmetros:
+    - file_path: Caminho relativo ao workspace (ex: 'main.py', 'src/app.py', 'requirements.txt')
+    - content: Conteúdo COMPLETO do arquivo a ser escrito (STRING obrigatória)
+    - overwrite: Se True, sobrescreve arquivo existente. Se False e arquivo existe, retorna erro.
+
+    Returns:
+        Mensagem de sucesso ou erro
+
+    Exemplo de uso correto:
+        write_file(file_path="requirements.txt", content="flask==2.0.0\\nrequests==2.28.0\\nfastapi==0.104.0", overwrite=False)
+        write_file(file_path="main.py", content="from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route('/')\\ndef home():\\n    return 'Hello World'", overwrite=False)
+    """
     try:
         target_path = (WORKSPACE_ROOT / file_path).resolve()
         target_path.relative_to(WORKSPACE_ROOT)  # Re-valida para segurança
@@ -83,23 +97,89 @@ def read_file(file_path: str) -> str:
     return filesystem_manager.read_file(file_path)
 
 
-@tool
-def list_directory(path: str = ".") -> str:
+class ListDirectoryInput(BaseModel):
+    path: str = Field(default="/app/workspace",
+                      description="Caminho do diretório a ser listado, relativo ao workspace (/app/workspace).")
+
+    @validator("path")
+    def validate_path_is_safe(cls, v: str) -> str:
+        # Se o path for ".", converte para o workspace
+        if v == ".":
+            v = "/app/workspace"
+
+        # Resolve o path absoluto
+        if not v.startswith("/app/workspace"):
+            v = f"/app/workspace/{v.lstrip('/')}"
+
+        absolute_path = Path(v).resolve()
+        try:
+            absolute_path.relative_to(WORKSPACE_ROOT)
+            return str(absolute_path)
+        except ValueError:
+            raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido (/app/workspace).")
+
+
+@tool(args_schema=ListDirectoryInput)
+def list_directory(path: str = "/app/workspace") -> str:
     """
-    Lista todos os arquivos e diretórios em um caminho específico.
+    Lista todos os arquivos e diretórios em um caminho específico dentro do workspace seguro.
 
     Use esta ferramenta para:
-    - Explorar a estrutura de diretórios do projeto
+    - Explorar a estrutura de diretórios do projeto dentro de /app/workspace
     - Encontrar arquivos disponíveis antes de ler
     - Verificar se um arquivo ou pasta existe
 
     Args:
-        path: Caminho do diretório (padrão: "." para diretório atual)
+        path: Caminho do diretório dentro do workspace (padrão: "/app/workspace" para raiz do workspace)
 
     Returns:
         Lista formatada de arquivos e diretórios
+
+    Exemplo de uso:
+        list_directory(path="/app/workspace")
     """
-    return filesystem_manager.list_directory(path)
+    logger.info(f"[LIST_DIRECTORY] Chamada recebida - path={repr(path)}, type={type(path)}")
+
+    try:
+        # Garante que o path é seguro
+        if path == ".":
+            path = "/app/workspace"
+
+        if not path.startswith("/app/workspace"):
+            path = f"/app/workspace/{path.lstrip('/')}"
+
+        logger.info(f"[LIST_DIRECTORY] Path processado: {path}")
+
+        resolved_path = Path(path).resolve()
+        logger.info(f"[LIST_DIRECTORY] Path resolvido: {resolved_path}")
+
+        resolved_path.relative_to(WORKSPACE_ROOT)  # Valida segurança
+
+        if not resolved_path.exists():
+            logger.warning(f"[LIST_DIRECTORY] Diretório não existe: {resolved_path}")
+            return f"Erro: O diretório '{path}' não existe."
+
+        if not resolved_path.is_dir():
+            return f"Erro: '{path}' não é um diretório."
+
+        # Lista o conteúdo
+        items = []
+        for item in sorted(resolved_path.iterdir()):
+            item_type = "DIR" if item.is_dir() else "FILE"
+            items.append(f"[{item_type}] {item.name}")
+
+        if not items:
+            return f"O diretório '{path}' está vazio."
+
+        logger.info(f"[LIST_DIRECTORY] Sucesso - {len(items)} itens encontrados")
+        return f"Conteúdo de '{path}':\n" + "\n".join(items)
+
+    except ValueError as e:
+        logger.error(f"[LIST_DIRECTORY] Erro de validação: {e}")
+        return f"Erro de validação: {e}"
+    except Exception as e:
+        logger.error(f"[LIST_DIRECTORY] Erro: {e}", exc_info=True)
+        return f"Erro ao listar diretório: {e}"
 
 
 @tool
