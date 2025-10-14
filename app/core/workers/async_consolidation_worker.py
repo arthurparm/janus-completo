@@ -10,7 +10,8 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any
 
-from app.core.infrastructure.message_broker import message_broker, TaskMessage, QueueName
+from app.core.infrastructure.message_broker import message_broker
+from app.models.schemas import TaskMessage, QueueName
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 
 logger = logging.getLogger(__name__)

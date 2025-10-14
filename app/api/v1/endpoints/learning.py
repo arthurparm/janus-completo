@@ -1,11 +1,12 @@
 from typing import Dict, Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 import structlog
 
 from app.services.learning_service import (
-    learning_service,
+    LearningService,
+    get_learning_service,
     LearningServiceError,
     ModelNotFoundError,
     TrainingFailedError
@@ -56,7 +57,8 @@ class ModelListResponse(BaseModel):
 # --- Endpoints ---
 
 @router.post("/harvest", response_model=LearningResponse, summary="Inicia a coleta de dados para treino")
-async def trigger_harvesting(request: HarvestRequest):
+async def trigger_harvesting(request: HarvestRequest,
+                             learning_service: LearningService = Depends(get_learning_service)):
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
         result = await learning_service.trigger_harvesting(limit=request.limit)
@@ -67,7 +69,7 @@ async def trigger_harvesting(request: HarvestRequest):
 
 
 @router.post("/train", response_model=LearningResponse, summary="Inicia o treino de um novo modelo")
-async def trigger_training(request: TrainRequest):
+async def trigger_training(request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)):
     """Delega o processo de treinamento de modelo para o LearningService."""
     try:
         result = await learning_service.trigger_training(request.model_type, request.training_config.dict())
@@ -81,7 +83,7 @@ async def trigger_training(request: TrainRequest):
 
 
 @router.get("/training/status", response_model=TrainingStatusResponse, summary="Obtém status do treinamento atual")
-async def get_training_status():
+async def get_training_status(learning_service: LearningService = Depends(get_learning_service)):
     """Busca o status de qualquer sessão de treinamento ativa via LearningService."""
     session = learning_service.get_training_status()
     if session:
@@ -90,14 +92,14 @@ async def get_training_status():
 
 
 @router.get("/models", response_model=ModelListResponse, summary="Lista todos os modelos treinados")
-async def list_models():
+async def list_models(learning_service: LearningService = Depends(get_learning_service)):
     """Delega a listagem de modelos para o LearningService."""
     models = learning_service.list_all_models()
     return ModelListResponse(total=len(models), models=models)
 
 
 @router.get("/models/{model_id}", response_model=ModelInfo, summary="Obtém detalhes de um modelo")
-async def get_model_details(model_id: str):
+async def get_model_details(model_id: str, learning_service: LearningService = Depends(get_learning_service)):
     """Delega a busca de detalhes de um modelo para o LearningService."""
     try:
         return learning_service.get_model_details(model_id)
@@ -106,12 +108,12 @@ async def get_model_details(model_id: str):
 
 
 @router.get("/stats", summary="Obtém estatísticas do sistema de treinamento")
-async def get_learning_stats():
+async def get_learning_stats(learning_service: LearningService = Depends(get_learning_service)):
     """Delega a busca de estatísticas para o LearningService."""
     return learning_service.get_learning_statistics()
 
 
 @router.get("/health", summary="Health check do sistema de treinamento")
-async def learning_health():
+async def learning_health(learning_service: LearningService = Depends(get_learning_service)):
     """Delega a verificação de saúde para o LearningService."""
     return learning_service.get_health_status()

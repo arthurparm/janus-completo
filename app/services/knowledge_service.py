@@ -4,11 +4,19 @@ from fastapi import Request
 
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.code_analysis_service import code_analysis_service
-from app.core.workers.knowledge_consolidator import knowledge_consolidator
+from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 
 logger = structlog.get_logger(__name__)
 
 CODEBASE_DIR = "/app"
+
+
+# --- Custom Service-Layer Exceptions ---
+
+class KnowledgeServiceError(Exception):
+    """Base exception for knowledge service errors."""
+    pass
+
 
 class KnowledgeService:
     """

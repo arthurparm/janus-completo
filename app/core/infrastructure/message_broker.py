@@ -10,7 +10,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Métricas
+# --- Métricas ---
 _MESSAGES_PUBLISHED = Counter("broker_messages_published_total", "Total de mensagens publicadas", ["queue"])
 _CONNECTION_ERRORS = Counter("broker_connection_errors_total", "Total de erros de conexão com o broker")
 
@@ -30,8 +30,9 @@ class MessageBroker:
                 return
             logger.info("Conectando ao RabbitMQ...")
             try:
+                rabbitmq_url = f"amqp://{settings.RABBITMQ_USER}:{settings.RABBITMQ_PASSWORD}@{settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}/"
                 self._connection = await aio_pika.connect_robust(
-                    settings.RABBITMQ_URL,
+                    rabbitmq_url,
                     client_properties={"connection_name": "janus_system"}
                 )
                 logger.info("Conexão com RabbitMQ estabelecida com sucesso.")
@@ -48,7 +49,9 @@ class MessageBroker:
             logger.info("Conexão com RabbitMQ fechada.")
 
     async def publish(self, queue_name: str, message: str):
-        """Publica uma mensagem em uma fila."""
+        """
+        Publica uma mensagem em uma fila.
+        """
         await self.connect()
         async with self._connection.channel() as channel:
             await channel.declare_queue(queue_name, durable=True)
@@ -59,7 +62,9 @@ class MessageBroker:
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
 
     async def get_queue_info(self, queue_name: str) -> Optional[dict]:
-        """Obtém informações sobre uma fila."""
+        """
+        Obtém informações sobre uma fila.
+        """
         await self.connect()
         async with self._connection.channel() as channel:
             queue = await channel.declare_queue(queue_name, durable=True)
@@ -70,35 +75,45 @@ class MessageBroker:
             }
 
     async def health_check(self) -> bool:
-        """Verifica a saúde da conexão."""
+        """
+        Verifica a saúde da conexão.
+        """
         try:
             await self.connect()
             return not self._connection.is_closed
         except Exception:
             return False
 
-
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
 _broker_instance: Optional[MessageBroker] = None
 
-
 async def initialize_broker():
-    """Inicializa a instância singleton do MessageBroker."""
+    """
+    Inicializa a instância singleton do MessageBroker.
+    """
     global _broker_instance
     if _broker_instance is None:
         _broker_instance = MessageBroker()
         await _broker_instance.connect()
 
-
 async def close_broker():
-    """Fecha a conexão da instância singleton."""
+    """
+    Fecha a conexão da instância singleton.
+    """
     if _broker_instance:
         await _broker_instance.close()
 
-
 async def get_broker() -> MessageBroker:
-    """Função getter para injeção de dependência."""
+    """
+    Função getter para injeção de dependência.
+    """
     if _broker_instance is None:
         await initialize_broker()
     return _broker_instance
+
+
+# --- Compatibilidade com código legado ---
+# Exportar uma referência para a instância singleton (para imports legados)
+# NOTA: Esta é uma referência que será None até initialize_broker() ser chamada
+message_broker = _broker_instance

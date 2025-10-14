@@ -1,5 +1,5 @@
 import structlog
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional  # Added Optional
 from fastapi import Request
 
 from app.repositories.memory_repository import MemoryRepository
@@ -36,13 +36,14 @@ class MemoryService:
             logger.error("Erro no serviço de memória ao adicionar experiência", exc_info=e)
             raise MemoryServiceError("Falha ao adicionar experiência.") from e
 
-    async def recall_experiences(self, query: str) -> List[Dict[str, Any]]:
+    async def recall_experiences(self, query: str, limit: Optional[int] = None) -> List[
+        Dict[str, Any]]:  # Added limit parameter
         """
         Delega a busca por experiências para o repositório.
         """
-        logger.info("Buscando experiências via serviço", query=query)
+        logger.info("Buscando experiências via serviço", query=query, limit=limit)
         try:
-            return await self._repo.search_experiences(query=query)
+            return await self._repo.search_experiences(query=query, limit=limit)  # Pass limit to repository
         except Exception as e:
             logger.error("Erro no serviço de memória ao buscar experiências", exc_info=e)
             raise MemoryServiceError("Falha ao buscar experiências.") from e

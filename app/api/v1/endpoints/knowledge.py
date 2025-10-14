@@ -32,20 +32,15 @@ class ClearGraphResponse(BaseModel):
 
 @router.post("/index", response_model=IndexResponse, summary="Inicia a indexação da base de código")
 async def trigger_indexing(service: KnowledgeService = Depends(get_knowledge_service)):
-    # A lógica de erro é tratada pelo exception handler genérico
     return await service.index_codebase()
-
 
 @router.post("/consolidate", response_model=IndexResponse, summary="Inicia a consolidação de experiências")
 async def trigger_consolidation(service: KnowledgeService = Depends(get_knowledge_service)):
-    # A lógica de erro é tratada pelo exception handler genérico
-    return await service.trigger_consolidation(limit=10)  # Limite fixo ou pode vir da request
-
+    return await service.trigger_consolidation(limit=10)
 
 @router.get("/stats", summary="Estatísticas do grafo")
 async def get_knowledge_stats(service: KnowledgeService = Depends(get_knowledge_service)):
     return await service.get_stats()
-
 
 @router.get("/entities", response_model=List[CodeEntity], summary="Lista entidades de código")
 async def get_code_entities(
@@ -54,15 +49,12 @@ async def get_code_entities(
 ):
     return await service.get_code_entities(file_path)
 
-
 @router.get("/entity/{entity_name}", response_model=EntityDetailsResponse, summary="Obtém detalhes de uma entidade")
 async def get_entity_details(entity_name: str, service: KnowledgeService = Depends(get_knowledge_service)):
     details = await service.get_entity_details(entity_name)
-    # A verificação de "não encontrado" é uma lógica de negócio do endpoint, então permanece.
     if not details:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Entidade '{entity_name}' não encontrada.")
     return details
-
 
 @router.delete("/clear", response_model=ClearGraphResponse, summary="Limpa todo o grafo")
 async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledge_service)):

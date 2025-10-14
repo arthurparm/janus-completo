@@ -1,7 +1,7 @@
 import structlog
 from typing import Dict, Any
 
-from app.core.infrastructure.python_sandbox import python_sandbox, SandboxResult
+from app.core.infrastructure.python_sandbox import python_sandbox, ExecutionResult
 
 logger = structlog.get_logger(__name__)
 
@@ -15,7 +15,7 @@ class SandboxRepository:
     Abstrai todas as interações diretas com a infraestrutura de execução de código.
     """
 
-    def execute_code(self, code: str, context: Dict[str, Any]) -> SandboxResult:
+    def execute_code(self, code: str, context: Dict[str, Any]) -> ExecutionResult:
         """Executa um bloco de código através da infraestrutura de sandbox."""
         logger.debug("Executando código no repositório de sandbox.")
         try:
@@ -24,7 +24,7 @@ class SandboxRepository:
             logger.error("Erro no repositório ao executar código no sandbox", exc_info=e)
             raise SandboxRepositoryError("Falha ao executar código no sandbox.") from e
 
-    def evaluate_expression(self, expression: str) -> SandboxResult:
+    def evaluate_expression(self, expression: str) -> ExecutionResult:
         """Avalia uma expressão através da infraestrutura de sandbox."""
         logger.debug("Avaliando expressão no repositório de sandbox.")
         try:

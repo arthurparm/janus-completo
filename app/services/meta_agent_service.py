@@ -2,7 +2,7 @@ import structlog
 from typing import Dict, Any, Optional
 
 from app.core.agents import get_meta_agent, MetaAgent
-from app.core.agents.meta_agent import HealthReport
+from app.core.agents.meta_agent import StateReport
 
 logger = structlog.get_logger(__name__)
 
@@ -26,7 +26,7 @@ class MetaAgentService:
         # Helper para obter a instância do meta-agente
         return get_meta_agent()
 
-    async def run_analysis_cycle(self) -> HealthReport:
+    async def run_analysis_cycle(self) -> StateReport:
         logger.info("Disparando ciclo de análise do meta-agente via serviço.")
         try:
             agent = self._get_agent()
@@ -35,7 +35,7 @@ class MetaAgentService:
             logger.error("Erro no serviço ao executar ciclo de análise do meta-agente", exc_info=e)
             raise MetaAgentServiceError("Falha ao executar o ciclo de análise.") from e
 
-    def get_latest_report(self) -> Optional[HealthReport]:
+    def get_latest_report(self) -> Optional[StateReport]:
         logger.info("Buscando último relatório do meta-agente via serviço.")
         return self._get_agent().last_report
 
@@ -77,3 +77,8 @@ class MetaAgentService:
 
 # Instância única do serviço
 meta_agent_service = MetaAgentService()
+
+
+# Padrão de Injeção de Dependência: Getter para o serviço
+def get_meta_agent_service() -> MetaAgentService:
+    return meta_agent_service

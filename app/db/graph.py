@@ -2,14 +2,13 @@ import asyncio
 import logging
 from typing import Set, Optional
 
-from neo4j import AsyncGraphDatabase, AsyncDriver
-from neo4j.async_unit_of_work import AsyncTransaction
+from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession, AsyncTransaction
 from prometheus_client import Counter, Histogram
 from fastapi import Depends
 
 from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
-from app.models.schemas import GraphRelationship  # Importa o Enum
+from app.models.schemas import GraphRelationship
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +96,9 @@ class GraphDatabase:
     async def get_session(self) -> AsyncSession:
         return self._driver.session()
 
-
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
 _graph_db_instance: Optional[GraphDatabase] = None
-
 
 async def initialize_graph_db():
     """Inicializa a instância singleton do GraphDatabase."""
@@ -110,15 +107,19 @@ async def initialize_graph_db():
         _graph_db_instance = GraphDatabase()
         await _graph_db_instance.connect()
 
-
 async def close_graph_db():
     """Fecha a conexão da instância singleton."""
     if _graph_db_instance:
         await _graph_db_instance.close()
-
 
 async def get_graph_db() -> GraphDatabase:
     """Função getter para injeção de dependência, retorna a instância singleton."""
     if _graph_db_instance is None:
         await initialize_graph_db()
     return _graph_db_instance
+
+
+# --- Compatibilidade com código legado ---
+# Exportar uma referência para a instância singleton (para imports legados)
+# NOTA: Esta é uma referência que será None até initialize_graph_db() ser chamada
+graph_db = _graph_db_instance

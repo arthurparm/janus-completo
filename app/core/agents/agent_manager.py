@@ -1,12 +1,19 @@
 import structlog
+import asyncio  # Added asyncio import
 from typing import Dict, Any
 from starlette.requests import Request
 
 from app.core.infrastructure import AgentType
 
-# ... outros imports necessários para os agentes ...
+# Assuming CircuitBreaker is defined elsewhere or will be defined.
+# For now, we'll use a placeholder for its type if it's not directly available.
+# from app.core.infrastructure.circuit_breaker import CircuitBreaker # Uncomment if CircuitBreaker is in this path
 
 logger = structlog.get_logger(__name__)
+
+# Global dictionary to hold circuit breaker instances for different agent types
+# This needs to be initialized with actual CircuitBreaker instances as agents are created or registered.
+agent_circuit_breakers: Dict[AgentType, Any] = {}
 
 class AgentManager:
     """
@@ -35,9 +42,13 @@ class AgentManager:
         }
 
     def reset_circuit_breaker(self):
-        """Reseta os circuit breakers dos agentes."""
+        """
+        Reseta os circuit breakers dos agentes.
+        Clears the global agent_circuit_breakers dictionary.
+        """
         logger.info("Resetando circuit breakers no AgentManager.")
-        # Lógica de reset...
+        global agent_circuit_breakers
+        agent_circuit_breakers.clear()
 
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
@@ -51,3 +62,7 @@ def get_agent_manager() -> AgentManager:
     if _agent_manager_instance is None:
         _agent_manager_instance = AgentManager()
     return _agent_manager_instance
+
+
+# --- Compatibilidade com código legado ---
+agent_manager = get_agent_manager()

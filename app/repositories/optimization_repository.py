@@ -2,7 +2,7 @@ import structlog
 from typing import Dict, Any, List
 
 from app.core.optimization import self_optimization_cycle
-from app.core.optimization.monitor import SystemMetrics, DetectedIssue
+from app.core.optimization.self_optimization import SystemMetrics, DetectedIssue
 
 logger = structlog.get_logger(__name__)
 

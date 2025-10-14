@@ -6,17 +6,20 @@ from .correlation_middleware import CorrelationMiddleware
 from .enums import AgentType
 from .filesystem_manager import read_file, write_file, list_directory
 from .logging_config import setup_logging
-from .message_broker import MessageBroker, message_broker
+from .message_broker import MessageBroker, initialize_broker, close_broker, \
+    get_broker  # Importar initialize_broker, close_broker, get_broker
 from .prompt_loader import PromptLoader, prompt_loader, get_prompt, get_prompt_advanced
 from .python_sandbox import PythonSandbox, python_sandbox
 from .rate_limit_middleware import RateLimitMiddleware
-from .reasoning_core import ReasoningSession, solve_question
+from .reasoning_core import ReasoningSession
 from .resilience import CircuitBreaker, resilient
 
 __all__ = [
     # Message Broker
     "MessageBroker",
-    "message_broker",
+    "initialize_broker",  # Adicionado
+    "close_broker",  # Adicionado
+    "get_broker",  # Adicionado
     # Resilience
     "CircuitBreaker",
     "resilient",
@@ -32,7 +35,6 @@ __all__ = [
     "list_directory",
     # Reasoning Core
     "ReasoningSession",
-    "solve_question",
     # Prompt Loader
     "PromptLoader",
     "prompt_loader",

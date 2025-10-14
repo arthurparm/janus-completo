@@ -1,13 +1,8 @@
-"""
-Módulo de memória - Memória episódica, semântica e consolidação.
-"""
-from . import knowledge_graph_manager
-from .memory_core import EpisodicMemory, ShortTermMemory, memory_core, initialize_memory_core
+from .memory_core import MemoryCore, get_memory_db, initialize_memory_db, close_memory_db
 
 __all__ = [
-    "EpisodicMemory",
-    "ShortTermMemory",
-    "memory_core",
-    "initialize_memory_core",
-    "knowledge_graph_manager"
+    "MemoryCore",
+    "get_memory_db",
+    "initialize_memory_db",
+    "close_memory_db",
 ]

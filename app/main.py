@@ -18,8 +18,18 @@ from app.db.graph import initialize_graph_db, close_graph_db, get_graph_db
 from app.core.memory.memory_core import initialize_memory_db, close_memory_db, get_memory_db
 
 # Importa as classes e getters para a construção do grafo de dependências
-from app.repositories import *  # Importa todos os repositórios
-from app.services import *  # Importa todos os serviços
+from app.repositories.knowledge_repository import KnowledgeRepository  # Explicitly import KnowledgeRepository
+from app.repositories.memory_repository import MemoryRepository  # Explicitly import MemoryRepository
+from app.repositories.agent_repository import AgentRepository  # Explicitly import AgentRepository
+from app.repositories.task_repository import TaskRepository  # Explicitly import TaskRepository
+# from app.repositories import *  # Importa todos os repositórios - Removido para evitar conflitos e ser mais explícito
+
+from app.services.agent_service import AgentService  # Explicitly import AgentService
+from app.services.memory_service import MemoryService  # Explicitly import MemoryService
+from app.services.knowledge_service import KnowledgeService  # Explicitly import KnowledgeService
+from app.services.task_service import TaskService  # Explicitly import TaskService
+# from app.services import *  # Importa todos os serviços - Removido para evitar conflitos e ser mais explícito
+
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector

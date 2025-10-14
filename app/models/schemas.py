@@ -53,3 +53,13 @@ class VectorCollection(str, Enum):
 class QueueName(str, Enum):
     """Nomes das filas no Message Broker (RabbitMQ)."""
     KNOWLEDGE_CONSOLIDATION = "janus.knowledge.consolidation"
+
+
+class TaskMessage(BaseModel):
+    """
+    Representa uma mensagem de tarefa para o message broker.
+    """
+    task_id: str
+    task_type: str
+    payload: dict = Field(default_factory=dict)
+    timestamp: float

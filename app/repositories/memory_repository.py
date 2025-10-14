@@ -25,11 +25,11 @@ class MemoryRepository:
             logger.error("Erro no repositório ao salvar experiência", exc_info=e)
             raise
 
-    async def search_experiences(self, query: str) -> List[Dict[str, Any]]:
+    async def search_experiences(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Busca por experiências no banco de dados vetorial."""
-        logger.debug("Buscando experiências no repositório de memória", query=query)
+        logger.debug("Buscando experiências no repositório de memória", query=query, limit=limit)
         try:
-            return await self._db.arecall(query=query)
+            return await self._db.arecall(query=query, limit=limit)
         except Exception as e:
             logger.error("Erro no repositório ao buscar experiências", exc_info=e)
             raise

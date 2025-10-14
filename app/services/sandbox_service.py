@@ -3,7 +3,7 @@ from typing import Dict, Any
 from fastapi import Request
 
 from app.repositories.sandbox_repository import SandboxRepository, SandboxRepositoryError
-from app.core.infrastructure.python_sandbox import SandboxResult
+from app.core.infrastructure.python_sandbox import ExecutionResult
 
 logger = structlog.get_logger(__name__)
 
@@ -27,7 +27,7 @@ class SandboxService:
     def __init__(self, repo: SandboxRepository):
         self._repo = repo
 
-    def execute_code(self, code: str, context: Dict[str, Any]) -> SandboxResult:
+    def execute_code(self, code: str, context: Dict[str, Any]) -> ExecutionResult:
         """
         Valida a entrada e delega a execução de código para o repositório.
         """
@@ -41,7 +41,7 @@ class SandboxService:
             logger.error("Erro no repositório de sandbox ao executar código", exc_info=e)
             raise SandboxError("Falha ao executar código no sandbox.") from e
 
-    def evaluate_expression(self, expression: str) -> SandboxResult:
+    def evaluate_expression(self, expression: str) -> ExecutionResult:
         """
         Valida a entrada e delega a avaliação de expressão para o repositório.
         """

@@ -3,8 +3,8 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 # Importa as exceções customizadas de cada serviço
-from app.services.agent_service import AgentServiceError, AgentNotFoundError, AgentTimeoutError
-from app.services.collaboration_service import CollaborationServiceError, TaskNotFoundError
+from app.services.agent_service import AgentServiceError, AgentTimeoutError
+from app.services.collaboration_service import CollaborationServiceError, AgentNotFoundError, TaskNotFoundError
 from app.services.context_service import ContextServiceError
 from app.services.knowledge_service import KnowledgeServiceError
 from app.services.learning_service import LearningServiceError, ModelNotFoundError, TrainingFailedError

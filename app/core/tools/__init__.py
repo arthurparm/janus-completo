@@ -7,6 +7,7 @@ from .action_module import (
     DynamicToolGenerator,
     ToolCategory,
     PermissionLevel,
+    ToolMetadata,  # Adicionado ToolMetadata
     get_tools_by_category,
     get_all_tools
 )
@@ -34,6 +35,7 @@ __all__ = [
     "DynamicToolGenerator",
     "ToolCategory",
     "PermissionLevel",
+    "ToolMetadata",  # Adicionado ToolMetadata
     "get_tools_by_category",
     "get_all_tools",
     "recall_experiences",
