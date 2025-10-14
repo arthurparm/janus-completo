@@ -13,7 +13,6 @@ class KnowledgeRepository:
     Camada de Repositório para o Grafo de Conhecimento.
     Usa Enums para todas as constantes do grafo, evitando "magic strings".
     """
-
     def __init__(self, db: GraphDatabase):
         self._db = db
 
@@ -83,7 +82,6 @@ class KnowledgeRepository:
                      MATCH (callee:{GraphLabel.FUNCTION} {{name: call.callee_name}})
                      MERGE (caller)-[r:{GraphRelationship.CALLS}]->(callee)"""
         await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
-
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_knowledge_repository(db: GraphDatabase = Depends(get_graph_db)) -> "KnowledgeRepository":
