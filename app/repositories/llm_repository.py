@@ -12,11 +12,9 @@ from app.core.llm import (
 
 logger = structlog.get_logger(__name__)
 
-
 class LLMRepositoryError(Exception):
     """Base exception for LLM repository errors."""
     pass
-
 
 class LLMRepository:
     """
@@ -77,5 +75,6 @@ class LLMRepository:
         cb.reset()
 
 
-# Instância única do repositório
-llm_repository = LLMRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_llm_repository() -> LLMRepository:
+    return LLMRepository()
