@@ -1,10 +1,9 @@
 import structlog
 from dataclasses import asdict
 from typing import Dict, Any, Optional
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.reflexion_repository import ReflexionRepository, get_reflexion_repository, \
-    ReflexionRepositoryError
+from app.repositories.reflexion_repository import ReflexionRepository, ReflexionRepositoryError
 from app.core.optimization import ReflexionConfig
 
 logger = structlog.get_logger(__name__)
@@ -30,7 +29,6 @@ class ReflexionService:
     Camada de serviço para o ciclo de auto-otimização Reflexion.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: ReflexionRepository):
         self._repo = repo
 
@@ -75,7 +73,6 @@ class ReflexionService:
         logger.info("Buscando saúde do módulo Reflexion via serviço.")
         return self._repo.get_health()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_reflexion_service(repo: ReflexionRepository = Depends(get_reflexion_repository)) -> ReflexionService:
-    return ReflexionService(repo)
+def get_reflexion_service(request: Request) -> ReflexionService:
+    return request.app.state.reflexion_service

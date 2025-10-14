@@ -1,8 +1,8 @@
 import structlog
 from typing import List, Dict, Any, Optional
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.tool_repository import ToolRepository, get_tool_repository
+from app.repositories.tool_repository import ToolRepository
 from app.core.tools import (
     DynamicToolGenerator,
     ToolCategory,
@@ -100,7 +100,6 @@ class ToolService:
     def list_permissions(self) -> List[str]:
         return self._repo.get_all_permissions()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_tool_service(repo: ToolRepository = Depends(get_tool_repository)) -> ToolService:
-    return ToolService(repo)
+def get_tool_service(request: Request) -> ToolService:
+    return request.app.state.tool_service

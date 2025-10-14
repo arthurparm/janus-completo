@@ -2,10 +2,10 @@ import structlog
 from typing import Dict, Any, Optional
 import json
 import uuid
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.task_repository import TaskRepository, get_task_repository, TaskRepositoryError
-from app.models.schemas import QueueName  # Importa o Enum
+from app.repositories.task_repository import TaskRepository, TaskRepositoryError
+from app.models.schemas import QueueName
 
 logger = structlog.get_logger(__name__)
 
@@ -26,7 +26,6 @@ class TaskService:
     Camada de serviço para tarefas assíncronas.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: TaskRepository):
         self._repo = repo
 
@@ -53,7 +52,6 @@ class TaskService:
                 "metadata": metadata
             }
 
-            # Usa o Enum para o nome da fila
             await self._repo.publish_message(
                 queue_name=QueueName.KNOWLEDGE_CONSOLIDATION,
                 message=json.dumps(message_body)
@@ -79,7 +77,6 @@ class TaskService:
         logger.debug("Verificando saúde do broker via serviço.")
         return await self._repo.is_broker_healthy()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_task_service(repo: TaskRepository = Depends(get_task_repository)) -> TaskService:
-    return TaskService(repo)
+def get_task_service(request: Request) -> TaskService:
+    return request.app.state.task_service

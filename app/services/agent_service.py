@@ -1,11 +1,9 @@
 import asyncio
 import structlog
 from typing import Dict, Any
-from fastapi import Depends
+from fastapi import Depends, Request
 
-from starlette.requests import Request
-
-from app.repositories.agent_repository import AgentRepository, get_agent_repository, AgentRepositoryError
+from app.repositories.agent_repository import AgentRepository, get_agent_repository
 from app.core.infrastructure import AgentType
 
 logger = structlog.get_logger(__name__)
@@ -61,32 +59,20 @@ class AgentService:
             )
 
             if result and "error" in result:
-                error_msg = result["error"]
-                logger.error("Erro retornado pelo repositório do agente", error_message=error_msg,
-                             correlation_id=correlation_id)
-                raise AgentExecutionError(error_msg)
-
+                raise AgentExecutionError(result["error"])
+            
             if not result:
                 raise AgentExecutionError("A execução do agente retornou um resultado vazio.")
 
-            logger.info("Execução do agente orquestrada com sucesso", correlation_id=correlation_id)
             return result
 
         except asyncio.TimeoutError as e:
-            logger.error(f"Timeout no serviço ao executar agente após {self.AGENT_EXECUTION_TIMEOUT}s",
-                         correlation_id=correlation_id)
             raise AgentTimeoutError(
                 f"A execução excedeu o tempo limite de {self.AGENT_EXECUTION_TIMEOUT} segundos.") from e
-        except AgentRepositoryError as e:
-            logger.error("Erro no repositório de agente", exc_info=e, correlation_id=correlation_id)
-            raise AgentExecutionError("Ocorreu um erro na camada de execução do agente.") from e
-        except AgentExecutionError:
-            raise
         except Exception as e:
             logger.critical("Erro inesperado no serviço de agente", exc_info=e, correlation_id=correlation_id)
             raise AgentServiceError("Ocorreu um erro inesperado no serviço de agente.") from e
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_agent_service(repo: AgentRepository = Depends(get_agent_repository)) -> AgentService:
-    return AgentService(repo)
+def get_agent_service(request: Request) -> AgentService:
+    return request.app.state.agent_service

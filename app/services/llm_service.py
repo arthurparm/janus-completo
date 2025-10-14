@@ -1,8 +1,8 @@
 import structlog
 from typing import Dict, Any, List, Optional
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.llm_repository import LLMRepository, get_llm_repository, LLMRepositoryError
+from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.core.llm import ModelRole, ModelPriority
 
 logger = structlog.get_logger(__name__)
@@ -28,7 +28,6 @@ class LLMService:
     Camada de serviço para gerenciamento do Cérebro Híbrido (LLMs).
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: LLMRepository):
         self._repo = repo
 
@@ -68,7 +67,6 @@ class LLMService:
         except LLMRepositoryError as e:
             raise LLMServiceError(str(e)) from e
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_llm_service(repo: LLMRepository = Depends(get_llm_repository)) -> LLMService:
-    return LLMService(repo)
+def get_llm_service(request: Request) -> LLMService:
+    return request.app.state.llm_service

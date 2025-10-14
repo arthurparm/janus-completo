@@ -1,8 +1,8 @@
 import structlog
 from typing import List, Dict, Any
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.memory_repository import MemoryRepository, get_memory_repository
+from app.repositories.memory_repository import MemoryRepository
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -16,7 +16,6 @@ class MemoryService:
     Camada de serviço para operações relacionadas à memória episódica.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: MemoryRepository):
         self._repo = repo
 
@@ -48,7 +47,6 @@ class MemoryService:
             logger.error("Erro no serviço de memória ao buscar experiências", exc_info=e)
             raise MemoryServiceError("Falha ao buscar experiências.") from e
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_memory_service(repo: MemoryRepository = Depends(get_memory_repository)) -> MemoryService:
-    return MemoryService(repo)
+def get_memory_service(request: Request) -> MemoryService:
+    return request.app.state.memory_service

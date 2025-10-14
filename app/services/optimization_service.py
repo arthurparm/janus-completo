@@ -1,10 +1,9 @@
 import structlog
 from typing import Dict, Any, List, Optional
-from fastapi import Depends
+from fastapi import Request
 
 from app.repositories.optimization_repository import (
     OptimizationRepository,
-    get_optimization_repository,
     OptimizationRepositoryError,
     SystemMetrics,
     DetectedIssue
@@ -25,7 +24,6 @@ class OptimizationService:
     Camada de serviço para o ciclo de auto-otimização proativa.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: OptimizationRepository):
         self._repo = repo
 
@@ -80,8 +78,6 @@ class OptimizationService:
         logger.info("Buscando status do módulo de otimização via serviço.")
         return self._repo.get_status()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_optimization_service(
-        repo: OptimizationRepository = Depends(get_optimization_repository)) -> OptimizationService:
-    return OptimizationService(repo)
+def get_optimization_service(request: Request) -> OptimizationService:
+    return request.app.state.optimization_service

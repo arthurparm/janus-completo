@@ -1,8 +1,8 @@
 from typing import List, Dict, Any, Optional
 import structlog
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.knowledge_repository import KnowledgeRepository, get_knowledge_repository
+from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.code_analysis_service import code_analysis_service
 from app.core.workers.knowledge_consolidator import knowledge_consolidator
 
@@ -13,9 +13,8 @@ CODEBASE_DIR = "/app"
 class KnowledgeService:
     """
     Camada de serviço para o Grafo de Conhecimento.
-    Orquestra a lógica de negócio, delegando o acesso a dados para o repositório.
+    Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: KnowledgeRepository):
         self._repo = repo
 
@@ -44,18 +43,14 @@ class KnowledgeService:
     async def index_codebase(self) -> Dict[str, Any]:
         logger.info(f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
         await self._repo.clear_code_entities()
-        logger.info("Entidades de código antigas removidas.")
 
         python_files = code_analysis_service.find_python_files(CODEBASE_DIR)
         total_files, total_funcs, total_classes, all_calls = 0, 0, 0, []
 
-        logger.info(f"Analisando {len(python_files)} arquivos e persistindo entidades...")
         for file_path in python_files:
             parser = code_analysis_service.parse_python_file(file_path)
             if parser:
-                # Delega a persistência da estrutura do arquivo para o repositório
                 await self._repo.save_code_structure(parser)
-                
                 for call in parser.calls:
                     all_calls.append(
                         {"caller_name": call['caller'], "callee_name": call['callee'], "file_path": file_path})
@@ -63,17 +58,14 @@ class KnowledgeService:
                 total_funcs += len(parser.functions)
                 total_classes += len(parser.classes)
 
-        logger.info(f"Mesclando {len(all_calls)} relações de chamada...")
         await self._repo.bulk_merge_calls(all_calls)
 
         summary = f"Indexação concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {len(all_calls)} chamadas internas criadas."
-        logger.info(summary)
         return {"message": "Indexação da base de código concluída.", "summary": summary}
 
     async def clear_graph(self) -> int:
         return await self._repo.clear_all_data()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_knowledge_service(repo: KnowledgeRepository = Depends(get_knowledge_repository)) -> KnowledgeService:
-    return KnowledgeService(repo)
+def get_knowledge_service(request: Request) -> KnowledgeService:
+    return request.app.state.knowledge_service

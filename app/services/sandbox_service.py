@@ -1,8 +1,8 @@
 import structlog
 from typing import Dict, Any
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.sandbox_repository import SandboxRepository, get_sandbox_repository, SandboxRepositoryError
+from app.repositories.sandbox_repository import SandboxRepository, SandboxRepositoryError
 from app.core.infrastructure.python_sandbox import SandboxResult
 
 logger = structlog.get_logger(__name__)
@@ -24,7 +24,6 @@ class SandboxService:
     Camada de serviço para operações de execução de código em sandbox.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: SandboxRepository):
         self._repo = repo
 
@@ -80,7 +79,6 @@ class SandboxService:
             }
         }
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_sandbox_service(repo: SandboxRepository = Depends(get_sandbox_repository)) -> SandboxService:
-    return SandboxService(repo)
+def get_sandbox_service(request: Request) -> SandboxService:
+    return request.app.state.sandbox_service

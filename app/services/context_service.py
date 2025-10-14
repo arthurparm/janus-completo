@@ -1,8 +1,8 @@
 import structlog
 from typing import Optional, Dict, Any
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.context_repository import ContextRepository, get_context_repository, ContextRepositoryError
+from app.repositories.context_repository import ContextRepository, ContextRepositoryError
 from app.core.infrastructure.context_manager import ContextInfo, WebSearchResult
 
 logger = structlog.get_logger(__name__)
@@ -16,7 +16,6 @@ class ContextService:
     Camada de serviço para operações de contexto ambiental.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: ContextRepository):
         self._repo = repo
 
@@ -62,7 +61,6 @@ class ContextService:
             logger.error("Erro no repositório ao formatar contexto para prompt", exc_info=e)
             raise ContextServiceError("Falha ao formatar o contexto para prompt.") from e
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_context_service(repo: ContextRepository = Depends(get_context_repository)) -> ContextService:
-    return ContextService(repo)
+def get_context_service(request: Request) -> ContextService:
+    return request.app.state.context_service

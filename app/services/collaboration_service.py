@@ -1,9 +1,8 @@
 import structlog
 from typing import Dict, Any, List, Optional
-from fastapi import Depends
+from fastapi import Request
 
-from app.repositories.collaboration_repository import CollaborationRepository, get_collaboration_repository, \
-    CollaborationRepositoryError
+from app.repositories.collaboration_repository import CollaborationRepository, CollaborationRepositoryError
 from app.core.agents import AgentRole
 from app.core.agents.multi_agent_system import Task, TaskPriority, TaskStatus
 
@@ -30,7 +29,6 @@ class CollaborationService:
     Camada de serviço para o sistema de colaboração multi-agente.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-
     def __init__(self, repo: CollaborationRepository):
         self._repo = repo
 
@@ -104,8 +102,6 @@ class CollaborationService:
     def get_health_status(self) -> Dict[str, Any]:
         return self._repo.get_system_health()
 
-
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_collaboration_service(
-        repo: CollaborationRepository = Depends(get_collaboration_repository)) -> CollaborationService:
-    return CollaborationService(repo)
+def get_collaboration_service(request: Request) -> CollaborationService:
+    return request.app.state.collaboration_service
