@@ -1,10 +1,14 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+import structlog
 
-from app.config import settings
+from app.services.system_status_service import system_status_service
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
+
+# --- Pydantic Model (DTO) ---
 
 class StatusResponse(BaseModel):
     app_name: str
@@ -13,20 +17,16 @@ class StatusResponse(BaseModel):
     status: str
 
 
+# --- Endpoint ---
+
 @router.get(
     "/status",
     response_model=StatusResponse,
     summary="Verifica o estado da aplicação",
     tags=["System"]
 )
-def get_system_status():
-    """
-    Retorna o status atual da aplicação, incluindo nome, versão e ambiente.
-    Este endpoint é usado como um health check para monitoramento.
-    """
-    return {
-        "app_name": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT,
-        "status": "OPERATIONAL"
-    }
+async def get_system_status():
+    """Delega a obtenção do status da aplicação para o SystemStatusService."""
+    logger.info("Recebida requisição de status do sistema.")
+    status_data = system_status_service.get_system_status()
+    return StatusResponse(**status_data)
