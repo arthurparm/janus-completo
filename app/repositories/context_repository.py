@@ -5,11 +5,9 @@ from app.core.infrastructure.context_manager import context_manager, ContextInfo
 
 logger = structlog.get_logger(__name__)
 
-
 class ContextRepositoryError(Exception):
     """Base exception for context repository errors."""
     pass
-
 
 class ContextRepository:
     """
@@ -67,5 +65,6 @@ class ContextRepository:
             raise ContextRepositoryError("Falha ao formatar o contexto para prompt.") from e
 
 
-# Instância única do repositório
-context_repository = ContextRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_context_repository() -> ContextRepository:
+    return ContextRepository()
