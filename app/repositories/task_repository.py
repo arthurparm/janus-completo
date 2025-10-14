@@ -1,27 +1,29 @@
 import structlog
 from typing import Dict, Any, Optional
+from fastapi import Depends
 
-from app.core.infrastructure.message_broker import message_broker
+from app.core.infrastructure.message_broker import MessageBroker, get_broker
 
 logger = structlog.get_logger(__name__)
-
 
 class TaskRepositoryError(Exception):
     """Base exception for task repository errors."""
     pass
 
-
 class TaskRepository:
     """
     Camada de Repositório para tarefas assíncronas (Message Broker).
-    Abstrai todas as interações diretas com a infraestrutura de mensageria.
+    Recebe sua dependência de infraestrutura via DI.
     """
+
+    def __init__(self, broker: MessageBroker):
+        self._broker = broker
 
     async def publish_message(self, queue_name: str, message: str):
         """Publica uma mensagem em uma fila específica."""
         logger.debug("Publicando mensagem no repositório de tarefas", queue=queue_name)
         try:
-            await message_broker.publish(queue_name=queue_name, message=message)
+            await self._broker.publish(queue_name=queue_name, message=message)
         except Exception as e:
             logger.error("Erro no repositório ao publicar mensagem", exc_info=e)
             raise TaskRepositoryError("Falha ao publicar mensagem no broker.") from e
@@ -30,7 +32,7 @@ class TaskRepository:
         """Busca informações de uma fila específica."""
         logger.debug("Buscando informações da fila no repositório", queue=queue_name)
         try:
-            return await message_broker.get_queue_info(queue_name)
+            return await self._broker.get_queue_info(queue_name)
         except Exception as e:
             logger.error("Erro no repositório ao buscar informações da fila", exc_info=e)
             raise TaskRepositoryError(f"Falha ao buscar informações da fila '{queue_name}'.") from e
@@ -38,10 +40,11 @@ class TaskRepository:
     async def is_broker_healthy(self) -> bool:
         """Verifica a saúde do message broker."""
         try:
-            return await message_broker.health_check()
+            return await self._broker.health_check()
         except Exception:
             return False
 
 
-# Instância única do repositório
-task_repository = TaskRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_task_repository(broker: MessageBroker = Depends(get_broker)) -> TaskRepository:
+    return TaskRepository(broker)
