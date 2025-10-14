@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic-settings
-neo4j
+neo4j>=5.15
 qdrant-client
 langchain>=0.1.20
 langchain-openai>=0.1.6
