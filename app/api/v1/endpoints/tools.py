@@ -1,21 +1,14 @@
 import structlog
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 
-from app.services.tool_service import (
-    tool_service,
-    ToolServiceError,
-    ToolNotFoundError,
-    ToolCreationError,
-    ProtectedToolError
-)
+from app.services.tool_service import ToolService, get_tool_service
 from app.core.tools import ToolCategory, PermissionLevel
 
 router = APIRouter(prefix="/tools", tags=["Tools"])
 logger = structlog.get_logger(__name__)
-
 
 # --- Pydantic Models (DTOs) ---
 
@@ -49,11 +42,11 @@ class CreateToolFromFunctionRequest(BaseModel):
     rate_limit_per_minute: Optional[int] = None
     tags: List[str] = Field(default_factory=list)
 
-
 # --- Endpoints ---
 
 @router.get("/", response_model=ToolListResponse, summary="Lista todas as ferramentas disponíveis")
 async def list_tools(
+        service: ToolService = Depends(get_tool_service),
         category: Optional[str] = None,
         permission_level: Optional[str] = None,
         tags: Optional[str] = None
@@ -64,8 +57,8 @@ async def list_tools(
         perm_filter = PermissionLevel(permission_level.lower()) if permission_level else None
         tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
-        tools_metadata = tool_service.list_tools(cat_filter, perm_filter, tag_list)
-
+        tools_metadata = service.list_tools(cat_filter, perm_filter, tag_list)
+        
         tool_infos = [ToolInfo(
             name=meta.name,
             description=meta.description,
@@ -77,68 +70,43 @@ async def list_tools(
         ) for meta in tools_metadata]
 
         return ToolListResponse(total=len(tool_infos), tools=tool_infos)
-    except ValueError as e:  # Erro de conversão de enum
+    except ValueError as e:  # Erro de conversão de enum é uma validação de input -> 400
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Filtro inválido: {e}")
-    except ToolServiceError as e:
-        logger.error("Erro no serviço de ferramentas ao listar", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @router.get("/{tool_name}", response_model=ToolInfo, summary="Obtém detalhes de uma ferramenta")
-async def get_tool_details(tool_name: str):
+async def get_tool_details(tool_name: str, service: ToolService = Depends(get_tool_service)):
     """Delega a busca de detalhes de uma ferramenta para o ToolService."""
-    try:
-        metadata = tool_service.get_tool_details(tool_name)
-        return ToolInfo(**metadata.dict())
-    except ToolNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
+    # ToolNotFoundError é tratado pelo exception handler central -> 404
+    metadata = service.get_tool_details(tool_name)
+    return ToolInfo(**metadata.dict())
 
 @router.get("/stats/usage", response_model=ToolStatsResponse, summary="Estatísticas de uso de ferramentas")
-async def get_tool_statistics():
+async def get_tool_statistics(service: ToolService = Depends(get_tool_service)):
     """Delega a busca de estatísticas para o ToolService."""
-    try:
-        return tool_service.get_statistics()
-    except ToolServiceError as e:
-        logger.error("Erro no serviço de ferramentas ao buscar estatísticas", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    return service.get_statistics()
 
 
 @router.post("/create/from-function", response_model=ToolInfo, status_code=status.HTTP_201_CREATED,
              summary="Cria ferramenta a partir de código Python")
-async def create_tool_from_function(request: CreateToolFromFunctionRequest):
+async def create_tool_from_function(
+        request: CreateToolFromFunctionRequest,
+        service: ToolService = Depends(get_tool_service)
+):
     """Delega a criação de uma ferramenta a partir de código para o ToolService."""
-    try:
-        new_tool_metadata = tool_service.create_tool_from_function(request.dict())
-        return ToolInfo(**new_tool_metadata.dict())
-    except ToolCreationError as e:
-        logger.error("Erro de criação de ferramenta no serviço", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.error("Erro inesperado ao criar ferramenta", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Erro interno ao criar ferramenta.")
-
+    # ToolCreationError é tratado pelo exception handler central -> 400
+    new_tool_metadata = service.create_tool_from_function(request.dict())
+    return ToolInfo(**new_tool_metadata.dict())
 
 @router.delete("/{tool_name}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove uma ferramenta dinâmica")
-async def delete_tool(tool_name: str):
+async def delete_tool(tool_name: str, service: ToolService = Depends(get_tool_service)):
     """Delega a remoção de uma ferramenta para o ToolService."""
-    try:
-        tool_service.delete_tool(tool_name)
-    except ProtectedToolError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ToolNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ToolServiceError as e:
-        logger.error("Erro no serviço de ferramentas ao remover", tool_name=tool_name, exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    # ProtectedToolError -> 400 e ToolNotFoundError -> 404 são tratados centralmente
+    service.delete_tool(tool_name)
 
 @router.get("/categories/list", summary="Lista todas as categorias de ferramentas")
-async def list_categories():
-    return {"categories": tool_service.list_categories()}
-
+async def list_categories(service: ToolService = Depends(get_tool_service)):
+    return {"categories": service.list_categories()}
 
 @router.get("/permissions/list", summary="Lista todos os níveis de permissão")
-async def list_permissions():
-    return {"permission_levels": tool_service.list_permissions()}
+async def list_permissions(service: ToolService = Depends(get_tool_service)):
+    return {"permission_levels": service.list_permissions()}

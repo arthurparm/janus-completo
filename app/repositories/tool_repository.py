@@ -1,6 +1,7 @@
 import structlog
 from typing import List, Dict, Any, Optional
 from langchain.tools import BaseTool
+from fastapi import Depends
 
 from app.core.tools import (
     action_registry,
@@ -11,11 +12,9 @@ from app.core.tools import (
 
 logger = structlog.get_logger(__name__)
 
-
 class ToolRepositoryError(Exception):
     """Base exception for tool repository errors."""
     pass
-
 
 class ToolRepository:
     """
@@ -59,5 +58,7 @@ class ToolRepository:
         return [perm.value for perm in PermissionLevel]
 
 
-# Instância única do repositório
-tool_repository = ToolRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_tool_repository() -> ToolRepository:
+    # O action_registry é um singleton global, então o repositório não precisa de estado.
+    return ToolRepository()
