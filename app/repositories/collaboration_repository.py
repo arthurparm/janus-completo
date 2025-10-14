@@ -6,11 +6,9 @@ from app.core.agents.multi_agent_system import Task, TaskStatus, SpecializedAgen
 
 logger = structlog.get_logger(__name__)
 
-
 class CollaborationRepositoryError(Exception):
     """Base exception for collaboration repository errors."""
     pass
-
 
 class CollaborationRepository:
     """
@@ -19,7 +17,6 @@ class CollaborationRepository:
     """
 
     def _get_system(self) -> MultiAgentSystem:
-        # Centraliza a obtenção da instância do sistema
         return get_multi_agent_system()
 
     def create_agent(self, role: AgentRole) -> SpecializedAgent:
@@ -72,5 +69,6 @@ class CollaborationRepository:
         }
 
 
-# Instância única do repositório
-collaboration_repository = CollaborationRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_collaboration_repository() -> CollaborationRepository:
+    return CollaborationRepository()
