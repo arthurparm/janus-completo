@@ -1,21 +1,18 @@
 import structlog
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 
 from app.services.collaboration_service import (
-    collaboration_service,
-    CollaborationServiceError,
-    AgentNotFoundError,
-    TaskNotFoundError
+    CollaborationService,
+    get_collaboration_service
 )
 from app.core.agents import AgentRole
 from app.core.agents.multi_agent_system import TaskPriority, TaskStatus
 
 router = APIRouter(prefix="/collaboration", tags=["Collaboration"])
 logger = structlog.get_logger(__name__)
-
 
 # --- Pydantic Models (DTOs) ---
 
@@ -43,118 +40,92 @@ class ExecuteProjectRequest(BaseModel):
 # --- Endpoints ---
 
 @router.post("/agents/create", response_model=CreateAgentResponse, status_code=status.HTTP_201_CREATED)
-async def create_agent(request: CreateAgentRequest):
+async def create_agent(
+        request: CreateAgentRequest,
+        service: CollaborationService = Depends(get_collaboration_service)
+):
     """Delega a criação de um novo agente para o CollaborationService."""
-    try:
-        role = AgentRole(request.role)
-        agent = collaboration_service.create_agent(role)
-        return CreateAgentResponse(
-            agent_id=agent.agent_id,
-            role=agent.role.value,
-            message=f"Agente {role.value} criado com sucesso"
-        )
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Papel inválido: {request.role}")
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço de colaboração ao criar agente", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    # ValueError é tratado pelo handler central -> 400
+    role = AgentRole(request.role)
+    agent_data = service.create_agent(role)
+    return CreateAgentResponse(
+        **agent_data,
+        message=f"Agente {agent_data['role']} criado com sucesso"
+    )
 
 @router.get("/agents", summary="Lista todos os agentes ativos")
-async def list_agents():
+async def list_agents(service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a listagem de agentes para o CollaborationService."""
-    try:
-        agents = collaboration_service.list_agents()
-        return {"total_agents": len(agents), "agents": agents}
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço de colaboração ao listar agentes", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    agents = service.list_agents()
+    return {"total_agents": len(agents), "agents": agents}
 
 @router.get("/agents/{agent_id}", summary="Obtém detalhes de um agente")
-async def get_agent_details(agent_id: str):
+async def get_agent_details(agent_id: str, service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a busca de detalhes do agente para o CollaborationService."""
-    try:
-        return collaboration_service.get_agent_details(agent_id)
-    except AgentNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço ao buscar detalhes do agente", agent_id=agent_id, exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    # AgentNotFoundError é tratado pelo handler central -> 404
+    return service.get_agent_details(agent_id)
 
 @router.post("/tasks/create", summary="Cria uma nova tarefa")
-async def create_task(request: CreateTaskRequest):
+async def create_task(
+        request: CreateTaskRequest,
+        service: CollaborationService = Depends(get_collaboration_service)
+):
     """Delega a criação de uma tarefa para o CollaborationService."""
     try:
         priority = TaskPriority[request.priority.upper()]
-        task = collaboration_service.create_task(
+        task = service.create_task(
             description=request.description,
             priority=priority,
             assigned_to=request.assigned_to,
             dependencies=request.dependencies
         )
         return task.to_dict()
-    except KeyError:
+    except KeyError:  # Erro de validação de input
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Prioridade inválida: {request.priority}")
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço ao criar tarefa", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @router.post("/tasks/execute", summary="Executa uma tarefa específica")
-async def execute_task(request: ExecuteTaskRequest):
+async def execute_task(
+        request: ExecuteTaskRequest,
+        service: CollaborationService = Depends(get_collaboration_service)
+):
     """Delega a execução de uma tarefa para o CollaborationService."""
-    try:
-        return await collaboration_service.execute_task(request.task_id, request.agent_id)
-    except (AgentNotFoundError, TaskNotFoundError) as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço ao executar tarefa", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    # AgentNotFoundError e TaskNotFoundError são tratados pelo handler -> 404
+    return await service.execute_task(request.task_id, request.agent_id)
 
 @router.get("/tasks", summary="Lista todas as tarefas")
-async def list_tasks(status: Optional[str] = None):
+async def list_tasks(
+        service: CollaborationService = Depends(get_collaboration_service),
+        status: Optional[str] = None
+):
     """Delega a listagem de tarefas para o CollaborationService."""
     try:
         task_status = TaskStatus(status) if status else None
-        tasks = collaboration_service.list_tasks(task_status)
+        tasks = service.list_tasks(task_status)
         return {"total_tasks": len(tasks), "tasks": [t.to_dict() for t in tasks]}
-    except ValueError:
+    except ValueError:  # Erro de validação de input
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Status inválido: {status}")
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço ao listar tarefas", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @router.get("/tasks/{task_id}", summary="Obtém detalhes de uma tarefa")
-async def get_task_details(task_id: str):
+async def get_task_details(task_id: str, service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a busca de detalhes da tarefa para o CollaborationService."""
-    try:
-        task = collaboration_service.get_task_details(task_id)
-        return task.to_dict()
-    except TaskNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
+    # TaskNotFoundError é tratado pelo handler -> 404
+    task = service.get_task_details(task_id)
+    return task.to_dict()
 
 @router.post("/projects/execute", summary="Executa um projeto completo")
-async def execute_project(request: ExecuteProjectRequest):
+async def execute_project(
+        request: ExecuteProjectRequest,
+        service: CollaborationService = Depends(get_collaboration_service)
+):
     """Delega a execução de um projeto para o CollaborationService."""
-    try:
-        return await collaboration_service.execute_project(request.description)
-    except CollaborationServiceError as e:
-        logger.error("Erro no serviço ao executar projeto", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    return await service.execute_project(request.description)
 
 @router.get("/workspace/status", summary="Retorna o status do workspace")
-async def get_workspace_status():
+async def get_workspace_status(service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a busca de status do workspace para o CollaborationService."""
-    return collaboration_service.get_workspace_status()
-
+    return service.get_workspace_status()
 
 @router.get("/health", summary="Health check do sistema de colaboração")
-async def health_check():
+async def health_check(service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a verificação de saúde para o CollaborationService."""
-    return collaboration_service.get_health_status()
+    return service.get_health_status()
