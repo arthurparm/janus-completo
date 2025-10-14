@@ -1,11 +1,11 @@
 import structlog
 from typing import Dict, Any
+from fastapi import Depends
 
-from app.repositories.sandbox_repository import sandbox_repository, SandboxRepositoryError
+from app.repositories.sandbox_repository import SandboxRepository, get_sandbox_repository, SandboxRepositoryError
 from app.core.infrastructure.python_sandbox import SandboxResult
 
 logger = structlog.get_logger(__name__)
-
 
 # --- Custom Service-Layer Exceptions ---
 
@@ -13,19 +13,20 @@ class SandboxError(Exception):
     """Base exception for sandbox service errors."""
     pass
 
-
 class InvalidInputError(SandboxError):
     """Raised for invalid input, such as empty code."""
     pass
-
 
 # --- Sandbox Service ---
 
 class SandboxService:
     """
     Camada de serviço para operações de execução de código em sandbox.
-    Orquestra a lógica de negócio, delegando o acesso à infraestrutura para o repositório.
+    Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
+
+    def __init__(self, repo: SandboxRepository):
+        self._repo = repo
 
     def execute_code(self, code: str, context: Dict[str, Any]) -> SandboxResult:
         """
@@ -36,7 +37,7 @@ class SandboxService:
             raise InvalidInputError("O código não pode ser vazio.")
 
         try:
-            return sandbox_repository.execute_code(code, context)
+            return self._repo.execute_code(code, context)
         except SandboxRepositoryError as e:
             logger.error("Erro no repositório de sandbox ao executar código", exc_info=e)
             raise SandboxError("Falha ao executar código no sandbox.") from e
@@ -50,7 +51,7 @@ class SandboxService:
             raise InvalidInputError("A expressão não pode ser vazia.")
 
         try:
-            return sandbox_repository.evaluate_expression(expression)
+            return self._repo.evaluate_expression(expression)
         except SandboxRepositoryError as e:
             logger.error("Erro no repositório de sandbox ao avaliar expressão", exc_info=e)
             raise SandboxError("Falha ao avaliar expressão no sandbox.") from e
@@ -58,7 +59,6 @@ class SandboxService:
     def get_capabilities(self) -> Dict[str, Any]:
         """Retorna as capacidades e restrições do sandbox."""
         logger.info("Buscando capacidades do sandbox via serviço.")
-        # Esta lógica é estática e não precisa de um repositório, mas é mantida no serviço por consistência.
         return {
             "allowed_modules": [
                 "math", "random", "datetime", "json", "re",
@@ -81,5 +81,6 @@ class SandboxService:
         }
 
 
-# Instância única do serviço
-sandbox_service = SandboxService()
+# Padrão de Injeção de Dependência: Getter para o serviço
+def get_sandbox_service(repo: SandboxRepository = Depends(get_sandbox_repository)) -> SandboxService:
+    return SandboxService(repo)

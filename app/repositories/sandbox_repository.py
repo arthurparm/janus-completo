@@ -5,11 +5,9 @@ from app.core.infrastructure.python_sandbox import python_sandbox, SandboxResult
 
 logger = structlog.get_logger(__name__)
 
-
 class SandboxRepositoryError(Exception):
     """Base exception for sandbox repository errors."""
     pass
-
 
 class SandboxRepository:
     """
@@ -36,5 +34,6 @@ class SandboxRepository:
             raise SandboxRepositoryError("Falha ao avaliar expressão no sandbox.") from e
 
 
-# Instância única do repositório
-sandbox_repository = SandboxRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_sandbox_repository() -> SandboxRepository:
+    return SandboxRepository()
