@@ -10,7 +10,7 @@ from app.services.optimization_service import (
     DetectedIssue
 )
 
-router = APIRouter(prefix="/optimization", tags=["Optimization"])
+router = APIRouter(tags=["Optimization"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

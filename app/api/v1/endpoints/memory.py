@@ -7,7 +7,7 @@ import structlog
 from app.services.memory_service import MemoryService, get_memory_service
 from app.models.schemas import Experience
 
-router = APIRouter(prefix="/memory", tags=["Memory"])
+router = APIRouter(tags=["Memory"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

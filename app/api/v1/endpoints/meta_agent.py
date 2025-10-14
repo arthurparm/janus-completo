@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.services.meta_agent_service import MetaAgentService, get_meta_agent_service
 
-router = APIRouter(prefix="/meta-agent", tags=["Meta-Agent"])
+router = APIRouter(tags=["Meta-Agent"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

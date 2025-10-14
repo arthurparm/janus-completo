@@ -6,7 +6,7 @@ import structlog
 
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 
-router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
+router = APIRouter(tags=["Knowledge"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

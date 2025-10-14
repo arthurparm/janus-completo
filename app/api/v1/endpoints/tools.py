@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.services.tool_service import ToolService, get_tool_service
 from app.core.tools import ToolCategory, PermissionLevel
 
-router = APIRouter(prefix="/tools", tags=["Tools"])
+router = APIRouter(tags=["Tools"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

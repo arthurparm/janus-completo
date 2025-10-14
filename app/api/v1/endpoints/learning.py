@@ -12,7 +12,7 @@ from app.services.learning_service import (
     TrainingFailedError
 )
 
-router = APIRouter(prefix="/learning", tags=["Learning"])
+router = APIRouter(tags=["Learning"])
 logger = structlog.get_logger(__name__)
 
 

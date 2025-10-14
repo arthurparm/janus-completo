@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.services.sandbox_service import SandboxService, get_sandbox_service
 
-router = APIRouter(prefix="/sandbox", tags=["Sandbox"])
+router = APIRouter(tags=["Sandbox"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

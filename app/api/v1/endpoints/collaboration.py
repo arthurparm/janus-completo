@@ -11,7 +11,7 @@ from app.services.collaboration_service import (
 from app.core.agents import AgentRole
 from app.core.agents.multi_agent_system import TaskPriority, TaskStatus
 
-router = APIRouter(prefix="/collaboration", tags=["Collaboration"])
+router = APIRouter(tags=["Collaboration"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

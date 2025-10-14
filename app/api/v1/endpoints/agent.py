@@ -8,7 +8,7 @@ from starlette.requests import Request
 from app.core.infrastructure import AgentType
 from app.services.agent_service import AgentService, get_agent_service
 
-router = APIRouter(prefix="/agent", tags=["Agent"])
+router = APIRouter(tags=["Agent"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

@@ -9,7 +9,7 @@ from app.services.observability_service import (
     get_observability_service
 )
 
-router = APIRouter(prefix="/observability", tags=["Observability"])
+router = APIRouter(tags=["Observability"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

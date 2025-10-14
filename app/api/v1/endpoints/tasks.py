@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.services.task_service import TaskService, get_task_service
 from app.models.schemas import QueueName
 
-router = APIRouter(prefix="/tasks", tags=["Tasks"])
+router = APIRouter(tags=["Tasks"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

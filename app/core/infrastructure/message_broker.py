@@ -54,7 +54,11 @@ class MessageBroker:
         """
         await self.connect()
         async with self._connection.channel() as channel:
-            await channel.declare_queue(queue_name, durable=True)
+            arguments = {}
+            if queue_name in ["janus.knowledge.consolidation", "default"]:
+                arguments["x-message-ttl"] = 86400000
+                arguments["x-max-length"] = 10000
+            await channel.declare_queue(queue_name, durable=True, arguments=arguments or None)
             await channel.default_exchange.publish(
                 aio_pika.Message(body=message.encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT),
                 routing_key=queue_name,
@@ -67,7 +71,11 @@ class MessageBroker:
         """
         await self.connect()
         async with self._connection.channel() as channel:
-            queue = await channel.declare_queue(queue_name, durable=True)
+            arguments = {}
+            if queue_name in ["janus.knowledge.consolidation", "default"]:
+                arguments["x-message-ttl"] = 86400000
+                arguments["x-max-length"] = 10000
+            queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments or None)
             return {
                 "name": queue.name,
                 "messages": queue.declaration_result.message_count,

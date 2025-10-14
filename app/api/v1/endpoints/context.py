@@ -7,7 +7,7 @@ import structlog
 from app.services.context_service import ContextService, get_context_service
 from app.core.infrastructure.context_manager import ContextInfo, WebSearchResult
 
-router = APIRouter(prefix="/context", tags=["Context"])
+router = APIRouter(tags=["Context"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

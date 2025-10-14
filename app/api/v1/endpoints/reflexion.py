@@ -9,7 +9,7 @@ from app.services.reflexion_service import (
     get_reflexion_service
 )
 
-router = APIRouter(prefix="/reflexion", tags=["Reflexion"])
+router = APIRouter(tags=["Reflexion"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---

@@ -11,7 +11,7 @@ from app.services.llm_service import (
 )
 from app.core.llm import ModelRole, ModelPriority
 
-router = APIRouter(prefix="/llm", tags=["LLM"])
+router = APIRouter(tags=["LLM"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---
