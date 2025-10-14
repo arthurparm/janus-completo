@@ -6,11 +6,9 @@ from app.core.optimization.monitor import SystemMetrics, DetectedIssue
 
 logger = structlog.get_logger(__name__)
 
-
 class OptimizationRepositoryError(Exception):
     """Base exception for optimization repository errors."""
     pass
-
 
 class OptimizationRepository:
     """
@@ -54,5 +52,6 @@ class OptimizationRepository:
         }
 
 
-# Instância única do repositório
-optimization_repository = OptimizationRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_optimization_repository() -> OptimizationRepository:
+    return OptimizationRepository()
