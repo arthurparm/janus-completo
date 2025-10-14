@@ -1,14 +1,14 @@
 import asyncio
 import structlog
 from typing import Dict, Any
+from fastapi import Depends
 
 from starlette.requests import Request
 
-from app.repositories.agent_repository import agent_repository, AgentRepositoryError
+from app.repositories.agent_repository import AgentRepository, get_agent_repository, AgentRepositoryError
 from app.core.infrastructure import AgentType
 
 logger = structlog.get_logger(__name__)
-
 
 # --- Custom Service-Layer Exceptions ---
 
@@ -16,25 +16,25 @@ class AgentServiceError(Exception):
     """Base exception for agent service errors."""
     pass
 
-
 class AgentTimeoutError(AgentServiceError):
     """Raised when agent execution exceeds the time limit."""
     pass
 
-
 class AgentExecutionError(AgentServiceError):
     """Raised for general errors during agent execution."""
     pass
-
 
 # --- Agent Service ---
 
 class AgentService:
     """
     Camada de serviço para orquestrar a execução de agentes.
-    Delega o acesso à infraestrutura para o repositório.
+    Recebe sua dependência de repositório via DI.
     """
     AGENT_EXECUTION_TIMEOUT = 120  # segundos
+
+    def __init__(self, repo: AgentRepository):
+        self._repo = repo
 
     async def execute_agent(
             self,
@@ -51,10 +51,8 @@ class AgentService:
                     correlation_id=correlation_id)
 
         try:
-            # A lógica de negócio (timeout) permanece no serviço
             result = await asyncio.wait_for(
-                # A chamada à infraestrutura é delegada ao repositório
-                agent_repository.run_agent(
+                self._repo.run_agent(
                     question=question,
                     request=http_request,
                     agent_type=agent_type
@@ -75,22 +73,20 @@ class AgentService:
             return result
 
         except asyncio.TimeoutError as e:
-            logger.error(
-                f"Timeout no serviço ao executar agente após {self.AGENT_EXECUTION_TIMEOUT}s",
-                correlation_id=correlation_id
-            )
+            logger.error(f"Timeout no serviço ao executar agente após {self.AGENT_EXECUTION_TIMEOUT}s",
+                         correlation_id=correlation_id)
             raise AgentTimeoutError(
                 f"A execução excedeu o tempo limite de {self.AGENT_EXECUTION_TIMEOUT} segundos.") from e
         except AgentRepositoryError as e:
             logger.error("Erro no repositório de agente", exc_info=e, correlation_id=correlation_id)
             raise AgentExecutionError("Ocorreu um erro na camada de execução do agente.") from e
         except AgentExecutionError:
-            # Apenas repassa a exceção já tratada
             raise
         except Exception as e:
             logger.critical("Erro inesperado no serviço de agente", exc_info=e, correlation_id=correlation_id)
             raise AgentServiceError("Ocorreu um erro inesperado no serviço de agente.") from e
 
 
-# Instância única do serviço
-agent_service = AgentService()
+# Padrão de Injeção de Dependência: Getter para o serviço
+def get_agent_service(repo: AgentRepository = Depends(get_agent_repository)) -> AgentService:
+    return AgentService(repo)

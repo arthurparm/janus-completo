@@ -1,16 +1,15 @@
 import structlog
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, validator
 from starlette.requests import Request
 
 from app.core.infrastructure import AgentType
-from app.services.agent_service import agent_service, AgentTimeoutError, AgentExecutionError
+from app.services.agent_service import AgentService, get_agent_service
 
-router = APIRouter()
+router = APIRouter(prefix="/agent", tags=["Agent"])
 logger = structlog.get_logger(__name__)
-
 
 # --- Pydantic Models (DTOs) ---
 
@@ -30,55 +29,33 @@ class AgentResponse(BaseModel):
     agent_type_used: str
     intermediate_steps: Optional[list] = None
 
-
 # --- Endpoint ---
 
-@router.post(
-    "/execute",
-    response_model=AgentResponse,
-    summary="Envia uma instrução para um agente Janus executar",
-    tags=["Agent"],
-)
-async def agent_execute(request: AgentExecutionRequest, http_request: Request):
+@router.post("/execute", response_model=AgentResponse, summary="Envia uma instrução para um agente executar")
+async def agent_execute(
+        request: AgentExecutionRequest,
+        http_request: Request,
+        service: AgentService = Depends(get_agent_service)
+):
     """
-    Recebe uma solicitação, delega para o AgentService e traduz os resultados
-    ou erros para uma resposta HTTP.
+    Recebe uma solicitação, delega para o AgentService e confia nos
+    exception handlers para tratar os erros de forma centralizada.
     """
-    correlation_id = getattr(http_request.state, "correlation_id", "no-id")
-    logger.info("Recebida requisição de execução de agente.", correlation_id=correlation_id)
+    logger.info("Recebida requisição de execução de agente.",
+                correlation_id=getattr(http_request.state, "correlation_id", "no-id"))
 
-    try:
-        result = await agent_service.execute_agent(
-            question=request.question,
-            agent_type=request.agent_type,
-            http_request=http_request
-        )
+    # O código agora é limpo e focado na lógica de negócio.
+    # A conversão de AgentTimeoutError -> 408 e AgentExecutionError -> 500/503
+    # é feita automaticamente pelo `exception_handlers.py`.
+    result = await service.execute_agent(
+        question=request.question,
+        agent_type=request.agent_type,
+        http_request=http_request
+    )
 
-        return AgentResponse(
-            question=request.question,
-            answer=result.get("answer", ""),
-            agent_type_used=request.agent_type.name,
-            intermediate_steps=result.get("intermediate_steps")
-        )
-
-    except AgentTimeoutError as e:
-        logger.warning("Timeout na execução do agente", correlation_id=correlation_id)
-        raise HTTPException(status_code=status.HTTP_408_REQUEST_TIMEOUT, detail=str(e))
-
-    except AgentExecutionError as e:
-        error_msg = str(e)
-        logger.error("Erro de execução no serviço de agente", error_message=error_msg, correlation_id=correlation_id)
-
-        # Lógica para mapear o erro do serviço para um status HTTP apropriado
-        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        if "circuit" in error_msg.lower():
-            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-
-        raise HTTPException(status_code=status_code, detail={"error": error_msg, "trace_id": correlation_id})
-
-    except Exception as e:
-        logger.critical("Erro inesperado na camada de API do agente", exc_info=e, correlation_id=correlation_id)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "Ocorreu um erro inesperado no servidor."}
-        )
+    return AgentResponse(
+        question=request.question,
+        answer=result.get("answer", ""),
+        agent_type_used=request.agent_type.name,
+        intermediate_steps=result.get("intermediate_steps")
+    )
