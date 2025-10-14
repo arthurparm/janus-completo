@@ -8,10 +8,11 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.problem_details import add_problem_handlers
 from app.api.v1.router import api_router
 from app.config import settings
-from app.core.agents import run_meta_agent_cycle
+from app.core.agents.meta_agent_cycle import run_meta_agent_cycle
 from app.core.infrastructure import CorrelationMiddleware, RateLimitMiddleware, setup_logging
 from app.core.memory import initialize_memory_core
 from app.core.workers import harvester
+from app.core.workers.knowledge_consolidator import knowledge_consolidator
 from app.db.graph import graph_db
 from app.db.vector_store import check_qdrant_readiness
 
@@ -53,6 +54,8 @@ async def lifespan(app: FastAPI):
     logger.info("Meta-agente cycle iniciado.")
     await harvester.start()
     logger.info("Data harvester iniciado.")
+    await knowledge_consolidator.start()
+    logger.info("Knowledge consolidator iniciado.")
 
     logger.info("Application startup complete.")
     yield
@@ -66,6 +69,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             logger.info("Meta-agente cycle cancelado.")
     await harvester.stop()
+    await knowledge_consolidator.stop()
     graph_db.close()
     logger.info("Application shutdown complete.")
 
