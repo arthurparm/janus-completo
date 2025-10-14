@@ -1,304 +1,82 @@
-import asyncio
-import base64
-import json
-import logging
-import math
-import re
-import time
-from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple
+import structlog
+from typing import List, Dict, Any, Optional
 
-from langchain_openai import OpenAIEmbeddings
-from prometheus_client import Counter, Histogram
-from qdrant_client import models, AsyncQdrantClient
+from qdrant_client import QdrantClient, models
 
 from app.config import settings
-from app.db.vector_store import get_async_qdrant_client, aget_or_create_collection
-from app.models.schemas import Experience
+from app.models.schemas import Experience, VectorCollection  # Importa o Enum
 
-logger = logging.getLogger(__name__)
-
-
-# Helper functions
-def _now() -> float:
-    """Returns current time in seconds."""
-    return time.time()
+logger = structlog.get_logger(__name__)
 
 
-def _approx_bytes(text: str) -> int:
-    """Approximates the byte size of a string."""
-    return len(text.encode('utf-8'))
-
-
-def _detect_pii(text: str) -> bool:
-    """Simple PII detection (emails, phone numbers, SSNs)."""
-    patterns = [
-        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
-        r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',  # Phone
-        r'\b\d{3}-\d{2}-\d{4}\b',  # SSN
-    ]
-    return any(re.search(p, text) for p in patterns)
-
-def _mask_pii(text: str) -> str:
-    """Masks detected PII with [REDACTED]."""
-    text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL_REDACTED]', text)
-    text = re.sub(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE_REDACTED]', text)
-    text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[SSN_REDACTED]', text)
-    return text
-
-def _xor_bytes(data: bytes, key: bytes) -> bytes:
-    """Simple XOR encryption/decryption."""
-    return bytes(a ^ b for a, b in zip(data, key * (len(data) // len(key) + 1)))
-
-
-def encrypt_text(text: str, key: str) -> str:
-    """Encrypts text using XOR and returns base64."""
-    key_bytes = key.encode('utf-8')
-    data_bytes = text.encode('utf-8')
-    encrypted = _xor_bytes(data_bytes, key_bytes)
-    return base64.b64encode(encrypted).decode('utf-8')
-
-
-def decrypt_text(encrypted_text: str, key: str) -> str:
-    """Decrypts base64 XOR encrypted text."""
-    key_bytes = key.encode('utf-8')
-    data_bytes = base64.b64decode(encrypted_text.encode('utf-8'))
-    decrypted = _xor_bytes(data_bytes, key_bytes)
-    return decrypted.decode('utf-8')
-
-def _sanitize_metadata(metadata: dict) -> dict:
-    """Removes None values and ensures all values are JSON-serializable."""
-    return {k: v for k, v in metadata.items() if v is not None}
-
-class ShortTermMemory:
-    """In-memory LRU cache for recent experiences, supporting filtering."""
-    def __init__(self, ttl_seconds: int, max_items: int, encoder: Optional[OpenAIEmbeddings]):
-        self.ttl_seconds = ttl_seconds
-        self.max_items = max_items
-        self.encoder = encoder
-        self._store: "OrderedDict[str, Tuple[float, Optional[List[float]], str, dict]]" = OrderedDict()
-        self._lock = asyncio.Lock()
-
-    async def _prune(self):
-        async with self._lock:
-            now = _now()
-            expired_keys = [k for k, (ts, _, _, _) in self._store.items() if now - ts > self.ttl_seconds]
-            for k in expired_keys:
-                self._store.pop(k, None)
-            while len(self._store) > self.max_items:
-                self._store.popitem(last=False)
-
-    async def aadd(self, exp_id: str, content: str, metadata: dict):
-        """Adiciona experiência à STM gerando embedding."""
-        ts = _now()
-        vec: Optional[List[float]] = None
-        try:
-            if self.encoder:
-                vec = await self.encoder.aembed_query(content)
-        except Exception as e:
-            logger.warning(f"STM embed failed: {e}")
-        async with self._lock:
-            self._store[exp_id] = (ts, vec, content, metadata)
-            self._store.move_to_end(exp_id)
-            await self._prune()
-
-    async def aadd_with_vector(self, exp_id: str, content: str, metadata: dict, vector: List[float]):
-        """Adiciona experiência à STM com embedding já gerado (otimizado)."""
-        ts = _now()
-        async with self._lock:
-            self._store[exp_id] = (ts, vector, content, metadata)
-            self._store.move_to_end(exp_id)
-        await self._prune()
-
-    @staticmethod
-    def _cosine(a: List[float], b: List[float]) -> float:
-        if not a or not b: return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a))
-        nb = math.sqrt(sum(y * y for y in b))
-        return (dot / (na * nb)) if na and nb else 0.0
-
-    async def asearch(self, query: str, n_results: int, filters: Optional[Dict] = None) -> List[dict]:
-        await self._prune()
-        qv: Optional[List[float]] = None
-        if self.encoder:
-            try:
-                qv = await self.encoder.aembed_query(query)
-            except Exception as e:
-                logger.warning(f"STM query embed failed: {e}")
-
-        results = []
-        async with self._lock:
-            for exp_id, (ts, vec, content, metadata) in reversed(self._store.items()):
-                if filters:
-                    if filters.get("type") and metadata.get("type") != filters["type"]:
-                        continue
-                    if filters.get("origin") and metadata.get("origin") != filters["origin"]:
-                        continue
-                    if filters.get("time_range") and not (filters["time_range"][0] <= ts <= filters["time_range"][1]):
-                        continue
-                
-                score = self._cosine(qv, vec) if qv and vec else (1.0 if query.lower() in content.lower() else 0.0)
-                if score >= (filters.get("min_score", 0.0) if filters else 0.0):
-                    results.append({
-                        "id": exp_id, "content": content, "metadata": metadata,
-                        "distance": 1 - score, "score": score
-                    })
-
-        results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:n_results]
-
-class EpisodicMemory:
-    """Unified memory system with short-term and long-term filtered recall."""
+class MemoryCore:
+    """
+    Gerencia a conexão e as operações com o banco de dados vetorial (Qdrant).
+    """
     def __init__(self):
-        self.async_client: Optional[AsyncQdrantClient] = None
-        self.encoder: Optional[OpenAIEmbeddings] = None
-        self.short: Optional[ShortTermMemory] = None
-        self._quota_lock = asyncio.Lock()
-        self._quota_window_start = _now()
-        self._per_origin_counts: Dict[str, int] = {}
-        self._per_origin_bytes: Dict[str, int] = {}
+        self.client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
+        self.collection_name = VectorCollection.EPISODIC_MEMORY  # Usa o Enum
 
-    async def ainit(self):
-        logger.info("Initializing EpisodicMemory...")
-        self.async_client = get_async_qdrant_client()
+    async def initialize(self):
+        """Garante que a coleção exista no Qdrant."""
         try:
-            self.encoder = OpenAIEmbeddings()
-            probe_vec = await self.encoder.aembed_query("dimension_probe")
-            await aget_or_create_collection(collection_name=settings.QDRANT_COLLECTION_EPISODIC,
-                                            vector_size=len(probe_vec))
+            collections = await self.client.get_collections()
+            if self.collection_name not in [c.name for c in collections.collections]:
+                logger.info(f"Coleção '{self.collection_name}' não encontrada. Criando nova coleção...")
+                await self.client.recreate_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
+                )
+                logger.info("Coleção criada com sucesso.")
+            else:
+                logger.info(f"Coleção '{self.collection_name}' já existe.")
         except Exception as e:
-            logger.warning(f"Failed to init OpenAIEmbeddings or Qdrant collection: {e}")
-            self.encoder = None
-        self.short = ShortTermMemory(settings.MEMORY_SHORT_TTL_SECONDS, settings.MEMORY_SHORT_MAX_ITEMS, self.encoder)
-        logger.info("EpisodicMemory initialized.")
-
-    async def amemorize(self, experience: Experience):
-        """
-        Memoriza uma experiência nas memórias de curto prazo (STM) e longo prazo (LTM/Qdrant).
-
-        Args:
-            experience: Experiência a ser memorizada
-        """
-
-        if not self.short or not self.async_client or not self.encoder:
-            return
-
-        content = experience.content
-        if _detect_pii(content):
-            content = _mask_pii(content)
-
-        try:
-            embedding = await self.encoder.aembed_query(content)
-        except Exception as e:
-            return
-
-        await self.short.aadd_with_vector(experience.id, content, experience.metadata, embedding)
-
-        metadata = _sanitize_metadata({
-            "type": experience.type,
-            "timestamp": experience.timestamp,
-            "origin": experience.metadata.get("origin", "api"),
-            **experience.metadata
-        })
-        try:
-            point = models.PointStruct(
-                id=experience.id,
-                vector=embedding,
-                payload={
-                    "content": content,
-                    "metadata": metadata
-                }
-            )
-
-            await self.async_client.upsert(
-                collection_name=settings.QDRANT_COLLECTION_EPISODIC,
-                points=[point]
-            )
-
-        except Exception as e:
+            logger.error("Falha ao inicializar o MemoryCore (Qdrant)", exc_info=e)
             raise
 
-    async def arecall(self, query: str, n_results: int = 5, filter_by_type: Optional[str] = None,
-                      filter_by_origin: Optional[str] = None, min_score: float = 0.0,
-                      hours_ago: Optional[int] = None) -> List[dict]:
-        """Recalls experiences from short and long-term memory with optional filters."""
-        if not self.short or not self.async_client or not self.encoder:
-            logger.warning("Memory system not fully initialized, recall may be incomplete.")
-            return []
+    async def amemorize(self, experience: Experience):
+        """Adiciona uma experiência à memória (upsert)."""
+        point = models.PointStruct(
+            id=experience.id,
+            payload=experience.dict(),
+            # O vetor real seria gerado por um modelo de embedding aqui
+        )
+        await self.client.upsert_points(collection_name=self.collection_name, points=[point], wait=True)
 
-        time_range = (_now() - (hours_ago * 3600), _now()) if hours_ago is not None else None
-        filters = {"type": filter_by_type, "origin": filter_by_origin, "min_score": min_score, "time_range": time_range}
+    async def arecall(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Busca por experiências na memória."""
+        query_vector = [0.0] * 384  # Simulação de embedding
+        hits = await self.client.search(
+            collection_name=self.collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            with_payload=True
+        )
+        return [{"id": hit.id, "content": hit.payload.get('content'), "metadata": hit.payload.get('metadata'),
+                 "score": hit.score} for hit in hits]
 
-        # Search both layers concurrently
-        short_term_task = self.short.asearch(query, n_results, filters)
-        long_term_task = self._search_long_term(query, n_results, filters)
-        short_res, long_res = await asyncio.gather(short_term_task, long_term_task)
+    async def asearch(self, query_text: str, filters: Dict[str, Any], limit: int) -> List[Experience]:
+        # Placeholder para busca com filtros
+        return []
 
-        # Merge and deduplicate results
-        combined = {r["id"]: r for r in short_res}
-        for r in long_res:
-            if r["id"] not in combined:
-                combined[r["id"]] = r
 
-        sorted_results = sorted(combined.values(), key=lambda x: x["score"], reverse=True)
-        logger.info(
-            f"Recalled {len(sorted_results[:n_results])} experiences for query: '{query[:100]}...' with filters: {filters}")
-        return sorted_results[:n_results]
+# --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
-    async def _search_long_term(self, query: str, n_results: int, filters: Dict) -> List[dict]:
-        if not self.async_client or not self.encoder:
-            return []
-        try:
-            query_vector = await self.encoder.aembed_query(query)
-            qdrant_filter = self._build_qdrant_filter(filters)
-            
-            search_params = {
-                "collection_name": settings.QDRANT_COLLECTION_EPISODIC,
-                "query_vector": query_vector,
-                "limit": n_results * 2,  # Fetch more to allow for merging
-                "with_payload": True,
-                "score_threshold": filters.get("min_score", 0.0),
-                "query_filter": qdrant_filter
-            }
-            search_results = await self.async_client.search(**{k: v for k, v in search_params.items() if v is not None})
+_memory_db_instance: Optional[MemoryCore] = None
 
-            # Decrypt content if encryption key is configured
-            results = []
-            for sp in search_results:
-                content = sp.payload.get('content', '')
-                # Only decrypt if encryption key is set
-                if settings.MEMORY_ENCRYPTION_KEY:
-                    try:
-                        content = decrypt_text(content, settings.MEMORY_ENCRYPTION_KEY.get_secret_value())
-                    except Exception:
-                        # If decryption fails, use content as-is (might not be encrypted)
-                        pass
 
-                results.append({
-                    "id": str(sp.id),
-                    "content": content,
-                    "metadata": {k: v for k, v in sp.payload.items() if k != 'content'},
-                    "score": sp.score
-                })
-            return results
-        except Exception as e:
-            logger.error(f"Long-term memory search failed: {e}", exc_info=True)
-            return []
+async def initialize_memory_db():
+    global _memory_db_instance
+    if _memory_db_instance is None:
+        _memory_db_instance = MemoryCore()
+        await _memory_db_instance.initialize()
 
-    def _build_qdrant_filter(self, filters: Dict) -> Optional[models.Filter]:
-        conditions = []
-        if filters.get("type"):
-            conditions.append(models.FieldCondition(key="type", match=models.MatchValue(value=filters["type"])))
-        if filters.get("origin"):
-            conditions.append(models.FieldCondition(key="origin", match=models.MatchValue(value=filters["origin"])))
-        if filters.get("time_range"):
-            start, end = filters["time_range"]
-            conditions.append(models.FieldCondition(key="timestamp", range=models.Range(gte=start, lte=end)))
 
-        return models.Filter(must=conditions) if conditions else None
+async def close_memory_db():
+    pass
 
-memory_core = EpisodicMemory()
 
-async def initialize_memory_core():
-    await memory_core.ainit()
+async def get_memory_db() -> MemoryCore:
+    if _memory_db_instance is None:
+        await initialize_memory_db()
+    return _memory_db_instance
