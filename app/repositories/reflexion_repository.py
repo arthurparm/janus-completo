@@ -7,11 +7,9 @@ from app.core.tools import get_faulty_tools
 
 logger = structlog.get_logger(__name__)
 
-
 class ReflexionRepositoryError(Exception):
     """Base exception for reflexion repository errors."""
     pass
-
 
 class ReflexionRepository:
     """
@@ -48,5 +46,6 @@ class ReflexionRepository:
         }
 
 
-# Instância única do repositório
-reflexion_repository = ReflexionRepository()
+# Padrão de Injeção de Dependência: Getter para o repositório
+def get_reflexion_repository() -> ReflexionRepository:
+    return ReflexionRepository()

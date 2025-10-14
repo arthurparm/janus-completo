@@ -1,12 +1,13 @@
 import structlog
 from dataclasses import asdict
 from typing import Dict, Any, Optional
+from fastapi import Depends
 
-from app.repositories.reflexion_repository import reflexion_repository, ReflexionRepositoryError
+from app.repositories.reflexion_repository import ReflexionRepository, get_reflexion_repository, \
+    ReflexionRepositoryError
 from app.core.optimization import ReflexionConfig
 
 logger = structlog.get_logger(__name__)
-
 
 # --- Custom Service-Layer Exceptions ---
 
@@ -14,24 +15,24 @@ class ReflexionServiceError(Exception):
     """Base exception for reflexion service errors."""
     pass
 
-
 class ReflexionValidationError(ReflexionServiceError):
     """Raised for validation errors."""
     pass
 
-
 class ReflexionTimeoutError(ReflexionServiceError):
     """Raised on execution timeout."""
     pass
-
 
 # --- Reflexion Service ---
 
 class ReflexionService:
     """
     Camada de serviço para o ciclo de auto-otimização Reflexion.
-    Orquestra a lógica de negócio, delegando o acesso à infraestrutura para o repositório.
+    Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
+
+    def __init__(self, repo: ReflexionRepository):
+        self._repo = repo
 
     async def run_reflexion_cycle(self, task: str, config_overrides: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -39,16 +40,13 @@ class ReflexionService:
         """
         logger.info("Orquestrando ciclo de Reflexion via serviço", task=task)
         try:
-            # Lógica de negócio: configurar o ciclo
             config = ReflexionConfig.from_settings()
             for key, value in config_overrides.items():
                 if value is not None:
                     setattr(config, key, value)
 
-            # Lógica de acesso a dados: delegar para o repositório
-            result = await reflexion_repository.run_cycle(task=task, config=config)
+            result = await self._repo.run_cycle(task=task, config=config)
 
-            # Lógica de negócio: formatar a resposta
             result["steps"] = [asdict(step) for step in result.get("steps", [])]
             result["iterations"] = len(result["steps"])
 
@@ -67,19 +65,17 @@ class ReflexionService:
             raise ReflexionServiceError("Ocorreu uma falha inesperada no serviço de Reflexion.") from e
 
     def get_config(self) -> ReflexionConfig:
-        """Retorna a configuração padrão do Reflexion."""
         return ReflexionConfig.from_settings()
 
     def reset_agent_breakers(self):
-        """Delega o reset dos circuit breakers para o repositório."""
         logger.info("Orquestrando reset dos circuit breakers via serviço.")
-        reflexion_repository.reset_breakers()
+        self._repo.reset_breakers()
 
     def get_health_status(self) -> Dict[str, Any]:
-        """Delega a coleta de informações de saúde para o repositório."""
         logger.info("Buscando saúde do módulo Reflexion via serviço.")
-        return reflexion_repository.get_health()
+        return self._repo.get_health()
 
 
-# Instância única do serviço
-reflexion_service = ReflexionService()
+# Padrão de Injeção de Dependência: Getter para o serviço
+def get_reflexion_service(repo: ReflexionRepository = Depends(get_reflexion_repository)) -> ReflexionService:
+    return ReflexionService(repo)
