@@ -42,6 +42,18 @@ class CreateToolFromFunctionRequest(BaseModel):
     rate_limit_per_minute: Optional[int] = None
     tags: List[str] = Field(default_factory=list)
 
+
+class CreateToolFromApiRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    endpoint_url: str = Field(..., min_length=1)
+    method: str = Field(default="GET")
+    headers: Optional[Dict[str, str]] = None
+    category: str = Field(default="api")
+    permission_level: str = Field(default="safe")
+    rate_limit_per_minute: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+
 # --- Endpoints ---
 
 @router.get("/", response_model=ToolListResponse, summary="Lista todas as ferramentas disponíveis")
@@ -78,7 +90,15 @@ async def get_tool_details(tool_name: str, service: ToolService = Depends(get_to
     """Delega a busca de detalhes de uma ferramenta para o ToolService."""
     # ToolNotFoundError é tratado pelo exception handler central -> 404
     metadata = service.get_tool_details(tool_name)
-    return ToolInfo(**metadata.dict())
+    return ToolInfo(
+        name=metadata.name,
+        description=metadata.description,
+        category=metadata.category.value,
+        permission_level=metadata.permission_level.value,
+        rate_limit_per_minute=metadata.rate_limit_per_minute,
+        requires_confirmation=metadata.requires_confirmation,
+        tags=metadata.tags
+    )
 
 @router.get("/stats/usage", response_model=ToolStatsResponse, summary="Estatísticas de uso de ferramentas")
 async def get_tool_statistics(service: ToolService = Depends(get_tool_service)):
@@ -95,7 +115,34 @@ async def create_tool_from_function(
     """Delega a criação de uma ferramenta a partir de código para o ToolService."""
     # ToolCreationError é tratado pelo exception handler central -> 400
     new_tool_metadata = service.create_tool_from_function(request.dict())
-    return ToolInfo(**new_tool_metadata.dict())
+    return ToolInfo(
+        name=new_tool_metadata.name,
+        description=new_tool_metadata.description,
+        category=new_tool_metadata.category.value,
+        permission_level=new_tool_metadata.permission_level.value,
+        rate_limit_per_minute=new_tool_metadata.rate_limit_per_minute,
+        requires_confirmation=new_tool_metadata.requires_confirmation,
+        tags=new_tool_metadata.tags
+    )
+
+
+@router.post("/create/from-api", response_model=ToolInfo, status_code=status.HTTP_201_CREATED,
+             summary="Cria ferramenta a partir de endpoint HTTP")
+async def create_tool_from_api(
+        request: CreateToolFromApiRequest,
+        service: ToolService = Depends(get_tool_service)
+):
+    """Delega a criação de uma ferramenta que chama um endpoint HTTP para o ToolService."""
+    new_tool_metadata = service.create_tool_from_api(request.dict())
+    return ToolInfo(
+        name=new_tool_metadata.name,
+        description=new_tool_metadata.description,
+        category=new_tool_metadata.category.value,
+        permission_level=new_tool_metadata.permission_level.value,
+        rate_limit_per_minute=new_tool_metadata.rate_limit_per_minute,
+        requires_confirmation=new_tool_metadata.requires_confirmation,
+        tags=new_tool_metadata.tags
+    )
 
 @router.delete("/{tool_name}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove uma ferramenta dinâmica")
 async def delete_tool(tool_name: str, service: ToolService = Depends(get_tool_service)):

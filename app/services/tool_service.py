@@ -74,9 +74,13 @@ class ToolService:
                 code=request_data['code'],
                 function_name=request_data['function_name']
             )
+            # Normaliza valores de enum (aceita maiúsculas vindas do cliente, ex.: "COMPUTATION")
+            raw_category = str(request_data.get('category', 'custom')).lower()
+            raw_permission = str(request_data.get('permission_level', 'safe')).lower()
+
             metadata_to_save = {
-                "category": ToolCategory(request_data.get('category', 'custom')),
-                "permission_level": PermissionLevel(request_data.get('permission_level', 'safe')),
+                "category": ToolCategory(raw_category),
+                "permission_level": PermissionLevel(raw_permission),
                 "rate_limit_per_minute": request_data.get('rate_limit_per_minute'),
                 "tags": request_data.get('tags', [])
             }
@@ -85,6 +89,32 @@ class ToolService:
         except Exception as e:
             logger.error("Erro no serviço ao criar ferramenta a partir de função", exc_info=e)
             raise ToolCreationError(f"Falha ao criar ferramenta: {e}") from e
+
+    def create_tool_from_api(self, request_data: Dict[str, Any]) -> ToolMetadata:
+        logger.info("Orquestrando criação de ferramenta a partir de API HTTP", tool_name=request_data['name'])
+        try:
+            tool = DynamicToolGenerator.from_api_endpoint(
+                name=request_data['name'],
+                description=request_data['description'],
+                endpoint_url=request_data['endpoint_url'],
+                method=request_data.get('method', 'GET'),
+                headers=request_data.get('headers')
+            )
+
+            raw_category = str(request_data.get('category', 'api')).lower()
+            raw_permission = str(request_data.get('permission_level', 'safe')).lower()
+
+            metadata_to_save = {
+                "category": ToolCategory(raw_category),
+                "permission_level": PermissionLevel(raw_permission),
+                "rate_limit_per_minute": request_data.get('rate_limit_per_minute'),
+                "tags": request_data.get('tags', [])
+            }
+            self._repo.save(tool, metadata_to_save)
+            return self.get_tool_details(request_data['name'])
+        except Exception as e:
+            logger.error("Erro no serviço ao criar ferramenta a partir de API", exc_info=e)
+            raise ToolCreationError(f"Falha ao criar ferramenta de API: {e}") from e
 
     def delete_tool(self, tool_name: str):
         logger.info("Orquestrando remoção de ferramenta", tool_name=tool_name)
