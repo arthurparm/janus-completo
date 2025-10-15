@@ -172,11 +172,22 @@ class SystemMonitor:
                 if usage["avg_duration"] > 2.0  # >2s média
             ]
 
+            # Uso de memória do processo (MB)
+            memory_usage_mb = 0.0
+            try:
+                import os
+                import psutil  # type: ignore
+                process = psutil.Process(os.getpid())
+                memory_usage_mb = round(process.memory_info().rss / (1024 ** 2), 2)
+            except Exception:
+                # Mantém 0.0 caso psutil não esteja disponível
+                memory_usage_mb = 0.0
+
             metrics = SystemMetrics(
                 avg_response_time=avg_response,
                 error_rate=error_rate,
                 tool_success_rate=(successful / total_calls) if total_calls > 0 else 1.0,
-                memory_usage_mb=0.0,  # Placeholder
+                memory_usage_mb=memory_usage_mb,
                 active_tools_count=stats.get("total_tools_registered", 0),
                 failed_tools=failed_tools,
                 slow_tools=slow_tools
@@ -284,6 +295,64 @@ class SystemMonitor:
                         "historical_avg": avg_historical
                     }
                 ))
+
+        # 5. Possível vazamento de memória (tendência ascendente)
+        if len(self._metrics_history) >= 5 and all(m.memory_usage_mb > 0.0 for m in self._metrics_history[-5:]):
+            window = [m.memory_usage_mb for m in self._metrics_history[-5:]]
+            diffs = [window[i + 1] - window[i] for i in range(len(window) - 1)]
+            total_increase = window[-1] - window[0]
+
+            if all(d > 0 for d in diffs) and total_increase >= 100.0:  # aumento >= 100MB
+                severity = min(1.0, total_increase / 500.0)
+                issues.append(DetectedIssue(
+                    issue_type=IssueType.MEMORY_LEAK,
+                    severity=severity,
+                    description=f"Tendência de aumento de memória ({total_increase:.0f}MB nas últimas medições)",
+                    affected_component="system",
+                    evidence={
+                        "last_5_memory_mb": window,
+                        "total_increase_mb": total_increase
+                    }
+                ))
+
+        # 6. Exaustão de recursos (memória do sistema muito alta ou processo grande)
+        try:
+            import os
+            import psutil  # type: ignore
+            vm = psutil.virtual_memory()
+            process = psutil.Process(os.getpid())
+            proc_mem_mb = round(process.memory_info().rss / (1024 ** 2), 2)
+            sys_mem_percent = vm.percent
+            sys_mem_total_mb = round(vm.total / (1024 ** 2), 2)
+        except Exception:
+            proc_mem_mb = latest.memory_usage_mb
+            sys_mem_percent = None
+            sys_mem_total_mb = None
+
+        resource_exhausted = False
+        description = None
+        severity = 0.0
+        if sys_mem_percent is not None and sys_mem_percent >= 85.0:
+            resource_exhausted = True
+            description = f"Uso de memória do sistema elevado ({sys_mem_percent:.0f}%)"
+            severity = min(1.0, sys_mem_percent / 100.0)
+        elif proc_mem_mb >= 2048.0:  # processo consumindo >= 2GB
+            resource_exhausted = True
+            description = f"Uso de memória do processo elevado ({proc_mem_mb:.0f}MB)"
+            severity = 0.8
+
+        if resource_exhausted:
+            issues.append(DetectedIssue(
+                issue_type=IssueType.RESOURCE_EXHAUSTION,
+                severity=severity,
+                description=description or "Exaustão de recursos detectada",
+                affected_component="system",
+                evidence={
+                    "process_memory_mb": proc_mem_mb,
+                    "system_memory_percent": sys_mem_percent,
+                    "system_memory_total_mb": sys_mem_total_mb
+                }
+            ))
 
         return issues
 
@@ -455,13 +524,28 @@ IMPORTANTE:
                 agent_type=AgentType.TOOL_USER
             )
 
-            success = "answer" in result and "erro" not in result["answer"].lower()
+            # Normaliza resposta do agente
+            ans_text = None
+            err_text = None
+            try:
+                if isinstance(result, dict):
+                    ans_text = result.get("answer") or result.get("content") or result.get("output")
+                    err_text = result.get("error") or result.get("status")
+                elif isinstance(result, str):
+                    ans_text = result
+                else:
+                    ans_text = str(result)
+            except Exception:
+                ans_text = None
+
+            success = bool(ans_text) and ("error" not in (ans_text or "").lower()) and (
+                        "erro" not in (ans_text or "").lower())
 
             applied = AppliedImprovement(
                 improvement=improvement,
                 success=success,
-                actual_impact=result.get("answer", "Sem resposta") if success else None,
-                error=result.get("answer") if not success else None
+                actual_impact=ans_text if success else None,
+                error=err_text or (ans_text if not success else None)
             )
 
             # Registra métrica
@@ -513,7 +597,8 @@ class SelfOptimizationCycle:
         self.executor = ImprovementExecutor()
         self._running = False
 
-    async def run_cycle(self) -> Dict[str, Any]:
+    async def run_cycle(self, enable_auto_execution: bool = True, max_improvements: Optional[int] = None) -> Dict[
+        str, Any]:
         """Executa um ciclo completo de auto-otimização."""
         cycle_start = time.perf_counter()
 
@@ -544,17 +629,21 @@ class SelfOptimizationCycle:
             improvements = await self.planner.plan_improvements(issues, metrics)
             logger.info(f"[SelfOptimization] Melhorias planejadas: {len(improvements)}")
 
-            # Limita a 3 melhorias por ciclo para evitar sobrecarga
-            improvements = improvements[:3]
+            # Limita melhorias por ciclo (padrão 3) para evitar sobrecarga
+            effective_limit = max_improvements if (max_improvements is not None) else 3
+            improvements = improvements[:effective_limit]
 
             # 4. EXECUTE
             applied_improvements = []
-            for improvement in improvements:
-                applied = await self.executor.execute_improvement(improvement)
-                applied_improvements.append(applied)
+            if enable_auto_execution:
+                for improvement in improvements:
+                    applied = await self.executor.execute_improvement(improvement)
+                    applied_improvements.append(applied)
 
-                if not applied.success:
-                    logger.warning(f"[SelfOptimization] Melhoria falhou: {applied.error}")
+                    if not applied.success:
+                        logger.warning(f"[SelfOptimization] Melhoria falhou: {applied.error}")
+            else:
+                logger.info("[SelfOptimization] Execução automática desabilitada - melhorias apenas planejadas")
 
             # 5. LEARN
             successful = sum(1 for imp in applied_improvements if imp.success)
@@ -562,7 +651,8 @@ class SelfOptimizationCycle:
 
             elapsed = time.perf_counter() - cycle_start
             _OPTIMIZATION_LATENCY.observe(elapsed)
-            _OPTIMIZATION_CYCLES.labels("success_with_improvements").inc()
+            _OPTIMIZATION_CYCLES.labels(
+                "success_with_improvements" if enable_auto_execution else "success_planned_no_exec").inc()
 
             return {
                 "success": True,

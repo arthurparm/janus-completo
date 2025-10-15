@@ -16,11 +16,15 @@ class OptimizationRepository:
     Abstrai todas as interações diretas com a infraestrutura de otimização.
     """
 
-    async def run_cycle(self) -> Dict[str, Any]:
+    async def run_cycle(self, enable_auto_execution: bool = True, max_improvements: int | None = None) -> Dict[
+        str, Any]:
         """Executa o ciclo de otimização através da infraestrutura core."""
         logger.debug("Executando ciclo de otimização via repositório.")
         try:
-            return await self_optimization_cycle.run_cycle()
+            return await self_optimization_cycle.run_cycle(
+                enable_auto_execution=enable_auto_execution,
+                max_improvements=max_improvements
+            )
         except Exception as e:
             logger.error("Erro no repositório ao executar ciclo de otimização", exc_info=e)
             raise OptimizationRepositoryError("Falha ao executar o ciclo de otimização.") from e

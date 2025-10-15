@@ -2,6 +2,7 @@ import structlog
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends
+from dataclasses import asdict
 from pydantic import BaseModel, Field
 
 from app.services.optimization_service import (
@@ -42,6 +43,17 @@ class DetectedIssueResponse(BaseModel):
     description: str
     affected_component: str
     detected_at: float
+
+
+class SystemAnalysisResponse(BaseModel):
+    analysis_type: str
+    score: float
+    issues_count: int
+    issues_by_type: dict[str, int]
+    metrics_snapshot: dict
+    trend: dict
+    insights: list[str]
+    details: Optional[dict] = None
 
 # --- Endpoints ---
 
@@ -87,9 +99,20 @@ async def get_metrics_history(
 ):
     """Delega a busca do histórico de métricas para o OptimizationService."""
     history = await service.get_metrics_history(limit)
-    return {"count": len(history), "metrics": [h.dict() for h in history]}
+    return {"count": len(history), "metrics": [asdict(h) for h in history]}
 
 @router.get("/status", summary="Status do módulo de auto-otimização")
 async def get_optimization_status(service: OptimizationService = Depends(get_optimization_service)):
     """Delega a busca de status do módulo para o OptimizationService."""
     return service.get_status()
+
+
+@router.post("/analyze", response_model=SystemAnalysisResponse, summary="Analisa métricas e problemas do sistema")
+async def analyze_system(
+        analysis_type: str = "performance",
+        detailed: bool = True,
+        service: OptimizationService = Depends(get_optimization_service)
+):
+    """Delega a análise agregada do sistema para o OptimizationService."""
+    result = await service.analyze_system(analysis_type=analysis_type, detailed=detailed)
+    return SystemAnalysisResponse(**result)

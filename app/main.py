@@ -39,6 +39,8 @@ from app.services.observability_service import ObservabilityService
 from app.repositories.observability_repository import ObservabilityRepository
 from app.core.monitoring import get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
+from app.repositories.optimization_repository import OptimizationRepository
+from app.services.optimization_service import OptimizationService
 
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
@@ -86,6 +88,10 @@ async def lifespan(app: FastAPI):
     app.state.reflexion_repo = ReflexionRepository(memory_service=app.state.memory_service)
     app.state.reflexion_service = ReflexionService(repo=app.state.reflexion_repo)
     app.state.tool_service = ToolService(app.state.tool_repo)
+
+    # --- Self-Optimization (Sprint 7) ---
+    app.state.optimization_repo = OptimizationRepository()
+    app.state.optimization_service = OptimizationService(app.state.optimization_repo)
 
     # Observabilidade: monitor e poison pill handler
     monitor = get_health_monitor()

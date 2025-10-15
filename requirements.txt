@@ -11,8 +11,6 @@ langchain-neo4j>=0.0.3
 langchain-google-genai>=0.1.0
 langchain-groq
 langchain-ollama
-onnxruntime
-sentence-transformers
 structlog
 prometheus-fastapi-instrumentator
 # Sprint 1: Message Broker
@@ -22,3 +20,6 @@ pika>=1.3.0
 tavily-python>=0.3.0
 # Sprint 4: Python Sandbox
 RestrictedPython>=6.0
+# Sprint 7: Self-Optimization metrics
+psutil>=5.9.0
+prometheus-client
