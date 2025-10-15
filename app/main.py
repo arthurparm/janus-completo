@@ -45,6 +45,7 @@ from app.services.optimization_service import OptimizationService
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector
+from app.core.workers import data_harvester as data_harvester_module
 
 setup_logging()
 logger = structlog.get_logger(__name__)
@@ -116,6 +117,8 @@ async def lifespan(app: FastAPI):
     # Worker de Coleta de Dados (Harvester)
     memory_connector = MemoryConnector(app.state.memory_repo)
     data_harvester = DataHarvester(connectors=[memory_connector])
+    # Expõe instância no módulo para health check simples
+    data_harvester_module.harvester = data_harvester
 
     # Inicia os workers
     await knowledge_consolidator.start()

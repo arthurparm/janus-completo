@@ -20,6 +20,8 @@ logger = structlog.get_logger(__name__)
 
 class HarvestRequest(BaseModel):
     limit: int = Field(100, ge=1, le=1000)
+    query: Optional[str] = Field(None, description="Consulta para filtrar experiências")
+    min_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar")
 
 class TrainingConfig(BaseModel):
     epochs: int = Field(3, ge=1, le=100)
@@ -54,6 +56,17 @@ class ModelListResponse(BaseModel):
     models: List[ModelInfo]
 
 
+class EvaluateRequest(BaseModel):
+    model_id: str
+    test_data_limit: int = Field(50, ge=1, le=1000)
+
+
+class EvaluationResponse(BaseModel):
+    model_id: str
+    examples_evaluated: int
+    metrics: Dict[str, Any]
+
+
 # --- Endpoints ---
 
 @router.post("/harvest", response_model=LearningResponse, summary="Inicia a coleta de dados para treino")
@@ -61,7 +74,8 @@ async def trigger_harvesting(request: HarvestRequest,
                              learning_service: LearningService = Depends(get_learning_service)):
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
-        result = await learning_service.trigger_harvesting(limit=request.limit)
+        result = await learning_service.trigger_harvesting(limit=request.limit, query=request.query,
+                                                           min_score=request.min_score)
         return result
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao coletar dados", exc_info=e)
@@ -111,6 +125,29 @@ async def get_model_details(model_id: str, learning_service: LearningService = D
 async def get_learning_stats(learning_service: LearningService = Depends(get_learning_service)):
     """Delega a busca de estatísticas para o LearningService."""
     return learning_service.get_learning_statistics()
+
+
+@router.get("/dataset/preview", summary="Pré-visualiza exemplos do dataset de treino")
+async def preview_dataset(limit: int = 20, learning_service: LearningService = Depends(get_learning_service)):
+    """Retorna os primeiros N exemplos do dataset de treino (JSONL)."""
+    try:
+        return await learning_service.preview_dataset(limit=limit)
+    except LearningServiceError as e:
+        logger.error("Erro ao pré-visualizar dataset", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/evaluate", response_model=EvaluationResponse, summary="Avalia a performance de um modelo")
+async def evaluate_model(request: EvaluateRequest, learning_service: LearningService = Depends(get_learning_service)):
+    """Delega a avaliação de um modelo para o LearningService."""
+    try:
+        result = learning_service.evaluate_model(request.model_id, request.test_data_limit)
+        return result
+    except ModelNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except LearningServiceError as e:
+        logger.error("Erro no serviço de aprendizado ao avaliar modelo", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/health", summary="Health check do sistema de treinamento")

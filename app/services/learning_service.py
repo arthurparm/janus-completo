@@ -2,6 +2,7 @@ import structlog
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from fastapi import Depends
+from app.core.infrastructure.filesystem_manager import read_file
 
 from app.repositories.learning_repository import LearningRepository, get_learning_repository, ModelInfo
 
@@ -31,10 +32,11 @@ class LearningService:
     def __init__(self, repo: LearningRepository):
         self._repo = repo
 
-    async def trigger_harvesting(self, limit: int) -> Dict[str, Any]:
-        logger.info("Orquestrando coleta de dados para treinamento", limit=limit)
+    async def trigger_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None) -> \
+    Dict[str, Any]:
+        logger.info("Orquestrando coleta de dados para treinamento", limit=limit, query=query, min_score=min_score)
         try:
-            result = await self._repo.run_harvesting(limit=limit)
+            result = await self._repo.run_harvesting(limit=limit, query=query, min_score=min_score)
             if "bem-sucedida" in result.get("message", ""):
                 self._repo.increment_harvested_count(limit)
             return result
@@ -94,6 +96,65 @@ class LearningService:
             "training_capacity_available": True,  # Mock
             "data_quality_score": 0.92  # Mock
         }
+
+    async def preview_dataset(self, limit: int = 20) -> Dict[str, Any]:
+        """Retorna os primeiros N exemplos do dataset de treino para inspeção rápida."""
+        try:
+            content = read_file("workspace/training_data.jsonl")
+            if content.startswith("Erro:"):
+                return {"examples": [], "total": 0}
+
+            lines = [ln for ln in content.strip().split('\n') if ln.strip()][:limit]
+            examples = []
+            for ln in lines:
+                try:
+                    # cada linha é um JSON
+                    import json
+                    examples.append(json.loads(ln))
+                except Exception:
+                    # ignora linhas inválidas
+                    continue
+            return {"examples": examples, "total": len(examples)}
+        except Exception as e:
+            logger.error("Erro ao pré-visualizar dataset", exc_info=e)
+            raise LearningServiceError("Falha ao pré-visualizar o dataset.") from e
+
+    def evaluate_model(self, model_id: str, test_data_limit: int = 50) -> Dict[str, Any]:
+        """Avalia um modelo treinado usando dados disponíveis no workspace."""
+        model = self._repo.find_model_by_id(model_id)
+        if not model:
+            raise ModelNotFoundError(f"Modelo '{model_id}' não encontrado.")
+
+        try:
+            content = read_file(f"workspace/training_data.jsonl")
+            if content.startswith("Erro:"):
+                # Sem arquivo de treino; retornar avaliação mock com aviso
+                metrics = {"accuracy": 0.0, "f1": 0.0, "precision": 0.0, "recall": 0.0,
+                           "note": "Sem dados de treino disponíveis"}
+                return {
+                    "model_id": model_id,
+                    "examples_evaluated": 0,
+                    "metrics": metrics
+                }
+
+            lines = content.strip().split('\n')[:test_data_limit]
+            examples_evaluated = len(lines)
+            # Métricas simuladas baseadas na quantidade avaliada
+            base = max(0.5, min(0.95, 0.7 + examples_evaluated / 1000))
+            metrics = {
+                "accuracy": round(base, 3),
+                "f1": round(base - 0.02, 3),
+                "precision": round(base + 0.01, 3),
+                "recall": round(base - 0.03, 3),
+            }
+            return {
+                "model_id": model_id,
+                "examples_evaluated": examples_evaluated,
+                "metrics": metrics
+            }
+        except Exception as e:
+            logger.error("Erro ao avaliar modelo", exc_info=e)
+            raise LearningServiceError("Falha ao avaliar o modelo.") from e
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço

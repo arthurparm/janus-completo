@@ -3,10 +3,11 @@ import hashlib
 import json
 import logging
 import time
-from typing import Any, Dict, List, Protocol, runtime_checkable
+from typing import Any, Dict, List, Protocol, runtime_checkable, Optional
 
-from app.core.infrastructure.filesystem_manager import write_file
+from app.core.infrastructure.filesystem_manager import write_file, read_file
 from app.repositories.memory_repository import MemoryRepository
+from app.core.memory.memory_core import memory_core
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,12 @@ class MemoryConnector(IHarvesterConnector):
     def __init__(self, memory_repo: MemoryRepository):
         self._repo = memory_repo
 
-    async def fetch_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
+    async def fetch_batch(self, limit: int = 50, query: Optional[str] = None) -> List[Dict[str, Any]]:
         logger.debug(f"Coletando experiências via {self.name}")
         try:
             # A lógica de busca agora usa o repositório injetado
-            return await self._repo.search_experiences(query="experiência do agente", limit=limit)
+            effective_query = query or "experiência do agente"
+            return await self._repo.search_experiences(query=effective_query, limit=limit)
         except Exception as e:
             logger.error(f"Erro ao coletar dados de {self.name}", exc_info=e)
             return []
@@ -107,3 +109,98 @@ class DataHarvester:
                 logger.info(f"{len(training_examples)} exemplos de treino salvos em {TRAINING_DATA_FILE}")
         except Exception as e:
             logger.error("Erro ao processar e salvar itens para treinamento", exc_info=e)
+
+
+# Instância opcional para health check simples
+harvester: DataHarvester | None = None
+
+
+async def harvest_data_for_training(limit: int = 50, query: Optional[str] = None, min_score: Optional[float] = None) -> \
+Dict[str, Any]:
+    """Coleta um lote de experiências e salva em JSONL para treino.
+
+    Esta função executa um ciclo único de coleta diretamente do repositório
+    de memória, formata os dados em pares (prompt, completion) e persiste no
+    ficheiro `training_data.jsonl` dentro do workspace.
+    """
+    start = time.perf_counter()
+    try:
+        memory_repo = MemoryRepository(memory_core)
+        connector = MemoryConnector(memory_repo)
+        items = await connector.fetch_batch(limit=limit, query=query)
+
+        # Filtragem por pontuação mínima, se disponível
+        if min_score is not None:
+            filtered: List[Dict[str, Any]] = []
+            for it in items:
+                score = it.get("score")
+                if score is None:
+                    score = (it.get("metadata") or {}).get("score")
+                if score is None or float(score) >= float(min_score):
+                    filtered.append(it)
+            items = filtered
+
+        def sanitize_text(text: str, max_len: int = 4096) -> str:
+            # Remove quebras excessivas e limita tamanho
+            s = " ".join(str(text).split())
+            return s[:max_len]
+
+        training_examples: List[Dict[str, Any]] = []
+        for item in items:
+            if item.get("content") and item.get("metadata"):
+                prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
+                completion = item["content"]
+                prompt = sanitize_text(prompt)
+                completion = sanitize_text(completion)
+                training_examples.append({"prompt": prompt, "completion": completion})
+
+        if not training_examples:
+            summary = "Sem dados adequados para treino neste lote."
+            logger.info(summary)
+            return {"message": "Coleta concluída com sucesso (sem exemplos válidos).", "summary": summary}
+
+        # Deduplicação baseada em hash de prompt+completion
+        existing = read_file(f"workspace/{TRAINING_DATA_FILE}")
+        seen_hashes: set[str] = set()
+        existing_lines: List[str] = []
+        if not existing.startswith("Erro:"):
+            for ln in [l for l in existing.strip().split('\n') if l.strip()]:
+                existing_lines.append(ln)
+                try:
+                    obj = json.loads(ln)
+                    key = (obj.get("prompt", "") + "|||" + obj.get("completion", ""))
+                    seen_hashes.add(hashlib.sha256(key.encode("utf-8")).hexdigest())
+                except Exception:
+                    continue
+
+        new_lines: List[str] = []
+        saved_count = 0
+        for ex in training_examples:
+            key = (ex["prompt"] + "|||" + ex["completion"])
+            h = hashlib.sha256(key.encode("utf-8")).hexdigest()
+            if h in seen_hashes:
+                continue
+            new_lines.append(json.dumps(ex, ensure_ascii=False))
+            seen_hashes.add(h)
+            saved_count += 1
+
+        # Combina e aplica política simples de retenção para tamanho
+        combined_lines = existing_lines + new_lines
+        # Retém no máximo 2000 linhas para evitar exceder limites
+        combined_lines = combined_lines[-2000:]
+        combined_text = "\n".join(combined_lines) + ("\n" if combined_lines else "")
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, write_file, TRAINING_DATA_FILE, combined_text, True)
+
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{len(training_examples)} exemplos de treino salvos em {TRAINING_DATA_FILE} em {elapsed:.2f}s"
+        )
+        return {
+            "message": "Coleta bem-sucedida.",
+            "summary": f"{saved_count} novos exemplos salvos (total {len(combined_lines)}) em {TRAINING_DATA_FILE}.",
+        }
+    except Exception as e:
+        logger.error("Erro no harvesting sob demanda", exc_info=e)
+        return {"message": "Falha na coleta de dados.", "summary": str(e)}

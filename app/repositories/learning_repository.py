@@ -63,10 +63,11 @@ class LearningRepository:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, start_training_process)
 
-    async def run_harvesting(self, limit: int) -> Dict[str, Any]:
+    async def run_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None) -> Dict[
+        str, Any]:
         """Abstrai a execução do worker de coleta de dados."""
-        logger.debug("Executando coleta de dados via repositório.")
-        return await data_harvester.harvest_data_for_training(limit=limit)
+        logger.debug("Executando coleta de dados via repositório.", query=query, min_score=min_score)
+        return await data_harvester.harvest_data_for_training(limit=limit, query=query, min_score=min_score)
 
     def is_harvester_healthy(self) -> bool:
         """Verifica a saúde do worker de coleta de dados."""
