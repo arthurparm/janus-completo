@@ -29,24 +29,43 @@ class GraphDatabase:
 - Métricas Prometheus
 - Timeout configurável
 
-### 2. **Knowledge Graph Manager** (`app/core/knowledge_graph_manager.py`)
+### 2. **Serviço e Repositório do Conhecimento** (`app/services/knowledge_service.py`,
+`app/repositories/knowledge_repository.py`)
 
-Gerencia operações no grafo de conhecimento:
+Camada de orquestração e acesso ao grafo de conhecimento. O Serviço delega consultas ao Graph RAG Core e operações ao
+Repositório, que executa queries Cypher no Neo4j de forma assíncrona e resiliente.
 
 ```python
-class KnowledgeGraphManager:
-    def create_entity(self, entity_type, properties) -> str:
-        """Cria entidade no grafo"""
+class KnowledgeService:
+    async def semantic_query(self, question: str) -> str:
+        """Consulta semântica usando Graph RAG (linguagem natural)."""
 
-    def create_relationship(self, from_id, to_id, rel_type) -> bool:
-        """Cria relacionamento entre entidades"""
+    async def find_related_concepts(self, concept: str, max_depth: int = 2) -> List[Dict[str, Any]]:
+        """Explora conceitos relacionados no grafo (rastreia arestas até max_depth)."""
 
-    def semantic_search(self, query, limit=5) -> list:
-        """Busca semântica no grafo"""
+    async def get_node_types(self) -> List[str]:
+        """Lista rótulos distintos presentes no grafo (labels)."""
 
-    def get_entity_neighbors(self, entity_id, depth=1) -> list:
-        """Obtém entidades relacionadas"""
+    async def get_health_status(self) -> Dict[str, Any]:
+        """Health: conectividade Neo4j, totais de nós e relações."""
+
+    async def trigger_consolidation(self, limit: int) -> Dict[str, Any]:
+        """Dispara consolidação de experiências (KnowledgeConsolidator)."""
+
+class KnowledgeRepository:
+    async def find_related_concepts(self, concept: str, max_depth: int) -> List[Dict[str, Any]]:
+        """MATCH em `(:Concept)` e caminhos até `max_depth` retornando nome, relação e distância."""
+
+    async def get_node_and_relationship_stats(self) -> Dict[str, List]:
+        """Agrega estatísticas por tipo de nó e tipo de relacionamento."""
+
+    async def clear_all_data(self) -> int:
+        """Limpa o grafo (DETACH DELETE) e retorna nós restantes."""
 ```
+
+Observação: A busca semântica é implementada no módulo `app/core/memory/graph_rag_core.py` via `query_knowledge_graph`,
+que recebe uma pergunta em linguagem natural e retorna uma resposta textual (com possíveis citações) baseada em
+consultas ao grafo e contexto.
 
 ### 3. **Knowledge Consolidator Worker** (`app/core/knowledge_consolidator_worker.py`)
 
@@ -77,13 +96,13 @@ Memória Episódica (Qdrant)
    Marca como consolidado
 ```
 
-### 4. **Ferramentas para Agentes** (`app/core/agent_tools.py`)
+### 4. **Ferramentas para Agentes** (`app/core/tools/agent_tools.py`)
 
 Três novas ferramentas que permitem aos agentes consultar o conhecimento consolidado:
 
 #### `query_knowledge_graph(query: str)`
 
-Consulta semântica no grafo de conhecimento.
+Consulta semântica no grafo de conhecimento (Graph RAG Core).
 
 **Exemplo:**
 
@@ -99,7 +118,7 @@ query_knowledge_graph("Quais ferramentas estão relacionadas a erros de timeout?
 
 #### `find_related_concepts(concept: str, max_depth: int)`
 
-Explora relacionamentos no grafo a partir de um conceito.
+Explora relacionamentos no grafo a partir de um conceito (label `Concept`).
 
 **Exemplo:**
 
@@ -116,7 +135,7 @@ find_related_concepts("Python", max_depth=2)
 
 #### `get_entity_details(entity_name: str)`
 
-Obtém propriedades e relacionamentos completos de uma entidade.
+Obtém propriedades e relacionamentos completos de uma entidade (qualquer label com `name`).
 
 **Exemplo:**
 
@@ -151,6 +170,11 @@ get_entity_details("execute_python_code")
 (:Solution {name, effectiveness})
 (:Technology {name, version})
 
+// Entidades de código (extraídas da base de código)
+(:File:CodeFile {path})
+(:Function:CodeFunction {name, file_path})
+(:Class:CodeClass {name, file_path})
+
 // Eventos
 (:Experience {timestamp, type, content})
 (:Action {name, outcome})
@@ -159,28 +183,28 @@ get_entity_details("execute_python_code")
 ### 6. **Tipos de Relacionamentos**
 
 ```cypher
-// Uso e dependência
+// Código
+(File)-[:CONTAINS]->(Function)
+(Class)-[:IMPLEMENTS]->(Interface)
+(Function)-[:CALLS]->(Function)
+(Module)-[:DEPENDS_ON]->(Module)
+
+// Conhecimento
 (Tool)-[:USES]->(Technology)
-(Agent)-[:UTILIZES]->(Tool)
-
-// Causação
-(Action)-[:CAUSES]->(Error)
-(Error)-[:TRIGGERS]->(Solution)
-
-// Resolução
+(Concept)-[:RELATES_TO]->(Concept)
+(Error)-[:CAUSED_BY]->(Cause)
 (Solution)-[:SOLVES]->(Error)
-(Tool)-[:FIXES]->(Problem)
+(Error)-[:SOLVED_BY]->(Solution)
 
-// Hierarquia
-(Concept)-[:IS_A]->(Category)
-(Tool)-[:BELONGS_TO]->(Category)
-
-// Temporal
-(Experience)-[:HAPPENED_BEFORE]->(Experience)
-(Action)-[:LEADS_TO]->(Outcome)
+// Experiência
+(Experience)-[:MENTIONS]->(Entity)
+(Entity)-[:EXTRACTED_FROM]->(Experience)
+(EventA)-[:FOLLOWED_BY]->(EventB)
 
 // Semântica
-(Concept)-[:RELATED_TO]->(Concept)
+(Concept)-[:IS_A]->(Category)
+(Entity)-[:PART_OF]->(Composite)
+(Entity)-[:HAS_PROPERTY]->(Value)
 (Entity)-[:SIMILAR_TO]->(Entity)
 ```
 
@@ -351,17 +375,12 @@ knowledge_relationships_created_total
     {
       "from": "search_web",
       "to": "TimeoutError",
-      "type": "CAN_FAIL_WITH"
+      "type": "CAUSES"
     },
     {
       "from": "TimeoutError",
       "to": "increase_timeout",
       "type": "SOLVED_BY"
-    },
-    {
-      "from": "search_web",
-      "to": "increase_timeout",
-      "type": "FIXED_BY"
     }
   ],
   "insights": [
@@ -375,12 +394,10 @@ knowledge_relationships_created_total
 
 ```cypher
 (:Tool {name: "search_web", category: "web", timeout: 30})
-  -[:CAN_FAIL_WITH]->
+  -[:CAUSES]->
 (:Error {name: "TimeoutError", severity: "medium"})
   -[:SOLVED_BY]->
 (:Solution {name: "increase_timeout", effectiveness: "high"})
-  -[:MODIFIES]->
-(:Tool {name: "search_web"})
 ```
 
 ### Consulta Posterior:
@@ -444,7 +461,7 @@ Caminhos no grafo explicam "como" o sistema chegou a uma conclusão.
 ## 📝 Checklist de Implementação
 
 - [x] GraphDatabase com Neo4j
-- [x] KnowledgeGraphManager para operações no grafo
+- [x] KnowledgeService + KnowledgeRepository
 - [x] KnowledgeConsolidator worker assíncrono
 - [x] Extração de conhecimento com LLM
 - [x] 3 ferramentas de consulta para agentes
@@ -463,3 +480,23 @@ destiladas em conhecimento estruturado, permitindo raciocínio mais profundo e d
 **Diferencial da Sprint 8:**
 > Enquanto a memória episódica lembra "o que aconteceu", a memória semântica entende "o que significa" - transformando
 > dados em sabedoria.
+
+## 📚 Endpoints da Sprint 8 (API)
+
+Prefixo: `/api/v1/knowledge`
+
+- `POST /query` — Consulta semântica em linguagem natural.
+    - Body: `{ "query": "Quais conceitos estão relacionados a Python?", "limit": 10 }`
+- `POST /concepts/related` — Conceitos relacionados a partir de um `Concept`.
+    - Body: `{ "concept": "LangChain", "max_depth": 2 }`
+- `POST /entity/details` — Detalhes de uma entidade (propriedades + relacionamentos).
+    - Body: `{ "entity_name": "reflexion" }`
+- `GET /stats` — Estatísticas de nós e relações do grafo.
+- `GET /node-types` — Lista labels presentes no grafo.
+- `GET /health` — Health da memória semântica (Neo4j, totais, status).
+- `POST /consolidate` — Dispara consolidação de experiências (LLM + Neo4j).
+    - Body: `{ "limit": 100 }`
+    - Nota: `batch_size` pode aparecer em exemplos antigos; atualmente é ignorado pelo serviço — apenas `limit` é usado.
+- `DELETE /clear` — Limpa todo o grafo (use com cuidado).
+
+Exemplos práticos em `http/sprint/Sprint 8.http`.

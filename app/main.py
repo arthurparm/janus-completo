@@ -66,7 +66,6 @@ async def lifespan(app: FastAPI):
     memory_db_instance = await get_memory_db()
     broker_instance = await get_broker()
     agent_manager_instance = get_agent_manager()
-    # Adicione outros getters de infraestrutura aqui...
 
     # --- Camada de Repositório ---
     app.state.knowledge_repo = KnowledgeRepository(graph_db_instance)
@@ -87,7 +86,6 @@ async def lifespan(app: FastAPI):
     app.state.reflexion_repo = ReflexionRepository(memory_service=app.state.memory_service)
     app.state.reflexion_service = ReflexionService(repo=app.state.reflexion_repo)
     app.state.tool_service = ToolService(app.state.tool_repo)
-    # Adicione outros serviços aqui...
 
     # Observabilidade: monitor e poison pill handler
     monitor = get_health_monitor()

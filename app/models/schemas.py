@@ -28,6 +28,7 @@ class GraphLabel(str, Enum):
     CODE_FUNCTION = "CodeFunction"
     CLASS = "Class"
     CODE_CLASS = "CodeClass"
+    CONCEPT = "Concept"
     ENTITY = "Entity"
     SKILL = "Skill"
     TASK = "Task"

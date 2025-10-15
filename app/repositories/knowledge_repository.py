@@ -83,6 +83,32 @@ class KnowledgeRepository:
                      MERGE (caller)-[r:{GraphRelationship.CALLS}]->(callee)"""
         await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
 
+    # --- Sprint 8: Consultas semânticas ---
+
+    async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10) -> List[Dict[str, Any]]:
+        # Usa label Concept para navegar por conceitos relacionados
+        query = f"""
+        MATCH path = (c:{GraphLabel.CONCEPT} {{name: $concept}})-[*1..{max_depth}]-(related)
+        RETURN related.name as concept,
+               type(last(relationships(path))) as relationship,
+               length(path) as distance
+        ORDER BY distance
+        LIMIT $limit
+        """
+        params = {"concept": concept, "limit": limit}
+        return await self._db.query(query, params, operation="repo_find_related_concepts")
+
+    async def get_node_types(self) -> List[str]:
+        # Lista todos os labels distintos presentes no grafo
+        query = """
+        MATCH (n)
+        UNWIND labels(n) AS label
+        RETURN DISTINCT label AS type
+        ORDER BY type
+        """
+        rows = await self._db.query(query, operation="repo_get_node_types")
+        return [row.get("type", "") for row in rows]
+
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_knowledge_repository(db: GraphDatabase = Depends(get_graph_db)) -> "KnowledgeRepository":
     return KnowledgeRepository(db)

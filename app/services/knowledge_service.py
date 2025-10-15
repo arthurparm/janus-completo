@@ -5,6 +5,7 @@ from fastapi import Request
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.code_analysis_service import code_analysis_service
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+from app.core.memory.graph_rag_core import query_knowledge_graph
 
 logger = structlog.get_logger(__name__)
 
@@ -45,8 +46,9 @@ class KnowledgeService:
         return details
 
     async def trigger_consolidation(self, limit: int) -> Dict[str, Any]:
-        await knowledge_consolidator.run_consolidation()
-        return {"message": "Processo de consolidação disparado com sucesso."}
+        # Utiliza consolidação em lote para alinhar com Sprint 8
+        stats = await knowledge_consolidator.consolidate_batch(limit=limit)
+        return stats
 
     async def index_codebase(self) -> Dict[str, Any]:
         logger.info(f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
@@ -73,6 +75,36 @@ class KnowledgeService:
 
     async def clear_graph(self) -> int:
         return await self._repo.clear_all_data()
+
+    # --- Sprint 8 Operations ---
+
+    async def semantic_query(self, question: str) -> str:
+        return await query_knowledge_graph(question)
+
+    async def find_related_concepts(self, concept: str, max_depth: int = 2) -> List[Dict[str, Any]]:
+        return await self._repo.find_related_concepts(concept=concept, max_depth=max_depth)
+
+    async def get_node_types(self) -> List[str]:
+        return await self._repo.get_node_types()
+
+    async def get_health_status(self) -> Dict[str, Any]:
+        try:
+            stats = await self._repo.get_node_and_relationship_stats()
+            total_nodes = sum(i.get("count", 0) for i in stats["nodes"]) if stats else 0
+            total_relationships = sum(i.get("count", 0) for i in stats["relationships"]) if stats else 0
+            return {
+                "status": "ok",
+                "neo4j_connected": True,
+                "total_nodes": total_nodes,
+                "total_relationships": total_relationships,
+            }
+        except Exception:
+            return {
+                "status": "degraded",
+                "neo4j_connected": False,
+                "total_nodes": 0,
+                "total_relationships": 0,
+            }
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_knowledge_service(request: Request) -> KnowledgeService:
