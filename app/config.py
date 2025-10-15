@@ -83,6 +83,9 @@ class AppSettings(BaseSettings):
     RABBITMQ_USER: str = "janus"
     RABBITMQ_PASSWORD: str = "janus_pass"
 
+    # Sprint 2: Knowledge Consolidator
+    KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS: int = 60
+
     # Sprint 3: Web Search
     TAVILY_API_KEY: Optional[SecretStr] = None
 

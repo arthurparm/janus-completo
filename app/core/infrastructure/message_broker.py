@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import Optional
+import json
+from typing import Optional, Callable, Awaitable, Any
 
 import aio_pika
 from aio_pika.abc import AbstractRobustConnection
@@ -91,6 +92,89 @@ class MessageBroker:
             return not self._connection.is_closed
         except Exception:
             return False
+
+    def start_consumer(
+        self,
+        queue_name: str,
+        callback: Callable[[Any], Awaitable[Any]],
+        prefetch_count: int = 10,
+    ) -> asyncio.Task:
+        """
+        Inicia um consumidor robusto com suporte a prefetch e reconexão.
+
+        - Usa conexão robusta (connect_robust) para reconectar automaticamente.
+        - Configura QoS (prefetch_count) para controlar a vazão de mensagens.
+        - Reenfileira mensagens em caso de exceção; quando a lógica de poison pill
+          evitar exceções (mensagem já quarentenada), a mensagem é confirmada (ack).
+
+        Retorna um asyncio.Task para controle externo (cancelamento, tracking).
+        """
+
+        async def _consume_loop() -> None:
+            while True:
+                try:
+                    await self.connect()
+                    assert self._connection is not None
+
+                    async with self._connection.channel() as channel:
+                        await channel.set_qos(prefetch_count=prefetch_count)
+
+                        arguments = None
+                        if queue_name in ["janus.knowledge.consolidation", "default"]:
+                            arguments = {
+                                "x-message-ttl": 24 * 60 * 60 * 1000,  # 24h em ms
+                                "x-max-length": 10000,
+                            }
+
+                        queue = await channel.declare_queue(
+                            queue_name,
+                            durable=True,
+                            arguments=arguments,
+                        )
+
+                        async def on_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
+                            async with message.process(requeue=True):
+                                try:
+                                    body_text = message.body.decode("utf-8")
+                                    try:
+                                        payload = json.loads(body_text)
+                                        # Import interno para evitar ciclos em import
+                                        from app.models.schemas import TaskMessage  # noqa
+
+                                        task = TaskMessage(**payload)
+                                        await callback(task)
+                                    except Exception:
+                                        # Se não for JSON válido para TaskMessage, entrega o texto bruto
+                                        await callback(body_text)
+                                except Exception as e:
+                                    logger.error(
+                                        "Erro ao processar mensagem",
+                                        extra={"queue": queue_name},
+                                        exc_info=e,
+                                    )
+                                    raise
+
+                        await queue.consume(on_message, no_ack=False)
+                        logger.info(
+                            "Consumidor iniciado",
+                            extra={"queue": queue_name, "prefetch": prefetch_count},
+                        )
+
+                        # Mantém o consumidor ativo até cancelamento
+                        await asyncio.Future()
+
+                except asyncio.CancelledError:
+                    logger.info("Consumidor cancelado", extra={"queue": queue_name})
+                    break
+                except Exception as e:
+                    logger.error(
+                        "Falha no consumidor; reconectando em 5s",
+                        extra={"queue": queue_name},
+                        exc_info=e,
+                    )
+                    await asyncio.sleep(5)
+
+        return asyncio.create_task(_consume_loop())
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 

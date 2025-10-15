@@ -13,10 +13,15 @@ from typing import Dict, Any
 from app.core.infrastructure.message_broker import message_broker
 from app.models.schemas import TaskMessage, QueueName
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 
 logger = logging.getLogger(__name__)
 
 
+@protect_against_poison_pills(
+    queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
+    extract_message_id=lambda task: task.task_id,
+)
 async def process_consolidation_task(task: TaskMessage) -> None:
     """
     Processa uma tarefa de consolidação de conhecimento recebida do RabbitMQ.

@@ -15,12 +15,12 @@ from prometheus_client import Counter, Histogram
 from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
 from app.core.llm.llm_manager import get_llm_client, ModelRole, ModelPriority
-from app.core.memory.memory_core import memory_core
+from app.services.memory_service import MemoryService
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
 
-# (Omitted metrics for brevity)
+# (Métricas omitidas para brevidade)
 
 @dataclass
 class ReflexionConfig:
@@ -52,10 +52,12 @@ class ReflexionSession:
     def __init__(
             self,
             task: str,
+            memory_service: MemoryService,
             evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
             config: Optional[ReflexionConfig] = None
     ):
         self.task = task.strip()
+        self.memory_service = memory_service
         self.evaluator = evaluator or self._default_evaluator
         self.config = config or ReflexionConfig.from_settings()
         self._llm = get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP)
@@ -79,7 +81,6 @@ Responda APENAS com um objeto JSON válido (sem markdown, sem explicações). Us
 Seu JSON:"""
         try:
             evaluation_str = await self._llm.asend(prompt, timeout_s=30)
-            # Remove markdown code blocks se houver
             evaluation_str = evaluation_str.strip()
             if evaluation_str.startswith('```'):
                 lines = evaluation_str.split('\n')
@@ -87,20 +88,13 @@ Seu JSON:"""
             evaluation_str = evaluation_str.strip()
 
             evaluation = json.loads(evaluation_str)
-            # Garante que tem as keys necessárias
-            if "score" not in evaluation:
-                evaluation["score"] = 0.5
-            if "strengths" not in evaluation:
-                evaluation["strengths"] = []
-            if "issues" not in evaluation:
-                evaluation["issues"] = []
-            if "suggestions" not in evaluation:
-                evaluation["suggestions"] = []
+            if "score" not in evaluation: evaluation["score"] = 0.5
+            if "strengths" not in evaluation: evaluation["strengths"] = []
+            if "issues" not in evaluation: evaluation["issues"] = []
+            if "suggestions" not in evaluation: evaluation["suggestions"] = []
             return evaluation
         except Exception as e:
-            logger.error(
-                f"Erro no avaliador: {e}. Response: {evaluation_str if 'evaluation_str' in locals() else 'N/A'}",
-                exc_info=False)
+            logger.error(f"Erro no avaliador: {e}. Response: {evaluation_str if 'evaluation_str' in locals() else 'N/A'}", exc_info=False)
             return {"score": 0.3, "issues": ["Falha na avaliação"], "suggestions": ["Tente novamente"], "strengths": []}
 
     async def _execute_action(self, iteration: int, previous_reflections: List[str]) -> str:
@@ -110,8 +104,7 @@ Seu JSON:"""
         enhanced_task = f"{self.task}{context}"
         try:
             logger.info(f"[Reflexion] Iteração {iteration}: Executando ação")
-            result = await agent_manager.arun_agent(question=enhanced_task, request=None,
-                                                    agent_type=AgentType.TOOL_USER)
+            result = await agent_manager.arun_agent(question=enhanced_task, request=None, agent_type=AgentType.TOOL_USER)
             return result.get("answer", "Sem resposta do agente.") if result else "Agente não retornou resultado."
         except Exception as e:
             logger.error(f"[Reflexion] Erro na execução: {e}", exc_info=True)
@@ -161,10 +154,10 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
                 best_score = score
                 best_result = action_result
 
-            await memory_core.amemorize(
-                Experience(type="reflexion_iteration",
-                           content=f"Tarefa: {self.task}\nScore: {score:.2f}\nReflexão: {reflection}",
-                           metadata={"iteration": iteration, "score": score, "origin": "reflexion_core"})
+            await self.memory_service.add_experience(
+                type="reflexion_iteration",
+                content=f"Tarefa: {self.task}\nScore: {score:.2f}\nReflexão: {reflection}",
+                metadata={"iteration": iteration, "score": score, "origin": "reflexion_core"}
             )
 
             if score >= self.config.success_threshold:
@@ -172,8 +165,15 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
                 break
 
         await self._extract_lessons()
-        return {"success": best_score >= self.config.success_threshold, "best_result": best_result,
-                "best_score": best_score, "steps": self._steps, "lessons_learned": self._lessons_learned}
+        elapsed_time = time.perf_counter() - self._start_time
+        return {
+            "success": best_score >= self.config.success_threshold,
+            "best_result": best_result,
+            "best_score": best_score,
+            "steps": self._steps,
+            "lessons_learned": self._lessons_learned,
+            "elapsed_seconds": elapsed_time
+        }
 
     async def _extract_lessons(self):
         if not self._steps: return
@@ -189,15 +189,17 @@ LIÇÕES APRENDIDAS:"""
             self._lessons_learned = [line.strip("- ") for line in lessons_text.split('\n') if
                                      line.strip().startswith("-")]
             if self._lessons_learned:
-                await memory_core.amemorize(
-                    Experience(type="lessons_learned", content=f"Tarefa: {self.task}\nLições: {self._lessons_learned}",
-                               metadata={"origin": "reflexion_core"}))
+                await self.memory_service.add_experience(
+                    type="lessons_learned",
+                    content=f"Tarefa: {self.task}\nLições: {self._lessons_learned}",
+                    metadata={"origin": "reflexion_core"}
+                )
                 logger.info(f"[Reflexion] {len(self._lessons_learned)} lições aprendidas e memorizadas")
         except Exception as e:
             logger.error(f"[Reflexion] Erro ao extrair lições: {e}", exc_info=True)
 
 
-async def arun_with_reflexion(task: str, evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
+async def arun_with_reflexion(task: str, memory_service: MemoryService, evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
                               config: Optional[ReflexionConfig] = None) -> Dict[str, Any]:
-    session = ReflexionSession(task=task, evaluator=evaluator, config=config)
+    session = ReflexionSession(task=task, memory_service=memory_service, evaluator=evaluator, config=config)
     return await session.arun()

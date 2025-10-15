@@ -8,11 +8,11 @@
 
 ###
 # 1. Resetar o circuit breaker
-POST http://localhost:8000/api/v1/reflexion/reset-circuit-breaker
+POST {{host}}{{api_v1_prefix}}/reflexion/reset-circuit-breaker
 
 ###
 # 2. Verificar health (deve mostrar CLOSED)
-GET http://localhost:8000/api/v1/reflexion/health
+GET {{host}}{{api_v1_prefix}}/reflexion/health
 Accept: application/json
 
 
