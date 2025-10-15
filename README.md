@@ -119,13 +119,56 @@ Variáveis avançadas também suportadas via app/config.py (ajustes finos de mem
 
 Opção A) Docker Compose (recomendado)
 
-1. docker-compose up -d --build
-2. Acesse: http://localhost:8000 (Swagger em /docs)
-3. Serviços:
-    - API: 8000/tcp
-    - Neo4j: 7474 (HTTP) e 7687 (Bolt)
-    - Qdrant: 6333
-    - Ollama: 11434
+Passo a passo (Docker):
+
+1. Instale Docker Desktop (Windows/macOS) ou Docker Engine (Linux).
+2. Copie `.env.example` para `.env` e preencha valores essenciais:
+    - `NEO4J_USER` e `NEO4J_PASSWORD` (acesso ao Neo4j)
+    - `OLLAMA_HOST=http://ollama:11434` (padrão já definido)
+    - Chaves de provedores LLM caso use OpenAI/Gemini (opcional)
+3. GPU (Ollama):
+    - Se NÃO possuir GPU NVIDIA, remova o bloco abaixo do serviço `ollama` em `docker-compose.yml`:
+      ```yaml
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [ gpu ]
+      ```
+    - Com GPU NVIDIA, mantenha para acelerar a execução dos modelos.
+4. Suba os serviços:
+    - `docker-compose up -d --build`
+5. Aguarde os health checks (Neo4j, Qdrant, Ollama, RabbitMQ):
+    - `docker compose ps`
+    - `docker compose logs -f janus-api` até ver “Application startup complete”.
+6. Acesse a API: `http://localhost:8000` (Swagger em `/docs`).
+7. Verifique serviços auxiliares:
+    - Neo4j Browser: `http://localhost:7474` (login `NEO4J_USER/NEO4J_PASSWORD`)
+    - Qdrant health: `http://localhost:6333/healthz`
+    - RabbitMQ UI: `http://localhost:15672` (credenciais de `.env`)
+8. Modelos (Ollama):
+    - O script `init-ollama.sh` puxa automaticamente os modelos: `llama3.1:8b`, `codellama:7b`, `phi3:mini` na primeira
+      execução.
+    - Opcional: puxe manualmente se necessário:
+      ```sh
+      docker-compose exec ollama ollama pull llama3.1:8b
+      docker-compose exec ollama ollama pull codellama:7b
+      docker-compose exec ollama ollama pull phi3:mini
+      ```
+9. Teste a prontidão:
+    - Readiness: `GET http://localhost:8000/readyz`
+    - Health da memória semântica: `GET http://localhost:8000/api/v1/knowledge/health`
+10. Use os endpoints da Sprint 8:
+    - Coleção `http/sprint/Sprint 8.http` possui exemplos prontos de:
+        - `/knowledge/consolidate` (atenção: pode levar minutos conforme `limit`)
+        - `/knowledge/query`, `/knowledge/concepts/related`, `/knowledge/entity/details`
+        - `/knowledge/stats`, `/knowledge/node-types`, `/knowledge/health`, `/knowledge/clear`
+11. Parar/Reiniciar:
+    - Parar: `docker-compose down`
+    - Reiniciar: `docker-compose up -d`
+    - Reset completo (apaga dados): remova pastas em `data/*` e suba novamente.
 
 Opção B) Local (sem Docker)
 
@@ -136,8 +179,10 @@ Opção B) Local (sem Docker)
 
 ### Primeira Execução (Ollama)
 
-Na primeira vez que você executar o sistema com Docker, os modelos do Ollama (nosso "Cérebro Soberano" local) precisarão
-ser baixados. Isso pode levar alguns minutos. Você pode fazer isso manualmente com os seguintes comandos:
+Na primeira execução com Docker, o script `init-ollama.sh` inicia o servidor Ollama e baixa automaticamente os modelos
+necessários. Isso pode levar alguns minutos.
+
+Caso prefira executar manualmente:
 
 ```sh
 docker-compose exec ollama ollama pull llama3.1:8b
@@ -147,6 +192,18 @@ docker-compose exec ollama ollama pull phi3:mini
 
 Dica: Em Windows, se make não estiver disponível, use os comandos diretos acima. Para quem tem Make, há alvos úteis (ver
 próxima seção).
+
+### Dicas e Troubleshooting (Docker)
+
+- Portas em uso: ajuste mapeamentos no `docker-compose.yml` se houver conflito.
+- Recursos do Docker Desktop: aumente memória/CPU se os serviços reiniciarem (Settings → Resources).
+- Neo4j falhando ao iniciar: verifique `NEO4J_USER/NEO4J_PASSWORD` no `.env` e plugins APOC no compose.
+- Sem GPU: remova o bloco `deploy.resources.reservations.devices` do serviço `ollama` (ver seção “GPU”).
+- Logs úteis:
+    - `docker compose logs -f janus-api`
+    - `docker compose logs -f neo4j`
+    - `docker compose logs -f qdrant`
+    - `docker compose logs -f ollama`
 
 ## Scripts e Tarefas (Makefile)
 
