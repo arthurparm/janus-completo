@@ -44,6 +44,24 @@ class TaskRepository:
         except Exception:
             return False
 
+    async def get_queue_policy(self, queue_name: str) -> Optional[Dict[str, Any]]:
+        """Consulta a política/argumentos atuais de uma fila via Management API."""
+        logger.debug("Buscando política da fila no repositório", queue=queue_name)
+        try:
+            return await self._broker.get_queue_policy(queue_name)
+        except Exception as e:
+            logger.error("Erro no repositório ao buscar política da fila", exc_info=e)
+            raise TaskRepositoryError(f"Falha ao buscar política da fila '{queue_name}'.") from e
+
+    async def validate_queue_policy(self, queue_name: str) -> Dict[str, Any]:
+        """Valida argumentos da fila contra a configuração esperada."""
+        logger.debug("Validando política da fila no repositório", queue=queue_name)
+        try:
+            return await self._broker.validate_queue_policy(queue_name)
+        except Exception as e:
+            logger.error("Erro no repositório ao validar política da fila", exc_info=e)
+            raise TaskRepositoryError(f"Falha ao validar política da fila '{queue_name}'.") from e
+
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_task_repository(broker: MessageBroker = Depends(get_broker)) -> TaskRepository:

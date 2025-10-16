@@ -1,7 +1,10 @@
 import asyncio
 import logging
 import json
-from typing import Optional, Callable, Awaitable, Any
+import base64
+from typing import Optional, Callable, Awaitable, Any, Dict
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 import aio_pika
 from aio_pika.abc import AbstractRobustConnection
@@ -55,11 +58,8 @@ class MessageBroker:
         """
         await self.connect()
         async with self._connection.channel() as channel:
-            arguments = {}
-            if queue_name in ["janus.knowledge.consolidation", "default"]:
-                arguments["x-message-ttl"] = 86400000
-                arguments["x-max-length"] = 10000
-            await channel.declare_queue(queue_name, durable=True, arguments=arguments or None)
+            arguments = self._get_queue_arguments(queue_name)
+            await channel.declare_queue(queue_name, durable=True, arguments=arguments)
             await channel.default_exchange.publish(
                 aio_pika.Message(body=message.encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT),
                 routing_key=queue_name,
@@ -72,11 +72,8 @@ class MessageBroker:
         """
         await self.connect()
         async with self._connection.channel() as channel:
-            arguments = {}
-            if queue_name in ["janus.knowledge.consolidation", "default"]:
-                arguments["x-message-ttl"] = 86400000
-                arguments["x-max-length"] = 10000
-            queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments or None)
+            arguments = self._get_queue_arguments(queue_name)
+            queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments)
             return {
                 "name": queue.name,
                 "messages": queue.declaration_result.message_count,
@@ -118,14 +115,7 @@ class MessageBroker:
 
                     async with self._connection.channel() as channel:
                         await channel.set_qos(prefetch_count=prefetch_count)
-
-                        arguments = None
-                        if queue_name in ["janus.knowledge.consolidation", "default"]:
-                            arguments = {
-                                "x-message-ttl": 24 * 60 * 60 * 1000,  # 24h em ms
-                                "x-max-length": 10000,
-                            }
-
+                        arguments = self._get_queue_arguments(queue_name)
                         queue = await channel.declare_queue(
                             queue_name,
                             durable=True,
@@ -175,6 +165,90 @@ class MessageBroker:
                     await asyncio.sleep(5)
 
         return asyncio.create_task(_consume_loop())
+
+    # --- Utilitários / Management API ---
+
+    def _get_queue_arguments(self, queue_name: str) -> Optional[Dict[str, int]]:
+        """
+        Obtém os argumentos esperados para a fila a partir da configuração.
+        Retorna None se não houver configuração específica.
+        """
+        try:
+            args = settings.RABBITMQ_QUEUE_CONFIG.get(queue_name)
+            return args or None
+        except Exception:
+            return None
+
+    async def get_queue_policy(self, queue_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Consulta a Management API do RabbitMQ para obter a política/argumentos atuais da fila.
+        Retorna dict com informações importantes ou None em caso de erro.
+        """
+        host = settings.RABBITMQ_HOST
+        port = settings.RABBITMQ_MANAGEMENT_PORT
+        user = settings.RABBITMQ_USER
+        password = settings.RABBITMQ_PASSWORD
+        url = f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
+
+        def _fetch() -> Optional[Dict[str, Any]]:
+            try:
+                req = Request(url)
+                token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+                req.add_header("Authorization", f"Basic {token}")
+                with urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    return {
+                        "name": data.get("name"),
+                        "durable": data.get("durable", True),
+                        "auto_delete": data.get("auto_delete", False),
+                        "messages": data.get("messages", 0),
+                        "consumers": data.get("consumers", 0),
+                        "arguments": data.get("arguments", {}) or {},
+                    }
+            except Exception as e:
+                logger.error(f"Erro ao consultar Management API do RabbitMQ: {e}")
+                return None
+
+        return await asyncio.to_thread(_fetch)
+
+    async def validate_queue_policy(self, queue_name: str) -> Dict[str, Any]:
+        """
+        Valida os argumentos atuais da fila contra os esperados na configuração.
+        Retorna um dict com status (healthy/degraded/unhealthy), mensagem e detalhes.
+        """
+        actual = await self.get_queue_policy(queue_name)
+        expected = self._get_queue_arguments(queue_name) or {}
+
+        if actual is None:
+            return {
+                "status": "unhealthy",
+                "message": "Não foi possível obter política da fila",
+                "details": {"queue": queue_name}
+            }
+
+        actual_args = actual.get("arguments", {}) or {}
+        mismatches: Dict[str, Dict[str, Any]] = {}
+        for key, expected_val in expected.items():
+            actual_val = actual_args.get(key)
+            if actual_val != expected_val:
+                mismatches[key] = {"expected": expected_val, "actual": actual_val}
+
+        status = "healthy" if not mismatches else "degraded"
+        msg = "Argumentos da fila conferem" if not mismatches else "Argumentos da fila divergem do esperado"
+
+        return {
+            "status": status,
+            "message": msg,
+            "details": {
+                "queue": queue_name,
+                "expected": expected,
+                "actual": actual_args,
+                "mismatches": mismatches,
+                "durable": actual.get("durable", True),
+                "messages": actual.get("messages", 0),
+                "consumers": actual.get("consumers", 0)
+            }
+        }
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 

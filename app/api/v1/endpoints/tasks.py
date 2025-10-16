@@ -29,6 +29,20 @@ class QueueInfoResponse(BaseModel):
     messages: int
     consumers: int
 
+
+class QueuePolicyResponse(BaseModel):
+    name: str
+    durable: bool
+    messages: int
+    consumers: int
+    arguments: dict
+
+
+class QueuePolicyValidationResponse(BaseModel):
+    status: str
+    message: str
+    details: dict
+
 # --- Endpoints ---
 
 @router.post("/consolidation", response_model=TaskResponse, summary="Publica tarefa de consolidação")
@@ -70,3 +84,22 @@ async def check_rabbitmq_health(service: TaskService = Depends(get_task_service)
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="RabbitMQ não está acessível"
     )
+
+
+@router.get("/queue/{queue_name}/policy", response_model=QueuePolicyResponse,
+            summary="Obtém política/argumentos da fila")
+async def get_queue_policy(queue_name: str, service: TaskService = Depends(get_task_service)):
+    """Retorna a política e argumentos atuais da fila via Management API."""
+    policy = await service.get_queue_policy(queue_name)
+    return QueuePolicyResponse(**policy)
+
+
+@router.get(
+    "/queue/{queue_name}/policy/validate",
+    response_model=QueuePolicyValidationResponse,
+    summary="Valida argumentos da fila contra configuração esperada"
+)
+async def validate_queue_policy(queue_name: str, service: TaskService = Depends(get_task_service)):
+    """Valida a política da fila e indica divergências (TTL, max-length, etc.)."""
+    result = await service.validate_queue_policy(queue_name)
+    return QueuePolicyValidationResponse(**result)

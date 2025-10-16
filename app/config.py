@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -88,6 +88,17 @@ class AppSettings(BaseSettings):
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
     RABBITMQ_PASSWORD: str = "janus_pass"
+    RABBITMQ_MANAGEMENT_PORT: int = 15672
+    RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
+        "janus.knowledge.consolidation": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        },
+        "default": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        }
+    }
 
     # Sprint 2: Knowledge Consolidator
     KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS: int = 60

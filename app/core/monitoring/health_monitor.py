@@ -411,6 +411,41 @@ async def check_poison_pill_handler_health() -> Dict[str, Any]:
 _health_monitor: Optional[HealthMonitor] = None
 
 
+async def check_message_broker_health() -> Dict[str, Any]:
+    """Health check de conectividade do RabbitMQ (Message Broker)."""
+    try:
+        from app.core.infrastructure.message_broker import get_broker
+        broker = await get_broker()
+        ok = await broker.health_check()
+        return {
+            "status": "healthy" if ok else "unhealthy",
+            "message": "Conexão com RabbitMQ está operacional" if ok else "RabbitMQ indisponível",
+            "details": {}
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "message": f"Erro ao verificar broker: {str(e)}",
+            "details": {}
+        }
+
+
+async def check_consolidation_queue_policy_health() -> Dict[str, Any]:
+    """Valida a política/argumentos da fila de consolidação (TTL, max-length)."""
+    try:
+        from app.core.infrastructure.message_broker import get_broker
+        from app.models.schemas import QueueName
+        broker = await get_broker()
+        result = await broker.validate_queue_policy(QueueName.KNOWLEDGE_CONSOLIDATION.value)
+        return result
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "message": f"Erro ao validar política da fila: {str(e)}",
+            "details": {}
+        }
+
+
 def get_health_monitor() -> HealthMonitor:
     """Obtém a instância global do HealthMonitor."""
     global _health_monitor
@@ -424,6 +459,11 @@ def get_health_monitor() -> HealthMonitor:
             is_critical=True
         )
         _health_monitor.register_health_check(
+            "message_broker",
+            check_message_broker_health,
+            is_critical=True
+        )
+        _health_monitor.register_health_check(
             "multi_agent_system",
             check_multi_agent_system_health,
             is_critical=False
@@ -431,6 +471,11 @@ def get_health_monitor() -> HealthMonitor:
         _health_monitor.register_health_check(
             "poison_pill_handler",
             check_poison_pill_handler_health,
+            is_critical=False
+        )
+        _health_monitor.register_health_check(
+            "rabbitmq_consolidation_queue_policy",
+            check_consolidation_queue_policy_health,
             is_critical=False
         )
 

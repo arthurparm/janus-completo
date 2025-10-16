@@ -77,6 +77,25 @@ class TaskService:
         logger.debug("Verificando saúde do broker via serviço.")
         return await self._repo.is_broker_healthy()
 
+    async def get_queue_policy(self, queue_name: str) -> Dict[str, Any]:
+        """Delega ao repositório a consulta da política/argumentos da fila."""
+        logger.info("Buscando política da fila via serviço", queue_name=queue_name)
+        try:
+            policy = await self._repo.get_queue_policy(queue_name)
+            if policy is None:
+                raise TaskServiceError(f"Fila '{queue_name}' não encontrada ou sem política disponível.")
+            return policy
+        except TaskRepositoryError as e:
+            raise TaskServiceError(f"Falha ao buscar política da fila '{queue_name}'.") from e
+
+    async def validate_queue_policy(self, queue_name: str) -> Dict[str, Any]:
+        """Valida argumentos atuais da fila contra configuração esperada."""
+        logger.info("Validando política da fila via serviço", queue_name=queue_name)
+        try:
+            return await self._repo.validate_queue_policy(queue_name)
+        except TaskRepositoryError as e:
+            raise TaskServiceError(f"Falha ao validar política da fila '{queue_name}'.") from e
+
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_task_service(request: Request) -> TaskService:
     return request.app.state.task_service
