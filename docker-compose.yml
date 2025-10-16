@@ -4,12 +4,13 @@ services:
     container_name: janus_api
     env_file:
       - .env
+      - .env.perf
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./workspace:/app/workspace
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude /app/workspace/
+    command: [ "sh","-lc","/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 ${APP_SERVER_ARGS:- --reload --reload-exclude /app/workspace/}" ]
     depends_on:
       neo4j:
         condition: service_healthy # Espera o Neo4j estar totalmente operacional
@@ -32,6 +33,10 @@ services:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       # Habilita plugins essenciais. APOC é fundamental para muitas operações complexas.
       - NEO4J_PLUGINS=["apoc"]
+      # Tuning de memória para throughput: heap e pagecache (Neo4j 5 - usar __ para '.')
+      - NEO4J_server_memory_heap_initial__size=2G
+      - NEO4J_server_memory_heap_max__size=4G
+      - NEO4J_server_memory_pagecache_size=8G
     networks:
       - janus-net
     healthcheck:
@@ -50,13 +55,10 @@ services:
       - ./data/qdrant:/qdrant/storage # Persiste os dados do Qdrant
     networks:
       - janus-net
-    healthcheck:
-      # Usa o endpoint /healthz que é mais apropriado para checagem de saúde
-      test: [ "CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1" ]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
+    # Observação: o image oficial do Qdrant não inclui utilitários como 'curl' ou 'wget'.
+    # O healthcheck anterior falhava por ausência dessas ferramentas, apesar do serviço estar saudável.
+    # Para evitar falso-negativo no status do container, removemos o healthcheck explícito aqui.
+    # Caso deseje reativar, use uma imagem personalizada que inclua 'curl' e cheque 'http://localhost:6333/healthz'.
 
   ollama:
     build:
@@ -79,10 +81,10 @@ services:
               count: all
               capabilities: [ gpu ]
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /tmp/tags.json && grep -q '\"model\":\"llama3.1:8b\"' /tmp/tags.json && grep -q '\"model\":\"codellama:7b\"' /tmp/tags.json && grep -q '\"model\":\"phi3:mini\"' /tmp/tags.json" ]
       interval: 15s   # Check less frequently
       timeout: 10s    # Allow more time for the command to respond
-      retries: 10     # Try more times
+      retries: 20     # Allow more time for model pulls to complete
       start_period: 60s # Grace period for the container to initialize before healthchecks start
 
   # Sprint 1: Message Broker para Comunicação Distribuída

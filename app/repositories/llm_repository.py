@@ -1,5 +1,9 @@
 import structlog
 from typing import Dict, Any, List, Optional
+from app.config import settings
+from app.core.llm.llm_manager import _provider_circuit_breakers  # type: ignore
+from app.core.llm.llm_manager import _llm_cache as llm_cache  # type: ignore
+from app.core.llm.llm_manager import _validate_openai_key, _validate_gemini_key  # type: ignore
 
 from app.core.llm import (
     get_llm_client,
@@ -73,6 +77,42 @@ class LLMRepository:
             raise LLMRepositoryError(f"Provedor '{provider}' não encontrado.")
         cb = _provider_circuit_breakers[provider]
         cb.reset()
+
+    def list_providers(self) -> List[Dict[str, Any]]:
+        """Lista provedores configurados com status de habilitação e modelos padrão."""
+        logger.debug("Listando provedores de LLMs via repositório.")
+
+        # Recupera chaves (podem ser SecretStr) e valida
+        openai_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
+        gemini_key = getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()
+
+        providers = [
+            {
+                "provider": "ollama",
+                "name": "Ollama",
+                "enabled": True,
+                "host": settings.OLLAMA_HOST,
+                "models": {
+                    "orchestrator": settings.OLLAMA_ORCHESTRATOR_MODEL,
+                    "code_generator": settings.OLLAMA_CODER_MODEL,
+                    "knowledge_curator": settings.OLLAMA_CURATOR_MODEL,
+                },
+            },
+            {
+                "provider": "openai",
+                "name": "OpenAI",
+                "enabled": _validate_openai_key(openai_key),
+                "model_default": settings.OPENAI_MODEL_NAME,
+            },
+            {
+                "provider": "google_gemini",
+                "name": "Google Gemini",
+                "enabled": _validate_gemini_key(gemini_key),
+                "model_default": settings.GEMINI_MODEL_NAME,
+            },
+        ]
+
+        return providers
 
 
 # Padrão de Injeção de Dependência: Getter para o repositório

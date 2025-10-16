@@ -4,6 +4,7 @@ from fastapi import Request
 
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.core.llm import ModelRole, ModelPriority
+from app.core.monitoring.health_monitor import check_llm_manager_health
 
 logger = structlog.get_logger(__name__)
 
@@ -66,6 +67,15 @@ class LLMService:
             return "unknown"
         except LLMRepositoryError as e:
             raise LLMServiceError(str(e)) from e
+
+    def get_providers(self) -> List[Dict[str, Any]]:
+        logger.info("Listando provedores de LLMs via serviço.")
+        return self._repo.list_providers()
+
+    async def get_health_status(self) -> Dict[str, Any]:
+        logger.info("Verificando saúde do sistema de LLMs via serviço.")
+        # Usa health monitor central para consolidar o estado dos circuit breakers e cache
+        return await check_llm_manager_health()
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_llm_service(request: Request) -> LLMService:

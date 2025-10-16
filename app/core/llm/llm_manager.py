@@ -172,8 +172,22 @@ def get_llm(
     # Estratégia 1: Prioridade é o Cérebro Soberano Local
     if priority == ModelPriority.LOCAL_ONLY:
         try:
-            llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=local_model_name, temperature=0)
-            if not _health_check_ollama(llm):
+            # Model kwargs para tunar desempenho do Ollama
+            model_kwargs: Dict[str, Any] = {}
+            if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+            if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+            if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+            if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+            if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+
+            llm = ChatOllama(
+                base_url=settings.OLLAMA_HOST,
+                model=local_model_name,
+                temperature=0,
+                model_kwargs=model_kwargs,
+            )
+            # Primeiro uso pode exigir carregar o modelo; aumentamos o timeout para reduzir falsos negativos
+            if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
                 raise RuntimeError(f"Health check falhou para modelo '{local_model_name}'")
 
             logger.info(f"Modelo local '{local_model_name}' inicializado com sucesso.")
@@ -221,8 +235,21 @@ def get_llm(
     # Fallback final para o modelo local
     logger.warning("Estratégias de nuvem falharam ou desabilitadas. Recorrendo ao modelo local.")
     try:
-        llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=local_model_name, temperature=0)
-        if not _health_check_ollama(llm):
+        # Model kwargs para tunar desempenho do Ollama (fallback)
+        model_kwargs: Dict[str, Any] = {}
+        if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+        if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+        if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+        if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+        if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+
+        llm = ChatOllama(
+            base_url=settings.OLLAMA_HOST,
+            model=local_model_name,
+            temperature=0,
+            model_kwargs=model_kwargs,
+        )
+        if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
             raise RuntimeError(f"Health check falhou para modelo local '{local_model_name}' no fallback")
 
         LLM_ROUTER_COUNTER.labels(role.value, "fallback", local_model_name, "ollama").inc()

@@ -71,6 +71,12 @@ class AppSettings(BaseSettings):
     OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
     OLLAMA_CODER_MODEL: str = "codellama:7b"
     OLLAMA_CURATOR_MODEL: str = "phi3:mini"
+    # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
+    OLLAMA_KEEP_ALIVE: Optional[str] = "30m"  # mantém modelos carregados para reduzir cold-start
+    OLLAMA_NUM_CTX: Optional[int] = 4096  # contexto máximo por requisição
+    OLLAMA_NUM_THREAD: Optional[int] = None  # threads CPU (auto se None)
+    OLLAMA_NUM_BATCH: Optional[int] = None  # tamanho de batch de tokens
+    OLLAMA_GPU_LAYERS: Optional[int] = None  # camadas na GPU (auto se None)
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

@@ -36,6 +36,10 @@ WORKDIR /app
 
 # Copia o ambiente virtual com as dependências instaladas do estágio 'builder'
 COPY --from=builder /opt/venv /opt/venv
+
+# Instala bibliotecas de runtime necessárias para alguns pacotes Python (ex.: torch CPU)
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copia o código da aplicação

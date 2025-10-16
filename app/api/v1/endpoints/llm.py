@@ -10,6 +10,7 @@ from app.services.llm_service import (
     LLMServiceError
 )
 from app.core.llm import ModelRole, ModelPriority
+from app.core.monitoring.health_monitor import check_llm_manager_health
 
 router = APIRouter(tags=["LLM"])
 logger = structlog.get_logger(__name__)
@@ -90,3 +91,15 @@ async def reset_circuit_breaker(
     # LLMServiceError (para provider não encontrado) é tratado pelo handler central.
     new_state = service.reset_circuit_breaker(provider)
     return {"message": f"Circuit breaker resetado para: {provider}", "new_state": new_state}
+
+
+@router.get("/providers", summary="Lista provedores configurados de LLMs")
+async def list_llm_providers(service: LLMService = Depends(get_llm_service)):
+    """Retorna os provedores configurados com seus modelos e estado de habilitação."""
+    return service.get_providers()
+
+
+@router.get("/health", summary="Health check do sistema de LLMs")
+async def llm_health(service: LLMService = Depends(get_llm_service)):
+    """Delega a verificação de saúde para o LLMService."""
+    return await service.get_health_status()

@@ -41,6 +41,8 @@ from app.core.monitoring import get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.repositories.optimization_repository import OptimizationRepository
 from app.services.optimization_service import OptimizationService
+from app.repositories.llm_repository import LLMRepository
+from app.services.llm_service import LLMService
 
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
@@ -89,6 +91,9 @@ async def lifespan(app: FastAPI):
     app.state.reflexion_repo = ReflexionRepository(memory_service=app.state.memory_service)
     app.state.reflexion_service = ReflexionService(repo=app.state.reflexion_repo)
     app.state.tool_service = ToolService(app.state.tool_repo)
+    # LLM (Sprint 10): Cérebro Híbrido
+    app.state.llm_repo = LLMRepository()
+    app.state.llm_service = LLMService(app.state.llm_repo)
 
     # --- Self-Optimization (Sprint 7) ---
     app.state.optimization_repo = OptimizationRepository()
