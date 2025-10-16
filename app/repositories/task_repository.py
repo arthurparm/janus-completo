@@ -62,6 +62,15 @@ class TaskRepository:
             logger.error("Erro no repositório ao validar política da fila", exc_info=e)
             raise TaskRepositoryError(f"Falha ao validar política da fila '{queue_name}'.") from e
 
+    async def reconcile_queue_policy(self, queue_name: str, force_delete: bool = True) -> Dict[str, Any]:
+        """Reconciliar política (deletando e recriando fila se divergente)."""
+        logger.debug("Reconciliação de política da fila no repositório", queue=queue_name)
+        try:
+            return await self._broker.reconcile_queue_policy(queue_name, force_delete=force_delete)
+        except Exception as e:
+            logger.error("Erro no repositório ao reconciliar política da fila", exc_info=e)
+            raise TaskRepositoryError(f"Falha ao reconciliar política da fila '{queue_name}'.") from e
+
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_task_repository(broker: MessageBroker = Depends(get_broker)) -> TaskRepository:

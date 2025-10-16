@@ -250,6 +250,71 @@ class MessageBroker:
             }
         }
 
+    async def delete_queue(self, queue_name: str, if_unused: bool = False, if_empty: bool = False) -> bool:
+        """
+        Deleta uma fila via Management API do RabbitMQ.
+        Atenção: isto remove todas as mensagens dessa fila.
+        """
+        host = settings.RABBITMQ_HOST
+        port = settings.RABBITMQ_MANAGEMENT_PORT
+        user = settings.RABBITMQ_USER
+        password = settings.RABBITMQ_PASSWORD
+        url = (
+            f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
+            f"?if-unused={str(if_unused).lower()}&if-empty={str(if_empty).lower()}"
+        )
+
+        def _delete() -> bool:
+            try:
+                req = Request(url, method="DELETE")
+                token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+                req.add_header("Authorization", f"Basic {token}")
+                with urlopen(req, timeout=5) as resp:
+                    status = getattr(resp, "status", 200)
+                    return 200 <= status < 300
+            except Exception as e:
+                logger.error(f"Erro ao deletar fila via Management API: {e}")
+                return False
+
+        return await asyncio.to_thread(_delete)
+
+    async def reconcile_queue_policy(self, queue_name: str, force_delete: bool = True) -> Dict[str, Any]:
+        """
+        Reconciliar a política da fila com a configuração esperada:
+        - Valida argumentos atuais; se houver divergências e force_delete=True, deleta a fila e recria com argumentos esperados.
+        - Retorna o resultado da validação após a reconciliação.
+        """
+        validation = await self.validate_queue_policy(queue_name)
+        mismatches = validation.get("details", {}).get("mismatches", {})
+        actions = []
+
+        if mismatches and force_delete:
+            deleted = await self.delete_queue(queue_name)
+            actions.append({"action": "delete_queue", "success": deleted})
+            if deleted:
+                # Recriar fila com argumentos esperados
+                try:
+                    await self.connect()
+                    async with self._connection.channel() as channel:
+                        args = self._get_queue_arguments(queue_name)
+                        await channel.declare_queue(queue_name, durable=True, arguments=args)
+                    actions.append({"action": "declare_queue", "success": True})
+                except Exception as e:
+                    logger.error(f"Erro ao recriar fila {queue_name}: {e}")
+                    actions.append({"action": "declare_queue", "success": False, "error": str(e)})
+
+            # Validar novamente após tentativa de reconciliação
+            validation = await self.validate_queue_policy(queue_name)
+
+        return {
+            "status": validation.get("status", "unknown"),
+            "message": validation.get("message", ""),
+            "details": {
+                **validation.get("details", {}),
+                "actions": actions
+            }
+        }
+
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
 _broker_instance: Optional[MessageBroker] = None

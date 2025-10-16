@@ -74,6 +74,25 @@ GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation
 Accept: application/json
 
 ###
+# 7.1. Obter Política/Argumentos da Fila
+GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy
+Accept: application/json
+
+###
+# 7.2. Validar Política da Fila (TTL, max-length)
+GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy/validate
+Accept: application/json
+
+###
+# 7.3. Reconciliação da Política (deleta e recria se divergente)
+POST {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy/reconcile
+Content-Type: application/json
+
+{
+  "force_delete": true
+}
+
+###
 # 8. Obter Informações de Fila Customizada (se existir)
 GET {{host}}{{api_v1_prefix}}/tasks/queue/default
 Accept: application/json

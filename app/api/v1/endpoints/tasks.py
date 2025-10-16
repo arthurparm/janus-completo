@@ -43,6 +43,16 @@ class QueuePolicyValidationResponse(BaseModel):
     message: str
     details: dict
 
+
+class ReconcilePolicyRequest(BaseModel):
+    force_delete: bool = True
+
+
+class ReconcilePolicyResponse(BaseModel):
+    status: str
+    message: str
+    details: dict
+
 # --- Endpoints ---
 
 @router.post("/consolidation", response_model=TaskResponse, summary="Publica tarefa de consolidação")
@@ -103,3 +113,22 @@ async def validate_queue_policy(queue_name: str, service: TaskService = Depends(
     """Valida a política da fila e indica divergências (TTL, max-length, etc.)."""
     result = await service.validate_queue_policy(queue_name)
     return QueuePolicyValidationResponse(**result)
+
+
+@router.post(
+    "/queue/{queue_name}/policy/reconcile",
+    response_model=ReconcilePolicyResponse,
+    summary="Reconcilia política da fila (deleta e recria se divergente)"
+)
+async def reconcile_queue_policy(
+        queue_name: str,
+        request: ReconcilePolicyRequest,
+        service: TaskService = Depends(get_task_service)
+):
+    """
+    Executa reconciliação da política da fila. Se houver divergências e `force_delete` estiver habilitado,
+    a fila será deletada via Management API e recriada com os argumentos esperados.
+    Atenção: Deletar a fila remove mensagens pendentes.
+    """
+    result = await service.reconcile_queue_policy(queue_name, force_delete=request.force_delete)
+    return ReconcilePolicyResponse(**result)
