@@ -23,14 +23,14 @@ trabalhem de forma desacoplada e escalável.
          ▼
 ┌─────────────────────────────────────┐
 │         RabbitMQ Broker             │
-│   ┌───────────────────────────┐    │
-│   │ Filas:                     │    │
-│   │ - knowledge.consolidation │    │
-│   │ - data.harvesting         │    │
-│   │ - agent.tasks             │    │
-│   │ - meta_agent.cycle        │    │
-│   │ - neural.training         │    │
-│   └───────────────────────────┘    │
+│   ┌───────────────────────────┐     │
+│   │ Filas:                    │     │
+│   │ - knowledge.consolidation │     │
+│   │ - data.harvesting         │     │
+│   │ - agent.tasks             │     │
+│   │ - meta_agent.cycle        │     │
+│   │ - neural.training         │     │
+│   └───────────────────────────┘     │
 └────────┬────────────────────────────┘
          │ consume
          ▼
@@ -144,13 +144,13 @@ Endpoints REST para interagir com o message broker:
 
 ## Filas Disponíveis
 
-| Fila                            | Propósito                      | Worker         |
-|---------------------------------|--------------------------------|----------------|
+| Fila                            | Propósito                      | Worker          |
+|---------------------------------|--------------------------------|-----------------|
 | `janus.knowledge.consolidation` | Consolidação de conhecimento   | ✅ Implementado |
-| `janus.data.harvesting`         | Coleta de dados de treinamento | ⏳ Futuro       |
-| `janus.agent.tasks`             | Tarefas de agentes             | ⏳ Futuro       |
+| `janus.data.harvesting`         | Coleta de dados de treinamento | ⏳ Futuro (Worker implementado; consumo por fila pendente) |
+| `janus.agent.tasks`             | Tarefas de agentes             | ✅ Implementado |
 | `janus.meta_agent.cycle`        | Ciclo do meta-agente           | ⏳ Futuro       |
-| `janus.neural.training`         | Treinamento de redes neurais   | ⏳ Futuro       |
+| `janus.neural.training`         | Treinamento de redes neurais   | ✅ Implementado |
 
 ---
 
