@@ -23,3 +23,6 @@ RestrictedPython>=6.0
 # Sprint 7: Self-Optimization metrics
 psutil>=5.9.0
 prometheus-client
+sentence-transformers>=2.2.2
+transformers>=4.36.0,<4.50.0
+onnxruntime>=1.17.0
