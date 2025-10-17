@@ -14,6 +14,9 @@ class AppSettings(BaseSettings):
     APP_NAME: str = "Janus"
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
+    # Identidade
+    AGENT_IDENTITY_NAME: str = "Janus"
+    IDENTITY_ENFORCEMENT_ENABLED: bool = True
 
     # Feature flags / modos de execução
     DRY_RUN: bool = True

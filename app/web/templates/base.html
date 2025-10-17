@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Janus Console</title>
+    <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<header>
+    <h1>Janus Console</h1>
+    <nav>
+        <a href="/web/">Home</a>
+        <a href="/web/overview">Overview</a>
+        <a href="/web/console">Console LLM</a>
+        <a href="/web/chat">Chat</a>
+        <a href="/web/operations">Operações</a>
+        <a href="/web/health">Saúde</a>
+        <div class="nav-controls" aria-label="Preferências de tema e circuito">
+            <div class="custom-select small">
+                <select id="nav-ui-theme" data-ui="custom" aria-label="Tema">
+                    <option value="theme-violet-cyan" selected>violeta/ciano</option>
+                    <option value="theme-green-blue">verde/azul</option>
+                    <option value="theme-magenta-amber">magenta/âmbar</option>
+                </select>
+            </div>
+            <label class="switch compact" title="Ativar efeitos de circuito">
+                <input type="checkbox" id="nav-ui-circuit"/>
+                <span class="slider"></span>
+                <span class="switch-label">Circuito</span>
+            </label>
+        </div>
+    </nav>
+</header>
+<!-- Reactive particles canvas overlay -->
+<canvas id="particles" aria-hidden="true"
+        style="position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:-1;"></canvas>
+<main>
+    {% block content %}{% endblock %}
+</main>
+<footer class="site-footer" role="contentinfo">
+    <div class="footer-content">
+        <div class="footer-left">
+            <small>© Janus</small>
+            <span class="sep">•</span>
+            <a href="/web/overview">Overview</a>
+            <span class="sep">•</span>
+            <a href="/web/operations">Operações</a>
+            <span class="sep">•</span>
+            <a href="/web/health">Saúde</a>
+        </div>
+        <div class="footer-right">
+            <span class="muted">Tema:</span>
+            <span id="footer-theme-name">violeta/ciano</span>
+        </div>
+    </div>
+</footer>
+<script>
+    (function () {
+        const canvas = document.getElementById('particles');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let w, h, dpr = Math.max(1, window.devicePixelRatio || 1);
+        let particles = [];
+        let mouse = {x: 0, y: 0, active: false};
+        let attractor = null; // focus/hover target
+        let streamBoost = 0; // increased motion during streaming
+        let accents = {a1: '#22d3ee', a2: '#7c3aed'};
+        const reduceMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)');
+        let reducedMotion = reduceMotionMedia.matches;
+        const BASE_COUNT = 60, IDLE_COUNT = 36, BG_COUNT = 18, RM_COUNT = 12;
+        let visibleCount = BASE_COUNT;
+        let lastActivity = Date.now();
+
+        function resize() {
+            w = canvas.clientWidth;
+            h = canvas.clientHeight;
+            canvas.width = Math.floor(w * dpr);
+            canvas.height = Math.floor(h * dpr);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        function cssAccent() {
+            const cs = getComputedStyle(document.documentElement);
+            accents.a1 = cs.getPropertyValue('--accent1').trim() || accents.a1;
+            accents.a2 = cs.getPropertyValue('--accent2').trim() || accents.a2;
+        }
+
+        cssAccent();
+        window.addEventListener('themechange', cssAccent);
+
+        const PCOUNT = BASE_COUNT;
+
+        function resetParticles() {
+            particles = Array.from({length: PCOUNT}, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3,
+                hue: Math.random() < 0.5 ? accents.a1 : accents.a2,
+                r: 1 + Math.random() * 1.4
+            }));
+        }
+
+        resetParticles();
+        window.addEventListener('themechange', resetParticles);
+
+        function bumpActivity() {
+            lastActivity = Date.now();
+            applyPerf();
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX * dpr;
+            mouse.y = e.clientY * dpr;
+            mouse.active = true;
+            bumpActivity();
+        });
+        document.addEventListener('mouseleave', () => {
+            mouse.active = false;
+        });
+        document.addEventListener('keydown', bumpActivity);
+        document.addEventListener('click', bumpActivity);
+        document.addEventListener('focusin', (e) => {
+            setAttractorFromEl(e.target);
+            bumpActivity();
+        });
+        document.addEventListener('focusout', () => {
+            attractor = null;
+        });
+        document.addEventListener('mouseover', (e) => {
+            const el = e.target.closest('button, a, input, textarea, select');
+            if (el) setAttractorFromEl(el);
+        });
+        document.addEventListener('mouseout', (e) => {
+            const el = e.target.closest('button, a, input, textarea, select');
+            if (el) attractor = null;
+        });
+
+        function setAttractorFromEl(el) {
+            if (!el || !el.getBoundingClientRect) {
+                attractor = null;
+                return;
+            }
+            const r = el.getBoundingClientRect();
+            attractor = {x: (r.left + r.width / 2) * dpr, y: (r.top + r.height / 2) * dpr};
+        }
+
+        function applyPerf() {
+            if (reducedMotion) {
+                visibleCount = RM_COUNT;
+            } else if (document.visibilityState === 'hidden') {
+                visibleCount = BG_COUNT;
+            } else if (Date.now() - lastActivity > 10000) {
+                visibleCount = IDLE_COUNT;
+            } else {
+                visibleCount = BASE_COUNT;
+            }
+        }
+
+        reduceMotionMedia.addEventListener('change', (e) => {
+            reducedMotion = e.matches;
+            applyPerf();
+        });
+        document.addEventListener('visibilitychange', applyPerf);
+        applyPerf();
+
+        function step() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < Math.min(visibleCount, particles.length); i++) {
+                const p = particles[i];
+                // gentle attraction to mouse
+                if (mouse.active) {
+                    const dx = mouse.x - p.x;
+                    const dy = mouse.y - p.y;
+                    const dist = Math.hypot(dx, dy) + 0.0001;
+                    const force = Math.min(0.4, (2.2 + streamBoost) / dist);
+                    p.vx += dx * force * 0.02;
+                    p.vy += dy * force * 0.02;
+                }
+                // subtle attraction to focused/hovered element
+                if (attractor) {
+                    const dx = attractor.x - p.x;
+                    const dy = attractor.y - p.y;
+                    const dist = Math.hypot(dx, dy) + 0.0001;
+                    const force = Math.min(0.28, (1.6 + streamBoost * 0.5) / dist);
+                    p.vx += dx * force * 0.016;
+                    p.vy += dy * force * 0.016;
+                }
+                // motion and bounds
+                p.vx *= 0.96;
+                p.vy *= 0.96;
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0) {
+                    p.x = 0;
+                    p.vx *= -0.6;
+                }
+                if (p.y < 0) {
+                    p.y = 0;
+                    p.vy *= -0.6;
+                }
+                if (p.x > canvas.width) {
+                    p.x = canvas.width;
+                    p.vx *= -0.6;
+                }
+                if (p.y > canvas.height) {
+                    p.y = canvas.height;
+                    p.vy *= -0.6;
+                }
+
+                ctx.beginPath();
+                ctx.fillStyle = p.hue;
+                const baseAlpha = reducedMotion ? 0.05 : 0.08;
+                ctx.globalAlpha = baseAlpha + streamBoost * 0.05;
+                ctx.arc(p.x, p.y, p.r * dpr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            requestAnimationFrame(step);
+        }
+
+        requestAnimationFrame(step);
+
+        // Expose small API
+        window.setStreamingState = function (isStreaming) {
+            streamBoost = isStreaming ? 1 : 0;
+        }
+    })();
+</script>
+<script>
+    // Controles globais de tema/circuito no menu
+    (function () {
+        function initCustomSelect(sel) {
+            if (!sel || sel.dataset.ui !== 'custom') return;
+            const wrap = sel.closest('.custom-select') || (function () {
+                const w = document.createElement('div');
+                w.className = 'custom-select';
+                sel.parentNode.insertBefore(w, sel);
+                w.appendChild(sel);
+                return w;
+            })();
+            const trigger = document.createElement('div');
+            trigger.className = 'select-trigger';
+            trigger.tabIndex = 0;
+            trigger.setAttribute('role', 'button');
+            trigger.setAttribute('aria-haspopup', 'listbox');
+            trigger.setAttribute('aria-expanded', 'false');
+            wrap.appendChild(trigger);
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'select-label';
+            labelSpan.textContent = sel.options[sel.selectedIndex]?.text || sel.value || '';
+            trigger.appendChild(labelSpan);
+            const menu = document.createElement('div');
+            menu.className = 'select-menu';
+            menu.setAttribute('role', 'listbox');
+            wrap.appendChild(menu);
+            Array.from(sel.options).forEach((opt, idx) => {
+                const o = document.createElement('div');
+                o.className = 'select-option';
+                o.setAttribute('role', 'option');
+                o.setAttribute('data-value', opt.value);
+                o.textContent = opt.text;
+                if (idx === sel.selectedIndex) o.classList.add('selected');
+                o.addEventListener('click', () => {
+                    sel.value = opt.value;
+                    labelSpan.textContent = opt.text;
+                    menu.querySelectorAll('.select-option').forEach(x => x.classList.remove('selected'));
+                    o.classList.add('selected');
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                    sel.dispatchEvent(new Event('change', {bubbles: true}));
+                });
+                menu.appendChild(o);
+            });
+
+            function toggleMenu(forceOpen) {
+                const willOpen = forceOpen ?? !wrap.classList.contains('open');
+                wrap.classList.toggle('open', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            }
+
+            trigger.addEventListener('click', () => toggleMenu());
+            trigger.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    toggleMenu();
+                }
+                if (ev.key === 'Escape') {
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            document.addEventListener('click', (ev) => {
+                if (!wrap.contains(ev.target)) {
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            sel.addEventListener('change', () => {
+                const curr = sel.options[sel.selectedIndex];
+                labelSpan.textContent = curr?.text || sel.value || '';
+                menu.querySelectorAll('.select-option').forEach(x => x.classList.toggle('selected', x.getAttribute('data-value') === sel.value));
+            });
+        }
+
+        const themeSel = document.getElementById('nav-ui-theme');
+        const circuitToggle = document.getElementById('nav-ui-circuit');
+        const footerTheme = document.getElementById('footer-theme-name');
+
+        function applyTheme(cls) {
+            const root = document.documentElement;
+            root.classList.remove('theme-violet-cyan', 'theme-green-blue', 'theme-magenta-amber');
+            root.classList.add(cls);
+            const name = themeSel?.options[themeSel.selectedIndex]?.text || '';
+            if (footerTheme) footerTheme.textContent = name;
+            window.dispatchEvent(new Event('themechange'));
+            try {
+                localStorage.setItem('uiTheme', cls);
+            } catch {
+            }
+        }
+
+        function applyCircuit(on) {
+            document.documentElement.classList.toggle('circuit-mode', !!on);
+            try {
+                localStorage.setItem('circuitMode', !!on ? '1' : '0');
+            } catch {
+            }
+        }
+
+        if (themeSel) {
+            initCustomSelect(themeSel);
+            const savedTheme = (function () {
+                try {
+                    return localStorage.getItem('uiTheme');
+                } catch {
+                    return null;
+                }
+            })();
+            if (savedTheme) {
+                themeSel.value = savedTheme;
+            }
+            applyTheme(themeSel.value);
+            themeSel.addEventListener('change', () => applyTheme(themeSel.value));
+        }
+        if (circuitToggle) {
+            const savedCircuit = (function () {
+                try {
+                    return localStorage.getItem('circuitMode') === '1';
+                } catch {
+                    return false;
+                }
+            })();
+            circuitToggle.checked = savedCircuit;
+            applyCircuit(circuitToggle.checked);
+            circuitToggle.addEventListener('change', () => applyCircuit(circuitToggle.checked));
+        }
+    })();
+</script>
+</body>
+</html>

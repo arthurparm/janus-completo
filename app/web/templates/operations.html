@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+    <h2>Operações</h2>
+
+    <div class="card" style="margin-bottom: 0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+        <div>
+            <label for="breaker-filter">Breaker</label>
+            <select id="breaker-filter" data-ui="custom">
+                <option value="all" selected>todos</option>
+                <option value="open">aberto</option>
+                <option value="half">semi-aberto</option>
+                <option value="closed">fechado</option>
+            </select>
+        </div>
+        <div style="flex:1 1 240px;">
+            <label for="cache-search">Cache (busca)</label>
+            <input id="cache-search" type="text" placeholder="filtrar por texto..."/>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Circuit Breakers</h3>
+            <div id="breakers-wrap" class="metrics-grid"></div>
+        </div>
+        <div class="card">
+            <h3>Cache</h3>
+            <div id="cache-wrap" class="metrics-grid"></div>
+        </div>
+    </div>
+
+    <h3 style="margin-top:0.75rem;">Ações</h3>
+    <p>Exemplos de operações administrativas podem ser adicionados aqui (limpar cache, reconfigurar breaker, etc.).</p>
+
+    <script>
+        const breakersData = {
+        {
+            breakers | tojson
+        }
+        }
+        ;
+        const cacheData = {
+        {
+            cache_entries | tojson
+        }
+        }
+        ;
+
+        function initCustomSelect(sel) {
+            if (!sel || sel.dataset.ui !== 'custom') return;
+            const wrap = document.createElement('div');
+            wrap.className = 'custom-select';
+            sel.parentNode.insertBefore(wrap, sel);
+            wrap.appendChild(sel);
+            const trigger = document.createElement('div');
+            trigger.className = 'select-trigger';
+            trigger.tabIndex = 0;
+            trigger.setAttribute('role', 'button');
+            trigger.setAttribute('aria-haspopup', 'listbox');
+            trigger.setAttribute('aria-expanded', 'false');
+            wrap.appendChild(trigger);
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'select-label';
+            labelSpan.textContent = sel.options[sel.selectedIndex]?.text || sel.value || '';
+            trigger.appendChild(labelSpan);
+            const menu = document.createElement('div');
+            menu.className = 'select-menu';
+            menu.setAttribute('role', 'listbox');
+            wrap.appendChild(menu);
+            Array.from(sel.options).forEach((opt, idx) => {
+                const o = document.createElement('div');
+                o.className = 'select-option';
+                o.setAttribute('role', 'option');
+                o.setAttribute('data-value', opt.value);
+                o.textContent = opt.text;
+                if (idx === sel.selectedIndex) o.classList.add('selected');
+                o.addEventListener('click', () => {
+                    sel.value = opt.value;
+                    labelSpan.textContent = opt.text;
+                    menu.querySelectorAll('.select-option').forEach(x => x.classList.remove('selected'));
+                    o.classList.add('selected');
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                    sel.dispatchEvent(new Event('change', {bubbles: true}));
+                });
+                menu.appendChild(o);
+            });
+
+            function toggleMenu(forceOpen) {
+                const willOpen = forceOpen ?? !wrap.classList.contains('open');
+                wrap.classList.toggle('open', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            }
+
+            trigger.addEventListener('click', () => toggleMenu());
+            trigger.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    toggleMenu();
+                }
+                if (ev.key === 'Escape') {
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            document.addEventListener('click', (ev) => {
+                if (!wrap.contains(ev.target)) {
+                    wrap.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            sel.addEventListener('change', () => {
+                const curr = sel.options[sel.selectedIndex];
+                labelSpan.textContent = curr?.text || sel.value || '';
+                menu.querySelectorAll('.select-option').forEach(x => x.classList.toggle('selected', x.getAttribute('data-value') === sel.value));
+            });
+        }
+
+        // Controles de tema/circuito foram movidos para o menu (base.html)
+
+        function createCard(title) {
+            const el = document.createElement('div');
+            el.className = 'card';
+            const h = document.createElement('h4');
+            h.textContent = title;
+            el.appendChild(h);
+            return el;
+        }
+
+        function renderKVList(obj) {
+            const ul = document.createElement('ul');
+            ul.className = 'kv-list';
+            try {
+                Object.entries(obj || {}).forEach(([k, v]) => {
+                    const li = document.createElement('li');
+                    const kspan = document.createElement('span');
+                    kspan.className = 'key';
+                    kspan.textContent = k;
+                    const vspan = document.createElement('span');
+                    vspan.className = 'val';
+                    vspan.textContent = typeof v === 'object' ? '[obj]' : String(v);
+                    li.appendChild(kspan);
+                    li.appendChild(vspan);
+                    ul.appendChild(li);
+                });
+            } catch {
+            }
+            return ul;
+        }
+
+        function renderDetails(obj) {
+            const det = document.createElement('details');
+            const sum = document.createElement('summary');
+            sum.textContent = 'Detalhes';
+            det.appendChild(sum);
+            const pre = document.createElement('pre');
+            pre.className = 'small-pre';
+            pre.textContent = JSON.stringify(obj, null, 2);
+            det.appendChild(pre);
+            return det;
+        }
+
+        function statusBadge(text) {
+            const b = document.createElement('span');
+            b.className = 'badge';
+            const t = String(text || '').toLowerCase();
+            if (t.includes('open') && !t.includes('closed')) b.classList.add('badge-open'); else if (t.includes('closed')) b.classList.add('badge-closed'); else if (t.includes('half')) b.classList.add('badge-half'); else b.classList.add('badge-neutral');
+            b.textContent = text || 'desconhecido';
+            return b;
+        }
+
+        function renderBreakers(filterVal = 'all') {
+            const wrap = document.getElementById('breakers-wrap');
+            wrap.innerHTML = '';
+            const items = Array.isArray(breakersData)
+                ? breakersData.map(b => ({name: b.provider || 'breaker', info: b}))
+                : Object.entries(breakersData || {}).map(([name, info]) => ({name, info}));
+            items.forEach(it => {
+                const status = (it.info && (it.info.state || it.info.status)) || (typeof it.info === 'string' ? it.info : 'desconhecido');
+                const statusLower = String(status || '').toLowerCase();
+                const statusKey = statusLower.includes('open') && !statusLower.includes('closed') ? 'open' : statusLower.includes('closed') ? 'closed' : statusLower.includes('half') ? 'half' : 'other';
+                if (filterVal !== 'all' && filterVal !== statusKey) return;
+                const card = createCard(it.name || 'breaker');
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.gap = '0.5rem';
+                const label = document.createElement('span');
+                label.textContent = 'status:';
+                label.className = 'muted';
+                row.appendChild(label);
+                row.appendChild(statusBadge(status));
+                card.appendChild(row);
+                card.appendChild(renderKVList(it.info));
+                card.appendChild(renderDetails(it.info));
+                wrap.appendChild(card);
+            });
+        }
+
+        function renderCache(searchText = '') {
+            const wrap = document.getElementById('cache-wrap');
+            wrap.innerHTML = '';
+            const items = Array.isArray(cacheData) ? cacheData : Object.entries(cacheData || {}).map(([key, val]) => ({
+                key,
+                val
+            }));
+            items.filter(it => {
+                const blob = JSON.stringify(it, null, 2).toLowerCase();
+                return !searchText || blob.includes(searchText.toLowerCase());
+            })
+                .forEach(it => {
+                    const title = it.key || 'entry';
+                    const card = createCard(title);
+                    card.appendChild(renderKVList(it.val || it));
+                    card.appendChild(renderDetails(it.val || it));
+                    wrap.appendChild(card);
+                });
+        }
+
+        const breakerFilter = document.getElementById('breaker-filter');
+        const cacheSearch = document.getElementById('cache-search');
+        initCustomSelect(breakerFilter);
+        breakerFilter.addEventListener('change', () => renderBreakers(breakerFilter.value));
+        cacheSearch.addEventListener('input', () => renderCache(cacheSearch.value));
+
+        renderBreakers('all');
+        renderCache('');
+    </script>
+</section>
+{% endblock %}

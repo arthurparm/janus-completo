@@ -65,6 +65,87 @@ class ToolService:
         logger.info("Buscando estatísticas de ferramentas via serviço.")
         return self._repo.get_all_statistics()
 
+    def generate_documentation(self, include_stats: bool = True, format: str = "markdown") -> str:
+        """
+        Gera documentação descritiva das ferramentas locais registradas.
+
+        - Usa metadados do registro (nome, categoria, descrição, nível de permissão, rate limit, tags)
+        - Opcionalmente inclui estatísticas recentes por ferramenta (total, sucesso, duração média)
+
+        Args:
+            include_stats: Se True, inclui estatísticas do registro de chamadas
+            format: Apenas "markdown" suportado para saída formatada
+
+        Returns:
+            Texto formatado com a documentação das ferramentas
+        """
+        try:
+            metas = self.list_tools(category=None, permission_level=None, tags=None)
+        except Exception as e:
+            logger.error("Falha ao listar ferramentas para documentação", exc_info=e)
+            metas = []
+
+        stats: Dict[str, Any] = {}
+        if include_stats:
+            try:
+                stats = self.get_statistics()
+            except Exception as e:
+                logger.warning("Falha ao obter estatísticas para documentação", exc_info=e)
+                stats = {}
+
+        total_tools = len(metas)
+        if format.lower() != "markdown":
+            format = "markdown"
+
+        # Agrupa por categoria
+        grouped: Dict[str, List[ToolMetadata]] = {}
+        for m in metas:
+            cat = getattr(m.category, "value", str(m.category))
+            grouped.setdefault(cat, []).append(m)
+
+        lines: List[str] = []
+        lines.append("# Documentação das Ferramentas Locais")
+        lines.append("")
+        lines.append(f"Resumo: {total_tools} ferramenta(s) registrada(s)")
+        if include_stats and stats:
+            lines.append(
+                f"Estatísticas gerais: {stats.get('total_calls', 0)} chamadas recentes, "
+                f"taxa de sucesso {stats.get('success_rate', 0.0)}"
+            )
+        lines.append("")
+
+        tool_usage = stats.get("tool_usage", {}) if stats else {}
+
+        for cat, items in sorted(grouped.items(), key=lambda x: x[0]):
+            lines.append(f"## Categoria: {cat}")
+            lines.append("")
+            for m in sorted(items, key=lambda x: x.name):
+                perm = getattr(m.permission_level, "value", str(m.permission_level))
+                rl = m.rate_limit_per_minute
+                req_conf = getattr(m, "requires_confirmation", False)
+                tags = ", ".join(m.tags) if m.tags else "(sem tags)"
+
+                lines.append(f"### {m.name}")
+                if m.description:
+                    lines.append(m.description.strip())
+                lines.append("")
+                lines.append(f"- Permissão: `{perm}`")
+                lines.append(f"- Rate limit/min: `{rl if rl is not None else 'sem limite'}`")
+                lines.append(f"- Requer confirmação: `{bool(req_conf)}`")
+                lines.append(f"- Tags: {tags}")
+
+                usage = tool_usage.get(m.name)
+                if include_stats and usage:
+                    total = usage.get("total", 0)
+                    success = usage.get("success", 0)
+                    avg = usage.get("avg_duration", 0.0)
+                    rate = round(success / total, 3) if total else 0.0
+                    lines.append(
+                        f"- Uso recente: `{total}` chamadas, sucesso `{success}`, taxa `{rate}`, duração média `{avg}s`")
+                lines.append("")
+
+        return "\n".join(lines)
+
     def create_tool_from_function(self, request_data: Dict[str, Any]) -> ToolMetadata:
         logger.info("Orquestrando criação de ferramenta a partir de código Python", tool_name=request_data['name'])
         try:

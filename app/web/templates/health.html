@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+    <h2>Saúde</h2>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Estado Geral do LLM Manager</h3>
+            <div id="overall-card"></div>
+        </div>
+        <div class="card">
+            <h3>Detalhes</h3>
+            <div id="details-wrap" class="metrics-grid"></div>
+        </div>
+        <div class="card">
+            <h3>Sistema</h3>
+            <div id="system-wrap" class="metrics-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        const statusData = {
+        {
+            status | tojson
+        }
+        }
+        ;
+        const systemData = {
+        {
+            system | tojson
+        }
+        }
+        ;
+
+        // Controles de tema/circuito foram movidos para o menu (base.html)
+
+        function statusBadge(text) {
+            const b = document.createElement('span');
+            b.className = 'badge';
+            const t = String(text || '').toLowerCase();
+            if (t.includes('healthy')) b.classList.add('badge-closed'); else if (t.includes('degraded')) b.classList.add('badge-half'); else if (t.includes('unhealthy')) b.classList.add('badge-open'); else b.classList.add('badge-neutral');
+            b.textContent = text || 'desconhecido';
+            return b;
+        }
+
+        function createCard(title) {
+            const el = document.createElement('div');
+            el.className = 'card';
+            const h = document.createElement('h4');
+            h.textContent = title;
+            el.appendChild(h);
+            return el;
+        }
+
+        function renderKVList(obj) {
+            const ul = document.createElement('ul');
+            ul.className = 'kv-list';
+            try {
+                Object.entries(obj || {}).forEach(([k, v]) => {
+                    const li = document.createElement('li');
+                    const kspan = document.createElement('span');
+                    kspan.className = 'key';
+                    kspan.textContent = k;
+                    const vspan = document.createElement('span');
+                    vspan.className = 'val';
+                    vspan.textContent = typeof v === 'object' ? '[obj]' : String(v);
+                    li.appendChild(kspan);
+                    li.appendChild(vspan);
+                    ul.appendChild(li);
+                });
+            } catch {
+            }
+            return ul;
+        }
+
+        function renderDetails(obj) {
+            const det = document.createElement('details');
+            const sum = document.createElement('summary');
+            sum.textContent = 'Detalhes';
+            det.appendChild(sum);
+            const pre = document.createElement('pre');
+            pre.className = 'small-pre';
+            pre.textContent = JSON.stringify(obj, null, 2);
+            det.appendChild(pre);
+            return det;
+        }
+
+        // Overall card
+        (function renderOverall() {
+            const mount = document.getElementById('overall-card');
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '0.5rem';
+            const label = document.createElement('span');
+            label.textContent = 'status:';
+            label.className = 'muted';
+            row.appendChild(label);
+            row.appendChild(statusBadge(statusData?.status || 'unknown'));
+            const msg = document.createElement('div');
+            msg.textContent = statusData?.message || '';
+            msg.style.marginTop = '6px';
+            msg.className = 'muted';
+            mount.appendChild(row);
+            mount.appendChild(msg);
+        })();
+
+        // Details cards
+        (function renderDetailsCards() {
+            const wrap = document.getElementById('details-wrap');
+            wrap.innerHTML = '';
+            const details = statusData?.details || {};
+            const byKey = Object.entries(details);
+            if (byKey.length === 0) {
+                const empty = document.createElement('div');
+                empty.textContent = 'Sem detalhes disponíveis';
+                empty.className = 'muted';
+                wrap.appendChild(empty);
+                return;
+            }
+            byKey.forEach(([k, v]) => {
+                const card = createCard(k);
+                card.appendChild(renderKVList({value: v}));
+                wrap.appendChild(card);
+            });
+            const raw = createCard('Bruto');
+            raw.appendChild(renderDetails(statusData));
+            wrap.appendChild(raw);
+        })();
+
+        // System cards
+        (function renderSystem() {
+            const wrap = document.getElementById('system-wrap');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            const items = [
+                {
+                    title: 'Identidade', data: {
+                        nome: (systemData?.config?.identity_name ?? 'Janus'),
+                        enforcement: Boolean(systemData?.config?.identity_enforcement)
+                    }
+                },
+                {
+                    title: 'Ambiente', data: {
+                        app: systemData?.app_name,
+                        env: systemData?.environment,
+                        version: systemData?.version,
+                        timestamp: systemData?.timestamp
+                    }
+                },
+                {
+                    title: 'Uptime/Processo', data: {
+                        uptime_s: systemData?.uptime_seconds,
+                        pid: systemData?.process?.pid,
+                        threads: systemData?.process?.threads,
+                        rss_mb: systemData?.process?.rss_mb
+                    }
+                },
+                {
+                    title: 'Performance', data: {
+                        cpu_percent: systemData?.performance?.cpu_percent,
+                        memory_percent: systemData?.performance?.memory_percent,
+                    }
+                },
+            ];
+            items.forEach(b => {
+                const card = createCard(b.title);
+                card.appendChild(renderKVList(b.data));
+                wrap.appendChild(card);
+            });
+            const raw = createCard('Bruto');
+            raw.appendChild(renderDetails(systemData));
+            wrap.appendChild(raw);
+        })();
+    </script>
+</section>
+{% endblock %}

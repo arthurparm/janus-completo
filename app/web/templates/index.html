@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+    <h2>Bem-vindo</h2>
+    <p>Use o Console LLM para testar prompts com `user_id`/`project_id` e veja métricas no Overview.</p>
+    <ul>
+        <li><a href="/web/overview">Overview</a> — métricas e status</li>
+        <li><a href="/web/console">Console LLM</a> — enviar prompts e ver respostas</li>
+        <li><a href="/web/operations">Operações</a> — cache e circuit breakers</li>
+        <li><a href="/web/health">Saúde</a> — health check</li>
+    </ul>
+</section>
+{% endblock %}

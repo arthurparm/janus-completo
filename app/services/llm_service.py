@@ -5,6 +5,7 @@ from fastapi import Request
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.core.llm import ModelRole, ModelPriority
 from app.core.monitoring.health_monitor import check_llm_manager_health
+from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +44,16 @@ class LLMService:
     ) -> Dict[str, Any]:
         logger.info("Orquestrando invocação de LLM via serviço", role=role.value, priority=priority.value)
         try:
+            # Aplica cabeçalho de identidade para reforçar que o assistente é Janus
+            if getattr(settings, "IDENTITY_ENFORCEMENT_ENABLED", True):
+                identity = getattr(settings, "AGENT_IDENTITY_NAME", None) or getattr(settings, "APP_NAME", "Janus")
+                identity_header = (
+                    f"System: Você é {identity}, um assistente de IA confiável e colaborativo. "
+                    f"Ao referir-se a si mesmo, use '{identity}'. Nunca se identifique como GPT, ChatGPT ou outro nome. "
+                    f"Não divulgue nomes de modelos ou provedores. Responda naturalmente no idioma do usuário."
+                )
+                prompt = f"{identity_header}\n\n{prompt}"
+
             return self._repo.invoke_llm(prompt, role, priority, timeout_seconds, user_id=user_id,
                                          project_id=project_id)
         except TimeoutError as e:

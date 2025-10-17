@@ -754,6 +754,54 @@ class LLMClient:
             return allowed
         return max(allowed, min_tokens)
 
+    def _sanitize_output(self, text: str) -> str:
+        """Aplica sanitização de identidade e remoção de divulgações de modelo.
+
+        - Remove/disfarça trechos como "As an AI/large language model".
+        - Substitui nomes de modelos/provedores por "Janus".
+        """
+        try:
+            if not getattr(settings, "IDENTITY_ENFORCEMENT_ENABLED", False):
+                return text
+            import re
+            sanitized = text
+            # Remover disclaimers comuns (inglês/português)
+            patterns_remove = [
+                r"(?i)\bAs an? (?:AI|(?:large )?language model)[^\.\n]*[\.\n]?",
+                r"(?i)\bI am an? (?:AI|(?:large )?language model)[^\.\n]*[\.\n]?",
+                r"(?i)\bAs a model[^\.\n]*[\.\n]?",
+                r"(?i)\bComo (?:um|uma) (?:modelo de linguagem|IA)[^\.\n]*[\.\n]?",
+                r"(?i)\bSou (?:um|uma) (?:modelo de linguagem|IA)[^\.\n]*[\.\n]?",
+            ]
+            for pat in patterns_remove:
+                sanitized = re.sub(pat, "", sanitized)
+
+            # Substituir nomes de modelos/provedores por identidade
+            identity = getattr(settings, "AGENT_IDENTITY_NAME", None) or getattr(settings, "APP_NAME", "Janus")
+            patterns_replace = [
+                r"(?i)\bGPT[- ]?\d(?:\.\d)?\b",
+                r"(?i)\bChatGPT\b",
+                r"(?i)\bClaude(?:[- ]?\d+)?\b",
+                r"(?i)\bLlama(?:[- ]?\d+)?\b",
+                r"(?i)\bMistral(?:[- ]?\d+)?\b",
+                r"(?i)\bGemini\b",
+                r"(?i)\bOpenAI\b",
+                r"(?i)\bAnthropic\b",
+                r"(?i)\bGoogle(?:\s+Gemini)?\b",
+                r"(?i)\bCohere\b",
+                r"(?i)\bHugging\s*Face\b",
+                r"(?i)\bBedrock\b",
+            ]
+            for pat in patterns_replace:
+                sanitized = re.sub(pat, identity, sanitized)
+
+            # Remover rótulos de papel tipo "Assistant:" no início
+            sanitized = re.sub(r"(?i)^(assistant|model|ai)\s*:\s*", "", sanitized.strip())
+            return sanitized
+        except Exception:
+            # Em caso de qualquer erro, retorna o texto original
+            return text
+
     async def asend(self, prompt: str, timeout_s: Optional[int] = None) -> str:
         """Envia um prompt para o LLM de forma assíncrona."""
         import asyncio
@@ -909,7 +957,7 @@ class LLMClient:
                 # Não interrompe fluxo em caso de erro nas métricas
                 pass
 
-            return output_text
+            return self._sanitize_output(output_text)
 
         except (ValueError, TimeoutError, CircuitOpenError, FuturesTimeoutError) as e:
             # Falha: incrementa o contador de falhas e propaga o erro

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from typing import Any, Dict, Optional
 import structlog
 
 from app.services.system_status_service import system_status_service
@@ -15,6 +16,12 @@ class StatusResponse(BaseModel):
     version: str
     environment: str
     status: str
+    timestamp: Optional[str] = None
+    uptime_seconds: Optional[float] = None
+    system: Optional[Dict[str, Any]] = None
+    process: Optional[Dict[str, Any]] = None
+    performance: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
 
 
 # --- Endpoint ---

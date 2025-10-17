@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools, \
-    optimization, llm, collaboration, observability, meta_agent
+    optimization, llm, collaboration, observability, meta_agent, chat
 
 api_router = APIRouter()
 from app.api.v1.endpoints.workspace import router as workspace_router  # noqa: E402
@@ -23,3 +23,4 @@ api_router.include_router(llm.router, prefix="/llm")  # Sprint 10: Hybrid Brain 
 api_router.include_router(collaboration.router, prefix="/collaboration")  # Sprint 11: Multi-agent collaboration
 api_router.include_router(observability.router, prefix="/observability")  # Sprint 12: Resilience & observability
 api_router.include_router(meta_agent.router, prefix="/meta-agent")  # Sprint 13: Meta-Agent proactive consciousness
+api_router.include_router(chat.router, prefix="/chat")  # Chat conversations

@@ -45,6 +45,10 @@ from app.repositories.optimization_repository import OptimizationRepository
 from app.services.optimization_service import OptimizationService
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
+from fastapi.staticfiles import StaticFiles
+from app.web.router import web_router
+from app.repositories.chat_repository import ChatRepository
+from app.services.chat_service import ChatService
 
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
@@ -98,6 +102,10 @@ async def lifespan(app: FastAPI):
     # LLM (Sprint 10): Cérebro Híbrido
     app.state.llm_repo = LLMRepository()
     app.state.llm_service = LLMService(app.state.llm_repo)
+
+    # Chat: Conversas com histórico (MVP em memória)
+    app.state.chat_repo = ChatRepository()
+    app.state.chat_service = ChatService(app.state.chat_repo, app.state.llm_service, app.state.tool_service)
 
     # --- Self-Optimization (Sprint 7) ---
     app.state.optimization_repo = OptimizationRepository()
@@ -163,6 +171,8 @@ app.add_middleware(CorrelationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 add_exception_handlers(app)
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(web_router, prefix="/web")
+app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
 @app.get("/", include_in_schema=False)
 def read_root():

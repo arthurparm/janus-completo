@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+    <h2>Console LLM</h2>
+
+    <div class="card" style="margin-bottom: 0.75rem;">
+        <form id="llm-form">
+            <label for="prompt">Prompt</label>
+            <textarea id="prompt" rows="6" required style="width:100%; min-height: 140px; resize: vertical;"
+                      placeholder="Descreva sua tarefa ou pergunta..."></textarea>
+            <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                <div>
+                    <label for="role">Role</label>
+                    <select id="role" data-ui="custom">
+                        <option value="orchestrator" selected>orchestrator</option>
+                        <option value="code_generator">code_generator</option>
+                        <option value="knowledge_curator">knowledge_curator</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="priority">Priority</label>
+                    <select id="priority" data-ui="custom">
+                        <option value="fast_and_cheap" selected>fast_and_cheap</option>
+                        <option value="high_quality">high_quality</option>
+                        <option value="local_only">local_only</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="timeout">Timeout (s)</label>
+                    <input type="number" id="timeout" min="0" placeholder="30"/>
+                </div>
+            </div>
+            <details style="margin-top: 0.5rem;">
+                <summary>Avançado</summary>
+                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+                    <div>
+                        <label for="user_id">User ID</label>
+                        <input type="text" id="user_id" placeholder="user-123"/>
+                    </div>
+                    <div>
+                        <label for="project_id">Project ID</label>
+                        <input type="text" id="project_id" placeholder="proj-abc"/>
+                    </div>
+                </div>
+            </details>
+            <div style="margin-top: 0.5rem; display:flex; gap:0.5rem;">
+                <button type="submit">Enviar</button>
+                <button type="button" id="clear-result" class="btn-rename" title="Limpar resultado">Limpar</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="result" class="card" style="display:none;">
+        <h3>Resultado</h3>
+        <pre id="response"></pre>
+        <p><strong>Provider:</strong> <span id="provider"></span> • <strong>Model:</strong> <span id="model"></span> •
+            <strong>Role:</strong> <span id="res_role"></span></p>
+    </div>
+</section>
+
+<script>
+    // Custom Select (reutiliza a abordagem do chat)
+    function initCustomSelect(sel) {
+        if (!sel || sel.dataset.ui !== 'custom') return;
+        const wrap = document.createElement('div');
+        wrap.className = 'custom-select';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger';
+        trigger.tabIndex = 0;
+        trigger.setAttribute('role', 'button');
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        wrap.appendChild(trigger);
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'select-label';
+        labelSpan.textContent = sel.options[sel.selectedIndex]?.text || sel.value || '';
+        trigger.appendChild(labelSpan);
+        const menu = document.createElement('div');
+        menu.className = 'select-menu';
+        menu.setAttribute('role', 'listbox');
+        wrap.appendChild(menu);
+        Array.from(sel.options).forEach((opt, idx) => {
+            const o = document.createElement('div');
+            o.className = 'select-option';
+            o.setAttribute('role', 'option');
+            o.setAttribute('data-value', opt.value);
+            o.textContent = opt.text;
+            if (idx === sel.selectedIndex) o.classList.add('selected');
+            o.addEventListener('click', () => {
+                sel.value = opt.value;
+                labelSpan.textContent = opt.text;
+                menu.querySelectorAll('.select-option').forEach(x => x.classList.remove('selected'));
+                o.classList.add('selected');
+                wrap.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+                sel.dispatchEvent(new Event('change', {bubbles: true}));
+            });
+            menu.appendChild(o);
+        });
+
+        function toggleMenu(forceOpen) {
+            const willOpen = forceOpen ?? !wrap.classList.contains('open');
+            wrap.classList.toggle('open', willOpen);
+            trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        }
+
+        trigger.addEventListener('click', () => toggleMenu());
+        trigger.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                toggleMenu();
+            }
+            if (ev.key === 'Escape') {
+                wrap.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+            if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+                ev.preventDefault();
+                const opts = Array.from(menu.querySelectorAll('.select-option'));
+                let idx = opts.findIndex(x => x.classList.contains('selected'));
+                idx = ev.key === 'ArrowDown' ? Math.min(idx + 1, opts.length - 1) : Math.max(idx - 1, 0);
+                opts.forEach(x => x.classList.remove('selected'));
+                const target = opts[idx];
+                target.classList.add('selected');
+                labelSpan.textContent = target.textContent || '';
+                sel.value = target.getAttribute('data-value');
+                sel.dispatchEvent(new Event('change', {bubbles: true}));
+                target.scrollIntoView({block: 'nearest'});
+            }
+        });
+        document.addEventListener('click', (ev) => {
+            if (!wrap.contains(ev.target)) {
+                wrap.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        });
+        sel.addEventListener('change', () => {
+            const curr = sel.options[sel.selectedIndex];
+            labelSpan.textContent = curr?.text || sel.value || '';
+            menu.querySelectorAll('.select-option').forEach(x => x.classList.toggle('selected', x.getAttribute('data-value') === sel.value));
+        });
+    }
+
+    // Auto-resize do prompt
+    const promptInput = document.getElementById('prompt');
+
+    function autoResizePrompt() {
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.min(320, promptInput.scrollHeight) + 'px';
+    }
+
+    promptInput.addEventListener('input', autoResizePrompt);
+    autoResizePrompt();
+
+    // Custom select nos campos de role/priority
+    initCustomSelect(document.getElementById('role'));
+    initCustomSelect(document.getElementById('priority'));
+
+    // Submit com Ctrl+Enter
+    promptInput.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('llm-form').dispatchEvent(new Event('submit'));
+        }
+    });
+
+    document.getElementById('llm-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            prompt: document.getElementById('prompt').value,
+            role: document.getElementById('role').value,
+            priority: document.getElementById('priority').value,
+            timeout_seconds: parseInt(document.getElementById('timeout').value || '30', 10),
+            user_id: document.getElementById('user_id').value || null,
+            project_id: document.getElementById('project_id').value || null,
+        };
+        // feedback visual de carregamento
+        const resCard = document.getElementById('result');
+        const responsePre = document.getElementById('response');
+        resCard.style.display = 'block';
+        responsePre.textContent = '⏳ Gerando resposta...';
+        try {
+            const res = await fetch('/api/v1/llm/invoke', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({message: res.statusText}));
+                throw new Error(err.detail || err.message || 'Erro ao invocar LLM');
+            }
+            const data = await res.json();
+            responsePre.textContent = data.response;
+            document.getElementById('provider').textContent = data.provider;
+            document.getElementById('model').textContent = data.model;
+            document.getElementById('res_role').textContent = data.role;
+            resCard.style.display = 'block';
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    // Limpar o resultado
+    document.getElementById('clear-result').addEventListener('click', () => {
+        document.getElementById('response').textContent = '';
+        document.getElementById('provider').textContent = '';
+        document.getElementById('model').textContent = '';
+        document.getElementById('res_role').textContent = '';
+        document.getElementById('result').style.display = 'none';
+    });
+</script>
+{% endblock %}
