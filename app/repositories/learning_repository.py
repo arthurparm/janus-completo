@@ -12,7 +12,8 @@ from prometheus_client import Counter, Histogram, Gauge
 from app.core.infrastructure.filesystem_manager import read_file
 from app.core.workers import data_harvester
 from app.core.workers.data_harvester import TRAINING_DATA_FILE
-from app.core.workers.neural_trainer import start_training_process
+# Legacy simulation removed: use NeuralTrainer
+from app.core.workers.neural_training_system import TrainingConfig as NTTrainingConfig, ModelType, neural_trainer
 
 ModelInfo = Dict[str, Any]
 TrainingSession = Dict[str, Any]
@@ -58,10 +59,74 @@ class LearningRepository:
         )
 
     def get_all_models(self) -> List[ModelInfo]:
-        return list(self._trained_models.values())
+        """Lista modelos treinados lendo do filesystem (workspace/models)."""
+        models_dir = os.path.join("/app", "workspace", "models")
+        results: List[ModelInfo] = []
+        try:
+            if not os.path.isdir(models_dir):
+                return list(self._trained_models.values())
+            for entry in os.listdir(models_dir):
+                model_path = os.path.join(models_dir, entry)
+                if not os.path.isdir(model_path):
+                    continue
+                meta_path = os.path.join(model_path, "metadata.json")
+                if not os.path.isfile(meta_path):
+                    continue
+                try:
+                    import json
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                    stat = os.stat(meta_path)
+                    results.append({
+                        "model_id": entry,
+                        "model_name": metadata.get("model_name", entry),
+                        "model_version": metadata.get("model_version"),
+                        "model_type": metadata.get("model_type"),
+                        "status": "trained",
+                        "created_at": datetime.utcfromtimestamp(stat.st_mtime).isoformat(),
+                        "training_examples": metadata.get("num_examples", 0),
+                        "accuracy": metadata.get("accuracy"),
+                        "loss": metadata.get("loss"),
+                        "path": model_path
+                    })
+                except Exception:
+                    continue
+            # Mantém também quaisquer modelos salvos via API antiga
+            results.extend(list(self._trained_models.values()))
+            return results
+        except Exception:
+            # Fallback para memória
+            return list(self._trained_models.values())
 
     def find_model_by_id(self, model_id: str) -> Optional[ModelInfo]:
-        return self._trained_models.get(model_id)
+        """Busca modelo pelo id (nome da pasta) lendo do filesystem."""
+        # Primeiro, verifica memória
+        if model_id in self._trained_models:
+            return self._trained_models.get(model_id)
+        models_dir = os.path.join("/app", "workspace", "models")
+        model_path = os.path.join(models_dir, model_id)
+        meta_path = os.path.join(model_path, "metadata.json")
+        if os.path.isfile(meta_path):
+            try:
+                import json
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+                stat = os.stat(meta_path)
+                return {
+                    "model_id": model_id,
+                    "model_name": metadata.get("model_name", model_id),
+                    "model_version": metadata.get("model_version"),
+                    "model_type": metadata.get("model_type"),
+                    "status": "trained",
+                    "created_at": datetime.utcfromtimestamp(stat.st_mtime).isoformat(),
+                    "training_examples": metadata.get("num_examples", 0),
+                    "accuracy": metadata.get("accuracy"),
+                    "loss": metadata.get("loss"),
+                    "path": model_path
+                }
+            except Exception:
+                return None
+        return None
 
     def save_model(self, model_info: ModelInfo) -> ModelInfo:
         model_id = model_info['model_id']
@@ -88,41 +153,73 @@ class LearningRepository:
         self._stats["total_harvested"] += count
         self._stats["last_harvest"] = datetime.utcnow().isoformat()
 
-    async def run_training_process(self) -> Dict[str, Any]:
-        """Executa o processo de treinamento, registrando experimento e versão do dataset."""
-        logger.debug("Executando processo de treinamento via repositório com tracking de experimento.")
+    async def run_training_process(
+        self,
+        dataset_version: Optional[str] = None,
+        model_name: Optional[str] = None,
+        training_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Executa o processo de treinamento com NeuralTrainer e tracking de experimento."""
+        logger.debug("Executando processo de treinamento via NeuralTrainer.")
 
         # Atualiza/obtém versão do dataset
         dataset_info = self._update_dataset_version()
+        if dataset_version:
+            dataset_info["version"] = dataset_version
 
         # Cria sessão/experimento
         experiment_id = self._create_experiment(dataset_info)
         start_ts = time.perf_counter()
         self._experiments_total.labels("created").inc()
 
-        # Executa treinamento síncrono em executor
-        loop = asyncio.get_event_loop()
+        # Monta configuração de treinamento
+        tp = training_params or {}
+        model_type_str = str(tp.get("model_type" or "classifier")).lower()
         try:
-            result = await loop.run_in_executor(None, start_training_process)
+            model_type = ModelType(model_type_str)
+        except Exception:
+            model_type = ModelType.CLASSIFIER
+
+        config = NTTrainingConfig(
+            model_type=model_type,
+            model_name=model_name or f"janus-{model_type.value}",
+            learning_rate=float(tp.get("learning_rate", 1e-5)),
+            batch_size=int(tp.get("batch_size", 8)),
+            num_epochs=int(tp.get("num_epochs", tp.get("epochs", 3))),
+            validation_split=float(tp.get("validation_split", 0.2)),
+            early_stopping=bool(tp.get("early_stopping", True)),
+            save_checkpoints=bool(tp.get("save_checkpoints", True)),
+            max_examples=tp.get("max_examples")
+        )
+
+        try:
+            result = await neural_trainer.train_model(config)
             elapsed = time.perf_counter() - start_ts
             self._experiment_duration.observe(elapsed)
 
             # Atualiza experimento
             exp = self._experiments.get(experiment_id, {})
             exp.update({
-                "status": "completed" if "Falha" not in result.get("message", "") else "failed",
+                "status": "completed" if result.status.value == "completed" else "failed",
                 "completed_at": datetime.utcnow().isoformat(),
-                "summary": result.get("summary"),
+                "summary": f"Acurácia: {result.accuracy}, exemplos: {result.num_examples}",
                 "duration_seconds": elapsed
             })
             self._experiments[experiment_id] = exp
             self._experiments_total.labels(exp["status"]).inc()
 
             # Retorna payload enriquecido
-            enriched = dict(result)
-            enriched["experiment_id"] = experiment_id
-            enriched["dataset_version"] = dataset_info.get("version")
-            enriched["dataset_num_examples"] = dataset_info.get("num_examples")
+            enriched = {
+                "message": "Treinamento concluído.",
+                "summary": f"Modelo {result.model_name} v{result.model_version} salvo.",
+                "experiment_id": experiment_id,
+                "dataset_version": dataset_info.get("version"),
+                "dataset_num_examples": dataset_info.get("num_examples"),
+                "model_name": result.model_name,
+                "model_version": result.model_version,
+                "accuracy": result.accuracy,
+                "loss": result.loss
+            }
             return enriched
         except Exception as e:
             elapsed = time.perf_counter() - start_ts

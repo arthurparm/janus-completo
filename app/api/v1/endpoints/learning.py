@@ -28,15 +28,30 @@ class TrainingConfig(BaseModel):
     epochs: int = Field(3, ge=1, le=100)
     batch_size: int = Field(8, ge=1, le=128)
     learning_rate: float = Field(1e-4, ge=1e-5, le=0.1)
+    validation_split: float = Field(0.2, ge=0.0, le=0.9)
+    early_stopping: bool = True
+    save_checkpoints: bool = True
+    max_examples: Optional[int] = Field(None, ge=1, description="Limite máximo de exemplos para treino")
 
 class TrainRequest(BaseModel):
     model_type: str = Field("CLASSIFIER")
+    model_name: Optional[str] = Field(None, description="Nome do modelo a ser treinado")
     training_config: TrainingConfig = Field(default_factory=TrainingConfig)
 
 class LearningResponse(BaseModel):
     message: str
     summary: str
     model_id: Optional[str] = None
+
+class TrainingAckResponse(BaseModel):
+    message: str
+    summary: str
+    task_id: str
+    status: str
+    queued_at: str
+    dataset_version: Optional[str] = None
+    dataset_num_examples: Optional[int] = None
+    model_name: Optional[str] = None
 
 class TrainingStatusResponse(BaseModel):
     is_training: bool
@@ -107,11 +122,11 @@ async def trigger_harvesting(request: HarvestRequest,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/train", response_model=LearningResponse, summary="Inicia o treino de um novo modelo")
+@router.post("/train", response_model=TrainingAckResponse, summary="Agenda o treino de um novo modelo")
 async def trigger_training(request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)):
-    """Delega o processo de treinamento de modelo para o LearningService."""
+    """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
-        result = await learning_service.trigger_training(request.model_type, request.training_config.dict())
+        result = await learning_service.trigger_training(request.model_type, request.training_config.dict(), model_name=request.model_name)
         return result
     except TrainingFailedError as e:
         logger.warning("Falha no treinamento via serviço", error=str(e))
@@ -178,12 +193,8 @@ async def evaluate_model(request: EvaluateRequest, learning_service: LearningSer
 @router.get("/dataset/version", response_model=DatasetVersionResponse,
             summary="Obtém a versão atual do dataset de treino")
 async def get_dataset_version(learning_service: LearningService = Depends(get_learning_service)):
-    """Retorna a versão do dataset derivada do conteúdo do JSONL."""
-    try:
-        return learning_service.get_dataset_version_info()
-    except LearningServiceError as e:
-        logger.error("Erro ao obter versão do dataset", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    """Retorna metadados de versão do dataset de treino."""
+    return learning_service.get_dataset_version_info()
 
 
 @router.get("/experiments", response_model=ExperimentListResponse, summary="Lista experimentos de treinamento")
@@ -195,17 +206,14 @@ async def list_experiments(learning_service: LearningService = Depends(get_learn
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentInfo, summary="Obtém detalhes de um experimento")
 async def get_experiment_details(experiment_id: str, learning_service: LearningService = Depends(get_learning_service)):
-    """Obtém informações detalhadas sobre um experimento específico."""
+    """Detalhes de um experimento específico."""
     try:
         return learning_service.get_experiment_details(experiment_id)
     except ExperimentNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except LearningServiceError as e:
-        logger.error("Erro ao obter detalhes de experimento", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/health", summary="Health check do sistema de treinamento")
 async def learning_health(learning_service: LearningService = Depends(get_learning_service)):
-    """Delega a verificação de saúde para o LearningService."""
+    """Verifica a saúde do sistema de treinamento."""
     return learning_service.get_health_status()

@@ -1,27 +1,50 @@
-from typing import List, Optional, Any, Dict
+from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query, Depends, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-import structlog
 
+from app.models.knowledge import CodeEntity
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 
-router = APIRouter(tags=["Knowledge"])
-logger = structlog.get_logger(__name__)
+router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
 
-# --- Pydantic Models (DTOs) ---
+
 class IndexResponse(BaseModel):
     message: str
     summary: str
 
-class CodeEntity(BaseModel):
-    type: str
-    name: str
-    file_path: str
 
-class EntityDetailsResponse(BaseModel):
-    entity: Dict[str, Any]
-    relationships: List[Dict[str, Any]]
+class KnowledgeQueryResponse(BaseModel):
+    answer: str
+
+
+class RelatedConceptsRequest(BaseModel):
+    concept: str
+    max_depth: int = 2
+    limit: int = 10
+    skip: int = 0
+
+
+class RelatedConceptItem(BaseModel):
+    concept: str
+    relationship: str
+    distance: int
+
+
+class RelatedConceptsResponse(BaseModel):
+    results: List[RelatedConceptItem]
+
+
+class EntityRelationshipsItem(BaseModel):
+    related_entity: str
+    related_type: str
+    relationship: str
+    distance: int
+
+
+class EntityRelationshipsResponse(BaseModel):
+    results: List[EntityRelationshipsItem]
+
 
 class ClearGraphResponse(BaseModel):
     status: str
@@ -33,34 +56,7 @@ class ClearGraphResponse(BaseModel):
 
 class KnowledgeQueryRequest(BaseModel):
     query: str
-    limit: Optional[int] = 10  # Aceito mas não utilizado no pipeline atual
-
-
-class KnowledgeQueryResponse(BaseModel):
-    answer: str
-
-
-class RelatedConceptsRequest(BaseModel):
-    concept: str
-    max_depth: int = 2
-
-
-class RelatedConceptItem(BaseModel):
-    concept: str
-    relationship: Optional[str] = None
-    distance: Optional[int] = None
-
-
-class RelatedConceptsResponse(BaseModel):
-    results: List[RelatedConceptItem]
-
-
-class EntityDetailsRequest(BaseModel):
-    entity_name: str
-
-
-class NodeTypesResponse(BaseModel):
-    types: List[str]
+    limit: Optional[int] = 10  # Usado pelo pipeline Graph RAG para limitar contexto
 
 
 class KnowledgeHealthResponse(BaseModel):
@@ -86,12 +82,6 @@ async def trigger_indexing(service: KnowledgeService = Depends(get_knowledge_ser
     return await service.index_codebase()
 
 
-@router.post("/consolidate", response_model=ConsolidationResponse, summary="Inicia a consolidação de experiências")
-async def trigger_consolidation(request: ConsolidationRequest,
-                                service: KnowledgeService = Depends(get_knowledge_service)):
-    stats = await service.trigger_consolidation(limit=request.limit)
-    return {"message": "Consolidação da memória semântica iniciada", "stats": stats}
-
 @router.get("/stats", summary="Estatísticas do grafo")
 async def get_knowledge_stats(service: KnowledgeService = Depends(get_knowledge_service)):
     return await service.get_stats()
@@ -103,12 +93,20 @@ async def get_code_entities(
 ):
     return await service.get_code_entities(file_path)
 
-@router.get("/entity/{entity_name}", response_model=EntityDetailsResponse, summary="Obtém detalhes de uma entidade")
-async def get_entity_details(entity_name: str, service: KnowledgeService = Depends(get_knowledge_service)):
-    details = await service.get_entity_details(entity_name)
-    if not details:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Entidade '{entity_name}' não encontrada.")
-    return details
+
+@router.get("/entity/{entity_name}/relationships", response_model=EntityRelationshipsResponse, summary="Navega relacionamentos de uma entidade")
+async def get_entity_relationships(
+        entity_name: str,
+        rel_type: Optional[str] = Query(None, description="Filtra pelo tipo de relacionamento"),
+        direction: str = Query("both", regex=r"^(out|in|both)$", description="Direção do relacionamento (out/in/both)"),
+        max_depth: int = Query(1, ge=1, le=5, description="Profundidade máxima de navegação"),
+        limit: int = Query(20, ge=1, le=100, description="Limite de resultados"),
+        skip: int = Query(0, ge=0, description="Offset para paginação"),
+        service: KnowledgeService = Depends(get_knowledge_service)
+):
+    rows = await service.get_entity_relationships(entity_name=entity_name, rel_type=rel_type, direction=direction, max_depth=max_depth, limit=limit, skip=skip)
+    items = [EntityRelationshipsItem(**row) for row in rows]
+    return EntityRelationshipsResponse(results=items)
 
 @router.delete("/clear", response_model=ClearGraphResponse, summary="Limpa todo o grafo")
 async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledge_service)):
@@ -124,26 +122,19 @@ async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledg
 
 @router.post("/query", response_model=KnowledgeQueryResponse, summary="Consulta o grafo de conhecimento (Graph RAG)")
 async def query_knowledge(request: KnowledgeQueryRequest, service: KnowledgeService = Depends(get_knowledge_service)):
-    answer = await service.semantic_query(request.query)
+    answer = await service.semantic_query(request.query, limit=request.limit)
     return KnowledgeQueryResponse(answer=answer)
 
 
 @router.post("/concepts/related", response_model=RelatedConceptsResponse, summary="Busca conceitos relacionados")
 async def related_concepts(request: RelatedConceptsRequest, service: KnowledgeService = Depends(get_knowledge_service)):
-    results = await service.find_related_concepts(concept=request.concept, max_depth=request.max_depth)
+    results = await service.find_related_concepts(concept=request.concept, max_depth=request.max_depth, limit=request.limit, skip=request.skip)
     items = [RelatedConceptItem(**row) for row in results]
     return RelatedConceptsResponse(results=items)
 
 
-@router.post("/entity/details", response_model=EntityDetailsResponse, summary="Obtém detalhes de uma entidade")
-async def post_entity_details(request: EntityDetailsRequest,
-                              service: KnowledgeService = Depends(get_knowledge_service)):
-    details = await service.get_entity_details(request.entity_name)
-    if not details:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"Entidade '{request.entity_name}' não encontrada.")
-    return details
-
+class NodeTypesResponse(BaseModel):
+    types: List[str]
 
 @router.get("/node-types", response_model=NodeTypesResponse, summary="Lista tipos de nós presentes no grafo")
 async def get_node_types(service: KnowledgeService = Depends(get_knowledge_service)):

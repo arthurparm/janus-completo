@@ -5,6 +5,7 @@ from fastapi import Depends
 from app.core.infrastructure.filesystem_manager import read_file
 
 from app.repositories.learning_repository import LearningRepository, get_learning_repository, ModelInfo
+from app.core.workers.neural_training_worker import publish_neural_training_task
 
 logger = structlog.get_logger(__name__)
 
@@ -49,36 +50,36 @@ class LearningService:
             logger.error("Erro no serviço ao orquestrar coleta de dados", exc_info=e)
             raise LearningServiceError("Falha ao orquestrar a coleta de dados.") from e
 
-    async def trigger_training(self, model_type: str, training_config: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info("Orquestrando treinamento de novo modelo", model_type=model_type)
+    async def trigger_training(self, model_type: str, training_config: Dict[str, Any], model_name: Optional[str] = None) -> Dict[str, Any]:
+        """Publica uma tarefa de treinamento na fila e retorna o ack com task_id."""
+        logger.info("Agendando treinamento de novo modelo", model_type=model_type)
         try:
-            result = await self._repo.run_training_process()
-
-            if "Falha" in result.get("message", ""):
-                raise TrainingFailedError(result.get("summary", "Causa desconhecida."))
-
-            model_id = f"janus-{model_type.lower()}-v{len(self._repo.get_all_models()) + 1}"
-            model_info = ModelInfo(
-                model_id=model_id,
-                model_type=model_type,
-                status="trained",
-                created_at=datetime.utcnow().isoformat(),
-                training_examples=100,  # Mock
-                accuracy=0.87,  # Mock
-                loss=0.23,  # Mock
-                experiment_id=result.get("experiment_id"),
-                dataset_version=result.get("dataset_version"),
-                dataset_num_examples=result.get("dataset_num_examples")
+            # Deriva versão atual do dataset
+            dataset_info = self._repo.get_dataset_version_info()
+            # Deriva nome de modelo
+            derived_model_name = model_name or f"janus-{str(model_type).lower()}"
+            # Publica tarefa
+            tp = dict(training_config or {})
+            tp.setdefault("model_type", str(model_type).lower())
+            task_id = await publish_neural_training_task(
+                dataset_version=dataset_info.get("version"),
+                model_name=derived_model_name,
+                training_params=tp
             )
-            self._repo.save_model(model_info)
-
-            result["model_id"] = model_id
-            return result
-        except TrainingFailedError:
-            raise
+            ack = {
+                "message": "Treinamento agendado.",
+                "summary": f"Tarefa {task_id} criada para treinar '{derived_model_name}'.",
+                "task_id": task_id,
+                "status": "queued",
+                "queued_at": datetime.utcnow().isoformat(),
+                "dataset_version": dataset_info.get("version"),
+                "dataset_num_examples": dataset_info.get("num_examples"),
+                "model_name": derived_model_name
+            }
+            return ack
         except Exception as e:
-            logger.error("Erro inesperado no serviço ao orquestrar treinamento", exc_info=e)
-            raise LearningServiceError("Falha inesperada ao orquestrar o treinamento.") from e
+            logger.error("Erro inesperado ao agendar treinamento", exc_info=e)
+            raise LearningServiceError("Falha ao agendar o treinamento.") from e
 
     def get_training_status(self) -> Optional[Dict[str, Any]]:
         return self._repo.get_active_training_session()

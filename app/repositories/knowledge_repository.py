@@ -85,7 +85,7 @@ class KnowledgeRepository:
 
     # --- Sprint 8: Consultas semânticas ---
 
-    async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10) -> List[Dict[str, Any]]:
+    async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0) -> List[Dict[str, Any]]:
         # Usa label Concept para navegar por conceitos relacionados
         query = f"""
         MATCH path = (c:{GraphLabel.CONCEPT} {{name: $concept}})-[*1..{max_depth}]-(related)
@@ -93,10 +93,36 @@ class KnowledgeRepository:
                type(last(relationships(path))) as relationship,
                length(path) as distance
         ORDER BY distance
+        SKIP $skip
         LIMIT $limit
         """
-        params = {"concept": concept, "limit": limit}
+        params = {"concept": concept, "limit": limit, "skip": skip}
         return await self._db.query(query, params, operation="repo_find_related_concepts")
+
+    async def find_entity_relationships(self, entity_name: str, rel_type: Optional[str] = None, direction: str = "both", max_depth: int = 1, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
+        # Navega relacionamentos a partir de uma entidade com direção e profundidade configuráveis
+        # direction: "out" (saída), "in" (entrada), "both" (ambas)
+        if direction not in ("out", "in", "both"):
+            direction = "both"
+        if direction == "out":
+            path = f"(e {{name: $name}})-[r*1..{max_depth}]->(related)"
+        elif direction == "in":
+            path = f"(e {{name: $name}})<-[r*1..{max_depth}]-(related)"
+        else:
+            path = f"(e {{name: $name}})-[r*1..{max_depth}]-(related)"
+
+        query = f"""
+        MATCH path = {path}
+        WHERE $rel_type IS NULL OR type(last(relationships(path))) = $rel_type
+        RETURN related.name as related_entity,
+               labels(related)[0] as related_type,
+               type(last(relationships(path))) as relationship,
+               length(path) as distance
+        SKIP $skip
+        LIMIT $limit
+        """
+        params = {"name": entity_name, "rel_type": rel_type, "skip": skip, "limit": limit}
+        return await self._db.query(query, params, operation="repo_find_entity_relationships_nav")
 
     async def get_node_types(self) -> List[str]:
         # Lista todos os labels distintos presentes no grafo

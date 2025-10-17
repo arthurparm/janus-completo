@@ -45,6 +45,9 @@ class KnowledgeService:
             return None
         return details
 
+    async def get_entity_relationships(self, entity_name: str, rel_type: Optional[str] = None, direction: str = "both", max_depth: int = 1, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
+        return await self._repo.find_entity_relationships(entity_name=entity_name, rel_type=rel_type, direction=direction, max_depth=max_depth, limit=limit, skip=skip)
+
     async def trigger_consolidation(self, limit: int) -> Dict[str, Any]:
         # Utiliza consolidação em lote para alinhar com Sprint 8
         stats = await knowledge_consolidator.consolidate_batch(limit=limit)
@@ -78,11 +81,11 @@ class KnowledgeService:
 
     # --- Sprint 8 Operations ---
 
-    async def semantic_query(self, question: str) -> str:
-        return await query_knowledge_graph(question)
+    async def semantic_query(self, question: str, limit: int = 10) -> str:
+        return await query_knowledge_graph(question, limit=limit)
 
-    async def find_related_concepts(self, concept: str, max_depth: int = 2) -> List[Dict[str, Any]]:
-        return await self._repo.find_related_concepts(concept=concept, max_depth=max_depth)
+    async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0) -> List[Dict[str, Any]]:
+        return await self._repo.find_related_concepts(concept=concept, max_depth=max_depth, limit=limit, skip=skip)
 
     async def get_node_types(self) -> List[str]:
         return await self._repo.get_node_types()
