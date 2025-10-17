@@ -48,6 +48,30 @@ class MemoryService:
             logger.error("Erro no serviço de memória ao buscar experiências", exc_info=e)
             raise MemoryServiceError("Falha ao buscar experiências.") from e
 
+    async def recall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        logger.info("Buscando experiências filtradas", query=query, filters=filters, limit=limit)
+        try:
+            return await self._repo.search_filtered(query=query, filters=filters, limit=limit)
+        except Exception as e:
+            logger.error("Erro no serviço ao buscar filtrado", exc_info=e)
+            raise MemoryServiceError("Falha na busca filtrada.") from e
+
+    async def recall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        logger.info("Buscando por janela temporal", query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit)
+        try:
+            return await self._repo.search_by_timeframe(query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit)
+        except Exception as e:
+            logger.error("Erro no serviço ao buscar por janela temporal", exc_info=e)
+            raise MemoryServiceError("Falha na busca por janela temporal.") from e
+
+    async def recall_recent_failures(self, limit: Optional[int] = None, timeframe_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+        logger.info("Buscando falhas recentes", limit=limit, timeframe_seconds=timeframe_seconds)
+        try:
+            return await self._repo.search_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds)
+        except Exception as e:
+            logger.error("Erro no serviço ao buscar falhas recentes", exc_info=e)
+            raise MemoryServiceError("Falha na busca de falhas recentes.") from e
+
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_memory_service(request: Request) -> MemoryService:
     return request.app.state.memory_service
