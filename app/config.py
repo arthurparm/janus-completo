@@ -105,6 +105,8 @@ class AppSettings(BaseSettings):
 
     # Sprint 3: Web Search
     TAVILY_API_KEY: Optional[SecretStr] = None
+    CONTEXT_WEB_CACHE_TTL_SECONDS: int = 1800
+    CONTEXT_WEB_CACHE_MAX_ITEMS: int = 512
 
     # Sprint 4: Python Sandbox (epicbox)
     SANDBOX_DOCKER_IMAGE: str = "python:3.11-slim"

@@ -61,6 +61,24 @@ class ContextService:
             logger.error("Erro no repositório ao formatar contexto para prompt", exc_info=e)
             raise ContextServiceError("Falha ao formatar o contexto para prompt.") from e
 
+    def get_web_cache_status(self) -> Dict[str, Any]:
+        """Retorna status atual do cache de busca web."""
+        logger.info("Obtendo status do cache web via serviço")
+        try:
+            return self._repo.get_web_cache_status()
+        except ContextRepositoryError as e:
+            logger.error("Erro no repositório ao obter status do cache web", exc_info=e)
+            raise ContextServiceError("Falha ao obter status do cache web.") from e
+
+    def invalidate_web_cache(self, query: Optional[str]) -> Dict[str, Any]:
+        """Invalida entradas do cache web (por query ou completo)."""
+        logger.info("Invalidando cache web via serviço", query=query)
+        try:
+            return self._repo.invalidate_web_cache(query)
+        except ContextRepositoryError as e:
+            logger.error("Erro no repositório ao invalidar cache web", exc_info=e)
+            raise ContextServiceError("Falha ao invalidar cache web.") from e
+
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_context_service(request: Request) -> ContextService:
     return request.app.state.context_service

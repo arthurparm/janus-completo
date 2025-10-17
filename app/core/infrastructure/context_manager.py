@@ -9,8 +9,11 @@ Responsável por enriquecer o contexto do agente com informações sobre o ambie
 
 import logging
 import platform
+import time
+import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from pydantic import BaseModel, Field
@@ -18,6 +21,28 @@ from pydantic import BaseModel, Field
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Métricas Prometheus (opcional)
+try:
+    from prometheus_client import Counter, Gauge  # type: ignore
+
+    _PROM_ENABLED = True
+except Exception:
+    _PROM_ENABLED = False
+
+if _PROM_ENABLED:
+    _WEB_CACHE_HITS = Counter(
+        "context_web_cache_hits_total",
+        "Total de hits no cache de busca web"
+    )
+    _WEB_CACHE_MISSES = Counter(
+        "context_web_cache_misses_total",
+        "Total de misses no cache de busca web"
+    )
+    _WEB_CACHE_SIZE = Gauge(
+        "context_web_cache_size",
+        "Itens atualmente armazenados no cache de busca web"
+    )
 
 
 class ContextInfo(BaseModel):
@@ -43,6 +68,14 @@ class ContextManager:
     def __init__(self):
         self._tavily_client: Optional[TavilySearchAPIWrapper] = None
         self._init_web_search()
+
+        # Cache de busca web (LRU + TTL)
+        self._web_cache: "OrderedDict[str, Tuple[float, WebSearchResult]]" = OrderedDict()
+        self._web_cache_lock = threading.Lock()
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._cache_ttl = int(getattr(settings, "CONTEXT_WEB_CACHE_TTL_SECONDS", 1800))
+        self._cache_max_items = int(getattr(settings, "CONTEXT_WEB_CACHE_MAX_ITEMS", 512))
 
     def _init_web_search(self):
         """Inicializa o cliente de busca web (Tavily)."""
@@ -114,6 +147,33 @@ class ContextManager:
         """
         logger.info(f"[SEARCH_WEB] Iniciando busca - query='{query}', max_results={max_results}, depth={search_depth}")
 
+        # Verifica cache antes de chamar Tavily
+        key = self._make_cache_key(query, max_results, search_depth)
+        now = time.time()
+        cached: Optional[WebSearchResult] = None
+        with self._web_cache_lock:
+            item = self._web_cache.get(key)
+            if item:
+                ts, result = item
+                if now - ts < self._cache_ttl:
+                    self._cache_hits += 1
+                    # move to fim (mais recente)
+                    self._web_cache.move_to_end(key)
+                    cached = result
+                    if _PROM_ENABLED:
+                        _WEB_CACHE_HITS.inc()
+                else:
+                    # expirado
+                    self._web_cache.pop(key, None)
+        if cached:
+            logger.info(f"[SEARCH_WEB] ✓ Cache HIT para '{query}'")
+            return cached
+        else:
+            logger.info(f"[SEARCH_WEB] Cache MISS para '{query}'")
+            self._cache_misses += 1
+            if _PROM_ENABLED:
+                _WEB_CACHE_MISSES.inc()
+
         if not self._tavily_client:
             logger.warning("[SEARCH_WEB] ⚠️ Tavily não disponível. Retornando resultados vazios.")
             return WebSearchResult(
@@ -152,11 +212,22 @@ class ContextManager:
 
             logger.info(f"[SEARCH_WEB] ✓ Busca concluída: '{query}' - {len(results)} resultados")
 
-            return WebSearchResult(
+            result_obj = WebSearchResult(
                 query=query,
                 results=results,
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
+
+            # Armazenar no cache
+            with self._web_cache_lock:
+                self._web_cache[key] = (time.time(), result_obj)
+                # LRU: manter tamanho máximo
+                while len(self._web_cache) > self._cache_max_items:
+                    self._web_cache.popitem(last=False)
+                if _PROM_ENABLED:
+                    _WEB_CACHE_SIZE.set(len(self._web_cache))
+
+            return result_obj
 
         except Exception as e:
             logger.error(f"[SEARCH_WEB] ❌ Erro ao buscar na web: {e}", exc_info=True)
@@ -165,6 +236,40 @@ class ContextManager:
                 results=[],
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
+
+    def _make_cache_key(self, query: str, max_results: int, search_depth: str) -> str:
+        q = (query or "").strip().lower()
+        return f"{q}|{max_results}|{search_depth}"
+
+    def get_web_cache_status(self) -> Dict[str, Any]:
+        """Retorna status atual do cache de busca web."""
+        with self._web_cache_lock:
+            size = len(self._web_cache)
+        status = {
+            "size": size,
+            "ttl_seconds": self._cache_ttl,
+            "max_items": self._cache_max_items,
+            "hits": self._cache_hits,
+            "misses": self._cache_misses
+        }
+        return status
+
+    def invalidate_web_cache(self, query: Optional[str] = None) -> Dict[str, Any]:
+        """Invalida entradas do cache. Se query for None, limpa todo o cache."""
+        removed = 0
+        with self._web_cache_lock:
+            if not query:
+                removed = len(self._web_cache)
+                self._web_cache.clear()
+            else:
+                prefix = (query or "").strip().lower()
+                keys_to_remove = [k for k in self._web_cache.keys() if k.startswith(prefix)]
+                for k in keys_to_remove:
+                    self._web_cache.pop(k, None)
+                removed = len(keys_to_remove)
+            if _PROM_ENABLED:
+                _WEB_CACHE_SIZE.set(len(self._web_cache))
+        return {"removed": removed, "remaining": len(self._web_cache)}
 
     def get_enriched_context(
             self,

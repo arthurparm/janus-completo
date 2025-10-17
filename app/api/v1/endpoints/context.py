@@ -17,6 +17,10 @@ class EnrichedContextRequest(BaseModel):
     include_web_search: bool = False
     max_web_results: int = 3
 
+
+class InvalidateCacheRequest(BaseModel):
+    query: Optional[str] = None
+
 # --- Endpoints ---
 
 @router.get("/current", response_model=ContextInfo, summary="Obtém contexto ambiental atual")
@@ -68,3 +72,18 @@ async def format_context_for_prompt(
         web_query=web_query
     )
     return {"formatted_context": formatted_context}
+
+
+@router.get("/web-cache/status", summary="Status do cache de busca web")
+async def get_web_cache_status(service: ContextService = Depends(get_context_service)):
+    """Retorna informações sobre o cache da busca web (Tavily)."""
+    return service.get_web_cache_status()
+
+
+@router.post("/web-cache/invalidate", summary="Invalida entradas do cache de busca web")
+async def invalidate_web_cache(
+        request: InvalidateCacheRequest,
+        service: ContextService = Depends(get_context_service)
+):
+    """Invalida o cache de busca web por query (prefixo) ou completamente se não informado."""
+    return service.invalidate_web_cache(query=request.query)

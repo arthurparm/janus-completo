@@ -64,6 +64,24 @@ class ContextRepository:
             logger.error("Erro no repositório ao formatar contexto para prompt", exc_info=e)
             raise ContextRepositoryError("Falha ao formatar o contexto para prompt.") from e
 
+    def get_web_cache_status(self) -> dict:
+        """Obtém o status atual do cache de busca web."""
+        logger.debug("Obtendo status do cache web no repositório.")
+        try:
+            return context_manager.get_web_cache_status()
+        except Exception as e:
+            logger.error("Erro no repositório ao obter status do cache web", exc_info=e)
+            raise ContextRepositoryError("Falha ao obter status do cache web.") from e
+
+    def invalidate_web_cache(self, query: Optional[str]) -> dict:
+        """Invalida entradas do cache web (por query ou completo)."""
+        logger.debug("Invalidando cache web no repositório.", query=query)
+        try:
+            return context_manager.invalidate_web_cache(query=query)
+        except Exception as e:
+            logger.error("Erro no repositório ao invalidar cache web", exc_info=e)
+            raise ContextRepositoryError("Falha ao invalidar cache web.") from e
+
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_context_repository() -> ContextRepository:
