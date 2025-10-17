@@ -37,6 +37,12 @@ class ExecuteTaskRequest(BaseModel):
 class ExecuteProjectRequest(BaseModel):
     description: str
 
+
+class ExecuteTasksParallelRequest(BaseModel):
+    task_ids: Optional[List[str]] = Field(default=None,
+                                          description="Lista de IDs de tarefas para executar; se vazio, executa todas PENDING")
+    concurrency: int = Field(default=4, ge=1, description="Limite de paralelismo")
+
 # --- Endpoints ---
 
 @router.post("/agents/create", response_model=CreateAgentResponse, status_code=status.HTTP_201_CREATED)
@@ -124,6 +130,19 @@ async def execute_project(
 async def get_workspace_status(service: CollaborationService = Depends(get_collaboration_service)):
     """Delega a busca de status do workspace para o CollaborationService."""
     return service.get_workspace_status()
+
+
+@router.post("/tasks/execute_parallel", summary="Executa múltiplas tarefas em paralelo respeitando dependências")
+async def execute_tasks_parallel(
+        request: ExecuteTasksParallelRequest,
+        service: CollaborationService = Depends(get_collaboration_service)
+):
+    """Executa tarefas em paralelo, respeitando dependências entre elas.
+
+    - Se `task_ids` não for fornecido, executa todas as tarefas PENDING no workspace.
+    - `concurrency` limita o número de tarefas em execução simultânea.
+    """
+    return await service.execute_tasks_parallel(task_ids=request.task_ids, concurrency=request.concurrency)
 
 @router.get("/health", summary="Health check do sistema de colaboração")
 async def health_check(service: CollaborationService = Depends(get_collaboration_service)):

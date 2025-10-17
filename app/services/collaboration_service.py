@@ -143,6 +143,17 @@ class CollaborationService:
         logger.info("Orquestrando desligamento do sistema multi-agente")
         self._repo.shutdown_all()
 
+    # --- Parallel Execution ---
+    async def execute_tasks_parallel(self, task_ids: Optional[List[str]] = None, concurrency: int = 4) -> Dict[
+        str, Any]:
+        """Exposição de execução paralela com dependências via serviço."""
+        logger.info("Orquestrando execução paralela de tarefas", task_ids=task_ids, concurrency=concurrency)
+        try:
+            return await self._repo.run_tasks_parallel(task_ids=task_ids, concurrency=concurrency)
+        except Exception as e:
+            logger.error("Erro ao executar tarefas em paralelo", exc_info=e)
+            raise CollaborationServiceError("Falha na execução paralela de tarefas.") from e
+
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_collaboration_service(request: Request) -> CollaborationService:
     return request.app.state.collaboration_service

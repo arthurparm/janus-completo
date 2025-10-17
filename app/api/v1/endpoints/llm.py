@@ -22,6 +22,8 @@ class LLMInvokeRequest(BaseModel):
     role: str = Field("orchestrator")
     priority: str = Field("fast_and_cheap")
     timeout_seconds: Optional[int] = None
+    user_id: Optional[str] = Field(None)
+    project_id: Optional[str] = Field(None)
 
 class LLMInvokeResponse(BaseModel):
     response: str
@@ -55,7 +57,9 @@ async def invoke_llm(
         prompt=request.prompt,
         role=role,
         priority=priority,
-        timeout_seconds=request.timeout_seconds
+        timeout_seconds=request.timeout_seconds,
+        user_id=request.user_id,
+        project_id=request.project_id
     )
     return LLMInvokeResponse(**result)
 

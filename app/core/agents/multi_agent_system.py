@@ -311,6 +311,32 @@ class SharedWorkspace:
         """Recupera tarefas atribuídas a um agente."""
         return [task for task in self.tasks.values() if task.assigned_to == agent_id]
 
+    def get_ready_tasks(self) -> List[Task]:
+        """Retorna tarefas PENDING cujas dependências já estão COMPLETED.
+
+        Tarefas com dependências inexistentes ou falhas não são consideradas prontas.
+        """
+        ready: List[Task] = []
+        for task in self.tasks.values():
+            if task.status != TaskStatus.PENDING:
+                continue
+            deps = task.dependencies or []
+            if not deps:
+                ready.append(task)
+                continue
+            all_ok = True
+            for dep_id in deps:
+                dep = self.tasks.get(dep_id)
+                if dep is None:
+                    all_ok = False
+                    break
+                if dep.status != TaskStatus.COMPLETED:
+                    all_ok = False
+                    break
+            if all_ok:
+                ready.append(task)
+        return ready
+
 
 # --- Agente Especializado ---
 
@@ -743,6 +769,136 @@ Retorne em formato estruturado."""
                 status.value: len(self.workspace.get_tasks_by_status(status))
                 for status in TaskStatus
             }
+        }
+
+    async def execute_tasks_parallel(
+            self,
+            task_ids: Optional[List[str]] = None,
+            concurrency: int = 4
+    ) -> Dict[str, Any]:
+        """Executa múltiplas tarefas em paralelo respeitando dependências.
+
+        - Seleciona tarefas por `task_ids` ou todas PENDING no workspace
+        - Usa um semáforo para limitar paralelismo
+        - Agenda novas tarefas assim que suas dependências forem concluídas
+        - Marca tarefas impossíveis de resolver como BLOCKED
+        """
+        if concurrency < 1:
+            concurrency = 1
+
+        # Seleção inicial de tarefas alvo
+        if task_ids:
+            target_tasks = [t for tid, t in self.workspace.tasks.items() if tid in task_ids]
+        else:
+            target_tasks = [t for t in self.workspace.tasks.values() if t.status == TaskStatus.PENDING]
+
+        # Mapa rápido
+        task_map: Dict[str, Task] = {t.id: t for t in target_tasks}
+        if not task_map:
+            return {
+                "scheduled": 0,
+                "completed": 0,
+                "failed": 0,
+                "blocked": [],
+                "results": {},
+            }
+
+        # Dependentes e contagem de dependências não satisfeitas
+        dependents: Dict[str, List[str]] = {tid: [] for tid in task_map}
+        remaining_deps: Dict[str, int] = {}
+        invalid_dependency: Dict[str, bool] = {tid: False for tid in task_map}
+
+        for t in target_tasks:
+            deps = [d for d in (t.dependencies or []) if d in self.workspace.tasks]
+            # Se há dependência inexistente, marca como inválida
+            for d in (t.dependencies or []):
+                if d not in self.workspace.tasks:
+                    invalid_dependency[t.id] = True
+            remaining = 0
+            for d in deps:
+                dep_task = self.workspace.tasks.get(d)
+                if dep_task and dep_task.status != TaskStatus.COMPLETED:
+                    remaining += 1
+                # Registra relacionamento dependente → depende de
+                if d in task_map:
+                    dependents[d].append(t.id)
+            remaining_deps[t.id] = remaining
+
+        # Fila de prontas
+        from collections import deque
+        ready_queue = deque([t for t in target_tasks if remaining_deps[t.id] == 0 and not invalid_dependency[t.id]])
+
+        # Controle de paralelismo
+        sem = asyncio.Semaphore(concurrency)
+        running: set = set()
+        results: Dict[str, Any] = {}
+
+        async def _run_single(task: Task):
+            async with sem:
+                # Seleção simples de agente: usa assigned_to se disponível, senão PM
+                agent: Optional[SpecializedAgent] = None
+                if task.assigned_to:
+                    agent = self.get_agent(task.assigned_to)
+                if agent is None:
+                    if not self.project_manager:
+                        self.project_manager = self.create_agent(AgentRole.PROJECT_MANAGER)
+                    agent = self.project_manager
+                try:
+                    return await agent.execute_task(task)
+                except Exception as e:
+                    return {"task_id": task.id, "status": "failed", "error": str(e)}
+
+        # Loop principal de agendamento
+        scheduled_count = 0
+        while ready_queue or running:
+            # Agenda todas as tarefas atualmente prontas
+            while ready_queue:
+                t = ready_queue.popleft()
+                scheduled_count += 1
+                fut = asyncio.create_task(_run_single(t))
+                # Anexa o ID para identificação
+                fut._task_id = t.id  # type: ignore[attr-defined]
+                running.add(fut)
+
+            if not running:
+                break
+
+            done, pending = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+            running = pending
+            for fut in done:
+                tid = getattr(fut, "_task_id", None)
+                try:
+                    res = fut.result()
+                except Exception as e:
+                    res = {"task_id": tid, "status": "failed", "error": str(e)}
+                if tid:
+                    results[tid] = res
+                    # Atualiza dependentes
+                    status = res.get("status")
+                    if status == "completed":
+                        for dep in dependents.get(tid, []):
+                            remaining_deps[dep] = max(0, remaining_deps[dep] - 1)
+                            dep_task = task_map.get(dep)
+                            if dep_task and remaining_deps[dep] == 0 and not invalid_dependency.get(dep, False):
+                                if dep_task.status == TaskStatus.PENDING:
+                                    ready_queue.append(dep_task)
+
+        # Determina bloqueadas e falhas
+        completed = sum(1 for r in results.values() if r.get("status") == "completed")
+        failed = sum(1 for r in results.values() if r.get("status") == "failed")
+        blocked: List[str] = []
+        for tid, t in task_map.items():
+            if t.status == TaskStatus.PENDING and (
+                    remaining_deps.get(tid, 0) > 0 or invalid_dependency.get(tid, False)):
+                t.status = TaskStatus.BLOCKED
+                blocked.append(tid)
+
+        return {
+            "scheduled": scheduled_count,
+            "completed": completed,
+            "failed": failed,
+            "blocked": blocked,
+            "results": results,
         }
 
     def shutdown_all(self):

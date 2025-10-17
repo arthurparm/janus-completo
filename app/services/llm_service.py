@@ -32,11 +32,19 @@ class LLMService:
     def __init__(self, repo: LLMRepository):
         self._repo = repo
 
-    def invoke_llm(self, prompt: str, role: ModelRole, priority: ModelPriority, timeout_seconds: Optional[int]) -> Dict[
-        str, Any]:
+    def invoke_llm(
+            self,
+            prompt: str,
+            role: ModelRole,
+            priority: ModelPriority,
+            timeout_seconds: Optional[int],
+            user_id: Optional[str] = None,
+            project_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         logger.info("Orquestrando invocação de LLM via serviço", role=role.value, priority=priority.value)
         try:
-            return self._repo.invoke_llm(prompt, role, priority, timeout_seconds)
+            return self._repo.invoke_llm(prompt, role, priority, timeout_seconds, user_id=user_id,
+                                         project_id=project_id)
         except TimeoutError as e:
             logger.error("Timeout no serviço de LLM", exc_info=e)
             raise LLMTimeoutError(str(e)) from e

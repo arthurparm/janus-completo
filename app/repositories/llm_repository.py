@@ -26,11 +26,18 @@ class LLMRepository:
     Abstrai todas as interações diretas com a infraestrutura de LLMs.
     """
 
-    def invoke_llm(self, prompt: str, role: ModelRole, priority: ModelPriority, timeout_seconds: Optional[int]) -> Dict[
-        str, Any]:
+    def invoke_llm(
+            self,
+            prompt: str,
+            role: ModelRole,
+            priority: ModelPriority,
+            timeout_seconds: Optional[int],
+            user_id: Optional[str] = None,
+            project_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         logger.debug("Invocando LLM via repositório", role=role.value, priority=priority.value)
         try:
-            client = get_llm_client(role=role, priority=priority)
+            client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
             response = client.send(prompt, timeout_s=timeout_seconds)
             return {
                 "response": response,

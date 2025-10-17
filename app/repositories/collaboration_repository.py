@@ -56,6 +56,11 @@ class CollaborationRepository:
         logger.debug("Executando projeto via repositório", project_description=description)
         return await self._get_system().execute_project(description)
 
+    async def run_tasks_parallel(self, task_ids: Optional[List[str]] = None, concurrency: int = 4) -> Dict[str, Any]:
+        """Executa tarefas em paralelo respeitando dependências usando o core system."""
+        logger.debug("Executando tarefas em paralelo via repositório", task_ids=task_ids, concurrency=concurrency)
+        return await self._get_system().execute_tasks_parallel(task_ids=task_ids, concurrency=concurrency)
+
     def get_workspace_status(self) -> Dict[str, Any]:
         return self._get_system().get_workspace_status()
 

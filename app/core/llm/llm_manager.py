@@ -5,12 +5,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
+import random
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Histogram, Gauge
 
 from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker, CircuitOpenError
@@ -62,6 +63,290 @@ _provider_circuit_breakers: Dict[str, CircuitBreaker] = {
     )
     for provider in ["ollama", "openai", "google_gemini", "unknown"]
 }
+
+
+# --- P4: Orçamentação, Preços e Seleção Adaptativa ---
+
+@dataclass
+class ProviderPricing:
+    input_per_1k_usd: float
+    output_per_1k_usd: float
+
+
+@dataclass
+class ProviderStats:
+    total_requests: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    total_latency_seconds: float = 0.0
+
+    @property
+    def success_rate(self) -> float:
+        if self.total_requests <= 0:
+            return 0.0
+        return self.success_count / max(1, self.total_requests)
+
+    @property
+    def avg_latency(self) -> float:
+        if self.total_requests <= 0:
+            return 0.0
+        return self.total_latency_seconds / max(1, self.total_requests)
+
+
+@dataclass
+class ModelStats:
+    total_requests: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    total_latency_seconds: float = 0.0
+
+    @property
+    def success_rate(self) -> float:
+        if self.total_requests <= 0:
+            return 0.0
+        return self.success_count / max(1, self.total_requests)
+
+    @property
+    def avg_latency(self) -> float:
+        if self.total_requests <= 0:
+            return 0.0
+        return self.total_latency_seconds / max(1, self.total_requests)
+
+
+# Pricing por provedor (valores padrão via settings; Ollama ~ 0)
+_provider_pricing: Dict[str, ProviderPricing] = {
+    "openai": ProviderPricing(
+        input_per_1k_usd=settings.OPENAI_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.OPENAI_COST_PER_1K_OUTPUT_USD,
+    ),
+    "google_gemini": ProviderPricing(
+        input_per_1k_usd=settings.GEMINI_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.GEMINI_COST_PER_1K_OUTPUT_USD,
+    ),
+    "ollama": ProviderPricing(
+        input_per_1k_usd=settings.OLLAMA_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.OLLAMA_COST_PER_1K_OUTPUT_USD,
+    ),
+}
+
+# Orçamentos mensais por provedor
+_provider_budgets_usd: Dict[str, float] = {
+    "openai": settings.OPENAI_MONTHLY_BUDGET_USD,
+    "google_gemini": settings.GEMINI_MONTHLY_BUDGET_USD,
+    "ollama": settings.OLLAMA_MONTHLY_BUDGET_USD,
+}
+
+# Rastreamento de gastos acumulados
+_provider_spend_usd: Dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}
+
+# Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
+_model_penalty_factors: Dict[str, Dict[str, float]] = {
+    "openai": {},
+    "google_gemini": {},
+    "ollama": {},
+}
+
+# EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
+_expected_k_ema_by_role: Dict[str, float] = {}
+for _role_key, _k in getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).items():
+    try:
+        _expected_k_ema_by_role[_role_key] = float(_k)
+    except Exception:
+        _expected_k_ema_by_role[_role_key] = 2.0
+
+# Orçamentos diários multitenant (USD)
+_tenant_user_daily_budget_usd: float = getattr(settings, "TENANT_USER_DAILY_BUDGET_USD", 0.0) or 0.0
+_tenant_project_daily_budget_usd: float = getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
+
+# Rastreamento de gastos por usuário/projeto (reset diário)
+_tenant_user_spend_usd: Dict[str, Dict[str, Any]] = {}
+_tenant_project_spend_usd: Dict[str, Dict[str, Any]] = {}
+
+# Estatísticas observadas para seleção adaptativa
+_provider_stats: Dict[str, ProviderStats] = {
+    "openai": ProviderStats(),
+    "google_gemini": ProviderStats(),
+    "ollama": ProviderStats(),
+}
+
+# Estatísticas por modelo
+_model_stats: Dict[str, Dict[str, ModelStats]] = {
+    "openai": {},
+    "google_gemini": {},
+    "ollama": {},
+}
+
+# Métricas de orçamento e seleção
+LLM_PROVIDER_SPEND_USD = Counter(
+    "llm_provider_spend_usd_total",
+    "Gasto acumulado em USD por provedor",
+    ["provider", "category"],
+)
+LLM_PROVIDER_BUDGET_REMAINING = Gauge(
+    "llm_provider_budget_remaining_usd",
+    "Orçamento restante em USD por provedor",
+    ["provider"],
+)
+LLM_SELECTION_SCORE = Gauge(
+    "llm_selection_score",
+    "Score de seleção adaptativa por provedor",
+    ["priority", "provider"],
+)
+
+LLM_MODEL_SELECTION_SCORE = Gauge(
+    "llm_model_selection_score",
+    "Score de seleção adaptativa por modelo",
+    ["priority", "provider", "model"],
+)
+
+LLM_EXPECTED_COST_USD = Gauge(
+    "llm_expected_cost_usd",
+    "Custo esperado (USD) por candidato antes da seleção",
+    ["priority", "provider", "model", "role"],
+)
+
+# Métricas adicionais para economia dinâmica
+LLM_EXPECTED_KTOKENS_GAUGE = Gauge(
+    "llm_expected_ktokens_by_role",
+    "EMA de expected_k (ktokens) por papel",
+    ["role"],
+)
+LLM_TENANT_SPEND_USD = Counter(
+    "llm_tenant_spend_usd_total",
+    "Gasto acumulado em USD por tenant",
+    ["kind", "id"],
+)
+LLM_COST_DEVIATION_USD = Gauge(
+    "llm_cost_deviation_usd",
+    "Desvio do custo real vs estimado (USD) por candidato",
+    ["provider", "model", "role"],
+)
+LLM_EXPLORATION_DECISIONS = Counter(
+    "llm_exploration_decisions_total",
+    "Contagem de decisões de exploração na seleção",
+    ["role", "priority"],
+)
+
+# Inicializa gauge de expected_k para papéis conhecidos
+try:
+    for rk, val in _expected_k_ema_by_role.items():
+        LLM_EXPECTED_KTOKENS_GAUGE.labels(role=rk).set(val)
+except Exception:
+    pass
+
+
+def _budget_remaining(provider: str) -> float:
+    budget = _provider_budgets_usd.get(provider, 0.0)
+    spend = _provider_spend_usd.get(provider, 0.0)
+    return max(0.0, budget - spend)
+
+
+def _budget_allows(provider: str) -> bool:
+    # Orçamento 0.0 implica sem custo/sem controle (ex.: Ollama)
+    budget = _provider_budgets_usd.get(provider, 0.0)
+    if budget <= 0.0:
+        return True
+    return _budget_remaining(provider) > 0.0
+
+
+def _circuit_closed(provider: str) -> bool:
+    cb = _provider_circuit_breakers.get(provider)
+    if not cb:
+        return True
+    try:
+        return not cb.is_open()
+    except Exception:
+        return True
+
+
+def _normalize(values):
+    # Evita divisão por zero; retorna lista de valores normalizados [0..1]
+    if not values:
+        return []
+    min_v = min(values)
+    max_v = max(values)
+    if max_v == min_v:
+        return [1.0 for _ in values]
+    return [(v - min_v) / (max_v - min_v) for v in values]
+
+
+def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
+    try:
+        if provider == "openai":
+            mp = settings.OPENAI_MODEL_PRICING.get(model_name)
+            if mp:
+                return ProviderPricing(mp.get("input_per_1k_usd", settings.OPENAI_COST_PER_1K_INPUT_USD),
+                                       mp.get("output_per_1k_usd", settings.OPENAI_COST_PER_1K_OUTPUT_USD))
+            return ProviderPricing(settings.OPENAI_COST_PER_1K_INPUT_USD, settings.OPENAI_COST_PER_1K_OUTPUT_USD)
+        if provider == "google_gemini":
+            mp = settings.GEMINI_MODEL_PRICING.get(model_name)
+            if mp:
+                return ProviderPricing(mp.get("input_per_1k_usd", settings.GEMINI_COST_PER_1K_INPUT_USD),
+                                       mp.get("output_per_1k_usd", settings.GEMINI_COST_PER_1K_OUTPUT_USD))
+            return ProviderPricing(settings.GEMINI_COST_PER_1K_INPUT_USD, settings.GEMINI_COST_PER_1K_OUTPUT_USD)
+        # ollama
+        return ProviderPricing(settings.OLLAMA_COST_PER_1K_INPUT_USD, settings.OLLAMA_COST_PER_1K_OUTPUT_USD)
+    except Exception:
+        return ProviderPricing(0.0, 0.0)
+
+
+def _today_str() -> str:
+    try:
+        return datetime.utcnow().strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d")
+
+
+def _reset_if_new_day(spend_map: Dict[str, Dict[str, Any]]):
+    today = _today_str()
+    for k, v in list(spend_map.items()):
+        if v.get("date") != today:
+            spend_map[k] = {"date": today, "usd": 0.0}
+
+
+def _tenant_budget_remaining(kind: str, id_: Optional[str]) -> float:
+    if not id_:
+        return float("inf")
+    today = _today_str()
+    if kind == "user":
+        budget = _tenant_user_daily_budget_usd
+        entry = _tenant_user_spend_usd.get(id_)
+        if not entry or entry.get("date") != today:
+            _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
+            entry = _tenant_user_spend_usd[id_]
+        return max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0)) if budget > 0 else float("inf")
+    else:  # project
+        budget = _tenant_project_daily_budget_usd
+        entry = _tenant_project_spend_usd.get(id_)
+        if not entry or entry.get("date") != today:
+            _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
+            entry = _tenant_project_spend_usd[id_]
+        return max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0)) if budget > 0 else float("inf")
+
+
+def _register_tenant_spend(kind: str, id_: Optional[str], cost_usd: float):
+    if not id_:
+        return
+    today = _today_str()
+    cost_usd = max(0.0, float(cost_usd))
+    if kind == "user":
+        entry = _tenant_user_spend_usd.get(id_)
+        if not entry or entry.get("date") != today:
+            _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
+        _tenant_user_spend_usd[id_]["usd"] = (_tenant_user_spend_usd[id_]["usd"] or 0.0) + cost_usd
+        try:
+            LLM_TENANT_SPEND_USD.labels(kind="user", id=id_).inc(cost_usd)
+        except Exception:
+            pass
+    else:
+        entry = _tenant_project_spend_usd.get(id_)
+        if not entry or entry.get("date") != today:
+            _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
+        _tenant_project_spend_usd[id_]["usd"] = (_tenant_project_spend_usd[id_]["usd"] or 0.0) + cost_usd
+        try:
+            LLM_TENANT_SPEND_USD.labels(kind="project", id=id_).inc(cost_usd)
+        except Exception:
+            pass
 
 
 class ModelRole(Enum):
@@ -198,39 +483,163 @@ def get_llm(
             logger.error(f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True)
             raise RuntimeError(f"Falha crítica ao carregar modelo local. Causa: {e}") from e
 
-    # Provedores de Nuvem (ordenados por prioridade/custo)
-    cloud_providers = [
+    # Provedores de Nuvem (catálogo com factories por modelo)
+    cloud_catalog = [
         {
             "name": "Google Gemini", "provider_key": "google_gemini",
             "enabled": _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()),
-            "initializer": lambda: ChatGoogleGenerativeAI(model=settings.GEMINI_MODEL_NAME, temperature=0,
-                                                          google_api_key=(getattr(settings.GEMINI_API_KEY,
-                                                                                  'get_secret_value',
-                                                                                  lambda: None)() or None)),
-            "model_name": settings.GEMINI_MODEL_NAME,
+            "initializer_factory": lambda model: ChatGoogleGenerativeAI(
+                model=model,
+                temperature=0,
+                google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)() or None),
+            ),
+            "models": settings.GEMINI_MODELS if getattr(settings, "GEMINI_MODELS", None) else [
+                settings.GEMINI_MODEL_NAME],
         },
         {
             "name": "OpenAI", "provider_key": "openai",
             "enabled": _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()),
-            "initializer": lambda: ChatOpenAI(model=settings.OPENAI_MODEL_NAME, temperature=0),
-            "model_name": settings.OPENAI_MODEL_NAME,
-        }
+            "initializer_factory": lambda model: ChatOpenAI(model=model, temperature=0),
+            "models": settings.OPENAI_MODELS if getattr(settings, "OPENAI_MODELS", None) else [
+                settings.OPENAI_MODEL_NAME],
+        },
     ]
 
     # Estratégia 2: Rápido e Barato ou Alta Qualidade
     if priority in [ModelPriority.FAST_AND_CHEAP, ModelPriority.HIGH_QUALITY]:
-        for provider in cloud_providers:
-            if provider["enabled"]:
-                logger.info(f"Estratégia {priority.value}: Tentando o provedor: {provider['name']}")
+        # Seleção adaptativa por modelo considerando orçamento, circuito e métricas observadas
+        # Se houver candidatos por papel definidos, usa-os; caso contrário, usa listas de modelos por provedor
+        role_key = role.value
+        raw_role_candidates = getattr(settings, "LLM_CLOUD_MODEL_CANDIDATES", {}).get(role_key, [])
+
+        # Mapa provider->set(models) derivado de LLM_CLOUD_MODEL_CANDIDATES
+        role_candidates_map: Dict[str, set] = {}
+        for spec in raw_role_candidates:
+            try:
+                provider_key, model_name = spec.split(":", 1)
+                role_candidates_map.setdefault(provider_key.strip(), set()).add(model_name.strip())
+            except Exception:
+                logger.warning(f"Spec de candidato inválido: '{spec}' — esperado 'provider:model'")
+
+        candidates = []
+        for p in cloud_catalog:
+            provider_key = p["provider_key"]
+            if not (p["enabled"] and _circuit_closed(provider_key) and _budget_allows(provider_key)):
+                continue
+
+            # Lista de modelos elegíveis para este papel
+            model_list = list(role_candidates_map.get(provider_key, set())) or p["models"]
+            for model_name in model_list:
+                pricing = _get_model_pricing(provider_key, model_name)
+                cost_per_1k = pricing.input_per_1k_usd + pricing.output_per_1k_usd
+                stats = _model_stats.get(provider_key, {}).get(model_name, ModelStats())
+
+                candidates.append({
+                    "name": p["name"],
+                    "provider_key": provider_key,
+                    "model_name": model_name,
+                    "initializer_factory": p["initializer_factory"],
+                    "pricing": pricing,
+                    "stats": stats,
+                    "cost_per_1k": cost_per_1k,
+                })
+
+        if candidates:
+            role_key = role.value
+            # Filtra por teto de custo estimado por papel (usa EMA dinâmica)
+            expected_k = float(_expected_k_ema_by_role.get(role_key, float(
+                getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).get(role_key, 2.0))))
+            max_cost = float(getattr(settings, "LLM_MAX_COST_PER_REQUEST_USD", {}).get(role_key, float("inf")))
+            filtered = []
+            for c in candidates:
+                expected_cost = expected_k * c["cost_per_1k"]
                 try:
-                    llm = provider["initializer"]()
-                    logger.info(f"LLM do provedor '{provider['name']}' inicializado com sucesso.")
-                    LLM_ROUTER_COUNTER.labels(role.value, priority.value, provider["model_name"],
-                                              provider["provider_key"]).inc()
-                    _add_to_cache(cache_key, llm, provider["provider_key"])
+                    LLM_EXPECTED_COST_USD.labels(priority=priority.value, provider=c["provider_key"],
+                                                 model=c["model_name"], role=role_key).set(expected_cost)
+                except Exception:
+                    pass
+                if expected_cost <= max_cost:
+                    filtered.append(c)
+                else:
+                    logger.info(
+                        f"Candidato filtrado por custo: {c['provider_key']}:{c['model_name']} (expected_cost={expected_cost:.4f} > max_cost={max_cost:.4f}, role={role_key})")
+
+            candidates = filtered or candidates  # se todos foram filtrados, usa originais para evitar vazio
+            # Normalizações para scoring
+            cost_norm = _normalize([c["cost_per_1k"] for c in candidates])
+            latencies = [c["stats"].avg_latency if c["stats"].total_requests > 0 else 1.0 for c in candidates]
+            lat_norm = _normalize(latencies)
+            success_rates = [c["stats"].success_rate if c["stats"].total_requests > 0 else 0.7 for c in candidates]
+
+            scored = []
+            for idx, c in enumerate(candidates):
+                econ = getattr(settings, "LLM_ECONOMY_POLICY", "balanced").lower()
+                if priority == ModelPriority.FAST_AND_CHEAP:
+                    failure_penalty = 1.0 - success_rates[idx]
+                    if econ == "strict":
+                        w_cost, w_lat, w_fail = 0.75, 0.20, 0.05
+                    elif econ == "quality":
+                        w_cost, w_lat, w_fail = 0.45, 0.35, 0.20
+                    else:  # balanced
+                        w_cost, w_lat, w_fail = 0.60, 0.30, 0.10
+                    score = w_cost * cost_norm[idx] + w_lat * lat_norm[idx] + w_fail * failure_penalty
+                    # Aplica penalização pós-execução acumulada ao score
+                    pf = _model_penalty_factors.get(c["provider_key"], {}).get(c["model_name"], 1.0)
+                    if pf > 1.0:
+                        score = score / pf
+                    scored.append((score, c))
+                    LLM_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"]).set(score)
+                    LLM_MODEL_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"],
+                                                     model=c["model_name"]).set(score)
+                else:  # HIGH_QUALITY
+                    if econ == "strict":
+                        alpha = 0.20
+                    elif econ == "quality":
+                        alpha = 0.00
+                    else:  # balanced
+                        alpha = 0.10
+                    score = success_rates[idx] - 0.3 * lat_norm[idx] - alpha * cost_norm[idx]
+                    # Aplica penalização ao score
+                    pf = _model_penalty_factors.get(c["provider_key"], {}).get(c["model_name"], 1.0)
+                    if pf > 1.0:
+                        score = score / pf
+                    scored.append((score, c))
+                    LLM_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"]).set(score)
+                    LLM_MODEL_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"],
+                                                     model=c["model_name"]).set(score)
+
+            # Ordenação por score
+            if priority == ModelPriority.FAST_AND_CHEAP:
+                scored.sort(key=lambda x: x[0])  # menor é melhor
+            else:
+                scored.sort(key=lambda x: x[0], reverse=True)  # maior é melhor
+            # Exploração ocasional: escolhe candidato alternativo
+            explore_p = float(getattr(settings, "LLM_EXPLORATION_PERCENT", 0.0) or 0.0)
+            if explore_p > 0.0 and len(scored) > 1 and random.random() < explore_p:
+                alt_idx = random.randint(1, len(scored) - 1)
+                scored[0], scored[alt_idx] = scored[alt_idx], scored[0]
+                try:
+                    LLM_EXPLORATION_DECISIONS.labels(role=role.value, priority=priority.value).inc()
+                except Exception:
+                    pass
+                logger.info(
+                    f"Exploração ativada (p={explore_p:.2f}). Priorizando candidato alternativo index={alt_idx}.")
+
+            for score, cand in scored:
+                logger.info(
+                    f"Estratégia {priority.value}: Tentando {cand['provider_key']}:{cand['model_name']} (score={score:.3f}, cost_1k={cand['cost_per_1k']:.3f}, avg_lat={cand['stats'].avg_latency:.3f})"
+                )
+                try:
+                    llm = cand["initializer_factory"](cand["model_name"])
+                    logger.info(f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso.")
+                    LLM_ROUTER_COUNTER.labels(role.value, priority.value, cand["model_name"],
+                                              cand["provider_key"]).inc()
+                    _add_to_cache(cache_key, llm, cand["provider_key"])
                     return llm
                 except Exception as e:
-                    logger.warning(f"Falha ao inicializar o provedor '{provider['name']}': {e}.", exc_info=True)
+                    logger.warning(
+                        f"Falha ao inicializar '{cand['provider_key']}:{cand['model_name']}' (score={score:.3f}): {e}",
+                        exc_info=True)
 
     # Fallback final para o modelo local
     logger.warning("Estratégias de nuvem falharam ou desabilitadas. Recorrendo ao modelo local.")
@@ -265,12 +674,15 @@ def get_llm(
 class LLMClient:
     """Cliente unificado para invocar LLMs com métricas, timeouts e resiliência."""
 
-    def __init__(self, base: BaseChatModel, provider: str, model: str, role: ModelRole, cache_key: str):
+    def __init__(self, base: BaseChatModel, provider: str, model: str, role: ModelRole, cache_key: str,
+                 user_id: Optional[str] = None, project_id: Optional[str] = None):
         self.base = base
         self.provider = provider
         self.model = model
         self.role = role
         self.cache_key = cache_key
+        self.user_id = user_id
+        self.project_id = project_id
 
     def _estimate_tokens(self, text: str) -> int:
         return max(1, len(text) // 4)
@@ -283,6 +695,64 @@ class LLMClient:
 
     def _invoke(self, prompt: str) -> Any:
         return self.base.invoke(prompt)
+
+    def _apply_output_limit(self, max_output_tokens: int):
+        try:
+            if max_output_tokens and max_output_tokens > 0:
+                if self.provider == "openai":
+                    mk = getattr(self.base, "model_kwargs", None)
+                    if isinstance(mk, dict):
+                        mk["max_tokens"] = max_output_tokens
+                    else:
+                        setattr(self.base, "model_kwargs", {"max_tokens": max_output_tokens})
+                elif self.provider == "google_gemini":
+                    if hasattr(self.base, "max_output_tokens"):
+                        setattr(self.base, "max_output_tokens", max_output_tokens)
+                    else:
+                        mk = getattr(self.base, "model_kwargs", None)
+                        if isinstance(mk, dict):
+                            mk["max_output_tokens"] = max_output_tokens
+                        else:
+                            setattr(self.base, "model_kwargs", {"max_output_tokens": max_output_tokens})
+        except Exception:
+            # Silencioso: se não conseguir aplicar diretamente, segue sem travar
+            pass
+
+    def _compute_output_limit(self, prompt: str) -> int:
+        pricing = _get_model_pricing(self.provider, self.model)
+        tokens_in = self._estimate_tokens(prompt)
+        role_key = self.role.value
+        max_req_cost = float(getattr(settings, "LLM_MAX_COST_PER_REQUEST_USD", {}).get(role_key, float("inf")))
+        cap = int(getattr(settings, "LLM_MAX_GENERATION_TOKENS_CAP", 0) or 0)
+        min_tokens = int(getattr(settings, "LLM_MIN_GENERATION_TOKENS", 0) or 0)
+
+        input_cost_usd = (tokens_in / 1000.0) * pricing.input_per_1k_usd
+        remaining_req_usd = max(0.0, (max_req_cost - input_cost_usd)) if max_req_cost < float("inf") else float("inf")
+        remaining_provider_usd = _budget_remaining(self.provider)
+        remaining_user_usd = _tenant_budget_remaining("user", self.user_id)
+        remaining_project_usd = _tenant_budget_remaining("project", self.project_id)
+
+        def usd_to_out_tokens(usd: float) -> int:
+            if usd == float("inf"):
+                return 10 ** 9
+            try:
+                return int((usd / max(1e-12, pricing.output_per_1k_usd)) * 1000)
+            except Exception:
+                return 0
+
+        allowances = [
+            usd_to_out_tokens(remaining_req_usd),
+            usd_to_out_tokens(remaining_provider_usd),
+            usd_to_out_tokens(remaining_user_usd),
+            usd_to_out_tokens(remaining_project_usd),
+        ]
+
+        allowed = min([a for a in allowances if a >= 0]) if allowances else 0
+        if cap and cap > 0:
+            allowed = min(allowed, cap)
+        if allowed < min_tokens and self.provider != "ollama":
+            return allowed
+        return max(allowed, min_tokens)
 
     async def asend(self, prompt: str, timeout_s: Optional[int] = None) -> str:
         """Envia um prompt para o LLM de forma assíncrona."""
@@ -312,6 +782,43 @@ class LLMClient:
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
 
+            # Calcula e aplica limite de geração dinâmico com base em orçamentos/tectos
+            allowed_out = self._compute_output_limit(prompt)
+            min_tokens = int(getattr(settings, "LLM_MIN_GENERATION_TOKENS", 0) or 0)
+            if allowed_out < min_tokens and self.provider != "ollama":
+                # Fallback para modelo local se não houver orçamento suficiente
+                try:
+                    model_map = {
+                        ModelRole.ORCHESTRATOR: settings.OLLAMA_ORCHESTRATOR_MODEL,
+                        ModelRole.CODE_GENERATOR: settings.OLLAMA_CODER_MODEL,
+                        ModelRole.KNOWLEDGE_CURATOR: settings.OLLAMA_CURATOR_MODEL,
+                    }
+                    local_model_name = model_map.get(self.role, settings.OLLAMA_ORCHESTRATOR_MODEL)
+                    model_kwargs: Dict[str, Any] = {}
+                    if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+                    if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+                    if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+                    if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                    if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                    local_llm = ChatOllama(
+                        base_url=settings.OLLAMA_HOST,
+                        model=local_model_name,
+                        temperature=0,
+                        model_kwargs=model_kwargs,
+                    )
+                    if _health_check_ollama(local_llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 2):
+                        logger.info("Sem orçamento suficiente; fallback para modelo local (Ollama).")
+                        self.base = local_llm
+                        self.provider = "ollama"
+                        self.model = local_model_name
+                        _add_to_cache(self.cache_key, local_llm, "ollama")
+                    else:
+                        logger.warning("Falha no health check do fallback local; mantendo provedor atual.")
+                except Exception:
+                    logger.warning("Erro ao executar fallback local; mantendo provedor atual.")
+            else:
+                self._apply_output_limit(allowed_out)
+
             if timeout > 0:
                 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"llm_{self.provider}")
                 future = executor.submit(decorated_invoke, prompt)
@@ -328,8 +835,79 @@ class LLMClient:
                 _llm_cache[self.cache_key].consecutive_failures = 0
 
             output_text = getattr(result, "content", None) or str(result)
-            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "in").inc(self._estimate_tokens(prompt))
-            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "out").inc(self._estimate_tokens(output_text))
+            tokens_in = self._estimate_tokens(prompt)
+            tokens_out = self._estimate_tokens(output_text)
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "in").inc(tokens_in)
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "out").inc(tokens_out)
+
+            # Atualiza estatísticas e gastos (P4)
+            try:
+                stats = _provider_stats.get(self.provider)
+                if stats:
+                    stats.total_requests += 1
+                    stats.success_count += 1
+                    stats.total_latency_seconds += elapsed
+                # Estatísticas por modelo
+                _model_stats.setdefault(self.provider, {})
+                mstats = _model_stats[self.provider].get(self.model)
+                if not mstats:
+                    mstats = ModelStats()
+                    _model_stats[self.provider][self.model] = mstats
+                mstats.total_requests += 1
+                mstats.success_count += 1
+                mstats.total_latency_seconds += elapsed
+                # Precificação por modelo
+                pricing = _get_model_pricing(self.provider, self.model)
+                cost_usd = (tokens_in / 1000.0) * pricing.input_per_1k_usd + (
+                            tokens_out / 1000.0) * pricing.output_per_1k_usd
+                _provider_spend_usd[self.provider] = _provider_spend_usd.get(self.provider, 0.0) + max(0.0, cost_usd)
+                LLM_PROVIDER_SPEND_USD.labels(self.provider, "request").inc(max(0.0, cost_usd))
+                LLM_PROVIDER_BUDGET_REMAINING.labels(self.provider).set(_budget_remaining(self.provider))
+
+                # Atualiza orçamentos de tenant
+                _register_tenant_spend("user", self.user_id, cost_usd)
+                _register_tenant_spend("project", self.project_id, cost_usd)
+
+                # Atualiza EMA de expected_k por papel
+                try:
+                    observed_k = (tokens_in + tokens_out) / 1000.0
+                    prev = float(_expected_k_ema_by_role.get(self.role.value, float(
+                        getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).get(self.role.value, 2.0))))
+                    alpha = float(getattr(settings, "LLM_DYNAMIC_EXPECTED_ALPHA", 0.1) or 0.1)
+                    new_ema = alpha * observed_k + (1.0 - alpha) * prev
+                    _expected_k_ema_by_role[self.role.value] = new_ema
+                    LLM_EXPECTED_KTOKENS_GAUGE.labels(role=self.role.value).set(new_ema)
+                except Exception:
+                    pass
+
+                # Desvio de custo real vs estimativa base (por ktokens)
+                try:
+                    cost_per_1k = pricing.input_per_1k_usd + pricing.output_per_1k_usd
+                    expected_k_baseline = float(_expected_k_ema_by_role.get(self.role.value, 2.0))
+                    expected_cost_baseline = expected_k_baseline * cost_per_1k
+                    deviation = cost_usd - expected_cost_baseline
+                    LLM_COST_DEVIATION_USD.labels(provider=self.provider, model=self.model, role=self.role.value).set(
+                        deviation)
+                except Exception:
+                    pass
+
+                # Penalização se exceder teto por requisição
+                try:
+                    max_req_cost = float(
+                        getattr(settings, "LLM_MAX_COST_PER_REQUEST_USD", {}).get(self.role.value, float("inf")))
+                    if cost_usd > max_req_cost and max_req_cost < float("inf"):
+                        inc = float(getattr(settings, "LLM_COST_PENALTY_INCREMENT", 0.25) or 0.25)
+                        max_factor = float(getattr(settings, "LLM_COST_PENALTY_MAX_FACTOR", 3.0) or 3.0)
+                        curr = _model_penalty_factors.setdefault(self.provider, {}).get(self.model, 1.0)
+                        new_pf = min(max_factor, curr + inc)
+                        _model_penalty_factors[self.provider][self.model] = new_pf
+                        logger.info(
+                            f"Penalização aplicada a {self.provider}:{self.model} por exceder custo (pf={new_pf:.2f}).")
+                except Exception:
+                    pass
+            except Exception:
+                # Não interrompe fluxo em caso de erro nas métricas
+                pass
 
             return output_text
 
@@ -341,6 +919,25 @@ class LLMClient:
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
+
+            # Atualiza estatísticas em falha
+            try:
+                stats = _provider_stats.get(self.provider)
+                if stats:
+                    stats.total_requests += 1
+                    stats.failure_count += 1
+                    stats.total_latency_seconds += elapsed
+                # Estatísticas por modelo
+                _model_stats.setdefault(self.provider, {})
+                mstats = _model_stats[self.provider].get(self.model)
+                if not mstats:
+                    mstats = ModelStats()
+                    _model_stats[self.provider][self.model] = mstats
+                mstats.total_requests += 1
+                mstats.failure_count += 1
+                mstats.total_latency_seconds += elapsed
+            except Exception:
+                pass
 
             logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
             if isinstance(e, FuturesTimeoutError):
@@ -369,11 +966,13 @@ def _infer_model_name(llm: BaseChatModel) -> str:
 
 def get_llm_client(
         role: ModelRole = ModelRole.ORCHESTRATOR,
-        priority: ModelPriority = ModelPriority.LOCAL_ONLY
+        priority: ModelPriority = ModelPriority.LOCAL_ONLY,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
 ) -> LLMClient:
     """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
     cache_key = f"{role.value}_{priority.value}"
     llm = get_llm(role=role, priority=priority, cache_key=cache_key)
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
-    return LLMClient(llm, provider, model_name, role, cache_key)
+    return LLMClient(llm, provider, model_name, role, cache_key, user_id=user_id, project_id=project_id)
