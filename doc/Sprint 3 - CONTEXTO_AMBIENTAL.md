@@ -286,10 +286,12 @@ enriched = context_manager.get_enriched_context(
 ### 3. Busca Avançada de Memórias
 
 ```python
-from app.core.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
+
+memory_db = await get_memory_db()
 
 # Busca filtrada
-memories = await memory_core.arecall_filtered(
+memories = await memory_db.arecall_filtered(
     query="erro de conexão",
     filter_by_type="action_failure",
     hours_ago=24,
@@ -297,14 +299,14 @@ memories = await memory_core.arecall_filtered(
 )
 
 # Busca por período
-recent = await memory_core.arecall_by_timeframe(
+recent = await memory_db.arecall_by_timeframe(
     query="deploy",
     hours_ago=12,
-    n_results=10
+    limit=10
 )
 
 # Buscar falhas recentes
-failures = await memory_core.arecall_recent_failures(n_results=20)
+failures = await memory_db.arecall_recent_failures(limit=20)
 ```
 
 ---
