@@ -10,7 +10,7 @@ from prometheus_client import Counter, Histogram
 from app.config import settings
 from app.core.agents.agent_manager import agent_manager, AgentType
 from app.core.infrastructure.resilience import CircuitBreaker
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 from app.db.graph import graph_db
 from app.models.schemas import Experience
 
@@ -124,13 +124,12 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
             refinement = "Nenhum problema crítico detectado na Memória Semântica. O sistema está operando conforme as lições aprendidas."
         return {"refinement": refinement}
 
-    # ... (o resto do ciclo permanece o mesmo)
-
     res_plan = await _run_phase(Phase.PLAN, _phase_plan)
     if res_plan.get("ok"): shared["hypothesis"] = res_plan.get("result", {}).get("plan")
 
     try:
-        await memory_core.amemorize(
+        memory_db = await get_memory_db()
+        await memory_db.amemorize(
             Experience(type="meta_agent_checkpoint", content=f"PLAN[{iteration}]: {shared.get('hypothesis')}",
                        metadata={"origin": "meta_agent"}))
     except Exception as e:
@@ -144,7 +143,8 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
     if res_ref.get("ok"): shared["refinements"].append(res_ref.get("result"))
 
     try:
-        await memory_core.amemorize(Experience(type="meta_agent_checkpoint", content=f"OBSERVE/REFINE[{iteration}]",
+        memory_db = await get_memory_db()
+        await memory_db.amemorize(Experience(type="meta_agent_checkpoint", content=f"OBSERVE/REFINE[{iteration}]",
                                                metadata={"origin": "meta_agent"}))
     except Exception as e:
         logger.warning(f"Falha ao salvar checkpoint pós-ciclo: {e}")

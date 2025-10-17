@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 from fastapi import Depends  # Adicionado para DI
 
 from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
-from app.core.memory.memory_core import get_memory_db, MemoryCore  # Usar o getter
+from app.core.memory.memory_core import get_memory_db  # Usar o getter
 
 logger = logging.getLogger(__name__)
 
