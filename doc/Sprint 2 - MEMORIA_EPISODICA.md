@@ -215,7 +215,7 @@ Métricas
 Prometheus
 ```
 
-**recall(query: str, n_results: int) -> List[dict]**
+**recall(query: str, limit: int) -> List[dict]**
 
 ```python
 # Busca experiências por similaridade
@@ -273,7 +273,7 @@ Prometheus
     "metadata": {
       ...
     },
-    "distance": 0.15
+    "score": 0.15
   }
 ]
 ```
@@ -295,7 +295,7 @@ Prometheus
 ```json
 {
   "query": "falhas de conexão",
-  "n_results": 5
+  "limit": 5
 }
 ```
 
@@ -431,7 +431,7 @@ curl -X POST http://localhost:8000/api/v1/memory/experience \
 **Via Python:**
 
 ```python
-from app.core.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
 exp = Experience(
@@ -440,7 +440,8 @@ exp = Experience(
     metadata={"tool": "web_search", "query": "FastAPI docs"}
 )
 
-memory_core.memorize(exp)
+memory_db = await get_memory_db()
+await memory_db.amemorize(exp)
 ```
 
 ### 3. Buscar Experiências
@@ -454,12 +455,13 @@ curl "http://localhost:8000/api/v1/memory/recall?query=timeout+Neo4j"
 **Via Python:**
 
 ```python
-results = memory_core.recall(query="erros de timeout", n_results=5)
+memory_db = await get_memory_db()
+results = await memory_db.arecall(query="erros de timeout", limit=5)
 
 for result in results:
     print(f"ID: {result['id']}")
     print(f"Content: {result['content']}")
-    print(f"Distance: {result['distance']}")
+    print(f"Score: {result['score']}")
     print(f"Metadata: {result['metadata']}")
 ```
 
@@ -482,7 +484,6 @@ error_exp = Experience(
     content="Tentativa de conexão com Neo4j falhou com timeout após 10s",
     metadata={"component": "Neo4j", "error_type": "timeout", "duration": 10}
 )
-memory_core.memorize(error_exp)
 
 # 2. Agente implementa solução
 solution_exp = Experience(
@@ -490,10 +491,13 @@ solution_exp = Experience(
     content="Aumentado timeout do Neo4j para 30s resolveu o problema",
     metadata={"component": "Neo4j", "timeout_before": 10, "timeout_after": 30}
 )
-memory_core.memorize(solution_exp)
+
+memory_db = await get_memory_db()
+await memory_db.amemorize(error_exp)
+await memory_db.amemorize(solution_exp)
 
 # 3. Próxima vez que houver timeout, agente busca experiências similares
-similar = memory_core.recall("timeout Neo4j", n_results=3)
+similar = await memory_db.arecall("timeout Neo4j", limit=3)
 # Encontra as duas experiências acima e pode aplicar a solução automaticamente
 ```
 
@@ -508,7 +512,8 @@ exp_with_pii = Experience(
 )
 
 # Automático: PII detectado e mascarado
-memory_core.memorize(exp_with_pii)
+memory_db = await get_memory_db()
+await memory_db.amemorize(exp_with_pii)
 
 # No Qdrant, está armazenado como:
 # "Usuário forneceu email ***@***.*** e telefone [REDACTED_PHONE]"
@@ -518,12 +523,13 @@ memory_core.memorize(exp_with_pii)
 
 ```python
 # Armazena várias experiências sobre diferentes componentes
-memory_core.memorize(Experience(type="log", content="Circuit breaker do LLM Manager foi acionado"))
-memory_core.memorize(Experience(type="log", content="Falha na conexão com OpenAI API"))
-memory_core.memorize(Experience(type="log", content="Timeout no Qdrant após 30 segundos"))
+memory_db = await get_memory_db()
+await memory_db.amemorize(Experience(type="log", content="Circuit breaker do LLM Manager foi acionado"))
+await memory_db.amemorize(Experience(type="log", content="Falha na conexão com OpenAI API"))
+await memory_db.amemorize(Experience(type="log", content="Timeout no Qdrant após 30 segundos"))
 
 # Busca semântica por "problemas de LLM"
-results = memory_core.recall("problemas de LLM", n_results=5)
+results = await memory_db.arecall("problemas de LLM", limit=5)
 # Retorna as duas primeiras experiências (mais relevantes semanticamente)
 ```
 
@@ -607,7 +613,7 @@ Content-Type: application/json
 
 {
   "query": "memória episódica",
-  "n_results": 5
+  "limit": 5
 }
 ```
 
@@ -616,18 +622,21 @@ Content-Type: application/json
 ```python
 # 1. Testar short-term cache
 exp = Experience(type="test", content="cache test")
-memory_core.memorize(exp)
-results = memory_core.recall("cache", n_results=1)
+memory_db = await get_memory_db()
+await memory_db.amemorize(exp)
+results = await memory_db.arecall("cache", limit=1)
 assert len(results) == 1
 
 # 2. Testar PII masking
 exp_pii = Experience(type="test", content="Email: test@example.com")
-memory_core.memorize(exp_pii)
+memory_db = await get_memory_db()
+await memory_db.amemorize(exp_pii)
 # Verificar no Qdrant que email foi mascarado
 
 # 3. Testar quota
+memory_db = await get_memory_db()
 for i in range(201):  # Excede limite de 200
-    memory_core.memorize(Experience(
+    await memory_db.amemorize(Experience(
         type="test",
         content=f"test {i}",
         metadata={"origin": "test_origin"}
