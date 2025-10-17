@@ -386,7 +386,7 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
         logger.debug("Health check Ollama passou.")
         return True
     except Exception as e:
-        logger.error(f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError))
+        logger.error(f"Health check OllaM falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError))
         return False
     finally:
         if executor:
@@ -436,7 +436,8 @@ def invalidate_cache(provider: Optional[str] = None):
 def get_llm(
         role: ModelRole = ModelRole.ORCHESTRATOR,
         priority: ModelPriority = ModelPriority.LOCAL_ONLY,
-        cache_key: str = ""
+        cache_key: str = "",
+        exclude_providers: Optional[list[str]] = None
 ) -> BaseChatModel:
     """Obtém uma instância de um modelo de linguagem com base no papel e na prioridade."""
     if not cache_key:
@@ -457,6 +458,9 @@ def get_llm(
     # Estratégia 1: Prioridade é o Cérebro Soberano Local
     if priority == ModelPriority.LOCAL_ONLY:
         try:
+            # Bloqueia se provedor local estiver excluído
+            if exclude_providers and "ollama" in exclude_providers:
+                raise RuntimeError("Provedor local 'ollama' está excluído para esta seleção.")
             # Model kwargs para tunar desempenho do Ollama
             model_kwargs: Dict[str, Any] = {}
             if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
@@ -524,6 +528,8 @@ def get_llm(
         candidates = []
         for p in cloud_catalog:
             provider_key = p["provider_key"]
+            if exclude_providers and provider_key in exclude_providers:
+                continue
             if not (p["enabled"] and _circuit_closed(provider_key) and _budget_allows(provider_key)):
                 continue
 
@@ -644,7 +650,9 @@ def get_llm(
     # Fallback final para o modelo local
     logger.warning("Estratégias de nuvem falharam ou desabilitadas. Recorrendo ao modelo local.")
     try:
-        # Model kwargs para tunar desempenho do Ollama (fallback)
+        if exclude_providers and "ollama" in exclude_providers:
+            raise RuntimeError("Fallback local desativado: 'ollama' está excluído.")
+        # Model kwargs para tunar desempenho do OllaM (fallback)
         model_kwargs: Dict[str, Any] = {}
         if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
         if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
@@ -827,6 +835,8 @@ class LLMClient:
 
         start = time.perf_counter()
         executor = None
+        input_tokens_real: Optional[int] = None
+        output_tokens_real: Optional[int] = None
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
 
@@ -987,6 +997,18 @@ class LLMClient:
             except Exception:
                 pass
 
+            # Penalização de seleção por falha
+            try:
+                inc = float(getattr(settings, "LLM_FAILURE_PENALTY_INCREMENT", 0.25) or 0.25)
+                max_factor = float(getattr(settings, "LLM_FAILURE_PENALTY_MAX_FACTOR", 3.0) or 3.0)
+                curr = _model_penalty_factors.setdefault(self.provider, {}).get(self.model, 1.0)
+                new_pf = min(max_factor, curr + inc)
+                _model_penalty_factors[self.provider][self.model] = new_pf
+                logger.info(
+                    f"Penalização aplicada a {self.provider}:{self.model} por falha (pf={new_pf:.2f}).")
+            except Exception:
+                pass
+
             logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
             if isinstance(e, FuturesTimeoutError):
                 raise TimeoutError(f"LLM request timeout after {timeout}s") from e
@@ -994,6 +1016,187 @@ class LLMClient:
         finally:
             if executor:
                 executor.shutdown(wait=False, cancel_futures=True)
+
+    def send_enriched(self, prompt: str, timeout_s: Optional[int] = None) -> Dict[str, Any]:
+        """Envia um prompt retornando também tokens reais e custo quando disponível.
+        
+        Retorno:
+        {
+            "response": str,
+            "provider": str,
+            "model": str,
+            "role": str,
+            "input_tokens": Optional[int],
+            "output_tokens": Optional[int],
+            "cost_usd": Optional[float],
+        }
+        """
+        self._validate_prompt(prompt)
+
+        operation = f"llm_send_{self.provider}"
+        timeout = timeout_s or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        circuit_breaker = _provider_circuit_breakers.get(self.provider, _provider_circuit_breakers["unknown"])
+
+        decorated_invoke = resilient(
+            max_attempts=settings.LLM_RETRY_MAX_ATTEMPTS,
+            initial_backoff=settings.LLM_RETRY_INITIAL_BACKOFF_SECONDS,
+            max_backoff=settings.LLM_RETRY_MAX_BACKOFF_SECONDS,
+            circuit_breaker=circuit_breaker,
+            retry_on=(Exception,),
+            operation_name=operation,
+        )(self._invoke)
+
+        start = time.perf_counter()
+        executor = None
+        input_tokens_real: Optional[int] = None
+        output_tokens_real: Optional[int] = None
+        try:
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
+
+            allowed_out = self._compute_output_limit(prompt)
+            min_tokens = int(getattr(settings, "LLM_MIN_GENERATION_TOKENS", 0) or 0)
+            if allowed_out < min_tokens and self.provider != "ollama":
+                try:
+                    model_map = {
+                        ModelRole.ORCHESTRATOR: settings.OLLAMA_ORCHESTRATOR_MODEL,
+                        ModelRole.CODE_GENERATOR: settings.OLLAMA_CODER_MODEL,
+                        ModelRole.KNOWLEDGE_CURATOR: settings.OLLAMA_CURATOR_MODEL,
+                    }
+                    local_model_name = model_map.get(self.role, settings.OLLAMA_ORCHESTRATOR_MODEL)
+                    model_kwargs: Dict[str, Any] = {}
+                    if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+                    if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+                    if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+                    if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                    if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                    local_llm = ChatOllama(
+                        base_url=settings.OLLAMA_HOST,
+                        model=local_model_name,
+                        temperature=0,
+                        model_kwargs=model_kwargs,
+                    )
+                    if _health_check_ollama(local_llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 2):
+                        logger.info("Sem orçamento suficiente; fallback para modelo local (Ollama).")
+                        self.base = local_llm
+                        self.provider = "ollama"
+                        self.model = local_model_name
+                        _add_to_cache(self.cache_key, local_llm, "ollama")
+                    else:
+                        logger.warning("Falha no health check do fallback local; mantendo provedor atual.")
+                except Exception:
+                    logger.warning("Erro ao executar fallback local; mantendo provedor atual.")
+            else:
+                self._apply_output_limit(allowed_out)
+
+            if timeout > 0:
+                executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"llm_{self.provider}")
+                future = executor.submit(decorated_invoke, prompt)
+                result = future.result(timeout=timeout)
+            else:
+                result = decorated_invoke(prompt)
+
+            elapsed = time.perf_counter() - start
+            LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(elapsed)
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "success", "").inc()
+
+            if self.cache_key in _llm_cache:
+                _llm_cache[self.cache_key].consecutive_failures = 0
+
+            output_text = getattr(result, "content", None) or str(result)
+
+            try:
+                input_tokens_real, output_tokens_real = self._extract_usage_tokens(result)
+            except Exception:
+                input_tokens_real = None
+                output_tokens_real = None
+
+            tokens_in = input_tokens_real if input_tokens_real is not None else self._estimate_tokens(prompt)
+            tokens_out = output_tokens_real if output_tokens_real is not None else self._estimate_tokens(output_text)
+
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "in").inc(tokens_in)
+            LLM_TOKENS.labels(self.provider, self.model, self.role.value, "out").inc(tokens_out)
+
+            cost_usd: Optional[float] = None
+            try:
+                pricing = _get_model_pricing(self.provider, self.model)
+                cost_usd = (tokens_in / 1000.0) * pricing.input_per_1k_usd + (tokens_out / 1000.0) * pricing.output_per_1k_usd
+                _provider_spend_usd[self.provider] = _provider_spend_usd.get(self.provider, 0.0) + max(0.0, cost_usd)
+                LLM_PROVIDER_SPEND_USD.labels(self.provider, "request").inc(max(0.0, cost_usd))
+                LLM_PROVIDER_BUDGET_REMAINING.labels(self.provider).set(_budget_remaining(self.provider))
+                _register_tenant_spend("user", self.user_id, cost_usd)
+                _register_tenant_spend("project", self.project_id, cost_usd)
+            except Exception:
+                pass
+
+            enriched = {
+                "response": self._sanitize_output(output_text),
+                "provider": self.provider,
+                "model": self.model,
+                "role": self.role.value,
+                "input_tokens": input_tokens_real,
+                "output_tokens": output_tokens_real,
+                "cost_usd": cost_usd,
+            }
+            return enriched
+
+        except (ValueError, TimeoutError, CircuitOpenError, FuturesTimeoutError) as e:
+            if self.cache_key in _llm_cache:
+                _llm_cache[self.cache_key].consecutive_failures += 1
+            elapsed = time.perf_counter() - start
+            LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
+            LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
+            logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
+            if isinstance(e, FuturesTimeoutError):
+                raise TimeoutError(f"LLM request timeout after {timeout}s") from e
+            raise
+        finally:
+            if executor:
+                executor.shutdown(wait=False, cancel_futures=True)
+
+    def _extract_usage_tokens(self, result: Any) -> (Optional[int], Optional[int]):
+        """Tenta extrair tokens reais do objeto de resposta do LangChain.
+        Procura campos comuns em usage_metadata/response_metadata.
+        """
+        try:
+            meta_sources = []
+            for attr in ("usage_metadata", "response_metadata"):
+                if hasattr(result, attr):
+                    md = getattr(result, attr)
+                    if isinstance(md, dict):
+                        meta_sources.append(md)
+            # Alguns provedores podem embutir em result.additional_kwargs
+            if hasattr(result, "additional_kwargs") and isinstance(getattr(result, "additional_kwargs"), dict):
+                ak = getattr(result, "additional_kwargs")
+                usage = ak.get("usage") or ak.get("token_usage") or {}
+                if isinstance(usage, dict):
+                    meta_sources.append(usage)
+
+            in_val: Optional[int] = None
+            out_val: Optional[int] = None
+            in_keys = ["input_tokens", "prompt_tokens", "input_token_count", "total_tokens_in", "num_prompt_tokens"]
+            out_keys = ["output_tokens", "completion_tokens", "output_token_count", "total_tokens_out", "num_completion_tokens"]
+
+            for md in meta_sources:
+                for k in in_keys:
+                    if md.get(k) is not None:
+                        try:
+                            in_val = int(md.get(k))
+                            break
+                        except Exception:
+                            pass
+                for k in out_keys:
+                    if md.get(k) is not None:
+                        try:
+                            out_val = int(md.get(k))
+                            break
+                        except Exception:
+                            pass
+                if in_val is not None or out_val is not None:
+                    break
+
+            return in_val, out_val
+        except Exception:
+            return None, None
 
 
 # --- Funções de Inferência e Factory ---
@@ -1017,10 +1220,11 @@ def get_llm_client(
         priority: ModelPriority = ModelPriority.LOCAL_ONLY,
         user_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        exclude_providers: Optional[list[str]] = None,
 ) -> LLMClient:
     """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
     cache_key = f"{role.value}_{priority.value}"
-    llm = get_llm(role=role, priority=priority, cache_key=cache_key)
+    llm = get_llm(role=role, priority=priority, cache_key=cache_key, exclude_providers=exclude_providers)
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
     return LLMClient(llm, provider, model_name, role, cache_key, user_id=user_id, project_id=project_id)

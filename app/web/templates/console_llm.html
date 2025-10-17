@@ -3,6 +3,29 @@
 <section>
     <h2>Console LLM</h2>
 
+    <div style="margin-bottom: 0.5rem;">
+        <label for="view_mode" class="muted">Exibição</label>
+        <select id="view_mode" data-ui="custom">
+            <option value="detalhado" selected>detalhado</option>
+            <option value="resumido">resumido</option>
+        </select>
+    </div>
+
+    <div id="info-panels" class="grid" style="margin-bottom: 0.75rem;">
+        <div class="card">
+            <h3>Sistema</h3>
+            <ul class="kv-list" id="sys-kv"></ul>
+        </div>
+        <div class="card">
+            <h3>LLMs</h3>
+            <div class="metrics-grid" id="llms-wrap"></div>
+        </div>
+        <div class="card">
+            <h3>Cache</h3>
+            <ul class="kv-list" id="cache-kv"></ul>
+        </div>
+    </div>
+
     <div class="card" style="margin-bottom: 0.75rem;">
         <form id="llm-form">
             <label for="prompt">Prompt</label>
@@ -50,11 +73,50 @@
         </form>
     </div>
 
+    <div id="error-banner" class="card" style="display:none; background:#fee; color:#822;">
+        <h3>Erro</h3>
+        <pre id="error-text" style="white-space: pre-wrap;"> </pre>
+    </div>
+
     <div id="result" class="card" style="display:none;">
         <h3>Resultado</h3>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.5rem;">
+            <button type="button" id="copy-response" title="Copiar resposta">Copiar</button>
+            <a id="model-link" href="#" class="btn-rename" style="display:none;" title="Abrir página do modelo">Abrir modelo</a>
+        </div>
         <pre id="response"></pre>
-        <p><strong>Provider:</strong> <span id="provider"></span> • <strong>Model:</strong> <span id="model"></span> •
-            <strong>Role:</strong> <span id="res_role"></span></p>
+        <div class="metrics-grid" style="margin-top:0.5rem;">
+            <div>
+                <h4>Provider/Model</h4>
+                <ul class="kv-list">
+                    <li><span class="key">Provider</span><span class="val" id="provider"></span></li>
+                    <li><span class="key">Model</span><span class="val" id="model"></span></li>
+                    <li><span class="key">Role</span><span class="val" id="res_role"></span></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Requisição</h4>
+                <ul class="kv-list">
+                    <li><span class="key">Priority</span><span class="val" id="res_priority"></span></li>
+                    <li><span class="key">Timeout (s)</span><span class="val" id="res_timeout"></span></li>
+                    <li><span class="key">User</span><span class="val" id="res_user_id"></span></li>
+                    <li><span class="key">Project</span><span class="val" id="res_project_id"></span></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Métricas</h4>
+                <ul class="kv-list">
+                    <li><span class="key">Elapsed (ms)</span><span class="val" id="elapsed_ms"></span></li>
+                    <li><span class="key">Tokens in</span><span class="val" id="tokens_in"></span></li>
+                    <li><span class="key">Tokens out</span><span class="val" id="tokens_out"></span></li>
+                    <li><span class="key">Custo (USD)</span><span class="val" id="cost_usd"></span></li>
+                </ul>
+            </div>
+        </div>
+        <details id="local-history" style="margin-top:0.5rem;">
+            <summary>Histórico local</summary>
+            <ul class="kv-list" id="history-list"></ul>
+        </details>
     </div>
 </section>
 
@@ -143,6 +205,119 @@
         });
     }
 
+    // Helpers
+    async function fetchJson(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Erro ao carregar ' + url);
+        return await res.json();
+    }
+    function estimateTokens(text) {
+        if (!text) return 0;
+        return Math.max(0, Math.round(text.length / 4));
+    }
+    function safeText(v) {
+        return v === undefined || v === null ? '' : String(v);
+    }
+
+    const HISTORY_KEY = 'janus_llm_history';
+    function pushHistory(entry) {
+        try {
+            let arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            arr.unshift(entry);
+            arr = arr.slice(0, 50);
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+            renderHistory(arr);
+        } catch (e) {}
+    }
+    function renderHistory(existing) {
+        const list = document.getElementById('history-list');
+        const details = document.getElementById('local-history');
+        if (!list || !details) return;
+        let arr = existing;
+        if (!Array.isArray(arr)) {
+            try { arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { arr = []; }
+        }
+        list.innerHTML = (arr || []).slice(0, 10).map(e => {
+            const d = new Date(e.ts);
+            const t = d.toLocaleString();
+            const cost = e.cost_usd != null ? ('$' + Number(e.cost_usd).toFixed(5)) : '—';
+            const inTok = String(e.input_tokens) + (e.input_tokens_approx ? ' ≈' : '');
+            const outTok = String(e.output_tokens) + (e.output_tokens_approx ? ' ≈' : '');
+            const model = [e.provider, e.model].filter(Boolean).join('/');
+            const role = e.role || '';
+            const prompt = (e.prompt_excerpt || '').replace(/\n/g, ' ');
+            return `<li><span class="key">${safeText(t)}</span><span class="val">${safeText(model)} | ${safeText(role)} | in:${inTok} out:${outTok} | ${cost}</span></li>`;
+        }).join('');
+    }
+
+    const VIEW_MODE_KEY = 'janus_llm_view_mode';
+    function applyViewMode(mode) {
+        const info = document.getElementById('info-panels');
+        const adv = document.querySelector('#llm-form details');
+        if (info) info.style.display = (mode === 'resumido') ? 'none' : '';
+        if (adv) adv.open = (mode === 'detalhado');
+    }
+
+    // Painéis de informação
+    async function initInfoPanels() {
+        try {
+            const [sys, providers, breakers, cacheModels, cacheResponses] = await Promise.all([
+                fetchJson('/api/v1/system/status'),
+                fetchJson('/api/v1/llm/providers'),
+                fetchJson('/api/v1/llm/circuit-breakers'),
+                fetchJson('/api/v1/llm/cache/status'),
+                fetchJson('/api/v1/llm/response-cache/status'),
+            ]);
+            renderSystem(sys);
+            renderLLMs(providers, breakers);
+            renderCache(cacheModels, cacheResponses);
+        } catch (e) {
+            // silencioso, UI opcional
+        }
+    }
+    function renderSystem(sys) {
+        const kv = document.getElementById('sys-kv');
+        if (!kv || !sys) return;
+        const perf = sys.performance || {};
+        const list = [
+            ['App', sys.app_name],
+            ['Env', sys.environment],
+            ['Uptime (s)', sys.uptime_seconds],
+            ['CPU %', perf.cpu_percent ?? '—'],
+            ['Mem %', perf.memory_percent ?? '—'],
+        ];
+        kv.innerHTML = list.map(([k,v]) => `<li><span class="key">${k}</span><span class="val">${safeText(v)}</span></li>`).join('');
+    }
+    function renderLLMs(providers, breakers) {
+        const wrap = document.getElementById('llms-wrap');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        const bmap = {};
+        (Array.isArray(breakers) ? breakers : []).forEach(b => { bmap[b.provider] = b.state; });
+        const items = Array.isArray(providers) ? providers : Object.values(providers || {});
+        items.forEach(p => {
+            const name = p.name || p.provider || 'provider';
+            const state = bmap[p.provider] || 'unknown';
+            const badgeCls = state === 'closed' ? 'badge-closed'
+                : state === 'open' ? 'badge-open'
+                : state === 'half_open' ? 'badge-half'
+                : 'badge-neutral';
+            const el = document.createElement('div');
+            el.innerHTML = `<div><span class="badge ${badgeCls}" title="Breaker">${state}</span> <span class="muted">${name}</span></div>`;
+            wrap.appendChild(el);
+        });
+    }
+    function renderCache(cacheModels, cacheResponses) {
+        const kv = document.getElementById('cache-kv');
+        if (!kv) return;
+        const a = (cacheModels && cacheModels.total_cached) || 0;
+        const b = (cacheResponses && cacheResponses.total_cached) || 0;
+        kv.innerHTML = `
+            <li><span class="key">Model cache</span><span class="val">${safeText(a)}</span></li>
+            <li><span class="key">Response cache</span><span class="val">${safeText(b)}</span></li>
+        `;
+    }
+
     // Auto-resize do prompt
     const promptInput = document.getElementById('prompt');
 
@@ -154,15 +329,37 @@
     promptInput.addEventListener('input', autoResizePrompt);
     autoResizePrompt();
 
-    // Custom select nos campos de role/priority
+    // Custom select nos campos de role/priority e exibição
     initCustomSelect(document.getElementById('role'));
     initCustomSelect(document.getElementById('priority'));
+    const viewModeSel = document.getElementById('view_mode');
+    if (viewModeSel) {
+        const savedView = localStorage.getItem(VIEW_MODE_KEY) || 'detalhado';
+        viewModeSel.value = savedView;
+        initCustomSelect(viewModeSel);
+        applyViewMode(savedView);
+        viewModeSel.addEventListener('change', () => {
+            const m = viewModeSel.value;
+            localStorage.setItem(VIEW_MODE_KEY, m);
+            applyViewMode(m);
+        });
+    }
 
     // Submit com Ctrl+Enter
     promptInput.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'Enter') {
             e.preventDefault();
             document.getElementById('llm-form').dispatchEvent(new Event('submit'));
+        }
+    });
+
+    // Copiar resposta
+    document.getElementById('copy-response').addEventListener('click', async () => {
+        try {
+            const txt = document.getElementById('response').textContent || '';
+            await navigator.clipboard.writeText(txt);
+        } catch (e) {
+            // silencioso
         }
     });
 
@@ -179,8 +376,13 @@
         // feedback visual de carregamento
         const resCard = document.getElementById('result');
         const responsePre = document.getElementById('response');
+        const errBanner = document.getElementById('error-banner');
+        const errText = document.getElementById('error-text');
+        if (errBanner) errBanner.style.display = 'none';
+        if (errText) errText.textContent = '';
         resCard.style.display = 'block';
         responsePre.textContent = '⏳ Gerando resposta...';
+        const startT = performance.now();
         try {
             const res = await fetch('/api/v1/llm/invoke', {
                 method: 'POST',
@@ -188,17 +390,82 @@
                 body: JSON.stringify(payload),
             });
             if (!res.ok) {
-                const err = await res.json().catch(() => ({message: res.statusText}));
-                throw new Error(err.detail || err.message || 'Erro ao invocar LLM');
+                let errMsg = res.statusText;
+                try {
+                    const err = await res.json();
+                    errMsg = err.detail || err.message || errMsg;
+                } catch {}
+                const e = new Error(errMsg || 'Erro ao invocar LLM');
+                e.status = res.status;
+                e.url = (typeof res.url === 'string') ? res.url : '/api/v1/llm/invoke';
+                throw e;
             }
             const data = await res.json();
-            responsePre.textContent = data.response;
-            document.getElementById('provider').textContent = data.provider;
-            document.getElementById('model').textContent = data.model;
-            document.getElementById('res_role').textContent = data.role;
+            responsePre.textContent = data.response || '';
+            document.getElementById('provider').textContent = safeText(data.provider);
+            document.getElementById('model').textContent = safeText(data.model);
+            document.getElementById('res_role').textContent = safeText(data.role);
+
+            // Detalhes da requisição
+            document.getElementById('res_priority').textContent = safeText(payload.priority);
+            document.getElementById('res_timeout').textContent = safeText(payload.timeout_seconds);
+            document.getElementById('res_user_id').textContent = safeText(payload.user_id);
+            document.getElementById('res_project_id').textContent = safeText(payload.project_id);
+
+            // Métricas
+            const elapsed = Math.round(performance.now() - startT);
+            const realIn = (data.input_tokens !== undefined && data.input_tokens !== null) ? Number(data.input_tokens) : null;
+            const realOut = (data.output_tokens !== undefined && data.output_tokens !== null) ? Number(data.output_tokens) : null;
+            const approxIn = estimateTokens(payload.prompt);
+            const approxOut = estimateTokens(data.response || '');
+            const displayIn = realIn != null ? String(realIn) : String(approxIn) + ' ≈';
+            const displayOut = realOut != null ? String(realOut) : String(approxOut) + ' ≈';
+            const costUsd = (data.cost_usd !== undefined && data.cost_usd !== null) ? Number(data.cost_usd) : null;
+            document.getElementById('elapsed_ms').textContent = String(elapsed);
+            document.getElementById('tokens_in').textContent = displayIn;
+            document.getElementById('tokens_out').textContent = displayOut;
+            document.getElementById('cost_usd').textContent = costUsd != null ? ('$' + costUsd.toFixed(5)) : '—';
+
+            // Histórico local
+            pushHistory({
+                ts: Date.now(),
+                provider: data.provider || '',
+                model: data.model || '',
+                role: data.role || payload.role || '',
+                prompt_excerpt: (payload.prompt || '').slice(0, 280),
+                response_excerpt: (data.response || '').slice(0, 280),
+                input_tokens: realIn != null ? realIn : approxIn,
+                input_tokens_approx: realIn == null,
+                output_tokens: realOut != null ? realOut : approxOut,
+                output_tokens_approx: realOut == null,
+                cost_usd: costUsd,
+                elapsed_ms: elapsed,
+            });
+
+            // Link do modelo
+            const modelLink = document.getElementById('model-link');
+            if (data.model) {
+                modelLink.href = `/web/models/${encodeURIComponent(data.model)}`;
+                modelLink.style.display = 'inline';
+            } else {
+                modelLink.style.display = 'none';
+            }
+
             resCard.style.display = 'block';
         } catch (err) {
-            alert(err.message);
+            const errBanner = document.getElementById('error-banner');
+            const errText = document.getElementById('error-text');
+            const status = (err && err.status) ? `status ${err.status}` : '';
+            const url = (err && err.url) ? String(err.url) : '/api/v1/llm/invoke';
+            const role = payload.role;
+            const pri = payload.priority;
+            const to = payload.timeout_seconds;
+            const msg = (err && err.message) ? String(err.message) : 'Erro ao invocar LLM';
+            const full = `${msg}\nURL: ${url} ${status}\nRole: ${role} | Priority: ${pri} | Timeout: ${to}s`;
+            if (errText) errText.textContent = full;
+            if (errBanner) errBanner.style.display = 'block';
+            const resCard = document.getElementById('result');
+            if (resCard) resCard.style.display = 'none';
         }
     });
 
@@ -208,7 +475,25 @@
         document.getElementById('provider').textContent = '';
         document.getElementById('model').textContent = '';
         document.getElementById('res_role').textContent = '';
+        document.getElementById('res_priority').textContent = '';
+        document.getElementById('res_timeout').textContent = '';
+        document.getElementById('res_user_id').textContent = '';
+        document.getElementById('res_project_id').textContent = '';
+        document.getElementById('elapsed_ms').textContent = '';
+        document.getElementById('tokens_in').textContent = '';
+        document.getElementById('tokens_out').textContent = '';
+        document.getElementById('cost_usd').textContent = '';
+        const modelLink = document.getElementById('model-link');
+        if (modelLink) { modelLink.style.display = 'none'; modelLink.href = '#'; }
         document.getElementById('result').style.display = 'none';
+        const errBanner = document.getElementById('error-banner');
+        const errText = document.getElementById('error-text');
+        if (errBanner) errBanner.style.display = 'none';
+        if (errText) errText.textContent = '';
     });
+
+    // Inicializa painéis
+    initInfoPanels();
+    renderHistory();
 </script>
 {% endblock %}

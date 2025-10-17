@@ -71,6 +71,27 @@ class LLMService:
         logger.info("Orquestrando invalidação de cache de LLMs via serviço", provider=provider)
         return self._repo.invalidate_cache(provider)
 
+    # --- Response cache specific controls ---
+    def get_response_cache_status(self) -> List[Dict[str, Any]]:
+        """Retorna apenas entradas do cache de respostas (prompts/respostas)."""
+        logger.info("Buscando status do cache de respostas via serviço.")
+        try:
+            entries = self._repo.get_cache_entries()
+            return [e for e in entries if e.get("kind") == "response"]
+        except LLMRepositoryError as e:
+            logger.error("Erro no repositório ao obter status do cache de respostas", exc_info=e)
+            raise LLMServiceError("Falha ao obter status do cache de respostas.") from e
+
+    def invalidate_response_cache(self, prompt: Optional[str] = None, role: Optional[str] = None,
+                                  priority: Optional[str] = None) -> int:
+        """Invalida entradas do cache de respostas por filtro (prompt/role/priority) ou completas se não informado."""
+        logger.info("Invalidando cache de respostas via serviço", prompt=bool(prompt), role=role, priority=priority)
+        try:
+            return self._repo.invalidate_response_cache(prompt=prompt, role=role, priority=priority)
+        except LLMRepositoryError as e:
+            logger.error("Erro no repositório ao invalidar cache de respostas", exc_info=e)
+            raise LLMServiceError("Falha ao invalidar cache de respostas.") from e
+
     def get_circuit_breaker_statuses(self) -> List[Dict[str, Any]]:
         logger.info("Buscando status dos circuit breakers via serviço.")
         return self._repo.get_circuit_breakers()
