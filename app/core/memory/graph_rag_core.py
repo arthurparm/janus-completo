@@ -12,7 +12,7 @@ from prometheus_client import Counter, Histogram
 from app.config import settings
 from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.llm.llm_manager import get_llm, ModelRole
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,8 @@ class VectorRetriever:
     async def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         t0 = time.perf_counter()
         try:
-            res = await memory_core.arecall(query=query, n_results=k)
+            memory_db = await get_memory_db()
+            res = await memory_db.arecall(query=query, limit=k)
             _RAG_EVENTS.labels("vector_retrieval", "success").inc()
             _RAG_STAGE_LAT.labels("vector_retrieval", "success").observe(time.perf_counter() - t0)
             return res or []
