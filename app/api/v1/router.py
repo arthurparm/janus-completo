@@ -4,6 +4,9 @@ from .endpoints import system_status, knowledge, agent, memory, learning, tasks,
     optimization, llm, collaboration, observability, meta_agent
 
 api_router = APIRouter()
+from app.api.v1.endpoints.workspace import router as workspace_router  # noqa: E402
+
+api_router.include_router(workspace_router)
 
 api_router.include_router(system_status.router, prefix="/system")
 api_router.include_router(knowledge.router, prefix="/knowledge")

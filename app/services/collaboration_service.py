@@ -22,6 +22,11 @@ class TaskNotFoundError(CollaborationServiceError):
     """Raised when a task is not found."""
     pass
 
+
+class AgentNotFoundError(CollaborationServiceError):
+    """Raised when an agent is not found."""
+    pass
+
 # --- Collaboration Service ---
 
 class CollaborationService:
@@ -101,6 +106,42 @@ class CollaborationService:
 
     def get_health_status(self) -> Dict[str, Any]:
         return self._repo.get_system_health()
+
+    # --- Shared Workspace Operations ---
+    def add_artifact(self, key: str, value: Any, author: str) -> Dict[str, Any]:
+        logger.info("Orquestrando adição de artefato ao workspace", key=key, author=author)
+        # Validar agente autor, se fornecido
+        if author:
+            agent = self._repo.find_agent_by_id(author)
+            if not agent:
+                raise AgentNotFoundError(f"Agente '{author}' não encontrado.")
+        self._repo.add_artifact(key, value, author)
+        return {"key": key, "author": author}
+
+    def get_artifact(self, key: str) -> Optional[Any]:
+        logger.info("Orquestrando leitura de artefato do workspace", key=key)
+        return self._repo.get_artifact(key)
+
+    def send_message(self, from_agent: str, to_agent: str, content: str) -> Dict[str, Any]:
+        logger.info("Orquestrando envio de mensagem entre agentes", from_agent=from_agent, to_agent=to_agent)
+        # Validar agentes
+        if not self._repo.find_agent_by_id(from_agent):
+            raise AgentNotFoundError(f"Agente '{from_agent}' não encontrado.")
+        if not self._repo.find_agent_by_id(to_agent):
+            raise AgentNotFoundError(f"Agente '{to_agent}' não encontrado.")
+        return self._repo.send_message(from_agent, to_agent, content)
+
+    def get_messages_for(self, agent_id: str) -> List[Dict[str, Any]]:
+        logger.info("Orquestrando recuperação de mensagens para agente", agent_id=agent_id)
+        # Validar agente
+        if not self._repo.find_agent_by_id(agent_id):
+            raise AgentNotFoundError(f"Agente '{agent_id}' não encontrado.")
+        return self._repo.get_messages_for(agent_id)
+
+    # --- System Control ---
+    def shutdown_system(self) -> None:
+        logger.info("Orquestrando desligamento do sistema multi-agente")
+        self._repo.shutdown_all()
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_collaboration_service(request: Request) -> CollaborationService:

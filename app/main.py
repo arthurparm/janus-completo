@@ -26,6 +26,7 @@ from app.repositories.context_repository import ContextRepository
 from app.repositories.sandbox_repository import SandboxRepository
 from app.repositories.reflexion_repository import ReflexionRepository
 from app.repositories.tool_repository import ToolRepository
+from app.repositories.collaboration_repository import CollaborationRepository
 
 from app.services.agent_service import AgentService
 from app.services.memory_service import MemoryService
@@ -35,6 +36,7 @@ from app.services.context_service import ContextService
 from app.services.sandbox_service import SandboxService
 from app.services.reflexion_service import ReflexionService
 from app.services.tool_service import ToolService
+from app.services.collaboration_service import CollaborationService
 from app.services.observability_service import ObservabilityService
 from app.repositories.observability_repository import ObservabilityRepository
 from app.core.monitoring import get_health_monitor
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
     app.state.context_repo = ContextRepository()
     app.state.sandbox_repo = SandboxRepository()
     app.state.tool_repo = ToolRepository()
+    app.state.collaboration_repo = CollaborationRepository()
 
     # --- Camada de Serviço ---
     app.state.agent_service = AgentService(app.state.agent_repo)
@@ -91,6 +94,7 @@ async def lifespan(app: FastAPI):
     app.state.reflexion_repo = ReflexionRepository(memory_service=app.state.memory_service)
     app.state.reflexion_service = ReflexionService(repo=app.state.reflexion_repo)
     app.state.tool_service = ToolService(app.state.tool_repo)
+    app.state.collaboration_service = CollaborationService(app.state.collaboration_repo)
     # LLM (Sprint 10): Cérebro Híbrido
     app.state.llm_repo = LLMRepository()
     app.state.llm_service = LLMService(app.state.llm_repo)

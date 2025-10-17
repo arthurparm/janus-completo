@@ -68,6 +68,31 @@ class CollaborationRepository:
             "workspace_status": system.get_workspace_status()
         }
 
+    # --- Shared Workspace Operations ---
+    def add_artifact(self, key: str, value: Any, author: str):
+        logger.debug("Adicionando artefato no workspace via repositório", key=key, author=author)
+        self._get_system().workspace.add_artifact(key, value, author)
+
+    def get_artifact(self, key: str) -> Optional[Any]:
+        logger.debug("Lendo artefato do workspace via repositório", key=key)
+        return self._get_system().workspace.get_artifact(key)
+
+    def send_message(self, from_agent: str, to_agent: str, content: str) -> Dict[str, Any]:
+        logger.debug("Enviando mensagem via repositório", from_agent=from_agent, to_agent=to_agent)
+        system = self._get_system()
+        system.workspace.send_message(from_agent, to_agent, content)
+        # Retorna a última mensagem registrada (garantido pela operação acima)
+        return system.workspace.messages[-1] if system.workspace.messages else {}
+
+    def get_messages_for(self, agent_id: str) -> List[Dict[str, Any]]:
+        logger.debug("Recuperando mensagens para agente via repositório", agent_id=agent_id)
+        return self._get_system().workspace.get_messages_for(agent_id)
+
+    # --- System Control ---
+    def shutdown_all(self):
+        logger.debug("Desligando todos os agentes via repositório")
+        self._get_system().shutdown_all()
+
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_collaboration_repository() -> CollaborationRepository:
