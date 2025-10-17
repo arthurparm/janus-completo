@@ -140,6 +140,63 @@ Endpoints REST para interagir com o message broker:
 }
 ```
 
+**GET** `/api/v1/tasks/queue/{queue_name}/policy`
+
+Retorna política e argumentos atuais da fila via Management API (TTL, max-length, DLX, etc.).
+
+```json
+{
+  "name": "janus.knowledge.consolidation",
+  "durable": true,
+  "messages": 5,
+  "consumers": 1,
+  "arguments": {
+    "x-message-ttl": 60000,
+    "x-max-length": 1000,
+    "x-dead-letter-exchange": "janus.dlx"
+  }
+}
+```
+
+**GET** `/api/v1/tasks/queue/{queue_name}/policy/validate`
+
+Valida política da fila contra configuração esperada e aponta divergências.
+
+```json
+{
+  "status": "ok",
+  "message": "Política consistente com configuração esperada",
+  "details": {}
+}
+```
+
+**POST** `/api/v1/tasks/queue/{queue_name}/policy/reconcile`
+
+Reconcilia política (deleta e recria a fila com parâmetros esperados quando `force_delete=true`).
+
+Request:
+
+```json
+{
+  "force_delete": true
+}
+```
+
+Response:
+
+```json
+{
+  "status": "reconciled",
+  "message": "Fila recriada com política esperada",
+  "details": {
+    "deleted": true,
+    "recreated": true
+  }
+}
+```
+
+> Atenção: Deletar a fila remove mensagens pendentes.
+
 ---
 
 ## Filas Disponíveis

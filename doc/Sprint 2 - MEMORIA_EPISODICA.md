@@ -3,7 +3,12 @@
 ## ✅ Status: **COMPLETAMENTE IMPLEMENTADA E APRIMORADA**
 
 A Sprint 2 foi **totalmente implementada** com uma arquitetura sofisticada de memória episódica usando **Qdrant** como
-banco vetorial e sistema de camadas (short-term + long-term).
+banco vetorial.
+
+> Atualização de implementação: No código atual (`app/core/memory/memory_core.py`), não há
+> cache de curto prazo (OrderedDict/TTL/LRU), detecção/mascaramento de PII, criptografia de conteúdo
+> ou gestão de quota por origem. A persistência e busca estão focadas na camada de longo prazo (Qdrant),
+> com filtros por `metadata.*` e campo temporal `ts_ms`. A função `decrypt_text` é um stub (sem criptografia efetiva).
 
 ---
 
@@ -252,18 +257,23 @@ Prometheus
 
 **POST** `/api/v1/memory/memorize`
 
+Adiciona uma experiência ao Qdrant com embedding e `ts_ms`.
+
 ```json
 {
   "type": "agent_action",
   "content": "O agente executou a ferramenta de busca...",
   "metadata": {
     "tool": "web_search",
-    "result": "success"
+    "result": "success",
+    "origin": "agent_core"
   }
 }
 ```
 
-**GET** `/api/v1/memory/recall?query=busca+web`
+**GET** `/api/v1/memory/recall?query=busca+web&limit=5`
+
+Busca por similaridade semântica (Qdrant) e retorna payloads.
 
 ```json
 [
@@ -271,33 +281,26 @@ Prometheus
     "id": "uuid",
     "content": "O agente executou a ferramenta de busca...",
     "metadata": {
-      ...
+      "type": "agent_action",
+      "origin": "agent_core",
+      "ts_ms": 1728224400123
     },
-    "score": 0.15
+    "score": 0.85
   }
 ]
 ```
 
-**POST** `/api/v1/memory/experience` (alias)
+**GET** `/api/v1/memory/recall/filtered?query=erro&min_score=0.7&filter_by_type=action_failure`
 
-```json
-{
-  "content": "Experiência detalhada...",
-  "type": "system_event",
-  "metadata": {
-    "component": "Neo4j"
-  }
-}
-```
+Busca com filtros de tipo/origem e limiar mínimo de score.
 
-**POST** `/api/v1/memory/search` (alias)
+**GET** `/api/v1/memory/recall/timeframe?query=deploy&hours_ago=24&limit=5`
 
-```json
-{
-  "query": "falhas de conexão",
-  "limit": 5
-}
-```
+Busca restrita a um período temporal recente usando `ts_ms`.
+
+**GET** `/api/v1/memory/recall/recent_failures?limit=10`
+
+Retorna falhas recentes para análise (tipo `action_failure`).
 
 ---
 

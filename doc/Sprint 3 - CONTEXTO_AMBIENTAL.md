@@ -18,7 +18,7 @@ de memórias**, permitindo ao Janus ter consciência temporal e percepção do a
 
 ## 🏗️ Arquitetura Implementada
 
-### 1. Context Manager (`app/core/context_manager.py`)
+### 1. Context Manager (`app/core/infrastructure/context_manager.py`)
 
 Módulo central responsável por fornecer consciência ambiental ao agente.
 
@@ -207,6 +207,33 @@ Body:
 #### 4.4 `GET /api/v1/context/format-prompt`
 
 Retorna contexto formatado para inclusão em prompts
+
+#### 4.5 `GET /api/v1/context/web-cache/status`
+
+Retorna informações do cache de busca web (hits, misses, tamanho, TTL).
+
+Exemplo de resposta:
+
+```json
+{
+  "hits": 12,
+  "misses": 3,
+  "size": 4,
+  "ttl_seconds": 600
+}
+```
+
+#### 4.6 `POST /api/v1/context/web-cache/invalidate`
+
+Invalida entradas do cache por `query` (prefixo) ou completamente se não informado.
+
+Body:
+
+```json
+{
+  "query": "Python tutorials"
+}
+```
 
 ---
 
