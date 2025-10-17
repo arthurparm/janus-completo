@@ -176,7 +176,7 @@ def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]]):
         return graph_ctx, vector_ctx
 
 
-async def query_knowledge_graph(question: str) -> str:
+async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     """
     Pipeline Graph RAG com estágios: cache -> (graph_retrieval + opcional vector_retrieval) -> rerank -> síntese -> guardas.
     Mantém a assinatura anterior e retorna resposta em texto.
@@ -198,11 +198,11 @@ async def query_knowledge_graph(question: str) -> str:
         graph_ctx = graph_ret.retrieve_with_llm(question)
         # Optional: additional vector retrieval from episodic memory
         vector_ret = VectorRetriever()
-        vector_ctx = await vector_ret.retrieve(question, k=5)
+        vector_ctx = await vector_ret.retrieve(question, k=max(1, min(5, limit)))
         # Simple fusion: keep both; store compact context in cache
         fused_ctx = {
-            "graph": graph_ctx,
-            "vector": [{"id": v.get("id"), "content": v.get("content", "")} for v in vector_ctx],
+            "graph": graph_ctx[:max(1, limit)],
+            "vector": [{"id": v.get("id"), "content": v.get("content", "")} for v in vector_ctx][:max(1, limit)],
         }
         _CONTEXT_CACHE.put(qkey, fused_ctx)
     else:
@@ -218,10 +218,10 @@ async def query_knowledge_graph(question: str) -> str:
     # Prepare context text
     vector_texts = []
     try:
-        vector_texts = [str(v.get("content", "")) for v in vector_ctx][:5]
+        vector_texts = [str(v.get("content", "")) for v in vector_ctx][:max(1, min(5, limit))]
     except Exception:
         vector_texts = []
-    context_text = f"Graph: {graph_ctx}\nVector: {vector_texts}" if vector_texts else f"Graph: {graph_ctx}"
+    context_text = f"Graph: {graph_ctx[:max(1, limit)]}\nVector: {vector_texts}" if vector_texts else f"Graph: {graph_ctx[:max(1, limit)]}"
 
     t_synth = time.perf_counter()
     try:

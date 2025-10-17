@@ -53,13 +53,14 @@ async def add_memory(
 async def recall_memories(
         query: str = Query(..., description="Consulta em linguagem natural para buscar memórias."),
         limit: Optional[int] = Query(None, ge=1, le=50, description="Máximo de resultados a retornar."),
+        min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Pontuação mínima (0..1) para filtrar resultados."),
         service: MemoryService = Depends(get_memory_service)
 ):
     """
     Delega a busca por experiências para o MemoryService.
     O tratamento de erros é feito pelo exception handler central.
     """
-    return await service.recall_experiences(query=query, limit=limit)
+    return await service.recall_experiences(query=query, limit=limit, min_score=min_score)
 
 # --- Advanced recall endpoints ---
 
@@ -74,6 +75,7 @@ async def recall_filtered(
         origin: Optional[str] = Query(None, description="Filtrar por metadata.origin"),
         status: Optional[str] = Query(None, description="Filtrar por metadata.status"),
         limit: Optional[int] = Query(None, ge=1, le=50, description="Máximo de resultados a retornar."),
+        min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Pontuação mínima (0..1) para filtrar resultados."),
         service: MemoryService = Depends(get_memory_service)
 ):
     filters: Dict[str, Any] = {}
@@ -83,7 +85,7 @@ async def recall_filtered(
         filters["origin"] = origin
     if status is not None:
         filters["status"] = status
-    return await service.recall_filtered(query=query, filters=filters, limit=limit)
+    return await service.recall_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
 
 
 def _to_ts_ms(iso_str: Optional[str]) -> Optional[int]:
@@ -105,11 +107,12 @@ async def recall_by_timeframe(
         start: Optional[str] = Query(None, description="Início ISO-8601 (ex.: 2025-01-01T00:00:00+00:00)"),
         end: Optional[str] = Query(None, description="Fim ISO-8601 (ex.: 2025-01-02T00:00:00+00:00)"),
         limit: Optional[int] = Query(None, ge=1, le=50),
+        min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Pontuação mínima (0..1) para filtrar resultados."),
         service: MemoryService = Depends(get_memory_service)
 ):
     start_ms = _to_ts_ms(start)
     end_ms = _to_ts_ms(end)
-    return await service.recall_by_timeframe(query=query, start_ts_ms=start_ms, end_ts_ms=end_ms, limit=limit)
+    return await service.recall_by_timeframe(query=query, start_ts_ms=start_ms, end_ts_ms=end_ms, limit=limit, min_score=min_score)
 
 @router.get(
     "/recall/recent_failures",
@@ -119,6 +122,7 @@ async def recall_by_timeframe(
 async def recall_recent_failures(
         timeframe_seconds: Optional[int] = Query(None, ge=60, le=86400, description="Janela em segundos (padrão: configuração do sistema)."),
         limit: Optional[int] = Query(None, ge=1, le=50),
+        min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="Pontuação mínima (0..1) para filtrar resultados."),
         service: MemoryService = Depends(get_memory_service)
 ):
-    return await service.recall_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds)
+    return await service.recall_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)

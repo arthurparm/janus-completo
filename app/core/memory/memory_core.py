@@ -69,7 +69,7 @@ class MemoryCore:
         )
         self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
 
-    async def arecall(self, query: str, limit: Optional[int] = 10) -> List[Dict[str, Any]]:
+    async def arecall(self, query: str, limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Busca por experiências na memória usando embeddings do texto de consulta.
         """
@@ -86,12 +86,15 @@ class MemoryCore:
             limit=effective_limit,
             with_payload=True,
         )
-        return [{
+        results = [{
             "id": hit.id,
             "content": hit.payload.get('content'),
             "metadata": hit.payload.get('metadata'),
             "score": hit.score
         } for hit in hits]
+        if min_score is not None:
+            results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        return results
 
     def _build_filter(self, filters: Dict[str, Any]) -> Optional[models.Filter]:
         if not filters:
@@ -114,7 +117,7 @@ class MemoryCore:
             return None
         return models.Filter(must=must)
 
-    async def arecall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = 10) -> List[Dict[str, Any]]:
+    async def arecall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Busca com filtros por payload (ex.: type, metadata.status, metadata.origin).
         """
@@ -133,14 +136,17 @@ class MemoryCore:
             with_payload=True,
             query_filter=qfilter,
         )
-        return [{
+        results = [{
             "id": hit.id,
             "content": hit.payload.get('content'),
             "metadata": hit.payload.get('metadata'),
             "score": hit.score
         } for hit in hits]
+        if min_score is not None:
+            results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        return results
 
-    async def arecall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = 10) -> List[Dict[str, Any]]:
+    async def arecall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Busca por janela temporal usando o campo auxiliar ts_ms.
         Se o período não puder ser aplicado no filtro, faz pós-filtragem em memória.
@@ -193,9 +199,11 @@ class MemoryCore:
             {"id": r["id"], "content": r["content"], "metadata": r["metadata"], "score": r["score"]}
             for r in results if within(r.get("ts_ms"))
         ]
+        if min_score is not None:
+            results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
         return results
 
-    async def arecall_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def arecall_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Busca falhas recentes usando metadata.status == 'failure' dentro de uma janela.
         """
@@ -214,12 +222,44 @@ class MemoryCore:
             with_payload=True,
             query_filter=qfilter,
         )
-        return [{
+        results = [{
             "id": h.id,
             "content": h.payload.get('content'),
             "metadata": h.payload.get('metadata'),
             "score": h.score,
         } for h in hits]
+        if min_score is not None:
+            results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        return results
+
+    async def arecall_recent_lessons(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
+        """
+        Busca lições recentes usando type == 'lessons_learned' dentro de uma janela.
+        """
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        window = timeframe_seconds if timeframe_seconds is not None else int(getattr(settings, "MEMORY_QUOTA_WINDOW_SECONDS", 3600))
+        start_ms = now_ms - (window * 1000)
+
+        qfilter = models.Filter(must=[
+            models.FieldCondition(key="type", match=models.MatchValue(value="lessons_learned")),
+            models.FieldCondition(key="ts_ms", range=models.Range(gte=start_ms, lte=now_ms)),
+        ])
+        hits = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=[0.0] * self._vector_size,
+            limit=limit or 10,
+            with_payload=True,
+            query_filter=qfilter,
+        )
+        results = [{
+            "id": h.id,
+            "content": h.payload.get('content'),
+            "metadata": h.payload.get('metadata'),
+            "score": h.score,
+        } for h in hits]
+        if min_score is not None:
+            results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        return results
 
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---

@@ -36,41 +36,48 @@ class MemoryService:
             logger.error("Erro no serviço de memória ao adicionar experiência", exc_info=e)
             raise MemoryServiceError("Falha ao adicionar experiência.") from e
 
-    async def recall_experiences(self, query: str, limit: Optional[int] = None) -> List[
-        Dict[str, Any]]:  # Added limit parameter
+    async def recall_experiences(self, query: str, limit: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Delega a busca por experiências para o repositório.
         """
-        logger.info("Buscando experiências via serviço", query=query, limit=limit)
+        logger.info("Buscando experiências via serviço", query=query, limit=limit, min_score=min_score)
         try:
-            return await self._repo.search_experiences(query=query, limit=limit)  # Pass limit to repository
+            return await self._repo.search_experiences(query=query, limit=limit, min_score=min_score)
         except Exception as e:
             logger.error("Erro no serviço de memória ao buscar experiências", exc_info=e)
             raise MemoryServiceError("Falha ao buscar experiências.") from e
 
-    async def recall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        logger.info("Buscando experiências filtradas", query=query, filters=filters, limit=limit)
+    async def recall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
+        logger.info("Buscando experiências filtradas", query=query, filters=filters, limit=limit, min_score=min_score)
         try:
-            return await self._repo.search_filtered(query=query, filters=filters, limit=limit)
+            return await self._repo.search_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
         except Exception as e:
             logger.error("Erro no serviço ao buscar filtrado", exc_info=e)
             raise MemoryServiceError("Falha na busca filtrada.") from e
 
-    async def recall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        logger.info("Buscando por janela temporal", query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit)
+    async def recall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
+        logger.info("Buscando por janela temporal", query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit, min_score=min_score)
         try:
-            return await self._repo.search_by_timeframe(query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit)
+            return await self._repo.search_by_timeframe(query=query, start_ts_ms=start_ts_ms, end_ts_ms=end_ts_ms, limit=limit, min_score=min_score)
         except Exception as e:
             logger.error("Erro no serviço ao buscar por janela temporal", exc_info=e)
             raise MemoryServiceError("Falha na busca por janela temporal.") from e
 
-    async def recall_recent_failures(self, limit: Optional[int] = None, timeframe_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
-        logger.info("Buscando falhas recentes", limit=limit, timeframe_seconds=timeframe_seconds)
+    async def recall_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
+        logger.debug("Service: recall_recent_failures", limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
         try:
-            return await self._repo.search_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds)
+            return await self._repo.search_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
         except Exception as e:
             logger.error("Erro no serviço ao buscar falhas recentes", exc_info=e)
-            raise MemoryServiceError("Falha na busca de falhas recentes.") from e
+            raise MemoryServiceError(f"Erro ao buscar falhas recentes: {e}")
+
+    async def recall_recent_lessons(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
+        logger.debug("Service: recall_recent_lessons", limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
+        try:
+            return await self._repo.search_recent_lessons(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
+        except Exception as e:
+            logger.error("Erro no serviço ao buscar lições recentes", exc_info=e)
+            raise MemoryServiceError(f"Erro ao buscar lições recentes: {e}")
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_memory_service(request: Request) -> MemoryService:
