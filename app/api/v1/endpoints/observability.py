@@ -31,6 +31,18 @@ async def check_all_components(service: ObservabilityService = Depends(get_obser
     """Delega a execução de todos os health checks para o ObservabilityService."""
     return await service.check_all_components()
 
+@router.get("/health/components/llm_manager", summary="Health do componente LLM Manager")
+async def health_llm_manager(service: ObservabilityService = Depends(get_observability_service)):
+    return await service.get_llm_manager_health()
+
+@router.get("/health/components/multi_agent_system", summary="Health do componente Multi-Agent System")
+async def health_multi_agent(service: ObservabilityService = Depends(get_observability_service)):
+    return await service.get_multi_agent_system_health()
+
+@router.get("/health/components/poison_pill_handler", summary="Health do componente Poison Pill Handler")
+async def health_poison_pill_handler(service: ObservabilityService = Depends(get_observability_service)):
+    return await service.get_poison_pill_handler_health()
+
 @router.get("/poison-pills/quarantined", summary="Retorna mensagens em quarentena")
 async def get_quarantined_messages(
         service: ObservabilityService = Depends(get_observability_service),
@@ -61,6 +73,10 @@ async def release_from_quarantine(
     # MessageNotFoundError é tratado pelo exception handler central -> 404
     msg = service.release_from_quarantine(request.message_id, request.allow_retry)
     return {"message": "Mensagem liberada com sucesso", "message_id": msg.message_id}
+
+@router.post("/poison-pills/cleanup", summary="Limpa mensagens expiradas da quarentena")
+async def cleanup_quarantine(service: ObservabilityService = Depends(get_observability_service)):
+    return service.cleanup_expired_quarantine()
 
 @router.get("/poison-pills/stats", summary="Retorna estatísticas de poison pills")
 async def get_poison_pill_stats(

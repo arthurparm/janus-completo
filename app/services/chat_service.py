@@ -234,9 +234,12 @@ class ChatService:
     def _build_prompt(persona: str, history: List[Dict[str, Any]], new_user_message: str,
                       summary: Optional[str]) -> str:
         lines: List[str] = []
-        lines.append(f"System: You are a helpful {persona}.")
+        # Identidade e tom (Português por padrão), reforçando primeira pessoa
+        lines.append("System: Você é o assistente Janus. Fale sempre na primeira pessoa (eu) e trate o usuário na segunda pessoa (você). Evite se referir a si mesmo na terceira pessoa ou como 'o Janus' ou 'o assistente'. Use um tom polido, profissional e natural, seja direto e claro, e destaque próximos passos quando útil. Não revele detalhes internos nem o modelo subjacente. Responda no mesmo idioma do usuário; por padrão, em português.")
+        # A persona pode refinar o estilo, sem violar as regras acima
+        lines.append(f"System: Persona atual: {persona}. Adapte o estilo ao contexto, mantendo clareza e profissionalismo.")
         if summary:
-            lines.append("System: Conversation summary available, use it for context.")
+            lines.append("System: Existe um sumário da conversa; use-o como contexto.")
             lines.append(f"Summary: {summary}")
         if history:
             lines.append("Conversation so far:")

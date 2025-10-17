@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Poison Pills{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Poison Pills</h1>
+  <p>Mensagens quarentenadas, estatísticas e ações de liberação.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Estatísticas</h2>
+      <ul id="poisonStats" class="kv-list"></ul>
+      <div class="actions">
+        <button id="refreshStats" class="btn">Atualizar estatísticas</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Quarentena</h2>
+      <div class="actions">
+        <label><input type="checkbox" id="allowRetryAll" /> Permitir reprocessamento ao liberar</label>
+        <button id="refreshMessages" class="btn">Atualizar lista</button>
+        <button id="releaseAllBtn" class="btn warning">Liberar todas</button>
+        <button id="cleanupExpired" class="btn">Limpar expiradas</button>
+      </div>
+      <table class="table" id="quarantineTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fila</th>
+            <th>Falhas</th>
+            <th>Motivo</th>
+            <th>Visto</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+async function safeFetch(url, options={}) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) return await res.json();
+    return await res.text();
+  } catch (err) {
+    console.error('Fetch error:', url, err);
+    return null;
+  }
+}
+
+function renderKVList(el, obj) {
+  el.innerHTML = '';
+  if (!obj) { el.innerHTML = '<li class="error">Erro ao carregar</li>'; return; }
+  Object.entries(obj).forEach(([k,v]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="key">${k}</span><span class="value">${typeof v === 'object' ? JSON.stringify(v) : v}</span>`;
+    el.appendChild(li);
+  });
+}
+
+async function loadStats() {
+  const data = await safeFetch('/api/v1/observability/poison-pills/stats');
+  renderKVList(document.getElementById('poisonStats'), data || { erro: 'Não foi possível obter estatísticas' });
+}
+
+function renderQuarantineTable(rows) {
+  const tbody = document.querySelector('#quarantineTable tbody');
+  tbody.innerHTML = '';
+  if (!rows || !Array.isArray(rows) || rows.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.innerHTML = '<div class="empty">Nenhuma mensagem em quarentena</div>';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    const id = row.message_id || row.id || row.uuid || '';
+    const queue = row.queue || row.routing_key || row.exchange || '';
+    const failures = row.failure_count || row.failures || 0;
+    const reason = row.reason || row.error || row.last_error || '';
+    const seen = (row.first_seen && row.last_seen) ? `${row.first_seen} → ${row.last_seen}` : (row.timestamp || row.seen || row.quarantined_at || '');
+
+    tr.innerHTML = `
+      <td><code>${id}</code></td>
+      <td>${queue}</td>
+      <td>${failures}</td>
+      <td title="${reason}">${reason ? reason.substring(0, 60) : ''}</td>
+      <td>${seen}</td>
+      <td>
+        <label class="inline"><input type="checkbox" data-allow-retry /> Permitir retry</label>
+        <button class="btn" data-action="release">Liberar</button>
+      </td>
+    `;
+
+    tr.querySelector('[data-action="release"]').addEventListener('click', async () => {
+      const allowRetry = tr.querySelector('[data-allow-retry]').checked;
+      await releaseMessage(id, allowRetry);
+      await loadQuarantine();
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function releaseMessage(messageId, allowRetry) {
+  const payload = { message_id: messageId, allow_retry: !!allowRetry };
+  const res = await safeFetch('/api/v1/observability/poison-pills/release', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res;
+}
+
+async function loadQuarantine() {
+  const data = await safeFetch('/api/v1/observability/poison-pills/quarantined');
+  const rows = Array.isArray(data) ? data : (data && Array.isArray(data.messages) ? data.messages : []);
+  renderQuarantineTable(rows);
+}
+
+async function releaseAll() {
+  if (!confirm('Liberar todas as mensagens da quarentena?')) return;
+  const allowRetry = document.getElementById('allowRetryAll').checked;
+  const data = await safeFetch('/api/v1/observability/poison-pills/quarantined');
+  const rows = Array.isArray(data) ? data : (data && Array.isArray(data.messages) ? data.messages : []);
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    const id = row.message_id || row.id || row.uuid;
+    if (!id) continue;
+    await releaseMessage(id, allowRetry);
+  }
+  await loadQuarantine();
+  await loadStats();
+}
+
+async function cleanupExpired() {
+  const res = await safeFetch('/api/v1/observability/poison-pills/cleanup', { method: 'POST' });
+  if (!res) {
+    alert('Falha ao limpar mensagens expiradas da quarentena');
+    return;
+  }
+  await loadQuarantine();
+  await loadStats();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('refreshStats').addEventListener('click', loadStats);
+  document.getElementById('refreshMessages').addEventListener('click', loadQuarantine);
+  document.getElementById('releaseAllBtn').addEventListener('click', releaseAll);
+  document.getElementById('cleanupExpired').addEventListener('click', cleanupExpired);
+  loadStats();
+  loadQuarantine();
+});
+</script>
+{% endblock %}

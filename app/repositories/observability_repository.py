@@ -40,6 +40,24 @@ class ObservabilityRepository:
             logger.error("Erro no repositório ao executar health checks", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao executar os health checks.") from e
 
+    async def get_component_health(self, component: str) -> Dict[str, Any]:
+        logger.debug("Checando saúde de componente via repositório", component=component)
+        try:
+            result = await self._monitor.check_component(component)
+            return result.to_dict()
+        except Exception as e:
+            logger.error("Erro no repositório ao verificar componente", component=component, exc_info=e)
+            raise ObservabilityRepositoryError(f"Falha ao verificar health do componente '{component}'.") from e
+
+    async def get_llm_manager_health(self) -> Dict[str, Any]:
+        return await self.get_component_health("llm_manager")
+
+    async def get_multi_agent_system_health(self) -> Dict[str, Any]:
+        return await self.get_component_health("multi_agent_system")
+
+    async def get_poison_pill_handler_health(self) -> Dict[str, Any]:
+        return await self.get_component_health("poison_pill_handler")
+
     def get_quarantined_messages(self, queue: Optional[str] = None) -> List[QuarantinedMessage]:
         logger.debug("Buscando mensagens em quarentena via repositório", queue=queue)
         return self._pp_handler.get_quarantined_messages(queue=queue)
@@ -50,6 +68,14 @@ class ObservabilityRepository:
         if not msg:
             raise ObservabilityRepositoryError(f"Mensagem com ID '{message_id}' não encontrada na quarentena.")
         return msg
+
+    def cleanup_expired_quarantine(self) -> int:
+        logger.debug("Limpando mensagens expiradas da quarentena via repositório")
+        try:
+            return self._pp_handler.cleanup_expired_quarantine()
+        except Exception as e:
+            logger.error("Erro no repositório ao limpar quarentena expirada", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao limpar quarentena expirada.") from e
 
     def get_poison_pill_stats(self, queue: Optional[str] = None) -> Dict[str, Any]:
         logger.debug("Buscando estatísticas de poison pills via repositório", queue=queue)
