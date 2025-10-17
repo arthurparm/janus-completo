@@ -52,18 +52,33 @@ class MessageBroker:
             self._connection = None
             logger.info("Conexão com RabbitMQ fechada.")
 
-    async def publish(self, queue_name: str, message: str):
+    async def publish(
+        self,
+        queue_name: str,
+        message: str,
+        *,
+        priority: Optional[int] = None,
+        headers: Optional[Dict[str, Any]] = None,
+        expiration: Optional[int] = None,
+    ):
         """
         Publica uma mensagem em uma fila.
+
+        - Suporta prioridade via `priority` (0-9) quando a fila possui `x-max-priority`.
+        - Suporta `headers` e `expiration` (ms) para uso avançado.
         """
         await self.connect()
         async with self._connection.channel() as channel:
             arguments = self._get_queue_arguments(queue_name)
             await channel.declare_queue(queue_name, durable=True, arguments=arguments)
-            await channel.default_exchange.publish(
-                aio_pika.Message(body=message.encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT),
-                routing_key=queue_name,
+            msg = aio_pika.Message(
+                body=message.encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                priority=priority,
+                headers=headers,
+                expiration=expiration,
             )
+            await channel.default_exchange.publish(msg, routing_key=queue_name)
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
 
     async def get_queue_info(self, queue_name: str) -> Optional[dict]:
