@@ -58,7 +58,7 @@ class ReflexionSession:
     ):
         self.task = task.strip()
         self.memory_service = memory_service
-        self.evaluator = evaluator or self._default_evaluator
+        self.evaluator = evaluator or self._specialized_evaluator
         self.config = config or ReflexionConfig.from_settings()
         self._llm = get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP)
         self._start_time = time.perf_counter()
@@ -126,6 +126,71 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
         except Exception as e:
             logger.error(f"[Reflexion] Erro na reflexão: {e}", exc_info=True)
             return f"Reflexão falhou: {e}."
+
+    async def _specialized_evaluator(self, task: str, observation: str) -> Dict[str, Any]:
+        """Seleciona avaliador especializado com base na natureza da tarefa."""
+        task_type = self._classify_task_type(task)
+        if task_type == "coding":
+            return await self._evaluate_coding(observation)
+        elif task_type == "research":
+            return await self._evaluate_research(observation)
+        else:
+            return await self._default_evaluator(task, observation)
+
+    def _classify_task_type(self, task: str) -> str:
+        t = task.lower()
+        coding_keywords = ["code", "python", "bug", "function", "refactor", "test", "error", "compile", "lint"]
+        research_keywords = ["research", "web", "search", "explain", "summarize", "document", "compare", "source"]
+        if any(k in t for k in coding_keywords):
+            return "coding"
+        if any(k in t for k in research_keywords):
+            return "research"
+        return "general"
+
+    async def _evaluate_coding(self, observation: str) -> Dict[str, Any]:
+        """Heurística rápida para avaliação de tarefas de código sem depender do LLM."""
+        obs = observation.lower()
+        has_error = any(x in obs for x in ["traceback", "error", "exception", "failed", "cannot", "undefined"])
+        passed_tests = any(x in obs for x in ["tests passed", "all tests", "success", "ok"])
+        runtime_ok = any(x in obs for x in ["executed", "ran", "output", "result"]) and not has_error
+        score = 0.2
+        suggestions: List[str] = []
+        if has_error:
+            score = 0.2
+            suggestions.append("Inspecione logs e mensagens de exceção para root cause.")
+            suggestions.append("Adicione testes unitários cobrindo o caso que falhou.")
+            suggestions.append("Verifique dependências e importações ausentes.")
+        elif passed_tests:
+            score = 0.95
+            suggestions.append("Consolidar cobertura de testes e revisar performance.")
+        elif runtime_ok:
+            score = 0.7
+            suggestions.append("Validar saída com casos de borda e entradas maiores.")
+        else:
+            score = 0.5
+            suggestions.append("Executar testes básicos e checar tratamentos de erro.")
+        return {"score": score, "suggestions": suggestions}
+
+    async def _evaluate_research(self, observation: str) -> Dict[str, Any]:
+        """Heurística para avaliação de pesquisas: verifica relevância e fontes."""
+        length = len(observation)
+        has_links = observation.count("http://") + observation.count("https://")
+        mentions_date = any(x in observation.lower() for x in ["202", "today", "recent", "latest"])
+        score = 0.3
+        suggestions: List[str] = []
+        if length > 500:
+            score += 0.3
+        if has_links >= 2:
+            score += 0.3
+            suggestions.append("Inclua 2-3 fontes confiáveis com URLs.")
+        if mentions_date:
+            score += 0.1
+        score = min(score, 0.9)
+        if score < 0.6:
+            suggestions.append("Aumente a profundidade e adicione evidências com citações.")
+        else:
+            suggestions.append("Resuma pontos-chave e destaque contradições entre fontes.")
+        return {"score": score, "suggestions": suggestions}
 
     async def arun(self) -> Dict[str, Any]:
         iteration = 0

@@ -9,7 +9,8 @@ from app.services.learning_service import (
     get_learning_service,
     LearningServiceError,
     ModelNotFoundError,
-    TrainingFailedError
+    TrainingFailedError,
+    ExperimentNotFoundError
 )
 
 router = APIRouter(tags=["Learning"])
@@ -65,6 +66,30 @@ class EvaluationResponse(BaseModel):
     model_id: str
     examples_evaluated: int
     metrics: Dict[str, Any]
+
+
+class DatasetVersionResponse(BaseModel):
+    version: Optional[str]
+    num_examples: int
+    hash: Optional[str]
+    last_modified: Optional[str]
+
+
+class ExperimentInfo(BaseModel):
+    experiment_id: str
+    status: str
+    dataset_version: Optional[str] = None
+    num_examples: Optional[int] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    summary: Optional[str] = None
+    error: Optional[str] = None
+    duration_seconds: Optional[float] = None
+
+
+class ExperimentListResponse(BaseModel):
+    total: int
+    experiments: List[ExperimentInfo]
 
 
 # --- Endpoints ---
@@ -147,6 +172,36 @@ async def evaluate_model(request: EvaluateRequest, learning_service: LearningSer
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao avaliar modelo", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/dataset/version", response_model=DatasetVersionResponse,
+            summary="Obtém a versão atual do dataset de treino")
+async def get_dataset_version(learning_service: LearningService = Depends(get_learning_service)):
+    """Retorna a versão do dataset derivada do conteúdo do JSONL."""
+    try:
+        return learning_service.get_dataset_version_info()
+    except LearningServiceError as e:
+        logger.error("Erro ao obter versão do dataset", exc_info=e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/experiments", response_model=ExperimentListResponse, summary="Lista experimentos de treinamento")
+async def list_experiments(learning_service: LearningService = Depends(get_learning_service)):
+    """Lista os experimentos rastreados pelo repositório de aprendizado."""
+    exps = learning_service.list_experiments()
+    return ExperimentListResponse(total=len(exps), experiments=exps)
+
+
+@router.get("/experiments/{experiment_id}", response_model=ExperimentInfo, summary="Obtém detalhes de um experimento")
+async def get_experiment_details(experiment_id: str, learning_service: LearningService = Depends(get_learning_service)):
+    """Obtém informações detalhadas sobre um experimento específico."""
+    try:
+        return learning_service.get_experiment_details(experiment_id)
+    except ExperimentNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except LearningServiceError as e:
+        logger.error("Erro ao obter detalhes de experimento", exc_info=e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

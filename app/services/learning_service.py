@@ -22,6 +22,11 @@ class TrainingFailedError(LearningServiceError):
     """Raised when the training process fails."""
     pass
 
+
+class ExperimentNotFoundError(LearningServiceError):
+    """Raised when an experiment is not found."""
+    pass
+
 # --- Learning Service ---
 
 class LearningService:
@@ -60,7 +65,10 @@ class LearningService:
                 created_at=datetime.utcnow().isoformat(),
                 training_examples=100,  # Mock
                 accuracy=0.87,  # Mock
-                loss=0.23  # Mock
+                loss=0.23,  # Mock
+                experiment_id=result.get("experiment_id"),
+                dataset_version=result.get("dataset_version"),
+                dataset_num_examples=result.get("dataset_num_examples")
             )
             self._repo.save_model(model_info)
 
@@ -155,6 +163,20 @@ class LearningService:
         except Exception as e:
             logger.error("Erro ao avaliar modelo", exc_info=e)
             raise LearningServiceError("Falha ao avaliar o modelo.") from e
+
+    # ===== Dataset Version and Experiments =====
+
+    def get_dataset_version_info(self) -> Dict[str, Any]:
+        return self._repo.get_dataset_version_info()
+
+    def list_experiments(self) -> List[Dict[str, Any]]:
+        return self._repo.list_experiments()
+
+    def get_experiment_details(self, experiment_id: str) -> Dict[str, Any]:
+        exp = self._repo.get_experiment(experiment_id)
+        if not exp:
+            raise ExperimentNotFoundError(f"Experimento '{experiment_id}' não encontrado.")
+        return exp
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço

@@ -2,9 +2,16 @@ import structlog
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import asyncio
+import hashlib
+import os
+import time
 from fastapi import Depends
 
+from prometheus_client import Counter, Histogram, Gauge
+
+from app.core.infrastructure.filesystem_manager import read_file
 from app.core.workers import data_harvester
+from app.core.workers.data_harvester import TRAINING_DATA_FILE
 from app.core.workers.neural_trainer import start_training_process
 
 ModelInfo = Dict[str, Any]
@@ -21,12 +28,34 @@ class LearningRepository:
     def __init__(self):
         self._training_sessions: Dict[str, TrainingSession] = {}
         self._trained_models: Dict[str, ModelInfo] = {}
+        self._experiments: Dict[str, Dict[str, Any]] = {}
         self._stats = {
             "total_harvested": 0,
             "total_trained": 0,
             "last_harvest": None,
-            "last_training": None
+            "last_training": None,
+            "dataset": {
+                "version": None,
+                "num_examples": 0,
+                "hash": None,
+                "last_modified": None
+            }
         }
+
+        # Metrics
+        self._experiments_total = Counter(
+            "learning_experiments_total",
+            "Total de experimentos de treinamento",
+            ["status"]
+        )
+        self._experiment_duration = Histogram(
+            "learning_experiment_duration_seconds",
+            "Duração dos experimentos de treinamento"
+        )
+        self._dataset_examples = Gauge(
+            "learning_dataset_examples_count",
+            "Número de exemplos no dataset de treino"
+        )
 
     def get_all_models(self) -> List[ModelInfo]:
         return list(self._trained_models.values())
@@ -48,6 +77,8 @@ class LearningRepository:
         return None
 
     def get_stats(self) -> Dict[str, Any]:
+        # Atualiza info de dataset antes de retornar
+        self._update_dataset_version()
         stats = self._stats.copy()
         stats["active_training_sessions"] = 1 if self.get_active_training_session() else 0
         stats["avg_training_time_minutes"] = 2.5  # Mock
@@ -58,10 +89,55 @@ class LearningRepository:
         self._stats["last_harvest"] = datetime.utcnow().isoformat()
 
     async def run_training_process(self) -> Dict[str, Any]:
-        """Abstrai a execução da tarefa de treinamento síncrona."""
-        logger.debug("Executando processo de treinamento síncrono via repositório.")
+        """Executa o processo de treinamento, registrando experimento e versão do dataset."""
+        logger.debug("Executando processo de treinamento via repositório com tracking de experimento.")
+
+        # Atualiza/obtém versão do dataset
+        dataset_info = self._update_dataset_version()
+
+        # Cria sessão/experimento
+        experiment_id = self._create_experiment(dataset_info)
+        start_ts = time.perf_counter()
+        self._experiments_total.labels("created").inc()
+
+        # Executa treinamento síncrono em executor
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, start_training_process)
+        try:
+            result = await loop.run_in_executor(None, start_training_process)
+            elapsed = time.perf_counter() - start_ts
+            self._experiment_duration.observe(elapsed)
+
+            # Atualiza experimento
+            exp = self._experiments.get(experiment_id, {})
+            exp.update({
+                "status": "completed" if "Falha" not in result.get("message", "") else "failed",
+                "completed_at": datetime.utcnow().isoformat(),
+                "summary": result.get("summary"),
+                "duration_seconds": elapsed
+            })
+            self._experiments[experiment_id] = exp
+            self._experiments_total.labels(exp["status"]).inc()
+
+            # Retorna payload enriquecido
+            enriched = dict(result)
+            enriched["experiment_id"] = experiment_id
+            enriched["dataset_version"] = dataset_info.get("version")
+            enriched["dataset_num_examples"] = dataset_info.get("num_examples")
+            return enriched
+        except Exception as e:
+            elapsed = time.perf_counter() - start_ts
+            self._experiment_duration.observe(elapsed)
+            self._experiments_total.labels("error").inc()
+            exp = self._experiments.get(experiment_id, {})
+            exp.update({
+                "status": "error",
+                "completed_at": datetime.utcnow().isoformat(),
+                "error": str(e),
+                "duration_seconds": elapsed
+            })
+            self._experiments[experiment_id] = exp
+            logger.error("Erro no processo de treinamento", exc_info=e)
+            return {"message": "Falha no treino.", "summary": str(e), "experiment_id": experiment_id}
 
     async def run_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None) -> Dict[
         str, Any]:
@@ -72,6 +148,70 @@ class LearningRepository:
     def is_harvester_healthy(self) -> bool:
         """Verifica a saúde do worker de coleta de dados."""
         return hasattr(data_harvester, 'harvester')
+
+    # ===== Dataset Versioning =====
+
+    def _update_dataset_version(self) -> Dict[str, Any]:
+        """Computa versão do dataset baseada no conteúdo atual do JSONL."""
+        try:
+            content = read_file(os.path.join("workspace", TRAINING_DATA_FILE))
+            if content.startswith("Erro:"):
+                info = {
+                    "version": None,
+                    "num_examples": 0,
+                    "hash": None,
+                    "last_modified": None
+                }
+                self._stats["dataset"].update(info)
+                self._dataset_examples.set(0)
+                return info
+
+            lines = [ln for ln in content.strip().split('\n') if ln.strip()]
+            num_examples = len(lines)
+            sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            # Versão simplificada: num_exemplos + prefixo do hash
+            version = f"v{num_examples}-{sha[:8]}"
+            last_modified = datetime.utcnow().isoformat()
+            info = {
+                "version": version,
+                "num_examples": num_examples,
+                "hash": sha,
+                "last_modified": last_modified
+            }
+            self._stats["dataset"].update(info)
+            self._dataset_examples.set(num_examples)
+            return info
+        except Exception:
+            # Em caso de erro, não quebrar chamadas de stats
+            return self._stats.get("dataset", {})
+
+    def get_dataset_version_info(self) -> Dict[str, Any]:
+        return self._update_dataset_version()
+
+    # ===== Experiments Tracking =====
+
+    def _create_experiment(self, dataset_info: Dict[str, Any]) -> str:
+        exp_id = f"exp-{int(time.time())}-{hashlib.sha256(os.urandom(8)).hexdigest()[:6]}"
+        self._experiments[exp_id] = {
+            "experiment_id": exp_id,
+            "status": "training",
+            "dataset_version": dataset_info.get("version"),
+            "num_examples": dataset_info.get("num_examples"),
+            "started_at": datetime.utcnow().isoformat()
+        }
+        # também registrar sessão ativa
+        self._training_sessions[exp_id] = {
+            "current_model": None,
+            "progress": 0.0,
+            "status": "training"
+        }
+        return exp_id
+
+    def list_experiments(self) -> List[Dict[str, Any]]:
+        return list(self._experiments.values())
+
+    def get_experiment(self, experiment_id: str) -> Optional[Dict[str, Any]]:
+        return self._experiments.get(experiment_id)
 
 
 # Padrão de Injeção de Dependência: Getter para o repositório
