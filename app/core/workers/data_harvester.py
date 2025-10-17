@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Protocol, runtime_checkable, Optional
 
 from app.core.infrastructure.filesystem_manager import write_file, read_file
 from app.repositories.memory_repository import MemoryRepository
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,8 @@ Dict[str, Any]:
     """
     start = time.perf_counter()
     try:
-        memory_repo = MemoryRepository(memory_core)
+        memory_db = await get_memory_db()
+        memory_repo = MemoryRepository(memory_db)
         connector = MemoryConnector(memory_repo)
         items = await connector.fetch_batch(limit=limit, query=query)
 
