@@ -26,7 +26,7 @@ from typing import List, Dict, Any, Optional
 from prometheus_client import Counter, Histogram, Gauge
 
 from app.core.infrastructure.filesystem_manager import write_file
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
@@ -324,11 +324,11 @@ class NeuralTrainer:
     ) -> List[Dict[str, Any]]:
         """Carrega dados de treino da memória episódica."""
         try:
-            # Busca experiências relevantes na memória
             query = "experiência de uso de ferramentas e aprendizado"
-            experiences = await memory_core.arecall(
+            memory_db = await get_memory_db()
+            experiences = await memory_db.arecall(
                 query=query,
-                n_results=config.max_examples or 1000
+                limit=config.max_examples or 1000
             )
 
             logger.info(f"[NeuralTrainer] Carregadas {len(experiences)} experiências para treino")
@@ -445,7 +445,8 @@ class NeuralTrainer:
     ):
         """Memoriza resultado do treinamento."""
         try:
-            await memory_core.amemorize(Experience(
+            memory_db = await get_memory_db()
+            await memory_db.amemorize(Experience(
                 type="neural_training",
                 content=f"Modelo '{config.model_name}' treinado com sucesso\n"
                         f"Acurácia: {result.accuracy:.2%}\n"
