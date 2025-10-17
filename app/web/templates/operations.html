@@ -30,22 +30,62 @@
         </div>
     </div>
 
+    <div class="grid" style="margin-top:0.75rem;">
+        <div class="card">
+            <h3>Autonomy Loop</h3>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <label for="autonomy-interval">Intervalo (segundos)</label>
+                <input id="autonomy-interval" type="number" min="1" max="3600" value="60" style="width:120px;"/>
+                <button id="autonomy-start-btn">Iniciar</button>
+                <button id="autonomy-stop-btn">Parar</button>
+                <button id="autonomy-refresh-btn">Status</button>
+            </div>
+            <div id="autonomy-status" style="margin-top:0.5rem;"></div>
+            <details style="margin-top:0.5rem;">
+                <summary>Plano de execução</summary>
+                <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                    <button id="autonomy-load-plan">Carregar plano</button>
+                    <button id="autonomy-update-plan">Atualizar plano</button>
+                </div>
+                <textarea id="autonomy-plan" rows="8" style="width:100%; margin-top:0.5rem;" placeholder='[{"tool":"...","args":{}}]'></textarea>
+            </details>
+        </div>
+        <div class="card">
+            <h3>Meta-Agente</h3>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <label for="heartbeat-minutes">Heartbeat (min)</label>
+                <input id="heartbeat-minutes" type="number" min="1" max="1440" value="60" style="width:120px;"/>
+                <button id="heartbeat-start-btn">Iniciar</button>
+                <button id="heartbeat-stop-btn">Parar</button>
+                <button id="heartbeat-status-btn">Status</button>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.5rem;">
+                <button id="meta-run-btn">Rodar análise</button>
+                <button id="meta-report-btn">Último relatório</button>
+            </div>
+            <div id="meta-agent-status" style="margin-top:0.5rem;"></div>
+            <details style="margin-top:0.5rem;">
+                <summary>Relatório</summary>
+                <pre id="meta-agent-report" class="small-pre"></pre>
+            </details>
+        </div>
+        <div class="card">
+            <h3>Workers</h3>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <button id="workers-start-btn">Iniciar todos</button>
+                <button id="workers-stop-btn">Parar todos</button>
+                <button id="workers-status-btn">Status</button>
+            </div>
+            <div id="workers-status" style="margin-top:0.5rem;"></div>
+        </div>
+    </div>
+
     <h3 style="margin-top:0.75rem;">Ações</h3>
     <p>Exemplos de operações administrativas podem ser adicionados aqui (limpar cache, reconfigurar breaker, etc.).</p>
 
     <script>
-        const breakersData = {
-        {
-            breakers | tojson
-        }
-        }
-        ;
-        const cacheData = {
-        {
-            cache_entries | tojson
-        }
-        }
-        ;
+        const breakersData = {{ breakers | tojson }};
+        const cacheData = {{ cache_entries | tojson }};
 
         function initCustomSelect(sel) {
             if (!sel || sel.dataset.ui !== 'custom') return;
@@ -117,8 +157,6 @@
             });
         }
 
-        // Controles de tema/circuito foram movidos para o menu (base.html)
-
         function createCard(title) {
             const el = document.createElement('div');
             el.className = 'card';
@@ -144,8 +182,7 @@
                     li.appendChild(vspan);
                     ul.appendChild(li);
                 });
-            } catch {
-            }
+            } catch {}
             return ul;
         }
 
@@ -165,7 +202,10 @@
             const b = document.createElement('span');
             b.className = 'badge';
             const t = String(text || '').toLowerCase();
-            if (t.includes('open') && !t.includes('closed')) b.classList.add('badge-open'); else if (t.includes('closed')) b.classList.add('badge-closed'); else if (t.includes('half')) b.classList.add('badge-half'); else b.classList.add('badge-neutral');
+            if (t.includes('open') && !t.includes('closed')) b.classList.add('badge-open');
+            else if (t.includes('closed')) b.classList.add('badge-closed');
+            else if (t.includes('half')) b.classList.add('badge-half');
+            else b.classList.add('badge-neutral');
             b.textContent = text || 'desconhecido';
             return b;
         }
@@ -201,21 +241,137 @@
         function renderCache(searchText = '') {
             const wrap = document.getElementById('cache-wrap');
             wrap.innerHTML = '';
-            const items = Array.isArray(cacheData) ? cacheData : Object.entries(cacheData || {}).map(([key, val]) => ({
-                key,
-                val
-            }));
+            const items = Array.isArray(cacheData) ? cacheData : Object.entries(cacheData || {}).map(([key, val]) => ({ key, val }));
             items.filter(it => {
                 const blob = JSON.stringify(it, null, 2).toLowerCase();
                 return !searchText || blob.includes(searchText.toLowerCase());
             })
-                .forEach(it => {
-                    const title = it.key || 'entry';
-                    const card = createCard(title);
-                    card.appendChild(renderKVList(it.val || it));
-                    card.appendChild(renderDetails(it.val || it));
-                    wrap.appendChild(card);
+            .forEach(it => {
+                const title = it.key || 'entry';
+                const card = createCard(title);
+                card.appendChild(renderKVList(it.val || it));
+                card.appendChild(renderDetails(it.val || it));
+                wrap.appendChild(card);
+            });
+        }
+
+        // --- New: Autonomy, Meta-Agent, Workers controls ---
+        async function startAutonomy() {
+            const interval = Number(document.getElementById('autonomy-interval').value || 60);
+            const res = await fetch('/api/v1/autonomy/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ interval_seconds: interval })
+            });
+            const data = await res.json().catch(() => ({}));
+            document.getElementById('autonomy-status').textContent = JSON.stringify(data, null, 2);
+            if (!res.ok) alert(data.detail || 'Falha ao iniciar Autonomy');
+        }
+        async function stopAutonomy() {
+            const res = await fetch('/api/v1/autonomy/stop', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            document.getElementById('autonomy-status').textContent = JSON.stringify(data, null, 2);
+            if (!res.ok) alert(data.detail || 'Falha ao parar Autonomy');
+        }
+        async function refreshAutonomyStatus() {
+            const res = await fetch('/api/v1/autonomy/status');
+            const data = await res.json().catch(() => ({}));
+            document.getElementById('autonomy-status').textContent = JSON.stringify(data, null, 2);
+        }
+        async function loadAutonomyPlan() {
+            const res = await fetch('/api/v1/autonomy/plan');
+            const data = await res.json().catch(() => ({}));
+            const plan = Array.isArray(data.plan) ? data.plan : [];
+            document.getElementById('autonomy-plan').value = JSON.stringify(plan, null, 2);
+        }
+        async function updateAutonomyPlan() {
+            const txt = document.getElementById('autonomy-plan').value || '[]';
+            let plan;
+            try { plan = JSON.parse(txt); } catch (e) { alert('Plano inválido: JSON malformado'); return; }
+            const res = await fetch('/api/v1/autonomy/plan', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert((data && data.detail && (data.detail.message || data.detail)) || 'Falha ao atualizar plano');
+            document.getElementById('autonomy-status').textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function startHeartbeat() {
+            const minutes = Number(document.getElementById('heartbeat-minutes').value || 60);
+            const res = await fetch('/api/v1/meta-agent/heartbeat/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ interval_minutes: minutes })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert(data.detail || 'Falha ao iniciar heartbeat');
+            document.getElementById('meta-agent-status').textContent = JSON.stringify(data, null, 2);
+        }
+        async function stopHeartbeat() {
+            const res = await fetch('/api/v1/meta-agent/heartbeat/stop', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert(data.detail || 'Falha ao parar heartbeat');
+            document.getElementById('meta-agent-status').textContent = JSON.stringify(data, null, 2);
+        }
+        async function heartbeatStatus() {
+            const res = await fetch('/api/v1/meta-agent/heartbeat/status');
+            const data = await res.json().catch(() => ({}));
+            document.getElementById('meta-agent-status').textContent = JSON.stringify(data, null, 2);
+        }
+        async function runMetaAnalysis() {
+            const res = await fetch('/api/v1/meta-agent/analyze', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert(data.detail || 'Falha ao rodar análise');
+            document.getElementById('meta-agent-report').textContent = JSON.stringify(data, null, 2);
+        }
+        async function latestMetaReport() {
+            const res = await fetch('/api/v1/meta-agent/report/latest');
+            const data = await res.json().catch(() => ({}));
+            document.getElementById('meta-agent-report').textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function startWorkers() {
+            const res = await fetch('/api/v1/workers/start-all', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert(data.detail || 'Falha ao iniciar workers');
+            renderWorkersStatus(data);
+        }
+        async function stopWorkers() {
+            const res = await fetch('/api/v1/workers/stop-all', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) alert(data.detail || 'Falha ao parar workers');
+            document.getElementById('workers-status').textContent = JSON.stringify(data, null, 2);
+        }
+        async function workersStatus() {
+            const res = await fetch('/api/v1/workers/status');
+            const data = await res.json().catch(() => ({}));
+            renderWorkersStatus(data);
+        }
+        function renderWorkersStatus(data) {
+            const wrap = document.getElementById('workers-status');
+            try {
+                const list = (data && data.workers) || [];
+                const ul = document.createElement('ul');
+                ul.className = 'kv-list';
+                list.forEach(w => {
+                    const li = document.createElement('li');
+                    const name = document.createElement('span');
+                    name.className = 'key';
+                    name.textContent = w.name || 'worker';
+                    const val = document.createElement('span');
+                    val.className = 'val';
+                    val.textContent = w.running ? 'running' : (w.cancelled ? 'cancelled' : (w.done ? 'done' : 'idle'));
+                    li.appendChild(name);
+                    li.appendChild(val);
+                    ul.appendChild(li);
                 });
+                wrap.innerHTML = '';
+                wrap.appendChild(ul);
+            } catch {
+                wrap.textContent = JSON.stringify(data, null, 2);
+            }
         }
 
         const breakerFilter = document.getElementById('breaker-filter');
@@ -223,6 +379,23 @@
         initCustomSelect(breakerFilter);
         breakerFilter.addEventListener('change', () => renderBreakers(breakerFilter.value));
         cacheSearch.addEventListener('input', () => renderCache(cacheSearch.value));
+
+        // Hook up new controls
+        document.getElementById('autonomy-start-btn').addEventListener('click', startAutonomy);
+        document.getElementById('autonomy-stop-btn').addEventListener('click', stopAutonomy);
+        document.getElementById('autonomy-refresh-btn').addEventListener('click', refreshAutonomyStatus);
+        document.getElementById('autonomy-load-plan').addEventListener('click', loadAutonomyPlan);
+        document.getElementById('autonomy-update-plan').addEventListener('click', updateAutonomyPlan);
+
+        document.getElementById('heartbeat-start-btn').addEventListener('click', startHeartbeat);
+        document.getElementById('heartbeat-stop-btn').addEventListener('click', stopHeartbeat);
+        document.getElementById('heartbeat-status-btn').addEventListener('click', heartbeatStatus);
+        document.getElementById('meta-run-btn').addEventListener('click', runMetaAnalysis);
+        document.getElementById('meta-report-btn').addEventListener('click', latestMetaReport);
+
+        document.getElementById('workers-start-btn').addEventListener('click', startWorkers);
+        document.getElementById('workers-stop-btn').addEventListener('click', stopWorkers);
+        document.getElementById('workers-status-btn').addEventListener('click', workersStatus);
 
         renderBreakers('all');
         renderCache('');

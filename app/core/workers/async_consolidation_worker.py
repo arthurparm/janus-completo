@@ -15,8 +15,6 @@ from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import TaskMessage, QueueName
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
-from app.core.workers.neural_training_worker import start_neural_training_worker
 
 logger = logging.getLogger(__name__)
 
@@ -160,34 +158,3 @@ async def start_consolidation_worker():
     logger.info("✓ Worker de consolidação de conhecimento iniciado.")
 
     return consumer_task
-
-
-# Função para iniciar todos os workers do sistema
-async def start_all_workers():
-    """
-    Inicia todos os workers assíncronos do sistema.
-    """
-    logger.info("Iniciando todos os workers do sistema...")
-
-    workers = []
-
-    # Worker de consolidação de conhecimento
-    consolidation_worker = await start_consolidation_worker()
-    workers.append(consolidation_worker)
-
-    # Worker de tarefas de agente
-    agent_worker = await start_agent_tasks_worker()
-    workers.append(agent_worker)
-
-    # Worker de treinamento neural
-    neural_worker = await start_neural_training_worker()
-    workers.append(neural_worker)
-
-    # Aqui você pode adicionar outros workers:
-    # - Data harvesting worker
-    # - Meta-agent cycle worker
-    # etc.
-
-    logger.info(f"✓ {len(workers)} workers iniciados com sucesso.")
-
-    return workers

@@ -7,6 +7,7 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict
+import asyncio
 
 from starlette.requests import Request
 
@@ -15,8 +16,43 @@ from app.core.infrastructure.enums import AgentType
 from app.core.agents.agent_manager import AgentManager
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import TaskMessage, QueueName
+from app.core.infrastructure.resilience import CircuitBreaker
+from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# Bulkheads e Circuitos por agente
+_agent_bulkheads: Dict[AgentType, asyncio.Semaphore] = {}
+_agent_circuits: Dict[AgentType, CircuitBreaker] = {}
+
+
+def _get_bulkhead(agent_type: AgentType) -> asyncio.Semaphore:
+    limits = getattr(settings, "AGENT_BULKHEAD_LIMITS", {}) or {}
+    default_limit = int(getattr(settings, "AGENT_BULKHEAD_DEFAULT_LIMIT", 2) or 2)
+    limit = int(limits.get(agent_type.value, default_limit) or default_limit)
+    sem = _agent_bulkheads.get(agent_type)
+    if sem is None:
+        sem = asyncio.Semaphore(limit)
+        _agent_bulkheads[agent_type] = sem
+    return sem
+
+
+def _get_circuit(agent_type: AgentType) -> CircuitBreaker:
+    default_threshold = int(getattr(settings, "AGENT_CIRCUIT_FAILURE_THRESHOLD", 3) or 3)
+    default_recovery = int(getattr(settings, "AGENT_CIRCUIT_RECOVERY_TIMEOUT", 30) or 30)
+    cfg_map = getattr(settings, "AGENT_CIRCUIT_CONFIG", {}) or {}
+    if isinstance(cfg_map, dict) and agent_type.value in cfg_map:
+        th = int(cfg_map[agent_type.value].get("failure_threshold", default_threshold) or default_threshold)
+        rt = int(cfg_map[agent_type.value].get("recovery_timeout", default_recovery) or default_recovery)
+    else:
+        th = default_threshold
+        rt = default_recovery
+    cb = _agent_circuits.get(agent_type)
+    if cb is None:
+        cb = CircuitBreaker(failure_threshold=th, recovery_timeout=rt)
+        _agent_circuits[agent_type] = cb
+    return cb
 
 
 def _parse_agent_type(value: Any) -> AgentType:
@@ -49,16 +85,28 @@ async def process_agent_task(task: TaskMessage) -> None:
         scope = {"type": "http", "method": "POST", "path": "/agent/run"}
         dummy_request = Request(scope)
 
-        manager = AgentManager()
-        result = await manager.arun_agent(
-            question=question,
-            agent_type=agent_type,
-            request=dummy_request,
-        )
+        # Bulkhead & Circuit por agente
+        bulkhead = _get_bulkhead(agent_type)
+        circuit = _get_circuit(agent_type)
 
-        logger.info(
-            f"✓ Agent task completed: task_id={task.task_id}, type={agent_type}, result={str(result)[:200]}"
-        )
+        await bulkhead.acquire()
+        try:
+            manager = AgentManager()
+
+            async def _execute():
+                return await manager.arun_agent(
+                    question=question,
+                    agent_type=agent_type,
+                    request=dummy_request,
+                )
+
+            result = await circuit.call_async(_execute)
+
+            logger.info(
+                f"\u2713 Agent task completed: task_id={task.task_id}, type={agent_type}, result={str(result)[:200]}"
+            )
+        finally:
+            bulkhead.release()
     except Exception as e:
         logger.error(f"Agent task failed: task_id={task.task_id}, error={e}", exc_info=True)
         raise
@@ -95,5 +143,5 @@ async def start_agent_tasks_worker():
         callback=process_agent_task,
         prefetch_count=10,
     )
-    logger.info("✓ Agent tasks worker started.")
+    logger.info("\u2713 Agent tasks worker started.")
     return consumer_task

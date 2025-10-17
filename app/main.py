@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 import structlog
@@ -56,6 +57,7 @@ from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector
 from app.core.workers import data_harvester as data_harvester_module
+from app.core.workers.neural_training_worker import start_neural_training_worker
 
 setup_logging()
 logger = structlog.get_logger(__name__)
@@ -148,7 +150,12 @@ async def lifespan(app: FastAPI):
     # Inicia os workers
     await knowledge_consolidator.start()
     await data_harvester.start()
+    # Inicia consumidor da fila de treinamento neural
+    neural_training_task = await start_neural_training_worker()
+
+    # Guarda referências para shutdown
     app.state.workers = [knowledge_consolidator, data_harvester]
+    app.state.neural_training_consumer_task = neural_training_task
 
     logger.info("Application startup complete.")
     yield
@@ -157,6 +164,16 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown: Closing resources...")
     for worker in app.state.workers:
         await worker.stop()
+
+    # Cancela consumidor de treinamento
+    try:
+        if getattr(app.state, "neural_training_consumer_task", None):
+            app.state.neural_training_consumer_task.cancel()
+            # aguarda cancelamento
+            with contextlib.suppress(asyncio.CancelledError):
+                await app.state.neural_training_consumer_task
+    except Exception:
+        pass
 
     # Para o monitoramento contínuo de saúde antes de fechar recursos
     await monitor.stop_monitoring()

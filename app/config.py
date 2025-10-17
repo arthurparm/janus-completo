@@ -19,7 +19,7 @@ class AppSettings(BaseSettings):
     IDENTITY_ENFORCEMENT_ENABLED: bool = True
 
     # Feature flags / modos de execução
-    DRY_RUN: bool = True
+    DRY_RUN: bool = False
 
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
@@ -171,7 +171,8 @@ class AppSettings(BaseSettings):
         },
         "janus.meta_agent.cycle": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-max-priority": 10
         },
         "default": {
             "x-message-ttl": 86400000,

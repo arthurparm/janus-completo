@@ -1,0 +1,54 @@
+"""
+Orquestrador de Workers
+
+Centraliza a inicialização de todos os workers e tarefas em background
+usando imports lazy para evitar ciclos de importação.
+"""
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def start_all_workers():
+    """
+    Inicia todos os workers assíncronos do sistema.
+    Retorna a lista de tarefas/consumidores iniciados.
+    """
+    # Imports lazy para evitar ciclos entre módulos de workers/monitoring
+    from app.core.workers.async_consolidation_worker import start_consolidation_worker
+    from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
+    from app.core.workers.neural_training_worker import start_neural_training_worker
+    from app.core.workers.meta_agent_worker import start_meta_agent_worker
+    from app.core.workers.auto_scaler import start_auto_scaler
+    from app.core.monitoring import start_auto_healer
+
+    logger.info("Iniciando orquestrador de workers...")
+
+    workers = []
+
+    # Worker de consolidação de conhecimento
+    consolidation_worker = await start_consolidation_worker()
+    workers.append(consolidation_worker)
+
+    # Worker de tarefas de agente
+    agent_worker = await start_agent_tasks_worker()
+    workers.append(agent_worker)
+
+    # Worker de treinamento neural
+    neural_worker = await start_neural_training_worker()
+    workers.append(neural_worker)
+
+    # Worker de ciclo do Meta-Agente
+    meta_agent_worker = await start_meta_agent_worker()
+    workers.append(meta_agent_worker)
+
+    # Auto-Scaler de filas (background task)
+    auto_scaler_task = await start_auto_scaler()
+    workers.append(auto_scaler_task)
+
+    # Auto-Healer de componentes (background task)
+    healer_task = await start_auto_healer()
+    workers.append(healer_task)
+
+    logger.info(f"\u2713 {len(workers)} workers iniciados pelo orquestrador.")
+    return workers

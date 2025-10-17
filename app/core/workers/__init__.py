@@ -1,24 +1,23 @@
 """
-Módulo de workers - Workers assíncronos e tarefas em background.
+Pacote de workers: mantenha importações explícitas por módulo.
+
+Evite reexportar funções/classes de workers neste __init__ para reduzir acoplamento
+entre módulos e minimizar risco de importações cíclicas.
+
+Use importações diretas dos módulos, por exemplo:
+- from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
+- from app.core.workers.neural_training_worker import publish_neural_training_task
+- from app.core.workers.meta_agent_worker import start_meta_agent_worker
+- from app.core.workers.auto_scaler import start_auto_scaler
+- from app.core.workers.async_consolidation_worker import publish_consolidation_task
+
+Para iniciar todos os workers de forma centralizada, utilize o orquestrador:
+- from app.core.workers.orchestrator import start_all_workers
 """
-from .async_consolidation_worker import publish_consolidation_task
-from .data_harvester import DataHarvester
-from .knowledge_consolidator_worker import KnowledgeConsolidator, knowledge_consolidator
-from .neural_trainer import start_training_process
-from .neural_training_system import NeuralTrainer, neural_trainer
-from .agent_tasks_worker import publish_agent_task, start_agent_tasks_worker
-from .neural_training_worker import publish_neural_training_task, start_neural_training_worker
+
+# Reexporta apenas o orquestrador central para conveniência
+from .orchestrator import start_all_workers
 
 __all__ = [
-    "publish_consolidation_task",
-    "KnowledgeConsolidator",
-    "knowledge_consolidator",
-    "DataHarvester",
-    "NeuralTrainer",
-    "neural_trainer",
-    "start_training_process",
-    "publish_agent_task",
-    "start_agent_tasks_worker",
-    "publish_neural_training_task",
-    "start_neural_training_worker",
+    "start_all_workers",
 ]
