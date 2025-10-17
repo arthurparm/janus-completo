@@ -54,6 +54,10 @@ class VectorCollection(str, Enum):
 class QueueName(str, Enum):
     """Nomes das filas no Message Broker (RabbitMQ)."""
     KNOWLEDGE_CONSOLIDATION = "janus.knowledge.consolidation"
+    AGENT_TASKS = "janus.agent.tasks"
+    NEURAL_TRAINING = "janus.neural.training"
+    DATA_HARVESTING = "janus.data.harvesting"
+    META_AGENT_CYCLE = "janus.meta_agent.cycle"
 
 
 class TaskMessage(BaseModel):

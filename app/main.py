@@ -43,12 +43,14 @@ from app.core.monitoring import get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.repositories.optimization_repository import OptimizationRepository
 from app.services.optimization_service import OptimizationService
+from app.services.autonomy_service import AutonomyService
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
 from fastapi.staticfiles import StaticFiles
 from app.web.router import web_router
 from app.repositories.chat_repository import ChatRepository
 from app.services.chat_service import ChatService
+from app.core.autonomy.goal_manager import GoalManager
 
 from app.core.agents.agent_manager import get_agent_manager
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
@@ -103,6 +105,9 @@ async def lifespan(app: FastAPI):
     app.state.llm_repo = LLMRepository()
     app.state.llm_service = LLMService(app.state.llm_repo)
 
+    # Goals Manager (Autonomy)
+    app.state.goal_manager = GoalManager(app.state.memory_service)
+
     # Chat: Conversas com histórico (MVP em memória)
     app.state.chat_repo = ChatRepository()
     app.state.chat_service = ChatService(app.state.chat_repo, app.state.llm_service, app.state.tool_service)
@@ -110,6 +115,9 @@ async def lifespan(app: FastAPI):
     # --- Self-Optimization (Sprint 7) ---
     app.state.optimization_repo = OptimizationRepository()
     app.state.optimization_service = OptimizationService(app.state.optimization_repo)
+
+    # Autonomy Service (Loop contínuo)
+    app.state.autonomy_service = AutonomyService(app.state.optimization_service)
 
     # Observabilidade: monitor e poison pill handler
     monitor = get_health_monitor()

@@ -157,6 +157,22 @@ class AppSettings(BaseSettings):
             "x-message-ttl": 86400000,
             "x-max-length": 10000
         },
+        "janus.agent.tasks": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        },
+        "janus.neural.training": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        },
+        "janus.data.harvesting": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        },
+        "janus.meta_agent.cycle": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000
+        },
         "default": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000
@@ -248,17 +264,18 @@ class AppSettings(BaseSettings):
                     try:
                         parsed[str(k)] = float(val)
                     except Exception:
-                        continue
+                        parsed[str(k)] = 0.0
                 return parsed
             except Exception:
                 parsed: Dict[str, float] = {}
-                for item in [x for x in s.split(";") if x.strip()]:
-                    if "=" in item:
-                        k, val = item.split("=", 1)
+                parts = [x.strip() for x in s.split(",") if x.strip()]
+                for p in parts:
+                    if "=" in p:
+                        k, v_str = p.split("=", 1)
                         try:
-                            parsed[k.strip()] = float(val.strip())
+                            parsed[k.strip()] = float(v_str.strip())
                         except Exception:
-                            pass
+                            parsed[k.strip()] = 0.0
                 return parsed
         return v or {}
 
