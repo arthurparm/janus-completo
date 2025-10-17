@@ -15,9 +15,10 @@ from app.core.tools.action_module import (
 from app.core.infrastructure.context_manager import context_manager
 from app.core.infrastructure.enums import AgentType
 from app.core.tools.faulty_tools import get_faulty_tools
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 from app.core.infrastructure.python_sandbox import python_sandbox
 from app.db.graph import graph_db
+from app.core.memory.working_memory import get_working_memory
 
 logger = logging.getLogger(__name__)
 
@@ -186,21 +187,10 @@ def list_directory(path: str = "/app/workspace") -> str:
 async def recall_experiences(query: str) -> str:
     """
     Busca na memória episódica por experiências passadas relevantes usando similaridade semântica.
-
-    Use esta ferramenta para:
-    - Lembrar de ações similares executadas anteriormente
-    - Recuperar contexto de tarefas passadas
-    - Aprender com sucessos e falhas anteriores
-    - Encontrar exemplos de como resolver um problema
-
-    Args:
-        query: Descrição do que você quer lembrar (ex: "como escrever arquivos", "erros com API")
-
-    Returns:
-        JSON com até 3 experiências mais relevantes encontradas
     """
     try:
-        experiences = await memory_core.arecall(query=query, n_results=3)
+        memory_db = await get_memory_db()
+        experiences = await memory_db.arecall(query=query, limit=3)
         return json.dumps(experiences, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Error recalling experiences: {e}", exc_info=True)
@@ -212,28 +202,16 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
     """
     Analisa as N experiências mais recentes armazenadas na memória episódica
     para identificar padrões de falhas, erros recorrentes e problemas do sistema.
-
-    Use esta ferramenta quando precisar:
-    - Detectar padrões de falhas recorrentes
-    - Identificar ferramentas problemáticas
-    - Analisar erros recentes do sistema
-    - Fazer diagnóstico de problemas
-
-    Args:
-        last_n_experiences: Número de experiências a analisar (padrão: 100)
-
-    Returns:
-        Resumo das falhas encontradas ou mensagem indicando ausência de falhas.
     """
     try:
-        experiences = await memory_core.arecall(query="falha erro error exception", n_results=last_n_experiences)
+        memory_db = await get_memory_db()
+        experiences = await memory_db.arecall(query="falha erro error exception", limit=last_n_experiences)
         failures = [exp for exp in experiences if exp.get("metadata", {}).get("type") == "action_failure"]
         if not failures:
             return f"Análise concluída. Nenhuma falha significativa encontrada nas últimas {last_n_experiences} experiências."
 
         summary = f"Análise de {len(failures)} falhas encontradas nas últimas {last_n_experiences} experiências:\n\n"
 
-        # Agrupa falhas por ferramenta
         failures_by_tool = {}
         for fail in failures:
             tool_used = fail.get("metadata", {}).get("tool_used", "N/A")
@@ -241,10 +219,9 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
                 failures_by_tool[tool_used] = []
             failures_by_tool[tool_used].append(fail)
 
-        # Gera resumo por ferramenta
         for tool, tool_failures in sorted(failures_by_tool.items(), key=lambda x: len(x[1]), reverse=True):
             summary += f"\n🔴 Ferramenta '{tool}' - {len(tool_failures)} falha(s):\n"
-            for fail in tool_failures[:3]:  # Mostra até 3 exemplos
+            for fail in tool_failures[:3]:
                 error = fail.get("content", "Erro desconhecido")[:150]
                 timestamp = fail.get("metadata", {}).get("timestamp", "N/A")
                 summary += f"  - [{timestamp}] {error}\n"
@@ -553,11 +530,25 @@ def execute_python_expression(expression: str) -> str:
 
 # --- Fábrica de Ferramentas ---
 
+@tool
+def recall_working_memory(query: str, limit: int = 5) -> str:
+    """
+    Busca na memória de trabalho (curto prazo) por itens relevantes.
+    """
+    try:
+        wm = get_working_memory()
+        results = wm.recall(query=query, limit=limit)
+        return json.dumps(results, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error recalling working memory: {e}", exc_info=True)
+        return f"Erro ao buscar na working memory: {e}"
+
 unified_tools: List[BaseTool] = [
     write_file,
     read_file,
     list_directory,
     recall_experiences,
+    recall_working_memory,
     query_knowledge_graph,  # Sprint 8: Consulta grafo de conhecimento
     find_related_concepts,  # Sprint 8: Busca conceitos relacionados
     get_entity_details,  # Sprint 8: Detalhes de entidades
@@ -572,6 +563,7 @@ unified_tools: List[BaseTool] = [
 meta_agent_tools: List[BaseTool] = [
     analyze_memory_for_failures,
     recall_experiences,
+    recall_working_memory,
     query_knowledge_graph,  # Sprint 8: Meta-agente pode consultar conhecimento consolidado
     get_current_datetime
 ]
@@ -620,6 +612,12 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
         tags=["memory", "episodic"]
+    )
+    action_registry.register(
+        recall_working_memory,
+        category=ToolCategory.DATABASE,
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["memory", "working", "short_term"]
     )
     action_registry.register(
         analyze_memory_for_failures,

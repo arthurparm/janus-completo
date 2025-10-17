@@ -13,6 +13,7 @@ from .action_module import (
 )
 from .agent_tools import (
     recall_experiences,
+    recall_working_memory,
     unified_tools,
     meta_agent_tools,
     get_tools_for_agent
@@ -39,6 +40,7 @@ __all__ = [
     "get_tools_by_category",
     "get_all_tools",
     "recall_experiences",
+    "recall_working_memory",
     "unified_tools",
     "meta_agent_tools",
     "get_tools_for_agent",
