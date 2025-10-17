@@ -1,13 +1,15 @@
 import structlog
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 
 from app.services.reflexion_service import (
     ReflexionService,
     get_reflexion_service
 )
+from app.services.memory_service import MemoryService, get_memory_service
+from app.services.meta_agent_service import MetaAgentService, get_meta_agent_service
 
 router = APIRouter(tags=["Reflexion"])
 logger = structlog.get_logger(__name__)
@@ -28,6 +30,16 @@ class ReflexionResponse(BaseModel):
     lessons_learned: list[str]
     elapsed_seconds: float
     steps: list[dict]
+
+class LessonItem(BaseModel):
+    id: str
+    content: str
+    metadata: dict
+    score: Optional[float] = None
+
+class PostSprintSummaryResponse(BaseModel):
+    lessons: list[LessonItem]
+    meta_report: Optional[dict] = None
 
 # --- Endpoints ---
 
@@ -75,3 +87,28 @@ async def reflexion_health(service: ReflexionService = Depends(get_reflexion_ser
         # O handler genérico pode não ser suficiente se quisermos um status 503 específico aqui
         logger.error("Falha no health check do serviço de Reflexion", exc_info=e)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+
+@router.get("/summary/post_sprint", response_model=PostSprintSummaryResponse, summary="Resumo pós-sprint: lições e estado do sistema")
+async def get_post_sprint_summary(
+        limit: int = Query(10, ge=1, le=100, description="Limite de lições recentes"),
+        timeframe_seconds: Optional[int] = Query(None, description="Janela de tempo em segundos para lições"),
+        min_score: Optional[float] = Query(None, ge=0.0, description="Score mínimo das lições"),
+        memory: MemoryService = Depends(get_memory_service),
+        meta: MetaAgentService = Depends(get_meta_agent_service),
+):
+    """Retorna um resumo pós-sprint com lições aprendidas recentes e o último relatório do Meta-Agente."""
+    lessons_raw = await memory.recall_recent_lessons(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
+    lessons = [
+        LessonItem(
+            id=str(item.get("id")),
+            content=item.get("content", ""),
+            metadata=item.get("metadata", {}),
+            score=item.get("score"),
+        )
+        for item in lessons_raw
+    ]
+
+    report = meta.get_latest_report()
+    meta_report = report.to_dict() if report else None
+
+    return PostSprintSummaryResponse(lessons=lessons, meta_report=meta_report)

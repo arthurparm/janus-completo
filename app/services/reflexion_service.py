@@ -5,6 +5,7 @@ from fastapi import Request
 
 from app.repositories.reflexion_repository import ReflexionRepository, ReflexionRepositoryError
 from app.core.optimization import ReflexionConfig
+from app.core.optimization import self_optimization_cycle
 
 logger = structlog.get_logger(__name__)
 
@@ -32,6 +33,21 @@ class ReflexionService:
     def __init__(self, repo: ReflexionRepository):
         self._repo = repo
 
+    async def _compute_dynamic_success_threshold(self, base: float) -> float:
+        """Ajusta dinamicamente o success_threshold com base em métricas históricas."""
+        try:
+            metrics = await self_optimization_cycle.monitor.collect_metrics()
+            health_score = self_optimization_cycle.monitor._calculate_health_score(metrics)
+            # Ajuste leve em torno do baseline: sobe quando o sistema está saudável, desce quando há degradação
+            adjust = (health_score - 0.8) * 0.3 - metrics.error_rate * 0.2 - min(1.0, metrics.avg_response_time) * 0.05
+            dyn = max(0.6, min(0.95, base + adjust))
+            logger.info("Threshold dinâmico calculado", base=base, adjusted=dyn, health_score=health_score,
+                        error_rate=metrics.error_rate, avg_response_time=metrics.avg_response_time)
+            return round(dyn, 2)
+        except Exception as e:
+            logger.warning("Falha ao calcular threshold dinâmico; usando valor base.", exc_info=e)
+            return base
+
     async def run_reflexion_cycle(self, task: str, config_overrides: Dict[str, Any]) -> Dict[str, Any]:
         """
         Orquestra a execução de uma tarefa com o ciclo completo de Reflexion.
@@ -42,6 +58,10 @@ class ReflexionService:
             for key, value in config_overrides.items():
                 if value is not None:
                     setattr(config, key, value)
+
+            # Aplicar ajuste dinâmico quando não houver override explícito do usuário
+            if config_overrides.get("success_threshold") is None:
+                config.success_threshold = await self._compute_dynamic_success_threshold(config.success_threshold)
 
             result = await self._repo.run_cycle(task=task, config=config)
 
