@@ -8,7 +8,7 @@
 
 ###
 # 1. Health Check do Sistema Multi-Agente
-GET {{host}}{{api_v1_prefix}}/collaboration/health
+GET http://localhost:8000/api/v1/autonomy/status
 Accept: application/json
 
 ###

@@ -10,10 +10,13 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any
 
-from app.core.infrastructure.message_broker import message_broker
+# Use broker getter to avoid None reference
+from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import TaskMessage, QueueName
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
+from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
+from app.core.workers.neural_training_worker import start_neural_training_worker
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +125,12 @@ async def publish_consolidation_task(
         timestamp=datetime.utcnow().timestamp()
     )
 
-    await message_broker.publish(
+    # Ensure message is serialized to JSON string for broker compatibility
+    serialized = task_message.model_dump_json()
+    broker = await get_broker()
+    await broker.publish(
         queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
-        message=task_message,
-        priority=5  # Prioridade média
+        message=serialized
     )
 
     logger.info(f"Tarefa de consolidação publicada: task_id={task_id}, mode={mode}")
@@ -140,14 +145,13 @@ async def start_consolidation_worker():
     """
     logger.info("Iniciando worker de consolidação de conhecimento...")
 
-    # Conecta ao RabbitMQ
-    await message_broker.connect()
+    broker = await get_broker()
 
     # Inicia o consolidator
     knowledge_consolidator._initialize()
 
     # Inicia consumidor da fila
-    consumer_task = message_broker.start_consumer(
+    consumer_task = broker.start_consumer(
         queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
         callback=process_consolidation_task,
         prefetch_count=5  # Processa até 5 tarefas em paralelo
@@ -171,10 +175,17 @@ async def start_all_workers():
     consolidation_worker = await start_consolidation_worker()
     workers.append(consolidation_worker)
 
+    # Worker de tarefas de agente
+    agent_worker = await start_agent_tasks_worker()
+    workers.append(agent_worker)
+
+    # Worker de treinamento neural
+    neural_worker = await start_neural_training_worker()
+    workers.append(neural_worker)
+
     # Aqui você pode adicionar outros workers:
     # - Data harvesting worker
     # - Meta-agent cycle worker
-    # - Neural training worker
     # etc.
 
     logger.info(f"✓ {len(workers)} workers iniciados com sucesso.")
