@@ -507,6 +507,88 @@ for tool_name, usage in sorted_tools:
 - Ferramentas defeituosas marcadas com tags
 - Sistema pode aprender quais ferramentas são confiáveis
 
+### Autonomy Loop (Plano de Execução)
+
+O **AutonomyLoop** integra-se ao Action Module para executar planos de ações em ciclos contínuos, respeitando políticas de segurança e limites de execução.
+
+**Configuração:**
+
+- Estrutura `AutonomyConfig` (em `app/services/autonomy_service.py`):
+  - `interval_seconds`: intervalo entre ciclos
+  - `risk_profile`: `conservative|balanced|aggressive`
+  - `auto_confirm`: confirma automaticamente ações não perigosas
+  - `allowlist` / `blocklist`: controle de ferramentas permitidas/bloqueadas
+  - `max_actions_per_cycle`, `max_seconds_per_cycle`: cotas por ciclo
+  - `plan`: lista de passos (`{"tool": str, "args": dict}`)
+
+**Forma de cada passo do plano:**
+
+```json
+{
+  "tool": "list_directory",
+  "args": { "path": "/app/workspace" }
+}
+```
+
+**Validações aplicadas (pré-execução):**
+
+- Verificação de shape: cada passo deve conter `tool` (string) e `args` (objeto)
+- Existência da ferramenta no `action_registry`
+- `blocklist`: bloqueia imediatamente ferramentas listadas
+- `allowlist`: se fornecida, apenas ferramentas presentes são aceitas
+- `args_schema` (quando definido via `@tool(args_schema=Model)`): validação rígida dos argumentos
+
+> Observação: ferramentas sem `args_schema` têm validação limitada à presença do objeto `args`. Para validação completa, defina `args_schema` na ferramenta.
+
+**Fallback de plano:**
+
+- Se `config.plan` estiver vazio, o loop usa um plano seguro:
+  - `get_current_datetime`
+  - `get_system_info`
+
+**Endpoints (API REST):**
+
+- `POST /api/v1/autonomy/start`: inicia o loop com `AutonomyConfig` (opcionalmente com `plan`)
+- `GET /api/v1/autonomy/status`: obtém status atual (ativo, ciclos, config)
+- `GET /api/v1/autonomy/plan`: retorna o plano atual e metadados
+- `PUT /api/v1/autonomy/plan`: atualiza o plano em runtime (valida contra allowlist/blocklist e `args_schema`)
+- `POST /api/v1/autonomy/stop`: para o loop
+
+**Exemplo de início com plano:**
+
+```http
+POST /api/v1/autonomy/start
+Content-Type: application/json
+
+{
+  "interval_seconds": 15,
+  "auto_confirm": true,
+  "max_actions_per_cycle": 5,
+  "max_seconds_per_cycle": 30,
+  "allowlist": ["get_current_datetime", "list_directory"],
+  "blocklist": [],
+  "plan": [
+    { "tool": "get_current_datetime", "args": {} },
+    { "tool": "list_directory", "args": { "path": "/app/workspace/models" } }
+  ]
+}
+```
+
+**Exemplo de atualização de plano com erro (blocklist):**
+
+```http
+PUT /api/v1/autonomy/plan
+Content-Type: application/json
+
+{
+  "plan": [
+    { "tool": "list_directory", "args": {} }
+  ]
+}
+```
+
+Resposta esperada: `422 Unprocessable Entity` com detalhe indicando ferramenta bloqueada.
+
 ## 📈 Métricas de Sucesso
 
 **Indicadores:**

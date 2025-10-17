@@ -86,3 +86,71 @@ Accept: application/json
 ###
 # 12. Remover Ferramenta Dinâmica
 DELETE {{host}}{{api_v1_prefix}}/tools/custom_calculator
+
+###
+# 13. Iniciar AutonomyLoop com Plano Customizado
+POST {{host}}{{api_v1_prefix}}/autonomy/start
+Content-Type: application/json
+
+{
+  "interval_seconds": 15,
+  "auto_confirm": true,
+  "max_actions_per_cycle": 5,
+  "max_seconds_per_cycle": 30,
+  "allowlist": ["get_current_datetime", "list_directory"],
+  "blocklist": [],
+  "plan": [
+    { "tool": "get_current_datetime", "args": {} },
+    { "tool": "list_directory", "args": { "path": "/app/workspace/models" } }
+  ]
+}
+
+###
+# 14. Obter Status do AutonomyLoop
+GET {{host}}{{api_v1_prefix}}/autonomy/status
+Accept: application/json
+
+###
+# 15. Obter Plano Atual do AutonomyLoop
+GET {{host}}{{api_v1_prefix}}/autonomy/plan
+Accept: application/json
+
+###
+# 16. Atualizar Plano em Runtime
+PUT {{host}}{{api_v1_prefix}}/autonomy/plan
+Content-Type: application/json
+
+{
+  "plan": [
+    { "tool": "get_current_datetime", "args": {} },
+    { "tool": "list_directory", "args": { "path": "/app/workspace" } }
+  ]
+}
+
+###
+# 17. Tentar Atualizar Plano com Ferramenta Inexistente (Erro 422 esperado)
+PUT {{host}}{{api_v1_prefix}}/autonomy/plan
+Content-Type: application/json
+
+{
+  "plan": [
+    { "tool": "nonexistent_tool", "args": {} }
+  ]
+}
+
+###
+# 17b. Tentar Atualizar Plano com Ferramenta Bloqueada (Erro 422 esperado)
+PUT {{host}}{{api_v1_prefix}}/autonomy/plan
+Content-Type: application/json
+
+{
+  "plan": [
+    { "tool": "list_directory", "args": {} }
+  ]
+}
+
+> Pré-condição: iniciar com `blocklist` contendo `list_directory`.
+
+###
+# 18. Parar AutonomyLoop
+POST {{host}}{{api_v1_prefix}}/autonomy/stop
