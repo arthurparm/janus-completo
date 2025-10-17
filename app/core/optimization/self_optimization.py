@@ -23,7 +23,7 @@ from typing import List, Dict, Any, Optional
 from prometheus_client import Counter, Histogram, Gauge
 
 from app.core.agents.agent_manager import agent_manager, AgentType
-from app.core.memory.memory_core import memory_core
+from app.core.memory.memory_core import get_memory_db
 from app.core.tools.action_module import action_registry
 from app.models.schemas import Experience
 
@@ -553,7 +553,8 @@ IMPORTANTE:
 
             # Memoriza resultado
             try:
-                memory_core.memorize(Experience(
+                memory_db = await get_memory_db()
+                await memory_db.amemorize(Experience(
                     type="self_optimization",
                     content=f"Melhoria aplicada: {improvement.description}\nSucesso: {success}\nResultado: {applied.actual_impact or applied.error}",
                     metadata={
