@@ -28,12 +28,28 @@ class MemoryConnector(IHarvesterConnector):
 
     def __init__(self, memory_repo: MemoryRepository):
         self._repo = memory_repo
+        # ciclo de consultas para diversificar quando nenhuma query explícita for fornecida
+        self._query_cycle = [
+            "action_success",
+            "action_failure",
+            "lessons_learned",
+            "reflexion_iteration",
+            "neural_training",
+            "reasoning",
+            "log",
+            "experiência do agente",
+        ]
+        self._q_idx = 0
+
+    def _next_query(self) -> str:
+        q = self._query_cycle[self._q_idx % len(self._query_cycle)]
+        self._q_idx += 1
+        return q
 
     async def fetch_batch(self, limit: int = 50, query: Optional[str] = None) -> List[Dict[str, Any]]:
         logger.debug(f"Coletando experiências via {self.name}")
         try:
-            # A lógica de busca agora usa o repositório injetado
-            effective_query = query or "experiência do agente"
+            effective_query = query or self._next_query()
             return await self._repo.search_experiences(query=effective_query, limit=limit)
         except Exception as e:
             logger.error(f"Erro ao coletar dados de {self.name}", exc_info=e)
@@ -94,19 +110,47 @@ class DataHarvester:
         """Processa um lote de itens, formata e salva em um arquivo JSONL."""
         logger.info(f"Processando {len(items)} itens coletados.")
         try:
-            training_examples = []
+            # construir exemplos prompt/completion
+            training_examples: List[Dict[str, Any]] = []
             for item in items:
                 if item.get('content') and item.get('metadata'):
                     prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
                     completion = item['content']
                     training_examples.append({"prompt": prompt, "completion": completion})
 
-            if training_examples:
-                jsonl_content = "\n".join(json.dumps(ex, ensure_ascii=False) for ex in training_examples)
-                # A escrita em arquivo é uma operação de I/O que pode ser executada em um executor
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, write_file, TRAINING_DATA_FILE, jsonl_content + "\n", True)
-                logger.info(f"{len(training_examples)} exemplos de treino salvos em {TRAINING_DATA_FILE}")
+            if not training_examples:
+                return
+
+            # mesclar com arquivo existente e deduplicar via hash de prompt+completion
+            existing = read_file(f"workspace/{TRAINING_DATA_FILE}")
+            seen_hashes: set[str] = set()
+            existing_lines: List[str] = []
+            if isinstance(existing, str) and not existing.startswith("Erro:"):
+                for ln in [l for l in existing.strip().split('\n') if l.strip()]:
+                    existing_lines.append(ln)
+                    try:
+                        obj = json.loads(ln)
+                        key = (obj.get("prompt", "") + "|||" + obj.get("completion", ""))
+                        seen_hashes.add(hashlib.sha256(key.encode("utf-8")).hexdigest())
+                    except Exception:
+                        continue
+
+            new_lines: List[str] = []
+            for ex in training_examples:
+                key = (ex["prompt"] + "|||" + ex["completion"])
+                h = hashlib.sha256(key.encode("utf-8")).hexdigest()
+                if h in seen_hashes:
+                    continue
+                new_lines.append(json.dumps(ex, ensure_ascii=False))
+                seen_hashes.add(h)
+
+            combined_lines = existing_lines + new_lines
+            combined_lines = combined_lines[-2000:]
+            combined_text = "\n".join(combined_lines) + ("\n" if combined_lines else "")
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, write_file, TRAINING_DATA_FILE, combined_text, True)
+            logger.info(f"Dataset atualizado com {len(combined_lines)} linhas (novas: {len(new_lines)}).")
         except Exception as e:
             logger.error("Erro ao processar e salvar itens para treinamento", exc_info=e)
 

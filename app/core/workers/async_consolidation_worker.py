@@ -86,54 +86,19 @@ async def process_consolidation_task(task: TaskMessage) -> None:
         raise
 
 
-async def publish_consolidation_task(
-        mode: str = "batch",
-        limit: int = 10,
-        experience_id: str = None,
-        experience_content: str = None,
-        metadata: Dict[str, Any] = None
-) -> str:
-    """
-    Publica uma tarefa de consolidação no RabbitMQ.
-
-    Args:
-        mode: Modo de consolidação ("batch" ou "single")
-        limit: Limite de experiências (para modo batch)
-        experience_id: ID da experiência (para modo single)
-        experience_content: Conteúdo da experiência (para modo single)
-        metadata: Metadados da experiência (para modo single)
-
-    Returns:
-        ID da tarefa publicada
-    """
-    task_id = str(uuid.uuid4())
-
-    payload = {
-        "mode": mode,
-        "limit": limit if mode == "batch" else None,
-        "experience_id": experience_id if mode == "single" else None,
-        "experience_content": experience_content if mode == "single" else None,
-        "metadata": metadata if mode == "single" else None
-    }
-
+async def publish_consolidation_task(payload: Dict[str, Any], correlation_id: str | None = None) -> Dict[str, Any]:
+    """Publica uma tarefa de consolidação na fila apropriada."""
+    broker = await get_broker()
+    # Alinha com o esquema de TaskMessage (timestamp obrigatório) e serializa
     task_message = TaskMessage(
-        task_id=task_id,
+        task_id=str(uuid.uuid4()),
         task_type="knowledge_consolidation",
         payload=payload,
-        timestamp=datetime.utcnow().timestamp()
+        timestamp=datetime.utcnow().timestamp(),
     )
-
-    # Ensure message is serialized to JSON string for broker compatibility
     serialized = task_message.model_dump_json()
-    broker = await get_broker()
-    await broker.publish(
-        queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
-        message=serialized
-    )
-
-    logger.info(f"Tarefa de consolidação publicada: task_id={task_id}, mode={mode}")
-
-    return task_id
+    await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=serialized)
+    return {"status": "ok", "task_id": task_message.task_id}
 
 
 async def start_consolidation_worker():
@@ -145,8 +110,8 @@ async def start_consolidation_worker():
 
     broker = await get_broker()
 
-    # Inicia o consolidator
-    knowledge_consolidator._initialize()
+    # Inicia o consolidator com await (método assíncrono)
+    await knowledge_consolidator._initialize()
 
     # Inicia consumidor da fila
     consumer_task = broker.start_consumer(
