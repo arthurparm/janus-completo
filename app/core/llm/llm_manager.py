@@ -865,7 +865,7 @@ class LLMClient:
                         model_kwargs=model_kwargs,
                     )
                     if _health_check_ollama(local_llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 2):
-                        logger.info("Sem orçamento suficiente; fallback para modelo local (Ollama).")
+                        logger.info("Sem orçamento suficiente; fallback para modelo local (OllaM).")
                         self.base = local_llm
                         self.provider = "ollama"
                         self.model = local_model_name
@@ -1076,7 +1076,7 @@ class LLMClient:
                         model_kwargs=model_kwargs,
                     )
                     if _health_check_ollama(local_llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 2):
-                        logger.info("Sem orçamento suficiente; fallback para modelo local (Ollama).")
+                        logger.info("Sem orçamento suficiente; fallback para modelo local (OllaM).")
                         self.base = local_llm
                         self.provider = "ollama"
                         self.model = local_model_name
