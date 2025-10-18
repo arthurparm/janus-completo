@@ -26,3 +26,5 @@ prometheus-client
 sentence-transformers>=2.2.2
 transformers>=4.36.0,<4.50.0
 onnxruntime>=1.17.0
+# Security: Encryption for episodic memory content
+cryptography>=41.0.0
