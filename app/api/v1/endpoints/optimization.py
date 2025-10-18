@@ -1,5 +1,5 @@
 import structlog
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends
 from dataclasses import asdict
@@ -52,6 +52,7 @@ class SystemAnalysisResponse(BaseModel):
     issues_by_type: dict[str, int]
     metrics_snapshot: dict
     trend: dict
+    series: Dict[str, List[float]]
     insights: list[str]
     details: Optional[dict] = None
 
