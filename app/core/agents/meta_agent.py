@@ -7,6 +7,7 @@ melhorias sem intervenção humana.
 """
 import asyncio
 import logging
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -67,6 +68,67 @@ class IssueCategory(Enum):
     RESOURCE = "resource"
     CONFIGURATION = "configuration"
     SECURITY = "security"
+
+
+def _safe_issue_severity(value: Any) -> IssueSeverity:
+    s = (str(value) if value is not None else "").strip().lower()
+    try:
+        return IssueSeverity(s)
+    except Exception:
+        if s in ("info", "informational", "notice"):
+            return IssueSeverity.LOW
+        if s in ("moderate", "medium", "normal"):
+            return IssueSeverity.MEDIUM
+        if s in ("major", "high", "severe"):
+            return IssueSeverity.HIGH
+        if s in ("critical", "blocker", "urgent"):
+            return IssueSeverity.CRITICAL
+        return IssueSeverity.LOW
+
+
+def _safe_issue_category(value: Any) -> IssueCategory:
+    s = (str(value) if value is not None else "").strip().lower()
+    try:
+        return IssueCategory(s)
+    except Exception:
+        synonyms = {
+            "ops": "reliability",
+            "operational": "reliability",
+            "operations": "reliability",
+            "availability": "reliability",
+            "stability": "reliability",
+            "latency": "performance",
+            "throughput": "performance",
+            "efficiency": "performance",
+            "memory": "resource",
+            "cpu": "resource",
+            "disk": "resource",
+            "io": "resource",
+            "quota": "resource",
+            "capacity": "resource",
+            "misconfiguration": "configuration",
+            "config": "configuration",
+            "configuration": "configuration",
+            "auth": "security",
+            "authorization": "security",
+            "authentication": "security",
+            "vulnerability": "security",
+            "security": "security",
+        }
+        mapped = synonyms.get(s)
+        if mapped:
+            return IssueCategory(mapped)
+        if ("latency" in s) or ("slow" in s) or ("performance" in s):
+            return IssueCategory.PERFORMANCE
+        if ("availability" in s) or ("stability" in s) or ("reliab" in s) or ("operat" in s):
+            return IssueCategory.RELIABILITY
+        if ("cpu" in s) or ("memory" in s) or ("disk" in s) or ("resource" in s) or ("quota" in s):
+            return IssueCategory.RESOURCE
+        if ("config" in s) or ("misconfig" in s) or ("configuration" in s) or ("settings" in s):
+            return IssueCategory.CONFIGURATION
+        if ("security" in s) or ("auth" in s) or ("vuln" in s) or ("attack" in s):
+            return IssueCategory.SECURITY
+        return IssueCategory.PERFORMANCE
 
 
 @dataclass
@@ -145,28 +207,55 @@ class StateReport:
 # --- Ferramentas de Introspecção ---
 
 @tool
-def analyze_memory_for_failures(time_window_hours: int = 24, max_results: int = 50) -> str:
+def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: Any = 50) -> str:
     """
     Analisa a memória episódica em busca de padrões de falha.
 
     Args:
-        time_window_hours: Janela de tempo para análise (horas)
-        max_results: Número máximo de resultados
+        time_window_hours: Janela de tempo para análise (horas) — aceita número ou JSON
+        max_results: Número máximo de resultados — aceita número ou JSON
 
     Returns:
         JSON string com falhas encontradas e padrões identificados
     """
     try:
-        from app.db.vector import vector_db
-        import json
+        # Normalização de inputs: suportar strings JSON ou strings numéricas
+        try:
+            if isinstance(time_window_hours, str):
+                s = time_window_hours.strip()
+                if s.startswith("{") and s.endswith("}"):
+                    cfg = json.loads(s)
+                    time_window_hours = cfg.get("time_window_hours", time_window_hours)
+                    max_results = cfg.get("max_results", max_results)
+            if isinstance(max_results, str):
+                s2 = max_results.strip()
+                if s2.startswith("{") and s2.endswith("}"):
+                    cfg2 = json.loads(s2)
+                    max_results = cfg2.get("max_results", max_results)
+                    time_window_hours = cfg2.get("time_window_hours", time_window_hours)
+            time_window_hours = int(time_window_hours)
+            max_results = int(max_results)
+        except Exception:
+            time_window_hours = 24
+            max_results = 50
 
-        # Buscar experiências de falha
+        # Buscar experiências de falha usando MemoryCore (Qdrant)
         query = "error failure exception crash bug"
-        results = vector_db.search(
-            query=query,
-            limit=max_results,
-            filter_metadata={"type": "action_failure"}
-        )
+
+        # Executa operações assíncronas em um event loop próprio (executado em thread)
+        import asyncio
+        from app.core.memory.memory_core import get_memory_db
+
+        async def _fetch_failures():
+            mem = await get_memory_db()
+            results = await mem.arecall_filtered(
+                query=query,
+                filters={"type": "action_failure"},
+                limit=max_results
+            )
+            return results
+
+        results = asyncio.run(_fetch_failures())
 
         if not results:
             return json.dumps({
@@ -298,7 +387,6 @@ def get_resource_usage() -> str:
     """
     try:
         import psutil
-        import json
 
         resources = {
             "cpu_percent": psutil.cpu_percent(interval=1),
@@ -404,27 +492,19 @@ class MetaAgent:
             get_resource_usage
         ]
         self.executor: Optional[AgentExecutor] = None
+        self.llm = None
         self.last_report: Optional[StateReport] = None
         self.cycle_count = 0
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._initialize_agent()
-        logger.info("Meta-Agente inicializado")
 
     def _initialize_agent(self):
         """Inicializa o executor do Meta-Agente."""
-        prompt = PromptTemplate.from_template(META_AGENT_PROMPT)
-
-        # Usar LLM de alta qualidade para análise crítica
+        # Usar LLM de alta qualidade para análise crítica, sem bind de 'stop'
         llm = get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
-
-        agent = create_react_agent(llm, self.tools, prompt)
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=10,
-            handle_parsing_errors=True
-        )
+        self.llm = llm
+        self.executor = None
+        logger.info("Meta-Agente inicializado")
 
     async def run_analysis_cycle(self) -> StateReport:
         """
@@ -441,26 +521,61 @@ class MetaAgent:
         logger.info(f"Meta-Agente iniciando ciclo de análise: {cycle_id}")
 
         try:
-            # Invocar o agente com tarefa de análise
-            task = """Analise o estado atual do sistema Janus:
-
-1. Verifique a saúde de todos os componentes
-2. Analise a memória episódica em busca de falhas recentes
-3. Avalie o uso de recursos
-4. Identifique problemas e padrões preocupantes
-5. Gere recomendações de melhoria
-
-Retorne um relatório estruturado em JSON."""
-
-            result = await asyncio.to_thread(
-                self.executor.invoke,
-                {"input": task}
+            # Coletar dados das ferramentas sem usar ReAct (evitar parâmetro 'stop')
+            mem_str = await asyncio.to_thread(
+                analyze_memory_for_failures.invoke,
+                {"time_window_hours": 24, "max_results": 50}
             )
+            health_str = await asyncio.to_thread(
+                get_system_health_metrics.invoke,
+                {}
+            )
+            perf_str = await asyncio.to_thread(
+                analyze_performance_trends.invoke,
+                {"metric_name": "llm_latency", "hours": 24}
+            )
+            resources_str = await asyncio.to_thread(
+                get_resource_usage.invoke,
+                {}
+            )
+
+            # Tarefa de análise orientada por dados observados
+            task = (
+                "Analise o estado atual do sistema Janus com base nos dados observados abaixo e "
+                "retorne APENAS o relatório final no formato JSON especificado.\n\n"
+                "Dados Observados:\n"
+                f"- Falhas de memória episódica: {mem_str}\n"
+                f"- Métricas de saúde do sistema: {health_str}\n"
+                f"- Tendências de performance: {perf_str}\n"
+                f"- Uso de recursos: {resources_str}\n\n"
+                "Formato do Relatório (JSON): {\n"
+                "  \"overall_status\": \"healthy|degraded|critical\",\n"
+                "  \"health_score\": 0-100,\n"
+                "  \"issues\": [{\n"
+                "    \"severity\": \"low|medium|high|critical\",\n"
+                "    \"category\": \"performance|reliability|resource|configuration|security\",\n"
+                "    \"title\": \"...\",\n"
+                "    \"description\": \"...\",\n"
+                "    \"evidence\": {\"metric\": \"value\"}\n"
+                "  }],\n"
+                "  \"recommendations\": [{\n"
+                "    \"category\": \"...\",\n"
+                "    \"title\": \"...\",\n"
+                "    \"description\": \"...\",\n"
+                "    \"rationale\": \"...\",\n"
+                "    \"priority\": 1-5\n"
+                "  }],\n"
+                "  \"summary\": \"Resumo executivo...\"\n"
+                "}"
+            )
+
+            # Invocar LLM diretamente (sem AgentExecutor) para evitar 'stop'
+            llm_msg = await asyncio.to_thread(self.llm.invoke, task)
+            output = getattr(llm_msg, "content", str(llm_msg))
 
             duration = asyncio.get_event_loop().time() - start_time
 
             # Parsear resultado
-            output = result.get("output", "{}")
             report_data = self._parse_agent_output(output)
 
             # Criar relatório
@@ -472,8 +587,8 @@ Retorne um relatório estruturado em JSON."""
                 issues_detected=[
                     DetectedIssue(
                         id=f"issue_{i}",
-                        severity=IssueSeverity(issue.get("severity", "low")),
-                        category=IssueCategory(issue.get("category", "performance")),
+                        severity=_safe_issue_severity(issue.get("severity", "low")),
+                        category=_safe_issue_category(issue.get("category", "performance")),
                         title=issue.get("title", ""),
                         description=issue.get("description", ""),
                         evidence=issue.get("evidence", {})
@@ -483,7 +598,7 @@ Retorne um relatório estruturado em JSON."""
                 recommendations=[
                     Recommendation(
                         id=f"rec_{i}",
-                        category=IssueCategory(rec.get("category", "performance")),
+                        category=_safe_issue_category(rec.get("category", "performance")),
                         title=rec.get("title", ""),
                         description=rec.get("description", ""),
                         rationale=rec.get("rationale", ""),
