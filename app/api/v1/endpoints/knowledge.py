@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.models.knowledge import CodeEntity
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 
-router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
+router = APIRouter(tags=["Knowledge"])
 
 
 class IndexResponse(BaseModel):
@@ -67,8 +67,12 @@ class KnowledgeHealthResponse(BaseModel):
 
 
 class ConsolidationRequest(BaseModel):
+    mode: str = "batch"  # "batch" ou "single"
     limit: int = 10
-    batch_size: Optional[int] = 10  # Placeholder, não utilizado diretamente
+    min_score: float = 0.0
+    experience_id: Optional[str] = None
+    experience_content: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class ConsolidationResponse(BaseModel):
@@ -146,3 +150,43 @@ async def get_node_types(service: KnowledgeService = Depends(get_knowledge_servi
 async def knowledge_health(service: KnowledgeService = Depends(get_knowledge_service)):
     health = await service.get_health_status()
     return KnowledgeHealthResponse(**health)
+
+
+@router.post("/consolidate", response_model=ConsolidationResponse,
+             summary="Dispara consolidação de conhecimento via fila")
+async def publish_consolidation(request: ConsolidationRequest):
+    # Publica tarefa para o worker de consolidação consumir
+    from app.core.workers.async_consolidation_worker import publish_consolidation_task
+    payload = request.model_dump()
+    result = await publish_consolidation_task(payload)
+    return ConsolidationResponse(message="Tarefa de consolidação publicada.", stats=result)
+
+
+@router.get("/functions/calling", response_model=List[CodeEntity],
+            summary="Lista funções que chamam a função informada")
+async def functions_calling(
+        name: str = Query(..., description="Nome da função alvo"),
+        service: KnowledgeService = Depends(get_knowledge_service)
+):
+    rows = await service.get_functions_calling(function_name=name)
+    return [CodeEntity(**row) for row in rows]
+
+
+@router.get("/files/importing", response_model=List[CodeEntity],
+            summary="Lista arquivos que importam o módulo/arquivo informado")
+async def files_importing(
+        module: str = Query(..., description="Nome do módulo ou caminho do arquivo"),
+        service: KnowledgeService = Depends(get_knowledge_service)
+):
+    rows = await service.get_files_importing(module=module)
+    return [CodeEntity(**row) for row in rows]
+
+
+@router.get("/classes/implementations", response_model=List[CodeEntity],
+            summary="Lista classes que implementam o protocolo/interface informado")
+async def classes_implementations(
+        protocol: str = Query(..., description="Nome do protocolo/interface"),
+        service: KnowledgeService = Depends(get_knowledge_service)
+):
+    rows = await service.get_classes_implementing(protocol=protocol)
+    return [CodeEntity(**row) for row in rows]

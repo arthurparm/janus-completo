@@ -22,7 +22,7 @@ from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
 from app.core.memory.memory_core import decrypt_text
 from app.core.memory.graph_guardian import graph_guardian
-from app.db.graph import graph_db
+from app.db.graph import get_graph_db
 from app.db.vector_store import get_qdrant_client
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ class KnowledgeConsolidator:
         self.llm: Optional[BaseChatModel] = None
         self._initialized = False
 
-    def _initialize(self):
+    async def _initialize(self):
         """Inicializa componentes necessários."""
         if self._initialized:
             return
@@ -120,8 +120,13 @@ class KnowledgeConsolidator:
             self.llm = None
 
         # Verifica health do Neo4j
-        if not graph_db.health_check():
-            logger.warning("Neo4j não está saudável. Consolidação pode falhar.")
+        try:
+            db = await get_graph_db()
+            ok = await db.health_check()
+            if not ok:
+                logger.warning("Neo4j não está saudável. Consolidação pode falhar.")
+        except Exception as e:
+            logger.warning(f"Falha ao verificar saúde do Neo4j: {e}")
 
         self._initialized = True
 
@@ -197,7 +202,7 @@ class KnowledgeConsolidator:
             logger.error(f"Erro na extração de conhecimento com LLM: {e}", exc_info=True)
             return {"entities": [], "relationships": [], "insights": []}
 
-    def _persist_to_neo4j(
+    async def _persist_to_neo4j(
             self,
             experience_id: str,
             extracted_data: Dict[str, Any],
@@ -217,9 +222,11 @@ class KnowledgeConsolidator:
         entities_created = 0
         relationships_created = 0
 
+        db = await get_graph_db()
+
         # Cria nó da experiência
         try:
-            graph_db.query(
+            await db.query(
                 """
                 MERGE (e:Experience {id: $exp_id})
                 SET e.timestamp = $timestamp,
@@ -252,12 +259,8 @@ class KnowledgeConsolidator:
                 entity_name = normalized_entity["name"]
                 entity_type = normalized_entity["type"]
                 entity_props = normalized_entity["properties"]
-
-                # Adiciona nome original como propriedade (útil para auditoria)
                 entity_props["original_name"] = normalized_entity.get("original_name", entity_name)
-
-                # Cria ou atualiza entidade
-                graph_db.query(
+                await db.query(
                     f"""
                     MERGE (n:{entity_type} {{name: $name}})
                     SET n += $properties,
@@ -273,10 +276,8 @@ class KnowledgeConsolidator:
                     },
                     operation="create_entity"
                 )
-
                 entities_created += 1
                 ENTITIES_EXTRACTED.inc()
-
             except ValueError as ve:
                 logger.warning(f"Entidade inválida ignorada: {entity.get('name')} - {ve}")
             except Exception as e:
@@ -288,30 +289,22 @@ class KnowledgeConsolidator:
                 continue
 
             try:
-                # GUARDIÃO DO GRAFO: Normaliza e valida relacionamento
                 normalized_rel = graph_guardian.validate_and_normalize_relationship(
                     from_entity=rel["from"],
                     to_entity=rel["to"],
                     rel_type=rel.get("type", "RELATES_TO"),
                     properties=rel.get("properties", {})
                 )
-
-                # Se a normalização retornou None, o relacionamento é inválido
                 if normalized_rel is None:
                     logger.debug(f"Relacionamento inválido ignorado: {rel}")
                     continue
-
                 from_name = normalized_rel["from"]
                 to_name = normalized_rel["to"]
                 rel_type = normalized_rel["type"]
                 rel_props = normalized_rel["properties"]
-
-                # Adiciona metadados para auditoria
                 rel_props["original_from"] = normalized_rel.get("original_from", from_name)
                 rel_props["original_to"] = normalized_rel.get("original_to", to_name)
-
-                # Cria relacionamento (permite qualquer tipo de nó de origem/destino)
-                graph_db.query(
+                await db.query(
                     f"""
                     MATCH (a {{name: $from_name}})
                     MATCH (b {{name: $to_name}})
@@ -328,16 +321,13 @@ class KnowledgeConsolidator:
                     },
                     operation="create_relationship"
                 )
-
                 relationships_created += 1
                 RELATIONSHIPS_CREATED.inc()
-
             except Exception as e:
                 logger.error(
                     f"Erro ao criar relacionamento {rel.get('from')} -> {rel.get('to')}: {e}"
                 )
 
-        # Armazena insights como propriedades
         insights = extracted_data.get("insights", [])
         if insights:
             try:
@@ -346,7 +336,7 @@ class KnowledgeConsolidator:
                     for ins in insights[:5]  # Limita a 5 insights
                 ])
 
-                graph_db.query(
+                await db.query(
                     """
                     MATCH (e:Experience {id: $exp_id})
                     SET e.insights = $insights_text
@@ -378,30 +368,17 @@ class KnowledgeConsolidator:
     ) -> Dict[str, Any]:
         """
         Consolida uma experiência episódica em conhecimento semântico.
-
-        Args:
-            experience_id: ID da experiência
-            experience_content: Conteúdo da experiência
-            metadata: Metadados
-
-        Returns:
-            Resultado da consolidação
         """
         start = time.perf_counter()
 
         try:
-            # Extrai conhecimento com LLM
             extracted = await self._extract_knowledge_with_llm(experience_content, metadata)
-
-            # Persiste no Neo4j
-            num_entities, num_rels = self._persist_to_neo4j(
+            num_entities, num_rels = await self._persist_to_neo4j(
                 experience_id,
                 extracted,
                 metadata
             )
-
             elapsed = time.perf_counter() - start
-
             result = {
                 "experience_id": experience_id,
                 "entities_created": num_entities,
@@ -410,22 +387,17 @@ class KnowledgeConsolidator:
                 "elapsed_seconds": elapsed,
                 "status": "success"
             }
-
             CONSOLIDATION_COUNTER.labels("success", "").inc()
             CONSOLIDATION_LATENCY.labels("success").observe(elapsed)
-
             logger.info(
                 f"Consolidação concluída para experiência {experience_id}: "
                 f"{num_entities} entidades, {num_rels} relacionamentos em {elapsed:.2f}s"
             )
-
             return result
-
         except Exception as e:
             elapsed = time.perf_counter() - start
             CONSOLIDATION_COUNTER.labels("error", type(e).__name__).inc()
             CONSOLIDATION_LATENCY.labels("error").observe(elapsed)
-
             logger.error(
                 f"Erro na consolidação da experiência {experience_id}: {e}",
                 exc_info=True
@@ -439,15 +411,8 @@ class KnowledgeConsolidator:
     ) -> Dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.
-
-        Args:
-            limit: Número máximo de experiências a processar
-            min_score: Score mínimo para considerar experiência (0-1)
-
-        Returns:
-            Estatísticas da consolidação do lote
         """
-        self._initialize()
+        await self._initialize()
 
         if not self.qdrant_client:
             raise ValueError("Cliente Qdrant não disponível para consolidação.")
@@ -463,88 +428,57 @@ class KnowledgeConsolidator:
         }
 
         try:
-            # Busca experiências no Qdrant (scroll para recuperar sem query específica)
             logger.info(f"Buscando até {limit} experiências para consolidação...")
-
             scroll_result = self.qdrant_client.scroll(
                 collection_name=settings.QDRANT_COLLECTION_EPISODIC,
                 limit=limit,
                 with_payload=True,
                 with_vectors=False
             )
-
             points, _ = scroll_result
-
             logger.info(f"Encontradas {len(points)} experiências para consolidar.")
-
-            # Processa cada experiência
             for point in points:
                 stats["total_processed"] += 1
-
                 try:
                     exp_id = str(point.id)
                     raw_content = point.payload.get("content", "")
-
-                    # Decrypt content if encryption key is configured
-                    content = raw_content
-                    if settings.MEMORY_ENCRYPTION_KEY:
-                        try:
-                            content = decrypt_text(raw_content, settings.MEMORY_ENCRYPTION_KEY.get_secret_value())
-                        except Exception as e:
-                            logger.warning(f"Failed to decrypt experience {exp_id}: {e}. Using raw content.")
-                            content = raw_content
-
-                    # Filtra conteúdo vazio
+                    try:
+                        content = decrypt_text(raw_content, point.payload.get("metadata"))
+                    except Exception as e:
+                        logger.warning(f"Failed to decrypt experience {exp_id}: {e}. Using raw content.")
+                        content = raw_content
                     if not content or len(content.strip()) < 10:
                         logger.debug(f"Ignorando experiência {exp_id} (conteúdo vazio).")
                         continue
-
-                    # Verifica se já foi consolidada
                     already_consolidated = await self._check_if_consolidated(exp_id)
                     if already_consolidated:
                         logger.debug(f"Experiência {exp_id} já consolidada. Pulando.")
                         continue
-
                     metadata = {k: v for k, v in point.payload.items() if k != "content"}
-
-                    # Consolida
                     result = await self.consolidate_experience(exp_id, content, metadata)
-
                     stats["successful"] += 1
                     stats["total_entities"] += result.get("entities_created", 0)
                     stats["total_relationships"] += result.get("relationships_created", 0)
-
                 except Exception as e:
                     stats["failed"] += 1
                     logger.error(f"Falha ao consolidar experiência {point.id}: {e}")
                     continue
-
             stats["elapsed_seconds"] = time.perf_counter() - start_time
-
             logger.info(
                 f"Consolidação em lote concluída: {stats['successful']}/{stats['total_processed']} "
                 f"experiências consolidadas em {stats['elapsed_seconds']:.2f}s"
             )
-
             return stats
-
         except Exception as e:
             logger.error(f"Erro na consolidação em lote: {e}", exc_info=True)
             stats["elapsed_seconds"] = time.perf_counter() - start_time
             raise
 
     async def _check_if_consolidated(self, experience_id: str) -> bool:
-        """
-        Verifica se uma experiência já foi consolidada no Neo4j.
-
-        Args:
-            experience_id: ID da experiência
-
-        Returns:
-            True se já consolidada
-        """
+        """Verifica se uma experiência já foi consolidada no Neo4j."""
         try:
-            result = graph_db.query(
+            db = await get_graph_db()
+            result = await db.query(
                 """
                 MATCH (e:Experience {id: $exp_id})
                 RETURN e.consolidated_at IS NOT NULL AS consolidated
@@ -552,9 +486,7 @@ class KnowledgeConsolidator:
                 params={"exp_id": experience_id},
                 operation="check_consolidated"
             )
-
             return result[0].get("consolidated", False) if result else False
-
         except Exception as e:
             logger.warning(f"Erro ao verificar consolidação: {e}")
             return False

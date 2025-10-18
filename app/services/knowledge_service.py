@@ -48,9 +48,18 @@ class KnowledgeService:
     async def get_entity_relationships(self, entity_name: str, rel_type: Optional[str] = None, direction: str = "both", max_depth: int = 1, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
         return await self._repo.find_entity_relationships(entity_name=entity_name, rel_type=rel_type, direction=direction, max_depth=max_depth, limit=limit, skip=skip)
 
-    async def trigger_consolidation(self, limit: int) -> Dict[str, Any]:
+    async def get_functions_calling(self, function_name: str) -> List[Dict[str, Any]]:
+        return await self._repo.find_functions_calling(function_name=function_name)
+
+    async def get_files_importing(self, module: str) -> List[Dict[str, Any]]:
+        return await self._repo.find_files_importing(module=module)
+
+    async def get_classes_implementing(self, protocol: str) -> List[Dict[str, Any]]:
+        return await self._repo.find_classes_implementing(protocol=protocol)
+
+    async def trigger_consolidation(self, limit: int, min_score: float = 0.0) -> Dict[str, Any]:
         # Utiliza consolidação em lote para alinhar com Sprint 8
-        stats = await knowledge_consolidator.consolidate_batch(limit=limit)
+        stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
         return stats
 
     async def index_codebase(self) -> Dict[str, Any]:
