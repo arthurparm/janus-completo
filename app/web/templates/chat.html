@@ -1,493 +1,113 @@
 {% extends "base.html" %}
+{% block title %}Janus — Diálogo Aumentado{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/chat.js"></script>
+{% endblock %}
 {% block content %}
-<section>
-    <h2>Chat de Conversação</h2>
-    <!-- Botão hambúrguer animado para alternar menu lateral -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom: 0.75rem;">
-        <button id="hamburger-btn" type="button" class="hamburger" title="Ocultar/mostrar conversas"
-                aria-label="Ocultar/mostrar conversas" aria-expanded="true">
-            <span></span><span></span><span></span>
-        </button>
-    </div>
+  <section class="mt-24">
+    <h1 class="brand-title">Diálogo Aumentado</h1>
+    <p class="muted">Acompanhe o processo cognitivo da IA em tempo real.</p>
 
-    <div id="chat-grid" class="grid" style="grid-template-columns: 280px 1fr; grid-auto-rows: auto; gap: 1rem;">
-        <div id="conversations-pane" class="card" style="grid-row: 1 / span 2; overflow-y: auto;">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-                <strong>Conversas</strong>
-                <button id="refresh-conversations" type="button">Atualizar</button>
-            </div>
-            <ul id="conversations-list" style="list-style:none; padding:0; margin:0;"></ul>
+    <div class="chat-layout mt-16">
+      <!-- Coluna Esquerda: Sessões -->
+      <aside id="sessions-panel">
+        <div class="panel-section">
+          <div class="panel-title">Conversas</div>
+          <ul class="session-list">
+            <li class="session-item">
+              <span>Exploração de conhecimento</span>
+              <span class="time">há 5 min</span>
+            </li>
+            <li class="session-item">
+              <span>Planejamento de tarefas</span>
+              <span class="time">há 22 min</span>
+            </li>
+            <li class="session-item">
+              <span>Agente de busca</span>
+              <span class="time">ontem</span>
+            </li>
+          </ul>
         </div>
-        <div class="card messages-wrap">
-            <div class="timeline" id="timeline"></div>
-            <div id="messages" style="min-height: 240px; max-height: 400px; overflow-y: auto;"></div>
-        </div>
+      </aside>
 
-        <div class="card" style="grid-column: 1 / -1;">
-            <form id="chat-form">
-                <label for="message">Mensagem</label>
-                <textarea id="message" name="message" rows="4" placeholder="Digite sua mensagem..." required
-                          style="width: 100%; min-height: 120px; resize: vertical;"></textarea>
-
-                <div class="grid" style="grid-template-columns: repeat(4, 1fr); gap: 1rem;">
-                    <div>
-                        <label for="role">Papel</label>
-                        <select id="role" name="role" data-ui="custom">
-                            <option value="orchestrator" selected>orchestrator</option>
-                            <option value="code_generator">code_generator</option>
-                            <option value="knowledge_curator">knowledge_curator</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="priority">Prioridade</label>
-                        <select id="priority" name="priority" data-ui="custom">
-                            <option value="local_only" selected>local_only</option>
-                            <option value="fast_and_cheap">fast_and_cheap</option>
-                            <option value="high_quality">high_quality</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="timeout">Timeout</label>
-                        <input id="timeout" name="timeout" type="number" min="0" placeholder="30"/>
-                    </div>
-                    <div>
-                        <label for="streaming">Streaming</label>
-                        <select id="streaming" name="streaming" data-ui="custom">
-                            <option value="sse" selected>SSE</option>
-                            <option value="none">none</option>
-                        </select>
-                    </div>
-                </div>
-
-                <details style="margin-top: 0.5rem;">
-                    <summary>Avançado</summary>
-                    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
-                        <div>
-                            <label for="user_id">User ID</label>
-                            <input id="user_id" name="user_id" type="text" placeholder="opcional"/>
-                        </div>
-                        <div>
-                            <label for="project_id">Project ID</label>
-                            <input id="project_id" name="project_id" type="text" placeholder="opcional"/>
-                        </div>
-                    </div>
-                </details>
-
-                <div style="margin-top: 0.5rem;">
-                    <button type="submit">Enviar</button>
-                    <button type="button" id="new-conversation" style="margin-left: 0.5rem;">Nova conversa</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        const apiBase = '/api/v1/chat';
-        let conversationId = null;
-
-        const messagesDiv = document.getElementById('messages');
-        const timelineDiv = document.getElementById('timeline');
-        const form = document.getElementById('chat-form');
-        const btnNew = document.getElementById('new-conversation');
-        const listEl = document.getElementById('conversations-list');
-        const btnRefresh = document.getElementById('refresh-conversations');
-        const gridEl = document.getElementById('chat-grid');
-        const sidebarEl = document.getElementById('conversations-pane');
-        const btnToggleSidebar = document.getElementById('hamburger-btn');
-        const messageInput = document.getElementById('message');
-
-        // Sidebar hide/show
-        function setSidebarHidden(hidden) {
-            if (!gridEl || !sidebarEl || !btnToggleSidebar) return;
-            sidebarEl.style.display = hidden ? 'none' : '';
-            gridEl.style.gridTemplateColumns = hidden ? '1fr' : '280px 1fr';
-            btnToggleSidebar.setAttribute('aria-expanded', hidden ? 'false' : 'true');
-            btnToggleSidebar.classList.toggle('open', !hidden);
-        }
-
-        const sidebarPref = sessionStorage.getItem('sidebar_hidden') === '1';
-        setSidebarHidden(sidebarPref);
-        btnToggleSidebar.addEventListener('click', () => {
-            const willHide = sidebarEl.style.display !== 'none';
-            setSidebarHidden(willHide);
-            sessionStorage.setItem('sidebar_hidden', willHide ? '1' : '0');
-        });
-
-        // Auto-resize da caixa de mensagem
-        function autoResizeMessage() {
-            if (!messageInput) return;
-            messageInput.style.height = 'auto';
-            messageInput.style.height = Math.min(280, messageInput.scrollHeight) + 'px';
-        }
-
-        messageInput.addEventListener('input', autoResizeMessage);
-        autoResizeMessage();
-
-        // Custom Select (uniform visual across options)
-        function initCustomSelect(sel) {
-            if (!sel || sel.dataset.ui !== 'custom') return;
-            // wrap
-            const wrap = document.createElement('div');
-            wrap.className = 'custom-select';
-            sel.parentNode.insertBefore(wrap, sel);
-            wrap.appendChild(sel);
-            // trigger
-            const trigger = document.createElement('div');
-            trigger.className = 'select-trigger';
-            trigger.tabIndex = 0;
-            trigger.setAttribute('role', 'button');
-            trigger.setAttribute('aria-haspopup', 'listbox');
-            trigger.setAttribute('aria-expanded', 'false');
-            wrap.appendChild(trigger);
-            const labelSpan = document.createElement('span');
-            labelSpan.className = 'select-label';
-            labelSpan.textContent = sel.options[sel.selectedIndex]?.text || sel.value || '';
-            trigger.appendChild(labelSpan);
-            // menu
-            const menu = document.createElement('div');
-            menu.className = 'select-menu';
-            menu.setAttribute('role', 'listbox');
-            wrap.appendChild(menu);
-            // build options
-            Array.from(sel.options).forEach((opt, idx) => {
-                const o = document.createElement('div');
-                o.className = 'select-option';
-                o.setAttribute('role', 'option');
-                o.setAttribute('data-value', opt.value);
-                o.textContent = opt.text;
-                if (idx === sel.selectedIndex) o.classList.add('selected');
-                o.addEventListener('click', () => {
-                    sel.value = opt.value;
-                    // update UI
-                    labelSpan.textContent = opt.text;
-                    menu.querySelectorAll('.select-option').forEach(x => x.classList.remove('selected'));
-                    o.classList.add('selected');
-                    // close
-                    wrap.classList.remove('open');
-                    trigger.setAttribute('aria-expanded', 'false');
-                    // notify
-                    sel.dispatchEvent(new Event('change', {bubbles: true}));
-                });
-                menu.appendChild(o);
-            });
-
-            // interactions
-            function toggleMenu(forceOpen) {
-                const willOpen = forceOpen ?? !wrap.classList.contains('open');
-                wrap.classList.toggle('open', willOpen);
-                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-            }
-
-            trigger.addEventListener('click', () => toggleMenu());
-            trigger.addEventListener('keydown', (ev) => {
-                if (ev.key === 'Enter' || ev.key === ' ') {
-                    ev.preventDefault();
-                    toggleMenu();
-                }
-                if (ev.key === 'Escape') {
-                    wrap.classList.remove('open');
-                    trigger.setAttribute('aria-expanded', 'false');
-                }
-                if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-                    ev.preventDefault();
-                    const opts = Array.from(menu.querySelectorAll('.select-option'));
-                    let idx = opts.findIndex(x => x.classList.contains('selected'));
-                    idx = ev.key === 'ArrowDown' ? Math.min(idx + 1, opts.length - 1) : Math.max(idx - 1, 0);
-                    opts.forEach(x => x.classList.remove('selected'));
-                    const target = opts[idx];
-                    target.classList.add('selected');
-                    labelSpan.textContent = target.textContent || '';
-                    sel.value = target.getAttribute('data-value');
-                    sel.dispatchEvent(new Event('change', {bubbles: true}));
-                    target.scrollIntoView({block: 'nearest'});
-                }
-            });
-            document.addEventListener('click', (ev) => {
-                if (!wrap.contains(ev.target)) {
-                    wrap.classList.remove('open');
-                    trigger.setAttribute('aria-expanded', 'false');
-                }
-            });
-            // keep UI in sync if value changes programmatically
-            sel.addEventListener('change', () => {
-                const curr = sel.options[sel.selectedIndex];
-                labelSpan.textContent = curr?.text || sel.value || '';
-                menu.querySelectorAll('.select-option').forEach(x => x.classList.toggle('selected', x.getAttribute('data-value') === sel.value));
-            });
-        }
-
-        function addTimelineMark(kind) {
-            const dot = document.createElement('div');
-            dot.className = `mark ${kind}`;
-            timelineDiv.appendChild(dot);
-            timelineDiv.scrollTop = timelineDiv.scrollHeight;
-            return dot;
-        }
-
-        function addMessage(role, text) {
-            const el = document.createElement('div');
-            el.className = `msg msg-${role}`;
-            el.innerHTML = `<strong>${role}:</strong><div class="content">${text}</div>`;
-            messagesDiv.appendChild(el);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            addTimelineMark(role === 'assistant' ? 'tl-assistant-final' : role === 'user' ? 'tl-user' : 'tl-system');
-        }
-
-        async function startConversation() {
-            try {
-                const res = await fetch(`${apiBase}/start`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({persona: 'assistant'})
-                });
-                const data = await res.json();
-                conversationId = data.conversation_id;
-                sessionStorage.setItem('current_conversation_id', conversationId);
-                messagesDiv.innerHTML = '';
-                addMessage('system', `Nova conversa iniciada: ${conversationId}`);
-                document.documentElement.setAttribute('data-context-role', 'system');
-                await loadConversations();
-            } catch (e) {
-                addMessage('system', `Erro ao iniciar conversa: ${e}`);
-            }
-        }
-
-        async function loadConversations() {
-            const userId = document.getElementById('user_id').value || '';
-            const projectId = document.getElementById('project_id').value || '';
-            const url = new URL(`${apiBase}/conversations`, window.location.origin);
-            if (userId) url.searchParams.set('user_id', userId);
-            if (projectId) url.searchParams.set('project_id', projectId);
-            try {
-                const res = await fetch(url.toString());
-                const items = await res.json();
-                renderConversations(items);
-            } catch (e) {
-                console.error('Falha ao carregar conversas', e);
-            }
-        }
-
-        function renderConversations(items) {
-            listEl.innerHTML = '';
-            items.forEach(item => {
-                const li = document.createElement('li');
-                li.style.borderBottom = '1px solid var(--border)';
-                li.style.padding = '0.5rem 0';
-                const isActive = item.conversation_id === conversationId;
-                li.innerHTML = `
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
-            <button type="button" data-cid="${item.conversation_id}" class="btn-open" style="flex:1; text-align:left; ${isActive ? 'font-weight:bold;' : ''}">${item.title || item.conversation_id}</button>
-            <button type="button" data-cid="${item.conversation_id}" class="btn-rename" title="Renomear">✏️</button>
-            <button type="button" data-cid="${item.conversation_id}" class="btn-delete" title="Apagar">🗑️</button>
+      <!-- Coluna Central: Diálogo -->
+      <section id="dialog-window">
+        <div class="messages">
+          <div class="msg user">
+            <div class="meta">Você • agora</div>
+            <div class="content">Olá Janus! Você está online?</div>
           </div>
-        `;
-                listEl.appendChild(li);
-            });
-            listEl.querySelectorAll('.btn-open').forEach(btn => {
-                btn.addEventListener('click', async (ev) => {
-                    const cid = ev.target.getAttribute('data-cid');
-                    conversationId = cid;
-                    messagesDiv.innerHTML = '';
-                    // carregar histórico
-                    const res = await fetch(`${apiBase}/${cid}/history`);
-                    const data = await res.json();
-                    (data.messages || []).forEach(m => addMessage(m.role, m.text));
-                    sessionStorage.setItem('current_conversation_id', conversationId);
-                    await loadConversations();
-                });
-            });
-            listEl.querySelectorAll('.btn-rename').forEach(btn => {
-                btn.addEventListener('click', async (ev) => {
-                    const cid = ev.target.getAttribute('data-cid');
-                    const newTitle = prompt('Novo título da conversa:');
-                    if (!newTitle) return;
-                    const userId = document.getElementById('user_id').value || null;
-                    const projectId = document.getElementById('project_id').value || null;
-                    const res = await fetch(`${apiBase}/${cid}/rename`, {
-                        method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({new_title: newTitle, user_id: userId, project_id: projectId})
-                    });
-                    if (res.ok) await loadConversations();
-                });
-            });
-            listEl.querySelectorAll('.btn-delete').forEach(btn => {
-                btn.addEventListener('click', async (ev) => {
-                    const cid = ev.target.getAttribute('data-cid');
-                    const userId = document.getElementById('user_id').value || '';
-                    const projectId = document.getElementById('project_id').value || '';
-                    const url = new URL(`${apiBase}/${cid}`, window.location.origin);
-                    if (userId) url.searchParams.set('user_id', userId);
-                    if (projectId) url.searchParams.set('project_id', projectId);
-                    const res = await fetch(url.toString(), {method: 'DELETE'});
-                    if (res.ok) {
-                        if (cid === conversationId) {
-                            conversationId = null;
-                            messagesDiv.innerHTML = '';
-                        }
-                        if (sessionStorage.getItem('current_conversation_id') === cid) {
-                            sessionStorage.removeItem('current_conversation_id');
-                        }
-                        await loadConversations();
-                    }
-                });
-            });
-        }
 
-        form.addEventListener('submit', async (ev) => {
-            ev.preventDefault();
-            if (!conversationId) await startConversation();
+          <div class="msg ai processing">
+            <div class="meta">Janus • processando</div>
+            <div class="content">Analisando intenção, contexto e memória… {fonte, chave, função}</div>
+          </div>
 
-            const message = document.getElementById('message').value.trim();
-            const role = document.getElementById('role').value;
-            const priority = document.getElementById('priority').value;
-            const timeoutVal = document.getElementById('timeout').value;
-            const userId = document.getElementById('user_id').value || null;
-            const projectId = document.getElementById('project_id').value || null;
-            const streaming = document.getElementById('streaming').value;
+          <div class="msg ai generating">
+            <div class="meta">Janus • gerando</div>
+            <div class="content typewriter">Estou analisando seu pedido e preparando uma resposta detalhada…</div>
+          </div>
 
-            if (!message) return;
+          <div class="msg ai complete">
+            <div class="meta">Janus • completo</div>
+            <div class="content">Sim — estou online e pronto para ajudar. Como posso contribuir?</div>
+          </div>
+        </div>
 
-            addMessage('user', message);
-            document.documentElement.setAttribute('data-context-role', 'user');
-            document.getElementById('message').value = '';
-            autoResizeMessage && autoResizeMessage();
+        <div id="input-area">
+          <div id="intent-tags">
+            <span class="tag">Intenção: consulta</span>
+            <span class="tag">Escopo: conhecimento</span>
+            <span class="tag">Agentes: 2</span>
+          </div>
+          <div class="input-row">
+            <input id="chat-input" type="text" placeholder="Escreva sua mensagem…" />
+            <button class="send-btn" id="chat-send" title="Enviar"></button>
+          </div>
+        </div>
+      </section>
 
-            try {
-                if (streaming === 'sse') {
-                    const url = new URL(`${apiBase}/stream/${conversationId}`, window.location.origin);
-                    url.searchParams.set('message', message);
-                    url.searchParams.set('role', role);
-                    url.searchParams.set('priority', priority);
-                    if (timeoutVal) url.searchParams.set('timeout_seconds', parseInt(timeoutVal, 10));
-                    if (userId) url.searchParams.set('user_id', userId);
-                    if (projectId) url.searchParams.set('project_id', projectId);
+      <!-- Coluna Direita: Contexto Ativo -->
+      <aside id="context-panel">
+        <div class="panel-section">
+          <div class="panel-title">Fontes de Conhecimento</div>
+          <ul class="knowledge-sources">
+            <li class="active"><span class="icon"></span><span>Documentação interna</span></li>
+            <li><span class="icon"></span><span>Base de artigos</span></li>
+            <li class="active"><span class="icon"></span><span>Repositório de código</span></li>
+            <li><span class="icon"></span><span>Memória vetorial</span></li>
+          </ul>
+        </div>
 
-                    const es = new EventSource(url.toString());
-                    let acc = '';
-                    const tmpEl = document.createElement('div');
-                    tmpEl.className = 'msg msg-assistant msg-stream';
-                    tmpEl.innerHTML = `<strong>assistant (streaming):</strong><div class="content" id="stream-partial"></div>`;
-                    messagesDiv.appendChild(tmpEl);
-                    const partialDiv = tmpEl.querySelector('#stream-partial');
-                    const tlStream = addTimelineMark('tl-assistant-stream');
-                    document.documentElement.style.setProperty('--shimmer-strength', '0.10');
-                    document.documentElement.style.setProperty('--shimmer-speed', '900ms');
-                    document.documentElement.setAttribute('data-context-role', 'assistant');
-                    window.setStreamingState && window.setStreamingState(true);
-                    es.addEventListener('ack', () => {
-                        // acknowledged start
-                    });
+        <div class="panel-section">
+          <div class="panel-title">Agentes Envolvidos</div>
+          <div class="agent">
+            <div class="agent-name">Agente de Contexto</div>
+            <div class="progress-bar"><div class="progress"></div></div>
+          </div>
+          <div class="agent">
+            <div class="agent-name">Agente de Síntese</div>
+            <div class="progress-bar"><div class="progress" style="animation-delay: 500ms"></div></div>
+          </div>
+        </div>
 
-                    es.addEventListener('partial', (ev) => {
-                        try {
-                            const data = JSON.parse(ev.data);
-                            acc += data.text || '';
-                            partialDiv.textContent = acc;
-                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                        } catch {
-                        }
-                    });
-                    es.addEventListener('done', () => {
-                        es.close();
-                        // Finaliza a mensagem de streaming sem duplicar
-                        const roleLabel = tmpEl.querySelector('strong');
-                        if (roleLabel) roleLabel.textContent = 'assistant:';
-                        partialDiv.textContent = acc;
-                        tmpEl.classList.remove('msg-stream');
-                        if (tlStream) tlStream.classList.remove('tl-assistant-stream');
-                        addTimelineMark('tl-assistant-final');
-                        document.documentElement.style.setProperty('--shimmer-strength', '0.05');
-                        document.documentElement.style.setProperty('--shimmer-speed', '1200ms');
-                        window.setStreamingState && window.setStreamingState(false);
-                        document.documentElement.setAttribute('data-context-role', 'assistant');
-                    });
-                    es.addEventListener('error', (ev) => {
-                        es.close();
-                        // Remove placeholder de streaming e sinaliza erro
-                        tmpEl && tmpEl.remove();
-                        addMessage('system', 'Erro no streaming');
-                        if (tlStream) tlStream.classList.remove('tl-assistant-stream');
-                        document.documentElement.style.setProperty('--shimmer-strength', '0.05');
-                        document.documentElement.style.setProperty('--shimmer-speed', '1200ms');
-                        window.setStreamingState && window.setStreamingState(false);
-                        document.documentElement.setAttribute('data-context-role', 'system');
-                    });
-                } else {
-                    const res = await fetch(`${apiBase}/message`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            conversation_id: conversationId,
-                            message,
-                            role,
-                            priority,
-                            timeout_seconds: timeoutVal ? parseInt(timeoutVal, 10) : null,
-                            user_id: userId,
-                            project_id: projectId,
-                        })
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                        addMessage('assistant', data.response);
-                        document.documentElement.setAttribute('data-context-role', 'assistant');
-                    } else {
-                        addMessage('system', `Erro: ${data.detail || 'Falha na API'}`);
-                        document.documentElement.setAttribute('data-context-role', 'system');
-                    }
-                }
-            } catch (e) {
-                addMessage('system', `Erro de rede: ${e}`);
-                document.documentElement.setAttribute('data-context-role', 'system');
-            }
-        });
+        <div class="panel-section">
+          <div class="panel-title">Grafo de Relações</div>
+          <div class="graph">
+            <div class="node n1" title="Tópico A"></div>
+            <div class="node n2" title="Tópico B"></div>
+            <div class="node n3" title="Tópico C"></div>
+            <div class="edge e1"></div>
+            <div class="edge e2"></div>
+          </div>
+        </div>
 
-        btnNew.addEventListener('click', async () => {
-            await startConversation();
-        });
-
-        btnRefresh.addEventListener('click', async () => {
-            await loadConversations();
-        });
-
-        // initialize custom selects
-        initCustomSelect(document.getElementById('role'));
-        initCustomSelect(document.getElementById('priority'));
-        initCustomSelect(document.getElementById('streaming'));
-        // Tema e circuito agora são controlados globalmente no menu do cabeçalho
-
-        // Inicialização: usa conversa atual da sessão ou cria uma única nova
-        (async function initConversation() {
-            await loadConversations();
-            const savedCid = sessionStorage.getItem('current_conversation_id');
-            if (savedCid) {
-                conversationId = savedCid;
-                try {
-                    const res = await fetch(`${apiBase}/${conversationId}/history`);
-                    const data = await res.json();
-                    messagesDiv.innerHTML = '';
-                    (data.messages || []).forEach(m => addMessage(m.role, m.text));
-                } catch {
-                }
-            } else {
-                const firstBtn = listEl.querySelector('.btn-open');
-                if (firstBtn) {
-                    const cid = firstBtn.getAttribute('data-cid');
-                    conversationId = cid;
-                    try {
-                        const res = await fetch(`${apiBase}/${cid}/history`);
-                        const data = await res.json();
-                        messagesDiv.innerHTML = '';
-                        (data.messages || []).forEach(m => addMessage(m.role, m.text));
-                    } catch {
-                    }
-                    sessionStorage.setItem('current_conversation_id', conversationId);
-                } else {
-                    await startConversation();
-                    sessionStorage.setItem('current_conversation_id', conversationId);
-                }
-            }
-        })();
-    </script>
-</section>
+        <div class="panel-section">
+          <div class="panel-title">Resumo</div>
+          <div class="muted">Confiança: <span class="confidence">98%</span></div>
+        </div>
+      </aside>
+    </div>
+  </section>
 {% endblock %}

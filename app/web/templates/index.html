@@ -1,13 +1,141 @@
 {% extends "base.html" %}
+
+{% block title %}Janus — Dashboard{% endblock %}
+
 {% block content %}
-<section>
-    <h2>Bem-vindo</h2>
-    <p>Use o Console LLM para testar prompts com `user_id`/`project_id` e veja métricas no Overview.</p>
-    <ul>
-        <li><a href="/web/overview">Overview</a> — métricas e status</li>
-        <li><a href="/web/console">Console LLM</a> — enviar prompts e ver respostas</li>
-        <li><a href="/web/operations">Operações</a> — cache e circuit breakers</li>
-        <li><a href="/web/health">Saúde</a> — health check</li>
-    </ul>
-</section>
+  <section class="mt-24">
+    <div class="space-between mb-8">
+      <h1 class="brand-title">Painel de Controle Cognitivo</h1>
+      <div id="status-badge" class="status-badge status-warning" title="Status do Sistema">
+        <span class="status-dot"></span>
+        <span id="status-text">Carregando...</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card grid-4">
+        <div class="card-title">Aplicação</div>
+        <div class="card-value"><span id="app-name">—</span></div>
+        <div class="muted">Versão <span id="app-version">—</span></div>
+      </div>
+
+      <div class="card grid-4">
+        <div class="card-title">Ambiente</div>
+        <div class="card-value"><span id="app-env">{{ app_env|upper }}</span></div>
+        <div class="muted">Observabilidade e métricas em tempo real</div>
+      </div>
+
+      <div class="card grid-4">
+        <div class="card-title">Uptime</div>
+        <div class="card-value"><span id="uptime">—</span></div>
+        <div class="muted">Tempo desde inicialização</div>
+      </div>
+
+      <div class="card grid-12">
+        <div class="space-between">
+          <div>
+            <div class="card-title">Performance</div>
+            <div class="muted">Latência, throughput e consumo</div>
+          </div>
+          <div class="row">
+            <button class="btn" id="btn-refresh">Atualizar</button>
+            <button class="btn btn-primary" id="metrics-refresh">Forçar coleta</button>
+          </div>
+        </div>
+        <div class="grid mt-16">
+          <div class="card chart-card grid-4 slide-in fade-in">
+            <div class="space-between">
+              <div class="card-title chart-title">Latência LLM (ms)</div>
+              <div class="chart-value mono" id="latency-value">--</div>
+            </div>
+            <canvas id="chart-latency" class="chart" height="140"></canvas>
+          </div>
+          <div class="card chart-card grid-4 slide-in fade-in">
+            <div class="space-between">
+              <div class="card-title chart-title">Taxa de Erros (%)</div>
+              <div class="chart-value mono" id="error-value">--</div>
+            </div>
+            <canvas id="chart-error" class="chart" height="140"></canvas>
+          </div>
+          <div class="card chart-card grid-4 slide-in fade-in">
+            <div class="space-between">
+              <div class="card-title chart-title">Memória (MB)</div>
+              <div class="chart-value mono" id="memory-value">--</div>
+            </div>
+            <canvas id="chart-memory" class="chart" height="140"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Saúde dos Microsserviços -->
+  <section class="mt-24">
+    <h2 class="brand-title mb-8">Saúde dos Microsserviços</h2>
+    <div class="service-health-grid">
+      <div class="service-status-item slide-in fade-in" data-service="agent">
+        <div class="top"><span class="dot"></span><span class="name">Agent Service</span></div>
+        <div class="metric mono">Agentes: —</div>
+      </div>
+      <div class="service-status-item slide-in fade-in" data-service="knowledge">
+        <div class="top"><span class="dot"></span><span class="name">Knowledge Service</span></div>
+        <div class="metric mono">Ontologias: —</div>
+      </div>
+      <div class="service-status-item slide-in fade-in" data-service="memory">
+        <div class="top"><span class="dot"></span><span class="name">Memory Service</span></div>
+        <div class="metric mono">Uso: —</div>
+      </div>
+      <div class="service-status-item slide-in fade-in" data-service="llm">
+        <div class="top"><span class="dot"></span><span class="name">LLM Gateway</span></div>
+        <div class="metric mono">Latência: —</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mt-24 hero-core-section fade-in">
+    <h2 class="brand-title mb-8">Estado Vital — Core de Janus</h2>
+    <div class="hero-core">
+      <svg id="core-svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet">
+        <!-- Core ring -->
+        <circle class="core-base" cx="300" cy="180" r="60" />
+        <circle id="core-progress" class="core-progress" cx="300" cy="180" r="60"
+                stroke-dasharray="377" stroke-dashoffset="377" />
+
+        <!-- Connections -->
+        <line id="line-memory" class="core-line particles active" x1="300" y1="180" x2="150" y2="60" />
+        <line id="line-knowledge" class="core-line particles active" x1="300" y1="180" x2="450" y2="60" />
+        <line id="line-agent" class="core-line particles" x1="300" y1="180" x2="150" y2="300" />
+        <line id="line-task" class="core-line particles" x1="300" y1="180" x2="450" y2="300" />
+
+        <!-- Service nodes -->
+        <g id="node-memory" class="service-node active" transform="translate(150,60)">
+          <circle r="18"></circle>
+          <circle class="health-indicator" r="5" cx="0" cy="-18"></circle>
+          <text class="service-label anchor-right" text-anchor="start" transform="translate(45,0)" dy=".35em">Memory</text>
+        </g>
+        <g id="node-knowledge" class="service-node active" transform="translate(450,60)">
+          <circle r="18"></circle>
+          <circle class="health-indicator" r="5" cx="0" cy="-18"></circle>
+          <text class="service-label anchor-left" text-anchor="end" transform="translate(-45,0)" dy=".35em">Knowledge</text>
+        </g>
+        <g id="node-agent" class="service-node" transform="translate(150,300)">
+          <circle r="18"></circle>
+          <circle class="health-indicator" r="5" cx="0" cy="-18"></circle>
+          <text class="service-label anchor-right" text-anchor="start" transform="translate(45,0)" dy=".35em">Agents</text>
+        </g>
+        <g id="node-task" class="service-node" transform="translate(450,300)">
+          <circle r="18"></circle>
+          <circle class="health-indicator" r="5" cx="0" cy="-18"></circle>
+          <text class="service-label anchor-left" text-anchor="end" transform="translate(-45,0)" dy=".35em">Tasks</text>
+        </g>
+      </svg>
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/core.js"></script>
+  <script src="/static/js/charts.js"></script>
 {% endblock %}
