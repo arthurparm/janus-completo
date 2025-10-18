@@ -42,7 +42,20 @@ class GraphRelationship(str, Enum):
     """Tipos de relacionamento no Grafo de Conhecimento (Neo4j)."""
     CONTAINS = "CONTAINS"
     CALLS = "CALLS"
+    IMPORTS = "IMPORTS"
+    DEFINES = "DEFINES"
+    INHERITS_FROM = "INHERITS_FROM"
+    IMPLEMENTS = "IMPLEMENTS"
+    USES = "USES"
     IS_SYNONYM_OF = "IS_SYNONYM_OF"
+    IS_A = "IS_A"
+    EXAMPLE_OF = "EXAMPLE_OF"
+    PART_OF = "PART_OF"
+    DEPENDS_ON = "DEPENDS_ON"
+    ENABLES = "ENABLES"
+    PRODUCES = "PRODUCES"
+    RESULTS_IN = "RESULTS_IN"
+    RELATES_TO = "RELATES_TO"
     # Adicione outros tipos de relacionamento conforme necessário
 
 
