@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        extra='ignore', env_file='.env', env_file_encoding='utf-8'
+        extra='ignore', env_file='app/.env', env_file_encoding='utf-8'
     )
 
     # App
@@ -104,8 +104,8 @@ class AppSettings(BaseSettings):
     GEMINI_MODELS: List[str] = ["gemini-2.5-flash"]
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
-    OLLAMA_CODER_MODEL: str = "codellama:7b"
-    OLLAMA_CURATOR_MODEL: str = "phi3:mini"
+    OLLAMA_CODER_MODEL: str = "llama3.1:8b"
+    OLLAMA_CURATOR_MODEL: str = "llama3.1:8b"
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor
