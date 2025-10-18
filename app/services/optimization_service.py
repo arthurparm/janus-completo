@@ -141,6 +141,11 @@ class OptimizationService:
                     "memory_usage_mb": metrics.memory_usage_mb,
                 },
                 "trend": trend,
+                "series": {
+                    "avg_response_time": resp_times,
+                    "error_rate": error_rates,
+                    "memory_usage_mb": memory_usage,
+                },
                 "insights": insights,
             }
 

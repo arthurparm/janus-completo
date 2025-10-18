@@ -12,6 +12,11 @@ from app.services.optimization_service import OptimizationService
 from app.core.tools.action_module import action_registry
 from fastapi import Request
 
+# NEW IMPORTS
+from app.services.llm_service import LLMService
+from app.core.autonomy.goal_manager import GoalManager, GoalStatus, Goal
+from app.core.autonomy.planner import build_plan_for_goal
+
 logger = structlog.get_logger(__name__)
 
 
@@ -62,8 +67,10 @@ class AutonomyService:
     Fechamento de loop (Refletir/Otimizar) será integrado em etapas seguintes.
     """
 
-    def __init__(self, optimization_service: OptimizationService):
+    def __init__(self, optimization_service: OptimizationService, llm_service: Optional[LLMService] = None, goal_manager: Optional[GoalManager] = None):
         self._optimization_service = optimization_service
+        self._llm_service = llm_service
+        self._goal_manager = goal_manager
         self._config = AutonomyConfig()
         self._policy = PolicyEngine(PolicyConfig())
         self._autonomy_task: Optional[asyncio.Task] = None
@@ -161,11 +168,38 @@ class AutonomyService:
         metrics = await self._optimization_service.get_system_health()
         logger.info("[AutonomyLoop] Perceber: métricas", **metrics)
 
-        # Planejar: usa plano fornecido na config, se disponível; caso contrário, fallback seguro
-        plan = self._config.plan if self._config.plan else [
-            {"tool": "get_current_datetime", "args": {}},
-            {"tool": "get_system_info", "args": {}},
-        ]
+        # Seleciona meta atual (se disponível)
+        current_goal: Optional[Goal] = None
+        try:
+            if self._goal_manager:
+                current_goal = self._goal_manager.get_next_goal()
+                if current_goal and current_goal.status == GoalStatus.PENDING:
+                    self._goal_manager.update_goal_status(current_goal.id, GoalStatus.IN_PROGRESS)
+        except Exception:
+            current_goal = None
+
+        # Planejar: se houver plano na configuração usa; caso contrário, gera via Planner
+        if self._config.plan:
+            plan = self._config.plan
+        else:
+            plan = []
+            if current_goal and self._llm_service:
+                try:
+                    plan = await build_plan_for_goal(
+                        goal=current_goal,
+                        metrics=metrics,
+                        llm_service=self._llm_service,
+                        policy=self._policy,
+                        max_steps=self._config.max_actions_per_cycle,
+                        timeout_seconds=max(5, self._config.max_seconds_per_cycle)
+                    )
+                except Exception as e:
+                    logger.error("[AutonomyLoop] Falha ao gerar plano via planner", exc_info=e)
+            if not plan:
+                plan = [
+                    {"tool": "get_current_datetime", "args": {}},
+                    {"tool": "get_system_info", "args": {}},
+                ]
 
         # Executar: respeitando PolicyEngine e rate limits
         self._policy.reset_cycle_quota()

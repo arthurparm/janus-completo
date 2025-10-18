@@ -3,9 +3,10 @@ from typing import Dict, Any, Optional
 import json
 import uuid
 from fastapi import Request
+from datetime import datetime
 
 from app.repositories.task_repository import TaskRepository, TaskRepositoryError
-from app.models.schemas import QueueName
+from app.models.schemas import QueueName, TaskMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -43,18 +44,24 @@ class TaskService:
         logger.info("Criando tarefa de consolidação via serviço", mode=mode)
         try:
             task_id = str(uuid.uuid4())
-            message_body = {
-                "task_id": task_id,
+            payload = {
                 "mode": mode,
                 "limit": limit,
                 "experience_id": experience_id,
                 "experience_content": experience_content,
                 "metadata": metadata
             }
+            task_message = TaskMessage(
+                task_id=task_id,
+                task_type="knowledge_consolidation",
+                payload=payload,
+                timestamp=datetime.utcnow().timestamp()
+            )
+            serialized = task_message.model_dump_json()
 
             await self._repo.publish_message(
                 queue_name=QueueName.KNOWLEDGE_CONSOLIDATION,
-                message=json.dumps(message_body)
+                message=serialized
             )
             return task_id
         except TaskRepositoryError as e:
