@@ -6,6 +6,16 @@ Localização: Itanhaém, SP, Brasil
 Documento ID: JANUS-ARC-1.0-20250814
 Status: Proposta Arquitetural Final
 
+Nota de Estrutura: A documentação principal do projeto foi reestruturada para facilitar a consulta. Consulte:
+
+- `doc/Architecture.md` — Arquitetura e componentes
+- `doc/Configuration.md` — Configuração e variáveis de ambiente
+- `doc/Usage.md` — Setup, execução e fluxo de uso
+- `doc/Examples.md` — Exemplos de código
+- `doc/Troubleshooting.md` — Diagnóstico e resolução de problemas
+
+Este relatório permanece como documentação arquitetural detalhada e de referência histórica.
+
 Sumário Executivo
 
 Este documento apresenta uma proposta arquitetural abrangente para o reprojeto do assistente pessoal Janus. A
@@ -398,10 +408,20 @@ sandbox.
 Consciência Contextual: Integrada através de um módulo dedicado que ancora o agente em seu tempo e espaço (Itanhaém, 14
 de agosto de 2025), proporcionando interações mais ricas e relevantes.
 
-### Roteiro de Implementação em Fases (Mapeado para Sprints)
+### Resumo da Refatoração de Documentação (Sprints)
 
-Para gerenciar a complexidade e entregar valor incrementalmente, a implementação é dividida em fases. Cada fase agrupa
-um conjunto de sprints de desenvolvimento, conforme detalhado no documento `SPRINTS JANUS.md`.
+- Objetivo: padronizar e versionar a documentação por Sprint para evolução consistente.
+- Template padrão: `doc/SPRINT_TEMPLATE.md` com seções fixas (Objetivos, Endpoints, Serviços/Workers, Fluxo de uso,
+  Observabilidade, Configuração, Exemplos, Referências de código).
+- Convenções: nomes em PT-BR, endpoints em `app/api/v1/endpoints/`, serviços em `app/services/`, workers em
+  `app/workers/`.
+- Referência central: ver “Documentação Detalhada” no `README.md` para navegação (Arquitetura, Configuração, Uso,
+  Exemplos, Troubleshooting).
+- Benefícios: clareza de responsabilidades por módulo, menor acoplamento documental, trilha de auditoria e manutenção
+  facilitada.
+
+Nota: Os relatórios por sprint foram descontinuados para enxugar a documentação; use as coleções HTTP em `http/sprint` e
+os documentos centrais.
 
 | Fase       | Título                        | Foco Principal                                                                                                      | Sprints Correspondentes |
 |:-----------|:------------------------------|:--------------------------------------------------------------------------------------------------------------------|:------------------------|
@@ -451,8 +471,8 @@ Este apêndice centraliza todas as APIs e serviços externos que alimentam as ca
    Together AI
    Vários Modelos
    $25 em créditos gratuitos na inscrição.
-   Excelente opção para acessar modelos de código aberto com alto desempenho e custos baixos após o término dos
-   créditos.
+   Excelente opção para acessar modelos de código aberto com alto desempenho e custos baixos após o
+   término dos créditos.
 
 2. Ferramentas e APIs Especializadas
    Estas APIs fornecem ao Janus "sentidos" e "habilidades" específicas para interagir com o mundo digital e físico.
