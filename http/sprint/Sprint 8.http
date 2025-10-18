@@ -5,93 +5,277 @@
 
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@concept_langchain = LangChain
+@concept_agent = agent
+@entity_tool = write_file
+@entity_concept = reflexion
+@max_depth = 2
+@max_depth_deep = 3
+@rel_limit = 20
+@rel_skip = 0
+@query_limit_small = 10
+@query_limit_medium = 15
+@consolidate_limit = 5
+@consolidate_batch_size = 5
 
 ###
 # 0. LIMPAR Grafo de Conhecimento (Use com cuidado!)
+# @name clear_graph
 DELETE {{host}}{{api_v1_prefix}}/knowledge/clear
 Accept: application/json
+
+> {%
+client.test("Clear: status 200 e JSON", function() {
+  client.assert(response.status === 200, "Status não é 200");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"), "Content-Type não é JSON");
+});
+const clearJson = response.body.json();
+client.test("Clear: corpo esperado", function() {
+  client.assert(clearJson.status === "success", "status != success");
+  client.assert(clearJson.message === "Grafo de conhecimento limpo com sucesso", "Mensagem inesperada");
+  client.assert(typeof clearJson.remaining_nodes === "number" && clearJson.remaining_nodes >= 0, "remaining_nodes inválido");
+});
+%}
 
 ###
 # 1. Consolidar Conhecimento da Memória Episódica
 # ATENÇÃO: Cada experiência leva ~5-20s para processar (chamada LLM)
 # Com limit=5, espere ~25-100s (até 2 minutos)
+# @name consolidate_batch
 POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
 Content-Type: application/json
 
 {
-  "limit": 100,
-  "batch_size": 10
+  "limit": {{consolidate_limit}},
+  "batch_size": {{consolidate_batch_size}}
 }
+
+> {%
+client.test("Consolidate: status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const consJson = response.body.json();
+client.test("Consolidate: mensagem e stats", function() {
+  client.assert(consJson.message === "Tarefa de consolidação publicada.");
+  client.assert(typeof consJson.stats === "object" && consJson.stats !== null, "stats deve ser objeto");
+});
+%}
 
 ###
 # 2. Consultar Grafo de Conhecimento - Conceitos Relacionados a Python
+# @name query_python
 POST {{host}}{{api_v1_prefix}}/knowledge/query
 Content-Type: application/json
 
 {
   "query": "Quais conceitos estão relacionados a Python?",
-  "limit": 10
+  "limit": {{query_limit_small}}
 }
+
+> {%
+client.test("Query(Python): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const qPython = response.body.json();
+client.test("Query(Python): answer string", function() {
+  client.assert(typeof qPython.answer === "string", "answer deve ser string");
+});
+%}
 
 ###
 # 3. Consultar Grafo de Conhecimento - Erros e Falhas
+# @name query_errors
 POST {{host}}{{api_v1_prefix}}/knowledge/query
 Content-Type: application/json
 
 {
   "query": "Quais erros foram registrados no sistema?",
-  "limit": 15
+  "limit": {{query_limit_medium}}
 }
+
+> {%
+client.test("Query(Erros): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const qErrors = response.body.json();
+client.test("Query(Erros): answer string", function() {
+  client.assert(typeof qErrors.answer === "string");
+});
+%}
 
 ###
 # 4. Buscar Conceitos Relacionados
+# @name concepts_related_langchain
 POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
 Content-Type: application/json
 
 {
-  "concept": "LangChain",
-  "max_depth": 2
+  "concept": "{{concept_langchain}}",
+  "max_depth": {{max_depth}}
 }
+
+> {%
+client.test("Related(LangChain): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const relLang = response.body.json();
+client.test("Related(LangChain): estrutura results", function() {
+  client.assert(Array.isArray(relLang.results), "results deve ser array");
+  if (relLang.results.length > 0) {
+    const it = relLang.results[0];
+    client.assert(typeof it.concept === "string");
+    client.assert(typeof it.relationship === "string");
+    client.assert(typeof it.distance === "number");
+  }
+});
+%}
 
 ###
 # 5. Buscar Conceitos Relacionados - Profundidade Maior
+# @name concepts_related_agent
 POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
 Content-Type: application/json
 
 {
-  "concept": "agent",
-  "max_depth": 3
+  "concept": "{{concept_agent}}",
+  "max_depth": {{max_depth_deep}}
 }
+
+> {%
+client.test("Related(agent): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const relAgent = response.body.json();
+client.test("Related(agent): estrutura results", function() {
+  client.assert(Array.isArray(relAgent.results), "results deve ser array");
+  if (relAgent.results.length > 0) {
+    const it = relAgent.results[0];
+    client.assert(typeof it.concept === "string");
+    client.assert(typeof it.relationship === "string");
+    client.assert(typeof it.distance === "number");
+  }
+});
+%}
 
 ###
-# 6. Obter Detalhes de Entidade - Ferramenta
-POST {{host}}{{api_v1_prefix}}/knowledge/entity/details
-Content-Type: application/json
+# 6. Obter Relacionamentos de Entidade - Ferramenta
+# @name entity_relationships_write_file
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/{{entity_tool}}/relationships?max_depth={{max_depth}}&limit={{rel_limit}}&skip={{rel_skip}}
+Accept: application/json
 
-{
-  "entity_name": "write_file"
-}
+> {%
+client.test("Entity(write_file): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const relWriteFile = response.body.json();
+client.test("Entity(write_file): estrutura results", function() {
+  client.assert(Array.isArray(relWriteFile.results), "results deve ser array");
+  if (relWriteFile.results.length > 0) {
+    const it = relWriteFile.results[0];
+    client.assert(typeof it.related_entity === "string");
+    client.assert(typeof it.related_type === "string");
+    client.assert(typeof it.relationship === "string");
+    client.assert(typeof it.distance === "number");
+  }
+});
+%}
 
 ###
-# 7. Obter Detalhes de Entidade - Conceito
-POST {{host}}{{api_v1_prefix}}/knowledge/entity/details
-Content-Type: application/json
+# 7. Obter Relacionamentos de Entidade - Conceito
+# @name entity_relationships_reflexion
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/{{entity_concept}}/relationships?max_depth={{max_depth}}&limit={{rel_limit}}&skip={{rel_skip}}
+Accept: application/json
 
-{
-  "entity_name": "reflexion"
-}
+> {%
+client.test("Entity(reflexion): status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const relReflexion = response.body.json();
+client.test("Entity(reflexion): estrutura results", function() {
+  client.assert(Array.isArray(relReflexion.results), "results deve ser array");
+  if (relReflexion.results.length > 0) {
+    const it = relReflexion.results[0];
+    client.assert(typeof it.related_entity === "string");
+    client.assert(typeof it.related_type === "string");
+    client.assert(typeof it.relationship === "string");
+    client.assert(typeof it.distance === "number");
+  }
+});
+%}
 
 ###
 # 8. Estatísticas do Grafo de Conhecimento
+# @name knowledge_stats
 GET {{host}}{{api_v1_prefix}}/knowledge/stats
 Accept: application/json
 
+> {%
+client.test("Stats: status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const statsJson = response.body.json();
+client.test("Stats: campos principais", function() {
+  client.assert(typeof statsJson.total_nodes === "number");
+  client.assert(typeof statsJson.total_relationships === "number");
+  client.assert(Array.isArray(statsJson.node_types));
+  client.assert(Array.isArray(statsJson.relationship_types));
+});
+%}
+
 ###
 # 9. Listar Tipos de Nós no Grafo
+# @name node_types
 GET {{host}}{{api_v1_prefix}}/knowledge/node-types
 Accept: application/json
 
+> {%
+client.test("Node Types: status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const typesJson = response.body.json();
+client.test("Node Types: lista de strings", function() {
+  client.assert(Array.isArray(typesJson.types));
+  if (typesJson.types.length > 0) {
+    client.assert(typeof typesJson.types[0] === "string");
+  }
+});
+%}
+
 ###
 # 10. Health Check da Memória Semântica
+# @name knowledge_health
 GET {{host}}{{api_v1_prefix}}/knowledge/health
 Accept: application/json
+
+> {%
+client.test("Health: status 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+const healthJson = response.body.json();
+client.test("Health: campos esperados", function() {
+  client.assert(typeof healthJson.status === "string");
+  client.assert(typeof healthJson.neo4j_connected === "boolean");
+  client.assert(typeof healthJson.total_nodes === "number");
+  client.assert(typeof healthJson.total_relationships === "number");
+});
+%}
+
+###
+# 9. Listar Funções que chamam uma função
+GET http://localhost:8000/api/v1/knowledge/functions/calling?name=run_agent_async
+
+### Knowledge: arquivos que importam um módulo/arquivo
+GET http://localhost:8000/api/v1/knowledge/files/importing?module=resilience.py
+
+### Knowledge: classes que implementam um protocolo/interface
+GET http://localhost:8000/api/v1/knowledge/classes/implementations?protocol=AgentExecutor

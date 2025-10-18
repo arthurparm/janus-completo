@@ -189,4 +189,25 @@ Accept: application/json
 GET {{host}}{{api_v1_prefix}}/system/status
 Accept: application/json
 
+###
+# 19. Adicionar Experiência com PII (email/telefone) — deve ser mascarada
+POST {{host}}{{api_v1_prefix}}/memory/memorize
+Content-Type: application/json
+
+{
+  "type": "user_interaction",
+  "content": "Usuário forneceu email john.doe@example.com e telefone +55 (11) 98765-4321",
+  "metadata": {"origin": "http_tests"}
+}
+
+###
+# 20. Recall Filtrado (status=failure)
+GET {{host}}{{api_v1_prefix}}/memory/recall/filtered?query=erro&status=failure&limit=5&min_score=0.3
+Accept: application/json
+
+###
+# 21. Falhas Recentes (janela padrão de cota)
+GET {{host}}{{api_v1_prefix}}/memory/recall/recent_failures?limit=5&min_score=0.3
+Accept: application/json
+
 
