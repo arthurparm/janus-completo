@@ -25,62 +25,110 @@ class GraphDatabase:
     _driver: Optional[AsyncDriver] = None
     _ontology_lock = asyncio.Lock()
     _known_relationship_types: Set[str] = set()
+    _offline: bool = False
 
     async def connect(self):
-        """Estabelece a conexão com o banco de dados."""
-        if self._driver:
-            return
-        logger.info("Criando novo driver Neo4j...")
-        try:
-            password = settings.NEO4J_PASSWORD.get_secret_value()
-            self._driver = AsyncGraphDatabase.driver(
-                settings.NEO4J_URI, auth=(settings.NEO4J_USER, password)
-            )
-            await self._driver.verify_connectivity()
-            await self._initialize_ontology()
-            logger.info("Driver Neo4j criado e ontologia inicializada.")
-        except Exception as e:
-            logger.critical(f"FATAL: Não foi possível criar o driver Neo4j: {e}", exc_info=True)
-            raise ConnectionError(f"Falha ao conectar ao Neo4j: {e}") from e
+        if self._driver is None:
+            try:
+                self._driver = AsyncGraphDatabase.driver(
+                    settings.NEO4J_URI,
+                    auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value())
+                )
+                await self._initialize_ontology()
+                logger.info("Conexão com Neo4j estabelecida.")
+                self._offline = False
+            except Exception as e:
+                logger.warning("Neo4j indisponível; ativando modo offline.", exc_info=e)
+                # Mantém driver como None e sinaliza modo offline
+                self._driver = None
+                self._offline = True
 
     async def close(self):
-        """Fecha a conexão com o banco de dados."""
         if self._driver:
             await self._driver.close()
             self._driver = None
-            logger.info("Driver Neo4j fechado.")
 
     async def _initialize_ontology(self):
-        async with self._driver.session() as session:
-            result = await session.run("MATCH (rt:RelationshipType) RETURN rt.name AS name")
-            existing_types = {record["name"] async for record in result}
-            self._known_relationship_types.update(existing_types)
-            logger.info(
-                f"Ontologia carregada. {len(self._known_relationship_types)} tipos de relacionamento conhecidos.")
-
-    async def register_relationship_type(self, tx: AsyncTransaction, type_name: str):
-        if type_name in self._known_relationship_types:
-            return
         async with self._ontology_lock:
-            if type_name in self._known_relationship_types:
-                return
-            logger.warning(f"Tipo de relacionamento desconhecido: '{type_name}'. Registrando dinamicamente...")
-            await tx.run(
-                "MERGE (rt:RelationshipType {name: $name}) SET rt.dynamically_added = true, rt.createdAt = timestamp()",
-                name=type_name
-            )
-            self._known_relationship_types.add(type_name)
+            if not self._known_relationship_types and self._driver is not None:
+                # Registra tipos básicos de relacionamento
+                async with self._driver.session() as session:
+                    await self.register_relationship_type(session, GraphRelationship.CONTAINS.value)
+                    await self.register_relationship_type(session, GraphRelationship.CALLS.value)
+                    await self.register_relationship_type(session, GraphRelationship.IS_SYNONYM_OF.value)
+                    # Tipos adicionais (arestas tipificadas)
+                    await self.register_relationship_type(session, GraphRelationship.IMPORTS.value)
+                    await self.register_relationship_type(session, GraphRelationship.DEFINES.value)
+                    await self.register_relationship_type(session, GraphRelationship.INHERITS_FROM.value)
+                    await self.register_relationship_type(session, GraphRelationship.IMPLEMENTS.value)
+                    await self.register_relationship_type(session, GraphRelationship.USES.value)
+                    await self.register_relationship_type(session, GraphRelationship.IS_A.value)
+                    await self.register_relationship_type(session, GraphRelationship.EXAMPLE_OF.value)
+                    await self.register_relationship_type(session, GraphRelationship.PART_OF.value)
+                    await self.register_relationship_type(session, GraphRelationship.DEPENDS_ON.value)
+                    await self.register_relationship_type(session, GraphRelationship.ENABLES.value)
+                    await self.register_relationship_type(session, GraphRelationship.PRODUCES.value)
+                    await self.register_relationship_type(session, GraphRelationship.RESULTS_IN.value)
+                    await self.register_relationship_type(session, GraphRelationship.RELATES_TO.value)
+                    logger.info("Ontologia inicial do grafo registrada.")
+
+    async def register_relationship_type(self, tx_or_session, rel_type: str):
+        # Usa transação ou sessão para registrar um tipo de relacionamento
+        if self._driver is None:
+            return
+        query = f"MERGE (t:RelationshipType {{name: $rel_type}})"
+        await tx_or_session.run(query, rel_type=rel_type)
+        self._known_relationship_types.add(rel_type)
 
     @resilient(operation_name="neo4j_query")
-    async def query(self, cypher_query: str, params: dict = None):
-        async with self._driver.session() as session:
-            result = await session.run(cypher_query, params or {})
-            return [record.data() async for record in result]
+    async def query(self, cypher_query: str, params: dict = None, operation: str | None = None):
+        op = operation or "query"
+        # Offline: retorna vazio sem lançar exceção
+        if self._driver is None or self._offline:
+            try:
+                _DB_QUERIES.labels(op, "failure").inc()
+            except Exception:
+                pass
+            return []
+        start = None
+        try:
+            start = asyncio.get_event_loop().time()
+            async with self._driver.session() as session:
+                result = await session.run(cypher_query, params or {})
+                rows = [record.data() async for record in result]
+                _DB_QUERIES.labels(op, "success").inc()
+                if start is not None:
+                    _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+                return rows
+        except Exception:
+            _DB_QUERIES.labels(op, "failure").inc()
+            if start is not None:
+                _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+            raise
 
     @resilient(operation_name="neo4j_execute")
-    async def execute(self, cypher_query: str, params: dict = None):
-        async with self._driver.session() as session:
-            await session.run(cypher_query, params or {})
+    async def execute(self, cypher_query: str, params: dict = None, operation: str | None = None):
+        op = operation or "execute"
+        # Offline: no-op
+        if self._driver is None or self._offline:
+            try:
+                _DB_QUERIES.labels(op, "failure").inc()
+            except Exception:
+                pass
+            return None
+        start = None
+        try:
+            start = asyncio.get_event_loop().time()
+            async with self._driver.session() as session:
+                await session.run(cypher_query, params or {})
+                _DB_QUERIES.labels(op, "success").inc()
+                if start is not None:
+                    _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+        except Exception:
+            _DB_QUERIES.labels(op, "failure").inc()
+            if start is not None:
+                _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+            raise
 
     async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int:
         query = f"MERGE (n:{label} {{name: $name}}) RETURN id(n) as node_id"
@@ -94,7 +142,22 @@ class GraphDatabase:
         await tx.run(query, source_id=source_id, target_id=target_id)
 
     async def get_session(self) -> AsyncSession:
+        if self._driver is None or self._offline:
+            raise ConnectionError("Graph database em modo offline.")
         return self._driver.session()
+
+    @resilient(operation_name="neo4j_health")
+    async def health_check(self) -> bool:
+        if self._driver is None or self._offline:
+            return False
+        try:
+            async with self._driver.session() as session:
+                result = await session.run("RETURN 1 as ok")
+                record = await result.single()
+                return bool(record and record.get("ok") == 1)
+        except Exception as e:
+            logger.warning(f"Neo4j health check falhou: {e}")
+            return False
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
