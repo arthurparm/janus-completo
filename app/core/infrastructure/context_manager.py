@@ -80,10 +80,11 @@ class ContextManager:
     def _init_web_search(self):
         """Inicializa o cliente de busca web (Tavily)."""
         try:
-            # Verifica se a API key está configurada
-            tavily_key = getattr(settings, "TAVILY_API_KEY", None)
+            tavily_secret = getattr(settings, "TAVILY_API_KEY", None)
+            # Extrai o valor da SecretStr se existir
+            tavily_key = getattr(tavily_secret, "get_secret_value", lambda: tavily_secret)()
             if tavily_key and str(tavily_key).strip():
-                self._tavily_client = TavilySearchAPIWrapper()
+                self._tavily_client = TavilySearchAPIWrapper(tavily_api_key=str(tavily_key).strip())
                 logger.info("Cliente Tavily inicializado com sucesso.")
             else:
                 logger.warning("TAVILY_API_KEY não configurada. Busca web desabilitada.")

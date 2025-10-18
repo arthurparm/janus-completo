@@ -11,6 +11,7 @@ from aio_pika.abc import AbstractRobustConnection
 from prometheus_client import Counter
 
 from app.config import settings
+from app.models.schemas import TaskMessage
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,20 @@ class MessageBroker:
                 logger.info("Conexão com RabbitMQ estabelecida com sucesso.")
             except Exception as e:
                 _CONNECTION_ERRORS.inc()
-                logger.critical(f"FATAL: Não foi possível conectar ao RabbitMQ: {e}", exc_info=True)
-                raise ConnectionError(f"Falha ao conectar ao RabbitMQ: {e}") from e
+                logger.error(f"Falha ao conectar ao RabbitMQ em host '{settings.RABBITMQ_HOST}': {e}", exc_info=True)
+                # Fallback: tentar localhost para execução fora do Docker
+                try:
+                    fallback_url = f"amqp://{settings.RABBITMQ_USER}:{settings.RABBITMQ_PASSWORD}@localhost:{settings.RABBITMQ_PORT}/"
+                    logger.info("Tentando fallback de conexão com RabbitMQ em localhost...")
+                    self._connection = await aio_pika.connect_robust(
+                        fallback_url,
+                        client_properties={"connection_name": "janus_system_local"}
+                    )
+                    logger.info("Conexão com RabbitMQ (localhost) estabelecida com sucesso.")
+                except Exception as e2:
+                    logger.warning("RabbitMQ indisponível; seguindo em modo offline sem conexão.", exc_info=e2)
+                    # Não lança exceção aqui para permitir que a aplicação inicialize em modo degradado.
+                    self._connection = None
 
     async def close(self):
         """Fecha a conexão com o RabbitMQ."""
@@ -68,6 +81,10 @@ class MessageBroker:
         - Suporta `headers` e `expiration` (ms) para uso avançado.
         """
         await self.connect()
+        if self._connection is None:
+            # Modo offline: ignora publicação
+            logger.debug("Publicação ignorada (broker offline)", extra={"queue": queue_name})
+            return
         async with self._connection.channel() as channel:
             arguments = self._get_queue_arguments(queue_name)
             await channel.declare_queue(queue_name, durable=True, arguments=arguments)
@@ -81,11 +98,35 @@ class MessageBroker:
             await channel.default_exchange.publish(msg, routing_key=queue_name)
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
 
+    def _get_queue_arguments(self, queue_name: str) -> Dict[str, Any]:
+        """Obtém argumentos esperados para a fila (TTL, max-length, DLX, prioridade)."""
+        cfg = settings.RABBITMQ_QUEUE_CONFIG.get(queue_name, {})
+        args: Dict[str, Any] = {}
+        # TTL de mensagens
+        ttl = cfg.get("x-message-ttl")
+        if ttl is not None:
+            args["x-message-ttl"] = int(ttl)
+        # Limite de tamanho da fila
+        max_len = cfg.get("x-max-length")
+        if max_len is not None:
+            args["x-max-length"] = int(max_len)
+        # DLX (Dead Letter Exchange)
+        dlx = cfg.get("x-dead-letter-exchange")
+        if dlx is not None:
+            args["x-dead-letter-exchange"] = dlx
+        # Prioridade máxima suportada
+        max_priority = cfg.get("x-max-priority")
+        if max_priority is not None:
+            args["x-max-priority"] = int(max_priority)
+        return args
+
     async def get_queue_info(self, queue_name: str) -> Optional[dict]:
         """
         Obtém informações sobre uma fila.
         """
         await self.connect()
+        if self._connection is None:
+            return None
         async with self._connection.channel() as channel:
             arguments = self._get_queue_arguments(queue_name)
             queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments)
@@ -101,7 +142,7 @@ class MessageBroker:
         """
         try:
             await self.connect()
-            return not self._connection.is_closed
+            return bool(self._connection) and (not self._connection.is_closed)
         except Exception:
             return False
 
@@ -121,12 +162,41 @@ class MessageBroker:
 
         Retorna um asyncio.Task para controle externo (cancelamento, tracking).
         """
+        async def _on_message(message: aio_pika.IncomingMessage):
+            try:
+                payload = json.loads(message.body.decode("utf-8"))
+                # Converte para TaskMessage e processa
+                task = TaskMessage(**payload)  # type: ignore[name-defined]
+                await callback(task)
+            except Exception as e:
+                logger.error("Erro ao processar mensagem; reenfileirando", exc_info=e)
+                try:
+                    ch = getattr(message, "channel", None)
+                    if ch is not None and not ch.is_closed:
+                        message.nack(requeue=True)
+                    else:
+                        logger.warning("Canal do RabbitMQ fechado; nack ignorado e mensagem será reentregue pelo broker.")
+                except Exception as nack_err:
+                    logger.error("Falha ao enviar NACK; possivelmente canal inválido", exc_info=nack_err)
+                return
 
+            # Confirma a mensagem somente se o canal estiver válido
+            try:
+                ch = getattr(message, "channel", None)
+                if ch is not None and not ch.is_closed:
+                    message.ack()
+                else:
+                    logger.warning("Canal do RabbitMQ fechado antes do ACK; mensagem provavelmente será reentregue.")
+            except Exception as ack_err:
+                logger.error("Falha ao enviar ACK; mensagem será reentregue", exc_info=ack_err)
         async def _consume_loop() -> None:
             while True:
                 try:
                     await self.connect()
-                    assert self._connection is not None
+                    if self._connection is None:
+                        # Broker offline: aguarda antes de tentar novamente
+                        await asyncio.sleep(5)
+                        continue
 
                     async with self._connection.channel() as channel:
                         await channel.set_qos(prefetch_count=prefetch_count)
@@ -136,30 +206,7 @@ class MessageBroker:
                             durable=True,
                             arguments=arguments,
                         )
-
-                        async def on_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
-                            async with message.process(requeue=True):
-                                try:
-                                    body_text = message.body.decode("utf-8")
-                                    try:
-                                        payload = json.loads(body_text)
-                                        # Import interno para evitar ciclos em import
-                                        from app.models.schemas import TaskMessage  # noqa
-
-                                        task = TaskMessage(**payload)
-                                        await callback(task)
-                                    except Exception:
-                                        # Se não for JSON válido para TaskMessage, entrega o texto bruto
-                                        await callback(body_text)
-                                except Exception as e:
-                                    logger.error(
-                                        "Erro ao processar mensagem",
-                                        extra={"queue": queue_name},
-                                        exc_info=e,
-                                    )
-                                    raise
-
-                        await queue.consume(on_message, no_ack=False)
+                        await queue.consume(_on_message, no_ack=False)
                         logger.info(
                             "Consumidor iniciado",
                             extra={"queue": queue_name, "prefetch": prefetch_count},
@@ -180,19 +227,6 @@ class MessageBroker:
                     await asyncio.sleep(5)
 
         return asyncio.create_task(_consume_loop())
-
-    # --- Utilitários / Management API ---
-
-    def _get_queue_arguments(self, queue_name: str) -> Optional[Dict[str, int]]:
-        """
-        Obtém os argumentos esperados para a fila a partir da configuração.
-        Retorna None se não houver configuração específica.
-        """
-        try:
-            args = settings.RABBITMQ_QUEUE_CONFIG.get(queue_name)
-            return args or None
-        except Exception:
-            return None
 
     async def get_queue_policy(self, queue_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -295,7 +329,7 @@ class MessageBroker:
 
     async def reconcile_queue_policy(self, queue_name: str, force_delete: bool = True) -> Dict[str, Any]:
         """
-        Reconciliar a política da fila com a configuração esperada:
+        Reconcilia a política da fila com a configuração esperada:
         - Valida argumentos atuais; se houver divergências e force_delete=True, deleta a fila e recria com argumentos esperados.
         - Retorna o resultado da validação após a reconciliação.
         """
@@ -341,6 +375,7 @@ async def initialize_broker():
     global _broker_instance
     if _broker_instance is None:
         _broker_instance = MessageBroker()
+        # Não lançar erro se a conexão falhar; permanece offline
         await _broker_instance.connect()
 
 async def close_broker():
