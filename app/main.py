@@ -119,7 +119,11 @@ async def lifespan(app: FastAPI):
     app.state.optimization_service = OptimizationService(app.state.optimization_repo)
 
     # Autonomy Service (Loop contínuo)
-    app.state.autonomy_service = AutonomyService(app.state.optimization_service)
+    app.state.autonomy_service = AutonomyService(
+        app.state.optimization_service,
+        app.state.llm_service,
+        app.state.goal_manager,
+    )
 
     # Observabilidade: monitor e poison pill handler
     monitor = get_health_monitor()
@@ -176,7 +180,7 @@ async def lifespan(app: FastAPI):
         pass
 
     # Para o monitoramento contínuo de saúde antes de fechar recursos
-    await monitor.stop_monitoring()
+    monitor.stop_monitoring()
 
     await asyncio.gather(close_graph_db(), close_memory_db(), close_broker())
     logger.info("Infrastructure connections closed.")
