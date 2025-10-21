@@ -22,6 +22,9 @@ async def start_all_workers():
     from app.core.workers.reflexion_worker import start_reflexion_worker
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.monitoring import start_auto_healer
+    from app.core.workers.router_worker import start_router_worker
+    from app.core.workers.code_agent_worker import start_code_agent_worker
+    from app.core.workers.professor_agent_worker import start_professor_agent_worker
 
     logger.info("Iniciando orquestrador de workers...")
 
@@ -58,6 +61,16 @@ async def start_all_workers():
     # Auto-Healer de componentes (background task)
     healer_task = await start_auto_healer()
     workers.append(healer_task)
+
+    # === Novos workers do Parlamento ===
+    router_task = await start_router_worker()
+    workers.append(router_task)
+
+    code_agent_task = await start_code_agent_worker()
+    workers.append(code_agent_task)
+
+    professor_agent_task = await start_professor_agent_worker()
+    workers.append(professor_agent_task)
 
     logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

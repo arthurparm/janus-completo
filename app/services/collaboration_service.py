@@ -5,6 +5,8 @@ from fastapi import Request
 from app.repositories.collaboration_repository import CollaborationRepository, CollaborationRepositoryError
 from app.core.agents import AgentRole
 from app.core.agents.multi_agent_system import Task, TaskPriority, TaskStatus
+from app.core.infrastructure.message_broker import get_broker
+from app.models.schemas import TaskMessage, TaskState, QueueName
 
 logger = structlog.get_logger(__name__)
 
@@ -154,6 +156,33 @@ class CollaborationService:
             logger.error("Erro ao executar tarefas em paralelo", exc_info=e)
             raise CollaborationServiceError("Falha na execução paralela de tarefas.") from e
 
+    # --- Parliament Routing ---
+    async def pass_task(self, task_state: TaskState) -> str:
+        """
+        Publica o TaskState na fila adequada com base em `next_agent_role`.
+        Fallback: roteia para `JANUS.tasks.router` quando indefinido.
+        """
+        role = (task_state.next_agent_role or "router").lower()
+        if role in ("coder", "code", "code_agent"):
+            queue = QueueName.TASKS_AGENT_CODER.value
+        elif role in ("professor", "review", "professor_agent", "curator"):
+            queue = QueueName.TASKS_AGENT_PROFESSOR.value
+        elif role in ("sandbox", "tester", "test"):
+            queue = QueueName.TASKS_AGENT_SANDBOX.value
+        else:
+            queue = QueueName.TASKS_ROUTER.value
+
+        message = TaskMessage(
+            task_id=task_state.task_id,
+            task_type="task_state",
+            payload={"task_state": task_state.model_dump()},
+            timestamp=datetime.utcnow().timestamp(),
+        ).model_dump_json()
+
+        broker = await get_broker()
+        await broker.publish(queue_name=queue, message=message)
+        logger.info("TaskState publicado", queue=queue, task_id=task_state.task_id, next_role=role)
+        return queue
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_collaboration_service(request: Request) -> CollaborationService:
     return request.app.state.collaboration_service

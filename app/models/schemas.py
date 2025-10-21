@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +74,11 @@ class QueueName(str, Enum):
     META_AGENT_CYCLE = "janus.meta_agent.cycle"
     REFLEXION_TASKS = "janus.tasks.reflexion"
     FAILURE_DETECTED = "janus.failure.detected"
+    # Parlamento: novas filas de roteamento e agentes inteligentes
+    TASKS_ROUTER = "janus.tasks.router"
+    TASKS_AGENT_CODER = "janus.tasks.agent.coder"
+    TASKS_AGENT_PROFESSOR = "janus.tasks.agent.professor"
+    TASKS_AGENT_SANDBOX = "janus.tasks.agent.sandbox"
 
 
 class TaskMessage(BaseModel):
@@ -83,3 +89,30 @@ class TaskMessage(BaseModel):
     task_type: str
     payload: dict = Field(default_factory=dict)
     timestamp: float
+
+
+class TaskStateEvent(BaseModel):
+    """Evento de histórico de um TaskState."""
+    agent_role: Optional[str] = None
+    action: str
+    notes: Optional[str] = None
+    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+
+
+class TaskState(BaseModel):
+    """
+    Objeto de colaboração rico compartilhado entre agentes.
+
+    - Os agentes atualizam `data_payload` e `history` a cada passo.
+    - `next_agent_role` define para qual agente o estado deve ser roteado.
+    """
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    original_goal: str
+    current_agent_role: Optional[str] = None
+    next_agent_role: Optional[str] = None
+    data_payload: Dict[str, Any] = Field(default_factory=dict)
+    history: List[TaskStateEvent] = Field(default_factory=list)
+    status: str = Field(default="in_progress")
+    retries: int = Field(default=0)
+    meta: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
