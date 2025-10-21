@@ -1,0 +1,81 @@
+<section class="page-header">
+  <div class="container">
+    <h1>Log de Sprints: A Evolução de Janus</h1>
+    <p class="subtitle">
+      Um registro cronológico do desenvolvimento de Janus, desde a sua fundação como um sistema distribuído
+      até a gênese de sua consciência proativa. Cada Sprint representa um salto evolutivo.
+    </p>
+  </div>
+</section>
+
+<section id="timeline" class="timeline-section">
+  <div id="timelineLine" class="timeline-line" aria-hidden="true"></div>
+
+  <div id="timelineList" class="timeline-list">
+    <!-- Sprints iniciais 1-4 no HTML (para teste de scraping estático) -->
+
+    <article class="timeline-item" data-sprint="1">
+      <div class="timeline-card">
+        <div class="tag">Foco: Infraestrutura</div>
+        <h3>Sprint 1: Espinha Dorsal do Sistema – Fundamentos de Comunicação Distribuída</h3>
+        <p>
+          Foco Principal: Estabelecer uma arquitetura de comunicação assíncrona e distribuída.
+          Implementações Chave: Integração e configuração do RabbitMQ como o principal message broker; padrão
+          Orquestrador-Worker; canais de eventos.
+        </p>
+      </div>
+    </article>
+
+    <article class="timeline-item" data-sprint="2">
+      <div class="timeline-card">
+        <div class="tag">Foco: Memória</div>
+        <h3>Sprint 2: Núcleo Cognitivo – Aprendizagem Baseada em Experiências</h3>
+        <p>
+          Foco Principal: Desenvolver a capacidade de aprendizagem do Janus através de uma Memória Episódica.
+          Implementações Chave: Qdrant como banco de dados vetorial; indexação de experiências; recuperação
+          contextual.
+        </p>
+      </div>
+    </article>
+
+    <article class="timeline-item" data-sprint="3">
+      <div class="timeline-card">
+        <div class="tag">Foco: Conhecimento</div>
+        <h3>Sprint 3: Base de Conhecimento – Memória Semântica e Ontologias</h3>
+        <p>
+          Foco Principal: Construir memória semântica e grafos de conhecimento. Implementações Chave: embeddings;
+          relacionamento conceitual; ingestão de documentação técnica.
+        </p>
+      </div>
+    </article>
+
+    <article class="timeline-item" data-sprint="4">
+      <div class="timeline-card">
+        <div class="tag">Foco: Cognitivo</div>
+        <h3>Sprint 4: Planejamento Cognitivo – Orquestração de Modelos e Ferramentas</h3>
+        <p>
+          Foco Principal: Orquestrar fluxo de pensamento entre diferentes modelos e ferramentas. Implementações
+          Chave: orchestrator; uso de ferramentas; encadeamentos de raciocínio.
+        </p>
+      </div>
+    </article>
+
+    <!-- Itens carregados dinamicamente pelo Angular para manter estilos encapsulados -->
+    <ng-container *ngFor="let s of displayedSprints; trackBy: trackById">
+      <article class="timeline-item" [attr.data-sprint]="s.id">
+        <div class="timeline-card">
+          <div class="tag">Foco: {{ s.focus }}</div>
+          <h3>{{ s.title }}</h3>
+          <p>{{ s.summary }}</p>
+        </div>
+      </article>
+    </ng-container>
+  </div>
+
+  <div class="timeline-actions" *ngIf="!allLoaded">
+    <button id="loadMoreBtn" class="load-more-btn" (click)="loadMore()" aria-live="polite">
+      <span class="loader" aria-hidden="true"></span>
+      <span class="label">Carregar Mais Sprints</span>
+    </button>
+  </div>
+</section>

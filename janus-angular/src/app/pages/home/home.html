@@ -1,0 +1,95 @@
+<!-- Seção Hero -->
+<div class="hero-section">
+  <div class="ai-core">
+    <div class="core-ring"></div>
+    <div class="core-center"></div>
+  </div>
+  <h1>Projeto Janus</h1>
+  <h2>A Gênese da Inteligência Autônoma: Um Ecossistema Cognitivo em Evolução</h2>
+  <p>Janus é uma arquitetura cognitiva distribuída, projetada para aprender, raciocinar e se auto-otimizar. Este site
+    serve como seu ambiente de diagnóstico e interação.</p>
+  <div class="timestamp">{{ now }}</div>
+</div>
+
+<!-- Seção 2: A Arquitetura (3 Colunas) -->
+<section class="architecture-section">
+  <h2>A Arquitetura</h2>
+  <div class="architecture-grid">
+    <div class="card">
+      <h3>O Cérebro (Processamento Local)</h3>
+      <p>Núcleo de raciocínio soberano (Ollama) para autonomia. Inclui: Llama 3.2 8B (Orquestrador), Phi-3-mini
+        (Professor/Curador) e Code Llama 7B (Codificador).</p>
+    </div>
+    <div class="card">
+      <h3>O Co-processador (Nuvem Estratégica)</h3>
+      <p>Acesso a modelos de elite (OpenAI, Gemini, Grok) para tarefas de altíssima complexidade, gerenciado por um
+        Roteador Dinâmico.</p>
+    </div>
+    <div class="card">
+      <h3>O Sistema Nervoso (APIs Externas)</h3>
+      <p>Os 'sentidos' de Janus para perceber o mundo digital. Inclui: Tavily Search (Busca Web), HG Brasil (Contexto
+        Local) e Google NLP (Análise de Linguagem).</p>
+    </div>
+  </div>
+</section>
+
+<!-- Seção 3: O Ecossistema -->
+<section class="ecosystem-section">
+  <h2>O Ecossistema (Distribuição)</h2>
+  <div class="card">
+    <h3>Um Sistema Multiagente Distribuído</h3>
+    <p>Utilizando um padrão Orquestrador-Trabalhador sobre LangGraph e RabbitMQ, Janus decompõe problemas complexos em
+      tarefas paralelas, garantindo escalabilidade e resiliência.</p>
+  </div>
+</section>
+
+<!-- Seção 4: O Meta-Agente -->
+<section class="meta-agent-section">
+  <h2>O Meta-Agente (Consciência)</h2>
+  <div class="card">
+    <h3>Auto-Otimização Proativa</h3>
+    <p>O Meta-Agente (Sprint 13) monitora continuamente a saúde do sistema e analisa padrões de falha. É a
+      'autoconsciência diagnóstica' de Janus, transformando-o de reativo para proativo.</p>
+  </div>
+</section>
+
+<!-- Seção 5: Status do Sistema (Teste de Fogo) -->
+<section class="system-status-section">
+  <h2>Diagnóstico do Sistema em Tempo Real</h2>
+  <div class="status-monitor">
+    <div class="status-grid">
+      <div class="status-item">
+        <span class="status-label">ID do Sistema:</span>
+        <span class="status-value">JNS-ARC-1.0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Status Geral:</span>
+        <span class="status-value online">Operacional</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Barramento (RabbitMQ):</span>
+        <span class="status-value online">Online</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Memória Episódica (Qdrant):</span>
+        <span class="status-value online">Conectada</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Orquestrador (app/core/workers/orchestrator.py):</span>
+        <span class="status-value online">Ativo</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Meta-Agente (app/core/agents/meta_agent.py):</span>
+        <span class="status-value monitoring">Em monitorização</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Nós de Trabalho (app/core/workers/auto_scaler.py):</span>
+        <span class="status-value">7</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Última Análise de Falha:</span>
+        <span class="status-value">{{ now }}</span>
+      </div>
+    </div>
+  </div>
+</section>

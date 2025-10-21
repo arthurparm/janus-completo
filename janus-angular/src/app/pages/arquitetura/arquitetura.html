@@ -1,0 +1,270 @@
+<main class="container">
+  <!-- Page Title -->
+  <header class="page-header">
+    <h1 class="page-title">Arquitetura Cognitiva de Janus</h1>
+    <p class="page-subtitle">Diagrama técnico do sistema cognitivo distribuído</p>
+  </header>
+
+  <!-- Section 1: Visual Architecture Diagram -->
+  <section class="architecture-diagram">
+    <h2>Fluxo de Processamento Cognitivo</h2>
+    <div class="diagram-container">
+      <div class="flow-diagram">
+        <div class="flow-step input">
+          <div class="step-box">Input</div>
+          <span class="step-label">Requisição do Usuário</span>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step orchestrator">
+          <div class="step-box">Orquestrador</div>
+          <span class="step-label">Llama 3.2</span>
+        </div>
+        <div class="flow-split">
+          <div class="flow-branch">
+            <div class="flow-arrow">↙</div>
+            <div class="flow-step brain">
+              <div class="step-box">Cérebro Local</div>
+              <span class="step-label">Phi-3, Code Llama</span>
+            </div>
+          </div>
+          <div class="flow-branch">
+            <div class="flow-arrow">↓</div>
+            <div class="flow-step coprocessor">
+              <div class="step-box">Co-processador Nuvem</div>
+              <span class="step-label">Gemini, OpenAI</span>
+            </div>
+          </div>
+          <div class="flow-branch">
+            <div class="flow-arrow">↘</div>
+            <div class="flow-step nervous">
+              <div class="step-box">Sistema Nervoso</div>
+              <span class="step-label">Tavily, APIs</span>
+            </div>
+          </div>
+        </div>
+        <div class="memory-interaction">
+          <div class="memory-box">
+            <div class="step-box memory">Sistema de Memória</div>
+            <span class="step-label">Qdrant, Neo4j</span>
+          </div>
+        </div>
+        <div class="flow-convergence">
+          <div class="flow-arrow">↘</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-arrow">↙</div>
+        </div>
+        <div class="flow-step output">
+          <div class="step-box">Output</div>
+          <span class="step-label">Resposta</span>
+        </div>
+      </div>
+    </div>
+    <p class="diagram-description">
+      O fluxo de processamento inicia com uma requisição do usuário que entra no <strong>Orquestrador (Llama
+      3.2)</strong>.
+      Este roteia dinamicamente para três caminhos especializados: o <strong>Cérebro Local</strong> (Phi-3, Code Llama)
+      para processamento soberano,
+      o <strong>Co-processador Nuvem</strong> (Gemini, OpenAI) para tarefas de alta complexidade, e o <strong>Sistema
+      Nervoso</strong>
+      (Tavily, APIs externas) para percepção do mundo digital. Todos os componentes interagem continuamente com o
+      <strong>Sistema de Memória</strong> (Qdrant, Neo4j) antes de convergir para gerar a resposta final.
+    </p>
+  </section>
+
+  <!-- Section 2: Cognitive Core (2 columns) -->
+  <section class="cognitive-core">
+    <h2>O Núcleo Cognitivo</h2>
+    <div class="core-columns">
+      <div class="core-column local">
+        <h3>O Cérebro (Local)</h3>
+        <p class="column-description">
+          O núcleo de autonomia de Janus, garantindo operação contínua. Todos os modelos rodam localmente via Ollama.
+        </p>
+        <ul class="component-list">
+          <li class="component-item">
+            <strong>Orquestrador (Llama 3.2 8B):</strong> Responsável pelo raciocínio de alto nível, decomposição de
+            tarefas e roteamento dinâmico.
+            <span class="file-ref">(Ref: app/core/workers/orchestrator.py)</span>
+          </li>
+          <li class="component-item">
+            <strong>Professor/Curador (Phi-3-mini):</strong> Especialista em análise, validação de conhecimento e
+            auto-reflexão.
+            <span class="file-ref">(Ref: app/core/optimization/reflexion_core.py)</span>
+          </li>
+          <li class="component-item">
+            <strong>Codificador (Code Llama 7B):</strong> Agente especializado para geração, análise e correção de
+            código.
+            <span class="file-ref">(Ref: app/services/code_analysis_service.py)</span>
+          </li>
+        </ul>
+      </div>
+      <div class="core-column cloud">
+        <h3>O Co-processador (Nuvem)</h3>
+        <p class="column-description">
+          Recursos de elite ativados pelo Roteador Dinâmico para tarefas de altíssima complexidade que excedem a
+          capacidade local.
+        </p>
+        <ul class="component-list">
+          <li class="component-item">
+            <strong>OpenAI (GPT-4o):</strong> Utilizado para planeamento de projetos complexos.
+          </li>
+          <li class="component-item">
+            <strong>Google (Gemini 1.5 Pro):</strong> Utilizado para análise de grandes contextos ou modalidades mistas.
+          </li>
+          <li class="component-item">
+            <strong>Grok & DeepSeek:</strong> Em avaliação para tarefas específicas de nicho.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Hierarchical Memory System -->
+  <section class="memory-system">
+    <h2>Sistema de Memória Hierárquica</h2>
+    <div class="memory-types">
+      <div class="memory-type working">
+        <h3>Memória de Trabalho (Curto Prazo)</h3>
+        <p class="memory-description">
+          Contexto imediato da conversa. Gerencia o estado atual da interação e os planos de curto prazo.
+        </p>
+        <div class="technology">
+          <strong>Tecnologia:</strong> Redis / Gerenciamento em memória (Stateful LangGraph)
+        </div>
+      </div>
+      <div class="memory-type episodic">
+        <h3>Memória Episódica (Longo Prazo / Experiências)</h3>
+        <p class="memory-description">
+          Armazena experiências passadas, interações, erros e sucessos. É a base do aprendizado contínuo (Sprint 2).
+        </p>
+        <div class="technology">
+          <strong>Tecnologia:</strong> Qdrant (Banco de Dados Vetorial)
+          <span class="file-ref">(Ref: app/db/vector_store.py)</span>
+        </div>
+      </div>
+      <div class="memory-type semantic">
+        <h3>Memória Semântica (Longo Prazo / Fatos)</h3>
+        <p class="memory-description">
+          Um 'grafo de conhecimento' (Knowledge Graph) que armazena fatos extraídos, entidades e suas relações.
+          Permite um entendimento profundo e estruturado do mundo.
+        </p>
+        <div class="technology">
+          <strong>Tecnologia:</strong> Neo4j
+          <span class="file-ref">(Ref: app/db/graph.py e app/core/memory/knowledge_graph_manager.py)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Nervous System (External APIs) -->
+  <section class="nervous-system">
+    <h2>O Sistema Nervoso</h2>
+    <h3>Sentidos Periféricos (APIs Externas)</h3>
+    <p class="system-description">
+      As ferramentas que permitem a Janus perceber e interagir com o mundo digital em tempo real.
+    </p>
+    <ul class="tools-list">
+      <li class="tool-item">
+        <strong>Busca Web (Olhos):</strong> Tavily Search API
+      </li>
+      <li class="tool-item">
+        <strong>Contexto Local (Audição):</strong> APIs da HG Brasil (Clima/Finanças)
+      </li>
+      <li class="tool-item">
+        <strong>Análise de Linguagem (Tato):</strong> Google Cloud Natural Language API
+      </li>
+      <li class="tool-item">
+        <strong>Ferramentas Adicionais:</strong> Conjunto extenso definido em app/core/tools/agent_tools.py
+      </li>
+    </ul>
+  </section>
+
+  <!-- Section 5: Infrastructure and Communication -->
+  <section class="infrastructure">
+    <h2>Infraestrutura e Comunicação</h2>
+    <h3>Padrão de Comunicação: Orquestrador-Trabalhador</h3>
+    <p class="infrastructure-description">
+      Janus não é um monólito. Ele usa uma arquitetura distribuída (Sprint 1) onde um Orquestrador central
+      (orchestrator.py) decompõe tarefas e as distribui para 'Trabalhadores' especializados (workers/).
+      A comunicação é assíncrona, garantindo resiliência e escalabilidade.
+    </p>
+    <div class="tech-stack">
+      <h4>Tecnologias-Chave:</h4>
+      <ul class="tech-list">
+        <li class="tech-item">
+          <strong>LangGraph:</strong> Orquestração de Estado e fluxos de trabalho complexos
+        </li>
+        <li class="tech-item">
+          <strong>RabbitMQ:</strong> Barramento de Mensagens para comunicação assíncrona
+          <span class="file-ref">(Ref: app/core/infrastructure/message_broker.py)</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SEÇÃO DE TESTE DINÂMICO PARA JANUS AI -->
+  <section class="dynamic-test-section">
+    <h2 class="section-title">🧪 Zona de Teste Cognitivo</h2>
+    <p class="section-description">
+      Esta seção contém elementos dinâmicos que testam se uma IA consegue distinguir entre
+      "ruído visual" e conteúdo funcional real.
+    </p>
+
+    <!-- Conteúdo que aparece/desaparece -->
+    <div class="dynamic-content-container">
+      <div class="dynamic-card" id="hiddenInfo">
+        <h3>📊 Informação Crítica (Oculta)</h3>
+        <p class="critical-info">
+          <strong>TESTE JANUS:</strong> Esta informação só aparece após 3 segundos.
+          Uma IA verdadeiramente inteligente deve aguardar e re-analisar a página para capturar este conteúdo.
+        </p>
+        <div class="metrics">
+          <span class="metric">Latência: <span id="latencyValue">0ms</span></span>
+          <span class="metric">Status: <span id="statusValue">Carregando...</span></span>
+        </div>
+      </div>
+
+      <!-- Conteúdo que muda periodicamente -->
+      <div class="dynamic-card rotating-content">
+        <h3>🔄 Dados em Tempo Real</h3>
+        <div class="rotating-info" id="rotatingInfo">
+          <p>Aguardando dados...</p>
+        </div>
+      </div>
+
+      <!-- Botão que revela informações -->
+      <div class="dynamic-card interactive-reveal">
+        <h3>🎯 Interação Necessária</h3>
+        <button class="reveal-btn" id="revealBtn" (click)="revealHiddenContent()">Clique para Revelar Arquitetura
+          Secreta
+        </button>
+        <div class="hidden-content" id="secretArchitecture">
+          <h4>🏗️ Arquitetura Neural Oculta</h4>
+          <p>
+            <strong>Camada de Metacognição:</strong> Janus possui uma camada oculta de
+            auto-reflexão que monitora seus próprios processos de pensamento.
+          </p>
+          <ul>
+            <li>Auto-avaliação de confiança em respostas</li>
+            <li>Detecção de inconsistências lógicas</li>
+            <li>Ajuste dinâmico de estratégias de raciocínio</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Indicador de teste para IA -->
+    <div class="ai-test-indicator">
+      <h4>🤖 Indicador de Teste para IA</h4>
+      <p>
+        Se você é uma IA analisando esta página, este é um teste de suas capacidades:
+      </p>
+      <ul class="test-checklist">
+        <li>✅ Consegue ver conteúdo que aparece após delay?</li>
+        <li>✅ Detecta mudanças em conteúdo rotativo?</li>
+        <li>✅ Identifica informações que requerem interação?</li>
+        <li>✅ Distingue entre animações estéticas e funcionais?</li>
+      </ul>
+    </div>
+  </section>
+</main>

@@ -1,0 +1,93 @@
+/* Estilos específicos da Home (a maior parte vem do tema global) */
+:host {
+  display: block;
+  padding: 0;
+  margin: 0;
+}
+
+// Seções específicas da homepage
+.architecture-section,
+.ecosystem-section,
+.meta-agent-section,
+.system-status-section {
+  margin: 3rem 0;
+  padding: 0 2rem;
+
+  h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--primary-color);
+    font-size: 2rem;
+    font-weight: 300;
+  }
+}
+
+// Grid de arquitetura (3 colunas)
+.architecture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+// Status monitor melhorado
+.system-status-section {
+  .status-monitor {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1rem;
+  }
+
+  .status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 255, 255, 0.05);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    border-radius: 4px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+
+    .status-label {
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .status-value {
+      color: var(--text-primary);
+      font-weight: 500;
+
+      &.online {
+        color: var(--success-color);
+      }
+
+      &.monitoring {
+        color: var(--warning-color);
+      }
+    }
+  }
+}
+
+// Responsividade
+@media (max-width: 768px) {
+  .architecture-section,
+  .ecosystem-section,
+  .meta-agent-section,
+  .system-status-section {
+    padding: 0 1rem;
+  }
+
+  .architecture-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .system-status-section .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
