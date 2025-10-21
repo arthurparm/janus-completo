@@ -20,6 +20,7 @@ class AppSettings(BaseSettings):
 
     # Feature flags / modos de execução
     DRY_RUN: bool = False
+    PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
 
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
@@ -31,6 +32,14 @@ class AppSettings(BaseSettings):
     QDRANT_PORT: int = 6333
     QDRANT_API_KEY: Optional[SecretStr] = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
+
+    # MySQL - Configuration-as-Data
+    MYSQL_HOST: str = "mysql"
+    MYSQL_PORT: int = 3306
+    MYSQL_USER: str = "janus"
+    MYSQL_PASSWORD: SecretStr = "janus_pass"
+    MYSQL_DATABASE: str = "janus_config"
+    MYSQL_ROOT_PASSWORD: SecretStr = "janus_root"
 
     # LangSmith
     LANGCHAIN_TRACING_V2: str = "true"
@@ -170,6 +179,16 @@ class AppSettings(BaseSettings):
             "x-max-length": 10000
         },
         "janus.meta_agent.cycle": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000,
+            "x-max-priority": 10
+        },
+        "janus.tasks.reflexion": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000,
+            "x-max-priority": 10
+        },
+        "janus.failure.detected": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
             "x-max-priority": 10

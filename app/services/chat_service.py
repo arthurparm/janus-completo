@@ -16,6 +16,9 @@ from app.core.monitoring.chat_metrics import (
 from app.core.llm.llm_manager import _provider_pricing  # type: ignore
 import time as _time
 import json
+import asyncio
+from app.core.workers.async_consolidation_worker import publish_consolidation_task
+from app.core.workers.reflexion_worker import publish_reflexion_task
 
 logger = structlog.get_logger(__name__)
 
@@ -101,6 +104,18 @@ class ChatService:
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
+            # Disparar gatilhos pós-resposta
+            try:
+                self._trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
             return result_with_conv
 
         # Intercepta geração automática de documentação das ferramentas
@@ -132,6 +147,18 @@ class ChatService:
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
+            # Disparar gatilhos pós-resposta
+            try:
+                self._trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
             return result_with_conv
 
         # Intercepta perguntas sobre capacidades/ferramentas e responde com dados locais
@@ -163,6 +190,18 @@ class ChatService:
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
+            # Disparar gatilhos pós-resposta
+            try:
+                self._trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
             return result_with_conv
 
         try:
@@ -217,6 +256,18 @@ class ChatService:
 
         result_with_conv = dict(result)
         result_with_conv["conversation_id"] = conversation_id
+        # Disparar gatilhos pós-resposta
+        try:
+            self._trigger_post_response_events(
+                conversation_id=conversation_id,
+                user_message=message,
+                assistant_text=assistant_text,
+                result=result,
+                user_id=user_id,
+                project_id=project_id,
+            )
+        except Exception:
+            pass
         return result_with_conv
 
     def get_history(self, conversation_id: str) -> Dict[str, Any]:
@@ -604,6 +655,19 @@ class ChatService:
             except Exception:
                 pass
 
+            # Disparar gatilhos pós-resposta
+            try:
+                self._trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+
             _done = json.dumps({
                 "conversation_id": conversation_id,
                 "provider": result.get("provider"),
@@ -614,6 +678,48 @@ class ChatService:
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="error").observe(max(0.0, _time.time() - start_t))
             _err = json.dumps({"error": str(e)})
             yield f"event: error\ndata: {_err}\n\n"
+
+    def _trigger_post_response_events(
+            self,
+            conversation_id: str,
+            user_message: str,
+            assistant_text: str,
+            result: Dict[str, Any],
+            user_id: Optional[str],
+            project_id: Optional[str],
+    ) -> None:
+        """Dispara tarefas assíncronas de consolidação e reflexion após uma resposta gerada."""
+        # Consolidação de conhecimento (modo single)
+        try:
+            consolidation_payload = {
+                "mode": "single",
+                "experience_id": f"{conversation_id}:{int(_time.time())}",
+                "experience_content": assistant_text,
+                "metadata": {
+                    "conversation_id": conversation_id,
+                    "role": result.get("role"),
+                    "provider": result.get("provider"),
+                    "model": result.get("model"),
+                    "user_message": (user_message or "")[:500],
+                    "user_id": user_id,
+                    "project_id": project_id,
+                }
+            }
+            asyncio.create_task(publish_consolidation_task(consolidation_payload, correlation_id=conversation_id))
+        except Exception:
+            pass
+
+        # Reflexion (avaliar qualidade da resposta e aprender lições)
+        try:
+            reflexion_payload = {
+                "task": assistant_text,
+                "interaction_id": f"{conversation_id}:{int(_time.time())}",
+                "conversation_id": conversation_id,
+                "config_overrides": {}
+            }
+            asyncio.create_task(publish_reflexion_task(reflexion_payload, correlation_id=conversation_id))
+        except Exception:
+            pass
 
 
 def get_chat_service(request: Request) -> ChatService:

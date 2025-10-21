@@ -71,6 +71,8 @@ class QueueName(str, Enum):
     NEURAL_TRAINING = "janus.neural.training"
     DATA_HARVESTING = "janus.data.harvesting"
     META_AGENT_CYCLE = "janus.meta_agent.cycle"
+    REFLEXION_TASKS = "janus.tasks.reflexion"
+    FAILURE_DETECTED = "janus.failure.detected"
 
 
 class TaskMessage(BaseModel):

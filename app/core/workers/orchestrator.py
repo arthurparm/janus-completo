@@ -18,7 +18,8 @@ async def start_all_workers():
     from app.core.workers.async_consolidation_worker import start_consolidation_worker
     from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
     from app.core.workers.neural_training_worker import start_neural_training_worker
-    from app.core.workers.meta_agent_worker import start_meta_agent_worker
+    from app.core.workers.meta_agent_worker import start_meta_agent_worker, start_failure_event_consumer
+    from app.core.workers.reflexion_worker import start_reflexion_worker
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.monitoring import start_auto_healer
 
@@ -38,9 +39,17 @@ async def start_all_workers():
     neural_worker = await start_neural_training_worker()
     workers.append(neural_worker)
 
+    # Worker de Reflexion (consome janus.tasks.reflexion)
+    reflexion_worker = await start_reflexion_worker()
+    workers.append(reflexion_worker)
+
     # Worker de ciclo do Meta-Agente
     meta_agent_worker = await start_meta_agent_worker()
     workers.append(meta_agent_worker)
+
+    # Meta-Agent orientado a eventos (consome janus.failure.detected)
+    failure_consumer = await start_failure_event_consumer()
+    workers.append(failure_consumer)
 
     # Auto-Scaler de filas (background task)
     auto_scaler_task = await start_auto_scaler()
@@ -50,5 +59,5 @@ async def start_all_workers():
     healer_task = await start_auto_healer()
     workers.append(healer_task)
 
-    logger.info(f"\u2713 {len(workers)} workers iniciados pelo orquestrador.")
+    logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers
