@@ -386,7 +386,7 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
         logger.debug("Health check Ollama passou.")
         return True
     except Exception as e:
-        logger.error(f"Health check OllaM falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError))
+        logger.error(f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError))
         return False
     finally:
         if executor:
@@ -437,9 +437,90 @@ def get_llm(
         role: ModelRole = ModelRole.ORCHESTRATOR,
         priority: ModelPriority = ModelPriority.LOCAL_ONLY,
         cache_key: str = "",
-        exclude_providers: Optional[list[str]] = None
+        exclude_providers: Optional[list[str]] = None,
+        config: Optional[Dict[str, Any]] = None
 ) -> BaseChatModel:
-    """Obtém uma instância de um modelo de linguagem com base no papel e na prioridade."""
+    """Obtém uma instância de um modelo de linguagem com base no papel e na prioridade.
+    Suporta overrides via configuração (provider/model/temperature/exclude_providers/priority).
+    """
+    # Overrides por configuração dinâmica
+    try:
+        if config:
+            prio = config.get("priority")
+            if prio:
+                try:
+                    priority = prio if isinstance(prio, ModelPriority) else ModelPriority[str(prio)]
+                except Exception:
+                    try:
+                        priority = ModelPriority[prio]
+                    except Exception:
+                        pass
+            cfg_excl = config.get("exclude_providers") or []
+            if cfg_excl:
+                exclude_providers = list(set((exclude_providers or []) + list(cfg_excl)))
+            forced_cache = config.get("cache_key")
+            if forced_cache:
+                cache_key = forced_cache
+            provider = config.get("provider")
+            model = config.get("model")
+            temperature = float(config.get("temperature", 0))
+            if provider and model:
+                if not cache_key:
+                    cache_key = f"forced_{provider}_{model}_{role.value}"
+                cached_item = _get_from_cache(cache_key)
+                if cached_item:
+                    return cached_item.instance
+                if exclude_providers and provider in exclude_providers:
+                    logger.warning(f"Provedor '{provider}' excluído por configuração; ignorando override.")
+                else:
+                    try:
+                        if provider == "ollama":
+                            model_kwargs: Dict[str, Any] = {}
+                            if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+                            if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+                            if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+                            if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                            if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                            llm = ChatOllama(
+                                base_url=settings.OLLAMA_HOST,
+                                model=model,
+                                temperature=temperature,
+                                model_kwargs=model_kwargs,
+                            )
+                            if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
+                                raise RuntimeError(f"Health check falhou para modelo '{model}'")
+                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "ollama").inc()
+                            _add_to_cache(cache_key, llm, "ollama")
+                            return llm
+                        elif provider == "openai":
+                            if not _validate_openai_key(
+                                    getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
+                                raise RuntimeError("OPENAI_API_KEY inválida ou ausente.")
+                            llm = ChatOpenAI(model=model, temperature=temperature)
+                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "openai").inc()
+                            _add_to_cache(cache_key, llm, "openai")
+                            return llm
+                        elif provider == "google_gemini":
+                            if not _validate_gemini_key(
+                                    getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()):
+                                raise RuntimeError("GEMINI_API_KEY inválida ou ausente.")
+                            llm = ChatGoogleGenerativeAI(
+                                model=model,
+                                temperature=temperature,
+                                google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value',
+                                                        lambda: None)() or None),
+                            )
+                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "google_gemini").inc()
+                            _add_to_cache(cache_key, llm, "google_gemini")
+                            return llm
+                        else:
+                            logger.warning(f"Provider override desconhecido: {provider}")
+                    except Exception as e:
+                        logger.error(f"Falha ao aplicar override de LLM: {e}", exc_info=True)
+                        # Continua para a seleção padrão
+    except Exception:
+        pass
+
     if not cache_key:
         cache_key = f"{role.value}_{priority.value}"
 
@@ -461,7 +542,7 @@ def get_llm(
             # Bloqueia se provedor local estiver excluído
             if exclude_providers and "ollama" in exclude_providers:
                 raise RuntimeError("Provedor local 'ollama' está excluído para esta seleção.")
-            # Model kwargs para tunar desempenho do Ollama
+            # Model kwargs para tunar desempenho do OllaM
             model_kwargs: Dict[str, Any] = {}
             if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
             if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD

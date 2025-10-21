@@ -18,6 +18,8 @@ services:
         condition: service_healthy # Espera a API do Ollama estar pronta
       rabbitmq:
         condition: service_healthy # Sprint 1: Espera RabbitMQ estar operacional
+      mysql:
+        condition: service_healthy # Configuration-as-Data: Espera MySQL estar operacional
     networks:
       - janus-net
 
@@ -86,6 +88,29 @@ services:
       timeout: 10s    # Allow more time for the command to respond
       retries: 20     # Allow more time for model pulls to complete
       start_period: 60s # Grace period for the container to initialize before healthchecks start
+
+  # Configuration-as-Data: MySQL para configurações dinâmicas
+  mysql:
+    image: mysql:8.0
+    container_name: janus_mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./sql/init:/docker-entrypoint-initdb.d
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-janus_root}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-janus_config}
+      - MYSQL_USER=${MYSQL_USER:-janus}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-janus_pass}
+    networks:
+      - janus-net
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-janus_root}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Sprint 1: Message Broker para Comunicação Distribuída
   rabbitmq:

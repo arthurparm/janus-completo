@@ -158,8 +158,10 @@ import string
 import time
 from collections import OrderedDict
 from typing import Dict, Optional, Tuple, Any, Callable
+import logging
 
 from prometheus_client import Counter
+from app.repositories.prompt_repository import PromptRepository
 
 PROMPTS = {
     "cypher_generation": CYPHER_GENERATION_TEMPLATE,
@@ -178,13 +180,26 @@ PROMPT_CACHE_MISSES = Counter(
 
 
 class PromptLoader:
-    def __init__(self, max_size: int = 128, ttl_seconds: int = 300, hot_reload: bool = False):
+    def __init__(self, max_size: int = 128, ttl_seconds: int = 300, hot_reload: bool = False,
+                 use_database: bool = True):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.hot_reload = hot_reload
-        self._store: Dict[str, str] = PROMPTS  # origem default em memória
+        self.use_database = use_database
+        self._store: Dict[str, str] = PROMPTS  # origem default em memória (fallback)
         self._external_provider: Optional[Callable[[str], Optional[str]]] = None  # gancho p/ fonte externa
         self._cache: "OrderedDict[Tuple[str, str, str, str, str], Tuple[float, str]]" = OrderedDict()
+        self._prompt_repo: Optional[PromptRepository] = None
+        self._logger = logging.getLogger(__name__)
+
+        # Inicializar repositório se usar banco de dados
+        if self.use_database:
+            try:
+                self._prompt_repo = PromptRepository()
+                self._logger.info("PromptLoader inicializado com suporte a banco de dados MySQL")
+            except Exception as e:
+                self._logger.warning(f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória.")
+                self.use_database = False
 
     def _make_key(self, name: str, namespace: Optional[str], version: Optional[str], lang: Optional[str],
                   model: Optional[str]) -> Tuple[str, str, str, str, str]:
@@ -218,6 +233,27 @@ class PromptLoader:
         self._external_provider = provider
         self.invalidate()
 
+    def _get_prompt_from_database(self, name: str, version: Optional[str] = None) -> Optional[str]:
+        """Busca prompt do banco de dados MySQL."""
+        if not self.use_database or not self._prompt_repo:
+            return None
+
+        try:
+            if version:
+                # Buscar versão específica
+                prompt = self._prompt_repo.get_prompt_version_by_id(int(version))
+                if prompt and prompt.prompt_name == name:
+                    return prompt.prompt_text
+            else:
+                # Buscar versão ativa
+                prompt = self._prompt_repo.get_active_prompt(name)
+                if prompt:
+                    return prompt.prompt_text
+        except Exception as e:
+            self._logger.error(f"Erro ao buscar prompt '{name}' do banco: {e}")
+
+        return None
+
     def get(self, name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
             lang: Optional[str] = None, model: Optional[str] = None, variables: Optional[Dict[str, Any]] = None,
             hot_reload: Optional[bool] = None) -> str:
@@ -238,21 +274,35 @@ class PromptLoader:
                     # expirado
                     self._cache.pop(key, None)
 
-        # miss (ou hot reload): tenta provider externo primeiro
+        # miss (ou hot reload): busca em ordem de prioridade
         PROMPT_CACHE_MISSES.labels(*key).inc()
         template: Optional[str] = None
-        if self._external_provider is not None:
+
+        # 1. Tentar banco de dados primeiro (se habilitado)
+        if self.use_database:
+            template = self._get_prompt_from_database(name, version)
+            if template:
+                self._logger.debug(f"Prompt '{name}' carregado do banco de dados")
+
+        # 2. Tentar provider externo se banco falhou
+        if template is None and self._external_provider is not None:
             try:
                 candidate = self._external_provider(name)
                 if isinstance(candidate, str) and candidate:
                     template = candidate
-            except Exception:
+                    self._logger.debug(f"Prompt '{name}' carregado do provider externo")
+            except Exception as e:
+                self._logger.warning(f"Provider externo falhou para '{name}': {e}")
                 template = None
+
+        # 3. Fallback para store em memória
         if template is None:
             try:
                 template = self._store[name]
+                self._logger.debug(f"Prompt '{name}' carregado do fallback em memória")
             except KeyError:
-                raise KeyError(f"Prompt '{name}' não encontrado.")
+                raise KeyError(
+                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, ou memória).")
 
         self._validate_placeholders(template, variables)
 
@@ -282,3 +332,45 @@ def get_prompt_advanced(prompt_name: str, *, namespace: Optional[str] = None, ve
                         hot_reload: Optional[bool] = None) -> str:
     return prompt_loader.get(prompt_name, namespace=namespace, version=version, lang=lang, model=model,
                              variables=variables, hot_reload=hot_reload)
+
+
+def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent") -> bool:
+    """
+    Atualiza um prompt existente criando uma nova versão ativa.
+    Usado pelo Meta-Agent para otimização dinâmica.
+    """
+    if not prompt_loader.use_database or not prompt_loader._prompt_repo:
+        logging.warning(f"Tentativa de atualizar prompt '{prompt_name}' sem banco de dados habilitado")
+        return False
+
+    try:
+        # Criar nova versão do prompt
+        new_prompt = prompt_loader._prompt_repo.create_prompt_version(
+            prompt_name=prompt_name,
+            prompt_text=new_text,
+            created_by=created_by,
+            activate=True  # Ativar automaticamente a nova versão
+        )
+
+        # Invalidar cache para forçar reload
+        prompt_loader.invalidate(lambda k: k[1] == prompt_name)
+
+        logging.info(f"Prompt '{prompt_name}' atualizado com sucesso. Nova versão: {new_prompt.version}")
+        return True
+    except Exception as e:
+        logging.error(f"Erro ao atualizar prompt '{prompt_name}': {e}")
+        return False
+
+
+def get_prompt_stats() -> Dict[str, Any]:
+    """
+    Obtém estatísticas dos prompts para análise do Meta-Agent.
+    """
+    if not prompt_loader.use_database or not prompt_loader._prompt_repo:
+        return {"error": "Banco de dados não habilitado"}
+
+    try:
+        return prompt_loader._prompt_repo.get_prompt_stats()
+    except Exception as e:
+        logging.error(f"Erro ao obter estatísticas de prompts: {e}")
+        return {"error": str(e)}

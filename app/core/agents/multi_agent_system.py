@@ -22,6 +22,8 @@ from prometheus_client import Counter, Histogram, Gauge
 
 from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
 from app.core.tools import get_all_tools
+from app.repositories.agent_config_repository import AgentConfigRepository
+from app.core.infrastructure.prompt_loader import get_prompt_advanced
 
 logger = logging.getLogger(__name__)
 
@@ -353,12 +355,17 @@ class SpecializedAgent:
         self.agent_id = agent_id or f"{role.value}_{uuid.uuid4().hex[:8]}"
         self.workspace = workspace
         self.executor: Optional[AgentExecutor] = None
+        self.config_repo = AgentConfigRepository()
         self._initialize_agent()
         ACTIVE_AGENTS_GAUGE.inc()
         logger.info(f"Agente '{self.agent_id}' ({role.value}) inicializado")
 
-    def _initialize_agent(self):
-        """Inicializa o executor do agente com prompt especializado."""
+    def _get_prompt_for_role(self, config) -> str:
+        """Obtém o prompt para o papel do agente (do banco ou fallback)."""
+        if config and config.prompt_template:
+            return config.prompt_template
+
+        # Fallback para prompts padrão
         prompts = {
             AgentRole.PROJECT_MANAGER: """Você é um Gerente de Projetos especializado em coordenar equipes de agentes.
 
@@ -494,10 +501,23 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
 {agent_scratchpad}"""
         }
 
-        prompt_text = prompts.get(self.role, prompts[AgentRole.PROJECT_MANAGER])
-        prompt = PromptTemplate.from_template(prompt_text)
+        return prompts.get(self.role, prompts[AgentRole.PROJECT_MANAGER])
 
-        # Selecionar LLM baseado no papel
+    def _get_llm_config_for_role(self, config):
+        """Obtém configuração do LLM para o papel do agente (do banco ou fallback)."""
+        if config and config.llm_config:
+            llm_role_str = config.llm_config.get('role', 'ORCHESTRATOR')
+            llm_priority_str = config.llm_config.get('priority', 'HIGH_QUALITY')
+
+            # Converter strings para enums
+            try:
+                llm_role = ModelRole[llm_role_str]
+                llm_priority = ModelPriority[llm_priority_str]
+                return llm_role, llm_priority
+            except KeyError as e:
+                logger.warning(f"Configuração LLM inválida no banco: {e}. Usando fallback.")
+
+        # Fallback para mapeamento padrão
         llm_mapping = {
             AgentRole.PROJECT_MANAGER: (ModelRole.ORCHESTRATOR, ModelPriority.HIGH_QUALITY),
             AgentRole.CODER: (ModelRole.CODE_GENERATOR, ModelPriority.HIGH_QUALITY),
@@ -507,7 +527,28 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
             AgentRole.OPTIMIZER: (ModelRole.CODE_GENERATOR, ModelPriority.HIGH_QUALITY),
         }
 
-        llm_role, llm_priority = llm_mapping.get(self.role, (ModelRole.ORCHESTRATOR, ModelPriority.LOCAL_ONLY))
+        return llm_mapping.get(self.role, (ModelRole.ORCHESTRATOR, ModelPriority.LOCAL_ONLY))
+
+    def _initialize_agent(self):
+        """Inicializa o executor do agente com prompt especializado."""
+        # Tentar carregar configuração do banco de dados
+        config = None
+        try:
+            config = self.config_repo.get_active_config(
+                agent_name=self.agent_id,
+                agent_role=self.role.value
+            )
+            if config:
+                logger.info(f"Configuração dinâmica carregada para {self.role.value} ({self.agent_id})")
+        except Exception as e:
+            logger.warning(f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
+
+        # Carregar prompt (do banco ou fallback)
+        prompt_text = self._get_prompt_for_role(config)
+        prompt = PromptTemplate.from_template(prompt_text)
+
+        # Selecionar LLM (do banco ou fallback)
+        llm_role, llm_priority = self._get_llm_config_for_role(config)
         llm = get_llm(role=llm_role, priority=llm_priority)
 
         # Pega as ferramentas e adiciona wrapper para corrigir parsing
@@ -527,12 +568,19 @@ IMPORTANTE: O Action Input deve ser JSON VÁLIDO em UMA LINHA.
 Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "overwrite": false}}
 """
 
+        # Configurações do executor (do banco ou padrão)
+        max_iterations = 15
+        max_execution_time = 180
+        if config and config.execution_config:
+            max_iterations = config.execution_config.get('max_iterations', 15)
+            max_execution_time = config.execution_config.get('max_execution_time', 180)
+
         self.executor = AgentExecutor(
             agent=agent,
             tools=wrapped_tools,  # Usa as ferramentas com wrapper
             verbose=True,
-            max_iterations=15,
-            max_execution_time=180,  # 3 minutos de timeout
+            max_iterations=max_iterations,
+            max_execution_time=max_execution_time,
             early_stopping_method="generate",
             handle_parsing_errors=parsing_error_message
         )
@@ -642,6 +690,16 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
     def get_messages(self) -> List[Dict[str, Any]]:
         """Recupera mensagens destinadas a este agente."""
         return self.workspace.get_messages_for(self.agent_id)
+
+    def update_config(self, config):
+        """Atualiza a configuração do agente dinamicamente."""
+        try:
+            logger.info(f"Atualizando configuração do agente {self.agent_id}")
+            self._initialize_agent()
+            logger.info(f"Configuração do agente {self.agent_id} atualizada com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao atualizar configuração do agente {self.agent_id}: {e}")
+            raise
 
     def shutdown(self):
         """Desliga o agente."""
@@ -758,6 +816,20 @@ Retorne em formato estruturado."""
             "workspace_artifacts": list(self.workspace.artifacts.keys()),
             "messages_exchanged": len(self.workspace.messages)
         }
+
+    def update_agent_config(self, agent_id: str, config) -> bool:
+        """Atualiza a configuração de um agente específico."""
+        agent = self.get_agent(agent_id)
+        if not agent:
+            logger.warning(f"Agente {agent_id} não encontrado para atualização de configuração")
+            return False
+
+        try:
+            agent.update_config(config)
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao atualizar configuração do agente {agent_id}: {e}")
+            return False
 
     def get_workspace_status(self) -> Dict[str, Any]:
         """Retorna status do workspace compartilhado."""
