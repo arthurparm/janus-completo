@@ -1,0 +1,8 @@
+<div *ngIf="current() as n" class="notif" [class.error]="n.type==='error'" [class.info]="n.type==='info'" [class.success]="n.type==='success'" [class.warning]="n.type==='warning'" role="alert" aria-live="assertive">
+  <div class="content">
+    <strong class="type">{{ n.type | titlecase }}</strong>
+    <span class="message">{{ n.title || n.message }}</span>
+    <span class="detail" *ngIf="n.detail">— {{ n.detail }}</span>
+  </div>
+  <button type="button" class="close" aria-label="Fechar" (click)="dismiss()">✕</button>
+</div>
