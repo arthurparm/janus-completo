@@ -1,0 +1,83 @@
+###
+# Knowledge API
+# Coleção atualizada para indexação, consulta e consolidação
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Health Check da Memória Semântica
+GET {{host}}{{api_v1_prefix}}/knowledge/health
+Accept: application/json
+
+###
+# Disparar Indexação da Base de Código
+POST {{host}}{{api_v1_prefix}}/knowledge/index
+Content-Type: application/json
+
+###
+# Estatísticas do Grafo
+GET {{host}}{{api_v1_prefix}}/knowledge/stats
+Accept: application/json
+
+###
+# Listar Entidades de Código (opcional: filtrar por arquivo)
+@file_path = 
+GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path={{file_path}}
+Accept: application/json
+
+###
+# Relacionamentos de uma Entidade
+@entity_name = ExampleClass
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/{{entity_name}}/relationships?direction=both&max_depth=2&limit=20&skip=0
+Accept: application/json
+
+###
+# Consulta ao Grafo (Graph RAG)
+POST {{host}}{{api_v1_prefix}}/knowledge/query
+Content-Type: application/json
+
+{
+  "query": "Como a consolidação de conhecimento é disparada?",
+  "limit": 5
+}
+
+###
+# Conceitos Relacionados
+POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
+Content-Type: application/json
+
+{
+  "concept": "RabbitMQ",
+  "max_depth": 2,
+  "limit": 10,
+  "skip": 0
+}
+
+###
+# Disparar Consolidação via Fila
+POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
+Content-Type: application/json
+
+{
+  "mode": "batch",
+  "limit": 10,
+  "min_score": 0.0,
+  "metadata": {
+    "trigger": "manual",
+    "source": "http-collection"
+  }
+}
+
+###
+# Listar funções que chamam uma função
+@function_name = _chunk_text
+GET {{host}}{{api_v1_prefix}}/knowledge/functions/calling?name={{function_name}}
+Accept: application/json
+
+###
+# Listar classes que implementam um protocolo/interface
+@protocol_name = KnowledgeConsolidator
+GET {{host}}{{api_v1_prefix}}/knowledge/classes/implementations?protocol={{protocol_name}}
+Accept: application/json

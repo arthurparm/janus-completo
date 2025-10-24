@@ -1,0 +1,22 @@
+###
+# Workers Orchestrator API
+# Controla start/stop e status de todos os workers
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Iniciar todos os workers
+POST {{host}}{{api_v1_prefix}}/workers/start-all
+Content-Type: application/json
+
+###
+# Status dos workers
+GET {{host}}{{api_v1_prefix}}/workers/status
+Accept: application/json
+
+###
+# Parar todos os workers
+POST {{host}}{{api_v1_prefix}}/workers/stop-all
+Content-Type: application/json

@@ -1,0 +1,91 @@
+###
+# Collaboration API
+# Coleção para tarefas multi-agente e status do workspace
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# Health do sistema de colaboração
+GET {{host}}{{api_v1_prefix}}/collaboration/health
+Accept: application/json
+
+###
+# Listar agentes ativos
+GET {{host}}{{api_v1_prefix}}/collaboration/agents
+Accept: application/json
+
+###
+# Criar tarefa
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
+Content-Type: application/json
+
+{
+  "description": "Analisar fluxo de consolidação e publicar tarefa",
+  "priority": "high",
+  "dependencies": []
+}
+
+###
+# Executar tarefa específica
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute
+Content-Type: application/json
+
+{
+  "task_id": "<preencher id>",
+  "agent_id": "<preencher agente>"
+}
+
+###
+# Listar tarefas (opcional: filtrar por status)
+@status = 
+GET {{host}}{{api_v1_prefix}}/collaboration/tasks?status={{status}}
+Accept: application/json
+
+###
+# Detalhes de uma tarefa
+@task_id = <preencher id>
+GET {{host}}{{api_v1_prefix}}/collaboration/tasks/{{task_id}}
+Accept: application/json
+
+###
+# Executar múltiplas tarefas em paralelo respeitando dependências
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute_parallel
+Content-Type: application/json
+
+{
+  "task_ids": null,
+  "concurrency": 4
+}
+
+###
+# Executar projeto completo
+POST {{host}}{{api_v1_prefix}}/collaboration/projects/execute
+Content-Type: application/json
+
+{
+  "description": "Projeto de validação do fluxo end-to-end"
+}
+
+###
+# Status do workspace
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/status
+Accept: application/json
+
+###
+# Obter artefato do workspace
+@artifact_key = last_consolidation_stats
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/{{artifact_key}}
+Accept: application/json
+
+###
+# Mensagens para um agente específico
+@agent_id = <preencher agente>
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/{{agent_id}}
+Accept: application/json
+
+###
+# Solicitar shutdown do sistema
+POST {{host}}{{api_v1_prefix}}/collaboration/system/shutdown
+Content-Type: application/json

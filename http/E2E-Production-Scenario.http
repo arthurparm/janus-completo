@@ -1,0 +1,429 @@
+###
+# E2E - Cenário de Produção Realista
+# Fluxo completo com sucesso, falhas e edge cases
+# Inclui headers, payloads e asserts com códigos de status
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+@token = 
+@correlation_id = {{$timestamp}}
+@client_version = 1.0.0
+
+############################################
+# 0) Pré-condições: Status inicial de workers
+############################################
+# @name workers_status_initial
+GET {{host}}{{api_v1_prefix}}/workers/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Workers status inicial: 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+%}
+
+############################################
+# 1) Workers: iniciar e validar falha de start duplicado
+############################################
+# @name workers_start_all
+POST {{host}}{{api_v1_prefix}}/workers/start-all
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Workers start-all: sucesso 200 ou já-rodando 400", function() {
+  client.assert([200, 400].includes(response.status), "esperado 200 ou 400");
+});
+%}
+
+# @name workers_start_all_duplicate
+POST {{host}}{{api_v1_prefix}}/workers/start-all
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Workers start-all duplicado: 400 problem+json", function() {
+  client.assert(response.status === 400);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+############################################
+# 2) Meta-Agent: health e heartbeat
+############################################
+# @name meta_health
+GET {{host}}{{api_v1_prefix}}/meta-agent/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Meta health: 200 e JSON", function() {
+  client.assert(response.status === 200);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+%}
+
+# @name meta_heartbeat_start
+POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "interval_minutes": 60
+}
+
+> {%
+client.test("Heartbeat start: 200 e mensagem", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.message === "string");
+});
+%}
+
+# @name meta_heartbeat_status
+GET {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Heartbeat status: 200 e inclui chave 'heartbeat_active'", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(body.hasOwnProperty("heartbeat_active"));
+});
+%}
+
+############################################
+# 3) Colaboração: criar agentes e tarefas
+############################################
+# @name agent_create_coder
+POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "role": "coder"
+}
+
+> {%
+client.test("Criar agente coder: 201 e JSON com agent_id", function() {
+  client.assert(response.status === 201);
+  const body = response.body.json();
+  client.assert(typeof body.agent_id === "string");
+  client.global.set("agent_id_coder", body.agent_id);
+});
+%}
+
+# @name agent_create_tester
+POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "role": "tester"
+}
+
+> {%
+client.test("Criar agente tester: 201 e JSON com agent_id", function() {
+  client.assert(response.status === 201);
+  const body = response.body.json();
+  client.assert(typeof body.agent_id === "string");
+  client.global.set("agent_id_tester", body.agent_id);
+});
+%}
+
+# @name task_create_ok
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "description": "Validar pipeline de consolidação",
+  "priority": "high",
+  "assigned_to": "{{agent_id_coder}}",
+  "dependencies": []
+}
+
+> {%
+client.test("Criar tarefa válida: 200 e contém id", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.id === "string");
+  client.global.set("task_id_ok", body.id);
+});
+%}
+
+# @name task_create_invalid_priority
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "description": "Tarefa com prioridade inválida",
+  "priority": "urgent",
+  "dependencies": []
+}
+
+> {%
+client.test("Criar tarefa inválida: 400 problem+json", function() {
+  client.assert(response.status === 400);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name tasks_list_invalid_status
+GET {{host}}{{api_v1_prefix}}/collaboration/tasks?status=invalid
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Listar tarefas com status inválido: 400 problem+json", function() {
+  client.assert(response.status === 400);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name task_details_ok
+GET {{host}}{{api_v1_prefix}}/collaboration/tasks/{{task_id_ok}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Detalhes da tarefa: 200 e inclui description", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.description === "string");
+});
+%}
+
+# @name execute_task_not_found
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "task_id": "task-inexistente",
+  "agent_id": "{{agent_id_tester}}"
+}
+
+> {%
+client.test("Executar tarefa inexistente: 404 problem+json", function() {
+  client.assert(response.status === 404);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name execute_parallel_all
+POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute_parallel
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "task_ids": null,
+  "concurrency": 4
+}
+
+> {%
+client.test("Executar paralelo: 200 e inclui resultados", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(body.hasOwnProperty("results"));
+});
+%}
+
+# @name workspace_messages_unknown_agent
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/agent_desconhecido
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Mensagens agente inexistente: 404 problem+json", function() {
+  client.assert(response.status === 404);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name workspace_artifact_not_found
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/nao_existe
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Artifact inexistente: 404 problem+json", function() {
+  client.assert(response.status === 404);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+############################################
+# 4) Conhecimento: health, index, queries e validações
+############################################
+# @name knowledge_health
+GET {{host}}{{api_v1_prefix}}/knowledge/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Knowledge health: 200 e JSON com status", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.status === "string");
+});
+%}
+
+# @name knowledge_index
+POST {{host}}{{api_v1_prefix}}/knowledge/index
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Indexação: 200 e inclui message/summary", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.message === "string");
+  client.assert(typeof body.summary === "string");
+});
+%}
+
+# @name entity_relationships_invalid_direction
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/Foo/relationships?direction=sideways&max_depth=2&limit=5&skip=0
+Accept: application/problem+json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Relacionamentos com direction inválido: 422 problem+json", function() {
+  client.assert(response.status === 422);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name classes_implementations_missing_param
+GET {{host}}{{api_v1_prefix}}/knowledge/classes/implementations
+Accept: application/problem+json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Classes implementations sem protocolo: 422 problem+json", function() {
+  client.assert(response.status === 422);
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("problem+json"));
+});
+%}
+
+# @name concepts_related_ok
+POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "concept": "LangChain",
+  "max_depth": 2,
+  "limit": 5,
+  "skip": 0
+}
+
+> {%
+client.test("Conceitos relacionados: 200 e results array", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(Array.isArray(body.results));
+});
+%}
+
+# @name consolidate_batch_publish
+POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "mode": "batch",
+  "limit": 5,
+  "min_score": 0.0,
+  "metadata": {"trigger": "e2e"}
+}
+
+> {%
+client.test("Consolidate publish: 200 e mensagem esperada", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(body.message === "Tarefa de consolidação publicada.");
+  client.assert(typeof body.stats === "object");
+});
+%}
+
+############################################
+# 5) Finalização: Workers stop e status
+############################################
+# @name workers_stop_all
+POST {{host}}{{api_v1_prefix}}/workers/stop-all
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Workers stop-all: 200 e JSON", function() {
+  client.assert(response.status === 200);
+});
+%}
+
+# @name workers_status_final
+GET {{host}}{{api_v1_prefix}}/workers/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Workers status final: 200 e tracked >= 0", function() {
+  client.assert(response.status === 200);
+  const body = response.body.json();
+  client.assert(typeof body.tracked === "number");
+});
+%}

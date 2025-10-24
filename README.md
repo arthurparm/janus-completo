@@ -1,6 +1,6 @@
 # Janus AI Architect
 
-Versão: `0.2.0` • Status: Ativo • Plataforma: API/Workers • Observabilidade: Prometheus/Grafana
+Versão: `1.0.0` • Status: Ativo • Plataforma: API/Workers • Observabilidade: Prometheus/Grafana
 
 Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA resilientes, com API unificada, roteamento dinâmico de LLMs, memória semântica, ferramentas dinâmicas, fluxo de aprendizagem e observabilidade completa. O design prioriza confiabilidade, desempenho e custo, operando com circuit breakers, orçamentos, caches, métricas e um meta-agente que otimiza a operação com feedback em ciclo fechado.
 
@@ -52,7 +52,7 @@ Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA r
   - Exemplo mínimo:
 ```
 APP_ENV=development
-APP_VERSION=0.2.0
+APP_VERSION=1.0.0
 APP_PORT=8000
 NEO4J_URL=bolt://neo4j:7687
 NEO4J_USER=neo4j
@@ -296,7 +296,8 @@ Observações:
 
 ## Manutenção e Atualizações
 
-- Versão atual: `0.2.0` (atualize `APP_VERSION` em `.env` e docs quando necessário)
+- Versão atual: `1.0.0` (atualize `APP_VERSION` em `.env` e docs quando necessário)
+- Release notes: `doc/Release-Notes-1.0.0.md`
 - Para detalhes de arquitetura, configuração, exemplos e troubleshooting:
   - Veja `doc/Architecture.md`, `doc/Configuration.md`, `doc/Usage.md`, `doc/Examples.md`, `doc/Troubleshooting.md`
 

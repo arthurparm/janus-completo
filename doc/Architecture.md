@@ -4,8 +4,8 @@ Este documento descreve a arquitetura do Janus AI Architect, organizada para gar
 
 ## Visão Geral
 
-- API (`FastAPI`) expõe endpoints REST sob ` /api/v1`.
-- Serviços de domínio coordenam lógica (LLM, Ferramentas, Memória, Aprendizado).
+- API (`FastAPI`) expõe endpoints REST sob ` /api/v1` e ` /healthz`.
+- Serviços de domínio coordenam lógica (LLM, Ferramentas, Memória, Aprendizado, Contexto, Observabilidade).
 - Núcleo cognitivo provê roteamento de LLMs, memória, reflexões e meta-agente.
 - Workers assíncronos processam tarefas de treinamento e consolidação.
 - Infraestrutura desacoplada via RabbitMQ, Neo4j (grafo) e Qdrant (vetores).
@@ -14,73 +14,76 @@ Este documento descreve a arquitetura do Janus AI Architect, organizada para gar
 ## Componentes Principais
 
 - API e Endpoints: `app/main.py`, `app/api/v1/endpoints/*.py`
-  - Exemplos: `learning.py` (aprendizado), `tools.py` (ferramentas), `llm.py` (LLM).
+  - Exemplos: `system_status.py` (status), `llm.py` (LLM), `context.py` (contexto), `observability.py` (observabilidade), `workers.py` (workers).
 - Serviços de Domínio: `app/services/*`
-  - `learning_service.py`, `tool_service.py`, `llm_service.py`, `knowledge_service.py`.
+  - `system_status_service.py`, `llm_service.py`, `context_service.py`, `observability_service.py`, `learning_service.py`, `knowledge_service.py`.
 - Repositórios: `app/repositories/*`
   - Integrações e persistência (Neo4j/Qdrant), cache e circuit breakers.
 - Núcleo Cognitivo: `app/core/*`
   - `llm_manager`, memória semântica, Reflexion, meta-agente, resilience utils.
 - Workers: `app/core/workers/*`
-  - `neural_training_worker.py`, `data_harvester.py`, consolidadores assíncronos.
+  - `neural_training_worker.py`, `router_worker.py`, `data_harvester.py`.
 - Infraestrutura: `app/core/infrastructure/*`
   - `message_broker.py` (RabbitMQ), `health_monitor.py`, rate limiting.
 - Configuração: `app/config.py`
   - Padrões, validações e variáveis para todos os módulos.
 
-## Fluxos Críticos
+## Fluxos de Dados
 
-1) Ferramentas Dinâmicas (Action Module)
-- Endpoints: `/api/v1/tools` (listar/detalhes), `/create/from-function`, `/create/from-api`, `DELETE /{tool_name}`.
-- Serviço registra e valida ferramentas, com categorias, permissões, tags e rate limit.
-- Memória semântica registra novas "habilidades" para uso futuro.
+1) Chamada de LLM (roteamento, cache e circuit breakers)
+- Cliente → `POST /api/v1/llm/invoke` → `llm_service` → `llm_manager` (seleção de provedor).
+- Circuit breakers: `GET /api/v1/llm/circuit-breakers` e reset via serviço (quando exposto).
+- Cache: `GET /api/v1/llm/cache/status` e `POST /api/v1/llm/cache/invalidate`.
+- Observabilidade registra latência, erros e quotas (Prometheus).
 
-2) Aprendizado (Neural Training)
-- Endpoints: `/harvest`, `/train`, `/training/status`, `/models`, `/evaluate`, `/stats`, `/experiments`.
-- `publish_neural_training_task` envia tarefas para `janus.neural.training` (RabbitMQ).
-- Worker `process_neural_training_task` executa treinamento; atualiza status, modelos e experimentos.
+2) Status do Sistema e Saúde de Serviços
+- `GET /healthz` para saúde geral da aplicação.
+- `GET /api/v1/system/status` para status detalhado (app, env, uptime, métricas).
+- `GET /api/v1/system/health/services` lista serviços: Agent, Knowledge, Memory, LLM Gateway com métricas.
 
-3) Memória Semântica (Semantic Memory / Knowledge)
-- Consolidação de conhecimento, indexação e consultas relacionadas.
-- Armazenamento: Neo4j (grafo de conceitos) e Qdrant (embeddings).
+3) Workers e Orquestração
+- `GET /api/v1/workers/status` para estado de workers rastreados.
+- `POST /api/v1/workers/start-all` / `POST /api/v1/workers/stop-all` para controle operacional.
+- Mensageria: filas RabbitMQ mapeadas em `message_broker.py` e inicialização em `app/main.py`.
 
-4) Roteamento de LLMs
-- Roteia chamadas entre OpenAI/Gemini/Ollama por prioridade e custo.
-- Circuit Breakers por provedor; cache de respostas; quotas e budgets por usuário/projeto.
-- Fallback para modelo local ("cérebro soberano") quando cloud indisponível.
+4) Contexto e Web Search
+- `GET /api/v1/context/current` retorna contexto ambiental atual.
+- `GET /api/v1/context/web-search` com `query`, `max_results`, `search_depth` para pesquisa web.
+- Cache web: `GET /api/v1/context/web-cache/status` e `POST /api/v1/context/web-cache/invalidate`.
 
-## Barramento de Mensagens (RabbitMQ)
+5) Observabilidade e Poison Pills
+- `GET /api/v1/observability/health/system`, `GET /api/v1/observability/metrics/summary`.
+- `GET /api/v1/observability/poison-pills/quarantined`, `POST /api/v1/observability/poison-pills/cleanup`, `GET /api/v1/observability/poison-pills/stats`.
 
-- Fila principal de treinamento: `janus.neural.training` (Enum `QueueName.NEURAL_TRAINING`).
-- Política: filas duráveis, reintentos com backoff e DLQ (quando configurado).
-- `message_broker.py` gerencia conexão, declaração de filas e validação de política.
+## Diagramas (Descrições)
 
-## Persistência e Memória
+- Fluxo Cognitivo: Input → Orquestrador → (Ferramentas locais ↔ LLM Cloud) → Memória (Neo4j/Qdrant) → Saída.
+- Data Path LLM: Frontend → API `/llm/invoke` → `llm_service` → `llm_manager` → Provedor → Cache/CBs → Métricas.
+- Orquestrador-Workers: API/Serviços → `publish` em RabbitMQ → Workers processam e emitem eventos/artefatos → Observabilidade coleta métricas.
+- Observabilidade: Coletores → Prometheus → Dashboards Grafana; API expõe saúde, resumo de métricas e quarentenas.
 
-- Neo4j: grafo de entidades/conceitos; queries e consolidação.
-- Qdrant: vetor semântico (similaridade) e indexação de embeddings.
-- Memória Hierárquica: curto prazo (TTL), episódica (eventos), semântica (conhecimento consolidado).
-- Quotas: limites por origem para itens/bytes e redaction de PII.
+## Decisões de Design (Justificativas)
 
-## Observabilidade e Resiliência
+- Orquestrador-Trabalhador: desacopla processamento intensivo e permite escala horizontal por fila/worker.
+- Multi-LLM com roteamento: otimiza custo/latência/qualidade, com fallback local para resiliência.
+- Memória Semântica dual (Neo4j + Qdrant): combina relações simbólicas e similaridade vetorial.
+- Circuit Breakers e Cache: reduzem impacto de falhas transitórias e custos com reuso de respostas.
+- API Unificada: simplifica integração e governança via `router.py` com `PUBLIC_API_MINIMAL` para modularidade.
+- Observabilidade integrada: sustenta confiabilidade em produção e feedback de melhorias.
 
-- Métricas: `/metrics` (Prometheus), health/liveness/readiness em `/healthz`, `/livez`, `/readyz`.
-- Circuit Breakers e retries com backoff exponencial em provedores e integrações.
-- Dashboards: `dashboards/janus_component_resilience_dashboard.json` (Grafana).
-- Logs estruturados por componente e workers.
+## Integridade e Comportamento do Sistema
 
-## Convenções e Versionamento
-
-- Prefixo de API: ` /api/v1` com tags por domínio (LLM, Tools, Learning, Knowledge).
-- Padrões de DTOs Pydantic para requests/responses; validações e erros claros.
-- Rate limiting por IP/API key; orçamentos por usuário/projeto para LLMs.
-- Configuração centralizada via `.env` carregada por `app/config.py`.
+- Contratos estáveis: DTOs Pydantic em `app/models/schemas.py` e validações em `app/config.py`.
+- Tolerância a falhas: CBs, retries, DLQ/Quarentena; workers isolam falhas sem derrubar o sistema.
+- Segurança operacional: sandbox para execução de ferramentas e rate limiting por IP/chave.
+- Compatibilidade: endpoints versionados sob ` /api/v1`, manutenção de backward-compat quando possível.
+- Observabilidade contínua: health endpoints e métricas garantem detecção e resposta rápida a anomalias.
 
 ## Referências de Código
 
-- Endpoints: `app/api/v1/endpoints/learning.py`, `tools.py`, `llm.py`
-- Serviços: `app/services/learning_service.py`, `tool_service.py`, `llm_service.py`
-- Workers: `app/core/workers/neural_training_worker.py`, `data_harvester.py`
-- Sistema de Treino: `app/core/workers/neural_training_system.py`
-- Infra: `app/core/infrastructure/message_broker.py`, `app/core/monitoring/health_monitor.py`
+- Endpoints: `app/api/v1/endpoints/system_status.py`, `llm.py`, `context.py`, `observability.py`, `workers.py`
+- Serviços: `app/services/system_status_service.py`, `llm_service.py`, `context_service.py`, `observability_service.py`
+- Repositórios: `app/repositories/llm_repository.py`, `observability_repository.py`, `context_repository.py`
+- Núcleo: `app/core/llm/*`, `app/core/optimization/reflexion_core.py`, `app/core/workers/*`
+- Infra: `app/core/infrastructure/message_broker.py`, `app/core/monitoring/*`
 - Configs: `app/config.py`, `app/models/schemas.py`
