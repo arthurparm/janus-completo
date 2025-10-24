@@ -12,7 +12,7 @@ export class Sprints implements OnInit, OnDestroy {
   private scrollHandler?: () => void;
   private readonly initialStaticCount = 4; // itens estáticos no HTML
   private isLoading = false;
-  private allLoaded = false;
+  allLoaded = false;
   displayedSprints: { id: number; title: string; focus: string; summary: string }[] = [];
   private allSprints = [
     {
