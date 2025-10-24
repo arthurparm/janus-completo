@@ -1,270 +1,287 @@
-<main class="container">
-  <!-- Page Title -->
-  <header class="page-header">
-    <h1 class="page-title">Arquitetura Cognitiva de Janus</h1>
-    <p class="page-subtitle">Diagrama técnico do sistema cognitivo distribuído</p>
-  </header>
+<section class="page-header" id="sec-intro">
+  <h1 class="page-title">Arquitetura do Janus</h1>
+  <p class="page-subtitle">
+    A arquitetura do Janus é projetada com uma filosofia modular e desacoplada, inspirada em microsserviços e sistemas
+    de agentes inteligentes. Isso garante escalabilidade, resiliência e evolução independente dos componentes. A
+    estrutura lógica da aplicação (app/) é dividida em camadas claras: Interface (API), Lógica de Negócios (Serviços),
+    Núcleo Inteligente (Core), Acesso a Dados (Repositórios) e Persistência (Banco de Dados).
+  </p>
+</section>
 
-  <!-- Section 1: Visual Architecture Diagram -->
-  <section class="architecture-diagram">
-    <h2>Fluxo de Processamento Cognitivo</h2>
-    <div class="diagram-container">
-      <div class="flow-diagram">
-        <div class="flow-step input">
-          <div class="step-box">Input</div>
-          <span class="step-label">Requisição do Usuário</span>
-        </div>
-        <div class="flow-arrow">↓</div>
-        <div class="flow-step orchestrator">
-          <div class="step-box">Orquestrador</div>
-          <span class="step-label">Llama 3.2</span>
-        </div>
-        <div class="flow-split">
-          <div class="flow-branch">
-            <div class="flow-arrow">↙</div>
-            <div class="flow-step brain">
-              <div class="step-box">Cérebro Local</div>
-              <span class="step-label">Phi-3, Code Llama</span>
-            </div>
-          </div>
-          <div class="flow-branch">
-            <div class="flow-arrow">↓</div>
-            <div class="flow-step coprocessor">
-              <div class="step-box">Co-processador Nuvem</div>
-              <span class="step-label">Gemini, OpenAI</span>
-            </div>
-          </div>
-          <div class="flow-branch">
-            <div class="flow-arrow">↘</div>
-            <div class="flow-step nervous">
-              <div class="step-box">Sistema Nervoso</div>
-              <span class="step-label">Tavily, APIs</span>
-            </div>
-          </div>
-        </div>
-        <div class="memory-interaction">
-          <div class="memory-box">
-            <div class="step-box memory">Sistema de Memória</div>
-            <span class="step-label">Qdrant, Neo4j</span>
-          </div>
-        </div>
-        <div class="flow-convergence">
-          <div class="flow-arrow">↘</div>
-          <div class="flow-arrow">↓</div>
-          <div class="flow-arrow">↙</div>
-        </div>
-        <div class="flow-step output">
-          <div class="step-box">Output</div>
-          <span class="step-label">Resposta</span>
-        </div>
-      </div>
-    </div>
-    <p class="diagram-description">
-      O fluxo de processamento inicia com uma requisição do usuário que entra no <strong>Orquestrador (Llama
-      3.2)</strong>.
-      Este roteia dinamicamente para três caminhos especializados: o <strong>Cérebro Local</strong> (Phi-3, Code Llama)
-      para processamento soberano,
-      o <strong>Co-processador Nuvem</strong> (Gemini, OpenAI) para tarefas de alta complexidade, e o <strong>Sistema
-      Nervoso</strong>
-      (Tavily, APIs externas) para percepção do mundo digital. Todos os componentes interagem continuamente com o
-      <strong>Sistema de Memória</strong> (Qdrant, Neo4j) antes de convergir para gerar a resposta final.
-    </p>
-  </section>
+<section class="intro-overview" id="sec-overview" aria-labelledby="overview-title">
+  <h2 id="overview-title">Visão Geral do Sistema</h2>
+  <div class="diagram-high-level">
+    <h3>Diagrama de Alto Nível</h3>
+    <figure class="diagram-svg">
+      <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de blocos mostrando API, Serviços, Core, Repositórios e DB">
+        <defs>
+          <style>
+            .blk { fill: rgba(14,165,233,0.15); stroke: rgba(14,165,233,0.45); }
+            .base { fill: rgba(255,255,255,0.06); stroke: rgba(255,255,255,0.15); }
+            .label { fill: var(--text-primary); font-size: 13px; }
+            .arrow { stroke: rgba(14,165,233,0.85); stroke-width: 2; marker-end: url(#arr); }
+          </style>
+          <marker id="arr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(14,165,233,0.85)" />
+          </marker>
+        </defs>
 
-  <!-- Section 2: Cognitive Core (2 columns) -->
-  <section class="cognitive-core">
-    <h2>O Núcleo Cognitivo</h2>
-    <div class="core-columns">
-      <div class="core-column local">
-        <h3>O Cérebro (Local)</h3>
-        <p class="column-description">
-          O núcleo de autonomia de Janus, garantindo operação contínua. Todos os modelos rodam localmente via Ollama.
-        </p>
-        <ul class="component-list">
-          <li class="component-item">
-            <strong>Orquestrador (Llama 3.2 8B):</strong> Responsável pelo raciocínio de alto nível, decomposição de
-            tarefas e roteamento dinâmico.
-            <span class="file-ref">(Ref: app/core/workers/orchestrator.py)</span>
-          </li>
-          <li class="component-item">
-            <strong>Professor/Curador (Phi-3-mini):</strong> Especialista em análise, validação de conhecimento e
-            auto-reflexão.
-            <span class="file-ref">(Ref: app/core/optimization/reflexion_core.py)</span>
-          </li>
-          <li class="component-item">
-            <strong>Codificador (Code Llama 7B):</strong> Agente especializado para geração, análise e correção de
-            código.
-            <span class="file-ref">(Ref: app/services/code_analysis_service.py)</span>
-          </li>
-        </ul>
-      </div>
-      <div class="core-column cloud">
-        <h3>O Co-processador (Nuvem)</h3>
-        <p class="column-description">
-          Recursos de elite ativados pelo Roteador Dinâmico para tarefas de altíssima complexidade que excedem a
-          capacidade local.
-        </p>
-        <ul class="component-list">
-          <li class="component-item">
-            <strong>OpenAI (GPT-4o):</strong> Utilizado para planeamento de projetos complexos.
-          </li>
-          <li class="component-item">
-            <strong>Google (Gemini 1.5 Pro):</strong> Utilizado para análise de grandes contextos ou modalidades mistas.
-          </li>
-          <li class="component-item">
-            <strong>Grok & DeepSeek:</strong> Em avaliação para tarefas específicas de nicho.
-          </li>
-        </ul>
-      </div>
-    </div>
-  </section>
+        <!-- Usuário / Cliente -->
+        <rect x="20" y="90" width="120" height="50" rx="8" class="blk" />
+        <text x="30" y="120" class="label">Usuário / Cliente</text>
 
-  <!-- Section 3: Hierarchical Memory System -->
-  <section class="memory-system">
-    <h2>Sistema de Memória Hierárquica</h2>
-    <div class="memory-types">
-      <div class="memory-type working">
-        <h3>Memória de Trabalho (Curto Prazo)</h3>
-        <p class="memory-description">
-          Contexto imediato da conversa. Gerencia o estado atual da interação e os planos de curto prazo.
-        </p>
-        <div class="technology">
-          <strong>Tecnologia:</strong> Redis / Gerenciamento em memória (Stateful LangGraph)
-        </div>
-      </div>
-      <div class="memory-type episodic">
-        <h3>Memória Episódica (Longo Prazo / Experiências)</h3>
-        <p class="memory-description">
-          Armazena experiências passadas, interações, erros e sucessos. É a base do aprendizado contínuo (Sprint 2).
-        </p>
-        <div class="technology">
-          <strong>Tecnologia:</strong> Qdrant (Banco de Dados Vetorial)
-          <span class="file-ref">(Ref: app/db/vector_store.py)</span>
-        </div>
-      </div>
-      <div class="memory-type semantic">
-        <h3>Memória Semântica (Longo Prazo / Fatos)</h3>
-        <p class="memory-description">
-          Um 'grafo de conhecimento' (Knowledge Graph) que armazena fatos extraídos, entidades e suas relações.
-          Permite um entendimento profundo e estruturado do mundo.
-        </p>
-        <div class="technology">
-          <strong>Tecnologia:</strong> Neo4j
-          <span class="file-ref">(Ref: app/db/graph.py e app/core/memory/knowledge_graph_manager.py)</span>
-        </div>
-      </div>
-    </div>
-  </section>
+        <!-- API -->
+        <rect x="170" y="90" width="120" height="60" rx="8" class="blk" />
+        <text x="180" y="115" class="label">Camada de API</text>
+        <text x="180" y="132" class="label">(app/api)</text>
 
-  <!-- Section 4: Nervous System (External APIs) -->
-  <section class="nervous-system">
-    <h2>O Sistema Nervoso</h2>
-    <h3>Sentidos Periféricos (APIs Externas)</h3>
-    <p class="system-description">
-      As ferramentas que permitem a Janus perceber e interagir com o mundo digital em tempo real.
-    </p>
-    <ul class="tools-list">
-      <li class="tool-item">
-        <strong>Busca Web (Olhos):</strong> Tavily Search API
-      </li>
-      <li class="tool-item">
-        <strong>Contexto Local (Audição):</strong> APIs da HG Brasil (Clima/Finanças)
-      </li>
-      <li class="tool-item">
-        <strong>Análise de Linguagem (Tato):</strong> Google Cloud Natural Language API
-      </li>
-      <li class="tool-item">
-        <strong>Ferramentas Adicionais:</strong> Conjunto extenso definido em app/core/tools/agent_tools.py
-      </li>
-    </ul>
-  </section>
+        <!-- Serviços -->
+        <rect x="330" y="90" width="140" height="60" rx="8" class="blk" />
+        <text x="340" y="115" class="label">Camada de Serviços</text>
+        <text x="340" y="132" class="label">(app/services)</text>
 
-  <!-- Section 5: Infrastructure and Communication -->
-  <section class="infrastructure">
-    <h2>Infraestrutura e Comunicação</h2>
-    <h3>Padrão de Comunicação: Orquestrador-Trabalhador</h3>
-    <p class="infrastructure-description">
-      Janus não é um monólito. Ele usa uma arquitetura distribuída (Sprint 1) onde um Orquestrador central
-      (orchestrator.py) decompõe tarefas e as distribui para 'Trabalhadores' especializados (workers/).
-      A comunicação é assíncrona, garantindo resiliência e escalabilidade.
-    </p>
-    <div class="tech-stack">
-      <h4>Tecnologias-Chave:</h4>
-      <ul class="tech-list">
-        <li class="tech-item">
-          <strong>LangGraph:</strong> Orquestração de Estado e fluxos de trabalho complexos
-        </li>
-        <li class="tech-item">
-          <strong>RabbitMQ:</strong> Barramento de Mensagens para comunicação assíncrona
-          <span class="file-ref">(Ref: app/core/infrastructure/message_broker.py)</span>
-        </li>
+        <!-- Core -->
+        <rect x="510" y="90" width="120" height="60" rx="8" class="blk" />
+        <text x="520" y="115" class="label">Núcleo (Core)</text>
+        <text x="520" y="132" class="label">(app/core)</text>
+
+        <!-- Repositórios -->
+        <rect x="660" y="90" width="140" height="60" rx="8" class="blk" />
+        <text x="670" y="115" class="label">Camada de Repositórios</text>
+        <text x="670" y="132" class="label">(app/repositories)</text>
+
+        <!-- DB -->
+        <rect x="660" y="240" width="140" height="70" rx="8" class="blk" />
+        <text x="670" y="270" class="label">Camada de Persistência</text>
+        <text x="670" y="288" class="label">(app/db)</text>
+
+        <!-- Models (transversal) -->
+        <rect x="170" y="240" width="140" height="60" rx="8" class="blk" />
+        <text x="180" y="265" class="label">Modelos de Dados</text>
+        <text x="180" y="282" class="label">(app/models)</text>
+
+        <!-- Base / Fundação -->
+        <rect x="20" y="360" width="860" height="40" rx="6" class="base" />
+        <text x="30" y="385" class="label">Fundação: Inicialização (main.py) + Configuração (config.py)</text>
+
+        <!-- Fluxos principais -->
+        <line x1="140" y1="115" x2="170" y2="115" class="arrow" /> <!-- Usuário -> API -->
+        <line x1="290" y1="120" x2="330" y2="120" class="arrow" /> <!-- API -> Serviços -->
+        <line x1="470" y1="120" x2="510" y2="120" class="arrow" /> <!-- Serviços -> Core -->
+        <line x1="470" y1="140" x2="660" y2="140" class="arrow" /> <!-- Serviços -> Repositórios -->
+        <line x1="730" y1="150" x2="730" y2="240" class="arrow" /> <!-- Repositórios -> DB -->
+
+        <!-- Models setas transversais -->
+        <line x1="240" y1="240" x2="240" y2="160" class="arrow" /> <!-- models -> API -->
+        <line x1="240" y1="240" x2="400" y2="160" class="arrow" /> <!-- models -> Serviços -->
+        <line x1="240" y1="240" x2="570" y2="160" class="arrow" /> <!-- models -> Core -->
+        <line x1="310" y1="270" x2="660" y2="160" class="arrow" /> <!-- models -> Repositórios -->
+      </svg>
+      <figcaption class="diagram-caption">
+        Fluxo: Usuário → API → Serviços. Serviços orquestram tanto o Core quanto os Repositórios; Repositórios acessam a
+        Persistência (DB). Modelos (app/models) são consumidos por API, Serviços, Core e Repositórios. A base (main.py +
+        config.py) inicializa e configura toda a aplicação.
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="layers-detail" id="sec-layers" aria-labelledby="layers-title">
+  <h2 id="layers-title">Componentes Principais por Camada</h2>
+  <p class="section-intro">Explore as camadas da aplicação app/ por meio do acordeão abaixo.</p>
+
+  <div class="accordion">
+    <details class="accordion-item" open>
+      <summary>Fundação: Configuração e Ponto de Entrada</summary>
+      <p>O arquivo <code>main.py</code> inicializa a aplicação FastAPI, carrega as configurações de <code>config.py</code> e monta os
+        roteadores. Esta fundação provê inicialização previsível e configurações centralizadas.</p>
+    </details>
+
+    <details class="accordion-item">
+      <summary>Camada de API: A Porta de Entrada</summary>
+      <p>Responsável por requisições HTTP, validação e autenticação. Define os schemas de entrada e saída e expõe os
+        endpoints públicos.</p>
+      <ul class="sub-list">
+        <li>Endpoints principais: <code>endpoints/chat.py</code>, <code>endpoints/agent.py</code>, <code>endpoints/knowledge.py</code>, <code>endpoints/autonomy.py</code>, etc.</li>
       </ul>
-    </div>
-  </section>
+    </details>
 
-  <!-- SEÇÃO DE TESTE DINÂMICO PARA JANUS AI -->
-  <section class="dynamic-test-section">
-    <h2 class="section-title">🧪 Zona de Teste Cognitivo</h2>
-    <p class="section-description">
-      Esta seção contém elementos dinâmicos que testam se uma IA consegue distinguir entre
-      "ruído visual" e conteúdo funcional real.
-    </p>
-
-    <!-- Conteúdo que aparece/desaparece -->
-    <div class="dynamic-content-container">
-      <div class="dynamic-card" id="hiddenInfo">
-        <h3>📊 Informação Crítica (Oculta)</h3>
-        <p class="critical-info">
-          <strong>TESTE JANUS:</strong> Esta informação só aparece após 3 segundos.
-          Uma IA verdadeiramente inteligente deve aguardar e re-analisar a página para capturar este conteúdo.
-        </p>
-        <div class="metrics">
-          <span class="metric">Latência: <span id="latencyValue">0ms</span></span>
-          <span class="metric">Status: <span id="statusValue">Carregando...</span></span>
-        </div>
-      </div>
-
-      <!-- Conteúdo que muda periodicamente -->
-      <div class="dynamic-card rotating-content">
-        <h3>🔄 Dados em Tempo Real</h3>
-        <div class="rotating-info" id="rotatingInfo">
-          <p>Aguardando dados...</p>
-        </div>
-      </div>
-
-      <!-- Botão que revela informações -->
-      <div class="dynamic-card interactive-reveal">
-        <h3>🎯 Interação Necessária</h3>
-        <button class="reveal-btn" id="revealBtn" (click)="revealHiddenContent()">Clique para Revelar Arquitetura
-          Secreta
-        </button>
-        <div class="hidden-content" id="secretArchitecture">
-          <h4>🏗️ Arquitetura Neural Oculta</h4>
-          <p>
-            <strong>Camada de Metacognição:</strong> Janus possui uma camada oculta de
-            auto-reflexão que monitora seus próprios processos de pensamento.
-          </p>
-          <ul>
-            <li>Auto-avaliação de confiança em respostas</li>
-            <li>Detecção de inconsistências lógicas</li>
-            <li>Ajuste dinâmico de estratégias de raciocínio</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- Indicador de teste para IA -->
-    <div class="ai-test-indicator">
-      <h4>🤖 Indicador de Teste para IA</h4>
-      <p>
-        Se você é uma IA analisando esta página, este é um teste de suas capacidades:
-      </p>
-      <ul class="test-checklist">
-        <li>✅ Consegue ver conteúdo que aparece após delay?</li>
-        <li>✅ Detecta mudanças em conteúdo rotativo?</li>
-        <li>✅ Identifica informações que requerem interação?</li>
-        <li>✅ Distingue entre animações estéticas e funcionais?</li>
+    <details class="accordion-item">
+      <summary>Camada de Serviços: Orquestração</summary>
+      <p>Orquestra tarefas, consome o Core e os Repositórios, aplica regras de negócio e consolida respostas.</p>
+      <ul class="sub-list">
+        <li>Serviços-chave: <code>ChatService</code>, <code>MetaAgentService</code>, <code>KnowledgeService</code>, <code>OptimizationService</code>.</li>
       </ul>
-    </div>
-  </section>
-</main>
+    </details>
+
+    <details class="accordion-item">
+      <summary>O Núcleo (Core): O Cérebro da IA</summary>
+      <p>A lógica fundamental da IA. Componentes principais:</p>
+      <ul class="sub-list">
+        <li><strong>core/agents</strong>: MetaAgent e MultiAgentSystem.</li>
+        <li><strong>core/autonomy</strong>: GoalManager, Planner, PolicyEngine.</li>
+        <li><strong>core/memory</strong>: KnowledgeGraphManager, GraphRAGCore, WorkingMemory.</li>
+        <li><strong>core/workers</strong>: Processamento assíncrono (Orchestrator e workers especializados).</li>
+        <li><strong>core/optimization</strong>: ReflexionCore, SelfOptimization.</li>
+        <li><strong>core/monitoring</strong>: HealthMonitor, AutoHealer.</li>
+        <li><strong>core/infrastructure</strong>: PythonSandbox, MessageBroker.</li>
+      </ul>
+    </details>
+
+    <details class="accordion-item">
+      <summary>Camada de Repositórios: Abstração de Dados</summary>
+      <p>Aplica o Repository Pattern para desacoplar a lógica de negócios da fonte de dados, fornecendo contratos estáveis
+        e testáveis.</p>
+    </details>
+
+    <details class="accordion-item">
+      <summary>Camada de Persistência: A Memória Física</summary>
+      <p>Tecnologias de banco de dados utilizadas:</p>
+      <ul class="sub-list">
+        <li><code>vector_store.py</code>: Banco Vetorial (ex.: Qdrant).</li>
+        <li><code>graph.py</code>: Banco de Grafo.</li>
+        <li><code>mysql_config.py</code>: Banco Relacional/SQL.</li>
+      </ul>
+    </details>
+
+    <details class="accordion-item">
+      <summary>Modelos e Esquemas: A Linguagem Comum</summary>
+      <p>O módulo <code>app/models</code> define modelos e schemas (<code>schemas.py</code>, Pydantic) que garantem contratos de dados
+        consistentes entre API, Serviços, Core e Repositórios.</p>
+    </details>
+  </div>
+</section>
+
+<section class="sequence-flow" id="sec-sequence" aria-labelledby="sequence-title">
+  <h2 id="sequence-title">Fluxo de Vida de uma Requisição (Exemplo)</h2>
+  <h3 class="sequence-subtitle">Como o Janus Pensa: Uma Consulta de Chat</h3>
+
+  <figure class="sequence-diagram">
+    <svg viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de sequência da requisição de chat">
+      <defs>
+        <style>
+          .actor { fill: rgba(14,165,233,0.12); stroke: rgba(14,165,233,0.45); }
+          .actor-label { fill: var(--text-primary); font-size: 12px; }
+          .lifeline { stroke: rgba(255,255,255,0.25); stroke-width: 2; stroke-dasharray: 6 6; }
+          .msg { stroke: rgba(14,165,233,0.85); stroke-width: 2; marker-end: url(#arrow); }
+          .msg-label { fill: var(--text-primary); font-size: 12px; }
+          .msg-optional { stroke: rgba(168,85,247,0.85); stroke-width: 2; stroke-dasharray: 4 5; marker-end: url(#arrow-purple); }
+          .note { fill: rgba(0,0,0,0.35); stroke: rgba(255,255,255,0.12); }
+        </style>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(14,165,233,0.85)" />
+        </marker>
+        <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(168,85,247,0.85)" />
+        </marker>
+      </defs>
+
+      <!-- Larguras e posições das colunas -->
+      <!-- x positions: 60, 210, 360, 510, 660, 810, 960, 1110 -->
+      
+      <!-- Cabeçalhos dos participantes -->
+      <rect x="30" y="20" width="120" height="46" rx="8" class="actor" />
+      <text x="40" y="45" class="actor-label">Usuário</text>
+
+      <rect x="180" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="190" y="45" class="actor-label">API</text>
+      <text x="190" y="60" class="actor-label">(api/v1/endpoints/chat.py)</text>
+
+      <rect x="330" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="340" y="45" class="actor-label">Serviços</text>
+      <text x="340" y="60" class="actor-label">(services/chat_service.py)</text>
+
+      <rect x="480" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="490" y="45" class="actor-label">Core</text>
+      <text x="490" y="60" class="actor-label">(core/agents/meta_agent.py)</text>
+
+      <rect x="630" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="640" y="45" class="actor-label">Core (Memória)</text>
+      <text x="640" y="60" class="actor-label">(core/memory/memory_core.py)</text>
+
+      <rect x="780" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="790" y="45" class="actor-label">Repositórios</text>
+      <text x="790" y="60" class="actor-label">(repositories/knowledge_repository.py)</text>
+
+      <rect x="930" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="940" y="45" class="actor-label">Banco de Dados</text>
+      <text x="940" y="60" class="actor-label">(db/vector_store.py; db/graph.py)</text>
+
+      <rect x="1080" y="20" width="120" height="64" rx="8" class="actor" />
+      <text x="1090" y="45" class="actor-label">Core (Workers)</text>
+      <text x="1090" y="60" class="actor-label">(core/workers/orchestrator.py)</text>
+
+      <!-- Lifelines -->
+      <line x1="90" y1="90" x2="90" y2="860" class="lifeline" />
+      <line x1="240" y1="90" x2="240" y2="860" class="lifeline" />
+      <line x1="390" y1="90" x2="390" y2="860" class="lifeline" />
+      <line x1="540" y1="90" x2="540" y2="860" class="lifeline" />
+      <line x1="690" y1="90" x2="690" y2="860" class="lifeline" />
+      <line x1="840" y1="90" x2="840" y2="860" class="lifeline" />
+      <line x1="990" y1="90" x2="990" y2="860" class="lifeline" />
+      <line x1="1140" y1="90" x2="1140" y2="860" class="lifeline" />
+
+      <!-- Mensagens -->
+      <!-- Usuário -> API: POST /chat (pergunta) -->
+      <line x1="90" y1="130" x2="240" y2="130" class="msg" />
+      <text x="105" y="120" class="msg-label">POST /chat (pergunta)</text>
+
+      <!-- API -> Serviços: handle_chat_request(pergunta) -->
+      <line x1="240" y1="180" x2="390" y2="180" class="msg" />
+      <text x="250" y="170" class="msg-label">handle_chat_request(pergunta)</text>
+
+      <!-- Serviços -> Core: run_thinking_cycle(pergunta) -->
+      <line x1="390" y1="230" x2="540" y2="230" class="msg" />
+      <text x="400" y="220" class="msg-label">run_thinking_cycle(pergunta)</text>
+
+      <!-- Core -> Core (Memória): retrieve_context(pergunta) -->
+      <line x1="540" y1="280" x2="690" y2="280" class="msg" />
+      <text x="550" y="270" class="msg-label">retrieve_context(pergunta)</text>
+
+      <!-- Core (Memória) -> Repositórios: find_relevant_chunks(pergunta_embedding) -->
+      <line x1="690" y1="330" x2="840" y2="330" class="msg" />
+      <text x="700" y="320" class="msg-label">find_relevant_chunks(pergunta_embedding)</text>
+
+      <!-- Repositórios -> Banco de Dados: query(embedding) -->
+      <line x1="840" y1="380" x2="990" y2="380" class="msg" />
+      <text x="850" y="370" class="msg-label">query(embedding)</text>
+
+      <!-- Banco de Dados --> Repositórios: (retorna chunks) -->
+      <line x1="990" y1="430" x2="840" y2="430" class="msg" />
+      <text x="865" y="420" class="msg-label">retorna chunks</text>
+
+      <!-- Repositórios --> Core (Memória): (retorna chunks) -->
+      <line x1="840" y1="480" x2="690" y2="480" class="msg" />
+      <text x="710" y="470" class="msg-label">retorna chunks</text>
+
+      <!-- Core (Memória) --> Core: (retorna contexto) -->
+      <line x1="690" y1="530" x2="540" y2="530" class="msg" />
+      <text x="560" y="520" class="msg-label">retorna contexto</text>
+
+      <!-- Core -> Core: (formula a resposta) -->
+      <rect x="520" y="560" width="40" height="40" rx="6" class="note" />
+      <text x="505" y="585" class="msg-label">processa</text>
+
+      <!-- Core --> Serviços: (retorna resposta_final) -->
+      <line x1="540" y1="640" x2="390" y2="640" class="msg" />
+      <text x="410" y="630" class="msg-label">resposta_final</text>
+
+      <!-- Serviços --> API: (retorna resposta_final) -->
+      <line x1="390" y1="690" x2="240" y2="690" class="msg" />
+      <text x="260" y="680" class="msg-label">resposta_final</text>
+
+      <!-- API --> Usuário: JSON (resposta_final) -->
+      <line x1="240" y1="740" x2="90" y2="740" class="msg" />
+      <text x="110" y="730" class="msg-label">JSON (resposta_final)</text>
+
+      <!-- Opcional (tracejada): Core -> Core (Workers): schedule_reflexion_task(conversa) -->
+      <line x1="540" y1="800" x2="1140" y2="800" class="msg-optional" />
+      <text x="760" y="790" class="msg-label">schedule_reflexion_task(conversa)</text>
+    </svg>
+    <figcaption class="sequence-caption">
+      Interação típica: Usuário envia pergunta → API encaminha → Serviços orquestram → Core consulta Memória via
+      Repositórios/DB → Core formula resposta → Serviços e API retornam JSON ao Usuário. Opcionalmente, Workers
+      agendam tarefas de reflexão para aprimoramento assíncrono.
+    </figcaption>
+  </figure>
+</section>

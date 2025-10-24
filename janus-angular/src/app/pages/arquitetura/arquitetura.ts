@@ -1,103 +1,104 @@
-import {Component, OnInit, OnDestroy} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
+import {NgIf, NgFor, DecimalPipe, JsonPipe} from '@angular/common';
+import {HttpClientModule} from '@angular/common/http';
+import {JanusApiService, SystemStatus, ServiceHealthItem, WorkersStatusItem, CircuitBreakerStatus, MetricsSummary, QuarantinedMessagesResponse} from '../../services/janus-api.service';
 
 @Component({
   selector: 'app-arquitetura',
-  imports: [],
+  imports: [NgIf, NgFor, HttpClientModule, DecimalPipe, JsonPipe],
   templateUrl: './arquitetura.html',
   styleUrl: './arquitetura.scss'
 })
-export class Arquitetura implements OnInit, OnDestroy {
-  private rotatingInterval: any;
-  private currentRotatingIndex = 0;
+export class Arquitetura implements OnInit {
+  // Estado em tempo real
+  apiHealthy: 'unknown' | 'ok' = 'unknown'
+  systemStatus?: SystemStatus
+  services: ServiceHealthItem[] = []
+  workers: WorkersStatusItem[] = []
+  llmProviders: any = null
+  llmHealth: any = null
+  llmCircuitBreakers: CircuitBreakerStatus[] = []
+  llmCacheTotal = 0
+  observabilitySystemHealth: any = null
+  metricsSummary?: MetricsSummary
+  contextInfo: any = null
 
-  // Conteúdo rotativo para testar capacidades de re-análise
-  rotatingContent = [
-    {
-      title: "Estado Inicial",
-      content: "Sistema em modo de espera. Aguardando entrada do usuário.",
-      metrics: {cpu: "12%", memory: "2.1GB", latency: "45ms"}
-    },
-    {
-      title: "Processamento Ativo",
-      content: "IA analisando requisição. Múltiplos modelos em execução simultânea.",
-      metrics: {cpu: "87%", memory: "4.8GB", latency: "120ms"}
-    },
-    {
-      title: "Síntese de Resposta",
-      content: "Consolidando resultados dos diferentes módulos cognitivos.",
-      metrics: {cpu: "65%", memory: "3.2GB", latency: "78ms"}
-    },
-    {
-      title: "Entrega Finalizada",
-      content: "Resposta gerada e otimizada. Sistema retornando ao estado base.",
-      metrics: {cpu: "23%", memory: "2.4GB", latency: "52ms"}
-    }
-  ];
+  // Observability extra
+  quarantinedMessages?: QuarantinedMessagesResponse
+  poisonPillStats?: any
 
-  ngOnInit() {
-    // Inicia rotação de conteúdo após 5 segundos
-    setTimeout(() => {
-      this.startContentRotation();
-    }, 5000);
+  loading = true
+
+  constructor(private api: JanusApiService) {}
+
+  ngOnInit(): void {
+    this.refreshAll()
   }
 
-  ngOnDestroy() {
-    if (this.rotatingInterval) {
-      clearInterval(this.rotatingInterval);
-    }
+  refreshAll(): void {
+    this.loading = true
+
+    // healthz
+    this.api.health().subscribe({
+      next: (h) => (this.apiHealthy = h.status === 'ok' ? 'ok' : 'unknown'),
+      error: () => (this.apiHealthy = 'unknown')
+    })
+
+    // system status
+    this.api.getSystemStatus().subscribe({
+      next: (s) => (this.systemStatus = s),
+      error: () => {}
+    })
+
+    // services
+    this.api.getServicesHealth().subscribe({
+      next: (resp) => (this.services = resp.services || []),
+      error: () => {}
+    })
+
+    // workers
+    this.api.getWorkersStatus().subscribe({
+      next: (resp) => (this.workers = resp.workers || []),
+      error: () => {}
+    })
+
+    // LLM subsystem
+    this.api.listLLMProviders().subscribe({ next: (p) => (this.llmProviders = p), error: () => {} })
+    this.api.getLLMHealth().subscribe({ next: (h) => (this.llmHealth = h), error: () => {} })
+    this.api.getLLMCircuitBreakers().subscribe({ next: (cb) => (this.llmCircuitBreakers = cb), error: () => {} })
+    this.api.getLLMCacheStatus().subscribe({ next: (cs) => (this.llmCacheTotal = cs.total_cached || 0), error: () => {} })
+
+    // Observability
+    this.api.getObservabilitySystemHealth().subscribe({ next: (oh) => (this.observabilitySystemHealth = oh), error: () => {} })
+    this.api.getObservabilityMetricsSummary().subscribe({ next: (ms) => (this.metricsSummary = ms), error: () => {} })
+
+    // Context
+    this.api.getCurrentContext().subscribe({ next: (ctx) => (this.contextInfo = ctx), error: () => {} })
+
+    // Extras de observabilidade
+    this.refreshObservabilityExtras()
+
+    this.loading = false
   }
 
-  startContentRotation() {
-    this.rotatingInterval = setInterval(() => {
-      this.currentRotatingIndex = (this.currentRotatingIndex + 1) % this.rotatingContent.length;
-      this.updateRotatingContent();
-    }, 4000);
+  startWorkers(): void {
+    this.api.startAllWorkers().subscribe({ next: () => this.refreshWorkers(), error: () => {} })
   }
 
-  updateRotatingContent() {
-    const element = document.getElementById('rotatingInfo');
-    if (element) {
-      const current = this.rotatingContent[this.currentRotatingIndex];
-      element.innerHTML = `
-        <div>
-          <h4 style="color: var(--orange); margin-bottom: 8px;">${current.title}</h4>
-          <p style="margin-bottom: 12px;">${current.content}</p>
-          <div class="metrics">
-            <span class="metric">CPU: ${current.metrics.cpu}</span>
-            <span class="metric">RAM: ${current.metrics.memory}</span>
-            <span class="metric">Latência: ${current.metrics.latency}</span>
-          </div>
-        </div>
-      `;
-    }
+  stopWorkers(): void {
+    this.api.stopAllWorkers().subscribe({ next: () => this.refreshWorkers(), error: () => {} })
   }
 
-  revealHiddenContent() {
-    const hiddenContent = document.getElementById('hiddenContent');
-    const button = document.getElementById('revealBtn');
-
-    if (hiddenContent && button) {
-      hiddenContent.classList.add('revealed');
-      button.textContent = 'Conteúdo Revelado ✓';
-      (button as HTMLButtonElement).disabled = true;
-
-      // Simula carregamento de dados críticos
-      setTimeout(() => {
-        const criticalData = document.getElementById('criticalData');
-        if (criticalData) {
-          criticalData.innerHTML = `
-            <strong>DADOS CRÍTICOS CARREGADOS:</strong><br>
-            • Chave de API: janus_${Math.random().toString(36).substr(2, 9)}<br>
-            • Token de Sessão: ${Date.now().toString(16)}<br>
-            • Endpoint Ativo: https://api.janus.ai/v2/cognitive-core<br>
-            • Status: OPERACIONAL ✓
-          `;
-        }
-      }, 1000);
-    }
+  cleanupQuarantine(): void {
+    this.api.cleanupQuarantine().subscribe({ next: () => this.refreshObservabilityExtras(), error: () => {} })
   }
 
-  getCurrentRotatingContent() {
-    return this.rotatingContent[this.currentRotatingIndex];
+  private refreshWorkers(): void {
+    this.api.getWorkersStatus().subscribe({ next: (resp) => (this.workers = resp.workers || []), error: () => {} })
+  }
+
+  private refreshObservabilityExtras(): void {
+    this.api.getQuarantinedMessages().subscribe({ next: (qm) => (this.quarantinedMessages = qm), error: () => {} })
+    this.api.getPoisonPillStats().subscribe({ next: (pps) => (this.poisonPillStats = pps), error: () => {} })
   }
 }
