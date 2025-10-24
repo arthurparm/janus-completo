@@ -1,25 +1,26 @@
 services:
   janus-api:
-    build: .
+    build:
+      context: ./janus
+      dockerfile: docker/Dockerfile
     container_name: janus_api
     env_file:
-      - .env
-      - .env.perf
+      - ./janus/config/.env
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/app/app
-      - ./workspace:/app/workspace
+      - ./janus/app:/app/app
+      - ./janus/workspace:/app/workspace
     command: [ "sh","-lc","/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 ${APP_SERVER_ARGS:- --reload --reload-exclude /app/workspace/}" ]
     depends_on:
       neo4j:
-        condition: service_healthy # Espera o Neo4j estar totalmente operacional
+        condition: service_healthy
       ollama:
-        condition: service_healthy # Espera a API do Ollama estar pronta
+        condition: service_healthy
       rabbitmq:
-        condition: service_healthy # Sprint 1: Espera RabbitMQ estar operacional
+        condition: service_healthy
       mysql:
-        condition: service_healthy # Configuration-as-Data: Espera MySQL estar operacional
+        condition: service_healthy
     networks:
       - janus-net
 
@@ -30,19 +31,17 @@ services:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - ./data/neo4j:/data # Persiste os dados do Neo4j
+      - ./janus/data/neo4j:/data
     environment:
-      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
-      # Habilita plugins essenciais. APOC é fundamental para muitas operações complexas.
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
       - NEO4J_PLUGINS=["apoc"]
-      # Tuning de memória para throughput: heap e pagecache (Neo4j 5 - usar __ para '.')
       - NEO4J_server_memory_heap_initial__size=2G
       - NEO4J_server_memory_heap_max__size=4G
       - NEO4J_server_memory_pagecache_size=8G
     networks:
       - janus-net
     healthcheck:
-      test: [ "CMD-SHELL", "cypher-shell -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1'" ]
+      test: [ "CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-password} 'RETURN 1'" ]
       interval: 5s
       timeout: 10s
       retries: 5
@@ -54,24 +53,20 @@ services:
     ports:
       - "6333:6333"
     volumes:
-      - ./data/qdrant:/qdrant/storage # Persiste os dados do Qdrant
+      - ./janus/data/qdrant:/qdrant/storage
     networks:
       - janus-net
-    # Observação: o image oficial do Qdrant não inclui utilitários como 'curl' ou 'wget'.
-    # O healthcheck anterior falhava por ausência dessas ferramentas, apesar do serviço estar saudável.
-    # Para evitar falso-negativo no status do container, removemos o healthcheck explícito aqui.
-    # Caso deseje reativar, use uma imagem personalizada que inclua 'curl' e cheque 'http://localhost:6333/healthz'.
 
   ollama:
     build:
-      context: .
-      dockerfile: ollama.Dockerfile
+      context: ./janus
+      dockerfile: docker/ollama.Dockerfile
     container_name: janus_ollama
     ports:
       - "11434:11434"
     volumes:
-      - ./data/ollama:/root/.ollama
-      - ./init-ollama.sh:/init-ollama.sh
+      - ./janus/data/ollama:/root/.ollama
+      - ./janus/scripts/init-ollama.sh:/init-ollama.sh
     networks:
       - janus-net
     entrypoint: [ "/bin/sh", "/init-ollama.sh" ]
@@ -84,20 +79,19 @@ services:
               capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /tmp/tags.json && grep -q '\"model\":\"llama3.1:8b\"' /tmp/tags.json && grep -q '\"model\":\"codellama:7b\"' /tmp/tags.json && grep -q '\"model\":\"phi3:mini\"' /tmp/tags.json" ]
-      interval: 15s   # Check less frequently
-      timeout: 10s    # Allow more time for the command to respond
-      retries: 20     # Allow more time for model pulls to complete
-      start_period: 60s # Grace period for the container to initialize before healthchecks start
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
 
-  # Configuration-as-Data: MySQL para configurações dinâmicas
   mysql:
     image: mysql:8.0
     container_name: janus_mysql
     ports:
       - "3306:3306"
     volumes:
-      - ./data/mysql:/var/lib/mysql
-      - ./sql/init:/docker-entrypoint-initdb.d
+      - ./janus/data/mysql:/var/lib/mysql
+      - ./janus/sql/init:/docker-entrypoint-initdb.d
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-janus_root}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-janus_config}
@@ -112,15 +106,14 @@ services:
       retries: 5
       start_period: 30s
 
-  # Sprint 1: Message Broker para Comunicação Distribuída
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: janus_rabbitmq
     ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # Management UI
+      - "5672:5672"
+      - "15672:15672"
     volumes:
-      - ./data/rabbitmq:/var/lib/rabbitmq
+      - ./janus/data/rabbitmq:/var/lib/rabbitmq
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-janus}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-janus_pass}
@@ -140,7 +133,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./janus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - janus-net
     depends_on:
@@ -156,8 +149,8 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./janus/grafana/provisioning:/etc/grafana/provisioning
+      - ./janus/grafana/dashboards:/var/lib/grafana/dashboards
     networks:
       - janus-net
     depends_on:

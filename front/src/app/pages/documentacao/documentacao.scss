@@ -1,0 +1,12 @@
+:host {
+  display: block;
+}
+
+.doc-page { padding: 16px; }
+.doc-page header { margin-bottom: 16px; }
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.doc-card { display: block; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; text-decoration: none; color: inherit; background: #fff; }
+.doc-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.external { margin-top: 24px; }
+.external ul { padding-left: 18px; }
+.external .hint { color: #6b7280; font-size: 0.95em; margin-top: 8px; }

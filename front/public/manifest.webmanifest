@@ -1,0 +1,17 @@
+{
+  "name": "Janus AI Architect",
+  "short_name": "Janus",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0F1A",
+  "theme_color": "#0A0F1A",
+  "description": "Frontend Angular do Janus AI Architect",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}

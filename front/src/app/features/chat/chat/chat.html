@@ -1,0 +1,25 @@
+<div class="chat-container">
+  <header class="chat-header">
+    <h2>Janus Chat</h2>
+    <div class="status">
+      <span *ngIf="loading">Carregando...</span>
+      <span *ngIf="!loading && conversationId">Conversa: {{ conversationId }}</span>
+    </div>
+  </header>
+
+  <main class="messages" id="messages">
+    <div *ngFor="let m of messages" class="message" [class.user]="m.role === 'user'" [class.assistant]="m.role !== 'user'">
+      <div class="bubble">
+        <pre>{{ m.content }}</pre>
+      </div>
+    </div>
+    <div *ngIf="!messages.length && !loading" class="empty">Comece a conversar abaixo.</div>
+  </main>
+
+  <footer class="input-bar">
+    <textarea [(ngModel)]="inputText" rows="3" placeholder="Digite sua mensagem..." [disabled]="loading"></textarea>
+    <button (click)="sendMessage()" [disabled]="loading || !inputText.trim()">Enviar</button>
+  </footer>
+
+  <div *ngIf="error" class="error">{{ error }}</div>
+</div>

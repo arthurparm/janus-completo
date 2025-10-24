@@ -83,3 +83,10 @@ package-lock.json
 # HTTP client scratch files
 http/*.http.cookies
 http/*.http.environment
+
+# Janus runtime data (containers)
+janus/data/
+janus/workspace/
+
+# Front-end build output
+front/dist/

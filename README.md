@@ -5,12 +5,12 @@ Versão: `1.0.0` • Status: Ativo • Plataforma: API/Workers • Observabilida
 Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA resilientes, com API unificada, roteamento dinâmico de LLMs, memória semântica, ferramentas dinâmicas, fluxo de aprendizagem e observabilidade completa. O design prioriza confiabilidade, desempenho e custo, operando com circuit breakers, orçamentos, caches, métricas e um meta-agente que otimiza a operação com feedback em ciclo fechado.
 
 - Repositório e documentação detalhada:
-  - `doc/Architecture.md` — arquitetura completa e referências de código
-  - `doc/Configuration.md` — variáveis e opções de configuração (Pydantic)
-  - `doc/Usage.md` — guia prático de uso (local/Docker) e cURL
-  - `doc/Examples.md` — exemplos Python/cURL para ferramentas, treino e LLMs
-  - `doc/Troubleshooting.md` — diagnóstico e resolução de problemas
-  - Histórico/Referência: `doc/DOCUMENTACAO JANUS.md`
+  - `docs/Architecture.md` — arquitetura completa e referências de código
+  - `docs/Configuration.md` — variáveis e opções de configuração (Pydantic)
+  - `docs/Usage.md` — guia prático de uso (local/Docker) e cURL
+  - `docs/Examples.md` — exemplos Python/cURL para ferramentas, treino e LLMs
+  - `docs/Troubleshooting.md` — diagnóstico e resolução de problemas
+  - Histórico/Referência: `docs/DOCUMENTACAO JANUS.md`
 
 
 ## 1. Visão Geral do Sistema
@@ -48,7 +48,7 @@ Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA r
 - Dependências Python: conforme `requirements.txt`
 - GPU (opcional): suporte a `Ollama` com GPU NVIDIA se disponível
 - Configuração por `.env`:
-  - Consulte `doc/Configuration.md` para lista completa e validações
+  - Consulte `docs/Configuration.md` para lista completa e validações
   - Exemplo mínimo:
 ```
 APP_ENV=development
@@ -94,6 +94,17 @@ OLLAMA_BASE_URL=http://ollama:11434
 
 ## 4. Estrutura do Projeto
 
+A organização do Janus segue padrões modernos para separar claramente frontend, backend, documentação e infraestrutura.
+
+- `front/`: aplicação Angular (UI)
+- `Janus/`: backend (Python/FastAPI, workers, serviços)
+- `docs/`: documentação em Markdown
+- `docker/`: Dockerfiles de base; `docker-compose.yml` permanece na raiz
+- `scripts/`: utilitários e automações
+- `http/`: coleções de requisições para teste manual
+
+Para detalhes completos, consulte `docs/Project-Structure.md`.
+
 ```
 janus-1.0/
 ├── app/                  # Código da aplicação (API, serviços, core)
@@ -106,7 +117,7 @@ janus-1.0/
 │   └── main.py           # FastAPI app (inclui /healthz, /readyz)
 ├── http/                 # Coleções HTTP (exercícios e testes)
 ├── grafana/              # Dashboards (JSON) para importação
-├── doc/                  # Documentação detalhada
+├── docs/                 # Documentação detalhada
 ├── docker-compose.yml    # Orquestração de serviços
 ├── requirements.txt      # Dependências Python
 ├── pyproject.toml        # Configuração de build/ferramentas
@@ -174,7 +185,7 @@ janus-1.0/
 ```
 [Request] -> [Router] -> [CB/Cache/Budget] -> [Provider] -> [Result]
                   |           |                 \-> Fallback (Ollama)
-               Observability  +----> Metrics/Logs -> Grafana
+               Observabilidade  +----> Metrics/Logs -> Grafana
 ```
 
 
@@ -211,7 +222,7 @@ curl -X POST http://localhost:8000/api/v1/learning/train \
 curl -s http://localhost:8000/api/v1/learning/train/status?job_id=12345
 ```
 
-- Mais exemplos: consulte `doc/Examples.md` e as coleções em `http/`
+- Mais exemplos: consulte `docs/Examples.md` e as coleções em `http/`
 
 
 ## 8. Documentação da API
@@ -254,56 +265,77 @@ Observações:
 - Tratamento de erros via `app/api/problem_details.py` e `exception_handlers.py`
 
 
-## 9. Guia de Contribuição
+# Contribuindo para o Janus
 
-- Pré-requisitos:
-  - Python 3.11, Docker/Compose, `.env` configurado
-  - Consulte `doc/Configuration.md` e `.aiassistant/rules/diretrizes de codigo.md`
-- Fluxo de contribuição:
-  - Abra uma issue descrevendo claramente motivação, escopo e impacto
-  - Faça um fork/branch (`feature/xyz`, `fix/abc`), mantenha commits pequenos e claros
-  - Siga o estilo do projeto e mantenha mudanças focadas (cirúrgicas)
-  - Cubra com testes quando aplicável (`pytest`) e valide API localmente
-  - Abra um PR com descrição técnica, screenshots (se aplicável) e checklist:
-    - [ ] Passa em testes locais
-    - [ ] Mantém compatibilidade com `docker-compose`
-    - [ ] Atualiza docs quando necessário (README, `doc/*`)
-- Padrões e qualidade:
-  - Logs estruturados, mensagens claras e métricas quando relevante
-  - Evite refatorações amplas não solicitadas; preserve estilo e contratos
-  - Respeite validações Pydantic em `app/config.py`
-- Comunicação:
-  - Use Issues/PRs para decisões; inclua links a código/arquitetura
+Obrigado por contribuir! Este guia define convenções, ferramentas e o fluxo de trabalho para manter o projeto organizado, consistente e saudável.
 
+## Pré-requisitos
+- Python `3.11` e `pip`
+- Node.js `>=18` para o frontend Angular
+- Docker/Compose (opcional, para ambiente de serviços)
+- Variáveis `.env` configuradas (veja `docs/Configuration.md`)
 
-## 10. Licença e Créditos
+## Setup de Desenvolvimento
+- Backend (Python):
+  - Crie o ambiente: `py -3.11 -m venv .venv && .venv\\Scripts\\activate`
+  - Instale deps: `pip install -r Janus/requirements.txt`
+  - (Opcional) Instale ferramentas de dev: `pip install ruff black pytest pre-commit`
+  - Ative hooks: `pre-commit install`
+- Frontend (Angular):
+  - Instale deps: `npm install` dentro de `front/`
+  - Rodar dev: `npm start`
 
-- Licença: MIT (adicione/consulte arquivo `LICENSE` quando disponível)
-- Créditos:
-  - Arquitetura e desenvolvimento: time Janus
-  - Terceiros: OpenAI, Google, Anthropic, Ollama, FastAPI, Neo4j, Qdrant, RabbitMQ, Prometheus, Grafana, LangChain/LangGraph e comunidade OSS
+## Convenções de Commits (Conventional Commits)
+Use mensagens de commit descritivas seguindo o padrão:
+```
+<tipo>(escopo opcional): descrição curta
 
+[corpo opcional]
+[rodapé opcional]
+```
+Tipos comuns: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `build`, `ci`, `chore`, `perf`, `revert`.
+Exemplos:
+- `feat(api): adicionar endpoint /api/v1/tools`
+- `fix(memory): corrigir cache nulo em Qdrant`
+- `docs(readme): alinhar doc/ para docs/`
 
-## Observabilidade e Screenshots
+### Branches
+- `feature/<slug>` para novas funcionalidades
+- `fix/<slug>` para correções
+- `chore/<slug>` para manutenção
 
-- Dashboards disponíveis em `grafana/dashboards/*.json` (importe no Grafana)
-- Recomenda-se criar capturas de tela para:
-  - Visão Geral (latência, taxa de erro, throughput)
-  - Desempenho de LLMs (latência, custo, acertos por tarefa)
-- Como capturar:
-  - Acesse `http://localhost:3000`, abra o dashboard e salve capturas como `grafana/screenshots/*.png`
+### Pull Requests
+Inclua na descrição:
+- Motivação, escopo e impacto
+- Screenshots (se aplicável)
+- Checklist:
+  - [ ] Passa em linters e formatação
+  - [ ] Testes executam localmente (`pytest`) quando aplicável
+  - [ ] Mantém compatibilidade com `docker-compose`
+  - [ ] Atualiza documentação quando necessário
 
+## Padrões de Código e Ferramentas
+- Python:
+  - Lint: `ruff` — `ruff check Janus/app`
+  - Formatação: `black` — `black Janus/app`
+  - Hooks: `pre-commit` (ver `.pre-commit-config.yaml`)
+- Angular:
+  - Lint: `eslint` — `npm run lint`
+  - Formatação: `prettier` (config em `package.json`)
 
-## Manutenção e Atualizações
+## Estrutura de Pastas
+- Código fonte:
+  - Backend: `Janus/app/...`
+  - Frontend: `front/src/...`
+- Documentação: `docs/`
+- Configuração: `config/` (`.env.example`, Prometheus/Grafana/Compose)
+- Testes: `Janus/tests/`
+- Recursos estáticos (dashboards, assets): `grafana/`, `front/public/`
 
-- Versão atual: `1.0.0` (atualize `APP_VERSION` em `.env` e docs quando necessário)
-- Release notes: `doc/Release-Notes-1.0.0.md`
-- Para detalhes de arquitetura, configuração, exemplos e troubleshooting:
-  - Veja `doc/Architecture.md`, `doc/Configuration.md`, `doc/Usage.md`, `doc/Examples.md`, `doc/Troubleshooting.md`
+## Dicas
+- Mantenha mudanças pequenas e focadas
+- Evite refatorações amplas sem necessidade
+- Use logs e métricas quando relevante
+- Respeite validações em `app/config.py`
 
-
-## Notas finais
-
-- Endpoints de Conhecimento e demais coleções de teste estão disponíveis em `http/`
-- Sprints históricos foram descontinuados como documentação; preferir os docs centrais (`doc/*`) e coleções HTTP
-- Em caso de dúvida operacional, consulte primeiro `doc/Troubleshooting.md`
+Obrigado por manter o projeto saudável e bem organizado!

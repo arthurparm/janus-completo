@@ -1,0 +1,39 @@
+<section class="doc-page">
+  <header>
+    <h1>Documentação</h1>
+    <p>Recursos e navegação para entender e operar o Janus.</p>
+  </header>
+
+  <div class="doc-grid">
+    <a class="doc-card" [routerLink]="['/arquitetura']">
+      <h3>Arquitetura</h3>
+      <p>Visão do sistema, serviços e workers.</p>
+    </a>
+
+    <a class="doc-card" [routerLink]="['/painel']">
+      <h3>Painel</h3>
+      <p>Status do sistema, saúde de serviços e workers.</p>
+    </a>
+
+    <a class="doc-card" [routerLink]="['/sprints']">
+      <h3>Sprints</h3>
+      <p>Planejamento e progresso de entregas.</p>
+    </a>
+
+    <a class="doc-card" [routerLink]="['/chat']">
+      <h3>Chat</h3>
+      <p>Interaja com o meta-agente e consulte conhecimento.</p>
+    </a>
+  </div>
+
+  <section class="external">
+    <h2>Guias e Referências</h2>
+    <ul>
+      <li><a href="/README.md" target="_blank">Guia rápido (README)</a></li>
+      <li><a href="/docs/Architecture.md" target="_blank">Arquitetura detalhada (Markdown)</a></li>
+      <li><a href="/http/E2E-Production-Scenario.http" target="_blank">Coleção de HTTP (produção)</a></li>
+      <li><a href="/http/Collaboration.http" target="_blank">Coleção de HTTP (colaboração)</a></li>
+    </ul>
+    <p class="hint">Se algum link não abrir, verifique se o servidor está servindo arquivos estáticos ou acesse pelo repositório.</p>
+  </section>
+</section>
