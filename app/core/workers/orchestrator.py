@@ -25,6 +25,8 @@ async def start_all_workers():
     from app.core.workers.router_worker import start_router_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
     from app.core.workers.professor_agent_worker import start_professor_agent_worker
+    from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
+    from app.core.workers.autonomy_worker import start_autonomy_worker
 
     logger.info("Iniciando orquestrador de workers...")
 
@@ -71,6 +73,13 @@ async def start_all_workers():
 
     professor_agent_task = await start_professor_agent_worker()
     workers.append(professor_agent_task)
+
+    sandbox_agent_task = await start_sandbox_agent_worker()
+    workers.append(sandbox_agent_task)
+
+    # AutonomyWorker (batimento cardíaco de intenção)
+    autonomy_task = await start_autonomy_worker()
+    workers.append(autonomy_task)
 
     logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

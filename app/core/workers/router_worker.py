@@ -28,6 +28,25 @@ def _infer_first_agent(original_goal: str) -> str:
         return "coder"
 
 
+def _contains_knowledge_payload(state: TaskState) -> bool:
+    """Heurística: decide se o TaskState contém conhecimento a ser consolidado."""
+    payload = state.data_payload or {}
+    tool_text = (payload.get("tool_output") or "").strip()
+    sandbox_text = (payload.get("sandbox_output") or "").strip()
+    sandbox_err = (payload.get("sandbox_error") or "").strip()
+    # Palavras-chave no objetivo original (pt/en)
+    goal = (state.original_goal or "").lower()
+    goal_kws = [
+        "pesquisar", "research", "buscar", "estudar", "study", "aprender", "learn",
+        "ler", "read", "pdf", "document", "docs", "doc", "article", "artigo", "context"
+    ]
+    goal_match = any(k in goal for k in goal_kws)
+    # Conteúdo suficiente vindo de ferramenta/sandbox
+    has_tool = len(tool_text) >= 256
+    has_sandbox = len(sandbox_text) >= 64 and not sandbox_err
+    return has_tool or has_sandbox or goal_match
+
+
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_ROUTER.value,
     extract_message_id=lambda task: task.task_id,
@@ -44,12 +63,54 @@ async def process_router_task(task: TaskMessage) -> None:
             state.next_agent_role = _infer_first_agent(state.original_goal)
         state.current_agent_role = "router"
 
+        # Nova lógica: se tarefa concluída com conhecimento, encaminhar ao consolidator
+        status = (state.status or "").lower()
+        success_like = status in ("success", "completed", "done")
+        should_consolidate = success_like and _contains_knowledge_payload(state)
+        if should_consolidate:
+            # Publica tarefa de consolidação em paralelo sem alterar o fluxo principal
+            payload = state.data_payload or {}
+            content = (payload.get("tool_output") or payload.get("sandbox_output") or state.original_goal or "").strip()
+            origin_agent = None
+            try:
+                for ev in reversed(state.history):
+                    ar = ev.get("agent_role")
+                    if ar and ar != "router":
+                        origin_agent = ar
+                        break
+            except Exception:
+                origin_agent = None
+            meta = {
+                "source_task_id": state.task_id,
+                "original_goal": state.original_goal,
+                "origin": "router",
+                "source_agent": origin_agent,
+                "status": state.status,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            side_msg = TaskMessage(
+                task_id=state.task_id,
+                task_type="knowledge_consolidation",
+                payload={
+                    "mode": "single",
+                    "experience_id": state.task_id,
+                    "experience_content": content,
+                    "metadata": meta,
+                },
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+            broker = await get_broker()
+            await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=side_msg)
+            route_note = f"next={state.next_agent_role} (memory side-published)"
+        else:
+            route_note = f"next={state.next_agent_role}"
+
         # Registrar no histórico
         state.history.append(
             {
                 "agent_role": "router",
                 "action": "routed",
-                "notes": f"next={state.next_agent_role}",
+                "notes": route_note,
                 "timestamp": datetime.utcnow().timestamp(),
             }
         )

@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -20,10 +20,11 @@ from qdrant_client import QdrantClient
 from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
-from app.core.memory.memory_core import decrypt_text
+from app.core.memory.memory_core import decrypt_text, get_memory_db
 from app.core.memory.graph_guardian import graph_guardian
 from app.db.graph import get_graph_db
 from app.db.vector_store import get_qdrant_client
+from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,28 @@ class KnowledgeConsolidator:
             logger.warning(f"Falha ao verificar saúde do Neo4j: {e}")
 
         self._initialized = True
+
+    def _chunk_text(self, text: str, chunk_size: int = 2000, overlap: int = 200) -> List[str]:
+        """Divide texto em chunks com overlap para extração robusta."""
+        try:
+            if not isinstance(text, str):
+                return []
+            t = text.strip()
+            if len(t) <= chunk_size:
+                return [t]
+            chunks: List[str] = []
+            start = 0
+            end = chunk_size
+            while start < len(t):
+                chunk = t[start:end]
+                chunks.append(chunk)
+                if end >= len(t):
+                    break
+                start = max(0, end - overlap)
+                end = start + chunk_size
+            return chunks
+        except Exception:
+            return [text]
 
     async def _extract_knowledge_with_llm(
             self,
@@ -369,21 +392,49 @@ class KnowledgeConsolidator:
         """
         Consolida uma experiência episódica em conhecimento semântico.
         """
+        await self._initialize()
         start = time.perf_counter()
 
+        # 1) Salvar na memória episódica (Qdrant), com robustez do MemoryCore
         try:
-            extracted = await self._extract_knowledge_with_llm(experience_content, metadata)
-            num_entities, num_rels = await self._persist_to_neo4j(
-                experience_id,
-                extracted,
-                metadata
-            )
+            db = await get_memory_db()
+            exp_type = str((metadata or {}).get("type") or "knowledge_event")
+            exp = Experience(id=experience_id, type=exp_type, content=experience_content, metadata=metadata)
+            await db.amemorize(exp)
+        except Exception:
+            logger.debug("Falha ao salvar experiência na memória episódica", exc_info=True)
+
+        # 2) Chunking do conteúdo para extração por partes
+        chunk_size = int(getattr(settings, "CONSOLIDATION_CHUNK_SIZE", 2000))
+        overlap = int(getattr(settings, "CONSOLIDATION_CHUNK_OVERLAP", 200))
+        chunks = self._chunk_text(experience_content, chunk_size=chunk_size, overlap=overlap)
+
+        total_entities = 0
+        total_rels = 0
+        total_insights = 0
+
+        try:
+            for idx, chunk in enumerate(chunks):
+                # Enriquecer metadata com info de chunk
+                md = dict(metadata or {})
+                md["chunk_index"] = idx
+                md["chunk_total"] = len(chunks)
+                extracted = await self._extract_knowledge_with_llm(chunk, md)
+                num_entities, num_rels = await self._persist_to_neo4j(
+                    experience_id,
+                    extracted,
+                    md
+                )
+                total_entities += num_entities
+                total_rels += num_rels
+                total_insights += len(extracted.get("insights", []))
+
             elapsed = time.perf_counter() - start
             result = {
                 "experience_id": experience_id,
-                "entities_created": num_entities,
-                "relationships_created": num_rels,
-                "insights_count": len(extracted.get("insights", [])),
+                "entities_created": total_entities,
+                "relationships_created": total_rels,
+                "insights_count": total_insights,
                 "elapsed_seconds": elapsed,
                 "status": "success"
             }
@@ -391,7 +442,7 @@ class KnowledgeConsolidator:
             CONSOLIDATION_LATENCY.labels("success").observe(elapsed)
             logger.info(
                 f"Consolidação concluída para experiência {experience_id}: "
-                f"{num_entities} entidades, {num_rels} relacionamentos em {elapsed:.2f}s"
+                f"{total_entities} entidades, {total_rels} relacionamentos em {elapsed:.2f}s"
             )
             return result
         except Exception as e:

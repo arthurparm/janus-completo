@@ -62,11 +62,12 @@ async def process_code_task(task: TaskMessage) -> None:
             timeout_seconds=None,
         )
         code = result.get("response", "")
+        lines_count = code.count("\n") + 1
         state.data_payload["script_code"] = code
         state.history.append({
             "agent_role": "coder",
             "action": "code_generated",
-            "notes": f"lines={code.count('\n') + 1}",
+            "notes": f"lines={lines_count}",
             "timestamp": datetime.utcnow().timestamp(),
         })
 

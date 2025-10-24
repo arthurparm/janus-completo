@@ -1,6 +1,8 @@
 import structlog
 from typing import Dict, Any, List, Optional
 from fastapi import Request
+from datetime import datetime
+import uuid
 
 from app.repositories.collaboration_repository import CollaborationRepository, CollaborationRepositoryError
 from app.core.agents import AgentRole
@@ -163,24 +165,80 @@ class CollaborationService:
         Fallback: roteia para `JANUS.tasks.router` quando indefinido.
         """
         role = (task_state.next_agent_role or "router").lower()
+        # Mapear filas por papel
         if role in ("coder", "code", "code_agent"):
             queue = QueueName.TASKS_AGENT_CODER.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
         elif role in ("professor", "review", "professor_agent", "curator"):
             queue = QueueName.TASKS_AGENT_PROFESSOR.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
         elif role in ("sandbox", "tester", "test"):
             queue = QueueName.TASKS_AGENT_SANDBOX.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+        elif role in ("knowledge_consolidator", "knowledge", "consolidator", "librarian", "memory"):
+            # Publicação especial para o pipeline de consolidação
+            queue = QueueName.KNOWLEDGE_CONSOLIDATION.value
+            payload = task_state.data_payload or {}
+            content = payload.get("tool_output") or payload.get("sandbox_output") or ""
+            # Se não houver conteúdo, usa o objetivo para não perder o ciclo
+            if not content:
+                content = task_state.original_goal or ""
+            # Agente de origem
+            origin_agent = None
+            try:
+                # último evento diferente de router
+                for ev in reversed(task_state.history):
+                    ar = ev.get("agent_role")
+                    if ar and ar != "router":
+                        origin_agent = ar
+                        break
+            except Exception:
+                origin_agent = None
+            meta = {
+                "source_task_id": task_state.task_id,
+                "original_goal": task_state.original_goal,
+                "origin": "router",
+                "source_agent": origin_agent,
+                "status": task_state.status,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="knowledge_consolidation",
+                payload={
+                    "mode": "single",
+                    "experience_id": task_state.task_id,  # usa o id da tarefa como experiência agregadora
+                    "experience_content": content,
+                    "metadata": meta,
+                },
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
         else:
             queue = QueueName.TASKS_ROUTER.value
-
-        message = TaskMessage(
-            task_id=task_state.task_id,
-            task_type="task_state",
-            payload={"task_state": task_state.model_dump()},
-            timestamp=datetime.utcnow().timestamp(),
-        ).model_dump_json()
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
 
         broker = await get_broker()
-        await broker.publish(queue_name=queue, message=message)
+        await broker.publish(queue_name=queue, message=msg)
         logger.info("TaskState publicado", queue=queue, task_id=task_state.task_id, next_role=role)
         return queue
 # Padrão de Injeção de Dependência: Getter para o serviço

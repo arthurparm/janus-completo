@@ -20,6 +20,8 @@ pika>=1.3.0
 tavily-python>=0.3.0
 # Sprint 4: Python Sandbox
 RestrictedPython>=6.0
+# Sandbox: Docker orchestrator
+docker>=6.1.0
 # Sprint 7: Self-Optimization metrics
 psutil>=5.9.0
 prometheus-client
@@ -28,3 +30,5 @@ transformers>=4.36.0,<4.50.0
 onnxruntime>=1.17.0
 # Security: Encryption for episodic memory content
 cryptography>=41.0.0
+# Database: MySQL driver for SQLAlchemy (mysql+pymysql)
+pymysql>=1.1.0

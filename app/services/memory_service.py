@@ -2,7 +2,7 @@ import structlog
 from typing import List, Dict, Any, Optional  # Added Optional
 from fastapi import Request
 
-from app.repositories.memory_repository import MemoryRepository
+from app.core.protocols import MemoryRepositoryProtocol
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -16,7 +16,7 @@ class MemoryService:
     Camada de serviço para operações relacionadas à memória episódica.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
-    def __init__(self, repo: MemoryRepository):
+    def __init__(self, repo: MemoryRepositoryProtocol):
         self._repo = repo
 
     async def add_experience(self, type: str, content: str, metadata: Dict[str, Any]) -> Experience:
