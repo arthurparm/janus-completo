@@ -26,21 +26,29 @@ export interface ServiceHealthResponse {
   services: ServiceHealthItem[];
 }
 
-export interface WorkersStatusItem {
-  name: string;
-  running: boolean;
-  done: boolean;
-  cancelled: boolean;
-  exception?: string | null;
+export interface WorkerStatusResponse {
+  id: string;
+  status: string;
+  last_heartbeat: Date;
+  tasks_processed: number;
 }
 
-export interface WorkersStatusResponse {
-  tracked: number;
-  workers: WorkersStatusItem[];
+export interface SystemOverviewResponse {
+  system_status: SystemStatus;
+  services_status: ServiceHealthItem[];
+  workers_status: WorkerStatusResponse[];
 }
 
-export interface LLMProviderInfo { [key: string]: any }
-export interface LLMHealth { status: string; details?: Record<string, any> }
+// LLM providers
+export interface LLMProviderMeta { priority?: number; enabled?: boolean; models?: string[]; type?: string }
+export type LLMProvidersResponse = Record<string, LLMProviderMeta>;
+
+// LLM health
+export interface LLMSubsystemHealth {
+  status: string;
+  providers?: Record<string, { status: string; latency_ms?: number; error?: string | null }>;
+}
+
 export interface LLMCacheEntry { [key: string]: any }
 export interface LLMCacheStatusResponse { total_cached: number; cache_entries: LLMCacheEntry[] }
 export interface CircuitBreakerStatus { provider: string; state: string; failure_count: number; last_failure_time?: number | null }
@@ -51,12 +59,24 @@ export interface MetricsSummary {
   poison_pills: Record<string, any>;
 }
 
+// Observability health
+export interface ObservabilitySystemHealth {
+  status: string;
+  dependencies?: Record<string, { status: string; details?: Record<string, unknown> }>;
+}
+
 export interface QuarantinedMessage {
   message_id: string; queue: string; reason: string; failure_count: number; quarantined_at: string;
 }
 
 export interface QuarantinedMessagesResponse {
   total_quarantined: number; messages: QuarantinedMessage[];
+}
+
+// Poison pill stats
+export interface PoisonPillStats {
+  total: number;
+  by_queue: Record<string, { count: number; last_quarantined_at?: string }>;
 }
 
 export interface ContextInfo { [key: string]: any }
@@ -67,6 +87,10 @@ export interface ChatStartResponse { conversation_id: string }
 export interface ChatMessage { role: string; content: string; timestamp?: string }
 export interface ChatMessageResponse { message?: ChatMessage; assistant_message?: ChatMessage; messages?: ChatMessage[] }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
+export interface ConversationMeta { conversation_id: string; title?: string; last_message_at?: string }
+export interface ConversationsListResponse { conversations: ConversationMeta[] }
+
+export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
 @Injectable({providedIn: 'root'})
 export class JanusApiService {
@@ -92,6 +116,11 @@ export class JanusApiService {
     return this.http.get<WorkersStatusResponse>(`/api/v1/workers/status`);
   }
 
+  // Consolidated System Overview
+  getSystemOverview(): Observable<SystemOverviewResponse> {
+    return this.http.get<SystemOverviewResponse>(`/api/v1/system/overview`);
+  }
+
   startAllWorkers(): Observable<any> {
     return this.http.post(`/api/v1/workers/start-all`, {});
   }
@@ -100,12 +129,12 @@ export class JanusApiService {
     return this.http.post(`/api/v1/workers/stop-all`, {});
   }
   // LLM subsystem
-  listLLMProviders(): Observable<any> {
-    return this.http.get<any>(`/api/v1/llm/providers`)
+  listLLMProviders(): Observable<LLMProvidersResponse> {
+    return this.http.get<LLMProvidersResponse>(`/api/v1/llm/providers`)
   }
 
-  getLLMHealth(): Observable<any> {
-    return this.http.get<any>(`/api/v1/llm/health`)
+  getLLMHealth(): Observable<LLMSubsystemHealth> {
+    return this.http.get<LLMSubsystemHealth>(`/api/v1/llm/health`)
   }
 
   getLLMCacheStatus(): Observable<LLMCacheStatusResponse> {
@@ -117,8 +146,8 @@ export class JanusApiService {
   }
 
   // Observability
-  getObservabilitySystemHealth(): Observable<any> {
-    return this.http.get<any>(`/api/v1/observability/health/system`)
+  getObservabilitySystemHealth(): Observable<ObservabilitySystemHealth> {
+    return this.http.get<ObservabilitySystemHealth>(`/api/v1/observability/health/system`)
   }
 
   getObservabilityMetricsSummary(): Observable<MetricsSummary> {
@@ -134,9 +163,9 @@ export class JanusApiService {
     return this.http.post(`/api/v1/observability/poison-pills/cleanup`, {})
   }
 
-  getPoisonPillStats(queue?: string): Observable<any> {
+  getPoisonPillStats(queue?: string): Observable<PoisonPillStats> {
     const params = queue ? `?queue=${encodeURIComponent(queue)}` : ''
-    return this.http.get<any>(`/api/v1/observability/poison-pills/stats${params}`)
+    return this.http.get<PoisonPillStats>(`/api/v1/observability/poison-pills/stats${params}`)
   }
 
   // Context
@@ -170,7 +199,9 @@ export class JanusApiService {
     return this.http.get<ChatHistoryResponse>(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history`)
   }
 
-  listConversations(): Observable<any> {
-    return this.http.get<any>(`/api/v1/chat/conversations`)
+  listConversations(): Observable<ConversationsListResponse> {
+    return this.http.get<ConversationsListResponse>(`/api/v1/chat/conversations`)
   }
 }
+
+export type WorkersStatusItem = WorkerStatusResponse;

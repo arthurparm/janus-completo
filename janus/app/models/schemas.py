@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -97,6 +96,29 @@ class TaskStateEvent(BaseModel):
     action: str
     notes: Optional[str] = None
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+
+
+class SystemStatusResponse(BaseModel):
+    status: str
+    message: str
+    timestamp: datetime
+
+class ServiceStatusResponse(BaseModel):
+    name: str
+    status: str
+    message: str
+    last_check: datetime
+
+class WorkerStatusResponse(BaseModel):
+    id: str
+    status: str
+    last_heartbeat: datetime
+    tasks_processed: int
+
+class SystemOverviewResponse(BaseModel):
+    system_status: SystemStatusResponse
+    services_status: List[ServiceStatusResponse]
+    workers_status: List[WorkerStatusResponse]
 
 
 class TaskState(BaseModel):

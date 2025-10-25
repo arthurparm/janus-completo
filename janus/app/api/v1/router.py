@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools, \
-    optimization, llm, collaboration, observability, meta_agent, chat, autonomy, workers
+    optimization, llm, collaboration, observability, meta_agent, chat, autonomy, workers, system_overview, assistant
 from app.config import settings  # Added settings for feature flag
 from app.api.v1.endpoints.workspace import router as workspace_router  # noqa: E402
 
@@ -11,11 +11,13 @@ if getattr(settings, "PUBLIC_API_MINIMAL", False):
     # Minimal public API: expose only chat and autonomy endpoints
     api_router.include_router(chat.router, prefix="/chat")  # Chat conversations
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
+    api_router.include_router(assistant.router)  # Assistant auto-tools
 else:
     # Full API: expose all internal and public endpoints
     api_router.include_router(workspace_router)
 
     api_router.include_router(system_status.router, prefix="/system")
+    api_router.include_router(system_overview.router, prefix="/system") # Novo endpoint agregado
     api_router.include_router(knowledge.router, prefix="/knowledge")
     api_router.include_router(agent.router, prefix="/agent")
     api_router.include_router(memory.router, prefix="/memory")
@@ -33,3 +35,4 @@ else:
     api_router.include_router(chat.router, prefix="/chat")  # Chat conversations
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
     api_router.include_router(workers.router, prefix="/workers")  # Workers orchestration controls
+    api_router.include_router(assistant.router)  # Assistant auto-tools

@@ -1,0 +1,55 @@
+import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {signal} from '@angular/core';
+import {HomeComponent} from './home';
+import {GlobalStateStore} from '../../core/state/global-state.store';
+import {NotificationService} from '../../core/notifications/notification.service';
+import {JanusApiService} from '../../services/janus-api.service';
+
+class MockGlobalStateStore {
+  loading = signal(false);
+  apiHealthy = signal<'ok' | 'unknown'>('ok');
+  systemStatus = signal<{cpu_usage_percent?: number; memory_usage_percent?: number; disk_usage_percent?: number; uptime_seconds?: number}>({
+    cpu_usage_percent: 10,
+    memory_usage_percent: 20,
+    disk_usage_percent: 30,
+    uptime_seconds: 123
+  });
+  services = signal<any[]>([]);
+  workers = signal<any[]>([]);
+  startPolling = (_ms: number) => {};
+  stopPolling = () => {};
+}
+
+class MockNotificationService {
+  notify(_n: { type: string; message: string }) {}
+}
+
+class MockJanusApiService {}
+
+describe('HomeComponent', () => {
+  let component: HomeComponent;
+  let fixture: ComponentFixture<HomeComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [HomeComponent],
+      providers: [
+        { provide: GlobalStateStore, useClass: MockGlobalStateStore },
+        { provide: NotificationService, useClass: MockNotificationService },
+        { provide: JanusApiService, useClass: MockJanusApiService }
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(HomeComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should compute services availability', () => {
+    expect(component.servicesAvailability()).toBeGreaterThanOrEqual(0);
+  });
+});

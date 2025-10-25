@@ -3,12 +3,19 @@
     <div class="brand">
       Projeto Janus<span class="dot">•</span>
     </div>
-    <nav class="nav" aria-label="Navegação principal">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Home</a>
-      <a routerLink="/arquitetura" routerLinkActive="active">Arquitetura</a>
-      <a routerLink="/sprints" routerLinkActive="active">Sprints</a>
-      <a routerLink="/painel" routerLinkActive="active">Painel</a>
-      <a routerLink="/documentacao" routerLinkActive="active">Documentação</a>
+
+    <button class="menu-toggle" aria-label="Abrir menu" [attr.aria-expanded]="isMenuOpen" (click)="toggleMenu()">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </button>
+
+    <nav class="nav" id="primary-navigation" aria-label="Navegação principal" [class.open]="isMenuOpen">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMenu()">Home</a>
+      <a routerLink="/arquitetura" routerLinkActive="active" (click)="closeMenu()">Arquitetura</a>
+      <a routerLink="/sprints" routerLinkActive="active" (click)="closeMenu()">Sprints</a>
+      <a routerLink="/chat" routerLinkActive="active" (click)="closeMenu()">Chat</a>
+      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()">Documentação</a>
     </nav>
   </div>
 </header>

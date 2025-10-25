@@ -50,6 +50,7 @@ from app.services.llm_service import LLMService
 from fastapi.staticfiles import StaticFiles
 from app.repositories.chat_repository import ChatRepository
 from app.services.chat_service import ChatService
+from app.services.assistant_service import AssistantService
 from app.core.autonomy.goal_manager import GoalManager
 
 from app.core.agents.agent_manager import get_agent_manager
@@ -105,6 +106,7 @@ async def lifespan(app: FastAPI):
     # LLM (Sprint 10): Cérebro Híbrido
     app.state.llm_repo = LLMRepository()
     app.state.llm_service = LLMService(app.state.llm_repo)
+    app.state.assistant_service = AssistantService(app.state.llm_service)
 
     # Goals Manager (Autonomy)
     app.state.goal_manager = GoalManager(app.state.memory_service)

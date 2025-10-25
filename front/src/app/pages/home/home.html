@@ -8,7 +8,7 @@
   <h2>A Gênese da Inteligência Autônoma: Um Ecossistema Cognitivo em Evolução</h2>
   <p>Janus é uma arquitetura cognitiva distribuída, projetada para aprender, raciocinar e se auto-otimizar. Este site
     serve como seu ambiente de diagnóstico e interação.</p>
-  <div class="timestamp">{{ now }}</div>
+  <div class="timestamp">{{ now() }}</div>
 </div>
 
 <!-- Seção 2: A Arquitetura (3 Colunas) -->
@@ -56,7 +56,9 @@
 <!-- Seção 5: Status do Sistema (Teste de Fogo) -->
 <section class="system-status-section">
   <h2>Diagnóstico do Sistema em Tempo Real</h2>
-  <div class="status-monitor">
+  <app-notification-banner></app-notification-banner>
+  <div *ngIf="loading()" class="loading">Carregando status...</div>
+  <div class="status-monitor" *ngIf="!loading()">
     <div class="status-grid">
       <div class="status-item">
         <span class="status-label">ID do Sistema:</span>
@@ -88,8 +90,73 @@
       </div>
       <div class="status-item">
         <span class="status-label">Última Análise de Falha:</span>
-        <span class="status-value">{{ now }}</span>
+        <span class="status-value">{{ now() }}</span>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- Seção 6: Observabilidade em Tempo Real (Gráficos) -->
+<section class="dashboard-section" *ngIf="!loading() && systemStatus() as sys">
+  <h2>Observabilidade em Tempo Real</h2>
+  <div class="dashboard-grid">
+    <article class="card chart">
+      <h3>Status do Sistema</h3>
+      <div class="chart-container">
+        <canvas baseChart [data]="systemStatusChartData()" [type]="'line'" [options]="systemStatusChartOptions"></canvas>
+      </div>
+      <div class="system-metrics">
+        <div class="metric">
+          <span class="label">CPU:</span>
+          <span class="value">{{ currentSystemMetrics().cpu }}%</span>
+        </div>
+        <div class="metric">
+          <span class="label">Memória:</span>
+          <span class="value">{{ currentSystemMetrics().memory }}%</span>
+        </div>
+        <div class="metric">
+          <span class="label">Disco:</span>
+          <span class="value">{{ currentSystemMetrics().disk }}%</span>
+        </div>
+        <div class="metric">
+          <span class="label">Uptime:</span>
+          <span class="value">{{ sys.uptime_seconds }}s</span>
+        </div>
+      </div>
+    </article>
+
+    <article class="card chart">
+      <h3>Saúde dos Serviços</h3>
+      <div class="chart-container">
+        <canvas baseChart [data]="servicesHealthChartData()" [type]="'bar'" [options]="servicesHealthChartOptions"></canvas>
+      </div>
+      <div class="services-summary">
+        <div class="summary-item">
+          <div class="label">Disponibilidade</div>
+          <div class="value">{{ servicesAvailability() }}%</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">Tempo Médio de Resposta</div>
+          <div class="value">{{ averageResponseTime() }}ms</div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card chart">
+      <h3>Desempenho dos Workers</h3>
+      <div class="chart-container">
+        <canvas baseChart [data]="workersPerformanceChartData()" [type]="'line'" [options]="workersPerformanceChartOptions"></canvas>
+      </div>
+      <div class="workers-summary">
+        <div class="summary-item">
+          <div class="label">Throughput</div>
+          <div class="value">{{ currentWorkersPerformance().throughput }} t/min</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">Latência</div>
+          <div class="value" [class.alert]="currentWorkersPerformance().latency > 500">{{ currentWorkersPerformance().latency }}ms</div>
+        </div>
+      </div>
+    </article>
   </div>
 </section>

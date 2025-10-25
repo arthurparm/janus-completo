@@ -61,7 +61,8 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas para t
 ## Estrutura Interna do Frontend (`/front`)
 
 - `src/app/pages/` — páginas (Documentação, Arquitetura, Sprints)
-- `src/app/features/` — features (Dashboard, Chat)
+- `src/app/features/` — features (Chat); observabilidade integrada à Home
+
 - `src/app/services/` — consumo das APIs do Janus
 - `proxy.conf.json` — mapeamento de rotas do backend durante o desenvolvimento
 

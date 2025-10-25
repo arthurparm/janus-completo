@@ -1,5 +1,5 @@
 import {Routes} from '@angular/router';
-import {MainLayout} from './core/layout/main-layout/main-layout';
+import { MainLayout } from './core/layout/main-layout/main-layout';
 
 export const routes: Routes = [
   {
@@ -10,7 +10,7 @@ export const routes: Routes = [
       {path: 'arquitetura', loadComponent: () => import('./pages/arquitetura/arquitetura').then(m => m.Arquitetura)},
       {path: 'sprints', loadComponent: () => import('./pages/sprints/sprints').then(m => m.Sprints)},
       {path: 'chat', loadComponent: () => import('./features/chat/chat/chat').then(m => m.ChatComponent) },
-      {path: 'painel', loadComponent: () => import('./features/dashboard/dashboard/dashboard').then(m => m.Dashboard)},
+      // Dashboard removido
       {
         path: 'documentacao',
         loadComponent: () => import('./pages/documentacao/documentacao').then(m => m.Documentacao)
