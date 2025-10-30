@@ -43,7 +43,8 @@ RestrictedPython = ">=6.0"
 
 # Embeddings / ML
 sentence-transformers = ">=2.2.2"
-transformers = ">=4.36.0,<4.50.0"
+# Elevado mínimo para incorporar correções de ReDoS do HF Transformers
+transformers = ">=4.45.2,<4.50.0"
 onnxruntime = ">=1.17.0"
 numpy = ">=1.26.0"
 
