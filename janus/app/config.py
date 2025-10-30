@@ -22,6 +22,11 @@ class AppSettings(BaseSettings):
     DRY_RUN: bool = False
     PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
 
+    # CORS
+    # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
+    # Pode ser configurada via variável de ambiente CORS_ALLOW_ORIGINS (JSON ou CSV)
+    CORS_ALLOW_ORIGINS: List[str] = ["*"]
+
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"

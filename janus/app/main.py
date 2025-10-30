@@ -3,7 +3,9 @@ import contextlib
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.exception_handlers import add_exception_handlers
@@ -199,7 +201,32 @@ app = FastAPI(
 Instrumentator().instrument(app).expose(app)
 app.add_middleware(CorrelationMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=getattr(settings, "CORS_ALLOW_ORIGINS", ["*"]),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 add_exception_handlers(app)
+ 
+# --- Autenticação por API Key (global) ---
+# Se a variável de ambiente PUBLIC_API_KEY estiver definida, exige o header X-API-Key
+API_KEY = getattr(settings, "PUBLIC_API_KEY", None)
+
+if API_KEY:
+    @app.middleware("http")
+    async def require_api_key(request: Request, call_next):
+        path = request.url.path
+        # Endpoints públicos para saúde e métricas (e documentação)
+        skip_paths = ["/docs", "/openapi.json", "/healthz", "/metrics"]
+        if any(path.startswith(p) for p in skip_paths):
+            return await call_next(request)
+        key = request.headers.get("X-API-Key")
+        if key != API_KEY:
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/", include_in_schema=False)
