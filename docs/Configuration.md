@@ -1,6 +1,6 @@
 # Configuração
 
-Este documento detalha as variáveis de ambiente e opções de configuração do Janus AI Architect, conforme definidas em `app/config.py`.
+Este documento detalha as variáveis de ambiente e opções de configuração do Janus, conforme definidas em `janus/app/config.py`. Para visão consolidada e exemplos de uso, veja `docs/Janus-Manual.md`.
 
 ## Estrutura de Configuração
 
@@ -82,13 +82,13 @@ OLLAMA_CURATOR_MODEL=phi3:mini
 
 ## Validações e Formatos
 
-- `app/config.py` possui validadores Pydantic para listas, inteiros, decimais e objetos JSON.
-- Chaves de provedores são validadas (`_validate_openai_key`, `_validate_gemini_key`).
-- Budgets/prioridades podem ser definidos por `user_id`/`project_id`.
+- `janus/app/config.py` possui validadores Pydantic para listas, inteiros, decimais e mapas JSON.
+- Chaves de provedores validadas (`_validate_openai_key`, `_validate_gemini_key`) em `janus/app/core/llm/llm_manager.py:394-405`.
+- Budgets/prioridades e limites por papel suportados (mapas JSON e strings CSV).
 
 ## Dicas
 
-- Sempre versionar `.env.example` com chaves vazias para cloud.
-- Usar `DRY_RUN=true` em desenvolvimento para operações de risco.
-- Ajustar budgets e prioridades conforme custo/qualidade desejados.
-- Habilitar tracing LangSmith apenas em ambientes controlados.
+- Versionar `.env.example` com chaves vazias.
+- Usar `DRY_RUN=true` em desenvolvimento.
+- Ajustar budgets/prioridades conforme metas de custo/qualidade.
+- Habilitar tracing somente em ambientes controlados.

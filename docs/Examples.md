@@ -1,25 +1,20 @@
 # Exemplos de Código
 
-Exemplos práticos para interagir com a API usando Python e cURL.
+Exemplos práticos para interagir com a API usando Python e cURL. Todos os endpoints refletem o código atual.
 
 ## Python (requests)
 
-Criar ferramenta a partir de função:
+Invocar LLM com roteamento adaptativo:
 ```
 import requests
 
 payload = {
-    "name": "text_summary",
-    "description": "Resumir texto",
-    "code": "def text_summary(text: str) -> str:\n    return text[:100]",
-    "function_name": "text_summary",
-    "category": "utility",
-    "permission_level": "user",
-    "rate_limit_per_min": 60,
-    "tags": ["nlp", "summary"]
+  "prompt": "Explique a arquitetura do Janus em 3 tópicos",
+  "role": "orchestrator",
+  "priority": "fast_and_cheap"
 }
 
-resp = requests.post("http://localhost:8000/api/v1/tools/create/from-function", json=payload)
+resp = requests.post("http://localhost:8000/api/v1/llm/invoke", json=payload)
 print(resp.status_code, resp.json())
 ```
 
@@ -28,52 +23,58 @@ Agendar treinamento e consultar status:
 import requests
 
 train_payload = {
-    "type": "Classifier",
-    "dataset_id": "news-2024-09",
-    "config": {"epochs": 3, "learning_rate": 0.0005}
+  "dataset_id": "ds-2024-10",
+  "model": "custom-bert",
+  "epochs": 3
 }
 
 ack = requests.post("http://localhost:8000/api/v1/learning/train", json=train_payload).json()
 print("ACK:", ack)
 
-status = requests.get("http://localhost:8000/api/v1/learning/training/status").json()
+status = requests.get("http://localhost:8000/api/v1/learning/train/status", params={"job_id": ack.get("job_id")}).json()
 print("STATUS:", status)
 ```
 
-Avaliar modelo:
+Consolidar conhecimento (batch):
 ```
 import requests
 
-payload = {
-    "model_id": "model-123",
-    "dataset_id": "news-2024-09",
-    "metrics": ["accuracy", "f1"]
-}
-
-resp = requests.post("http://localhost:8000/api/v1/learning/evaluate", json=payload)
+resp = requests.post("http://localhost:8000/api/v1/knowledge/consolidate", json={
+  "mode": "batch",
+  "limit": 5,
+  "min_score": 0.0
+})
 print(resp.json())
 ```
 
 ## cURL
 
-Criar ferramenta de API HTTP:
+Listar ferramentas:
 ```
-curl -X POST http://localhost:8000/api/v1/tools/create/from-api \
+curl -s http://localhost:8000/api/v1/tools
+```
+
+Criar ferramenta (API externa):
+```
+curl -X POST http://localhost:8000/api/v1/tools \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "ip_lookup",
-    "description": "Consulta IP em serviço externo",
-    "endpoint_url": "https://ipapi.co/json",
-    "method": "GET",
-    "headers": {"Accept": "application/json"},
-    "category": "utility",
-    "permission_level": "user",
-    "rate_limit_per_min": 120,
-    "tags": ["network", "lookup"]
+    "name": "weather",
+    "type": "http",
+    "endpoint": "https://api.weather.com/v1/forecast",
+    "category": "utilities",
+    "permissions": ["network"],
+    "tags": ["weather","forecast"]
   }'
 ```
 
-Listar modelos:
+Status de LLMs e circuit breakers:
 ```
-curl -s http://localhost:8000/api/v1/learning/models
+curl -s http://localhost:8000/api/v1/llm/health
+curl -s http://localhost:8000/api/v1/llm/circuit-breakers
+```
+
+Métricas Prometheus (amostra):
+```
+curl -s http://localhost:8000/metrics | head -n 50
 ```

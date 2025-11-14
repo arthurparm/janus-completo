@@ -1,6 +1,6 @@
 # Janus 1.0 — Organização do Projeto
 
-Este documento descreve a estrutura, nomenclatura e convenções adotadas para tornar o projeto claro, profissional e fácil de navegar.
+Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinhadas ao estado atual do repositório. Para a visão consolidada, veja `docs/Janus-Manual.md`.
 
 ## Visão Geral
 
@@ -45,14 +45,15 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas para t
 - Caminhos estáveis para CI/CD:
   - Evite mover arquivos sem ajustes correspondentes no `docker-compose.yml` e pipelines.
 - Documentação próxima do código:
-  - Referencie `docs/` na UI quando útil (ex.: página Documentação).
+  - Manual consolidado em `docs/Janus-Manual.md`.
+  - Referencie `docs/` na UI (página Documentação em `front/src/app/pages/documentacao`).
 
 ## Estrutura Interna do Backend (`/Janus`)
 
 - `app/` — Código da aplicação:
-  - `api/` (controllers/routers)
-  - `core/` (protocolos, workers, agentes)
-  - `services/` (orquestração, lógica de negócios)
+  - `api/` (routers) em `janus/app/api/v1/endpoints/*`
+  - `core/` (LLM, memória, resiliência, workers)
+  - `services/` (orquestração e lógica de domínio)
   - `models/`, `repositories/`, `db/`
 - `sql/` — scripts e migrações
 - `tests/` — testes unitários e de integração
@@ -61,7 +62,7 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas para t
 ## Estrutura Interna do Frontend (`/front`)
 
 - `src/app/pages/` — páginas (Documentação, Arquitetura, Sprints)
-- `src/app/features/` — features (Chat); observabilidade integrada à Home
+- `src/app/features/` — features (chat, knowledge, operations, overview)
 
 - `src/app/services/` — consumo das APIs do Janus
 - `proxy.conf.json` — mapeamento de rotas do backend durante o desenvolvimento
@@ -78,7 +79,7 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas para t
 ## Boas Práticas Complementares
 
 - Servir documentação (`/docs`) via backend ou web server no deploy.
-- Utilizar coleções `http/` para validação rápida de endpoints.
+- Utilizar coleções `http/` para validação rápida de endpoints (ex.: `janus/http/E2E-Production-Scenario.http`).
 - Adotar versionamento semântico e changelogs em `docs/Release-Notes-*`.
 
 ## Próximas Melhorias Sugeridas

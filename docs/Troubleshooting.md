@@ -18,7 +18,8 @@ Guia de diagnóstico e resolução de problemas comuns.
 
 - Chaves ausentes (OpenAI/Gemini) — defina `OPENAI_API_KEY`/`GEMINI_API_KEY`.
 - Fallback: Ollama local (`OLLAMA_HOST`) com modelos configurados.
-- Rate limit/budgets: aumente `RATE_LIMIT_*` e ajuste `LLM_BUDGETS_JSON`.
+- Rate limit/budgets: aumente `RATE_LIMIT_*` e ajuste `LLM_MAX_COST_PER_REQUEST_USD`/`LLM_EXPECTED_KTOKENS_BY_ROLE`.
+- Circuit breakers: ver estado em `GET /api/v1/llm/circuit-breakers` e reset por provider em `POST /api/v1/llm/circuit-breakers/{provider}/reset`.
 
 ## Treinamento e Dataset
 
@@ -27,9 +28,9 @@ Guia de diagnóstico e resolução de problemas comuns.
   - Confirme publicação na fila `janus.neural.training`.
   - Revise `neural_training_worker.py` e `neural_training_system.py`.
 
-- Dataset vazio
+-- Dataset vazio
   - Execute `POST /api/v1/learning/harvest`.
-  - Use `GET /api/v1/learning/dataset/preview?limit=5` para ver amostras.
+  - Liste modelos/datasets conforme endpoints disponíveis em `docs/Usage.md`.
 
 ## Portas e Ambiente
 
@@ -40,7 +41,7 @@ Guia de diagnóstico e resolução de problemas comuns.
 
 - Métricas: `GET /metrics`.
 - Health: `GET /healthz`, `GET /readyz`.
-- Dashboard Grafana: importe `dashboards/janus_component_resilience_dashboard.json`.
+- Dashboards Grafana: `janus/grafana/dashboards/janus-overview.json`, `janus-llm-performance.json`.
 
 ## Comandos Úteis
 
@@ -49,12 +50,14 @@ Guia de diagnóstico e resolução de problemas comuns.
 - `docker compose logs -f neo4j`
 - `docker compose logs -f qdrant`
 - `docker compose logs -f ollama`
+- `docker compose logs -f rabbitmq`
 
 ## Quando Abrir Issue
 
 - Erros repetidos em provedores LLM mesmo com chaves válidas.
 - Falhas de conexão persistentes a bancos ou filas após verificar credenciais.
 - Circuit Breakers abertos por longos períodos (veja métricas e logs).
+  - Confirme orçamento e tempo de recuperação configurado em `janus/app/config.py:76-80`.
 
 ## Problemas Específicos da 1.0.0
 
@@ -73,3 +76,11 @@ Guia de diagnóstico e resolução de problemas comuns.
   - Causa: IDs de pontos devem ser `UUID` ou `unsigned integer`.
   - Ajuste o payload para usar IDs válidos.
   - Cheque saúde: `http://localhost:6333/healthz`.
+
+## Outros Cenários
+
+- Broker offline (RabbitMQ indisponível)
+  - A API inicializa em modo degradado e publicações são ignoradas (sem erro) (`janus/app/core/infrastructure/message_broker.py:86-90`).
+  - Restaure conexões e valide política de filas via Management API (`janus/app/core/infrastructure/message_broker.py:258-335`).
+- API Key pública
+  - Se `PUBLIC_API_KEY` estiver configurada, inclua `X-API-Key` em chamadas (exceções para `/docs`, `/openapi.json`, `/healthz`, `/metrics`) (`janus/app/main.py:223-238`).

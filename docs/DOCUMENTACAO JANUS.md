@@ -1,18 +1,18 @@
-Relatório de Projeto Arquitetural: Evoluindo o Assistente Pessoal Janus para um Sistema Cognitivo Distribuído e
-Escalável
+Relatório de Projeto Arquitetural (Histórico): Evolução do Janus para um Sistema Cognitivo Distribuído e Escalável
 
 Data: 14 de agosto de 2025
 Localização: Itanhaém, SP, Brasil
 Documento ID: JANUS-ARC-1.0-20250814
-Status: Proposta Arquitetural Final
+Status: Documento histórico de referência (substituído por documentação consolidada)
 
-Nota de Estrutura: A documentação principal do projeto foi reestruturada para facilitar a consulta. Consulte:
+Nota de Estrutura: A documentação principal foi consolidada. Consulte:
 
-- `doc/Architecture.md` — Arquitetura e componentes
-- `doc/Configuration.md` — Configuração e variáveis de ambiente
-- `doc/Usage.md` — Setup, execução e fluxo de uso
-- `doc/Examples.md` — Exemplos de código
-- `doc/Troubleshooting.md` — Diagnóstico e resolução de problemas
+- `docs/Janus-Manual.md` — Manual completo (índice, fluxos, funções críticas, instalação, uso e padrões)
+- `docs/Architecture.md` — Arquitetura e componentes
+- `docs/Configuration.md` — Configuração e variáveis de ambiente
+- `docs/Usage.md` — Setup, execução e fluxos
+- `docs/Examples.md` — Exemplos de código
+- `docs/Troubleshooting.md` — Diagnóstico e resolução de problemas
 
 Este relatório permanece como documentação arquitetural detalhada e de referência histórica.
 

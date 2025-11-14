@@ -12,6 +12,16 @@ Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA r
   - `docs/Troubleshooting.md` — diagnóstico e resolução de problemas
   - Histórico/Referência: `docs/DOCUMENTACAO JANUS.md`
 
+## Documentação Consolidada
+
+- Manual completo (índice navegável, fluxos, funções críticas, instalação, uso, padrões): `docs/Janus-Manual.md`
+- Complementares:
+  - `docs/Architecture.md` — arquitetura e componentes com fluxos
+  - `docs/Configuration.md` — variáveis, políticas e validações
+  - `docs/Usage.md` — autonomia, endpoints e métricas
+  - `docs/Examples.md` — cURL, Python e Angular
+  - `docs/Troubleshooting.md` — erros comuns e soluções
+
 
 ## 1. Visão Geral do Sistema
 
@@ -264,6 +274,13 @@ Observações:
 - Modelos de request/response seguem `pydantic` em `app/models/schemas.py`
 - Tratamento de erros via `app/api/problem_details.py` e `exception_handlers.py`
 
+
+## Links Rápidos
+- Composição e startup: `janus/app/main.py:69-76,140-176,240-256`
+- Status do sistema: `janus/app/api/v1/endpoints/system_status.py:43-54,56-135`
+- LLM manager e métricas: `janus/app/core/llm/llm_manager.py:23-43,144-169,539-864,1005-1166`
+- Broker e filas: `janus/app/core/infrastructure/message_broker.py:69-123,258-335`
+- Configuração: `janus/app/config.py:74-114,135-183,197-241`
 
 # Contribuindo para o Janus
 

@@ -12,7 +12,7 @@ Este documento resume as mudanças, melhorias, correções e instruções de atu
   - `GET /api/v1/knowledge/stats` (nós/relacionamentos)
 - Meta-Agente e Reflexion Worker integrados ao orquestrador de workers.
 - Configuration-as-Data para prompts e agentes dinâmicos, com persistência MySQL.
-- Observabilidade aprimorada (Prometheus/Grafana), incluindo métricas por workers e componentes.
+- Observabilidade aprimorada (Prometheus/Grafana), incluindo métricas por workers e componentes. Ver dashboards `janus/grafana/dashboards/janus-overview.json` e `janus-llm-performance.json`.
 
 ## Melhorias
 - Logs estruturados e health checks consistentes para API e serviços subjacentes.
@@ -64,6 +64,12 @@ Este documento resume as mudanças, melhorias, correções e instruções de atu
   - `GET /api/v1/knowledge/stats`
 - Tasks/Filas:
   - `GET /api/v1/tasks/queue/{queue_name}`
+
+## Documentação Complementar
+- Manual consolidado: `docs/Janus-Manual.md`
+- Arquitetura e fluxos: `docs/Architecture.md`
+- Uso e exemplos: `docs/Usage.md`, `docs/Examples.md`
+- Troubleshooting: `docs/Troubleshooting.md`
 
 ## Links Úteis
 - Changelog completo: `CHANGELOG.md`

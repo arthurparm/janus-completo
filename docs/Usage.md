@@ -1,6 +1,6 @@
 # Uso (Janus 1.0.0)
 
-Este guia cobre o fluxo de Autonomia do Janus (batimento contínuo), metas (objetivos) e o Planejador Proativo (ORCHESTRATOR).
+Este guia cobre fluxos de Autonomia (heartbeat), LLM (invocação/cache/circuit breakers), Knowledge (consolidação/consultas) e Observabilidade, refletindo exatamente os endpoints do código atual. Para visão consolidada, veja `docs/Janus-Manual.md`.
 
 ## Autonomia (Heartbeat)
 - Endpoint para iniciar: `POST /api/v1/autonomy/start`
@@ -65,7 +65,11 @@ Ferramentas típicas no plano:
 - Cada passo passa por validação de políticas (`PolicyEngine`): permissões vs. perfil de risco, allow/blocklist e rate limits.
 - Telemetria: cada execução registra latência e sucesso/erro via `ActionRegistry`.
 
-## Cache de Respostas de LLMs
+## LLM (Invocação, Cache e Circuit Breakers)
+- Invocação: `POST /api/v1/llm/invoke` com `role` e `priority` mapeados em `janus/app/core/llm/llm_manager.py:380-390`.
+- Status do cache: `GET /api/v1/llm/cache/status`; invalidação: `POST /api/v1/llm/cache/invalidate` (`janus/app/api/v1/endpoints/llm.py:74-89`).
+- Response cache: `GET /api/v1/llm/response-cache/status`; invalidação granular: `POST /api/v1/llm/response-cache/invalidate` (`janus/app/api/v1/endpoints/llm.py:92-115`).
+- Circuit breakers: `GET /api/v1/llm/circuit-breakers`; reset por provider: `POST /api/v1/llm/circuit-breakers/{provider}/reset`.
 - O repositório de LLM usa um cache de respostas por `prompt+role+priority` com TTL configurável.
 - Status/invalidação:
   - `GET /api/v1/llm/response-cache/status`
