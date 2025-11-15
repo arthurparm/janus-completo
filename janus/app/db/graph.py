@@ -261,14 +261,26 @@ class GraphDatabase:
 
     async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int:
         query = f"MERGE (n:{label} {{name: $name}}) RETURN id(n) as node_id"
+        start = asyncio.get_event_loop().time()
         result = await tx.run(query, name=name)
         record = await result.single()
+        try:
+            _DB_QUERIES.labels("merge_node", "success").inc()
+            _DB_LATENCY.labels("merge_node").observe(asyncio.get_event_loop().time() - start)
+        except Exception:
+            pass
         return record["node_id"]
 
     async def merge_relationship(self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str):
         await self.register_relationship_type(tx, rel_type)
         query = f"MATCH (a), (b) WHERE id(a) = $source_id AND id(b) = $target_id MERGE (a)-[:`{rel_type}`]->(b)"
+        start = asyncio.get_event_loop().time()
         await tx.run(query, source_id=source_id, target_id=target_id)
+        try:
+            _DB_QUERIES.labels("merge_rel", "success").inc()
+            _DB_LATENCY.labels("merge_rel").observe(asyncio.get_event_loop().time() - start)
+        except Exception:
+            pass
 
     async def get_session(self) -> AsyncSession:
         if self._driver is None or self._offline:
