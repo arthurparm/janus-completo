@@ -19,6 +19,7 @@ from app.core.infrastructure import (
     CorrelationMiddleware, RateLimitMiddleware, setup_logging, setup_tracing,
     initialize_broker, close_broker, get_broker
 )
+from app.core.infrastructure.auth import get_actor_user_id
 from app.db.graph import initialize_graph_db, close_graph_db, get_graph_db
 from app.db.mysql_config import init_mysql_database
 from app.models import user_models  # noqa: F401
@@ -236,14 +237,22 @@ if API_KEY:
     @app.middleware("http")
     async def require_api_key(request: Request, call_next):
         path = request.url.path
-        # Endpoints públicos para saúde e métricas (e documentação)
-        skip_paths = ["/docs", "/openapi.json", "/healthz", "/metrics"]
-        if any(path.startswith(p) for p in skip_paths):
+        skip_paths = ["/docs", "/openapi.json", "/redoc", "/healthz", "/metrics", "/static/"]
+        if request.method == "OPTIONS" or any(path.startswith(p) for p in skip_paths):
             return await call_next(request)
         key = request.headers.get("X-API-Key")
         if key != API_KEY:
+            logger.warning("Unauthorized request", path=path)
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
+
+@app.middleware("http")
+async def actor_binding(request: Request, call_next):
+    try:
+        request.state.actor_user_id = get_actor_user_id(request)
+    except Exception:
+        request.state.actor_user_id = None
+    return await call_next(request)
 
 app.include_router(api_router, prefix="/api/v1")
 

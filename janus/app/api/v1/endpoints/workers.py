@@ -45,6 +45,12 @@ async def start_workers(request: Request):
         "meta_agent",
         "auto_scaler",
         "auto_healer",
+        "router",
+        "code_agent",
+        "professor_agent",
+        "sandbox_agent",
+        "autonomy",
+        "google_productivity",
     ]
     payload = []
     for idx, task in enumerate(workers):

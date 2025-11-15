@@ -27,6 +27,7 @@ async def start_all_workers():
     from app.core.workers.professor_agent_worker import start_professor_agent_worker
     from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
     from app.core.workers.autonomy_worker import start_autonomy_worker
+    from app.core.workers.google_productivity_worker import start_google_productivity_consumer
 
     logger.info("Iniciando orquestrador de workers...")
 
@@ -80,6 +81,9 @@ async def start_all_workers():
     # AutonomyWorker (batimento cardíaco de intenção)
     autonomy_task = await start_autonomy_worker()
     workers.append(autonomy_task)
+
+    google_productivity_task = await start_google_productivity_consumer()
+    workers.append(google_productivity_task)
 
     logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers
