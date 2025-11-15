@@ -1,0 +1,133 @@
+<div class="hitl">
+  <h2>Itens em Quarentena</h2>
+  <div class="controls">
+    <label>Itens por página:
+      <select [(ngModel)]="pageSize">
+        <option [value]="10">10</option>
+        <option [value]="25">25</option>
+        <option [value]="50">50</option>
+        <option [value]="100">100</option>
+      </select>
+    </label>
+    <label>Página:
+      <input type="number" [(ngModel)]="page" min="1"/>
+    </label>
+    <label>Tipo:
+      <input type="text" [(ngModel)]="filters.type"/>
+    </label>
+    <label>Motivo:
+      <input type="text" [(ngModel)]="filters.reason"/>
+    </label>
+    <label>Confiança ≥
+      <input type="number" step="0.05" [(ngModel)]="filters.confidence_ge"/>
+    </label>
+    <button (click)="refresh()">Atualizar</button>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tipo</th>
+        <th>Relação</th>
+        <th>Motivo</th>
+        <th>Confiança</th>
+        <th>Snippet</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of items">
+        <td>{{item.node_id}}</td>
+        <td>{{item.type}}</td>
+        <td>{{item.from_name}} ➜ {{item.to_name}}</td>
+        <td>{{item.reason}}</td>
+        <td>{{item.confidence || 0 | number:'1.2-2'}}</td>
+        <td class="snippet">{{item.source_snippet}}</td>
+        <td>
+          <button (click)="openPromote(item)">Promover</button>
+          <button (click)="openReject(item)">Rejeitar</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Sugerir Sinônimo</h3>
+  <form (ngSubmit)="submitSynonym()" #synForm="ngForm" class="syn-form">
+    <input type="text" [(ngModel)]="synonym.label" name="label" placeholder="Label (ex.: Concept)" required/>
+    <input type="text" [(ngModel)]="synonym.alias" name="alias" placeholder="Alias" required/>
+    <input type="text" [(ngModel)]="synonym.canonical" name="canonical" placeholder="Canônico" required/>
+    <button type="submit" [disabled]="synForm.invalid">Registrar</button>
+  </form>
+
+  <h2>Trilhas por Usuário</h2>
+  <div class="controls">
+    <input type="text" [(ngModel)]="auditUserId" placeholder="User ID"/>
+    <button (click)="loadAudit()">Carregar Histórico</button>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Quando</th>
+        <th>Ação</th>
+        <th>Status</th>
+        <th>Endpoint</th>
+        <th>Trace</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let ev of auditEvents">
+        <td>{{(ev.created_at || 0) * 1000 | date:'short'}}</td>
+        <td>{{ev.action}}</td>
+        <td>{{ev.status}}</td>
+        <td>{{ev.endpoint}}</td>
+        <td>{{ev.trace_id}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="metrics">
+    <div>
+      <strong>Promovidos:</strong> {{metrics.promote}}
+    </div>
+    <div>
+      <strong>Rejeitados:</strong> {{metrics.reject}}
+    </div>
+    <div>
+      <strong>Sinônimos:</strong> {{metrics.synonym}}
+    </div>
+  </div>
+
+  <div class="export">
+    <h3>Exportar Auditoria</h3>
+    <label>Formato:
+      <select [(ngModel)]="exportFormat">
+        <option value="csv">CSV</option>
+        <option value="json">JSON</option>
+      </select>
+    </label>
+    <label>Campos (CSV/JSON):
+      <input type="text" [(ngModel)]="exportFields" placeholder="id,user_id,endpoint,action,status"/>
+    </label>
+    <button (click)="exportAudit()">Exportar</button>
+  </div>
+
+  <div class="modal" *ngIf="modal.visible">
+    <div class="modal-body">
+      <h3>{{modal.mode === 'promote' ? 'Promover' : 'Rejeitar'}} Item #{{modal.item?.node_id}}</h3>
+      <div *ngIf="modal.mode === 'promote'">
+        <label>Justificativa (obrigatória):
+          <textarea [(ngModel)]="modal.justification"></textarea>
+        </label>
+        <button (click)="confirmPromote()" [disabled]="!modal.justification">Confirmar</button>
+        <button (click)="closeModal()">Cancelar</button>
+      </div>
+      <div *ngIf="modal.mode === 'reject'">
+        <label>Motivo (obrigatório):
+          <textarea [(ngModel)]="modal.justification"></textarea>
+        </label>
+        <button (click)="confirmReject()" [disabled]="!modal.justification">Confirmar</button>
+        <button (click)="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>

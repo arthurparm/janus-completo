@@ -73,6 +73,12 @@ export interface QuarantinedMessagesResponse {
   total_quarantined: number; messages: QuarantinedMessage[];
 }
 
+export interface GraphQuarantineItem { node_id: number; reason?: string; type?: string; from_name?: string; to_name?: string; confidence?: number; source_snippet?: string }
+export type GraphQuarantineListResponse = GraphQuarantineItem[]
+
+export interface AuditEvent { id: number; user_id?: number; endpoint?: string; action?: string; tool?: string; status?: string; latency_ms?: number; trace_id?: string; created_at?: number }
+export interface AuditEventsResponse { total: number; events: AuditEvent[] }
+
 // Poison pill stats
 export interface PoisonPillStats {
   total: number;
@@ -168,6 +174,41 @@ export class JanusApiService {
     return this.http.get<PoisonPillStats>(`/api/v1/observability/poison-pills/stats${params}`)
   }
 
+  // HITL / Observability: Graph quarantine & actions
+  listGraphQuarantine(limit: number = 100, offset: number = 0, filters?: { type?: string; reason?: string; confidence_ge?: number }): Observable<GraphQuarantineListResponse> {
+    const qs = new URLSearchParams()
+    qs.set('limit', String(limit))
+    qs.set('offset', String(offset))
+    if (filters?.type) qs.set('type', filters.type)
+    if (filters?.reason) qs.set('reason', filters.reason)
+    if (typeof filters?.confidence_ge !== 'undefined') qs.set('confidence_ge', String(filters?.confidence_ge))
+    return this.http.get<GraphQuarantineListResponse>(`/api/v1/observability/graph/quarantine?${qs.toString()}`)
+  }
+
+  promoteQuarantine(node_id: number): Observable<any> {
+    return this.http.post(`/api/v1/observability/graph/quarantine/promote`, { node_id })
+  }
+
+  rejectQuarantine(node_id: number, reason: string): Observable<any> {
+    return this.http.post(`/api/v1/observability/graph/quarantine/reject`, { node_id, reason })
+  }
+
+  registerSynonym(label: string, alias: string, canonical: string): Observable<any> {
+    return this.http.post(`/api/v1/observability/graph/entities/synonym`, { label, alias, canonical })
+  }
+
+  listAuditEvents(params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number } = {}): Observable<AuditEventsResponse> {
+    const qs = new URLSearchParams()
+    if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.tool) qs.set('tool', params.tool)
+    if (params.status) qs.set('status', params.status)
+    if (typeof params.start_ts !== 'undefined') qs.set('start_ts', String(params.start_ts))
+    if (typeof params.end_ts !== 'undefined') qs.set('end_ts', String(params.end_ts))
+    qs.set('limit', String(params.limit ?? 100))
+    qs.set('offset', String(params.offset ?? 0))
+    return this.http.get<AuditEventsResponse>(`/api/v1/observability/audit/events?${qs.toString()}`)
+  }
+
   // Context
   getCurrentContext(): Observable<ContextInfo> {
     return this.http.get<ContextInfo>(`/api/v1/context/current`)
@@ -205,3 +246,16 @@ export class JanusApiService {
 }
 
 export type WorkersStatusItem = WorkerStatusResponse;
+  exportAuditEvents(format: 'csv'|'json', params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number; fields?: string[] } = {}): Observable<any> {
+    const qs = new URLSearchParams()
+    if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.tool) qs.set('tool', params.tool)
+    if (params.status) qs.set('status', params.status)
+    if (typeof params.start_ts !== 'undefined') qs.set('start_ts', String(params.start_ts))
+    if (typeof params.end_ts !== 'undefined') qs.set('end_ts', String(params.end_ts))
+    qs.set('limit', String(params.limit ?? 1000))
+    qs.set('offset', String(params.offset ?? 0))
+    qs.set('format', format)
+    if (params.fields && params.fields.length) qs.set('fields', params.fields.join(','))
+    return this.http.get(`/api/v1/observability/audit/export?${qs.toString()}`, { responseType: 'text' })
+  }
