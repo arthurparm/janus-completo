@@ -31,3 +31,13 @@ class ExperimentResult(Base):
     metric_name = Column(String(50), nullable=False)
     metric_value = Column(Numeric(12, 6), nullable=False)
     created_at = Column(DateTime, default=func.current_timestamp())
+
+class ExperimentFeedback(Base):
+    __tablename__ = "experiment_feedback"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
+    arm_id = Column(Integer, ForeignKey("experiment_arms.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(100), nullable=False)
+    rating = Column(Numeric(4, 2), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.current_timestamp())

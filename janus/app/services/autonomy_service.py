@@ -271,6 +271,17 @@ class AutonomyService:
                 logger.warning("[AutonomyLoop] Ação bloqueada", tool=tool_name, reason=decision.reason)
                 AUTONOMY_ACTIONS.labels("blocked").inc()
                 continue
+            if decision.require_confirmation:
+                try:
+                    from app.repositories.pending_action_repository import PendingActionRepository
+                    import json as _json
+                    par = PendingActionRepository()
+                    par.create(user_id=str(self._config.user_id or ""), tool_name=tool_name, args_json=_json.dumps(args, ensure_ascii=False), run_id=self._current_run_id, cycle=self._cycle_count + 1)
+                    AUTONOMY_ACTIONS.labels("blocked").inc()
+                    logger.info("[AutonomyLoop] Ação enviada para aprovação", tool=tool_name)
+                except Exception:
+                    pass
+                continue
             tool = action_registry.get_tool(tool_name)
             if not tool:
                 logger.warning("[AutonomyLoop] Ferramenta não encontrada", tool=tool_name)

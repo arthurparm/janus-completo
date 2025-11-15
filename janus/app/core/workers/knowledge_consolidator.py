@@ -32,6 +32,10 @@ class KnowledgeConsolidator:
     async def start(self):
         if not self.is_running:
             self.is_running = True
+            try:
+                await self._knowledge_repo.ensure_basic_constraints()
+            except Exception:
+                pass
             self._task = asyncio.create_task(self._consolidation_cycle())
             logger.info("Knowledge Consolidator worker iniciado.")
 
@@ -76,6 +80,14 @@ class KnowledgeConsolidator:
                     continue
                 seen.add(exp_id)
                 content = str(exp.get("content") or "")
+                meta = exp.get("metadata") or {}
+                conf = None
+                try:
+                    conf = float(meta.get("confidence")) if meta.get("confidence") is not None else None
+                except Exception:
+                    conf = None
+                if conf is not None and conf < float(getattr(settings, "KNOWLEDGE_MIN_CONFIDENCE", 0.6)):
+                    continue
                 concepts = self._extract_concepts(content)
                 if concepts:
                     await self._knowledge_repo.merge_experience_mentions(exp, concepts)

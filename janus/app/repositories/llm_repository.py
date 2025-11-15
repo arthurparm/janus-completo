@@ -6,6 +6,15 @@ from app.core.llm.llm_manager import _llm_pool  # type: ignore
 from app.core.llm.llm_manager import warm_llm_pool  # type: ignore
 from app.core.llm.llm_manager import _validate_openai_key, _validate_gemini_key  # type: ignore
 from app.core.llm.response_cache import get as rc_get, put as rc_put, entries as rc_entries, invalidate as rc_invalidate
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 
 from app.core.llm import (
     get_llm_client,
@@ -38,11 +47,32 @@ class LLMRepository:
     ) -> Dict[str, Any]:
         logger.debug("Invocando LLM via repositório", role=role.value, priority=priority.value)
         client = None
+        span_cm = (_tracer.start_as_current_span("llm.invoke") if _OTEL else nullcontext())
         try:
+            with span_cm as span:
+                if _OTEL and span is not None:
+                    try:
+                        span.set_attribute("llm.role", role.value)
+                        span.set_attribute("llm.priority", priority.value)
+                        sid = user_id or USER_ID.get()
+                        tid = TRACE_ID.get()
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                    except Exception:
+                        pass
             # Cache de resposta: tentativa de hit antes de chamar provedor
             cached = rc_get(prompt, role.value, priority.value)
             if cached:
                 logger.info("Resposta retornada do cache de prompts/respostas.")
+                if _OTEL and span is not None:
+                    try:
+                        span.set_attribute("llm.cache_hit", True)
+                        span.set_attribute("llm.provider", cached.get("provider", "unknown"))
+                        span.set_attribute("llm.model", cached.get("model", "unknown"))
+                    except Exception:
+                        pass
                 return {
                     "response": cached["response"],
                     "provider": cached.get("provider", "unknown"),
@@ -54,6 +84,13 @@ class LLMRepository:
                 }
 
             client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
+            if _OTEL and span is not None:
+                try:
+                    span.set_attribute("llm.cache_hit", False)
+                    span.set_attribute("llm.provider", getattr(client, "provider", "unknown"))
+                    span.set_attribute("llm.model", getattr(client, "model", "unknown"))
+                except Exception:
+                    pass
             enriched = client.send_enriched(prompt, timeout_s=timeout_seconds)
 
             # Armazena no cache de resposta
@@ -85,6 +122,20 @@ class LLMRepository:
                 if client and getattr(client_fb, "provider", None) == getattr(client, "provider", None):
                     raise e
                 enriched_fb = client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
+                if _OTEL and _tracer is not None:
+                    try:
+                        with _tracer.start_as_current_span("llm.invoke.failover") as span_fb:
+                            span_fb.set_attribute("llm.failed_provider", failed_provider or "unknown")
+                            span_fb.set_attribute("llm.provider", getattr(client_fb, "provider", "unknown"))
+                            span_fb.set_attribute("llm.model", getattr(client_fb, "model", "unknown"))
+                            sid = user_id or USER_ID.get()
+                            tid = TRACE_ID.get()
+                            if sid and sid != "-":
+                                span_fb.set_attribute("janus.user_id", sid)
+                            if tid and tid != "-":
+                                span_fb.set_attribute("janus.trace_id", tid)
+                    except Exception:
+                        pass
                 try:
                     rc_put(
                         prompt,
