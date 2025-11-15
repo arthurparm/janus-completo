@@ -42,6 +42,7 @@ QUEUE_GOOGLE_MAIL = "janus.productivity.google.mail"
 _GOOGLE_PROD_EVENTS_PUBLISHED = Counter("google_productivity_events_published_total", "Eventos de produtividade publicados", ["type"])  # type: ignore
 _GOOGLE_CALENDAR_EVENTS_INDEXED = Counter("google_calendar_events_indexed_total", "Eventos do calendário indexados")  # type: ignore
 _GOOGLE_MAIL_SENT_TOTAL = Counter("google_mail_sent_total", "Mensagens de e-mail enviadas")  # type: ignore
+_PROD_WORKER_ERRORS = Counter("productivity_worker_errors_total", "Erros no worker de produtividade", ["op", "cause"])  # type: ignore
 _PROD_WORKER_LATENCY = Histogram("productivity_worker_latency_seconds", "Latência no worker de produtividade", ["op"])  # type: ignore
 _PROD_WORKER_USER_EVENTS = Counter("productivity_worker_user_events_total", "Eventos por usuário no worker", ["user_id", "op", "status"])  # type: ignore
 _PROD_WORKER_USER_LATENCY = Histogram("productivity_worker_user_latency_seconds", "Latência por usuário no worker de produtividade", ["user_id", "op"])  # type: ignore
@@ -171,7 +172,11 @@ async def start_google_productivity_consumer():
                             })
                         except Exception:
                             pass
-                except Exception:
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_ERRORS.labels("calendar_send", e.__class__.__name__).inc()
+                    except Exception:
+                        pass
                     try:
                         record_audit_event_direct({
                             "user_id": int(user_id) if user_id is not None else None,
@@ -230,7 +235,11 @@ async def start_google_productivity_consumer():
                             })
                         except Exception:
                             pass
-                except Exception:
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_ERRORS.labels("calendar_index", e.__class__.__name__).inc()
+                    except Exception:
+                        pass
                     pass
             if task.task_type == "google_mail_send" and user_id is not None:
                 try:
@@ -290,7 +299,11 @@ async def start_google_productivity_consumer():
                         "latency_ms": None,
                         "trace_id": TRACE_ID.get(),
                     })
-                except Exception:
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
+                    except Exception:
+                        pass
                     pass
                 if do_index and user_id is not None:
                     try:

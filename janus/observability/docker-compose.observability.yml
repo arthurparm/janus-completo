@@ -1,0 +1,44 @@
+version: '3.8'
+services:
+  loki:
+    image: grafana/loki:2.9.4
+    command: -config.file=/etc/loki/config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml
+      - loki-data:/loki
+  tempo:
+    image: grafana/tempo:2.4.1
+    command: ["tempo", "-config.file=/etc/tempo/config.yaml"]
+    ports:
+      - "3200:3200"
+      - "4317:4317" # gRPC
+      - "4318:4318" # HTTP
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo/config.yaml
+      - tempo-data:/var/tempo
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+  otel-collector:
+    image: otel/opentelemetry-collector:0.93.0
+    command: ["--config=/etc/otel-collector.yaml"]
+    ports:
+      - "4318:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otel-collector.yaml
+  promtail:
+    image: grafana/promtail:2.9.4
+    command: -config.file=/etc/promtail/config.yaml
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/log/janus:/var/log/janus
+volumes:
+  loki-data: {}
+  tempo-data: {}
+  grafana-data: {}
