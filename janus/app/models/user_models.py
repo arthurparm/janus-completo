@@ -90,3 +90,40 @@ class Consent(Base):
         UniqueConstraint("user_id", "scope", name="unique_user_scope_consent"),
         Index("idx_consent_user_scope", "user_id", "scope"),
     )
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    endpoint = Column(String(200), nullable=False)
+    action = Column(String(100), nullable=False)
+    tool = Column(String(100), nullable=True)
+    status = Column(String(20), nullable=False)
+    latency_ms = Column(Integer, nullable=True)
+    trace_id = Column(String(64), nullable=True)
+    justification = Column(Text, nullable=True)
+    details_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    __table_args__ = (
+        Index("idx_audit_user_ts", "user_id", "created_at"),
+        Index("idx_audit_trace", "trace_id"),
+        Index("idx_audit_endpoint", "endpoint"),
+        Index("idx_audit_action", "action"),
+    )
+
+
+class OAuthToken(Base):
+    __tablename__ = "oauth_tokens"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=False)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="unique_user_provider_token"),
+        Index("idx_oauth_user_provider", "user_id", "provider"),
+    )

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import Request, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
 import structlog
@@ -9,6 +10,8 @@ from app.services.observability_service import ObservabilityService, get_observa
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.services.llm_service import LLMService, get_llm_service
 from app.services.optimization_service import OptimizationService, get_optimization_service
+from app.db.mysql_config import init_mysql_database
+from app.services.db_migration_service import db_migration_service
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -36,6 +39,14 @@ class ServiceHealthItem(BaseModel):
 
 class ServiceHealthResponse(BaseModel):
     services: List[ServiceHealthItem]
+
+class UserStatusResponse(BaseModel):
+    user_id: str
+    conversations: int
+    messages: int
+    approx_in_tokens: int
+    approx_out_tokens: int
+    vector_points: int
 
 
 # --- Endpoints ---
@@ -133,3 +144,55 @@ async def get_services_health(
     ]
 
     return ServiceHealthResponse(services=services)
+
+@router.get(
+    "/status/user",
+    response_model=UserStatusResponse,
+    summary="Resumo de status por usuário (ator ou admin)",
+    tags=["System"]
+)
+async def get_user_status(request: Request, user_id: Optional[str] = None, observability: ObservabilityService = Depends(get_observability_service)):
+    actor = getattr(request.state, "actor_user_id", None)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from app.repositories.user_repository import UserRepository
+    repo = UserRepository()
+    is_admin = False
+    try:
+        is_admin = repo.is_admin(int(actor))
+    except Exception:
+        is_admin = False
+    target_uid = user_id or str(actor)
+    if (not is_admin) and (user_id is not None) and (str(user_id) != str(actor)):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    m = observability.get_user_metrics(target_uid)
+    return UserStatusResponse(**m)
+
+@router.post(
+    "/init/mysql",
+    summary="Inicializa tabelas MySQL (cria se não existirem)",
+    tags=["System"]
+)
+async def init_mysql():
+    try:
+        init_mysql_database()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error("Falha ao inicializar MySQL", exc_info=e)
+        return {"status": "error", "detail": str(e)}
+
+@router.get(
+    "/db/validate",
+    summary="Valida schema MySQL (users/sessions/messages/profiles)",
+    tags=["System"]
+)
+async def validate_db_schema():
+    return db_migration_service.validate_schema()
+
+@router.post(
+    "/db/migrate",
+    summary="Migra schema MySQL (cria índices/constraints ausentes)",
+    tags=["System"]
+)
+async def migrate_db_schema():
+    return db_migration_service.migrate_schema()
