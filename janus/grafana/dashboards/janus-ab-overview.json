@@ -1,0 +1,39 @@
+{
+  "title": "Janus A/B — Overview",
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "experiment_id",
+        "label": "Experiment ID",
+        "datasource": "Prometheus",
+        "query": "label_values(ab_experiment_results_total, experiment_id)",
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Results per Arm",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ab_experiment_results_total{experiment_id=\"$experiment_id\"}[5m])) by (arm_id)", "legendFormat": "arm {{arm_id}}" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Feedback per Arm",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ab_experiment_feedback_total{experiment_id=\"$experiment_id\"}[5m])) by (arm_id)", "legendFormat": "arm {{arm_id}}" }
+      ]
+    }
+  ]
+}
