@@ -12,6 +12,15 @@ from aio_pika.abc import AbstractRobustConnection
 from prometheus_client import Counter
 
 from app.config import settings
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 from app.models.schemas import TaskMessage
 
 logger = logging.getLogger(__name__)
@@ -19,6 +28,7 @@ logger = logging.getLogger(__name__)
 # --- Métricas ---
 _MESSAGES_PUBLISHED = Counter("broker_messages_published_total", "Total de mensagens publicadas", ["queue"])
 _CONNECTION_ERRORS = Counter("broker_connection_errors_total", "Total de erros de conexão com o broker")
+_CONSUME_ERRORS = Counter("broker_consume_errors_total", "Total de erros ao consumir mensagens", ["queue"])
 
 class MessageBroker:
     """
@@ -118,7 +128,23 @@ class MessageBroker:
                 expiration=expiration,
                 content_type=content_type,
             )
-            await channel.default_exchange.publish(msg, routing_key=queue_name)
+            cm = (_tracer.start_as_current_span("broker.publish") if _OTEL else nullcontext())
+            async with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        tid = TRACE_ID.get()
+                        sid = USER_ID.get()
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        span.set_attribute("broker.queue", queue_name)
+                        if priority is not None:
+                            span.set_attribute("broker.priority", int(priority))
+                        span.set_attribute("broker.content_type", content_type)
+                    except Exception:
+                        pass
+                await channel.default_exchange.publish(msg, routing_key=queue_name)
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
 
     def _get_queue_arguments(self, queue_name: str) -> Dict[str, Any]:
@@ -194,9 +220,27 @@ class MessageBroker:
                 else:
                     payload = json.loads(message.body.decode("utf-8"))
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
-                await callback(task)
+                cm = (_tracer.start_as_current_span("broker.consume") if _OTEL else nullcontext())
+                async with cm as span:  # type: ignore
+                    if _OTEL and span is not None:
+                        try:
+                            tid = TRACE_ID.get()
+                            sid = USER_ID.get()
+                            if tid and tid != "-":
+                                span.set_attribute("janus.trace_id", tid)
+                            if sid and sid != "-":
+                                span.set_attribute("janus.user_id", sid)
+                            span.set_attribute("broker.queue", queue_name)
+                            span.set_attribute("broker.content_type", str(ct))
+                        except Exception:
+                            pass
+                    await callback(task)
             except Exception as e:
                 logger.error("Erro ao processar mensagem; reenfileirando", exc_info=e)
+                try:
+                    _CONSUME_ERRORS.labels(queue_name).inc()
+                except Exception:
+                    pass
                 try:
                     ch = getattr(message, "channel", None)
                     if ch is not None and not ch.is_closed:
