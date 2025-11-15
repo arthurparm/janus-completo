@@ -21,6 +21,14 @@ except Exception:
 from app.core.embeddings.embedding_manager import embed_text
 from app.db.vector_store import get_qdrant_client, get_or_create_collection
 from qdrant_client import models
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 
 router = APIRouter(tags=["RAG"])
 
@@ -57,8 +65,10 @@ async def rag_search(
 
     import time as _t
     _start = _t.perf_counter()
+    cm = (_tracer.start_as_current_span("rag.search") if _OTEL else nullcontext())
     try:
-        results = await service.recall_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
+        with cm:  # type: ignore
+            results = await service.recall_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
         _RAG_REQ.labels("search", "success").inc()
         _RAG_LAT.labels("search", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -130,8 +140,10 @@ async def rag_user_chat_search(
     client = get_qdrant_client()
     import time as _t
     _start = _t.perf_counter()
+    cm = (_tracer.start_as_current_span("rag.user_chat") if _OTEL else nullcontext())
     try:
-        hits = client.search(collection_name=collection_name, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+        with cm:  # type: ignore
+            hits = client.search(collection_name=collection_name, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -210,7 +222,18 @@ async def rag_productivity_search(
     qfilter = models.Filter(must=must) if must else None
 
     client = get_qdrant_client()
-    hits = client.search(collection_name=coll, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+    import time as _t
+    _start = _t.perf_counter()
+    cm = (_tracer.start_as_current_span("rag.productivity") if _OTEL else nullcontext())
+    try:
+        with cm:  # type: ignore
+            hits = client.search(collection_name=coll, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+        _RAG_REQ.labels("productivity", "success").inc()
+        _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
+    except Exception:
+        _RAG_REQ.labels("productivity", "error").inc()
+        _RAG_LAT.labels("productivity", "error").observe(max(0.0, _t.perf_counter() - _start))
+        hits = []
 
     items: List[Dict[str, Any]] = []
     for h in hits or []:
@@ -295,7 +318,12 @@ async def rag_user_chat_search(
             rng["lte"] = end_ts_ms
         must.append(models.FieldCondition(key="metadata.timestamp", range=models.Range(**rng)))
     sc_filter = models.Filter(must=must)
-    res = client.search(
+    import time as _t
+    _start = _t.perf_counter()
+    cm = (_tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext())
+    try:
+        with cm:  # type: ignore
+            res = client.search(
         collection_name=collection_name,
         query_vector=vec,
         limit=limit,
@@ -303,6 +331,12 @@ async def rag_user_chat_search(
         query_filter=sc_filter,
         score_threshold=min_score if isinstance(min_score, float) else None,
     )
+        _RAG_REQ.labels("user_chat_v2", "success").inc()
+        _RAG_LAT.labels("user_chat_v2", "success").observe(max(0.0, _t.perf_counter() - _start))
+    except Exception:
+        _RAG_REQ.labels("user_chat_v2", "error").inc()
+        _RAG_LAT.labels("user_chat_v2", "error").observe(max(0.0, _t.perf_counter() - _start))
+        res = []
     results: List[Dict[str, Any]] = []
     for r in res:
         payload = r.payload or {}
@@ -343,7 +377,18 @@ async def rag_hybrid_search(
     if not uid:
         return RAGHybridResponse(answer="", citations=[])
 
-    results_vec = await service.recall_filtered(query=query, filters={"metadata.user_id": uid}, limit=limit, min_score=min_score)
+    import time as _t
+    _start = _t.perf_counter()
+    cm = (_tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext())
+    try:
+        with cm:  # type: ignore
+            results_vec = await service.recall_filtered(query=query, filters={"metadata.user_id": uid}, limit=limit, min_score=min_score)
+        _RAG_REQ.labels("hybrid", "success").inc()
+        _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
+    except Exception:
+        _RAG_REQ.labels("hybrid", "error").inc()
+        _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
+        results_vec = []
     from app.repositories.knowledge_repository import KnowledgeRepository
     from app.db.graph import get_graph_db
     kr = KnowledgeRepository(await get_graph_db())
