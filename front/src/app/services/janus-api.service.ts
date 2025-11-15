@@ -123,6 +123,33 @@ export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 export class JanusApiService {
   constructor(private http: HttpClient) {}
 
+  private _reqId(): string {
+    const s = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+    return s.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+
+  private _projectId?: string
+  private _sessionId?: string
+  private _conversationId?: string
+
+  setProjectId(project_id?: string) { this._projectId = project_id || undefined }
+  setSessionId(session_id?: string) { this._sessionId = session_id || undefined }
+  setConversationId(conversation_id?: string) { this._conversationId = conversation_id || undefined }
+  clearContext() { this._projectId = undefined; this._sessionId = undefined; this._conversationId = undefined }
+
+  private headersFor(userId?: number | string): Record<string, string> {
+    const h: Record<string, string> = { 'X-Request-ID': this._reqId() }
+    if (typeof userId !== 'undefined') h['X-User-Id'] = String(userId)
+    if (this._projectId) h['X-Project-Id'] = this._projectId
+    if (this._sessionId) h['X-Session-Id'] = this._sessionId
+    if (this._conversationId) h['X-Conversation-Id'] = this._conversationId
+    return h
+  }
+
   // Basic API health (useful for quick checks)
   health(): Observable<{status: string}> {
     return this.http.get<{status: string}>(`/healthz`);
@@ -288,19 +315,19 @@ export class JanusApiService {
 
   // Auth
   issueToken(user_id: number, expires_in: number = 3600): Observable<TokenResponse> {
-    const headers = { 'X-User-Id': String(user_id) }
+    const headers = this.headersFor(user_id)
     return this.http.post<TokenResponse>(`/api/v1/auth/token`, { user_id, expires_in }, { headers })
   }
 
   // Productivity limits status
   getProductivityLimitsStatus(user_id: number): Observable<ProductivityLimitsStatusResponse> {
-    const headers = { 'X-User-Id': String(user_id) }
+    const headers = this.headersFor(user_id)
     return this.http.get<ProductivityLimitsStatusResponse>(`/api/v1/productivity/limits/status?user_id=${encodeURIComponent(String(user_id))}`, { headers })
   }
 
   // Google OAuth
   googleOAuthStart(user_id: number, scope: 'calendar' | 'mail' | 'notes' = 'calendar'): Observable<GoogleOAuthStartResponse> {
-    const headers = { 'X-User-Id': String(user_id) }
+    const headers = this.headersFor(user_id)
     const qs = new URLSearchParams({ user_id: String(user_id), scope })
     return this.http.get<GoogleOAuthStartResponse>(`/api/v1/productivity/oauth/google/start?${qs.toString()}`, { headers })
   }
@@ -311,12 +338,12 @@ export class JanusApiService {
 
   // Calendar and Mail operations (queued)
   calendarAddEvent(req: CalendarAddRequest): Observable<QueueAck> {
-    const headers = { 'X-User-Id': String(req.user_id) }
+    const headers = this.headersFor(req.user_id)
     return this.http.post<QueueAck>(`/api/v1/productivity/calendar/events/add`, req, { headers })
   }
 
   mailSend(req: MailSendRequest): Observable<QueueAck> {
-    const headers = { 'X-User-Id': String(req.user_id) }
+    const headers = this.headersFor(req.user_id)
     return this.http.post<QueueAck>(`/api/v1/productivity/mail/messages/send`, req, { headers })
   }
 
