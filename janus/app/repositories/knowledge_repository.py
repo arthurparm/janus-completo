@@ -117,7 +117,9 @@ class KnowledgeRepository:
 
         query = f"""
         MATCH path = {path}
-        WHERE $rel_type IS NULL OR type(last(relationships(path))) = $rel_type
+        WHERE ($rel_type IS NULL OR type(last(relationships(path))) = $rel_type)
+          AND coalesce(last(relationships(path)).valid_to, datetime()) >= datetime()
+          AND coalesce(related.valid_to, datetime()) >= datetime()
         RETURN related.name as related_entity,
                labels(related)[0] as related_type,
                type(last(relationships(path))) as relationship,
@@ -186,7 +188,9 @@ class KnowledgeRepository:
 
         query = f"""
         MATCH path = {path}
-        WHERE $rel_type IS NULL OR type(last(relationships(path))) = $rel_type
+        WHERE ($rel_type IS NULL OR type(last(relationships(path))) = $rel_type)
+          AND coalesce(last(relationships(path)).valid_to, datetime()) >= datetime()
+          AND coalesce(related.valid_to, datetime()) >= datetime()
         RETURN related.name as related_entity,
                labels(related)[0] as related_type,
                type(last(relationships(path))) as relationship,
