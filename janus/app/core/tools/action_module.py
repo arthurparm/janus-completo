@@ -20,6 +20,16 @@ from typing import Dict, List, Optional, Callable, Any, Type
 
 from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.repositories.observability_repository import record_audit_event_direct
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 from pydantic import BaseModel
 import inspect
 
@@ -121,20 +131,72 @@ class DynamicToolGenerator:
                 if is_async:
                     @tool(description=description, args_schema=args_schema)
                     async def dynamic_tool(*args, **kwargs):
-                        return await func(*args, **kwargs)
+                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        async with cm as span:  # type: ignore
+                            if _OTEL and span is not None:
+                                try:
+                                    tid = TRACE_ID.get()
+                                    sid = USER_ID.get()
+                                    if tid and tid != "-":
+                                        span.set_attribute("janus.trace_id", tid)
+                                    if sid and sid != "-":
+                                        span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("tool.name", name)
+                                except Exception:
+                                    pass
+                            return await func(*args, **kwargs)
                 else:
                     @tool(description=description, args_schema=args_schema)
                     def dynamic_tool(*args, **kwargs):
-                        return func(*args, **kwargs)
+                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        with cm as span:  # type: ignore
+                            if _OTEL and span is not None:
+                                try:
+                                    tid = TRACE_ID.get()
+                                    sid = USER_ID.get()
+                                    if tid and tid != "-":
+                                        span.set_attribute("janus.trace_id", tid)
+                                    if sid and sid != "-":
+                                        span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("tool.name", name)
+                                except Exception:
+                                    pass
+                            return func(*args, **kwargs)
             else:
                 if is_async:
                     @tool(description=description)
                     async def dynamic_tool(*args, **kwargs):
-                        return await func(*args, **kwargs)
+                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        async with cm as span:  # type: ignore
+                            if _OTEL and span is not None:
+                                try:
+                                    tid = TRACE_ID.get()
+                                    sid = USER_ID.get()
+                                    if tid and tid != "-":
+                                        span.set_attribute("janus.trace_id", tid)
+                                    if sid and sid != "-":
+                                        span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("tool.name", name)
+                                except Exception:
+                                    pass
+                            return await func(*args, **kwargs)
                 else:
                     @tool(description=description)
                     def dynamic_tool(*args, **kwargs):
-                        return func(*args, **kwargs)
+                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        with cm as span:  # type: ignore
+                            if _OTEL and span is not None:
+                                try:
+                                    tid = TRACE_ID.get()
+                                    sid = USER_ID.get()
+                                    if tid and tid != "-":
+                                        span.set_attribute("janus.trace_id", tid)
+                                    if sid and sid != "-":
+                                        span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("tool.name", name)
+                                except Exception:
+                                    pass
+                            return func(*args, **kwargs)
 
             # Renomeia a ferramenta para o nome desejado
             dynamic_tool.name = name
@@ -424,9 +486,39 @@ class ActionRegistry:
         metadata = self._metadata.get(tool_name)
         category = metadata.category.value if metadata else "unknown"
         outcome = "success" if success else "error"
+        try:
+            cm = (_tracer.start_as_current_span("tool.call") if _OTEL else nullcontext())
+            with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        tid = TRACE_ID.get()
+                        sid = USER_ID.get()
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        span.set_attribute("tool.name", tool_name)
+                        span.set_attribute("tool.outcome", outcome)
+                        span.set_attribute("tool.duration_seconds", float(duration))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         _TOOL_CALLS.labels(tool_name, category, outcome).inc()
         _TOOL_LATENCY.labels(tool_name, category).observe(duration)
+        try:
+            record_audit_event_direct({
+                "user_id": USER_ID.get(),
+                "endpoint": f"tool:{tool_name}",
+                "action": "tool_call",
+                "tool": tool_name,
+                "status": outcome,
+                "latency_ms": int(duration * 1000),
+                "trace_id": TRACE_ID.get(),
+            })
+        except Exception:
+            pass
 
     def get_statistics(self) -> Dict[str, Any]:
         """Retorna estatísticas de uso de ferramentas."""
