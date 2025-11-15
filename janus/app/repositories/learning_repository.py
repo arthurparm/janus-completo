@@ -236,11 +236,11 @@ class LearningRepository:
             logger.error("Erro no processo de treinamento", exc_info=e)
             return {"message": "Falha no treino.", "summary": str(e), "experiment_id": experiment_id}
 
-    async def run_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None) -> Dict[
+    async def run_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None, origin: Optional[str] = None) -> Dict[
         str, Any]:
         """Abstrai a execução do worker de coleta de dados."""
         logger.debug("Executando coleta de dados via repositório.", query=query, min_score=min_score)
-        return await data_harvester.harvest_data_for_training(limit=limit, query=query, min_score=min_score)
+        return await data_harvester.harvest_data_for_training(limit=limit, query=query, min_score=min_score, origin=origin)
 
     def is_harvester_healthy(self) -> bool:
         """Verifica a saúde do worker de coleta de dados."""

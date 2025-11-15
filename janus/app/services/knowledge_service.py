@@ -93,6 +93,9 @@ class KnowledgeService:
     async def semantic_query(self, question: str, limit: int = 10) -> str:
         return await query_knowledge_graph(question, limit=limit)
 
+    async def consolidate_document(self, user_id: str, doc_id: str, limit: int = 50) -> Dict[str, Any]:
+        return await knowledge_consolidator.consolidate_document(user_id=user_id, doc_id=doc_id, limit=limit)
+
     async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0) -> List[Dict[str, Any]]:
         return await self._repo.find_related_concepts(concept=concept, max_depth=max_depth, limit=limit, skip=skip)
 
@@ -117,6 +120,63 @@ class KnowledgeService:
                 "total_nodes": 0,
                 "total_relationships": 0,
             }
+
+    # --- Governança / HITL ---
+
+    async def register_relationship_type(self, name: str) -> Dict[str, Any]:
+        from app.db.graph import get_graph_db
+        db = await get_graph_db()
+        async with await db.get_session() as session:
+            await db.register_relationship_type(session, name)
+        return {"status": "registered", "name": name}
+
+    async def list_quarantine_items(self, limit: int = 50) -> List[Dict[str, Any]]:
+        from app.db.graph import get_graph_db
+        db = await get_graph_db()
+        rows = await db.query(
+            """
+            MATCH (q:Quarantine)-[:EXTRACTED_FROM]->(e:Experience)
+            RETURN q.reason AS reason, q.type AS type, q.from_name AS from_name, q.to_name AS to_name,
+                   e.id AS experience_id, e.timestamp AS timestamp
+            LIMIT $limit
+            """,
+            params={"limit": int(limit)},
+            operation="list_quarantine"
+        )
+        return rows or []
+
+    async def promote_quarantine_relationship(self, from_name: str, to_name: str, rel_type: str, source_experience: str) -> Dict[str, Any]:
+        from app.db.graph import get_graph_db
+        db = await get_graph_db()
+        async with await db.get_session() as session:
+            tx = await session.begin_transaction()
+            try:
+                await db.register_relationship_type(tx, rel_type)
+                await tx.run(
+                    f"""
+                    MATCH (a {{name: $from_name}})
+                    MATCH (b {{name: $to_name}})
+                    MERGE (a)-[r:`{rel_type}`]->(b)
+                    SET r.source_experience = $source_experience,
+                        r.promoted_at = datetime()
+                    """,
+                    from_name=from_name,
+                    to_name=to_name,
+                    source_experience=source_experience,
+                )
+                await tx.run(
+                    """
+                    MATCH (q:Quarantine {from_name: $from_name, to_name: $to_name, type: $type})
+                    DETACH DELETE q
+                    """,
+                    from_name=from_name,
+                    to_name=to_name,
+                    type=rel_type,
+                )
+                await tx.commit()
+                return {"status": "promoted", "from": from_name, "to": to_name, "type": rel_type}
+            finally:
+                await tx.close()
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_knowledge_service(request: Request) -> KnowledgeService:

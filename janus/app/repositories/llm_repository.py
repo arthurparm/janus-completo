@@ -2,7 +2,8 @@ import structlog
 from typing import Dict, Any, List, Optional
 from app.config import settings
 from app.core.llm.llm_manager import _provider_circuit_breakers  # type: ignore
-from app.core.llm.llm_manager import _llm_cache as llm_cache  # type: ignore
+from app.core.llm.llm_manager import _llm_pool  # type: ignore
+from app.core.llm.llm_manager import warm_llm_pool  # type: ignore
 from app.core.llm.llm_manager import _validate_openai_key, _validate_gemini_key  # type: ignore
 from app.core.llm.response_cache import get as rc_get, put as rc_put, entries as rc_entries, invalidate as rc_invalidate
 
@@ -11,7 +12,6 @@ from app.core.llm import (
     ModelRole,
     ModelPriority,
     invalidate_cache,
-    _llm_cache,
     _provider_circuit_breakers
 )
 
@@ -105,15 +105,27 @@ class LLMRepository:
                 raise LLMRepositoryError(f"Falha ao invocar LLM: {e2}") from e2
 
     def get_cache_entries(self) -> List[Dict[str, Any]]:
-        logger.debug("Buscando entradas do cache de LLMs no repositório.")
+        logger.debug("Buscando entradas do pool de LLMs no repositório.")
         entries = []
-        for key, cached in _llm_cache.items():
+        for key, items in _llm_pool.items():
+            try:
+                provider, model = key.split(":", 1)
+            except Exception:
+                provider, model = "unknown", key
             entries.append({
-                "cache_key": key,
-                "provider": cached.provider,
-                "consecutive_failures": cached.consecutive_failures,
-                "created_at": cached.created_at.isoformat(),
+                "pool_key": key,
+                "provider": provider,
+                "model": model,
+                "size": len(items),
             })
+            for it in items:
+                entries.append({
+                    "pool_key": key,
+                    "provider": it.provider,
+                    "model": it.model,
+                    "consecutive_failures": it.consecutive_failures,
+                    "created_at": it.created_at.isoformat(),
+                })
         # Acrescenta entradas do cache de respostas
         try:
             entries.extend([{**e, "kind": "response"} for e in rc_entries()])
@@ -122,9 +134,13 @@ class LLMRepository:
         return entries
 
     def invalidate_cache(self, provider: Optional[str] = None) -> int:
-        logger.debug("Invalidando cache de LLMs via repositório", provider=provider)
+        logger.debug("Invalidando pool de LLMs via repositório", provider=provider)
         invalidate_cache(provider=provider)
-        return len(_llm_cache)
+        return sum(len(v) for v in _llm_pool.values())
+
+    def warm_pool(self, specs: Optional[List[str]] = None) -> Dict[str, int]:
+        logger.debug("Pré-aquecendo pool de LLMs via repositório.")
+        return warm_llm_pool(specs or getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or [])
 
     def invalidate_response_cache(self, prompt: Optional[str] = None, role: Optional[str] = None,
                                   priority: Optional[str] = None) -> int:

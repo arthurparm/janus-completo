@@ -112,6 +112,10 @@ class LLMService:
         logger.info("Listando provedores de LLMs via serviço.")
         return self._repo.list_providers()
 
+    def warm_pool(self, specs: Optional[List[str]] = None) -> Dict[str, int]:
+        logger.info("Pré-aquecendo pool de LLMs via serviço.")
+        return self._repo.warm_pool(specs)
+
     async def get_health_status(self) -> Dict[str, Any]:
         logger.info("Verificando saúde do sistema de LLMs via serviço.")
         # Usa health monitor central para consolidar o estado dos circuit breakers e cache

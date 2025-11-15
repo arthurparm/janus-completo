@@ -9,6 +9,7 @@ from prometheus_client import Counter, Histogram, Gauge
 
 from app.core.autonomy.policy_engine import PolicyEngine, PolicyConfig
 from app.services.optimization_service import OptimizationService
+from app.repositories.autonomy_repository import AutonomyRepository
 from app.core.tools.action_module import action_registry
 from fastapi import Request
 
@@ -67,7 +68,7 @@ class AutonomyService:
     Fechamento de loop (Refletir/Otimizar) será integrado em etapas seguintes.
     """
 
-    def __init__(self, optimization_service: OptimizationService, llm_service: Optional[LLMService] = None, goal_manager: Optional[GoalManager] = None):
+    def __init__(self, optimization_service: OptimizationService, llm_service: Optional[LLMService] = None, goal_manager: Optional[GoalManager] = None, repo: Optional[AutonomyRepository] = None):
         self._optimization_service = optimization_service
         self._llm_service = llm_service
         self._goal_manager = goal_manager
@@ -77,6 +78,8 @@ class AutonomyService:
         self._running = False
         self._cycle_count = 0
         self._last_cycle_at: Optional[float] = None
+        self._repo = repo or AutonomyRepository()
+        self._current_run_id: Optional[int] = None
 
     def _is_active(self) -> bool:
         return self._autonomy_task is not None and not self._autonomy_task.done()
@@ -96,6 +99,21 @@ class AutonomyService:
         ))
         self._running = True
         AUTONOMY_ACTIVE.set(1)
+        try:
+            run = self._repo.create_run(
+                user_id=self._config.user_id,
+                project_id=self._config.project_id,
+                risk_profile=self._config.risk_profile,
+                auto_confirm=self._config.auto_confirm,
+                allowlist=self._config.allowlist,
+                blocklist=self._config.blocklist,
+                max_actions_per_cycle=self._config.max_actions_per_cycle,
+                max_seconds_per_cycle=self._config.max_seconds_per_cycle,
+                interval_seconds=self._config.interval_seconds,
+            )
+            self._current_run_id = run.id
+        except Exception:
+            self._current_run_id = None
         self._autonomy_task = asyncio.create_task(self._run_loop())
         logger.info("AutonomyLoop iniciado", interval_seconds=config.interval_seconds)
         return True
@@ -108,6 +126,11 @@ class AutonomyService:
         AUTONOMY_ACTIVE.set(0)
         try:
             self._autonomy_task.cancel()
+        except Exception:
+            pass
+        try:
+            if self._current_run_id:
+                self._repo.stop_run(self._current_run_id)
         except Exception:
             pass
         logger.info("AutonomyLoop parado")
@@ -141,6 +164,35 @@ class AutonomyService:
         self._config.plan = plan or []
         logger.info("Plano de execução atualizado", steps=len(self._config.plan))
 
+    def update_policy_config(self, risk_profile: Optional[str] = None, auto_confirm: Optional[bool] = None,
+                             allowlist: Optional[list[str]] = None, blocklist: Optional[list[str]] = None,
+                             max_actions_per_cycle: Optional[int] = None, max_seconds_per_cycle: Optional[int] = None) -> None:
+        if risk_profile is not None:
+            self._config.risk_profile = risk_profile
+        if auto_confirm is not None:
+            self._config.auto_confirm = bool(auto_confirm)
+        if allowlist is not None:
+            self._config.allowlist = allowlist or []
+        if blocklist is not None:
+            self._config.blocklist = blocklist or []
+        if isinstance(max_actions_per_cycle, int) and max_actions_per_cycle > 0:
+            self._config.max_actions_per_cycle = max_actions_per_cycle
+        if isinstance(max_seconds_per_cycle, int) and max_seconds_per_cycle > 0:
+            self._config.max_seconds_per_cycle = max_seconds_per_cycle
+        self._policy = PolicyEngine(PolicyConfig(
+            risk_profile=self._config.risk_profile,
+            auto_confirm=self._config.auto_confirm,
+            allowlist=set(self._config.allowlist or []),
+            blocklist=set(self._config.blocklist or []),
+            max_actions_per_cycle=self._config.max_actions_per_cycle,
+            max_seconds_per_cycle=self._config.max_seconds_per_cycle,
+        ))
+        logger.info("Configuração de políticas atualizada",
+                    risk_profile=self._config.risk_profile,
+                    auto_confirm=self._config.auto_confirm,
+                    allowlist=len(self._config.allowlist),
+                    blocklist=len(self._config.blocklist))
+
     async def _run_loop(self):
         try:
             while self._running:
@@ -157,6 +209,11 @@ class AutonomyService:
                     AUTONOMY_LATENCY.observe(duration)
                     self._cycle_count += 1
                     self._last_cycle_at = time.time()
+                try:
+                    if self._current_run_id:
+                        self._repo.increment_cycles(self._current_run_id)
+                except Exception:
+                    pass
                 await asyncio.sleep(max(1, int(self._config.interval_seconds)))
         except asyncio.CancelledError:
             logger.info("Tarefa de AutonomyLoop cancelada")
@@ -279,6 +336,22 @@ class AutonomyService:
                 dur = time.perf_counter() - t0
                 try:
                     action_registry.record_call(tool_name, dur, success=success, error=error_msg, input_args=args)
+                except Exception:
+                    pass
+                try:
+                    if self._current_run_id is not None:
+                        self._repo.add_step(
+                            run_id=self._current_run_id,
+                            cycle=self._cycle_count + 1,
+                            tool=tool_name,
+                            input_preview=input_preview,
+                            input_length=input_length,
+                            result_preview=result_preview,
+                            result_length=result_length,
+                            success=success,
+                            error=error_msg,
+                            duration_seconds=dur,
+                        )
                 except Exception:
                     pass
 

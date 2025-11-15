@@ -38,11 +38,11 @@ class LearningService:
     def __init__(self, repo: LearningRepository):
         self._repo = repo
 
-    async def trigger_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None) -> \
+    async def trigger_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None, origin: Optional[str] = None) -> \
     Dict[str, Any]:
         logger.info("Orquestrando coleta de dados para treinamento", limit=limit, query=query, min_score=min_score)
         try:
-            result = await self._repo.run_harvesting(limit=limit, query=query, min_score=min_score)
+            result = await self._repo.run_harvesting(limit=limit, query=query, min_score=min_score, origin=origin)
             if "bem-sucedida" in result.get("message", ""):
                 self._repo.increment_harvested_count(limit)
             return result

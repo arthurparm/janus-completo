@@ -208,6 +208,42 @@ class KnowledgeRepository:
         rows = await self._db.query(query, operation="repo_get_node_types")
         return [row.get("type", "") for row in rows]
 
+    # --- Consolidação inicial de conhecimento a partir de experiências ---
+    async def merge_experience_mentions(self, experience: Dict[str, Any], concepts: List[str]) -> None:
+        if not experience:
+            return
+        exp_id = experience.get("id") or experience.get("experience_id") or ""
+        content = experience.get("content") or ""
+        ts = experience.get("ts_ms") or experience.get("timestamp") or None
+        async with await self._db.get_session() as session:
+            tx = await session.begin_transaction()
+            try:
+                exp_label = GraphLabel.REFLECTION.value if (experience.get("type") == "reflection") else GraphLabel.ENTITY.value
+                # Usa Experience como label primário para auditabilidade
+                exp_node_label = f"Experience:{exp_label}"
+                exp_key = exp_id or (content[:64] if content else "exp")
+                exp_node_id = await self._db.merge_node(tx, label=exp_node_label, name=str(exp_key))
+                # Atualiza propriedades básicas
+                await self._db.execute(
+                    """
+                    MATCH (e:Experience {name: $name})
+                    SET e.content = COALESCE($content, e.content),
+                        e.ts_ms = COALESCE($ts_ms, e.ts_ms)
+                    """,
+                    {"name": str(exp_key), "content": content[:2000] if isinstance(content, str) else None, "ts_ms": ts},
+                    operation="repo_update_experience_props",
+                )
+
+                for c in concepts:
+                    cname = c.strip()
+                    if not cname or len(cname) < 2:
+                        continue
+                    concept_id = await self._db.merge_node(tx, label=GraphLabel.CONCEPT.value, name=cname)
+                    await self._db.merge_relationship(tx, source_id=exp_node_id, target_id=concept_id, rel_type=GraphRelationship.MENTIONS.value)
+                await tx.commit()
+            finally:
+                await tx.close()
+
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_knowledge_repository(db: GraphDatabase = Depends(get_graph_db)) -> "KnowledgeRepository":
     return KnowledgeRepository(db)

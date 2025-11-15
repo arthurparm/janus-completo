@@ -6,6 +6,9 @@ from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.tool_service import ToolService
 from app.core.llm import ModelRole, ModelPriority
+from app.core.embeddings.embedding_manager import embed_text
+from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from qdrant_client import models
 from app.core.monitoring.chat_metrics import (
     CHAT_MESSAGES_TOTAL,
     CHAT_LATENCY_SECONDS,
@@ -19,6 +22,7 @@ import json
 import asyncio
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.core.workers.reflexion_worker import publish_reflexion_task
+from uuid import uuid4
 
 logger = structlog.get_logger(__name__)
 
@@ -75,6 +79,10 @@ class ChatService:
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         in_tokens = self._estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
+        try:
+            self._maybe_index_message(text=message, user_id=user_id, conversation_id=conversation_id, role="user")
+        except Exception:
+            pass
 
         # Intercepta fluxo de descoberta interativa de ferramentas/configuração
         if self._tools and self._is_discovery_query(message):
@@ -232,6 +240,10 @@ class ChatService:
         self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
         out_tokens = self._estimate_tokens(assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
+        try:
+            self._maybe_index_message(text=assistant_text, user_id=user_id, conversation_id=conversation_id, role="assistant")
+        except Exception:
+            pass
 
         # Aproxima custo com pricing do provedor, se disponível
         try:
@@ -269,6 +281,28 @@ class ChatService:
         except Exception:
             pass
         return result_with_conv
+
+    def _maybe_index_message(self, text: str, user_id: Optional[str], conversation_id: str, role: str) -> None:
+        if not text or not user_id:
+            return
+        vec = embed_text(text)
+        collection_name = get_or_create_collection(f"user_{user_id}")
+        client = get_qdrant_client()
+        now_ms = int(_time.time() * 1000)
+        payload = {
+            "content": text,
+            "ts_ms": now_ms,
+            "metadata": {
+                "type": "chat_msg",
+                "user_id": user_id,
+                "session_id": conversation_id,
+                "role": role,
+                "timestamp": now_ms,
+            }
+        }
+        pid = f"chat:{user_id}:{conversation_id}:{uuid4().hex}"
+        point = models.PointStruct(id=pid, vector=vec, payload=payload)
+        client.upsert(collection_name=collection_name, points=[point])
 
     def get_history(self, conversation_id: str) -> Dict[str, Any]:
         try:
