@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.db.mysql_config import mysql_db
-from app.models.user_models import User, Role, UserRole, Profile, Consent
+from app.models.user_models import User, Role, UserRole, Profile, Consent, OAuthToken
 
 class UserRepository:
     def __init__(self, session: Optional[Session] = None):
@@ -55,6 +55,17 @@ class UserRepository:
         try:
             q = s.query(UserRole).join(Role, UserRole.role_id == Role.id).filter(
                 and_(UserRole.user_id == user_id, Role.name == "ADMIN")
+            )
+            return q.first() is not None
+        finally:
+            if not self._session:
+                s.close()
+
+    def has_role(self, user_id: int, role_name: str) -> bool:
+        s = self._get_session()
+        try:
+            q = s.query(UserRole).join(Role, UserRole.role_id == Role.id).filter(
+                and_(UserRole.user_id == user_id, Role.name == role_name)
             )
             return q.first() is not None
         finally:
@@ -160,6 +171,42 @@ class ConsentRepository:
                 except Exception:
                     return False
             return True
+        finally:
+            if not self._session:
+                s.close()
+
+
+class OAuthTokenRepository:
+    def __init__(self, session: Optional[Session] = None):
+        self._session = session
+
+    def _get_session(self) -> Session:
+        if self._session:
+            return self._session
+        return mysql_db.get_session_direct()
+
+    def upsert(self, user_id: int, provider: str, access_token: str, refresh_token: Optional[str], expires_at: Optional[Any]) -> OAuthToken:
+        s = self._get_session()
+        try:
+            tok = s.query(OAuthToken).filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider).first()
+            if tok is None:
+                tok = OAuthToken(user_id=user_id, provider=provider, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at)
+                s.add(tok)
+            else:
+                tok.access_token = access_token
+                tok.refresh_token = refresh_token if refresh_token is not None else tok.refresh_token
+                tok.expires_at = expires_at
+            s.commit()
+            s.refresh(tok)
+            return tok
+        finally:
+            if not self._session:
+                s.close()
+
+    def get(self, user_id: int, provider: str) -> Optional[OAuthToken]:
+        s = self._get_session()
+        try:
+            return s.query(OAuthToken).filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider).first()
         finally:
             if not self._session:
                 s.close()
