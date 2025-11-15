@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import json
+import msgpack
 import base64
 from typing import Optional, Callable, Awaitable, Any, Dict
 from urllib.parse import quote
@@ -68,11 +69,12 @@ class MessageBroker:
     async def publish(
         self,
         queue_name: str,
-        message: str,
+        message: Any,
         *,
         priority: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None,
         expiration: Optional[int] = None,
+        use_msgpack: Optional[bool] = None,
     ):
         """
         Publica uma mensagem em uma fila.
@@ -88,12 +90,33 @@ class MessageBroker:
         async with self._connection.channel() as channel:
             arguments = self._get_queue_arguments(queue_name)
             await channel.declare_queue(queue_name, durable=True, arguments=arguments)
+
+            fmt_msgpack = use_msgpack if use_msgpack is not None else getattr(settings, "BROKER_USE_MSGPACK", True)
+
+            merged_headers: Dict[str, Any] = {**(headers or {})}
+
+            if fmt_msgpack:
+                if isinstance(message, (bytes, bytearray)):
+                    body = bytes(message)
+                else:
+                    body = msgpack.packb(message, use_bin_type=True)
+                content_type = "application/msgpack"
+            else:
+                if isinstance(message, str):
+                    body = message.encode("utf-8")
+                else:
+                    body = json.dumps(message, ensure_ascii=False).encode("utf-8")
+                content_type = "application/json"
+
+            merged_headers.setdefault("content_type", content_type)
+
             msg = aio_pika.Message(
-                body=message.encode(),
+                body=body,
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 priority=priority,
-                headers=headers,
+                headers=merged_headers,
                 expiration=expiration,
+                content_type=content_type,
             )
             await channel.default_exchange.publish(msg, routing_key=queue_name)
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
@@ -164,8 +187,12 @@ class MessageBroker:
         """
         async def _on_message(message: aio_pika.IncomingMessage):
             try:
-                payload = json.loads(message.body.decode("utf-8"))
-                # Converte para TaskMessage e processa
+                ct = getattr(message, "content_type", None) or (message.headers or {}).get("content_type")
+                use_msgpack_flag = getattr(settings, "BROKER_USE_MSGPACK", True)
+                if ct == "application/msgpack" or use_msgpack_flag:
+                    payload = msgpack.unpackb(message.body, raw=False)
+                else:
+                    payload = json.loads(message.body.decode("utf-8"))
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
                 await callback(task)
             except Exception as e:
@@ -244,8 +271,16 @@ class MessageBroker:
                 req = Request(url)
                 token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
                 req.add_header("Authorization", f"Basic {token}")
-                with urlopen(req, timeout=5) as resp:
+                from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
+                import time as _t
+                _t_start = _t.perf_counter()
+                _timeout = get_timeout_recommendation("rabbitmq_management", 5.0)
+                with urlopen(req, timeout=float(_timeout)) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
+                    try:
+                        record_latency("rabbitmq_management", _t.perf_counter() - _t_start)
+                    except Exception:
+                        pass
                     return {
                         "name": data.get("name"),
                         "durable": data.get("durable", True),

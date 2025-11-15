@@ -5,6 +5,7 @@ import sys
 from typing import Any, Dict, Optional
 
 import structlog
+from app.config import settings
 
 try:
     # Optional OpenTelemetry correlation
@@ -119,3 +120,27 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
+def setup_tracing(app=None):
+    try:
+        if not getattr(settings, "OTEL_ENABLED", False):
+            return
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry import trace
+        service_name = getattr(settings, "OTEL_SERVICE_NAME", settings.APP_NAME)
+        endpoint = getattr(settings, "OTEL_OTLP_ENDPOINT", None)
+        resource = Resource.create({"service.name": service_name})
+        provider = TracerProvider(resource=resource)
+        if endpoint:
+            exporter = OTLPSpanExporter(endpoint=endpoint)
+            processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(processor)
+        trace.set_tracer_provider(provider)
+        if app is not None:
+            from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+            FastAPIInstrumentor.instrument_app(app)
+    except Exception:
+        pass

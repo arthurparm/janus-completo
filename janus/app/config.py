@@ -52,7 +52,8 @@ class AppSettings(BaseSettings):
 
     # Memória
     MEMORY_SHORT_TTL_SECONDS: int = 600
-    MEMORY_SHORT_MAX_ITEMS: int = 512
+    MEMORY_SHORT_MAX_ITEMS: int = 256
+    MEMORY_SHORT_SCAN_MAX_ITEMS: int = 128
     MEMORY_MAX_CONTENT_CHARS: int = 20000
     MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
     MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
@@ -78,6 +79,11 @@ class AppSettings(BaseSettings):
     LLM_RETRY_INITIAL_BACKOFF_SECONDS: float = 0.5
     LLM_RETRY_MAX_BACKOFF_SECONDS: float = 5.0
     LLM_CACHE_TTL_SECONDS: int = 3600
+    LLM_RESPONSE_CACHE_USE_MSGPACK: bool = False
+    LLM_POOL_MAX_SIZE: int = 4
+    LLM_POOL_TTL_SECONDS: int = 3600
+    LLM_POOL_WARM_PROVIDERS: List[str] = []
+    LLM_EXECUTOR_MAX_WORKERS: int = 4
     LLM_MAX_PROMPT_LENGTH: int = 100000
     # Política econômica e tetos de custo
     LLM_ECONOMY_POLICY: str = "balanced"  # strict | balanced | quality
@@ -101,6 +107,23 @@ class AppSettings(BaseSettings):
     LLM_MAX_GENERATION_TOKENS_CAP: int = 4096
     LLM_MIN_GENERATION_TOKENS: int = 64
 
+    # Auto-tuning de timeouts
+    TIMEOUT_AUTO_TUNE_ENABLED: bool = True
+    TIMEOUT_AUTO_TUNE_PERCENTILE: float = 0.95
+    TIMEOUT_AUTO_TUNE_PAD_SECONDS: float = 0.5
+    TIMEOUT_MIN_SECONDS_MAP: Dict[str, float] = {
+        "llm": 5.0,
+        "qdrant_search": 3.0,
+        "neo4j_query": 3.0,
+        "rabbitmq_management": 2.0,
+    }
+    TIMEOUT_MAX_SECONDS_MAP: Dict[str, float] = {
+        "llm": 180.0,
+        "qdrant_search": 120.0,
+        "neo4j_query": 120.0,
+        "rabbitmq_management": 30.0,
+    }
+
     # Orçamentos diários multitenant (sem persistência)
     TENANT_USER_DAILY_BUDGET_USD: float = 1.00
     TENANT_PROJECT_DAILY_BUDGET_USD: float = 3.00
@@ -113,6 +136,9 @@ class AppSettings(BaseSettings):
     OPENAI_API_KEY: Optional[SecretStr] = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
     OPENAI_MODELS: List[str] = ["gpt-4o"]
+    OPENAI_HTTP_MAX_CONNECTIONS: int = 100
+    OPENAI_HTTP_MAX_KEEPALIVE: int = 20
+    OPENAI_HTTP_TIMEOUT_SECONDS: float = 60.0
     GEMINI_API_KEY: Optional[SecretStr] = None
     GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
     GEMINI_MODELS: List[str] = ["gemini-2.5-flash"]
@@ -158,6 +184,14 @@ class AppSettings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_IP_PER_MIN: int = 60
+
+    # Estáticos
+    SERVE_STATIC_FILES: bool = False
+    STATIC_FILES_DIR: str = "front/janus-angular/public"
+
+    # Timeouts de infraestrutura
+    QDRANT_DEFAULT_TIMEOUT_SECONDS: int = 30
+    NEO4J_DEFAULT_TIMEOUT_SECONDS: int = 30
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
     # Sprint 1: RabbitMQ
@@ -166,6 +200,7 @@ class AppSettings(BaseSettings):
     RABBITMQ_USER: str = "janus"
     RABBITMQ_PASSWORD: str = "janus_pass"
     RABBITMQ_MANAGEMENT_PORT: int = 15672
+    BROKER_USE_MSGPACK: bool = True
     RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
         "janus.knowledge.consolidation": {
             "x-message-ttl": 86400000,
@@ -223,6 +258,11 @@ class AppSettings(BaseSettings):
     REFLEXION_MAX_ITERATIONS: int = 3
     REFLEXION_MAX_TIME_SECONDS: int = 180
     REFLEXION_SUCCESS_THRESHOLD: float = 0.8
+
+    # Observabilidade
+    OTEL_ENABLED: bool = False
+    OTEL_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SERVICE_NAME: Optional[str] = None
 
     # ======= Validadores para variáveis de ambiente complexas =======
 

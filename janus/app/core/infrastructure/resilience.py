@@ -287,6 +287,25 @@ class CircuitBreaker:
 
         logger.info("circuit_breaker_reset", operation=self._last_operation)
 
+    def update_params(self, failure_threshold: Optional[int] = None, recovery_timeout: Optional[int] = None) -> None:
+        if failure_threshold is not None:
+            try:
+                ft = int(failure_threshold)
+                if ft >= 1:
+                    self.failure_threshold = ft
+            except Exception:
+                pass
+        if recovery_timeout is not None:
+            try:
+                rt = int(recovery_timeout)
+                if rt >= 1:
+                    self.recovery_timeout = rt
+            except Exception:
+                pass
+        if self._last_operation != "unknown":
+            _FAILURE_COUNT_GAUGE.labels(operation=self._last_operation).set(self.failure_count)
+            self._set_state_gauges(self._last_operation)
+
 
 def resilient(
         max_attempts: int = 3,

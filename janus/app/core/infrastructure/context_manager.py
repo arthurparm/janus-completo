@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from pydantic import BaseModel, Field
+import msgpack
 
 from app.config import settings
 
@@ -58,6 +59,14 @@ class WebSearchResult(BaseModel):
     query: str = Field(description="Query utilizada")
     results: List[Dict[str, Any]] = Field(description="Resultados da busca")
     timestamp: str = Field(description="Timestamp da busca")
+
+    def to_msgpack(self) -> bytes:
+        return msgpack.packb(self.model_dump(), use_bin_type=True)
+
+    @staticmethod
+    def from_msgpack(data: bytes) -> "WebSearchResult":
+        obj = msgpack.unpackb(data, raw=False)
+        return WebSearchResult(**obj)
 
 
 class ContextManager:

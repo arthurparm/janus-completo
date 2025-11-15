@@ -1,4 +1,4 @@
-import threading
+import asyncio
 import time
 from typing import Dict, Optional
 
@@ -14,12 +14,11 @@ class _TokenBucket:
         self.tokens = self.capacity
         self.rate_per_sec = rate_per_minute / 60.0
         self.timestamp = time.time()
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def allow(self) -> bool:
-        with self._lock:
+    async def allow(self) -> bool:
+        async with self._lock:
             now = time.time()
-            # refill
             delta = now - self.timestamp
             self.timestamp = now
             self.tokens = min(self.capacity, self.tokens + delta * self.rate_per_sec)
@@ -39,13 +38,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.key_limit = max(1, getattr(settings, "RATE_LIMIT_PER_KEY_PER_MIN", 300))
         self._buckets_ip: Dict[str, _TokenBucket] = {}
         self._buckets_key: Dict[str, _TokenBucket] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def _get_bucket(self, store: Dict[str, _TokenBucket], key: str, rate: int) -> _TokenBucket:
+    async def _get_bucket(self, store: Dict[str, _TokenBucket], key: str, rate: int) -> _TokenBucket:
         b = store.get(key)
         if b is not None:
             return b
-        with self._lock:
+        async with self._lock:
             b = store.get(key)
             if b is None:
                 b = _TokenBucket(rate)
@@ -65,7 +64,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         api_key = request.headers.get("X-API-Key")
 
         # per-IP check
-        if not self._get_bucket(self._buckets_ip, client_ip, self.ip_limit).allow():
+        ip_bucket = await self._get_bucket(self._buckets_ip, client_ip, self.ip_limit)
+        if not await ip_bucket.allow():
             return Response(
                 content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per IP)","instance":"%s"}' % path,
                 media_type="application/problem+json",
@@ -75,7 +75,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # per-key check if header present
         if api_key:
-            if not self._get_bucket(self._buckets_key, api_key, self.key_limit).allow():
+            key_bucket = await self._get_bucket(self._buckets_key, api_key, self.key_limit)
+            if not await key_bucket.allow():
                 return Response(
                     content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per API key)","instance":"%s"}' % path,
                     media_type="application/problem+json",
