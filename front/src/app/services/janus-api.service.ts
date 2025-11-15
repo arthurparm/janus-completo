@@ -95,6 +95,8 @@ export interface ChatMessageResponse { message?: ChatMessage; assistant_message?
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ConversationMeta { conversation_id: string; title?: string; last_message_at?: string }
 export interface ConversationsListResponse { conversations: ConversationMeta[] }
+export interface UserRolesResponse { user_id: number; roles: string[] }
+export interface TokenResponse { token: string }
 
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
@@ -242,6 +244,17 @@ export class JanusApiService {
 
   listConversations(): Observable<ConversationsListResponse> {
     return this.http.get<ConversationsListResponse>(`/api/v1/chat/conversations`)
+  }
+
+  // Users
+  getUserRoles(user_id: number): Observable<UserRolesResponse> {
+    return this.http.get<UserRolesResponse>(`/api/v1/users/${encodeURIComponent(String(user_id))}/roles`)
+  }
+
+  // Auth
+  issueToken(user_id: number, expires_in: number = 3600): Observable<TokenResponse> {
+    const headers = { 'X-User-Id': String(user_id) }
+    return this.http.post<TokenResponse>(`/api/v1/auth/token`, { user_id, expires_in }, { headers })
   }
 }
 

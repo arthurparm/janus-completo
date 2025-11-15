@@ -1,0 +1,14 @@
+<div class="login">
+  <h2>Login (Dev)</h2>
+  <p>Informe seu User ID para emitir um token JWT de desenvolvimento.</p>
+  <form (ngSubmit)="submit()" #f="ngForm">
+    <label>User ID:
+      <input type="number" [(ngModel)]="userId" name="userId" required/>
+    </label>
+    <label>Expira em (s):
+      <input type="number" [(ngModel)]="expires" name="expires" min="60"/>
+    </label>
+    <button type="submit" [disabled]="f.invalid">Emitir Token</button>
+  </form>
+  <div *ngIf="message" class="msg">{{message}}</div>
+</div>
