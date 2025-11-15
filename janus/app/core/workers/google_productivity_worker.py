@@ -182,6 +182,10 @@ async def start_google_productivity_consumer():
                         })
                     except Exception:
                         pass
+                    try:
+                        _PROD_WORKER_USER_EVENTS.labels(str(user_id or ""), "calendar_send", "error").inc()
+                    except Exception:
+                        pass
                 if do_index and user_id is not None:
                     try:
                         _t0 = __import__("time").perf_counter()
@@ -223,8 +227,8 @@ async def start_google_productivity_consumer():
                             })
                         except Exception:
                             pass
-                    except Exception:
-                        pass
+                except Exception:
+                    pass
             if task.task_type == "google_mail_send" and user_id is not None:
                 try:
                     repo = OAuthTokenRepository()
@@ -310,6 +314,11 @@ async def start_google_productivity_consumer():
                             _PROD_WORKER_LATENCY.labels("mail_index").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
+                except Exception:
+                    pass
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_USER_EVENTS.labels(str(user_id or ""), "mail_send", "error").inc()
                     except Exception:
                         pass
             try:
