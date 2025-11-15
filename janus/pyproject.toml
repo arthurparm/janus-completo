@@ -51,6 +51,7 @@ numpy = ">=1.26.0"
 # Security
 cryptography = ">=41.0.0"
 pymysql = "*"
+sqlalchemy = ">=2.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
