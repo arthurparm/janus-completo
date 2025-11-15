@@ -97,6 +97,22 @@ export interface ConversationMeta { conversation_id: string; title?: string; las
 export interface ConversationsListResponse { conversations: ConversationMeta[] }
 export interface UserRolesResponse { user_id: number; roles: string[] }
 export interface TokenResponse { token: string }
+export interface ProductivityLimitUsage { max_per_day: number; used: number; remaining: number }
+export interface ProductivityLimitsStatusResponse { user_id: string; limits: Record<string, ProductivityLimitUsage> }
+export interface GoogleOAuthStartResponse { authorize_url: string }
+export interface GoogleOAuthCallbackResponse { status: string; state?: string }
+export interface CalendarEvent { title: string; start_ts: number; end_ts: number; location?: string; notes?: string }
+export interface CalendarAddRequest { user_id: number; event: CalendarEvent; index?: boolean }
+export interface MailMessage { to: string; subject: string; body: string }
+export interface MailSendRequest { user_id: number; message: MailMessage; index?: boolean }
+export interface QueueAck { status: string; task_id?: string }
+export interface ExperimentWinnerResponse { winner: any; arms: any[]; metric: string; p_value?: number | null }
+export interface AssignmentResponse { experiment_id: number; user_id: string; arm_id: number }
+export interface FeedbackSubmitResponse { id: number; status: string }
+export interface DeploymentStageResponse { model_id: string; status: string; rollout_percent: number }
+export interface DeploymentPublishResponse { model_id: string; status: string; rollout_percent: number }
+export interface GPUBudgetResponse { user_id: string; budget: number }
+export interface GPUUsageResponse { used: number; updated_at?: string | null }
 
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
@@ -255,6 +271,74 @@ export class JanusApiService {
   issueToken(user_id: number, expires_in: number = 3600): Observable<TokenResponse> {
     const headers = { 'X-User-Id': String(user_id) }
     return this.http.post<TokenResponse>(`/api/v1/auth/token`, { user_id, expires_in }, { headers })
+  }
+
+  // Productivity limits status
+  getProductivityLimitsStatus(user_id: number): Observable<ProductivityLimitsStatusResponse> {
+    const headers = { 'X-User-Id': String(user_id) }
+    return this.http.get<ProductivityLimitsStatusResponse>(`/api/v1/productivity/limits/status?user_id=${encodeURIComponent(String(user_id))}`, { headers })
+  }
+
+  // Google OAuth
+  googleOAuthStart(user_id: number, scope: 'calendar' | 'mail' | 'notes' = 'calendar'): Observable<GoogleOAuthStartResponse> {
+    const headers = { 'X-User-Id': String(user_id) }
+    const qs = new URLSearchParams({ user_id: String(user_id), scope })
+    return this.http.get<GoogleOAuthStartResponse>(`/api/v1/productivity/oauth/google/start?${qs.toString()}`, { headers })
+  }
+
+  googleOAuthCallback(code: string, state: string): Observable<GoogleOAuthCallbackResponse> {
+    return this.http.post<GoogleOAuthCallbackResponse>(`/api/v1/productivity/oauth/google/callback`, { code, state })
+  }
+
+  // Calendar and Mail operations (queued)
+  calendarAddEvent(req: CalendarAddRequest): Observable<QueueAck> {
+    const headers = { 'X-User-Id': String(req.user_id) }
+    return this.http.post<QueueAck>(`/api/v1/productivity/calendar/events/add`, req, { headers })
+  }
+
+  mailSend(req: MailSendRequest): Observable<QueueAck> {
+    const headers = { 'X-User-Id': String(req.user_id) }
+    return this.http.post<QueueAck>(`/api/v1/productivity/mail/messages/send`, req, { headers })
+  }
+
+  // A/B Testing
+  getExperimentWinner(experiment_id: number, metric_name: string = 'accuracy'): Observable<ExperimentWinnerResponse> {
+    const qs = new URLSearchParams({ metric_name })
+    return this.http.get<ExperimentWinnerResponse>(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/winner?${qs.toString()}`)
+  }
+
+  assignUserToExperiment(experiment_id: number, user_id: string): Observable<AssignmentResponse> {
+    return this.http.post<AssignmentResponse>(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/assign`, { user_id })
+  }
+
+  submitExperimentFeedback(experiment_id: number, user_id: string, rating: number, notes?: string): Observable<FeedbackSubmitResponse> {
+    return this.http.post<FeedbackSubmitResponse>(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/feedback`, { user_id, rating, notes })
+  }
+
+  getExperimentFeedbackStats(experiment_id: number): Observable<any> {
+    return this.http.get<any>(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/feedback/stats`)
+  }
+
+  // Deployment
+  stageDeployment(model_id: string, rollout_percent: number): Observable<DeploymentStageResponse> {
+    return this.http.post<DeploymentStageResponse>(`/api/v1/deployment/stage`, { model_id, rollout_percent })
+  }
+
+  publishDeployment(model_id: string): Observable<DeploymentPublishResponse> {
+    return this.http.post<DeploymentPublishResponse>(`/api/v1/deployment/publish?model_id=${encodeURIComponent(model_id)}`, {})
+  }
+
+  rollbackDeployment(model_id: string): Observable<DeploymentPublishResponse> {
+    return this.http.post<DeploymentPublishResponse>(`/api/v1/deployment/rollback?model_id=${encodeURIComponent(model_id)}`, {})
+  }
+
+  // GPU resources
+  getGPUUsage(user_id: string): Observable<GPUUsageResponse> {
+    return this.http.get<GPUUsageResponse>(`/api/v1/resources/gpu/usage/${encodeURIComponent(user_id)}`)
+  }
+
+  setGPUBudget(user_id: string, budget: number): Observable<GPUBudgetResponse> {
+    return this.http.post<GPUBudgetResponse>(`/api/v1/resources/gpu/budget`, { user_id, budget })
   }
 }
 
