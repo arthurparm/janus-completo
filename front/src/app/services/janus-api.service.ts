@@ -78,6 +78,8 @@ export type GraphQuarantineListResponse = GraphQuarantineItem[]
 
 export interface AuditEvent { id: number; user_id?: number; endpoint?: string; action?: string; tool?: string; status?: string; latency_ms?: number; trace_id?: string; created_at?: number }
 export interface AuditEventsResponse { total: number; events: AuditEvent[] }
+export interface ReviewerMetricsResponse { user_id: number; decisions_total: number; approvals: number; rejections: number; synonyms: number; approval_rate: number; rejection_rate: number; avg_latency_ms: number }
+export interface PeriodReportResponse { period: string; buckets: { bucket: string; total: number; promote: number; reject: number; synonym: number }[] }
 
 // Poison pill stats
 export interface PoisonPillStats {
@@ -113,6 +115,7 @@ export interface DeploymentStageResponse { model_id: string; status: string; rol
 export interface DeploymentPublishResponse { model_id: string; status: string; rollout_percent: number }
 export interface GPUBudgetResponse { user_id: string; budget: number }
 export interface GPUUsageResponse { used: number; updated_at?: string | null }
+export interface ABExperimentSetResponse { status: string; LLM_AB_EXPERIMENT_ID: number }
 
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
@@ -227,6 +230,22 @@ export class JanusApiService {
     return this.http.get<AuditEventsResponse>(`/api/v1/observability/audit/events?${qs.toString()}`)
   }
 
+  getReviewerMetrics(user_id: number, start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {
+    const qs = new URLSearchParams()
+    qs.set('user_id', String(user_id))
+    if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
+    if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
+    return this.http.get<ReviewerMetricsResponse>(`/api/v1/observability/hitl/metrics/reviewer?${qs.toString()}`)
+  }
+
+  getHitlReports(period: 'daily'|'weekly'|'monthly' = 'daily', start_ts?: number, end_ts?: number): Observable<PeriodReportResponse> {
+    const qs = new URLSearchParams()
+    qs.set('period', period)
+    if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
+    if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
+    return this.http.get<PeriodReportResponse>(`/api/v1/observability/hitl/reports?${qs.toString()}`)
+  }
+
   // Context
   getCurrentContext(): Observable<ContextInfo> {
     return this.http.get<ContextInfo>(`/api/v1/context/current`)
@@ -339,6 +358,11 @@ export class JanusApiService {
 
   setGPUBudget(user_id: string, budget: number): Observable<GPUBudgetResponse> {
     return this.http.post<GPUBudgetResponse>(`/api/v1/resources/gpu/budget`, { user_id, budget })
+  }
+
+  // LLM A/B experiment
+  setLLMABExperiment(experiment_id: number): Observable<ABExperimentSetResponse> {
+    return this.http.post<ABExperimentSetResponse>(`/api/v1/llm/ab/set-experiment`, { experiment_id })
   }
 }
 

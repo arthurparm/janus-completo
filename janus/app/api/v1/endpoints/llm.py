@@ -11,6 +11,7 @@ from app.services.llm_service import (
 )
 from app.core.llm import ModelRole, ModelPriority
 from app.core.monitoring.health_monitor import check_llm_manager_health
+from app.config import settings
 
 router = APIRouter(tags=["LLM"])
 logger = structlog.get_logger(__name__)
@@ -139,3 +140,12 @@ async def list_llm_providers(service: LLMService = Depends(get_llm_service)):
 async def llm_health(service: LLMService = Depends(get_llm_service)):
     """Delega a verificação de saúde para o LLMService."""
     return await service.get_health_status()
+
+
+class ABExperimentSetRequest(BaseModel):
+    experiment_id: int
+
+@router.post("/ab/set-experiment", summary="Define experimento A/B para seleção de LLM por usuário")
+async def set_ab_experiment(req: ABExperimentSetRequest):
+    setattr(settings, "LLM_AB_EXPERIMENT_ID", int(req.experiment_id))
+    return {"status": "ok", "LLM_AB_EXPERIMENT_ID": int(req.experiment_id)}
