@@ -11,6 +11,9 @@ class ModelDeployment(Base):
     model_id = Column(String(200), nullable=False)
     status = Column(String(20), default="staged")
     rollout_percent = Column(Integer, default=0)
+    precheck_passed = Column(Integer, default=0)
+    bias_score = Column(Integer, default=0)
+    safety_warnings = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
     __table_args__ = (

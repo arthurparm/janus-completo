@@ -6,6 +6,7 @@ from app.repositories.user_repository import UserRepository
 import json
 import os
 from app.config import settings
+from app.services.bias_check_service import BiasCheckService
 
 router = APIRouter(tags=["Deployment"], prefix="/deployment")
 
@@ -43,7 +44,33 @@ async def publish(model_id: str, request: Request, repo: DeploymentRepository = 
         raise
     except Exception:
         pass
+    try:
+        svc = BiasCheckService()
+        res = svc.run_precheck(model_id)
+        if not res.get("precheck_passed"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("safety_warnings") or "Precheck failed")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     return repo.publish(model_id)
+
+
+@router.post("/precheck")
+async def precheck(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
+    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    ur = UserRepository()
+    if not actor or not ur.is_admin(int(actor)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    svc = BiasCheckService()
+    res = svc.run_precheck(model_id)
+    try:
+        sres = repo.stage(model_id, percent=0)
+        # Atualiza campos de precheck no registro
+        # Nota: em uma versão futura, usar método dedicado; aqui retornamos os dados para persistência externa
+    except Exception:
+        pass
+    return res
 
 @router.post("/rollback")
 async def rollback(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):

@@ -378,6 +378,10 @@ export class JanusApiService {
     return this.http.post<DeploymentPublishResponse>(`/api/v1/deployment/rollback?model_id=${encodeURIComponent(model_id)}`, {})
   }
 
+  precheckDeployment(model_id: string): Observable<{ precheck_passed: boolean; bias_score: number; safety_warnings?: string | null }> {
+    return this.http.post<{ precheck_passed: boolean; bias_score: number; safety_warnings?: string | null }>(`/api/v1/deployment/precheck?model_id=${encodeURIComponent(model_id)}`, {})
+  }
+
   // GPU resources
   getGPUUsage(user_id: string): Observable<GPUUsageResponse> {
     return this.http.get<GPUUsageResponse>(`/api/v1/resources/gpu/usage/${encodeURIComponent(user_id)}`)
