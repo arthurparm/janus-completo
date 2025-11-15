@@ -14,12 +14,17 @@ from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.user_repository import OAuthTokenRepository
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID, PROJECT_ID
 try:
-    from prometheus_client import Counter  # type: ignore
+    from prometheus_client import Counter, Histogram  # type: ignore
 except Exception:
     class Counter:  # type: ignore
         def labels(self, *a, **k):
             return self
         def inc(self, *a, **k):
+            pass
+    class Histogram:  # type: ignore
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
             pass
 try:
     from opentelemetry import trace  # type: ignore
@@ -37,6 +42,8 @@ QUEUE_GOOGLE_MAIL = "janus.productivity.google.mail"
 _GOOGLE_PROD_EVENTS_PUBLISHED = Counter("google_productivity_events_published_total", "Eventos de produtividade publicados", ["type"])  # type: ignore
 _GOOGLE_CALENDAR_EVENTS_INDEXED = Counter("google_calendar_events_indexed_total", "Eventos do calendário indexados")  # type: ignore
 _GOOGLE_MAIL_SENT_TOTAL = Counter("google_mail_sent_total", "Mensagens de e-mail enviadas")  # type: ignore
+_PROD_WORKER_LATENCY = Histogram("productivity_worker_latency_seconds", "Latência no worker de produtividade", ["op"])  # type: ignore
+_PROD_WORKER_USER_EVENTS = Counter("productivity_worker_user_events_total", "Eventos por usuário no worker", ["user_id", "op", "status"])  # type: ignore
 
 async def publish_google_calendar_add_event(user_id: int, event: Dict[str, Any], index: bool) -> str:
     task_id = uuid4().hex
@@ -130,6 +137,7 @@ async def start_google_productivity_consumer():
                                 exp_at = datetime.utcnow() + timedelta(seconds=int(exp_in or 0)) if exp_in else None
                                 repo.upsert(user_id=int(user_id), provider="google", access_token=str(access or tok.access_token), refresh_token=tok.refresh_token, expires_at=exp_at)
                     if access:
+                        _t0 = __import__("time").perf_counter()
                         async with httpx.AsyncClient(timeout=30) as client:
                             req = {
                                 "summary": ev.get("title"),
@@ -144,6 +152,11 @@ async def start_google_productivity_consumer():
                                 headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
                             )
                             resp.raise_for_status()
+                        try:
+                            _PROD_WORKER_USER_EVENTS.labels(str(user_id), "calendar_send", "ok").inc()
+                            _PROD_WORKER_LATENCY.labels("calendar_send").observe(__import__("time").perf_counter() - _t0)
+                        except Exception:
+                            pass
                         try:
                             record_audit_event_direct({
                                 "user_id": int(user_id),
@@ -171,6 +184,7 @@ async def start_google_productivity_consumer():
                         pass
                 if do_index and user_id is not None:
                     try:
+                        _t0 = __import__("time").perf_counter()
                         client = get_qdrant_client()
                         coll = get_or_create_collection(f"user_{user_id}")
                         title = str(ev.get("title", ""))
@@ -193,6 +207,8 @@ async def start_google_productivity_consumer():
                         client.upsert(collection_name=coll, points=[point])
                         try:
                             _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
+                            _PROD_WORKER_USER_EVENTS.labels(str(user_id), "calendar_index", "ok").inc()
+                            _PROD_WORKER_LATENCY.labels("calendar_index").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                         try:
@@ -237,6 +253,7 @@ async def start_google_productivity_consumer():
                                 exp_at = datetime.utcnow() + timedelta(seconds=int(exp_in or 0)) if exp_in else None
                                 repo.upsert(user_id=int(user_id), provider="google", access_token=str(access or tok.access_token), refresh_token=tok.refresh_token, expires_at=exp_at)
                     if access:
+                        _t0 = __import__("time").perf_counter()
                         to = str(msg.get("to",""))
                         subject = str(msg.get("subject",""))
                         body = str(msg.get("body",""))
@@ -251,6 +268,8 @@ async def start_google_productivity_consumer():
                             resp.raise_for_status()
                         try:
                             _GOOGLE_MAIL_SENT_TOTAL.inc()
+                            _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_send", "ok").inc()
+                            _PROD_WORKER_LATENCY.labels("mail_send").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                 try:
@@ -267,6 +286,7 @@ async def start_google_productivity_consumer():
                     pass
                 if do_index and user_id is not None:
                     try:
+                        _t0 = __import__("time").perf_counter()
                         client = get_qdrant_client()
                         coll = get_or_create_collection(f"user_{user_id}")
                         content = f"To: {str(msg.get('to',''))}\nSubject: {str(msg.get('subject',''))}\n{str(msg.get('body',''))}"
@@ -285,6 +305,11 @@ async def start_google_productivity_consumer():
                         from qdrant_client import models as _m
                         point = _m.PointStruct(id=pid, vector=vec, payload=payload_q)
                         client.upsert(collection_name=coll, points=[point])
+                        try:
+                            _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_index", "ok").inc()
+                            _PROD_WORKER_LATENCY.labels("mail_index").observe(__import__("time").perf_counter() - _t0)
+                        except Exception:
+                            pass
                     except Exception:
                         pass
             try:
