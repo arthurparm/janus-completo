@@ -70,6 +70,97 @@ class GraphDatabase:
                     await self.register_relationship_type(session, GraphRelationship.PRODUCES.value)
                     await self.register_relationship_type(session, GraphRelationship.RESULTS_IN.value)
                     await self.register_relationship_type(session, GraphRelationship.RELATES_TO.value)
+                    await self.register_relationship_type(session, GraphRelationship.MENTIONS.value)
+                    await self.register_relationship_type(session, GraphRelationship.CAUSES.value)
+                    await self.register_relationship_type(session, GraphRelationship.SOLVES.value)
+                    await self.register_relationship_type(session, GraphRelationship.CAUSED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.SOLVED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.HAS_PROPERTY.value)
+                    await self.register_relationship_type(session, GraphRelationship.SIMILAR_TO.value)
+                    await self.register_relationship_type(session, GraphRelationship.FOLLOWED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.EXTRACTED_FROM.value)
+                    try:
+                        await session.run("CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE")
+                        await session.run("CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)")
+                        await session.run("CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)")
+                        await session.run("CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)")
+                        await session.run("CREATE INDEX person_name_idx IF NOT EXISTS FOR (p:Person) ON (p.name)")
+                        await session.run("CREATE INDEX error_name_idx IF NOT EXISTS FOR (e:Error) ON (e.name)")
+                        await session.run("CREATE INDEX solution_name_idx IF NOT EXISTS FOR (s:Solution) ON (s.name)")
+                        await session.run("CREATE INDEX pattern_name_idx IF NOT EXISTS FOR (p:Pattern) ON (p.name)")
+                        await session.run("CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)")
+                        await session.run("CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)")
+                        await session.run("CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)")
+                        await session.run("CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)")
+                        await session.run("CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)")
+                        await session.run("CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)")
+                        await session.run("CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)")
+                    except Exception:
+                        try:
+                            await session.run("CREATE CONSTRAINT ON (e:Experience) ASSERT e.id IS UNIQUE")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE CONSTRAINT ON (t:RelationshipType) ASSERT t.name IS UNIQUE")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Concept(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Technology(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Tool(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Person(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Error(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Solution(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Pattern(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Function(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Class(name)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Function(name, file_path)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Class(name, file_path)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :File(path)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :CodeFile(path)")
+                        except Exception:
+                            pass
+                        try:
+                            await session.run("CREATE INDEX ON :Experience(consolidated_at)")
+                        except Exception:
+                            pass
                     logger.info("Ontologia inicial do grafo registrada.")
 
     async def register_relationship_type(self, tx_or_session, rel_type: str):
@@ -80,7 +171,13 @@ class GraphDatabase:
         await tx_or_session.run(query, rel_type=rel_type)
         self._known_relationship_types.add(rel_type)
 
-    @resilient(operation_name="neo4j_query")
+    @resilient(
+        operation_name="neo4j_query",
+        circuit_breaker=_DB_CB,
+        max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+        initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+        max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+    )
     async def query(self, cypher_query: str, params: dict = None, operation: str | None = None):
         op = operation or "query"
         # Offline: retorna vazio sem lançar exceção
@@ -92,21 +189,40 @@ class GraphDatabase:
             return []
         start = None
         try:
+            from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
             start = asyncio.get_event_loop().time()
             async with self._driver.session() as session:
-                result = await session.run(cypher_query, params or {})
+                _timeout = get_timeout_recommendation("neo4j_query", float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30))
+                result = await asyncio.wait_for(session.run(cypher_query, params or {}), timeout=float(_timeout))
                 rows = [record.data() async for record in result]
                 _DB_QUERIES.labels(op, "success").inc()
                 if start is not None:
-                    _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+                    _elapsed = asyncio.get_event_loop().time() - start
+                    _DB_LATENCY.labels(op).observe(_elapsed)
+                    try:
+                        record_latency("neo4j_query", _elapsed)
+                    except Exception:
+                        pass
                 return rows
         except Exception:
             _DB_QUERIES.labels(op, "failure").inc()
             if start is not None:
-                _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+                _elapsed = asyncio.get_event_loop().time() - start
+                _DB_LATENCY.labels(op).observe(_elapsed)
+                try:
+                    from app.core.monitoring.health_monitor import record_latency
+                    record_latency("neo4j_query", _elapsed)
+                except Exception:
+                    pass
             raise
 
-    @resilient(operation_name="neo4j_execute")
+    @resilient(
+        operation_name="neo4j_execute",
+        circuit_breaker=_DB_CB,
+        max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+        initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+        max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+    )
     async def execute(self, cypher_query: str, params: dict = None, operation: str | None = None):
         op = operation or "execute"
         # Offline: no-op
@@ -118,16 +234,29 @@ class GraphDatabase:
             return None
         start = None
         try:
+            from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
             start = asyncio.get_event_loop().time()
             async with self._driver.session() as session:
-                await session.run(cypher_query, params or {})
+                _timeout = get_timeout_recommendation("neo4j_query", float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30))
+                await asyncio.wait_for(session.run(cypher_query, params or {}), timeout=float(_timeout))
                 _DB_QUERIES.labels(op, "success").inc()
                 if start is not None:
-                    _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+                    _elapsed = asyncio.get_event_loop().time() - start
+                    _DB_LATENCY.labels(op).observe(_elapsed)
+                    try:
+                        record_latency("neo4j_query", _elapsed)
+                    except Exception:
+                        pass
         except Exception:
             _DB_QUERIES.labels(op, "failure").inc()
             if start is not None:
-                _DB_LATENCY.labels(op).observe(asyncio.get_event_loop().time() - start)
+                _elapsed = asyncio.get_event_loop().time() - start
+                _DB_LATENCY.labels(op).observe(_elapsed)
+                try:
+                    from app.core.monitoring.health_monitor import record_latency
+                    record_latency("neo4j_query", _elapsed)
+                except Exception:
+                    pass
             raise
 
     async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int:

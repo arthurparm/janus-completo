@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Optional
 
 import requests
@@ -119,6 +120,16 @@ def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_V
                                         field_schema=PayloadSchemaType.KEYWORD)
             client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
                                         field_schema=PayloadSchemaType.INTEGER)
+            try:
+                client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
+                                            field_schema=PayloadSchemaType.KEYWORD)
+            except Exception:
+                pass
+            try:
+                client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
+                                            field_schema=PayloadSchemaType.KEYWORD)
+            except Exception:
+                pass
             logger.info(f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp.")
         except Exception as create_error:
             logger.error(f"Falha ao criar coleção '{collection_name}': {create_error}", exc_info=True)
@@ -148,6 +159,16 @@ async def aget_or_create_collection(collection_name: str, vector_size: int = _DE
                                                     field_schema=PayloadSchemaType.KEYWORD)
             await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
                                                     field_schema=PayloadSchemaType.INTEGER)
+            try:
+                await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
+                                                        field_schema=PayloadSchemaType.KEYWORD)
+            except Exception:
+                pass
+            try:
+                await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
+                                                        field_schema=PayloadSchemaType.KEYWORD)
+            except Exception:
+                pass
             logger.info(
                 f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async.")
         except Exception as create_error:
