@@ -83,7 +83,8 @@ class VectorRetriever:
         t0 = time.perf_counter()
         try:
             memory_db = await get_memory_db()
-            res = await memory_db.arecall(query=query, limit=k)
+            min_score = float(getattr(settings, "RAG_VECTOR_MIN_SCORE", 0.0) or 0.0)
+            res = await memory_db.arecall(query=query, limit=k, min_score=min_score)
             _RAG_EVENTS.labels("vector_retrieval", "success").inc()
             _RAG_STAGE_LAT.labels("vector_retrieval", "success").observe(time.perf_counter() - t0)
             return res or []
@@ -162,11 +163,18 @@ def _extract_cypher(text: str) -> str:
     return ""
 
 
-def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]]):
-    """Reranker opcional: placeholder que mantém a ordem, com métricas de estágio."""
+def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]], limit: int):
     t0 = time.perf_counter()
     try:
-        # Placeholder: no-op; em ambientes com re-ranker, ordenar por heurística/score.
+        try:
+            vector_ctx = sorted(vector_ctx, key=lambda x: float(x.get("score", 0.0)), reverse=True)
+        except Exception:
+            pass
+        try:
+            graph_ctx = graph_ctx[:max(1, limit)]
+            vector_ctx = vector_ctx[:max(1, limit)]
+        except Exception:
+            pass
         _RAG_EVENTS.labels("rerank", "success").inc()
         _RAG_STAGE_LAT.labels("rerank", "success").observe(time.perf_counter() - t0)
         return graph_ctx, vector_ctx
@@ -210,7 +218,7 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
         vector_ctx = context.get("vector", [])
 
     # Optional rerank/fusion stage
-    graph_ctx, vector_ctx = _rerank(graph_ctx, vector_ctx)
+    graph_ctx, vector_ctx = _rerank(graph_ctx, vector_ctx, limit)
 
     if not graph_ctx and not vector_ctx:
         return "Não encontrei contexto relevante no grafo ou na memória para responder à pergunta."
