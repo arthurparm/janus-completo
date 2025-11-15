@@ -6,12 +6,15 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 import random
+import httpx
+from openai import OpenAI
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from prometheus_client import Counter, Histogram, Gauge
+from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
 
 from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker, CircuitOpenError
@@ -45,15 +48,40 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CachedLLM:
-    """Wrapper para instâncias de LLM com metadados de cache."""
     instance: BaseChatModel
     created_at: datetime
     provider: str
+    model: str
     consecutive_failures: int = 0
 
 
-_llm_cache: Dict[str, CachedLLM] = {}
-_MAX_CACHE_FAILURES = 3  # Limite de falhas para evicção do cache
+_llm_pool: Dict[str, list[CachedLLM]] = {}
+_MAX_CACHE_FAILURES = 3
+LLM_POOL_SIZE = Gauge(
+    "llm_pool_size",
+    "Tamanho do pool por provider/model",
+    ["provider", "model"],
+)
+LLM_POOL_HITS = Counter(
+    "llm_pool_hits_total",
+    "Hits de pool por provider/model",
+    ["provider", "model"],
+)
+LLM_POOL_MISSES = Counter(
+    "llm_pool_misses_total",
+    "Misses de pool por provider/model",
+    ["provider", "model"],
+)
+LLM_POOL_EVICTIONS = Counter(
+    "llm_pool_evictions_total",
+    "Evicções de pool por provider/model",
+    ["provider", "model", "reason"],
+)
+LLM_POOL_WARMS = Counter(
+    "llm_pool_warm_total",
+    "Instâncias pré-aquecidas por provider/model",
+    ["provider", "model"],
+)
 
 # Circuit Breakers por provedor para isolar falhas
 _provider_circuit_breakers: Dict[str, CircuitBreaker] = {
@@ -395,40 +423,117 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
 
 # --- Gerenciamento de Cache ---
 
-def _get_from_cache(cache_key: str) -> Optional[CachedLLM]:
-    if cache_key not in _llm_cache:
+def _pool_key(provider: str, model: str) -> str:
+    return f"{provider}:{model}"
+
+def _get_from_pool(provider: str, model: str) -> Optional[BaseChatModel]:
+    key = _pool_key(provider, model)
+    pool = _llm_pool.get(key, [])
+    if not pool:
+        try:
+            LLM_POOL_MISSES.labels(provider, model).inc()
+        except Exception:
+            pass
         return None
-
-    cached = _llm_cache[cache_key]
-    age = (datetime.now() - cached.created_at).total_seconds()
-
-    if age > settings.LLM_CACHE_TTL_SECONDS or cached.consecutive_failures >= _MAX_CACHE_FAILURES:
-        logger.info(
-            f"Cache para '{cache_key}' invalidado (age={age:.1f}s, failures={cached.consecutive_failures})."
-        )
-        del _llm_cache[cache_key]
+    now = datetime.now()
+    ttl = int(getattr(settings, "LLM_POOL_TTL_SECONDS", getattr(settings, "LLM_CACHE_TTL_SECONDS", 3600)) or 3600)
+    valid = []
+    evicted = 0
+    for item in pool:
+        age = (now - item.created_at).total_seconds()
+        if age > ttl or item.consecutive_failures >= _MAX_CACHE_FAILURES:
+            evicted += 1
+            try:
+                LLM_POOL_EVICTIONS.labels(provider, model, "ttl" if age > ttl else "failures").inc()
+            except Exception:
+                pass
+        else:
+            valid.append(item)
+    _llm_pool[key] = valid
+    if not valid:
+        try:
+            LLM_POOL_MISSES.labels(provider, model).inc()
+            LLM_POOL_SIZE.labels(provider, model).set(0)
+        except Exception:
+            pass
         return None
+    inst = valid[0].instance
+    try:
+        LLM_POOL_HITS.labels(provider, model).inc()
+        LLM_POOL_SIZE.labels(provider, model).set(len(valid))
+    except Exception:
+        pass
+    return inst
 
-    logger.debug(f"Retornando LLM do cache: {cache_key}")
-    return cached
 
-
-def _add_to_cache(cache_key: str, llm: BaseChatModel, provider: str):
-    _llm_cache[cache_key] = CachedLLM(
-        instance=llm, created_at=datetime.now(), provider=provider
-    )
-    logger.debug(f"LLM adicionado ao cache: {cache_key}")
+def _add_to_pool(provider: str, model: str, llm: BaseChatModel):
+    key = _pool_key(provider, model)
+    pool = _llm_pool.get(key) or []
+    max_size = int(getattr(settings, "LLM_POOL_MAX_SIZE", 4) or 4)
+    if len(pool) < max_size:
+        pool.append(CachedLLM(instance=llm, created_at=datetime.now(), provider=provider, model=model))
+        _llm_pool[key] = pool
+    else:
+        _llm_pool[key] = pool
+    try:
+        LLM_POOL_SIZE.labels(provider, model).set(len(_llm_pool[key]))
+    except Exception:
+        pass
 
 
 def invalidate_cache(provider: Optional[str] = None):
     if provider:
-        keys_to_remove = [k for k, v in _llm_cache.items() if v.provider == provider]
+        keys_to_remove = [k for k in list(_llm_pool.keys()) if k.startswith(f"{provider}:")]
         for key in keys_to_remove:
-            del _llm_cache[key]
-        logger.info(f"Cache invalidado para provider: {provider}")
+            del _llm_pool[key]
+        logger.info(f"Pool invalidado para provider: {provider}")
     else:
-        _llm_cache.clear()
-        logger.info("Cache de LLMs completamente invalidado.")
+        _llm_pool.clear()
+        logger.info("Pool de LLMs completamente invalidado.")
+
+def warm_llm_pool(specs: Optional[list[str]] = None) -> Dict[str, int]:
+    warmed: Dict[str, int] = {}
+    items = specs or list(getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or [])
+    for spec in items:
+        try:
+            provider, model = spec.split(":", 1)
+            provider = provider.strip()
+            model = model.strip()
+            if _get_from_pool(provider, model):
+                continue
+            if provider == "ollama":
+                mk: Dict[str, Any] = {}
+                if settings.OLLAMA_NUM_CTX: mk["num_ctx"] = settings.OLLAMA_NUM_CTX
+                if settings.OLLAMA_NUM_THREAD: mk["num_thread"] = settings.OLLAMA_NUM_THREAD
+                if settings.OLLAMA_NUM_BATCH: mk["num_batch"] = settings.OLLAMA_NUM_BATCH
+                if settings.OLLAMA_GPU_LAYERS: mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                if settings.OLLAMA_KEEP_ALIVE: mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=model, temperature=0, model_kwargs=mk)
+                if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
+                    continue
+                _add_to_pool("ollama", model, llm)
+            elif provider == "openai":
+                if not _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
+                    continue
+                llm = ChatOpenAI(model=model, temperature=0, client=_get_openai_client())
+                _add_to_pool("openai", model, llm)
+            elif provider == "google_gemini":
+                if not _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()):
+                    continue
+                llm = ChatGoogleGenerativeAI(model=model, temperature=0,
+                                             google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)() or None))
+                _add_to_pool("google_gemini", model, llm)
+            else:
+                continue
+            key = _pool_key(provider, model)
+            warmed[key] = warmed.get(key, 0) + 1
+            try:
+                LLM_POOL_WARMS.labels(provider, model).inc()
+            except Exception:
+                pass
+        except Exception:
+            pass
+    return warmed
 
 
 # --- Roteador Dinâmico de LLM (get_llm) ---
@@ -467,9 +572,9 @@ def get_llm(
             if provider and model:
                 if not cache_key:
                     cache_key = f"forced_{provider}_{model}_{role.value}"
-                cached_item = _get_from_cache(cache_key)
-                if cached_item:
-                    return cached_item.instance
+                pooled = _get_from_pool(provider, model)
+                if pooled:
+                    return pooled
                 if exclude_providers and provider in exclude_providers:
                     logger.warning(f"Provedor '{provider}' excluído por configuração; ignorando override.")
                 else:
@@ -490,15 +595,15 @@ def get_llm(
                             if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
                                 raise RuntimeError(f"Health check falhou para modelo '{model}'")
                             LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "ollama").inc()
-                            _add_to_cache(cache_key, llm, "ollama")
+                            _add_to_pool("ollama", model, llm)
                             return llm
                         elif provider == "openai":
                             if not _validate_openai_key(
                                     getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
                                 raise RuntimeError("OPENAI_API_KEY inválida ou ausente.")
-                            llm = ChatOpenAI(model=model, temperature=temperature)
+                            llm = ChatOpenAI(model=model, temperature=temperature, client=_get_openai_client())
                             LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "openai").inc()
-                            _add_to_cache(cache_key, llm, "openai")
+                            _add_to_pool("openai", model, llm)
                             return llm
                         elif provider == "google_gemini":
                             if not _validate_gemini_key(
@@ -511,7 +616,7 @@ def get_llm(
                                                         lambda: None)() or None),
                             )
                             LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "google_gemini").inc()
-                            _add_to_cache(cache_key, llm, "google_gemini")
+                            _add_to_pool("google_gemini", model, llm)
                             return llm
                         else:
                             logger.warning(f"Provider override desconhecido: {provider}")
@@ -524,9 +629,9 @@ def get_llm(
     if not cache_key:
         cache_key = f"{role.value}_{priority.value}"
 
-    cached_item = _get_from_cache(cache_key)
-    if cached_item:
-        return cached_item.instance
+    pooled_local = _get_from_pool("ollama", local_model_name) if priority == ModelPriority.LOCAL_ONLY else None
+    if pooled_local:
+        return pooled_local
 
     # Mapeamento de papéis para modelos locais
     model_map = {
@@ -562,7 +667,7 @@ def get_llm(
 
             logger.info(f"Modelo local '{local_model_name}' inicializado com sucesso.")
             LLM_ROUTER_COUNTER.labels(role.value, priority.value, local_model_name, "ollama").inc()
-            _add_to_cache(cache_key, llm, "ollama")
+            _add_to_pool("ollama", local_model_name, llm)
             return llm
         except Exception as e:
             logger.error(f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True)
@@ -584,7 +689,7 @@ def get_llm(
         {
             "name": "OpenAI", "provider_key": "openai",
             "enabled": _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()),
-            "initializer_factory": lambda model: ChatOpenAI(model=model, temperature=0),
+            "initializer_factory": lambda model: ChatOpenAI(model=model, temperature=0, client=_get_openai_client()),
             "models": settings.OPENAI_MODELS if getattr(settings, "OPENAI_MODELS", None) else [
                 settings.OPENAI_MODEL_NAME],
         },
@@ -721,7 +826,7 @@ def get_llm(
                     logger.info(f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso.")
                     LLM_ROUTER_COUNTER.labels(role.value, priority.value, cand["model_name"],
                                               cand["provider_key"]).inc()
-                    _add_to_cache(cache_key, llm, cand["provider_key"])
+                    _add_to_pool(cand["provider_key"], cand["model_name"], llm)
                     return llm
                 except Exception as e:
                     logger.warning(
@@ -751,7 +856,7 @@ def get_llm(
             raise RuntimeError(f"Health check falhou para modelo local '{local_model_name}' no fallback")
 
         LLM_ROUTER_COUNTER.labels(role.value, "fallback", local_model_name, "ollama").inc()
-        _add_to_cache(cache_key, llm, "ollama")
+        _add_to_pool("ollama", local_model_name, llm)
         return llm
     except Exception as e:
         logger.critical(f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}", exc_info=True)
@@ -902,8 +1007,13 @@ class LLMClient:
         self._validate_prompt(prompt)
 
         operation = f"llm_send_{self.provider}"
-        timeout = timeout_s or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        base_timeout = timeout_s or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        timeout = get_timeout_recommendation(f"llm_{self.provider}", float(base_timeout))
         circuit_breaker = _provider_circuit_breakers.get(self.provider, _provider_circuit_breakers["unknown"])
+        try:
+            circuit_breaker.update_params(recovery_timeout=int(max(1, timeout)))
+        except Exception:
+            pass
 
         decorated_invoke = resilient(
             max_attempts=settings.LLM_RETRY_MAX_ATTEMPTS,
@@ -915,7 +1025,6 @@ class LLMClient:
         )(self._invoke)
 
         start = time.perf_counter()
-        executor = None
         input_tokens_real: Optional[int] = None
         output_tokens_real: Optional[int] = None
         try:
@@ -950,7 +1059,7 @@ class LLMClient:
                         self.base = local_llm
                         self.provider = "ollama"
                         self.model = local_model_name
-                        _add_to_cache(self.cache_key, local_llm, "ollama")
+                        _add_to_pool("ollama", local_model_name, local_llm)
                     else:
                         logger.warning("Falha no health check do fallback local; mantendo provedor atual.")
                 except Exception:
@@ -959,19 +1068,24 @@ class LLMClient:
                 self._apply_output_limit(allowed_out)
 
             if timeout > 0:
-                executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"llm_{self.provider}")
-                future = executor.submit(decorated_invoke, prompt)
+                future = _get_executor(self.provider).submit(decorated_invoke, prompt)
                 result = future.result(timeout=timeout)
             else:
                 result = decorated_invoke(prompt)
 
             elapsed = time.perf_counter() - start
+            try:
+                record_latency(f"llm_{self.provider}", float(elapsed))
+            except Exception:
+                pass
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "success", "").inc()
 
-            # Sucesso: reseta o contador de falhas do cache
-            if self.cache_key in _llm_cache:
-                _llm_cache[self.cache_key].consecutive_failures = 0
+            key = _pool_key(self.provider, self.model)
+            for item in _llm_pool.get(key, []):
+                if item.instance is self.base:
+                    item.consecutive_failures = 0
+                    break
 
             output_text = getattr(result, "content", None) or str(result)
             tokens_in = self._estimate_tokens(prompt)
@@ -1051,11 +1165,17 @@ class LLMClient:
             return self._sanitize_output(output_text)
 
         except (ValueError, TimeoutError, CircuitOpenError, FuturesTimeoutError) as e:
-            # Falha: incrementa o contador de falhas e propaga o erro
-            if self.cache_key in _llm_cache:
-                _llm_cache[self.cache_key].consecutive_failures += 1
+            key = _pool_key(self.provider, self.model)
+            for item in _llm_pool.get(key, []):
+                if item.instance is self.base:
+                    item.consecutive_failures += 1
+                    break
 
             elapsed = time.perf_counter() - start
+            try:
+                record_latency(f"llm_{self.provider}", float(elapsed))
+            except Exception:
+                pass
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
 
@@ -1095,8 +1215,7 @@ class LLMClient:
                 raise TimeoutError(f"LLM request timeout after {timeout}s") from e
             raise
         finally:
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
+            pass
 
     def send_enriched(self, prompt: str, timeout_s: Optional[int] = None) -> Dict[str, Any]:
         """Envia um prompt retornando também tokens reais e custo quando disponível.
@@ -1115,8 +1234,13 @@ class LLMClient:
         self._validate_prompt(prompt)
 
         operation = f"llm_send_{self.provider}"
-        timeout = timeout_s or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        base_timeout = timeout_s or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        timeout = get_timeout_recommendation(f"llm_{self.provider}", float(base_timeout))
         circuit_breaker = _provider_circuit_breakers.get(self.provider, _provider_circuit_breakers["unknown"])
+        try:
+            circuit_breaker.update_params(recovery_timeout=int(max(1, timeout)))
+        except Exception:
+            pass
 
         decorated_invoke = resilient(
             max_attempts=settings.LLM_RETRY_MAX_ATTEMPTS,
@@ -1128,7 +1252,6 @@ class LLMClient:
         )(self._invoke)
 
         start = time.perf_counter()
-        executor = None
         input_tokens_real: Optional[int] = None
         output_tokens_real: Optional[int] = None
         try:
@@ -1161,7 +1284,7 @@ class LLMClient:
                         self.base = local_llm
                         self.provider = "ollama"
                         self.model = local_model_name
-                        _add_to_cache(self.cache_key, local_llm, "ollama")
+                        _add_to_pool("ollama", local_model_name, local_llm)
                     else:
                         logger.warning("Falha no health check do fallback local; mantendo provedor atual.")
                 except Exception:
@@ -1170,18 +1293,24 @@ class LLMClient:
                 self._apply_output_limit(allowed_out)
 
             if timeout > 0:
-                executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"llm_{self.provider}")
-                future = executor.submit(decorated_invoke, prompt)
+                future = _get_executor(self.provider).submit(decorated_invoke, prompt)
                 result = future.result(timeout=timeout)
             else:
                 result = decorated_invoke(prompt)
 
             elapsed = time.perf_counter() - start
+            try:
+                record_latency(f"llm_{self.provider}", float(elapsed))
+            except Exception:
+                pass
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "success", "").inc()
 
-            if self.cache_key in _llm_cache:
-                _llm_cache[self.cache_key].consecutive_failures = 0
+            key = _pool_key(self.provider, self.model)
+            for item in _llm_pool.get(key, []):
+                if item.instance is self.base:
+                    item.consecutive_failures = 0
+                    break
 
             output_text = getattr(result, "content", None) or str(result)
 
@@ -1221,9 +1350,16 @@ class LLMClient:
             return enriched
 
         except (ValueError, TimeoutError, CircuitOpenError, FuturesTimeoutError) as e:
-            if self.cache_key in _llm_cache:
-                _llm_cache[self.cache_key].consecutive_failures += 1
+            key = _pool_key(self.provider, self.model)
+            for item in _llm_pool.get(key, []):
+                if item.instance is self.base:
+                    item.consecutive_failures += 1
+                    break
             elapsed = time.perf_counter() - start
+            try:
+                record_latency(f"llm_{self.provider}", float(elapsed))
+            except Exception:
+                pass
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "failure").observe(elapsed)
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "failure", type(e).__name__).inc()
             logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
@@ -1231,8 +1367,7 @@ class LLMClient:
                 raise TimeoutError(f"LLM request timeout after {timeout}s") from e
             raise
         finally:
-            if executor:
-                executor.shutdown(wait=False, cancel_futures=True)
+            pass
 
     def _extract_usage_tokens(self, result: Any) -> (Optional[int], Optional[int]):
         """Tenta extrair tokens reais do objeto de resposta do LangChain.
@@ -1309,3 +1444,29 @@ def get_llm_client(
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
     return LLMClient(llm, provider, model_name, role, cache_key, user_id=user_id, project_id=project_id)
+# Pool de executores por provedor
+_llm_executors: Dict[str, ThreadPoolExecutor] = {}
+
+def _get_executor(provider_key: str) -> ThreadPoolExecutor:
+    max_workers = int(getattr(settings, "LLM_EXECUTOR_MAX_WORKERS", 4) or 4)
+    key = provider_key or "default"
+    ex = _llm_executors.get(key)
+    if ex is None:
+        ex = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix=f"llm_{key}")
+        _llm_executors[key] = ex
+    return ex
+
+_openai_http_client: Optional[httpx.Client] = None
+_openai_client: Optional[OpenAI] = None
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client, _openai_http_client
+    if _openai_client is None:
+        max_conn = int(getattr(settings, "OPENAI_HTTP_MAX_CONNECTIONS", 100) or 100)
+        max_keep = int(getattr(settings, "OPENAI_HTTP_MAX_KEEPALIVE", 20) or 20)
+        timeout = float(getattr(settings, "OPENAI_HTTP_TIMEOUT_SECONDS", settings.LLM_DEFAULT_TIMEOUT_SECONDS) or settings.LLM_DEFAULT_TIMEOUT_SECONDS)
+        limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=max_keep)
+        _openai_http_client = httpx.Client(limits=limits, timeout=timeout)
+        api_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
+        _openai_client = OpenAI(api_key=api_key, http_client=_openai_http_client)
+    return _openai_client

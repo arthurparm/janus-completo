@@ -6,6 +6,7 @@ Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
 
 import logging
+import msgpack
 import uuid
 from datetime import datetime
 from typing import Dict, Any
@@ -96,8 +97,8 @@ async def publish_consolidation_task(payload: Dict[str, Any], correlation_id: st
         payload=payload,
         timestamp=datetime.utcnow().timestamp(),
     )
-    serialized = task_message.model_dump_json()
-    await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=serialized)
+    serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
+    await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=serialized, use_msgpack=True)
     return {"status": "ok", "task_id": task_message.task_id}
 
 

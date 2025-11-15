@@ -159,7 +159,7 @@ class DataHarvester:
 harvester: DataHarvester | None = None
 
 
-async def harvest_data_for_training(limit: int = 50, query: Optional[str] = None, min_score: Optional[float] = None) -> \
+async def harvest_data_for_training(limit: int = 50, query: Optional[str] = None, min_score: Optional[float] = None, origin: Optional[str] = None) -> \
 Dict[str, Any]:
     """Coleta um lote de experiências e salva em JSONL para treino.
 
@@ -172,7 +172,14 @@ Dict[str, Any]:
         memory_db = await get_memory_db()
         memory_repo = MemoryRepository(memory_db)
         connector = MemoryConnector(memory_repo)
-        items = await connector.fetch_batch(limit=limit, query=query)
+        if origin:
+            try:
+                filters = {"origin": origin}
+                items = await memory_repo.search_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
+            except Exception:
+                items = await connector.fetch_batch(limit=limit, query=query)
+        else:
+            items = await connector.fetch_batch(limit=limit, query=query)
 
         # Filtragem por pontuação mínima, se disponível
         if min_score is not None:

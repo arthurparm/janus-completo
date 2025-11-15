@@ -163,6 +163,40 @@ def index_codebase() -> dict:
     """
     logger.info(f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
 
+    def _ensure_indexes():
+        idx_queries = [
+            "CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)",
+            "CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)",
+            "CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)",
+            "CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)",
+            "CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)",
+            "CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)",
+            "CREATE INDEX codefunction_name_file_idx IF NOT EXISTS FOR (f:CodeFunction) ON (f.name, f.file_path)",
+            "CREATE INDEX codeclass_name_file_idx IF NOT EXISTS FOR (c:CodeClass) ON (c.name, c.file_path)",
+        ]
+        for q in idx_queries:
+            try:
+                repo.query("ensure_index", q)
+            except Exception:
+                pass
+        legacy_queries = [
+            "CREATE INDEX ON :CodeFile(path)",
+            "CREATE INDEX ON :File(path)",
+            "CREATE INDEX ON :Function(name)",
+            "CREATE INDEX ON :Class(name)",
+            "CREATE INDEX ON :Function(name, file_path)",
+            "CREATE INDEX ON :Class(name, file_path)",
+            "CREATE INDEX ON :CodeFunction(name, file_path)",
+            "CREATE INDEX ON :CodeClass(name, file_path)",
+        ]
+        for q in legacy_queries:
+            try:
+                repo.query("ensure_index_legacy", q)
+            except Exception:
+                pass
+
+    _ensure_indexes()
+
     logger.info("Limpando entidades de código antigas do grafo...")
     repo.query("cleanup_code_entities", "MATCH (n) WHERE n:CodeFunction OR n:CodeClass OR n:CodeFile DETACH DELETE n")
 

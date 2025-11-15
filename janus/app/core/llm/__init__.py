@@ -8,7 +8,7 @@ from .llm_manager import (
     get_llm,
     get_llm_client,
     invalidate_cache,
-    _llm_cache,
+    _llm_pool,
     _provider_circuit_breakers
 )
 
@@ -19,6 +19,6 @@ __all__ = [
     "get_llm",
     "get_llm_client",
     "invalidate_cache",
-    "_llm_cache",
+    "_llm_pool",
     "_provider_circuit_breakers"
 ]

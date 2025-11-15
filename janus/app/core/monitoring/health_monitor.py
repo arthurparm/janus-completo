@@ -11,7 +11,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, Optional, Any, Callable
 
-from prometheus_client import Gauge, Info
+from prometheus_client import Gauge, Info, Histogram
+from collections import deque
+from typing import List
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,71 @@ SYSTEM_INFO = Info(
     "janus_system",
     "Informações do sistema Janus"
 )
+
+OBSERVED_LATENCY = Histogram(
+    "component_observed_latency_seconds",
+    "Latência observada por componente",
+    ["component"]
+)
+RECOMMENDED_TIMEOUT = Gauge(
+    "component_recommended_timeout_seconds",
+    "Timeout recomendado por componente",
+    ["component"]
+)
+
+_latency_windows: Dict[str, deque] = {}
+_LATENCY_WINDOW_SIZE = 256
+
+def record_latency(component: str, seconds: float) -> None:
+    if seconds is None:
+        return
+    try:
+        OBSERVED_LATENCY.labels(component=component).observe(float(seconds))
+    except Exception:
+        pass
+    dq = _latency_windows.get(component)
+    if dq is None:
+        dq = deque(maxlen=_LATENCY_WINDOW_SIZE)
+        _latency_windows[component] = dq
+    dq.append(float(seconds))
+
+def _percentile(sorted_values: List[float], p: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if p <= 0:
+        return sorted_values[0]
+    if p >= 1:
+        return sorted_values[-1]
+    idx = int(round((len(sorted_values) - 1) * p))
+    return sorted_values[idx]
+
+def get_timeout_recommendation(component: str, default_seconds: float) -> float:
+    auto = bool(getattr(settings, "TIMEOUT_AUTO_TUNE_ENABLED", False))
+    perc = float(getattr(settings, "TIMEOUT_AUTO_TUNE_PERCENTILE", 0.95) or 0.95)
+    pad = float(getattr(settings, "TIMEOUT_AUTO_TUNE_PAD_SECONDS", 0.5) or 0.0)
+    min_map = getattr(settings, "TIMEOUT_MIN_SECONDS_MAP", {}) or {}
+    max_map = getattr(settings, "TIMEOUT_MAX_SECONDS_MAP", {}) or {}
+    base = float(default_seconds)
+    if not auto:
+        rec = base
+    else:
+        vals = list(_latency_windows.get(component, deque()))
+        vals.sort()
+        p95 = _percentile(vals, perc) if vals else 0.0
+        rec = max(float(min_map.get(component, 0.0) or 0.0), base)
+        if p95 > 0.0:
+            rec = max(rec, p95 + pad)
+    mx = max_map.get(component)
+    if mx is not None:
+        try:
+            rec = min(rec, float(mx))
+        except Exception:
+            pass
+    try:
+        RECOMMENDED_TIMEOUT.labels(component=component).set(float(rec))
+    except Exception:
+        pass
+    return float(rec)
 
 
 class HealthStatus(Enum):
@@ -279,7 +347,13 @@ class HealthMonitor:
             "last_check": max(
                 (r.checked_at for r in self.last_results.values()),
                 default=datetime.now()
-            ).isoformat()
+            ).isoformat(),
+            "suggested_timeouts": {
+                "llm": get_timeout_recommendation("llm", float(getattr(settings, "LLM_DEFAULT_TIMEOUT_SECONDS", 60) or 60)),
+                "qdrant_search": get_timeout_recommendation("qdrant_search", float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30)),
+                "neo4j_query": get_timeout_recommendation("neo4j_query", float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30)),
+                "rabbitmq_management": get_timeout_recommendation("rabbitmq_management", 5.0),
+            }
         }
 
     async def start_monitoring(self, interval_seconds: int = 30):
@@ -316,14 +390,14 @@ class HealthMonitor:
 async def check_llm_manager_health() -> Dict[str, Any]:
     """Health check do LLM Manager."""
     try:
-        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_cache
+        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_pool
 
         open_circuits = sum(
             1 for cb in _provider_circuit_breakers.values()
             if cb.state.value == "OPEN"
         )
 
-        cached_llms = len(_llm_cache)
+        pool_instances = sum(len(v) for v in _llm_pool.values())
 
         if open_circuits >= len(_provider_circuit_breakers) - 1:
             return {
@@ -331,7 +405,7 @@ async def check_llm_manager_health() -> Dict[str, Any]:
                 "message": "Todos os provedores com circuit breaker aberto",
                 "details": {
                     "open_circuits": open_circuits,
-                    "cached_llms": cached_llms
+                    "pool_instances": pool_instances
                 }
             }
         elif open_circuits > 0:
@@ -340,7 +414,7 @@ async def check_llm_manager_health() -> Dict[str, Any]:
                 "message": f"{open_circuits} circuit breaker(s) aberto(s)",
                 "details": {
                     "open_circuits": open_circuits,
-                    "cached_llms": cached_llms
+                    "pool_instances": pool_instances
                 }
             }
         else:
@@ -349,7 +423,7 @@ async def check_llm_manager_health() -> Dict[str, Any]:
                 "message": "Todos os provedores operacionais",
                 "details": {
                     "open_circuits": 0,
-                    "cached_llms": cached_llms
+                    "pool_instances": pool_instances
                 }
             }
     except Exception as e:

@@ -311,7 +311,7 @@ def get_system_health_metrics() -> str:
     """
     try:
         import json
-        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_cache
+        from app.core.llm.llm_manager import _provider_circuit_breakers, _llm_pool
         from app.core.agents.multi_agent_system import get_multi_agent_system
         from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 
@@ -325,7 +325,8 @@ def get_system_health_metrics() -> str:
         metrics = {
             "system_health": system_health,
             "llm_manager": {
-                "cached_llms": len(_llm_cache),
+                "pool_keys": len(_llm_pool),
+                "pool_total_instances": sum(len(v) for v in _llm_pool.values()),
                 "circuit_breakers": {
                     provider: {
                         "state": cb.state.value,

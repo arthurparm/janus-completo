@@ -7,10 +7,12 @@ import asyncio
 from collections import OrderedDict
 import math
 
-from qdrant_client import QdrantClient, models
+from qdrant_client import AsyncQdrantClient, models
+from app.core.infrastructure.resilience import CircuitBreaker, resilient
 
 from app.config import settings
 from app.models.schemas import Experience, VectorCollection
+from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.embeddings.embedding_manager import embed_text
 
 # Métricas (fallback para no-op se prometheus não estiver disponível)
@@ -35,7 +37,7 @@ class MemoryCore:
     """
 
     def __init__(self):
-        self.client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
+        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
         self.collection_name = VectorCollection.EPISODIC_MEMORY.value
         self._vector_size = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
         # Short-term cache (LRU + TTL)
@@ -55,22 +57,26 @@ class MemoryCore:
         self._quota_rejections = Counter("memory_quota_rejections_total", "Rejeições por cota excedida")
         # Offline fallback flag
         self._offline = False
+        self._cb = CircuitBreaker(
+            failure_threshold=int(getattr(settings, "LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD", 3) or 3),
+            recovery_timeout=int(getattr(settings, "LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT", 30) or 30),
+        )
 
     async def initialize(self):
         """
-        Garante que a coleção exista no Qdrant.
+        Garante que a coleção exista no Qdrant (async).
         """
         try:
-            collections = self.client.get_collections()
-            if self.collection_name not in [c.name for c in collections.collections]:
-                logger.info(f"Coleção '{self.collection_name}' não encontrada. Criando nova coleção...")
-                self.client.recreate_collection(
+            try:
+                await self.client.get_collection(collection_name=self.collection_name)
+                logger.info(f"Coleção '{self.collection_name}' já existe.")
+            except Exception:
+                logger.info(f"Coleção '{self.collection_name}' não encontrada. Criando nova coleção (async)...")
+                await self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=models.VectorParams(size=self._vector_size, distance=models.Distance.COSINE),
                 )
-                logger.info("Coleção criada com sucesso.")
-            else:
-                logger.info(f"Coleção '{self.collection_name}' já existe.")
+                logger.info("Coleção criada com sucesso (async).")
         except Exception as e:
             logger.warning("Qdrant indisponível; ativando modo offline.", exc_info=e)
             self._offline = True
@@ -150,12 +156,11 @@ class MemoryCore:
         point = models.PointStruct(id=experience.id, payload=payload, vector=vector)
         if not self._offline:
             try:
-                self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
+                await self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
             except Exception:
                 logger.warning("Upsert no Qdrant falhou; armazenando apenas no cache.", exc_info=True)
                 self._offline = True
         else:
-            # Offline: skip Qdrant upsert
             pass
 
         # 8) Atualiza quota
@@ -213,8 +218,11 @@ class MemoryCore:
                         self._short_size.set(len(self._short_cache))
                     except Exception:
                         pass
-                # Similaridade coseno com todos os itens
-                for k, v in list(self._short_cache.items()):
+                scan_limit = int(getattr(settings, "MEMORY_SHORT_SCAN_MAX_ITEMS", max(1, self._short_max_items // 4)))
+                items = list(self._short_cache.items())
+                if scan_limit < len(items):
+                    items = items[-scan_limit:]
+                for k, v in items:
                     vec = v.get("vector")
                     if not isinstance(vec, list):
                         continue
@@ -234,12 +242,32 @@ class MemoryCore:
         qdrant_results: List[Dict[str, Any]] = []
         if not self._offline:
             try:
-                hits = self.client.search(
-                    collection_name=self.collection_name,
-                    query_vector=query_vector,
-                    limit=effective_limit,
-                    with_payload=True,
+                import asyncio as _asyncio
+                from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
+                @resilient(
+                    max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+                    initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+                    max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+                    circuit_breaker=self._cb,
+                    operation_name="qdrant_search",
                 )
+                async def _search():
+                    return await self.client.search(
+                        collection_name=self.collection_name,
+                        query_vector=query_vector,
+                        limit=effective_limit,
+                        with_payload=True,
+                    )
+                _start = _asyncio.get_event_loop().time()
+                _timeout = get_timeout_recommendation(
+                    "qdrant_search",
+                    float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+                )
+                hits = await _asyncio.wait_for(_search(), timeout=float(_timeout))
+                try:
+                    record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
+                except Exception:
+                    pass
                 qdrant_results = [{
                     "id": hit.id,
                     "content": decrypt_text(hit.payload.get('content'), hit.payload.get('metadata')),
@@ -312,13 +340,32 @@ class MemoryCore:
             # Offline: retorna vazio para buscas filtradas complexas
             return []
         try:
-            hits = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_vector,
-                limit=eff_limit,
-                with_payload=True,
-                query_filter=qfilter,
+            import asyncio as _asyncio
+            @resilient(
+                max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+                initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+                max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+                circuit_breaker=self._cb,
+                operation_name="qdrant_search_filtered",
             )
+            async def _search_filtered():
+                return await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    limit=eff_limit,
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+            _start = _asyncio.get_event_loop().time()
+            _timeout = get_timeout_recommendation(
+                "qdrant_search",
+                float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+            )
+            hits = await _asyncio.wait_for(_search_filtered(), timeout=float(_timeout))
+            try:
+                record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
+            except Exception:
+                pass
         except Exception:
             logger.warning("Busca filtrada no Qdrant falhou; retornando vazio.", exc_info=True)
             self._offline = True
@@ -360,13 +407,32 @@ class MemoryCore:
         if self._offline:
             return []
         try:
-            hits = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_vector,
-                limit=eff_limit,
-                with_payload=True,
-                query_filter=qfilter,
+            import asyncio as _asyncio
+            @resilient(
+                max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+                initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+                max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+                circuit_breaker=self._cb,
+                operation_name="qdrant_search_timeframe",
             )
+            async def _search_timeframe():
+                return await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    limit=eff_limit,
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+            _start = _asyncio.get_event_loop().time()
+            _timeout = get_timeout_recommendation(
+                "qdrant_search",
+                float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+            )
+            hits = await _asyncio.wait_for(_search_timeframe(), timeout=float(_timeout))
+            try:
+                record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
+            except Exception:
+                pass
         except Exception:
             logger.warning("Busca por janela no Qdrant falhou; retornando vazio.", exc_info=True)
             self._offline = True
@@ -410,13 +476,32 @@ class MemoryCore:
         if self._offline:
             return []
         try:
-            hits = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=[0.0] * self._vector_size,
-                limit=limit or 10,
-                with_payload=True,
-                query_filter=qfilter,
+            import asyncio as _asyncio
+            @resilient(
+                max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+                initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+                max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+                circuit_breaker=self._cb,
+                operation_name="qdrant_search_recent_failures",
             )
+            async def _search_recent_failures():
+                return await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=[0.0] * self._vector_size,
+                    limit=limit or 10,
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+            _start = _asyncio.get_event_loop().time()
+            _timeout = get_timeout_recommendation(
+                "qdrant_search",
+                float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+            )
+            hits = await _asyncio.wait_for(_search_recent_failures(), timeout=float(_timeout))
+            try:
+                record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
+            except Exception:
+                pass
         except Exception:
             logger.warning("Busca de falhas recentes no Qdrant falhou; retornando vazio.", exc_info=True)
             self._offline = True
@@ -446,13 +531,32 @@ class MemoryCore:
         if self._offline:
             return []
         try:
-            hits = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=[0.0] * self._vector_size,
-                limit=limit or 10,
-                with_payload=True,
-                query_filter=qfilter,
+            import asyncio as _asyncio
+            @resilient(
+                max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
+                initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
+                max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+                circuit_breaker=self._cb,
+                operation_name="qdrant_search_recent_lessons",
             )
+            async def _search_recent_lessons():
+                return await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=[0.0] * self._vector_size,
+                    limit=limit or 10,
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+            _start = _asyncio.get_event_loop().time()
+            _timeout = get_timeout_recommendation(
+                "qdrant_search",
+                float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+            )
+            hits = await _asyncio.wait_for(_search_recent_lessons(), timeout=float(_timeout))
+            try:
+                record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
+            except Exception:
+                pass
         except Exception:
             logger.warning("Busca de lições recentes no Qdrant falhou; retornando vazio.", exc_info=True)
             self._offline = True

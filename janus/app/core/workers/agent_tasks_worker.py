@@ -4,6 +4,7 @@ Async Agent Tasks Worker
 Consumes agent task messages from RabbitMQ and runs the agent asynchronously.
 """
 import logging
+import msgpack
 import uuid
 from datetime import datetime
 from typing import Any, Dict
@@ -126,9 +127,9 @@ async def publish_agent_task(question: str, agent_type: AgentType | str) -> str:
         timestamp=datetime.utcnow().timestamp(),
     )
 
-    serialized = task_message.model_dump_json()
+    serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
     broker = await get_broker()
-    await broker.publish(queue_name=QueueName.AGENT_TASKS.value, message=serialized)
+    await broker.publish(queue_name=QueueName.AGENT_TASKS.value, message=serialized, use_msgpack=True)
 
     logger.info(f"Published agent task: task_id={task_id}, type={payload['agent_type']}")
     return task_id

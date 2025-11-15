@@ -2,6 +2,7 @@ import time
 import hashlib
 import threading
 from typing import Optional, Dict, Any, Tuple, List
+import msgpack
 
 try:
     from prometheus_client import Counter, Gauge
@@ -21,6 +22,7 @@ from app.config import settings
 # --- Config ---
 _DEFAULT_TTL = getattr(settings, "LLM_RESPONSE_CACHE_TTL_SECONDS", 900)
 _ENABLED = getattr(settings, "LLM_RESPONSE_CACHE_ENABLED", True)
+_CACHE_USE_MSGPACK = getattr(settings, "LLM_RESPONSE_CACHE_USE_MSGPACK", False)
 
 # --- Metrics ---
 _RESPONSE_CACHE_HITS = Counter("llm_response_cache_hits_total", "Total de hits no cache de respostas")
@@ -77,7 +79,7 @@ def put(prompt: str, role: str, priority: str, response: str, provider: str, mod
         return
     key = _make_key(hash_prompt(prompt), role, priority)
     with _lock:
-        _cache[key] = {
+        entry: Dict[str, Any] = {
             "response": response,
             "provider": provider,
             "model": model,
@@ -90,7 +92,23 @@ def put(prompt: str, role: str, priority: str, response: str, provider: str, mod
             "output_tokens": output_tokens,
             "cost_usd": cost_usd,
         }
+        if _CACHE_USE_MSGPACK:
+            try:
+                entry["response_bin"] = msgpack.packb(response, use_bin_type=True)
+                entry["size_bytes"] = len(entry["response_bin"])  # prefer real stored size
+                entry["format"] = "msgpack"
+            except Exception:
+                entry["format"] = "json"
+        _cache[key] = entry
         _RESPONSE_CACHE_SIZE.set(len(_cache))
+
+
+def serialize_entry(entry: Dict[str, Any]) -> bytes:
+    return msgpack.packb(entry, use_bin_type=True)
+
+
+def deserialize_entry(data: bytes) -> Dict[str, Any]:
+    return msgpack.unpackb(data, raw=False)
 
 
 def invalidate(prompt: Optional[str] = None, role: Optional[str] = None, priority: Optional[str] = None) -> int:

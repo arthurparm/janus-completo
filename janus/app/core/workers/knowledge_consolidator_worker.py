@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional, Tuple, List
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from prometheus_client import Counter, Histogram
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient
 
 from app.config import settings
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
@@ -23,7 +23,7 @@ from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
 from app.core.memory.memory_core import decrypt_text, get_memory_db
 from app.core.memory.graph_guardian import graph_guardian
 from app.db.graph import get_graph_db
-from app.db.vector_store import get_qdrant_client
+from app.db.vector_store import get_async_qdrant_client
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class KnowledgeConsolidator:
     """Worker que consolida memória episódica em memória semântica."""
 
     def __init__(self):
-        self.qdrant_client: Optional[QdrantClient] = None
+        self.qdrant_client: Optional[AsyncQdrantClient] = None
         self.llm: Optional[BaseChatModel] = None
         self._initialized = False
 
@@ -102,8 +102,8 @@ class KnowledgeConsolidator:
             return
 
         try:
-            # Cliente Qdrant
-            self.qdrant_client = get_qdrant_client()
+            # Cliente Qdrant (assíncrono)
+            self.qdrant_client = get_async_qdrant_client()
             logger.info("Cliente Qdrant inicializado para consolidação.")
         except Exception as e:
             logger.error(f"Falha ao inicializar cliente Qdrant: {e}")
@@ -266,90 +266,184 @@ class KnowledgeConsolidator:
         except Exception as e:
             logger.error(f"Erro ao criar nó de experiência: {e}")
 
-        # Cria entidades (com normalização via Graph Guardian)
+        # Cria entidades (com normalização via Graph Guardian) em lote por tipo
+        normalized_entities = []
         for entity in extracted_data.get("entities", []):
             if not entity.get("name"):
                 continue
-
             try:
-                # GUARDIÃO DO GRAFO: Normaliza e valida entidade
-                normalized_entity = graph_guardian.validate_and_normalize_entity(
+                ne = graph_guardian.validate_and_normalize_entity(
                     name=entity["name"],
                     entity_type=entity.get("type", "CONCEPT"),
                     properties=entity.get("properties", {})
                 )
-
-                entity_name = normalized_entity["name"]
-                entity_type = normalized_entity["type"]
-                entity_props = normalized_entity["properties"]
-                entity_props["original_name"] = normalized_entity.get("original_name", entity_name)
-                await db.query(
-                    f"""
-                    MERGE (n:{entity_type} {{name: $name}})
-                    SET n += $properties,
-                        n.last_seen = datetime()
-                    WITH n
-                    MATCH (e:Experience {{id: $exp_id}})
-                    MERGE (e)-[:MENTIONS]->(n)
-                    """,
-                    params={
-                        "name": entity_name,
-                        "properties": entity_props,
-                        "exp_id": experience_id
-                    },
-                    operation="create_entity"
-                )
-                entities_created += 1
-                ENTITIES_EXTRACTED.inc()
+                props = ne["properties"]
+                props["original_name"] = ne.get("original_name", ne["name"]) 
+                normalized_entities.append({
+                    "name": ne["name"],
+                    "type": ne["type"],
+                    "properties": props,
+                })
             except ValueError as ve:
                 logger.warning(f"Entidade inválida ignorada: {entity.get('name')} - {ve}")
             except Exception as e:
-                logger.error(f"Erro ao criar entidade {entity.get('name')}: {e}")
+                logger.error(f"Erro ao normalizar entidade {entity.get('name')}: {e}")
 
-        # Cria relacionamentos (com normalização via Graph Guardian)
+        # Executa MERGE de entidades em transação única, agrupando por label
+        if normalized_entities:
+            try:
+                async with await db.get_session() as session:
+                    tx = await session.begin_transaction()
+                    try:
+                        from collections import defaultdict
+                        groups = defaultdict(list)
+                        for ne in normalized_entities:
+                            groups[ne["type"]].append(ne)
+                        try:
+                            await db.register_relationship_type(tx, "MENTIONS")
+                        except Exception:
+                            pass
+                        for label, batch in groups.items():
+                            await tx.run(
+                                f"""
+                                UNWIND $batch AS ent
+                                MERGE (n:{label} {{name: ent.name}})
+                                SET n += ent.properties,
+                                    n.last_seen = datetime()
+                                WITH n
+                                MATCH (e:Experience {{id: $exp_id}})
+                                MERGE (e)-[:MENTIONS]->(n)
+                                """,
+                                batch=batch,
+                                exp_id=experience_id,
+                            )
+                            entities_created += len(batch)
+                        await tx.commit()
+                        try:
+                            ENTITIES_EXTRACTED.inc(entities_created)
+                        except Exception:
+                            pass
+                    finally:
+                        await tx.close()
+            except Exception as e:
+                logger.error(f"Erro em transação de entidades: {e}")
+
+        # Cria relacionamentos (com normalização via Graph Guardian) em lote por tipo
+        normalized_rels = []
         for rel in extracted_data.get("relationships", []):
             if not rel.get("from") or not rel.get("to"):
                 continue
-
             try:
-                normalized_rel = graph_guardian.validate_and_normalize_relationship(
+                nr = graph_guardian.validate_and_normalize_relationship(
                     from_entity=rel["from"],
                     to_entity=rel["to"],
                     rel_type=rel.get("type", "RELATES_TO"),
                     properties=rel.get("properties", {})
                 )
-                if normalized_rel is None:
+                if nr is None:
                     logger.debug(f"Relacionamento inválido ignorado: {rel}")
                     continue
-                from_name = normalized_rel["from"]
-                to_name = normalized_rel["to"]
-                rel_type = normalized_rel["type"]
-                rel_props = normalized_rel["properties"]
-                rel_props["original_from"] = normalized_rel.get("original_from", from_name)
-                rel_props["original_to"] = normalized_rel.get("original_to", to_name)
-                await db.query(
-                    f"""
-                    MATCH (a {{name: $from_name}})
-                    MATCH (b {{name: $to_name}})
-                    MERGE (a)-[r:{rel_type}]->(b)
-                    SET r += $properties,
-                        r.discovered_at = datetime(),
-                        r.source_experience = $exp_id
-                    """,
-                    params={
-                        "from_name": from_name,
-                        "to_name": to_name,
-                        "properties": rel_props,
-                        "exp_id": experience_id
-                    },
-                    operation="create_relationship"
-                )
-                relationships_created += 1
-                RELATIONSHIPS_CREATED.inc()
+                props = nr["properties"]
+                props["original_from"] = nr.get("original_from", nr["from"]) 
+                props["original_to"] = nr.get("original_to", nr["to"]) 
+                normalized_rels.append({
+                    "from_name": nr["from"],
+                    "to_name": nr["to"],
+                    "type": nr["type"],
+                    "properties": props,
+                })
             except Exception as e:
-                logger.error(
-                    f"Erro ao criar relacionamento {rel.get('from')} -> {rel.get('to')}: {e}"
-                )
+                logger.error(f"Erro ao normalizar relacionamento {rel.get('from')} -> {rel.get('to')}: {e}")
+
+        def _should_quarantine(rel: Dict[str, Any]) -> bool:
+            t = rel.get("type")
+            a = rel.get("from_name", "")
+            b = rel.get("to_name", "")
+            if not a or not b:
+                return True
+            if a == b:
+                return True
+            if t == "RELATES_TO" and len(a) < 3 and len(b) < 3:
+                return True
+            return False
+
+        quarantined: List[Dict[str, Any]] = []
+        valid_rels: List[Dict[str, Any]] = []
+        for nr in normalized_rels:
+            if _should_quarantine(nr):
+                quarantined.append(nr)
+            else:
+                valid_rels.append(nr)
+
+        if valid_rels:
+            try:
+                async with await db.get_session() as session:
+                    tx = await session.begin_transaction()
+                    try:
+                        from collections import defaultdict
+                        groups = defaultdict(list)
+                        for nr in valid_rels:
+                            groups[nr["type"]].append(nr)
+                        for rel_type, batch in groups.items():
+                            try:
+                                await db.register_relationship_type(tx, rel_type)
+                            except Exception:
+                                pass
+                            await tx.run(
+                                f"""
+                                UNWIND $batch AS rel
+                                MATCH (a {{name: rel.from_name}})
+                                MATCH (b {{name: rel.to_name}})
+                                MERGE (a)-[r:{rel_type}]->(b)
+                                SET r += rel.properties,
+                                    r.discovered_at = datetime(),
+                                    r.source_experience = $exp_id
+                                """,
+                                batch=batch,
+                                exp_id=experience_id,
+                            )
+                            relationships_created += len(batch)
+                        await tx.commit()
+                        try:
+                            RELATIONSHIPS_CREATED.inc(relationships_created)
+                        except Exception:
+                            pass
+                    finally:
+                        await tx.close()
+            except Exception as e:
+                logger.error(f"Erro em transação de relacionamentos: {e}")
+
+        if quarantined:
+            try:
+                async with await db.get_session() as session:
+                    tx = await session.begin_transaction()
+                    try:
+                        try:
+                            await db.register_relationship_type(tx, "EXTRACTED_FROM")
+                        except Exception:
+                            pass
+                        for q in quarantined:
+                            await tx.run(
+                                """
+                                MERGE (q:Quarantine {reason: $reason, type: $type})
+                                SET q.from_name = $from_name,
+                                    q.to_name = $to_name,
+                                    q.created_at = datetime()
+                                WITH q
+                                MATCH (e:Experience {id: $exp_id})
+                                MERGE (q)-[:EXTRACTED_FROM]->(e)
+                                """,
+                                reason="low_quality",
+                                type=q.get("type"),
+                                from_name=q.get("from_name"),
+                                to_name=q.get("to_name"),
+                                exp_id=experience_id,
+                            )
+                        await tx.commit()
+                    finally:
+                        await tx.close()
+            except Exception:
+                pass
 
         insights = extracted_data.get("insights", [])
         if insights:
@@ -456,9 +550,9 @@ class KnowledgeConsolidator:
             raise
 
     async def consolidate_batch(
-            self,
-            limit: int = 10,
-            min_score: float = 0.0
+        self,
+        limit: int = 10,
+        min_score: float = 0.0
     ) -> Dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.
@@ -480,13 +574,13 @@ class KnowledgeConsolidator:
 
         try:
             logger.info(f"Buscando até {limit} experiências para consolidação...")
-            scroll_result = self.qdrant_client.scroll(
+            scroll_result = await self.qdrant_client.scroll(
                 collection_name=settings.QDRANT_COLLECTION_EPISODIC,
                 limit=limit,
                 with_payload=True,
                 with_vectors=False
             )
-            points, _ = scroll_result
+            points = scroll_result[0] if isinstance(scroll_result, tuple) else getattr(scroll_result, "points", [])
             logger.info(f"Encontradas {len(points)} experiências para consolidar.")
             for point in points:
                 stats["total_processed"] += 1
@@ -541,6 +635,179 @@ class KnowledgeConsolidator:
         except Exception as e:
             logger.warning(f"Erro ao verificar consolidação: {e}")
             return False
+
+    async def consolidate_document(self, user_id: str, doc_id: str, limit: int = 50) -> Dict[str, Any]:
+        await self._initialize()
+        start_time = time.perf_counter()
+        try:
+            client = get_async_qdrant_client()
+        except Exception as e:
+            raise ValueError(f"Cliente Qdrant não disponível: {e}")
+
+        try:
+            from qdrant_client import models as _models
+            qfilter = _models.Filter(must=[
+                _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=user_id)),
+                _models.FieldCondition(key="metadata.doc_id", match=_models.MatchValue(value=doc_id)),
+                _models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="doc_chunk")),
+            ])
+        except Exception:
+            qfilter = None
+
+        coll_name = f"user_{user_id}"
+        try:
+            scroll_result = await client.scroll(collection_name=coll_name, limit=limit, with_payload=True, with_vectors=False, filter=qfilter)  # type: ignore
+            points = scroll_result[0] if isinstance(scroll_result, tuple) else getattr(scroll_result, "points", [])
+        except Exception as e:
+            raise ValueError(f"Falha ao obter chunks do documento: {e}")
+
+        entities_total = 0
+        relationships_total = 0
+
+        db = await get_graph_db()
+        # Cria nó do Document
+        try:
+            await db.query(
+                """
+                MERGE (d:Document {id: $doc_id})
+                SET d.file_name = $file_name,
+                    d.user_id = $user_id,
+                    d.discovered_at = datetime()
+                """,
+                params={
+                    "doc_id": doc_id,
+                    "file_name": points[0].payload.get("metadata", {}).get("file_name") if points else None,
+                    "user_id": user_id,
+                },
+                operation="create_document_node",
+            )
+        except Exception:
+            pass
+
+        for p in points:
+            payload = getattr(p, "payload", {}) or {}
+            meta = payload.get("metadata") or {}
+            content = payload.get("content") or ""
+            if not content:
+                continue
+            md = dict(meta)
+            md["source"] = "document_chunk"
+            md["chunk_id"] = str(p.id)
+            extracted = await self._extract_knowledge_with_llm(content, md)
+
+            # Normaliza entidades
+            normalized_entities = []
+            for entity in extracted.get("entities", []):
+                if not entity.get("name"):
+                    continue
+                try:
+                    ne = graph_guardian.validate_and_normalize_entity(
+                        name=entity["name"],
+                        entity_type=entity.get("type", "CONCEPT"),
+                        properties=entity.get("properties", {}),
+                    )
+                    props = ne["properties"]
+                    props["original_name"] = ne.get("original_name", ne["name"])  
+                    normalized_entities.append({"name": ne["name"], "type": ne["type"], "properties": props})
+                except Exception:
+                    continue
+
+            # Persiste entidades e MENTIONS a partir de Document
+            if normalized_entities:
+                try:
+                    async with await db.get_session() as session:
+                        tx = await session.begin_transaction()
+                        from collections import defaultdict
+                        groups = defaultdict(list)
+                        for ne in normalized_entities:
+                            groups[ne["type"]].append(ne)
+                        try:
+                            await db.register_relationship_type(tx, "MENTIONS")
+                        except Exception:
+                            pass
+                        for label, batch in groups.items():
+                            await tx.run(
+                                f"""
+                                UNWIND $batch AS ent
+                                MERGE (n:{label} {{name: ent.name}})
+                                SET n += ent.properties,
+                                    n.last_seen = datetime()
+                                WITH n
+                                MATCH (d:Document {{id: $doc_id}})
+                                MERGE (d)-[:MENTIONS]->(n)
+                                """,
+                                batch=batch,
+                                doc_id=doc_id,
+                            )
+                            entities_total += len(batch)
+                        await tx.commit()
+                except Exception:
+                    pass
+
+            # Normaliza e persiste relacionamentos entre entidades
+            normalized_rels = []
+            for rel in extracted.get("relationships", []):
+                if not rel.get("from") or not rel.get("to"):
+                    continue
+                try:
+                    nr = graph_guardian.validate_and_normalize_relationship(
+                        from_entity=rel["from"],
+                        to_entity=rel["to"],
+                        rel_type=rel.get("type", "RELATES_TO"),
+                        properties=rel.get("properties", {}),
+                    )
+                    if nr is None:
+                        continue
+                    props = nr["properties"]
+                    props["source_chunk"] = str(p.id)
+                    normalized_rels.append({
+                        "from_name": nr["from"],
+                        "to_name": nr["to"],
+                        "type": nr["type"],
+                        "properties": props,
+                    })
+                except Exception:
+                    continue
+
+            if normalized_rels:
+                try:
+                    async with await db.get_session() as session:
+                        tx = await session.begin_transaction()
+                        from collections import defaultdict
+                        groups = defaultdict(list)
+                        for nr in normalized_rels:
+                            groups[nr["type"]].append(nr)
+                        for rel_type, batch in groups.items():
+                            try:
+                                await db.register_relationship_type(tx, rel_type)
+                            except Exception:
+                                pass
+                            await tx.run(
+                                f"""
+                                UNWIND $batch AS rel
+                                MATCH (a {{name: rel.from_name}})
+                                MATCH (b {{name: rel.to_name}})
+                                MERGE (a)-[r:{rel_type}]->(b)
+                                SET r += rel.properties,
+                                    r.discovered_at = datetime(),
+                                    r.source_document = $doc_id
+                                """,
+                                batch=batch,
+                                doc_id=doc_id,
+                            )
+                            relationships_total += len(batch)
+                        await tx.commit()
+                except Exception:
+                    pass
+
+        elapsed = time.perf_counter() - start_time
+        return {
+            "doc_id": doc_id,
+            "entities_created": entities_total,
+            "relationships_created": relationships_total,
+            "elapsed_seconds": elapsed,
+            "status": "success",
+        }
 
 
 # Instância global

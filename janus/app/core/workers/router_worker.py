@@ -5,6 +5,7 @@ Consome a fila central JANUS.tasks.router e decide o próximo agente
 para o TaskState usando o Planner na decomposição inicial.
 """
 import logging
+import msgpack
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
@@ -98,9 +99,13 @@ async def process_router_task(task: TaskMessage) -> None:
                     "metadata": meta,
                 },
                 timestamp=datetime.utcnow().timestamp(),
-            ).model_dump_json()
+            ).model_dump()
             broker = await get_broker()
-            await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=side_msg)
+            await broker.publish(
+                queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
+                message=msgpack.packb(side_msg, use_bin_type=True),
+                use_msgpack=True,
+            )
             route_note = f"next={state.next_agent_role} (memory side-published)"
         else:
             route_note = f"next={state.next_agent_role}"

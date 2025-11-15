@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Callable, Any, Type
 from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -115,16 +116,25 @@ class DynamicToolGenerator:
             BaseTool pronta para uso
         """
         try:
-            # LangChain @tool não aceita 'name', usa o nome da função
-            # Vamos criar a função com o nome correto dinamicamente
+            is_async = inspect.iscoroutinefunction(func)
             if args_schema:
-                @tool(description=description, args_schema=args_schema)
-                def dynamic_tool(*args, **kwargs):
-                    return func(*args, **kwargs)
+                if is_async:
+                    @tool(description=description, args_schema=args_schema)
+                    async def dynamic_tool(*args, **kwargs):
+                        return await func(*args, **kwargs)
+                else:
+                    @tool(description=description, args_schema=args_schema)
+                    def dynamic_tool(*args, **kwargs):
+                        return func(*args, **kwargs)
             else:
-                @tool(description=description)
-                def dynamic_tool(*args, **kwargs):
-                    return func(*args, **kwargs)
+                if is_async:
+                    @tool(description=description)
+                    async def dynamic_tool(*args, **kwargs):
+                        return await func(*args, **kwargs)
+                else:
+                    @tool(description=description)
+                    def dynamic_tool(*args, **kwargs):
+                        return func(*args, **kwargs)
 
             # Renomeia a ferramenta para o nome desejado
             dynamic_tool.name = name
@@ -158,31 +168,30 @@ class DynamicToolGenerator:
         Returns:
             BaseTool que faz chamadas HTTP
         """
-        import requests
+        import httpx
 
-        def api_call(**kwargs) -> str:
+        async def api_call(**kwargs) -> str:
             try:
-                if method.upper() == "GET":
-                    response = requests.get(
-                        endpoint_url,
-                        params=kwargs,
-                        headers=headers or {},
-                        timeout=30
-                    )
-                elif method.upper() == "POST":
-                    response = requests.post(
-                        endpoint_url,
-                        json=kwargs,
-                        headers=headers or {},
-                        timeout=30
-                    )
-                else:
-                    return f"Método HTTP '{method}' não suportado"
+                async with httpx.AsyncClient(timeout=30) as client:
+                    if method.upper() == "GET":
+                        response = await client.get(
+                            endpoint_url,
+                            params=kwargs,
+                            headers=headers or {},
+                        )
+                    elif method.upper() == "POST":
+                        response = await client.post(
+                            endpoint_url,
+                            json=kwargs,
+                            headers=headers or {},
+                        )
+                    else:
+                        return f"Método HTTP '{method}' não suportado"
 
                 response.raise_for_status()
                 return response.text
 
-            except requests.RequestException as e:
+            except httpx.HTTPError as e:
                 return f"Erro na chamada API: {e}"
 
         return DynamicToolGenerator.from_function_spec(
