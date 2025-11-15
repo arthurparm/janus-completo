@@ -2,6 +2,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from app.repositories.user_repository import UserRepository
 from app.db.mysql_config import mysql_db
 from app.models.consent_models import Consent
 
@@ -26,7 +27,11 @@ class ConsentResponse(BaseModel):
     revoked_at: Optional[str]
 
 @router.post("/", response_model=ConsentResponse)
-async def grant_consent(payload: ConsentRequest):
+async def grant_consent(payload: ConsentRequest, request: Request):
+    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    ur = UserRepository()
+    if not actor or (str(actor) != str(payload.user_id) and not ur.is_admin(int(actor))):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     s = _get_session()
     try:
         c = Consent(user_id=payload.user_id, scope=payload.scope, resource=payload.resource, granted="True", notes=payload.notes)
@@ -38,9 +43,18 @@ async def grant_consent(payload: ConsentRequest):
         s.close()
 
 @router.get("/", response_model=List[ConsentResponse])
-async def list_consents(user_id: Optional[str] = None, scope: Optional[str] = None):
+async def list_consents(user_id: Optional[str] = None, scope: Optional[str] = None, request: Request = None):
     s = _get_session()
     try:
+        if request is not None:
+            actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+            ur = UserRepository()
+            if not actor:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+            if user_id is None and not ur.is_admin(int(actor)):
+                user_id = str(actor)
+            if user_id is not None and (str(actor) != str(user_id)) and not ur.is_admin(int(actor)):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         q = s.query(Consent)
         if user_id:
             q = q.filter(Consent.user_id == user_id)
@@ -52,12 +66,16 @@ async def list_consents(user_id: Optional[str] = None, scope: Optional[str] = No
         s.close()
 
 @router.post("/{consent_id}/revoke", response_model=ConsentResponse)
-async def revoke_consent(consent_id: int):
+async def revoke_consent(consent_id: int, request: Request):
     s = _get_session()
     try:
         c = s.query(Consent).filter(Consent.id == consent_id).first()
         if not c:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consentimento não encontrado")
+        actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+        ur = UserRepository()
+        if not actor or (str(actor) != str(c.user_id) and not ur.is_admin(int(actor))):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         from datetime import datetime
         c.granted = "False"
         c.revoked_at = datetime.utcnow()
