@@ -14,6 +14,15 @@ from app.config import settings
 from app.models.schemas import Experience, VectorCollection
 from app.core.infrastructure.resilience import resilient, CircuitBreaker
 from app.core.embeddings.embedding_manager import embed_text
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 
 # Métricas (fallback para no-op se prometheus não estiver disponível)
 try:
@@ -55,6 +64,7 @@ class MemoryCore:
         self._short_misses = Counter("memory_short_cache_misses_total", "Cache curto prazo: misses")
         self._short_size = Gauge("memory_short_cache_size", "Itens no cache curto prazo")
         self._quota_rejections = Counter("memory_quota_rejections_total", "Rejeições por cota excedida")
+        self._ops_total = Counter("memory_operations_total", "Total de operações na memória", ["operation"])  # type: ignore
         # Offline fallback flag
         self._offline = False
         self._cb = CircuitBreaker(
@@ -156,7 +166,21 @@ class MemoryCore:
         point = models.PointStruct(id=experience.id, payload=payload, vector=vector)
         if not self._offline:
             try:
-                await self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
+                cm = (_tracer.start_as_current_span("memory.upsert") if _OTEL else nullcontext())
+                async with cm as span:  # type: ignore
+                    if _OTEL and span is not None:
+                        try:
+                            sid = USER_ID.get()
+                            tid = TRACE_ID.get()
+                            if sid and sid != "-":
+                                span.set_attribute("janus.user_id", sid)
+                            if tid and tid != "-":
+                                span.set_attribute("janus.trace_id", tid)
+                            span.set_attribute("memory.collection", self.collection_name)
+                            span.set_attribute("memory.point_id", str(experience.id))
+                        except Exception:
+                            pass
+                    await self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
             except Exception:
                 logger.warning("Upsert no Qdrant falhou; armazenando apenas no cache.", exc_info=True)
                 self._offline = True
@@ -190,6 +214,10 @@ class MemoryCore:
                     pass
         except Exception:
             logger.debug("Falha ao adicionar item no cache curto prazo", exc_info=True)
+        try:
+            self._ops_total.labels(operation="memorize").inc()
+        except Exception:
+            pass
 
     async def arecall(self, query: str, limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
         """
@@ -263,7 +291,21 @@ class MemoryCore:
                     "qdrant_search",
                     float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
                 )
-                hits = await _asyncio.wait_for(_search(), timeout=float(_timeout))
+                cm = (_tracer.start_as_current_span("memory.search") if _OTEL else nullcontext())
+                async with cm as span:  # type: ignore
+                    if _OTEL and span is not None:
+                        try:
+                            sid = USER_ID.get()
+                            tid = TRACE_ID.get()
+                            if sid and sid != "-":
+                                span.set_attribute("janus.user_id", sid)
+                            if tid and tid != "-":
+                                span.set_attribute("janus.trace_id", tid)
+                            span.set_attribute("memory.collection", self.collection_name)
+                            span.set_attribute("memory.limit", effective_limit)
+                        except Exception:
+                            pass
+                    hits = await _asyncio.wait_for(_search(), timeout=float(_timeout))
                 try:
                     record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
                 except Exception:
@@ -301,6 +343,17 @@ class MemoryCore:
         except Exception:
             pass
 
+        try:
+            if cache_results:
+                self._short_hits.inc()
+            else:
+                self._short_misses.inc()
+        except Exception:
+            pass
+        try:
+            self._ops_total.labels(operation="recall").inc()
+        except Exception:
+            pass
         return results
 
     def _build_filter(self, filters: Dict[str, Any]) -> Optional[models.Filter]:
@@ -361,7 +414,21 @@ class MemoryCore:
                 "qdrant_search",
                 float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
             )
-            hits = await _asyncio.wait_for(_search_filtered(), timeout=float(_timeout))
+            cm = (_tracer.start_as_current_span("memory.search_filtered") if _OTEL else nullcontext())
+            async with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        sid = USER_ID.get()
+                        tid = TRACE_ID.get()
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        span.set_attribute("memory.collection", self.collection_name)
+                        span.set_attribute("memory.limit", eff_limit)
+                    except Exception:
+                        pass
+                hits = await _asyncio.wait_for(_search_filtered(), timeout=float(_timeout))
             try:
                 record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
             except Exception:
@@ -378,6 +445,10 @@ class MemoryCore:
         } for hit in hits]
         if min_score is not None:
             results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        try:
+            self._ops_total.labels(operation="recall_filtered").inc()
+        except Exception:
+            pass
         return results
 
     async def arecall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -428,7 +499,21 @@ class MemoryCore:
                 "qdrant_search",
                 float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
             )
-            hits = await _asyncio.wait_for(_search_timeframe(), timeout=float(_timeout))
+            cm = (_tracer.start_as_current_span("memory.search_timeframe") if _OTEL else nullcontext())
+            async with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        sid = USER_ID.get()
+                        tid = TRACE_ID.get()
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        span.set_attribute("memory.collection", self.collection_name)
+                        span.set_attribute("memory.limit", eff_limit)
+                    except Exception:
+                        pass
+                hits = await _asyncio.wait_for(_search_timeframe(), timeout=float(_timeout))
             try:
                 record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
             except Exception:
@@ -459,6 +544,10 @@ class MemoryCore:
         ]
         if min_score is not None:
             results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        try:
+            self._ops_total.labels(operation="recall_timeframe").inc()
+        except Exception:
+            pass
         return results
 
     async def arecall_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -497,7 +586,21 @@ class MemoryCore:
                 "qdrant_search",
                 float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
             )
-            hits = await _asyncio.wait_for(_search_recent_failures(), timeout=float(_timeout))
+            cm = (_tracer.start_as_current_span("memory.search_recent_failures") if _OTEL else nullcontext())
+            async with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        sid = USER_ID.get()
+                        tid = TRACE_ID.get()
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        span.set_attribute("memory.collection", self.collection_name)
+                        span.set_attribute("memory.limit", limit or 10)
+                    except Exception:
+                        pass
+                hits = await _asyncio.wait_for(_search_recent_failures(), timeout=float(_timeout))
             try:
                 record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
             except Exception:
@@ -514,6 +617,10 @@ class MemoryCore:
         } for h in hits]
         if min_score is not None:
             results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        try:
+            self._ops_total.labels(operation="recall_recent_failures").inc()
+        except Exception:
+            pass
         return results
 
     async def arecall_recent_lessons(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -552,7 +659,21 @@ class MemoryCore:
                 "qdrant_search",
                 float(getattr(settings, "QDRANT_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
             )
-            hits = await _asyncio.wait_for(_search_recent_lessons(), timeout=float(_timeout))
+            cm = (_tracer.start_as_current_span("memory.search_recent_lessons") if _OTEL else nullcontext())
+            async with cm as span:  # type: ignore
+                if _OTEL and span is not None:
+                    try:
+                        sid = USER_ID.get()
+                        tid = TRACE_ID.get()
+                        if sid and sid != "-":
+                            span.set_attribute("janus.user_id", sid)
+                        if tid and tid != "-":
+                            span.set_attribute("janus.trace_id", tid)
+                        span.set_attribute("memory.collection", self.collection_name)
+                        span.set_attribute("memory.limit", limit or 10)
+                    except Exception:
+                        pass
+                hits = await _asyncio.wait_for(_search_recent_lessons(), timeout=float(_timeout))
             try:
                 record_latency("qdrant_search", _asyncio.get_event_loop().time() - _start)
             except Exception:
@@ -569,6 +690,10 @@ class MemoryCore:
         } for h in hits]
         if min_score is not None:
             results = [r for r in results if float(r.get("score", 0.0)) >= float(min_score)]
+        try:
+            self._ops_total.labels(operation="recall_recent_lessons").inc()
+        except Exception:
+            pass
         return results
 
 
