@@ -1,0 +1,35 @@
+{
+  "title": "Janus Documents Pipeline Latency",
+  "tags": ["janus", "documents", "pipeline"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "heatmap",
+      "title": "Extract Latency",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (le) (rate(doc_ingest_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "heatmap",
+      "title": "Chunk Latency",
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (le) (rate(doc_ingest_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "heatmap",
+      "title": "Embed Latency",
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (le) (rate(doc_ingest_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "bargauge",
+      "title": "Chunks per Ingest",
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [{"expr": "sum(doc_ingest_chunks_count)", "refId": "A"}]
+    }
+  ]
+}

@@ -121,6 +121,8 @@ class DocumentIngestionService:
                     pass
         text = ""
         ct = (content_type or "").lower()
+        import time as _t
+        _t0_ext = _t.perf_counter()
         if ct.startswith("text/plain"):
             text = self._extract_text_plain(data)
         elif ct.startswith("text/html") or ct.startswith("application/xhtml"):
@@ -131,6 +133,10 @@ class DocumentIngestionService:
             text = self._extract_text_docx(data)
         else:
             return {"doc_id": doc_id, "chunks": 0, "status": "unsupported_content_type"}
+        try:
+            _DOC_INGEST_LATENCY.observe(max(0.0, _t.perf_counter() - _t0_ext))
+        except Exception:
+            pass
 
         try:
             from app.config import settings
@@ -139,6 +145,7 @@ class DocumentIngestionService:
         except Exception:
             chunk_size = 1000
             overlap = 100
+        _t0_chunk = _t.perf_counter()
         chunks = self._chunk_text(text, chunk_size=chunk_size, overlap=overlap)
         try:
             if _OTEL and span is not None:
@@ -147,6 +154,10 @@ class DocumentIngestionService:
                 _DOC_INGEST_CHUNKS_COUNT.observe(float(len(chunks)))
             except Exception:
                 pass
+        except Exception:
+            pass
+        try:
+            _DOC_INGEST_LATENCY.observe(max(0.0, _t.perf_counter() - _t0_chunk))
         except Exception:
             pass
         if not chunks:
@@ -174,6 +185,10 @@ class DocumentIngestionService:
 
         _t0 = __import__("time").perf_counter()
         vectors = embed_texts(chunks)
+        try:
+            _DOC_INGEST_LATENCY.observe(max(0.0, __import__("time").perf_counter() - _t0))
+        except Exception:
+            pass
         collection_name = get_or_create_collection(f"user_{user_id}")
         client: QdrantClient = get_qdrant_client()
         try:
