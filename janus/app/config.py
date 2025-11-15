@@ -194,6 +194,9 @@ class AppSettings(BaseSettings):
     NEO4J_DEFAULT_TIMEOUT_SECONDS: int = 30
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
+    AUTH_JWT_SECRET: Optional[str] = None
+    AUTH_JWT_EXPIRES_SECONDS: int = 3600
+
     # Sprint 1: RabbitMQ
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
@@ -241,6 +244,25 @@ class AppSettings(BaseSettings):
 
     # Sprint 2: Knowledge Consolidator
     KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS: int = 60
+    KNOWLEDGE_MIN_CONFIDENCE: float = 0.6
+    RAG_HYBRID_VECTOR_WEIGHT: float = 0.7
+    RAG_HYBRID_GRAPH_WEIGHT: float = 0.3
+    DOCS_MAX_FILE_SIZE_BYTES: int = 10_000_000
+    DOCS_MAX_POINTS_PER_USER: int = 50000
+    PRODUCTIVITY_DAILY_LIMITS: Dict[str, int] = {
+        "calendar.write": 500,
+        "mail.send": 100,
+        "notes.write": 1000,
+    }
+    GOOGLE_OAUTH_CLIENT_ID: Optional[SecretStr] = None
+    GOOGLE_OAUTH_CLIENT_SECRET: Optional[SecretStr] = None
+    GOOGLE_OAUTH_REDIRECT_URI: Optional[str] = None
+    TRAINING_GPU_BUDGET_PER_USER: Dict[str, float] = {}
+    RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
+        "janus.neural.training": {"x-max-priority": 5, "x-message-ttl": 3600000},
+        "janus.productivity.google": {"x-max-priority": 5, "x-message-ttl": 600000},
+    }
+    MIN_DEPLOY_ACCURACY: float = 0.7
 
     # Sprint 3: Web Search
     TAVILY_API_KEY: Optional[SecretStr] = None

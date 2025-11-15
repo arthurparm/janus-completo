@@ -50,5 +50,5 @@ def create_note(user_id: str, title: str, content: str) -> str:
 # Registro com metadados e escopos nas tags
 action_registry.register(list_calendar_events, category=ToolCategory.API, permission_level=PermissionLevel.READ_ONLY, tags=["scope:calendar.read", "personal"])
 action_registry.register(create_calendar_event, category=ToolCategory.API, permission_level=PermissionLevel.WRITE, tags=["scope:calendar.write", "personal"])
-action_registry.register(send_email, category=ToolCategory.API, permission_level=PermissionLevel.DANGEROUS, tags=["scope:email.send", "personal", "sensitive"])
+action_registry.register(send_email, category=ToolCategory.API, permission_level=PermissionLevel.DANGEROUS, tags=["scope:mail.send", "personal", "sensitive"])
 action_registry.register(create_note, category=ToolCategory.API, permission_level=PermissionLevel.WRITE, tags=["scope:notes.write", "personal"])
