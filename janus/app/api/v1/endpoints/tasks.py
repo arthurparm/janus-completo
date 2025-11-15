@@ -1,7 +1,9 @@
 import structlog
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi.responses import JSONResponse, Response
+import msgpack
 from pydantic import BaseModel, Field
 
 from app.services.task_service import TaskService, get_task_service
@@ -58,7 +60,8 @@ class ReconcilePolicyResponse(BaseModel):
 @router.post("/consolidation", response_model=TaskResponse, summary="Publica tarefa de consolidação")
 async def create_consolidation_task(
         request: ConsolidationTaskRequest,
-        service: TaskService = Depends(get_task_service)
+        service: TaskService = Depends(get_task_service),
+        http_request: Request = None,
 ):
     """Delega a publicação de uma tarefa de consolidação para o TaskService."""
     # TaskServiceError é tratado pelo exception handler central -> 500
@@ -69,11 +72,12 @@ async def create_consolidation_task(
         experience_content=request.experience_content,
         metadata=request.metadata
     )
-    return TaskResponse(
-        task_id=task_id,
-        message=f"Tarefa de consolidação criada com sucesso (modo: {request.mode})",
-        queue=QueueName.KNOWLEDGE_CONSOLIDATION
-    )
+    data = {
+        "task_id": task_id,
+        "message": f"Tarefa de consolidação criada com sucesso (modo: {request.mode})",
+        "queue": QueueName.KNOWLEDGE_CONSOLIDATION,
+    }
+    return _negotiate_response(http_request, data)
 
 
 @router.get("/queue/{queue_name}", response_model=QueueInfoResponse, summary="Obtém informações sobre uma fila")
@@ -85,10 +89,10 @@ async def get_queue_info(queue_name: str, service: TaskService = Depends(get_tas
 
 
 @router.get("/health/rabbitmq", summary="Verifica saúde do RabbitMQ")
-async def check_rabbitmq_health(service: TaskService = Depends(get_task_service)):
+async def check_rabbitmq_health(service: TaskService = Depends(get_task_service), request: Request = None):
     """Delega a verificação de saúde do broker para o TaskService."""
     if await service.check_broker_health():
-        return {"status": "healthy", "message": "Conexão com RabbitMQ está operacional"}
+        return _negotiate_response(request, {"status": "healthy", "message": "Conexão com RabbitMQ está operacional"})
 
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -132,3 +136,8 @@ async def reconcile_queue_policy(
     """
     result = await service.reconcile_queue_policy(queue_name, force_delete=request.force_delete)
     return ReconcilePolicyResponse(**result)
+def _negotiate_response(request: Request, data: dict) -> Response:
+    accept = (request.headers.get("accept") or "").lower()
+    if "application/msgpack" in accept:
+        return Response(content=msgpack.packb(data, use_bin_type=True), media_type="application/msgpack")
+    return JSONResponse(content=data)

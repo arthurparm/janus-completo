@@ -23,6 +23,7 @@ class HarvestRequest(BaseModel):
     limit: int = Field(100, ge=1, le=1000)
     query: Optional[str] = Field(None, description="Consulta para filtrar experiências")
     min_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar")
+    user_id: Optional[str] = Field(None, description="Filtrar por usuário (origin)")
 
 class TrainingConfig(BaseModel):
     epochs: int = Field(3, ge=1, le=100)
@@ -115,7 +116,7 @@ async def trigger_harvesting(request: HarvestRequest,
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
         result = await learning_service.trigger_harvesting(limit=request.limit, query=request.query,
-                                                           min_score=request.min_score)
+                                                           min_score=request.min_score, origin=request.user_id)
         return result
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao coletar dados", exc_info=e)

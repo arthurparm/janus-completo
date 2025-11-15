@@ -162,6 +162,67 @@ async def publish_consolidation(request: ConsolidationRequest):
     return ConsolidationResponse(message="Tarefa de consolidação publicada.", stats=result)
 
 
+class DocConsolidationRequest(BaseModel):
+    user_id: str
+    doc_id: str
+    limit: int = 50
+
+@router.post("/consolidate/document", response_model=ConsolidationResponse,
+             summary="Consolida conhecimento a partir de um documento (doc_id) do usuário")
+async def consolidate_document(request: DocConsolidationRequest, service: KnowledgeService = Depends(get_knowledge_service)):
+    stats = await service.consolidate_document(user_id=request.user_id, doc_id=request.doc_id, limit=request.limit)
+    return ConsolidationResponse(message="Consolidação de documento concluída.", stats=stats)
+
+
+class RegisterRelTypeRequest(BaseModel):
+    name: str
+
+class RegisterRelTypeResponse(BaseModel):
+    status: str
+    name: str
+
+@router.post("/relationship-types/register", response_model=RegisterRelTypeResponse, summary="Registra um tipo canônico de relacionamento")
+async def register_relationship_type(request: RegisterRelTypeRequest, service: KnowledgeService = Depends(get_knowledge_service)):
+    res = await service.register_relationship_type(request.name)
+    return RegisterRelTypeResponse(**res)
+
+
+class QuarantineItem(BaseModel):
+    reason: str | None
+    type: str | None
+    from_name: str | None
+    to_name: str | None
+    experience_id: str | None
+    timestamp: str | None
+
+class QuarantineListResponse(BaseModel):
+    items: List[QuarantineItem]
+
+@router.get("/quarantine", response_model=QuarantineListResponse, summary="Lista itens em quarentena no grafo")
+async def list_quarantine(limit: int = 50, service: KnowledgeService = Depends(get_knowledge_service)):
+    rows = await service.list_quarantine_items(limit=limit)
+    items = [QuarantineItem(**row) for row in rows]
+    return QuarantineListResponse(items=items)
+
+
+class PromoteQuarantineRequest(BaseModel):
+    from_name: str
+    to_name: str
+    type: str
+    source_experience: str
+
+class PromoteQuarantineResponse(BaseModel):
+    status: str
+    from_name: str
+    to_name: str
+    type: str
+
+@router.post("/quarantine/promote", response_model=PromoteQuarantineResponse, summary="Promove um item de quarentena a relacionamento no grafo")
+async def promote_quarantine(request: PromoteQuarantineRequest, service: KnowledgeService = Depends(get_knowledge_service)):
+    res = await service.promote_quarantine_relationship(from_name=request.from_name, to_name=request.to_name, rel_type=request.type, source_experience=request.source_experience)
+    return PromoteQuarantineResponse(status=res.get("status"), from_name=request.from_name, to_name=request.to_name, type=request.type)
+
+
 @router.get("/functions/calling", response_model=List[CodeEntity],
             summary="Lista funções que chamam a função informada")
 async def functions_calling(

@@ -126,3 +126,27 @@ async def recall_recent_failures(
         service: MemoryService = Depends(get_memory_service)
 ):
     return await service.recall_recent_failures(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
+
+
+@router.get(
+    "/timeline/user",
+    response_model=List[RecallResponse],
+    summary="Linha do tempo de experiências por usuário"
+)
+async def user_timeline(
+        user_id: str = Query(..., description="Usuário (origin)"),
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        limit: Optional[int] = Query(None, ge=1, le=50),
+        min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
+        service: MemoryService = Depends(get_memory_service)
+):
+    start_ms = _to_ts_ms(start)
+    end_ms = _to_ts_ms(end)
+    items = await service.recall_by_timeframe(query=None, start_ts_ms=start_ms, end_ts_ms=end_ms, limit=limit, min_score=min_score)
+    filtered: List[Dict[str, Any]] = []
+    for it in items:
+        meta = it.get("metadata") or {}
+        if str(meta.get("origin")) == str(user_id):
+            filtered.append(it)
+    return filtered

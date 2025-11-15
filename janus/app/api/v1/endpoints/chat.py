@@ -72,19 +72,30 @@ class ChatListResponse(BaseModel):
 # --- Endpoints ---
 
 @router.post("/start", response_model=ChatStartResponse, summary="Inicia uma nova conversa")
-async def start_chat(request: ChatStartRequest, service: ChatService = Depends(get_chat_service)):
-    conversation_id = service.start_conversation(request.persona, request.user_id, request.project_id)
+async def start_chat(request: ChatStartRequest, service: ChatService = Depends(get_chat_service), http: Request = None):
+    hdr_uid = None
+    try:
+        hdr_uid = http.headers.get("X-User-Id") if http else None
+    except Exception:
+        hdr_uid = None
+    user_id = request.user_id or hdr_uid
+    conversation_id = service.start_conversation(request.persona, user_id, request.project_id)
     return ChatStartResponse(conversation_id=conversation_id)
 
 
 @router.post("/message", response_model=ChatMessageResponse, summary="Envia uma mensagem e recebe a resposta do LLM")
-async def send_message(payload: ChatMessageRequest, service: ChatService = Depends(get_chat_service)):
+async def send_message(payload: ChatMessageRequest, service: ChatService = Depends(get_chat_service), http: Request = None):
     try:
         role = ModelRole(payload.role)
         priority = ModelPriority(payload.priority)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role or priority")
 
+    hdr_uid = None
+    try:
+        hdr_uid = http.headers.get("X-User-Id") if http else None
+    except Exception:
+        hdr_uid = None
     try:
         result: Dict[str, Any] = service.send_message(
             conversation_id=payload.conversation_id,
@@ -92,7 +103,7 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
             role=role,
             priority=priority,
             timeout_seconds=payload.timeout_seconds,
-            user_id=payload.user_id,
+            user_id=payload.user_id or hdr_uid,
             project_id=payload.project_id,
         )
     except ConversationNotFoundError:
@@ -117,8 +128,12 @@ async def chat_history(conversation_id: str, service: ChatService = Depends(get_
 
 @router.get("/conversations", response_model=List[ChatListResponse], summary="Lista conversas com filtros de RBAC")
 async def list_conversations(user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = 50,
-                             service: ChatService = Depends(get_chat_service)):
-    items = service.list_conversations(user_id=user_id, project_id=project_id, limit=limit)
+                             service: ChatService = Depends(get_chat_service), http: Request = None):
+    try:
+        hdr_uid = http.headers.get("X-User-Id") if http else None
+    except Exception:
+        hdr_uid = None
+    items = service.list_conversations(user_id=user_id or hdr_uid, project_id=project_id, limit=limit)
 
     # map items to DTOs
     def map_item(it: Dict[str, Any]) -> ChatListResponse:
@@ -137,9 +152,14 @@ async def list_conversations(user_id: Optional[str] = None, project_id: Optional
 
 @router.put("/{conversation_id}/rename", summary="Renomeia uma conversa")
 async def rename_conversation(conversation_id: str, payload: ChatRenameRequest,
-                              service: ChatService = Depends(get_chat_service)):
+                              service: ChatService = Depends(get_chat_service), http: Request = None):
     try:
-        service.rename_conversation(conversation_id, payload.new_title, user_id=payload.user_id,
+        hdr_uid = None
+        try:
+            hdr_uid = http.headers.get("X-User-Id") if http else None
+        except Exception:
+            hdr_uid = None
+        service.rename_conversation(conversation_id, payload.new_title, user_id=payload.user_id or hdr_uid,
                                     project_id=payload.project_id)
         return {"status": "ok"}
     except ChatServiceError as e:
@@ -150,9 +170,14 @@ async def rename_conversation(conversation_id: str, payload: ChatRenameRequest,
 
 @router.delete("/{conversation_id}", summary="Apaga uma conversa")
 async def delete_conversation(conversation_id: str, user_id: Optional[str] = None, project_id: Optional[str] = None,
-                              service: ChatService = Depends(get_chat_service)):
+                              service: ChatService = Depends(get_chat_service), http: Request = None):
     try:
-        service.delete_conversation(conversation_id, user_id=user_id, project_id=project_id)
+        hdr_uid = None
+        try:
+            hdr_uid = http.headers.get("X-User-Id") if http else None
+        except Exception:
+            hdr_uid = None
+        service.delete_conversation(conversation_id, user_id=user_id or hdr_uid, project_id=project_id)
         return {"status": "ok"}
     except ChatServiceError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
