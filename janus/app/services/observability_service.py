@@ -105,6 +105,30 @@ class ObservabilityService:
             logger.error("Erro no repositório ao gerar resumo de métricas", exc_info=e)
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
 
+    def get_user_metrics(self, user_id: str) -> Dict[str, Any]:
+        logger.info("Coletando métricas agregadas por usuário", user_id=user_id)
+        try:
+            return self._repo.get_user_metrics(user_id)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao gerar métricas por usuário", exc_info=e)
+            raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
+
+    def get_user_activity(self, user_id: str) -> Dict[str, Any]:
+        logger.info("Coletando atividade agregada por usuário", user_id=user_id)
+        try:
+            return self._repo.get_user_activity(user_id)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao gerar atividade por usuário", exc_info=e)
+            raise ObservabilityServiceError("Falha ao gerar atividade por usuário.") from e
+
+    async def get_graph_audit_report(self) -> Dict[str, Any]:
+        logger.info("Executando auditoria de grafo via serviço.")
+        try:
+            return await self._repo.get_graph_audit_report()
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao auditar grafo", exc_info=e)
+            raise ObservabilityServiceError("Falha ao auditar o grafo.") from e
+
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_observability_service(request: Request) -> ObservabilityService:

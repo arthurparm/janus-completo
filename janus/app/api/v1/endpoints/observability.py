@@ -2,6 +2,7 @@ import structlog
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from fastapi import Request
 from pydantic import BaseModel
 
 from app.services.observability_service import (
@@ -90,3 +91,63 @@ async def get_poison_pill_stats(
 async def get_metrics_summary(service: ObservabilityService = Depends(get_observability_service)):
     """Delega a geração do resumo de métricas para o ObservabilityService."""
     return service.get_metrics_summary()
+
+@router.get("/graph/audit", summary="Auditoria de higiene do grafo de conhecimento")
+async def graph_audit(service: ObservabilityService = Depends(get_observability_service)):
+    """Executa consultas de auditoria no grafo e retorna um relatório resumido."""
+    return await service.get_graph_audit_report()
+
+
+class UserSummaryResponse(BaseModel):
+    user_id: str
+    conversations_count: int
+    last_conversation_updated_at: float | None
+    vector_points_count: int | None
+
+
+@router.get("/user_summary", response_model=UserSummaryResponse, summary="Resumo de uso por usuário")
+async def user_summary(user_id: str, request: Request):
+    chat_repo = request.app.state.chat_repo
+    items = chat_repo.list_conversations(user_id=user_id, project_id=None, limit=1000)
+    conversations_count = len(items)
+    last_updated = None
+    for it in items:
+        ts = it.get("updated_at")
+        if ts is None:
+            continue
+        last_updated = ts if last_updated is None or float(ts) > float(last_updated) else last_updated
+    try:
+        from app.db.vector_store import get_collection_info
+        info = get_collection_info(f"user_{user_id}")
+        points = int(info.get("points_count") or 0)
+    except Exception:
+        points = None
+    return UserSummaryResponse(user_id=user_id, conversations_count=conversations_count, last_conversation_updated_at=last_updated, vector_points_count=points)
+
+
+class UserMetricsResponse(BaseModel):
+    user_id: str
+    conversations: int
+    messages: int
+    approx_in_tokens: int
+    approx_out_tokens: int
+    vector_points: int
+
+
+@router.get("/metrics/user", response_model=UserMetricsResponse, summary="Métricas agregadas por usuário")
+async def user_metrics(user_id: str, service: ObservabilityService = Depends(get_observability_service)):
+    m = service.get_user_metrics(user_id)
+    return UserMetricsResponse(**m)
+
+
+class UserActivityResponse(BaseModel):
+    user_id: str
+    autonomy_runs: int
+    autonomy_steps: int
+    avg_step_duration_seconds: float
+
+
+@router.get("/activity/user", response_model=UserActivityResponse, summary="Atividade agregada por usuário")
+async def user_activity(user_id: str, service: ObservabilityService = Depends(get_observability_service)):
+    a = service.get_user_activity(user_id)
+    return UserActivityResponse(**a)
