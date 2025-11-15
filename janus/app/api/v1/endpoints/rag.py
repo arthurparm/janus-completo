@@ -1,0 +1,383 @@
+from typing import List, Optional, Dict, Any
+
+from fastapi import APIRouter, Query, Depends
+from pydantic import BaseModel
+
+from app.services.memory_service import MemoryService, get_memory_service
+try:
+    from prometheus_client import Counter, Histogram
+    _RAG_REQ = Counter("rag_requests_total", "Total de requisições RAG", ["endpoint", "outcome"])  # type: ignore
+    _RAG_LAT = Histogram("rag_latency_seconds", "Latência por endpoint RAG", ["endpoint", "outcome"])  # type: ignore
+except Exception:
+    class _Noop:
+        def labels(self, *args, **kwargs):
+            return self
+        def inc(self, *args, **kwargs):
+            pass
+        def observe(self, *args, **kwargs):
+            pass
+    _RAG_REQ = _Noop()  # type: ignore
+    _RAG_LAT = _Noop()  # type: ignore
+from app.core.embeddings.embedding_manager import embed_text
+from app.db.vector_store import get_qdrant_client, get_or_create_collection
+from qdrant_client import models
+
+router = APIRouter(tags=["RAG"])
+
+
+class RAGSearchResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+
+
+@router.get(
+    "/search",
+    response_model=RAGSearchResponse,
+    summary="Busca baseada em fatos com memória vetorial"
+)
+async def rag_search(
+    query: str = Query(..., description="Pergunta ou texto de busca"),
+    type: Optional[str] = Query(None, description="Filtrar por tipo da experiência"),
+    origin: Optional[str] = Query(None, description="Filtrar por metadata.origin"),
+    doc_id: Optional[str] = Query(None, description="Filtrar por metadata.doc_id"),
+    file_path: Optional[str] = Query(None, description="Filtrar por metadata.file_path"),
+    limit: Optional[int] = Query(5, ge=1, le=10),
+    min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
+    service: MemoryService = Depends(get_memory_service),
+):
+    filters: Dict[str, Any] = {}
+    if type is not None:
+        filters["type"] = type
+    if origin is not None:
+        filters["origin"] = origin
+    if doc_id is not None:
+        filters["metadata.doc_id"] = doc_id
+    if file_path is not None:
+        filters["metadata.file_path"] = file_path
+
+    import time as _t
+    _start = _t.perf_counter()
+    try:
+        results = await service.recall_filtered(query=query, filters=filters, limit=limit, min_score=min_score)
+        _RAG_REQ.labels("search", "success").inc()
+        _RAG_LAT.labels("search", "success").observe(max(0.0, _t.perf_counter() - _start))
+    except Exception:
+        _RAG_REQ.labels("search", "error").inc()
+        _RAG_LAT.labels("search", "error").observe(max(0.0, _t.perf_counter() - _start))
+        results = []
+
+    citations: List[Dict[str, Any]] = []
+    for r in results:
+        meta = r.get("metadata") or {}
+        citations.append({
+            "id": r.get("id"),
+            "doc_id": meta.get("doc_id"),
+            "file_path": meta.get("file_path"),
+            "type": meta.get("type"),
+            "origin": meta.get("origin"),
+            "score": r.get("score"),
+        })
+
+    snippets: List[str] = []
+    for r in results:
+        c = str(r.get("content") or "")
+        if not c:
+            continue
+        snippets.append(c[:300])
+        if len(snippets) >= max(1, min(3, limit or 5)):
+            break
+
+    if not snippets:
+        answer = "Nenhum trecho relevante encontrado para a consulta."
+    else:
+        answer = "\n\n".join(snippets)
+
+    return RAGSearchResponse(answer=answer, citations=citations)
+
+
+class RAGUserChatResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+
+
+@router.get(
+    "/user-chat",
+    response_model=RAGUserChatResponse,
+    summary="Busca em mensagens pessoais indexadas por usuário"
+)
+async def rag_user_chat_search(
+    query: str = Query(..., description="Pergunta ou texto de busca"),
+    user_id: str = Query(..., description="ID do usuário"),
+    session_id: Optional[str] = Query(None, description="ID da conversa para filtrar"),
+    role: Optional[str] = Query(None, description="Filtrar por role (user|assistant)"),
+    limit: Optional[int] = Query(5, ge=1, le=10),
+    min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
+):
+    from app.core.embeddings.embedding_manager import embed_text
+    from app.db.vector_store import get_qdrant_client, get_or_create_collection
+    from qdrant_client import models
+
+    collection_name = get_or_create_collection(f"user_{user_id}")
+    vec = embed_text(query)
+
+    must: List[models.FieldCondition] = []
+    if session_id:
+        must.append(models.FieldCondition(key="metadata.session_id", match=models.MatchValue(value=session_id)))
+    if role:
+        must.append(models.FieldCondition(key="metadata.role", match=models.MatchValue(value=role)))
+    qfilter = models.Filter(must=must) if must else None
+
+    client = get_qdrant_client()
+    import time as _t
+    _start = _t.perf_counter()
+    try:
+        hits = client.search(collection_name=collection_name, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+        _RAG_REQ.labels("user_chat", "success").inc()
+        _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
+    except Exception:
+        _RAG_REQ.labels("user_chat", "error").inc()
+        _RAG_LAT.labels("user_chat", "error").observe(max(0.0, _t.perf_counter() - _start))
+        hits = []
+
+    items: List[Dict[str, Any]] = []
+    for h in hits or []:
+        payload = getattr(h, "payload", {}) or {}
+        meta = payload.get("metadata") or {}
+        content = payload.get("content") or ""
+        score = float(getattr(h, "score", 0.0) or 0.0)
+        if min_score is not None and score < float(min_score):
+            continue
+        items.append({
+            "id": getattr(h, "id", None),
+            "content": content,
+            "metadata": meta,
+            "score": score,
+        })
+
+    citations: List[Dict[str, Any]] = []
+    for r in items:
+        m = r.get("metadata") or {}
+        citations.append({
+            "id": r.get("id"),
+            "user_id": m.get("user_id"),
+            "session_id": m.get("session_id"),
+            "role": m.get("role"),
+            "score": r.get("score"),
+        })
+
+    snippets: List[str] = []
+    for r in items:
+        c = str(r.get("content") or "")
+        if not c:
+            continue
+        snippets.append(c[:300])
+        if len(snippets) >= max(1, min(3, limit or 5)):
+            break
+
+    answer = "Nenhum trecho relevante encontrado." if not snippets else "\n\n".join(snippets)
+    return RAGUserChatResponse(answer=answer, citations=citations)
+
+
+class RAGProductivityResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+
+
+@router.get(
+    "/productivity",
+    response_model=RAGProductivityResponse,
+    summary="Busca em itens de produtividade (calendar/mail/notes) do usuário"
+)
+async def rag_productivity_search(
+    query: str = Query(..., description="Consulta"),
+    user_id: str = Query(..., description="ID do usuário"),
+    type: Optional[str] = Query(None, description="calendar_event|email_message|note_item"),
+    limit: Optional[int] = Query(5, ge=1, le=10),
+    min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
+):
+    from app.core.embeddings.embedding_manager import embed_text
+    from app.db.vector_store import get_qdrant_client, get_or_create_collection
+    from qdrant_client import models
+
+    coll = get_or_create_collection(f"user_{user_id}")
+    vec = embed_text(query)
+
+    must: List[models.FieldCondition] = [
+        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
+    ]
+    if type:
+        must.append(models.FieldCondition(key="metadata.type", match=models.MatchValue(value=type)))
+    qfilter = models.Filter(must=must) if must else None
+
+    client = get_qdrant_client()
+    hits = client.search(collection_name=coll, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+
+    items: List[Dict[str, Any]] = []
+    for h in hits or []:
+        payload = getattr(h, "payload", {}) or {}
+        meta = payload.get("metadata") or {}
+        content = payload.get("content") or ""
+        score = float(getattr(h, "score", 0.0) or 0.0)
+        if min_score is not None and score < float(min_score):
+            continue
+        items.append({
+            "id": getattr(h, "id", None),
+            "content": content,
+            "metadata": meta,
+            "score": score,
+        })
+
+    citations: List[Dict[str, Any]] = []
+    for r in items:
+        m = r.get("metadata") or {}
+        citations.append({
+            "id": r.get("id"),
+            "type": m.get("type"),
+            "user_id": m.get("user_id"),
+            "score": r.get("score"),
+        })
+
+    snippets: List[str] = []
+    for r in items:
+        c = str(r.get("content") or "")
+        if not c:
+            continue
+        snippets.append(c[:300])
+        if len(snippets) >= max(1, min(3, limit or 5)):
+            break
+
+    answer = "Nenhum item relevante encontrado." if not snippets else "\n\n".join(snippets)
+    return RAGProductivityResponse(answer=answer, citations=citations)
+
+
+class RAGUserChatResponse(BaseModel):
+    results: List[Dict[str, Any]]
+
+
+@router.get(
+    "/user_chat",
+    response_model=RAGUserChatResponse,
+    summary="Busca semântica em mensagens pessoais de chat"
+)
+async def rag_user_chat_search(
+    user_id: Optional[str] = None,
+    query: str,
+    session_id: Optional[str] = None,
+    start_ts_ms: Optional[int] = None,
+    end_ts_ms: Optional[int] = None,
+    limit: int = 5,
+    min_score: Optional[float] = None,
+    http: Request = None,
+):
+    if not user_id:
+        try:
+            user_id = http.headers.get("X-User-Id") if http else None
+        except Exception:
+            user_id = None
+    if not user_id:
+        return RAGUserChatResponse(results=[])
+    vec = embed_text(query)
+    client = get_qdrant_client()
+    collection_name = get_or_create_collection(f"user_{user_id}")
+    # Filtro por payload
+    must: List[models.FieldCondition] = [
+        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
+    ]
+    if session_id:
+        must.append(models.FieldCondition(key="metadata.session_id", match=models.MatchValue(value=session_id)))
+    # Apenas pontos de chat
+    must.append(models.FieldCondition(key="metadata.type", match=models.MatchValue(value="chat_msg")))
+    if isinstance(start_ts_ms, int) or isinstance(end_ts_ms, int):
+        rng = {}
+        if isinstance(start_ts_ms, int):
+            rng["gte"] = start_ts_ms
+        if isinstance(end_ts_ms, int):
+            rng["lte"] = end_ts_ms
+        must.append(models.FieldCondition(key="metadata.timestamp", range=models.Range(**rng)))
+    sc_filter = models.Filter(must=must)
+    res = client.search(
+        collection_name=collection_name,
+        query_vector=vec,
+        limit=limit,
+        with_payload=True,
+        query_filter=sc_filter,
+        score_threshold=min_score if isinstance(min_score, float) else None,
+    )
+    results: List[Dict[str, Any]] = []
+    for r in res:
+        payload = r.payload or {}
+        meta = payload.get("metadata", {})
+        results.append({
+            "id": r.id,
+            "score": r.score,
+            "role": meta.get("role"),
+            "session_id": meta.get("session_id"),
+            "timestamp": meta.get("timestamp"),
+        })
+    return RAGUserChatResponse(results=results)
+
+
+class RAGHybridResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+
+
+@router.get(
+    "/hybrid_search",
+    response_model=RAGHybridResponse,
+    summary="Busca híbrida (vetor + grafo) em conhecimento pessoal"
+)
+async def rag_hybrid_search(
+    query: str,
+    user_id: Optional[str] = None,
+    limit: int = 5,
+    min_score: Optional[float] = None,
+    http: Request = None,
+    service: MemoryService = Depends(get_memory_service),
+):
+    try:
+        hdr_uid = http.headers.get("X-User-Id") if http else None
+    except Exception:
+        hdr_uid = None
+    uid = user_id or hdr_uid
+    if not uid:
+        return RAGHybridResponse(answer="", citations=[])
+
+    results_vec = await service.recall_filtered(query=query, filters={"metadata.user_id": uid}, limit=limit, min_score=min_score)
+    from app.repositories.knowledge_repository import KnowledgeRepository
+    from app.db.graph import get_graph_db
+    kr = KnowledgeRepository(await get_graph_db())
+    concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
+    citations: List[Dict[str, Any]] = []
+    for r in results_vec:
+        meta = r.get("metadata") or {}
+        citations.append({
+            "source": "vector",
+            "score": r.get("score"),
+            "type": meta.get("type"),
+            "id": r.get("id"),
+            "doc_id": meta.get("doc_id"),
+            "file_path": meta.get("file_path"),
+            "origin": meta.get("origin"),
+        })
+    for c in concepts:
+        citations.append({
+            "source": "graph",
+            "concept": c.get("concept"),
+            "relationship": c.get("relationship"),
+            "distance": c.get("distance"),
+        })
+    snippets: List[str] = []
+    for r in results_vec:
+        c = str(r.get("content") or "")
+        if c:
+            snippets.append(c[:300])
+            if len(snippets) >= max(1, min(3, limit)):
+                break
+    if concepts and len(snippets) < max(1, min(3, limit)):
+        for c in concepts:
+            snippets.append(f"Related concept: {c.get('concept')} via {c.get('relationship')}")
+            if len(snippets) >= max(1, min(3, limit)):
+                break
+    answer = "\n\n".join(snippets) if snippets else "Nenhum trecho relevante encontrado."
+    return RAGHybridResponse(answer=answer, citations=citations)
