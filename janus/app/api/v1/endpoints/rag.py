@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Request
 from pydantic import BaseModel
 
 from app.services.memory_service import MemoryService, get_memory_service
@@ -367,17 +367,32 @@ async def rag_hybrid_search(
             "relationship": c.get("relationship"),
             "distance": c.get("distance"),
         })
-    snippets: List[str] = []
+    from app.config import settings
+    wv = float(getattr(settings, "RAG_HYBRID_VECTOR_WEIGHT", 0.7))
+    wg = float(getattr(settings, "RAG_HYBRID_GRAPH_WEIGHT", 0.3))
+
+    def _score_vec(r: Dict[str, Any]) -> float:
+        try:
+            s = float(r.get("score") or 0.0)
+            return wv * max(0.0, min(1.0, s))
+        except Exception:
+            return 0.0
+    def _score_concept(c: Dict[str, Any]) -> float:
+        try:
+            d = float(c.get("distance") or 1.0)
+            return wg * max(0.0, 1.0 / (1.0 + d))
+        except Exception:
+            return 0.0
+    merged: List[Dict[str, Any]] = []
     for r in results_vec:
-        c = str(r.get("content") or "")
-        if c:
-            snippets.append(c[:300])
-            if len(snippets) >= max(1, min(3, limit)):
-                break
-    if concepts and len(snippets) < max(1, min(3, limit)):
-        for c in concepts:
-            snippets.append(f"Related concept: {c.get('concept')} via {c.get('relationship')}")
-            if len(snippets) >= max(1, min(3, limit)):
-                break
+        merged.append({"type": "vector", "content": str(r.get("content") or ""), "score": _score_vec(r)})
+    for c in concepts:
+        merged.append({"type": "graph", "content": f"Related concept: {c.get('concept')} via {c.get('relationship')}", "score": _score_concept(c)})
+    merged.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+    snippets: List[str] = []
+    for m in merged[:max(1, min(3, limit))]:
+        t = str(m.get("content") or "")
+        if t:
+            snippets.append(t[:300])
     answer = "\n\n".join(snippets) if snippets else "Nenhum trecho relevante encontrado."
     return RAGHybridResponse(answer=answer, citations=citations)
