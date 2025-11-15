@@ -263,6 +263,7 @@ class AppSettings(BaseSettings):
         "janus.productivity.google": {"x-max-priority": 5, "x-message-ttl": 600000},
     }
     MIN_DEPLOY_ACCURACY: float = 0.7
+    LLM_AB_EXPERIMENT_ID: Optional[int] = None
 
     # Sprint 3: Web Search
     TAVILY_API_KEY: Optional[SecretStr] = None

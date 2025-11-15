@@ -83,7 +83,32 @@ class LLMRepository:
                     "cost_usd": cached.get("cost_usd"),
                 }
 
-            client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
+            client = None
+            try:
+                if user_id and getattr(settings, "LLM_AB_EXPERIMENT_ID", None):
+                    from app.repositories.ab_experiment_repository import ABExperimentRepository
+                    abr = ABExperimentRepository()
+                    exp_id = int(getattr(settings, "LLM_AB_EXPERIMENT_ID"))
+                    asg = abr.get_assignment(exp_id, str(user_id))
+                    if not asg:
+                        asg = abr.assign_user(exp_id, str(user_id))
+                    arm_id = asg.arm_id
+                    # Busca spec do braço
+                    from app.models.ab_experiment_models import ExperimentArm
+                    s = abr._get_session()
+                    try:
+                        arm = s.query(ExperimentArm).filter(ExperimentArm.id == arm_id).first()
+                        if arm and arm.model_spec and ":" in arm.model_spec:
+                            provider, model = arm.model_spec.split(":", 1)
+                            llm = get_llm(role=role, priority=priority, cache_key=f"ab_{provider}_{model}_{role.value}", config={"provider": provider, "model": model})
+                            client = LLMClient(llm, provider, model, role, f"ab_{provider}_{model}_{role.value}", user_id=user_id, project_id=project_id)
+                    finally:
+                        if not abr._session:
+                            s.close()
+            except Exception:
+                client = None
+            if client is None:
+                client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
             if _OTEL and span is not None:
                 try:
                     span.set_attribute("llm.cache_hit", False)
