@@ -97,6 +97,17 @@ async def graph_audit(service: ObservabilityService = Depends(get_observability_
     """Executa consultas de auditoria no grafo e retorna um relatório resumido."""
     return await service.get_graph_audit_report()
 
+@router.get("/graph/quarantine", summary="Lista itens de quarentena do grafo")
+async def graph_quarantine_list(limit: int = 100, service: ObservabilityService = Depends(get_observability_service)):
+    return await service.get_graph_quarantine_items(limit)
+
+class PromoteQuarantineRequest(BaseModel):
+    node_id: int
+
+@router.post("/graph/quarantine/promote", summary="Promove item de quarentena para relação no grafo")
+async def graph_quarantine_promote(request: PromoteQuarantineRequest, service: ObservabilityService = Depends(get_observability_service)):
+    return await service.promote_quarantine_item(request.node_id)
+
 
 class UserSummaryResponse(BaseModel):
     user_id: str

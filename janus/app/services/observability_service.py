@@ -129,6 +129,39 @@ class ObservabilityService:
             logger.error("Erro no repositório ao auditar grafo", exc_info=e)
             raise ObservabilityServiceError("Falha ao auditar o grafo.") from e
 
+    async def get_graph_quarantine_items(self, limit: int = 100) -> List[Dict[str, Any]]:
+        logger.info("Listando itens em quarentena do grafo via serviço.", limit=limit)
+        try:
+            return await self._repo.get_graph_quarantine_items(limit)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao listar itens de quarentena", exc_info=e)
+            raise ObservabilityServiceError("Falha ao listar itens de quarentena.") from e
+
+    async def promote_quarantine_item(self, node_id: int) -> Dict[str, Any]:
+        logger.info("Promovendo item da quarentena do grafo via serviço.", node_id=node_id)
+        try:
+            return await self._repo.promote_quarantine_item(node_id)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao promover item de quarentena", exc_info=e)
+            raise ObservabilityServiceError("Falha ao promover item de quarentena.") from e
+
+    def record_audit_event(self, event: Dict[str, Any]) -> None:
+        logger.info("Registrando evento de auditoria via serviço", **{k: v for k, v in event.items() if k != "detail"})
+        try:
+            self._repo.record_audit_event(event)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao registrar evento de auditoria", exc_info=e)
+            # Não propaga como fatal para não quebrar requisições; registra apenas o erro.
+            pass
+
+    def get_audit_events(self, user_id: Optional[str], tool: Optional[str], status: Optional[str], start_ts: Optional[float], end_ts: Optional[float], limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        logger.info("Consultando eventos de auditoria via serviço", user_id=user_id, tool=tool, status=status)
+        try:
+            return self._repo.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositório ao consultar eventos de auditoria", exc_info=e)
+            raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
+
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_observability_service(request: Request) -> ObservabilityService:

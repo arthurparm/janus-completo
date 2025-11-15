@@ -6,7 +6,7 @@ from app.core.monitoring import get_health_monitor, HealthMonitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler, PoisonPillHandler, QuarantinedMessage
 from app.db.graph import get_graph_db
 from app.db.mysql_config import mysql_db
-from app.models.user_models import Session as ChatSession, Message
+from app.models.user_models import Session as ChatSession, Message, AuditEvent
 from app.db.vector_store import get_collection_info
 
 logger = structlog.get_logger(__name__)
@@ -227,6 +227,124 @@ class ObservabilityRepository:
         except Exception as e:
             logger.error("Erro ao executar auditoria do grafo", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao executar auditoria do grafo.") from e
+
+    async def get_graph_quarantine_items(self, limit: int = 100) -> List[Dict[str, Any]]:
+        try:
+            db = await get_graph_db()
+            rows = await db.query(
+                "MATCH (q:Quarantine) RETURN id(q) AS node_id, q.reason AS reason, q.type AS type, q.from_name AS from_name, q.to_name AS to_name, q.confidence AS confidence, q.source_snippet AS source_snippet ORDER BY q.created_at DESC LIMIT $limit",
+                params={"limit": limit},
+                operation="list_quarantine_items",
+            )
+            return rows
+        except Exception as e:
+            logger.error("Erro ao listar itens de quarentena do grafo", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao listar itens de quarentena do grafo.") from e
+
+    async def promote_quarantine_item(self, node_id: int) -> Dict[str, Any]:
+        try:
+            db = await get_graph_db()
+            async with await db.get_session() as session:
+                tx = await session.begin_transaction()
+                rec = await tx.run(
+                    "MATCH (q:Quarantine) WHERE id(q) = $id RETURN q.reason AS reason, q.type AS type, q.from_name AS from_name, q.to_name AS to_name, q.confidence AS confidence, q.source_snippet AS source_snippet",
+                    id=node_id,
+                )
+                qrow = await rec.single()
+                if not qrow:
+                    await tx.close()
+                    raise ObservabilityRepositoryError("Item de quarentena não encontrado.")
+                rel_type = qrow.get("type")
+                await db.register_relationship_type(tx, rel_type)
+                await tx.run(
+                    f"""
+                    MATCH (a {{name: $from_name}})
+                    MATCH (b {{name: $to_name}})
+                    MERGE (a)-[r:{rel_type}]->(b)
+                    ON CREATE SET r.confidence = $confidence, r.discovered_at = datetime(), r.first_seen = datetime(), r.occurrences = 1, r.source_snippet = $source_snippet
+                    ON MATCH SET r.confidence = CASE WHEN $confidence > coalesce(r.confidence, 0) THEN $confidence ELSE r.confidence END, r.last_seen = datetime(), r.occurrences = coalesce(r.occurrences, 0) + 1, r.source_snippet = coalesce(r.source_snippet, $source_snippet)
+                    """,
+                    from_name=qrow.get("from_name"),
+                    to_name=qrow.get("to_name"),
+                    confidence=float(qrow.get("confidence") or 0.0),
+                    source_snippet=qrow.get("source_snippet"),
+                )
+                await tx.run(
+                    "MATCH (q:Quarantine) WHERE id(q) = $id SET q.status = 'promoted', q.promoted_at = datetime()",
+                    id=node_id,
+                )
+                await tx.commit()
+                return {
+                    "node_id": node_id,
+                    "status": "promoted",
+                    "type": rel_type,
+                }
+        except Exception as e:
+            logger.error("Erro ao promover item de quarentena", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao promover item de quarentena.") from e
+
+    def record_audit_event(self, event: Dict[str, Any]) -> None:
+        s = mysql_db.get_session_direct()
+        try:
+            ae = AuditEvent(
+                user_id=int(event.get("user_id")) if event.get("user_id") is not None else None,
+                endpoint=str(event.get("endpoint")),
+                action=str(event.get("action")),
+                tool=event.get("tool"),
+                status=str(event.get("status")),
+                latency_ms=int(event.get("latency_ms")) if event.get("latency_ms") is not None else None,
+                trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
+            )
+            s.add(ae)
+            s.commit()
+        except Exception as e:
+            s.rollback()
+            logger.error("Erro ao registrar evento de auditoria", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao registrar evento de auditoria.") from e
+        finally:
+            s.close()
+
+    def get_audit_events(self, user_id: Optional[str], tool: Optional[str], status: Optional[str], start_ts: Optional[float], end_ts: Optional[float], limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        s = mysql_db.get_session_direct()
+        try:
+            q = s.query(AuditEvent)
+            if user_id is not None:
+                try:
+                    q = q.filter(AuditEvent.user_id == int(user_id))
+                except Exception:
+                    q = q.filter(AuditEvent.user_id == -1)
+            if tool is not None:
+                q = q.filter(AuditEvent.tool == str(tool))
+            if status is not None:
+                q = q.filter(AuditEvent.status == str(status))
+            if start_ts is not None:
+                from datetime import datetime
+                q = q.filter(AuditEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
+            if end_ts is not None:
+                from datetime import datetime
+                q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
+            q = q.order_by(AuditEvent.created_at.desc())
+            q = q.offset(int(offset)).limit(int(limit))
+            rows = q.all()
+            return [
+                {
+                    "id": r.id,
+                    "user_id": r.user_id,
+                    "endpoint": r.endpoint,
+                    "action": r.action,
+                    "tool": r.tool,
+                    "status": r.status,
+                    "latency_ms": r.latency_ms,
+                    "trace_id": r.trace_id,
+                    "created_at": getattr(r, "created_at").timestamp() if getattr(r, "created_at", None) else None,
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            logger.error("Erro ao consultar eventos de auditoria", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao consultar eventos de auditoria.") from e
+        finally:
+            s.close()
 
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
