@@ -1,0 +1,34 @@
+{
+  "title": "Janus Chat Overview",
+  "tags": ["janus", "chat"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Quota Enforced",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "targets": [{"expr": "sum(chat_index_quota_enforced_total)", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Retention Deletions",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 6},
+      "targets": [{"expr": "sum(chat_index_retention_deletions_total)", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Quota Enforced Rate (events/min)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(chat_index_quota_enforced_total[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retention Deletions Rate (events/min)",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(chat_index_retention_deletions_total[5m]))", "refId": "A"}]
+    }
+  ]
+}

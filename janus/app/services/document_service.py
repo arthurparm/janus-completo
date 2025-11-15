@@ -4,7 +4,27 @@ from typing import List, Dict, Any, Optional
 from uuid import uuid4
 from qdrant_client import QdrantClient, models
 from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.repositories.observability_repository import record_audit_event_direct
+try:
+    from opentelemetry import trace  # type: ignore
+    _OTEL = True
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _OTEL = False
+    from contextlib import nullcontext
+    _tracer = None
 from app.core.embeddings.embedding_manager import embed_texts
+try:
+    from prometheus_client import Counter  # type: ignore
+except Exception:
+    class Counter:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+        def inc(self, *args, **kwargs):
+            pass
+        def labels(self, *args, **kwargs):
+            return self
 
 logger = structlog.get_logger(__name__)
 
@@ -48,6 +68,24 @@ class DocumentIngestionService:
         except Exception:
             return ""
 
+    def _extract_text_pdf(self, data: bytes) -> str:
+        try:
+            import io
+            try:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(data))
+                texts: List[str] = []
+                for page in getattr(reader, "pages", []) or []:
+                    try:
+                        texts.append(page.extract_text() or "")
+                    except Exception:
+                        pass
+                return " ".join([t for t in texts if t]).strip()
+            except Exception:
+                return ""
+        except Exception:
+            return ""
+
     def _chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[str]:
         if not text:
             return []
@@ -67,24 +105,90 @@ class DocumentIngestionService:
 
     async def ingest_file(self, user_id: str, filename: str, content_type: str, data: bytes) -> Dict[str, Any]:
         doc_id = f"doc:{user_id}:{uuid4().hex}"
+        span_cm = (_tracer.start_as_current_span("doc.ingest") if _OTEL else nullcontext())
+        with span_cm as span:
+            if _OTEL and span is not None:
+                try:
+                    tid = TRACE_ID.get()
+                    sid = USER_ID.get()
+                    if tid and tid != "-":
+                        span.set_attribute("janus.trace_id", tid)
+                    if sid and sid != "-":
+                        span.set_attribute("janus.user_id", sid)
+                    span.set_attribute("doc.filename", filename)
+                    span.set_attribute("doc.content_type", (content_type or "").lower())
+                except Exception:
+                    pass
         text = ""
         ct = (content_type or "").lower()
         if ct.startswith("text/plain"):
             text = self._extract_text_plain(data)
         elif ct.startswith("text/html") or ct.startswith("application/xhtml"):
             text = self._extract_text_html(data)
+        elif ct.startswith("application/pdf") or filename.lower().endswith(".pdf"):
+            text = self._extract_text_pdf(data)
         elif ct == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or filename.lower().endswith(".docx"):
             text = self._extract_text_docx(data)
         else:
             return {"doc_id": doc_id, "chunks": 0, "status": "unsupported_content_type"}
 
-        chunks = self._chunk_text(text)
+        try:
+            from app.config import settings
+            chunk_size = int(getattr(settings, "DOC_CHUNK_SIZE", 1000) or 1000)
+            overlap = int(getattr(settings, "DOC_CHUNK_OVERLAP", 100) or 100)
+        except Exception:
+            chunk_size = 1000
+            overlap = 100
+        chunks = self._chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+        try:
+            if _OTEL and span is not None:
+                span.set_attribute("doc.chunk_count", len(chunks))
+        except Exception:
+            pass
         if not chunks:
+            try:
+                _DOC_INGEST_FILES_TOTAL.labels("empty").inc()
+            except Exception:
+                pass
+            try:
+                _DOC_INGEST_FILES_USER_TOTAL.labels(str(user_id), "empty").inc()
+            except Exception:
+                pass
+            try:
+                record_audit_event_direct({
+                    "user_id": int(user_id) if user_id is not None else None,
+                    "endpoint": "doc:ingest",
+                    "action": "ingest",
+                    "tool": "documents",
+                    "status": "empty",
+                    "latency_ms": None,
+                    "trace_id": TRACE_ID.get(),
+                })
+            except Exception:
+                pass
             return {"doc_id": doc_id, "chunks": 0, "status": "empty"}
 
+        _t0 = __import__("time").perf_counter()
         vectors = embed_texts(chunks)
         collection_name = get_or_create_collection(f"user_{user_id}")
         client: QdrantClient = get_qdrant_client()
+        try:
+            from qdrant_client import models as _models
+            max_points_user = int(getattr(settings, "DOC_INDEX_MAX_POINTS_PER_USER", 500000) or 500000)
+            qfilter_user = _models.Filter(must=[
+                _models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="doc_chunk")),
+                _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id))),
+            ])
+            cnt_user = client.count(collection_name=collection_name, count_filter=qfilter_user, exact=True)
+            cur_user = int(getattr(cnt_user, "count", 0) or 0)
+            if cur_user >= max_points_user:
+                try:
+                    _DOC_INGEST_FILES_TOTAL.labels("quota_exceeded").inc()
+                except Exception:
+                    pass
+                return {"doc_id": doc_id, "chunks": 0, "status": "quota_exceeded"}
+        except Exception:
+            pass
         points: List[models.PointStruct] = []
         ts_ms = __import__("time").time()
         ts_ms = int(ts_ms * 1000)
@@ -103,5 +207,44 @@ class DocumentIngestionService:
             }
             points.append(models.PointStruct(id=pid, vector=vec, payload=payload))
         client.upsert(collection_name=collection_name, points=points)
+        try:
+            _DOC_INGEST_POINTS_TOTAL.labels("success").inc(len(points))
+            _DOC_INGEST_FILES_TOTAL.labels("indexed").inc()
+            _DOC_INGEST_POINTS_USER_TOTAL.labels(str(user_id)).inc(len(points))
+            _DOC_INGEST_FILES_USER_TOTAL.labels(str(user_id), "indexed").inc()
+            _DOC_INGEST_LATENCY.observe(__import__("time").perf_counter() - _t0)
+        except Exception:
+            pass
+        try:
+            record_audit_event_direct({
+                "user_id": int(user_id) if user_id is not None else None,
+                "endpoint": "doc:ingest",
+                "action": "ingest",
+                "tool": "documents",
+                "status": "indexed",
+                "latency_ms": int((__import__("time").perf_counter() - _t0) * 1000),
+                "trace_id": TRACE_ID.get(),
+            })
+        except Exception:
+            pass
         return {"doc_id": doc_id, "chunks": len(chunks), "status": "indexed"}
+_DOC_INGEST_POINTS_TOTAL = Counter("doc_ingest_points_total", "Pontos indexados na ingestão de documentos", ["outcome"])
+_DOC_INGEST_FILES_TOTAL = Counter("doc_ingest_files_total", "Arquivos ingeridos", ["status"])
+try:
+    from prometheus_client import Histogram, Counter as _CounterUser  # type: ignore
+    _DOC_INGEST_LATENCY = Histogram("doc_ingest_latency_seconds", "Latência da ingestão de documentos")
+    _DOC_INGEST_POINTS_USER_TOTAL = _CounterUser("doc_ingest_points_user_total", "Pontos indexados por usuário", ["user_id"])  # type: ignore
+    _DOC_INGEST_FILES_USER_TOTAL = _CounterUser("doc_ingest_files_user_total", "Arquivos ingeridos por usuário", ["user_id", "status"])  # type: ignore
+except Exception:
+    class _NoopHist:
+        def observe(self, *a, **k):
+            pass
+    _DOC_INGEST_LATENCY = _NoopHist()
+    class _NoopC:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            pass
+    _DOC_INGEST_POINTS_USER_TOTAL = _NoopC()
+    _DOC_INGEST_FILES_USER_TOTAL = _NoopC()
 

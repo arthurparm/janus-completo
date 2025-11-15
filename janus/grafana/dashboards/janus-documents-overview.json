@@ -1,0 +1,76 @@
+{
+  "title": "Janus Documents Overview",
+  "tags": ["janus", "documents"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Files Indexed",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(doc_ingest_files_total{status=\"indexed\"})", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Files Empty",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(doc_ingest_files_total{status=\"empty\"})", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Files Quota Exceeded",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(doc_ingest_files_total{status=\"quota_exceeded\"})", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Points Indexed",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(doc_ingest_points_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Files by Status",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (status) (doc_ingest_files_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Points Indexed Rate (pts/s)",
+      "gridPos": {"x": 0, "y": 6, "w": 8, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(doc_ingest_points_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Files Quota Exceeded (rate/min)",
+      "gridPos": {"x": 8, "y": 6, "w": 8, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(doc_ingest_files_total{status=\"quota_exceeded\"}[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "heatmap",
+      "title": "Ingest Latency (seconds)",
+      "gridPos": {"x": 16, "y": 6, "w": 8, "h": 8},
+      "targets": [
+        {"expr": "sum by (le) (rate(doc_ingest_latency_seconds_bucket[5m]))", "refId": "A"}
+      ],
+      "options": {"legend": {"show": true}}
+    }
+  ]
+}
