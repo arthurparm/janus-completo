@@ -3,9 +3,11 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status,
 from pydantic import BaseModel
 from app.services.document_service import DocumentIngestionService
 from app.db.vector_store import get_qdrant_client, get_or_create_collection
+from app.db.vector_store import get_collection_info
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.core.embeddings.embedding_manager import embed_text
 from qdrant_client import models
+from app.config import settings
 
 router = APIRouter(tags=["Documents"])
 
@@ -35,6 +37,22 @@ async def upload_document(
     if not uid:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário")
     data = await file.read()
+    try:
+        if len(data or b"") > int(getattr(settings, "DOCS_MAX_FILE_SIZE_BYTES", 10_000_000)):
+            return UploadResponse(doc_id="", chunks=0, status="file_too_large", consolidation=None)
+    except Exception:
+        pass
+    # Verifica quota de pontos por usuário antes de indexar
+    try:
+        info = get_collection_info(f"user_{uid}")
+        points_count = int(info.get("points_count") or 0)
+        # estima chunks a partir do tamanho do texto, aproximado após parsing; fallback para 1000 bytes/chunk
+        est_chunks = max(1, int(len(data or b"") / 1000))
+        if points_count + est_chunks > int(getattr(settings, "DOCS_MAX_POINTS_PER_USER", 50_000)):
+            return UploadResponse(doc_id="", chunks=0, status="quota_exceeded", consolidation=None)
+    except Exception:
+        pass
+
     result = await service.ingest_file(user_id=uid, filename=file.filename or "document", content_type=file.content_type or "", data=data)
     consolidation = None
     try:
