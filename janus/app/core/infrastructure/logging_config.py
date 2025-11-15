@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover
 
 # Correlation: trace_id for all logs via contextvar
 TRACE_ID: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="-")
+USER_ID: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="-")
 
 
 class _SamplingProcessor:
@@ -39,6 +40,7 @@ class _SamplingProcessor:
 
 def _add_trace_correlation(_, __, event_dict: Dict[str, Any]):
     event_dict["trace_id"] = TRACE_ID.get()
+    event_dict["user_id"] = USER_ID.get()
     if _OTEL:
         try:
             span = trace.get_current_span()
@@ -98,6 +100,7 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
     root.handlers = [handler]
     root.setLevel(level)
 
+    sampling_value = float(getattr(settings, "LOG_SAMPLING_RATE", sampling))
     processors = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -106,7 +109,7 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
         structlog.processors.TimeStamper(fmt="iso"),
         _add_trace_correlation,
         _redact_secrets,
-        _SamplingProcessor(sampling),
+        _SamplingProcessor(sampling_value),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
