@@ -344,8 +344,12 @@ class KnowledgeConsolidator:
                     logger.debug(f"Relacionamento inválido ignorado: {rel}")
                     continue
                 props = nr["properties"]
+                if "confidence" not in props:
+                    props["confidence"] = 0.5
                 props["original_from"] = nr.get("original_from", nr["from"]) 
                 props["original_to"] = nr.get("original_to", nr["to"]) 
+                if source_metadata.get("source_snippet"):
+                    props["source_snippet"] = source_metadata.get("source_snippet")
                 normalized_rels.append({
                     "from_name": nr["from"],
                     "to_name": nr["to"],
@@ -365,6 +369,12 @@ class KnowledgeConsolidator:
                 return True
             if t == "RELATES_TO" and len(a) < 3 and len(b) < 3:
                 return True
+            try:
+                conf = float(rel.get("properties", {}).get("confidence", 1.0))
+                if conf < 0.6:
+                    return True
+            except Exception:
+                pass
             return False
 
         quarantined: List[Dict[str, Any]] = []
@@ -395,8 +405,14 @@ class KnowledgeConsolidator:
                                 MATCH (a {{name: rel.from_name}})
                                 MATCH (b {{name: rel.to_name}})
                                 MERGE (a)-[r:{rel_type}]->(b)
-                                SET r += rel.properties,
+                                ON CREATE SET r += rel.properties,
                                     r.discovered_at = datetime(),
+                                    r.first_seen = datetime(),
+                                    r.occurrences = 1,
+                                    r.source_experience = $exp_id
+                                ON MATCH SET r += rel.properties,
+                                    r.last_seen = datetime(),
+                                    r.occurrences = coalesce(r.occurrences, 0) + 1,
                                     r.source_experience = $exp_id
                                 """,
                                 batch=batch,
@@ -428,7 +444,9 @@ class KnowledgeConsolidator:
                                 MERGE (q:Quarantine {reason: $reason, type: $type})
                                 SET q.from_name = $from_name,
                                     q.to_name = $to_name,
-                                    q.created_at = datetime()
+                                    q.created_at = datetime(),
+                                    q.confidence = $confidence,
+                                    q.source_snippet = $source_snippet
                                 WITH q
                                 MATCH (e:Experience {id: $exp_id})
                                 MERGE (q)-[:EXTRACTED_FROM]->(e)
@@ -437,6 +455,8 @@ class KnowledgeConsolidator:
                                 type=q.get("type"),
                                 from_name=q.get("from_name"),
                                 to_name=q.get("to_name"),
+                                confidence=float(q.get("properties", {}).get("confidence", 0.0)) if isinstance(q.get("properties"), dict) else 0.0,
+                                source_snippet=(q.get("properties", {}).get("source_snippet") if isinstance(q.get("properties"), dict) else None),
                                 exp_id=experience_id,
                             )
                         await tx.commit()
