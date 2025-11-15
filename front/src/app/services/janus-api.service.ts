@@ -116,6 +116,7 @@ export interface DeploymentPublishResponse { model_id: string; status: string; r
 export interface GPUBudgetResponse { user_id: string; budget: number }
 export interface GPUUsageResponse { used: number; updated_at?: string | null }
 export interface ABExperimentSetResponse { status: string; LLM_AB_EXPERIMENT_ID: number }
+export interface UserStatusResponse { user_id: string; conversations: number; messages: number; approx_in_tokens: number; approx_out_tokens: number; vector_points: number }
 
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
@@ -394,6 +395,25 @@ export class JanusApiService {
   // LLM A/B experiment
   setLLMABExperiment(experiment_id: number): Observable<ABExperimentSetResponse> {
     return this.http.post<ABExperimentSetResponse>(`/api/v1/llm/ab/set-experiment`, { experiment_id })
+  }
+
+  // System/User status
+  getUserStatus(user_id: string): Observable<UserStatusResponse> {
+    const qs = new URLSearchParams({ user_id })
+    return this.http.get<UserStatusResponse>(`/api/v1/system/status/user?${qs.toString()}`)
+  }
+
+  // Observability
+  exportAuditCSV(params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number }): Observable<string> {
+    const qs = new URLSearchParams()
+    if (params.user_id) qs.set('user_id', String(params.user_id))
+    if (params.tool) qs.set('tool', String(params.tool))
+    if (params.status) qs.set('status', String(params.status))
+    if (params.start_ts != null) qs.set('start_ts', String(params.start_ts))
+    if (params.end_ts != null) qs.set('end_ts', String(params.end_ts))
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.offset != null) qs.set('offset', String(params.offset))
+    return this.http.get(`/api/v1/observability/audit/export?${qs.toString()}`, { responseType: 'text' })
   }
 }
 
