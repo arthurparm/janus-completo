@@ -149,6 +149,50 @@ class ChatRepositorySQL:
             if not self._session:
                 s.close()
 
+    def update_message_text(self, conversation_id: str, message_id: int, new_text: str, user_id: Optional[str] = None) -> None:
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            msg = s.query(Message).filter(Message.id == int(message_id), Message.session_id == sid).first()
+            if msg is None:
+                raise ChatRepositoryError("Message not found")
+            cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id:
+                uid = int(user_id)
+                if cs.user_id is not None and cs.user_id != uid:
+                    if not self._user_repo.is_admin(uid):
+                        raise ChatRepositoryError("Access denied: user_id mismatch")
+            msg.text = new_text
+            cs.updated_at = datetime.utcnow()
+            s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
+    def delete_message(self, conversation_id: str, message_id: int, user_id: Optional[str] = None) -> None:
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            msg = s.query(Message).filter(Message.id == int(message_id), Message.session_id == sid).first()
+            if msg is None:
+                raise ChatRepositoryError("Message not found")
+            cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id:
+                uid = int(user_id)
+                if cs.user_id is not None and cs.user_id != uid:
+                    if not self._user_repo.is_admin(uid):
+                        raise ChatRepositoryError("Access denied: user_id mismatch")
+            s.delete(msg)
+            cs.updated_at = datetime.utcnow()
+            s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
     def update_summary(self, conversation_id: str, summary: Optional[str]) -> None:
         s = self._get_session()
         try:

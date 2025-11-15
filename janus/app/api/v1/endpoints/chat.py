@@ -1,7 +1,7 @@
 import structlog
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -75,10 +75,10 @@ class ChatListResponse(BaseModel):
 async def start_chat(request: ChatStartRequest, service: ChatService = Depends(get_chat_service), http: Request = None):
     hdr_uid = None
     try:
-        hdr_uid = http.headers.get("X-User-Id") if http else None
+        hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
     except Exception:
         hdr_uid = None
-    user_id = request.user_id or hdr_uid
+    user_id = request.user_id or hdr_uid or None
     conversation_id = service.start_conversation(request.persona, user_id, request.project_id)
     return ChatStartResponse(conversation_id=conversation_id)
 
@@ -93,7 +93,7 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
 
     hdr_uid = None
     try:
-        hdr_uid = http.headers.get("X-User-Id") if http else None
+        hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
     except Exception:
         hdr_uid = None
     try:
@@ -130,7 +130,7 @@ async def chat_history(conversation_id: str, service: ChatService = Depends(get_
 async def list_conversations(user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = 50,
                              service: ChatService = Depends(get_chat_service), http: Request = None):
     try:
-        hdr_uid = http.headers.get("X-User-Id") if http else None
+        hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
     except Exception:
         hdr_uid = None
     items = service.list_conversations(user_id=user_id or hdr_uid, project_id=project_id, limit=limit)
@@ -156,7 +156,7 @@ async def rename_conversation(conversation_id: str, payload: ChatRenameRequest,
     try:
         hdr_uid = None
         try:
-            hdr_uid = http.headers.get("X-User-Id") if http else None
+            hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
         except Exception:
             hdr_uid = None
         service.rename_conversation(conversation_id, payload.new_title, user_id=payload.user_id or hdr_uid,
@@ -174,7 +174,7 @@ async def delete_conversation(conversation_id: str, user_id: Optional[str] = Non
     try:
         hdr_uid = None
         try:
-            hdr_uid = http.headers.get("X-User-Id") if http else None
+            hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
         except Exception:
             hdr_uid = None
         service.delete_conversation(conversation_id, user_id=user_id or hdr_uid, project_id=project_id)
