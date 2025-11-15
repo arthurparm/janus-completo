@@ -1,59 +1,48 @@
 {
-  "title": "Janus Productivity Overview",
-  "tags": ["janus", "productivity"],
+  "title": "Janus Productivity — Overview",
   "timezone": "browser",
-  "schemaVersion": 38,
+  "schemaVersion": 36,
   "version": 1,
   "refresh": "10s",
   "panels": [
     {
-      "type": "stat",
-      "title": "Requests Total",
-      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "type": "graph",
+      "title": "Google Productivity Operations",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "sum(productivity_requests_total)", "refId": "A"}
+        { "expr": "sum(rate(google_productivity_operations_total{type=\"calendar_add\"}[5m]))", "legendFormat": "Calendar add" },
+        { "expr": "sum(rate(google_productivity_operations_total{type=\"mail_send\"}[5m]))", "legendFormat": "Mail send" }
       ]
     },
     {
-      "type": "bargauge",
-      "title": "Requests by Tool",
-      "gridPos": {"x": 6, "y": 0, "w": 9, "h": 6},
-      "options": {"displayMode": "gradient"},
+      "type": "graph",
+      "title": "Google Productivity Errors",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "sum by (tool) (productivity_requests_total)", "refId": "A"}
+        { "expr": "sum(rate(google_productivity_operations_error_total{type=\"calendar_add\"}[5m]))", "legendFormat": "Calendar add errors" },
+        { "expr": "sum(rate(google_productivity_operations_error_total{type=\"mail_send\"}[5m]))", "legendFormat": "Mail send errors" }
       ]
     },
     {
-      "type": "bargauge",
-      "title": "Requests by Status",
-      "gridPos": {"x": 15, "y": 0, "w": 9, "h": 6},
-      "options": {"displayMode": "gradient"},
+      "type": "graph",
+      "title": "Operation Latency (p95)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "sum by (status) (productivity_requests_total)", "refId": "A"}
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Request Rate (req/s) by Tool",
-      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
-      "targets": [
-        {"expr": "sum by (tool) (rate(productivity_requests_total[5m]))", "refId": "A"}
+        { "expr": "histogram_quantile(0.95, sum(rate(google_productivity_operation_latency_seconds_bucket{type=\"calendar_add\"}[5m])) by (le))", "legendFormat": "Calendar add p95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(google_productivity_operation_latency_seconds_bucket{type=\"mail_send\"}[5m])) by (le))", "legendFormat": "Mail send p95" }
       ]
     },
     {
       "type": "stat",
-      "title": "Mail Sent",
-      "gridPos": {"x": 0, "y": 14, "w": 6, "h": 6},
+      "title": "Indexed Points (Qdrant)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "sum(google_mail_sent_total)", "refId": "A"}
-      ]
-    },
-    {
-      "type": "stat",
-      "title": "Calendar Events Indexed",
-      "gridPos": {"x": 6, "y": 14, "w": 6, "h": 6},
-      "targets": [
-        {"expr": "sum(google_calendar_events_indexed_total)", "refId": "A"}
+        { "expr": "sum(increase(google_calendar_events_indexed_total[1h]))", "legendFormat": "Calendar indexed (1h)" },
+        { "expr": "sum(increase(google_mail_messages_indexed_total[1h]))", "legendFormat": "Mail indexed (1h)" }
       ]
     }
   ]
