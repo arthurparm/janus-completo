@@ -80,6 +80,8 @@ export interface AuditEvent { id: number; user_id?: number; endpoint?: string; a
 export interface AuditEventsResponse { total: number; events: AuditEvent[] }
 export interface ReviewerMetricsResponse { user_id: number; decisions_total: number; approvals: number; rejections: number; synonyms: number; approval_rate: number; rejection_rate: number; avg_latency_ms: number }
 export interface PeriodReportResponse { period: string; buckets: { bucket: string; total: number; promote: number; reject: number; synonym: number }[] }
+export interface ConsentItem { scope: string; granted: boolean; expires_at?: string|null }
+export interface ConsentsListResponse { user_id: number; consents: ConsentItem[] }
 
 // Poison pill stats
 export interface PoisonPillStats {
@@ -272,6 +274,19 @@ export class JanusApiService {
     if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
     if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
     return this.http.get<PeriodReportResponse>(`/api/v1/observability/hitl/reports?${qs.toString()}`)
+  }
+
+  // Consents API
+  listConsents(user_id: number): Observable<ConsentsListResponse> {
+    return this.http.get<ConsentsListResponse>(`/api/v1/consents/?user_id=${encodeURIComponent(String(user_id))}`)
+  }
+  grantConsent(user_id: number, scope: string, granted: boolean = true, expires_at?: string): Observable<any> {
+    const body: any = { user_id: String(user_id), scope, granted: granted ? 'True' : 'False' }
+    if (expires_at) body.expires_at = expires_at
+    return this.http.post(`/api/v1/consents/`, body)
+  }
+  revokeConsent(consent_id: number): Observable<any> {
+    return this.http.post(`/api/v1/consents/${encodeURIComponent(String(consent_id))}/revoke`, {})
   }
 
   // Context
