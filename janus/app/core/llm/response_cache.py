@@ -28,6 +28,8 @@ _CACHE_USE_MSGPACK = getattr(settings, "LLM_RESPONSE_CACHE_USE_MSGPACK", False)
 _RESPONSE_CACHE_HITS = Counter("llm_response_cache_hits_total", "Total de hits no cache de respostas")
 _RESPONSE_CACHE_MISSES = Counter("llm_response_cache_misses_total", "Total de misses no cache de respostas")
 _RESPONSE_CACHE_SIZE = Gauge("llm_response_cache_size", "Tamanho atual do cache de respostas (entradas)")
+_LLM_CACHE_REQUESTS = Counter("llm_cache_requests_total", "Total de requisições ao cache de LLM")
+_LLM_CACHE_HITS = Counter("llm_cache_hits_total", "Total de hits no cache de LLM")
 
 # --- Internal State ---
 _lock = threading.RLock()
@@ -59,6 +61,7 @@ def get(prompt: str, role: str, priority: str) -> Optional[Dict[str, Any]]:
         return None
     key = _make_key(hash_prompt(prompt), role, priority)
     with _lock:
+        _LLM_CACHE_REQUESTS.inc()
         entry = _cache.get(key)
         if not entry:
             _RESPONSE_CACHE_MISSES.inc()
@@ -71,6 +74,7 @@ def get(prompt: str, role: str, priority: str) -> Optional[Dict[str, Any]]:
             _RESPONSE_CACHE_SIZE.set(len(_cache))
             return None
         _RESPONSE_CACHE_HITS.inc()
+        _LLM_CACHE_HITS.inc()
         return entry
 
 
