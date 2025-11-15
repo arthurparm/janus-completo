@@ -1,45 +1,53 @@
 {
-  "title": "Janus Productivity by User",
-  "tags": ["janus", "productivity", "user"],
+  "title": "Janus Productivity — User Overview",
   "timezone": "browser",
-  "schemaVersion": 38,
+  "schemaVersion": 36,
   "version": 1,
   "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "user_id",
+        "label": "User ID",
+        "datasource": "Prometheus",
+        "query": "label_values(productivity_worker_user_events_total, user_id)",
+        "refresh": 2
+      }
+    ]
+  },
   "panels": [
     {
-      "type": "bargauge",
-      "title": "Requests per User",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 6},
-      "options": {"displayMode": "gradient"},
+      "type": "graph",
+      "title": "User Events (ok)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "topk(10, sum by (user_id) (productivity_requests_user_total))", "refId": "A"}
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"calendar_send\",status=\"ok\"}[5m]))", "legendFormat": "Calendar send" },
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"mail_send\",status=\"ok\"}[5m]))", "legendFormat": "Mail send" },
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"calendar_index\",status=\"ok\"}[5m]))", "legendFormat": "Calendar index" },
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"mail_index\",status=\"ok\"}[5m]))", "legendFormat": "Mail index" }
       ]
     },
     {
-      "type": "bargauge",
-      "title": "Requests per User by Tool",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 6},
-      "options": {"displayMode": "gradient"},
+      "type": "graph",
+      "title": "User Events (errors)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        {"expr": "topk(10, sum by (user_id,tool) (productivity_requests_user_total))", "refId": "A"}
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"calendar_send\",status=\"error\"}[5m]))", "legendFormat": "Calendar send errors" },
+        { "expr": "sum(rate(productivity_worker_user_events_total{user_id=\"$user_id\",op=\"mail_send\",status=\"error\"}[5m]))", "legendFormat": "Mail send errors" }
       ]
     },
     {
-      "type": "timeseries",
-      "title": "Request Rate by User (req/s)",
-      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
+      "type": "graph",
+      "title": "Latency p95 (per user)",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
       "targets": [
-        {"expr": "sum by (user_id) (rate(productivity_requests_user_total[5m]))", "refId": "A"}
+        { "expr": "histogram_quantile(0.95, sum(rate(productivity_worker_user_latency_seconds_bucket{user_id=\"$user_id\",op=\"calendar_send\"}[5m])) by (le))", "legendFormat": "Calendar send p95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(productivity_worker_user_latency_seconds_bucket{user_id=\"$user_id\",op=\"mail_send\"}[5m])) by (le))", "legendFormat": "Mail send p95" }
       ]
-    },
-    {
-      "type": "heatmap",
-      "title": "Request Latency (seconds)",
-      "gridPos": {"x": 0, "y": 14, "w": 24, "h": 8},
-      "targets": [
-        {"expr": "sum by (le) (rate(productivity_request_latency_seconds_bucket[5m]))", "refId": "A"}
-      ],
-      "options": {"legend": {"show": true}}
     }
   ]
 }

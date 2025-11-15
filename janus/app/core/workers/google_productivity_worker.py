@@ -44,6 +44,7 @@ _GOOGLE_CALENDAR_EVENTS_INDEXED = Counter("google_calendar_events_indexed_total"
 _GOOGLE_MAIL_SENT_TOTAL = Counter("google_mail_sent_total", "Mensagens de e-mail enviadas")  # type: ignore
 _PROD_WORKER_LATENCY = Histogram("productivity_worker_latency_seconds", "Latência no worker de produtividade", ["op"])  # type: ignore
 _PROD_WORKER_USER_EVENTS = Counter("productivity_worker_user_events_total", "Eventos por usuário no worker", ["user_id", "op", "status"])  # type: ignore
+_PROD_WORKER_USER_LATENCY = Histogram("productivity_worker_user_latency_seconds", "Latência por usuário no worker de produtividade", ["user_id", "op"])  # type: ignore
 
 async def publish_google_calendar_add_event(user_id: int, event: Dict[str, Any], index: bool) -> str:
     task_id = uuid4().hex
@@ -155,6 +156,7 @@ async def start_google_productivity_consumer():
                         try:
                             _PROD_WORKER_USER_EVENTS.labels(str(user_id), "calendar_send", "ok").inc()
                             _PROD_WORKER_LATENCY.labels("calendar_send").observe(__import__("time").perf_counter() - _t0)
+                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "calendar_send").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                         try:
@@ -213,6 +215,7 @@ async def start_google_productivity_consumer():
                             _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
                             _PROD_WORKER_USER_EVENTS.labels(str(user_id), "calendar_index", "ok").inc()
                             _PROD_WORKER_LATENCY.labels("calendar_index").observe(__import__("time").perf_counter() - _t0)
+                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "calendar_index").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                         try:
@@ -274,6 +277,7 @@ async def start_google_productivity_consumer():
                             _GOOGLE_MAIL_SENT_TOTAL.inc()
                             _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_send", "ok").inc()
                             _PROD_WORKER_LATENCY.labels("mail_send").observe(__import__("time").perf_counter() - _t0)
+                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "mail_send").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                 try:
@@ -312,6 +316,7 @@ async def start_google_productivity_consumer():
                         try:
                             _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_index", "ok").inc()
                             _PROD_WORKER_LATENCY.labels("mail_index").observe(__import__("time").perf_counter() - _t0)
+                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "mail_index").observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
                 except Exception:
