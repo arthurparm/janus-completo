@@ -89,6 +89,7 @@ class QueueName(str, Enum):
     TASKS_AGENT_CODER = "janus.tasks.agent.coder"
     TASKS_AGENT_PROFESSOR = "janus.tasks.agent.professor"
     TASKS_AGENT_SANDBOX = "janus.tasks.agent.sandbox"
+    PRODUCTIVITY_GOOGLE = "janus.productivity.google"
 
 
 class TaskMessage(BaseModel):
