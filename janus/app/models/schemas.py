@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+import msgpack
 
 
 # --- Schemas de Dados ---
@@ -36,6 +37,7 @@ class GraphLabel(str, Enum):
     STEP = "Step"
     REFLECTION = "Reflection"
     RELATIONSHIP_TYPE = "RelationshipType"
+    DOCUMENT = "Document"
 
 
 class GraphRelationship(str, Enum):
@@ -56,6 +58,15 @@ class GraphRelationship(str, Enum):
     PRODUCES = "PRODUCES"
     RESULTS_IN = "RESULTS_IN"
     RELATES_TO = "RELATES_TO"
+    MENTIONS = "MENTIONS"
+    CAUSES = "CAUSES"
+    SOLVES = "SOLVES"
+    CAUSED_BY = "CAUSED_BY"
+    SOLVED_BY = "SOLVED_BY"
+    HAS_PROPERTY = "HAS_PROPERTY"
+    SIMILAR_TO = "SIMILAR_TO"
+    FOLLOWED_BY = "FOLLOWED_BY"
+    EXTRACTED_FROM = "EXTRACTED_FROM"
     # Adicione outros tipos de relacionamento conforme necessário
 
 
@@ -88,6 +99,14 @@ class TaskMessage(BaseModel):
     task_type: str
     payload: dict = Field(default_factory=dict)
     timestamp: float
+
+    def to_msgpack(self) -> bytes:
+        return msgpack.packb(self.model_dump(), use_bin_type=True)
+
+    @staticmethod
+    def from_msgpack(data: bytes) -> "TaskMessage":
+        obj = msgpack.unpackb(data, raw=False)
+        return TaskMessage(**obj)
 
 
 class TaskStateEvent(BaseModel):
@@ -138,3 +157,11 @@ class TaskState(BaseModel):
     retries: int = Field(default=0)
     meta: Dict[str, Any] = Field(default_factory=dict)
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+
+    def to_msgpack(self) -> bytes:
+        return msgpack.packb(self.model_dump(), use_bin_type=True)
+
+    @staticmethod
+    def from_msgpack(data: bytes) -> "TaskState":
+        obj = msgpack.unpackb(data, raw=False)
+        return TaskState(**obj)

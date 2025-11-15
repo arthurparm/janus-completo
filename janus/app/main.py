@@ -3,9 +3,11 @@ import contextlib
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import json
+import msgpack
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.exception_handlers import add_exception_handlers
@@ -14,10 +16,12 @@ from app.config import settings
 
 # Importa os inicializadores de infraestrutura
 from app.core.infrastructure import (
-    CorrelationMiddleware, RateLimitMiddleware, setup_logging,
+    CorrelationMiddleware, RateLimitMiddleware, setup_logging, setup_tracing,
     initialize_broker, close_broker, get_broker
 )
 from app.db.graph import initialize_graph_db, close_graph_db, get_graph_db
+from app.db.mysql_config import init_mysql_database
+from app.models import user_models  # noqa: F401
 from app.core.memory.memory_core import initialize_memory_db, close_memory_db, get_memory_db
 
 # Importa as classes e getters para a construção do grafo de dependências
@@ -40,6 +44,7 @@ from app.services.sandbox_service import SandboxService
 from app.services.reflexion_service import ReflexionService
 from app.services.tool_service import ToolService
 from app.services.collaboration_service import CollaborationService
+from app.services.document_service import DocumentIngestionService
 from app.services.observability_service import ObservabilityService
 from app.repositories.observability_repository import ObservabilityRepository
 from app.core.monitoring import get_health_monitor
@@ -50,7 +55,6 @@ from app.services.autonomy_service import AutonomyService
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
 from fastapi.staticfiles import StaticFiles
-from app.repositories.chat_repository import ChatRepository
 from app.services.chat_service import ChatService
 from app.services.assistant_service import AssistantService
 from app.core.autonomy.goal_manager import GoalManager
@@ -69,6 +73,10 @@ async def lifespan(app: FastAPI):
     # 1. Inicializa a Infraestrutura de Baixo Nível
     logger.info("Application startup: Initializing infrastructure...")
     try:
+        try:
+            init_mysql_database()
+        except Exception:
+            logger.warning("MySQL init falhou; prosseguindo sem criar tabelas automaticamente.")
         await asyncio.gather(initialize_graph_db(), initialize_memory_db(), initialize_broker())
         logger.info("Infrastructure initialized successfully.")
     except Exception as e:
@@ -105,16 +113,25 @@ async def lifespan(app: FastAPI):
     app.state.reflexion_service = ReflexionService(repo=app.state.reflexion_repo)
     app.state.tool_service = ToolService(app.state.tool_repo)
     app.state.collaboration_service = CollaborationService(app.state.collaboration_repo)
+    app.state.document_service = DocumentIngestionService(app.state.memory_service)
     # LLM (Sprint 10): Cérebro Híbrido
     app.state.llm_repo = LLMRepository()
     app.state.llm_service = LLMService(app.state.llm_repo)
     app.state.assistant_service = AssistantService(app.state.llm_service)
 
+    try:
+        warm_specs = getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or []
+        if warm_specs:
+            app.state.llm_service.warm_pool(warm_specs)
+    except Exception:
+        pass
+
     # Goals Manager (Autonomy)
     app.state.goal_manager = GoalManager(app.state.memory_service)
 
     # Chat: Conversas com histórico (MVP em memória)
-    app.state.chat_repo = ChatRepository()
+    from app.repositories.chat_repository_sql import ChatRepositorySQL
+    app.state.chat_repo = ChatRepositorySQL()
     app.state.chat_service = ChatService(app.state.chat_repo, app.state.llm_service, app.state.tool_service)
 
     # --- Self-Optimization (Sprint 7) ---
@@ -196,6 +213,7 @@ app = FastAPI(
     description="Janus: An autonomous, modular AI software architect with a clean, decoupled architecture.",
     lifespan=lifespan
 )
+setup_tracing(app)
 
 # --- Configuração da Aplicação ---
 Instrumentator().instrument(app).expose(app)
@@ -229,6 +247,22 @@ if API_KEY:
 
 app.include_router(api_router, prefix="/api/v1")
 
+@app.middleware("http")
+async def msgpack_content_negotiation(request: Request, call_next):
+    accept = (request.headers.get("accept") or "").lower()
+    response = await call_next(request)
+    if "application/msgpack" in accept:
+        ct = (response.headers.get("content-type") or "").lower()
+        if ct.startswith("application/json"):
+            try:
+                body_bytes = getattr(response, "body", b"") or b""
+                data = json.loads(body_bytes.decode("utf-8"))
+                packed = msgpack.packb(data, use_bin_type=True)
+                return Response(content=packed, media_type="application/msgpack")
+            except Exception:
+                return response
+    return response
+
 @app.get("/", include_in_schema=False)
 def read_root():
     return {"message": f"Welcome to {settings.APP_NAME}. Docs available at /docs"}
@@ -236,3 +270,24 @@ def read_root():
 @app.get("/healthz", tags=["System"], summary="Health (basic)")
 def healthz():
     return {"status": "ok"}
+
+try:
+    if getattr(settings, "SERVE_STATIC_FILES", False):
+        app.mount(
+            "/static",
+            StaticFiles(directory=getattr(settings, "STATIC_FILES_DIR", "front/janus-angular/public"), check_dir=False),
+            name="static",
+        )
+
+        @app.middleware("http")
+        async def static_cache_control(request: Request, call_next):
+            response = await call_next(request)
+            path = request.url.path
+            if path.startswith("/static/") and response.status_code == 200:
+                try:
+                    response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+                except Exception:
+                    pass
+            return response
+except Exception:
+    pass
