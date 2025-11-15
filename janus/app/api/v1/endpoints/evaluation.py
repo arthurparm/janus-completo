@@ -2,6 +2,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.repositories.ab_experiment_repository import ABExperimentRepository
+from app.services.ab_testing_service import ABTestingService
 
 router = APIRouter(tags=["Evaluation"], prefix="/evaluation")
 
@@ -52,3 +53,9 @@ async def list_experiments(user_id: Optional[str] = None, repo: ABExperimentRepo
 async def add_result(experiment_id: int, req: ResultCreateRequest, repo: ABExperimentRepository = Depends(get_repo)):
     res = repo.add_result(experiment_id, req.arm_id, req.metric_name, req.metric_value)
     return {"id": res.id, "status": "ok"}
+
+
+@router.get("/experiments/{experiment_id}/winner")
+async def experiment_winner(experiment_id: int, metric_name: str = "accuracy"):
+    svc = ABTestingService()
+    return svc.compute_winner(experiment_id, metric_name)

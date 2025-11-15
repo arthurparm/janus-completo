@@ -2,6 +2,8 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from app.db.mysql_config import mysql_db
 from app.models.ab_experiment_models import Experiment, ExperimentArm, ExperimentResult
+from app.models.ab_assignment_models import ExperimentAssignment
+import random
 
 class ABExperimentRepository:
     def __init__(self, session: Optional[Session] = None):
@@ -55,6 +57,33 @@ class ABExperimentRepository:
             s.commit()
             s.refresh(res)
             return res
+        finally:
+            if not self._session:
+                s.close()
+
+    def assign_user(self, experiment_id: int, user_id: str) -> ExperimentAssignment:
+        s = self._get_session()
+        try:
+            existing = s.query(ExperimentAssignment).filter(ExperimentAssignment.experiment_id == experiment_id, ExperimentAssignment.user_id == user_id).first()
+            if existing:
+                return existing
+            arms = s.query(ExperimentArm).filter(ExperimentArm.experiment_id == experiment_id).all()
+            if not arms:
+                raise ValueError("No arms for experiment")
+            arm = random.choice(arms)
+            asg = ExperimentAssignment(experiment_id=experiment_id, user_id=user_id, arm_id=arm.id)
+            s.add(asg)
+            s.commit()
+            s.refresh(asg)
+            return asg
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_assignment(self, experiment_id: int, user_id: str) -> ExperimentAssignment | None:
+        s = self._get_session()
+        try:
+            return s.query(ExperimentAssignment).filter(ExperimentAssignment.experiment_id == experiment_id, ExperimentAssignment.user_id == user_id).first()
         finally:
             if not self._session:
                 s.close()
