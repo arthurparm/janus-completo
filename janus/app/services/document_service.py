@@ -143,6 +143,10 @@ class DocumentIngestionService:
         try:
             if _OTEL and span is not None:
                 span.set_attribute("doc.chunk_count", len(chunks))
+            try:
+                _DOC_INGEST_CHUNKS_COUNT.observe(float(len(chunks)))
+            except Exception:
+                pass
         except Exception:
             pass
         if not chunks:
@@ -233,6 +237,7 @@ _DOC_INGEST_FILES_TOTAL = Counter("doc_ingest_files_total", "Arquivos ingeridos"
 try:
     from prometheus_client import Histogram, Counter as _CounterUser  # type: ignore
     _DOC_INGEST_LATENCY = Histogram("doc_ingest_latency_seconds", "Latência da ingestão de documentos")
+    _DOC_INGEST_CHUNKS_COUNT = Histogram("doc_ingest_chunks_count", "Distribuição de chunks por ingestão")  # type: ignore
     _DOC_INGEST_POINTS_USER_TOTAL = _CounterUser("doc_ingest_points_user_total", "Pontos indexados por usuário", ["user_id"])  # type: ignore
     _DOC_INGEST_FILES_USER_TOTAL = _CounterUser("doc_ingest_files_user_total", "Arquivos ingeridos por usuário", ["user_id", "status"])  # type: ignore
 except Exception:
@@ -240,6 +245,10 @@ except Exception:
         def observe(self, *a, **k):
             pass
     _DOC_INGEST_LATENCY = _NoopHist()
+    class _NoopH:
+        def observe(self, *a, **k):
+            pass
+    _DOC_INGEST_CHUNKS_COUNT = _NoopH()
     class _NoopC:
         def labels(self, *a, **k):
             return self
