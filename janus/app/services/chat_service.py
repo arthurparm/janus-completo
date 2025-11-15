@@ -285,9 +285,20 @@ class ChatService:
     def _maybe_index_message(self, text: str, user_id: Optional[str], conversation_id: str, role: str) -> None:
         if not text or not user_id:
             return
-        vec = embed_text(text)
         collection_name = get_or_create_collection(f"user_{user_id}")
         client = get_qdrant_client()
+        try:
+            from app.config import settings
+            max_points = int(getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000)
+            from qdrant_client import models as _models
+            qfilter = _models.Filter(must=[_models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="chat_msg")), _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id)))])
+            cnt = client.count(collection_name=collection_name, count_filter=qfilter, exact=True)
+            current = int(getattr(cnt, "count", 0) or 0)
+            if current >= max_points:
+                return
+        except Exception:
+            pass
+        vec = embed_text(text)
         now_ms = int(_time.time() * 1000)
         payload = {
             "content": text,
@@ -405,6 +416,18 @@ class ChatService:
                 update_active_conversations(self._repo.count_conversations())
             except Exception:
                 pass
+        except ChatRepositoryError as e:
+            raise ChatServiceError(str(e))
+
+    def update_message(self, conversation_id: str, message_id: int, new_text: str, user_id: Optional[str] = None) -> None:
+        try:
+            self._repo.update_message_text(conversation_id, message_id, new_text, user_id=user_id)
+        except ChatRepositoryError as e:
+            raise ChatServiceError(str(e))
+
+    def delete_message(self, conversation_id: str, message_id: int, user_id: Optional[str] = None) -> None:
+        try:
+            self._repo.delete_message(conversation_id, message_id, user_id=user_id)
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 
