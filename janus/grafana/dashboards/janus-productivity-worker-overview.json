@@ -1,0 +1,28 @@
+{
+  "title": "Janus Productivity Worker Latency",
+  "tags": ["janus", "productivity", "worker"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "heatmap",
+      "title": "Worker Latency (seconds)",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
+      "targets": [
+        {"expr": "sum by (le) (rate(productivity_worker_latency_seconds_bucket[5m]))", "refId": "A"}
+      ],
+      "options": {"legend": {"show": true}}
+    },
+    {
+      "type": "bargauge",
+      "title": "Worker Events per User",
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "topk(10, sum by (user_id,op) (productivity_worker_user_events_total))", "refId": "A"}
+      ]
+    }
+  ]
+}
