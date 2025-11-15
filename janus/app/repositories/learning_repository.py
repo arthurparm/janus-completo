@@ -175,6 +175,7 @@ class LearningRepository:
         # Monta configuração de treinamento
         tp = training_params or {}
         model_type_str = str(tp.get("model_type" or "classifier")).lower()
+        user_id = tp.get("user_id")
         try:
             model_type = ModelType(model_type_str)
         except Exception:
@@ -189,13 +190,20 @@ class LearningRepository:
             validation_split=float(tp.get("validation_split", 0.2)),
             early_stopping=bool(tp.get("early_stopping", True)),
             save_checkpoints=bool(tp.get("save_checkpoints", True)),
-            max_examples=tp.get("max_examples")
+            max_examples=tp.get("max_examples"),
+            user_id=user_id
         )
 
         try:
             result = await neural_trainer.train_model(config)
             elapsed = time.perf_counter() - start_ts
             self._experiment_duration.observe(elapsed)
+            try:
+                from app.services.resource_manager import record_training_usage
+                cost = float(result.num_examples or 0) / 1000.0
+                record_training_usage(user_id, cost)
+            except Exception:
+                pass
 
             # Atualiza experimento
             exp = self._experiments.get(experiment_id, {})

@@ -27,6 +27,7 @@ async def process_neural_training_task(task: TaskMessage) -> None:
         dataset_version: str | None = payload.get("dataset_version")
         model_name: str | None = payload.get("model_name")
         training_params: Dict[str, Any] | None = payload.get("training_params") or {}
+        user_id: str | None = payload.get("user_id")
 
         repo = LearningRepository()
         summary = await repo.run_training_process(
@@ -49,6 +50,7 @@ async def publish_neural_training_task(
     dataset_version: str | None = None,
     model_name: str | None = None,
     training_params: Dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> str:
     """Publish a neural training task to the broker."""
     task_id = str(uuid.uuid4())
@@ -57,6 +59,8 @@ async def publish_neural_training_task(
         "model_name": model_name,
         "training_params": training_params or {},
     }
+    if user_id is not None:
+        payload["user_id"] = user_id
     task_message = TaskMessage(
         task_id=task_id,
         task_type="neural_training",

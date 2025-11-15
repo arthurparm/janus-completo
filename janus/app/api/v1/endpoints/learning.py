@@ -38,6 +38,7 @@ class TrainRequest(BaseModel):
     model_type: str = Field("CLASSIFIER")
     model_name: Optional[str] = Field(None, description="Nome do modelo a ser treinado")
     training_config: TrainingConfig = Field(default_factory=TrainingConfig)
+    user_id: Optional[str] = Field(None)
 
 class LearningResponse(BaseModel):
     message: str
@@ -127,7 +128,7 @@ async def trigger_harvesting(request: HarvestRequest,
 async def trigger_training(request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)):
     """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
-        result = await learning_service.trigger_training(request.model_type, request.training_config.dict(), model_name=request.model_name)
+        result = await learning_service.trigger_training(request.model_type, request.training_config.dict(), model_name=request.model_name, user_id=request.user_id)
         return result
     except TrainingFailedError as e:
         logger.warning("Falha no treinamento via serviço", error=str(e))

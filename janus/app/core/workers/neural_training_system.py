@@ -91,6 +91,7 @@ class TrainingConfig:
     early_stopping: bool = True
     save_checkpoints: bool = True
     max_examples: Optional[int] = None
+    user_id: Optional[str] = None
 
 
 @dataclass
@@ -330,6 +331,9 @@ class NeuralTrainer:
                 query=query,
                 limit=config.max_examples or 1000
             )
+            if config.user_id:
+                uid = str(config.user_id)
+                experiences = [e for e in experiences if str(e.get("metadata", {}).get("user_id", "")) == uid]
 
             logger.info(f"[NeuralTrainer] Carregadas {len(experiences)} experiências para treino")
             return experiences

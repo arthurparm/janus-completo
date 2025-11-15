@@ -50,7 +50,7 @@ class LearningService:
             logger.error("Erro no serviço ao orquestrar coleta de dados", exc_info=e)
             raise LearningServiceError("Falha ao orquestrar a coleta de dados.") from e
 
-    async def trigger_training(self, model_type: str, training_config: Dict[str, Any], model_name: Optional[str] = None) -> Dict[str, Any]:
+    async def trigger_training(self, model_type: str, training_config: Dict[str, Any], model_name: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Publica uma tarefa de treinamento na fila e retorna o ack com task_id."""
         logger.info("Agendando treinamento de novo modelo", model_type=model_type)
         try:
@@ -61,10 +61,13 @@ class LearningService:
             # Publica tarefa
             tp = dict(training_config or {})
             tp.setdefault("model_type", str(model_type).lower())
+            if user_id:
+                tp["user_id"] = user_id
             task_id = await publish_neural_training_task(
                 dataset_version=dataset_info.get("version"),
                 model_name=derived_model_name,
-                training_params=tp
+                training_params=tp,
+                user_id=user_id
             )
             ack = {
                 "message": "Treinamento agendado.",
