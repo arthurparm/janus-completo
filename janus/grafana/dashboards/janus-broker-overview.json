@@ -1,0 +1,61 @@
+{
+  "title": "Janus Broker Overview",
+  "tags": ["janus", "broker"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Connection Errors",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(broker_connection_errors_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Published by Queue",
+      "gridPos": {"x": 6, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (queue) (broker_messages_published_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Consumed by Queue",
+      "gridPos": {"x": 15, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (queue) (broker_messages_consumed_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Publish Rate (msgs/s)",
+      "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (queue) (rate(broker_messages_published_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Consume Rate (msgs/s)",
+      "gridPos": {"x": 12, "y": 6, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (queue) (rate(broker_messages_consumed_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Consume Errors by Queue",
+      "gridPos": {"x": 0, "y": 14, "w": 24, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (queue) (broker_consume_errors_total)", "refId": "A"}
+      ]
+    }
+  ]
+}

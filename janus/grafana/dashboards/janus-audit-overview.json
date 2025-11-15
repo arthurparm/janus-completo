@@ -1,0 +1,53 @@
+{
+  "title": "Janus Audit Overview",
+  "tags": ["janus", "audit"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total Audit Events",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(janus_audit_events_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Events by Action",
+      "gridPos": {"x": 6, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (action) (janus_audit_events_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Events by Status",
+      "gridPos": {"x": 15, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (status) (janus_audit_events_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Audit Event Rate (events/s) by Action",
+      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
+      "targets": [
+        {"expr": "sum by (action) (rate(janus_audit_events_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Top Endpoints",
+      "gridPos": {"x": 0, "y": 14, "w": 24, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "topk(10, sum by (endpoint) (janus_audit_events_total))", "refId": "A"}
+      ]
+    }
+  ]
+}

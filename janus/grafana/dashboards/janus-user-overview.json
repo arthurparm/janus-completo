@@ -1,0 +1,52 @@
+{
+  "title": "Janus User Overview",
+  "tags": ["janus", "user"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Memory Ops (total)",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "sum(memory_operations_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Memory Ops by Operation",
+      "gridPos": {"x": 8, "y": 0, "w": 16, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (operation) (memory_operations_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "heatmap",
+      "title": "Memory Latency (seconds)",
+      "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (le) (rate(memory_operation_latency_seconds_bucket[5m]))", "refId": "A"}
+      ],
+      "options": {"legend": {"show": true}}
+    },
+    {
+      "type": "stat",
+      "title": "LLM Cache Requests",
+      "gridPos": {"x": 12, "y": 6, "w": 6, "h": 8},
+      "targets": [
+        {"expr": "sum(llm_cache_requests_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "LLM Cache Hit Rate",
+      "gridPos": {"x": 18, "y": 6, "w": 6, "h": 8},
+      "targets": [
+        {"expr": "sum(llm_cache_hits_total) / clamp_min(sum(llm_cache_requests_total), 1)", "refId": "A"}
+      ]
+    }
+  ]
+}

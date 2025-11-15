@@ -1,0 +1,60 @@
+{
+  "title": "Janus Productivity Overview",
+  "tags": ["janus", "productivity"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Requests Total",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(productivity_requests_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Requests by Tool",
+      "gridPos": {"x": 6, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (tool) (productivity_requests_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Requests by Status",
+      "gridPos": {"x": 15, "y": 0, "w": 9, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [
+        {"expr": "sum by (status) (productivity_requests_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate (req/s) by Tool",
+      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
+      "targets": [
+        {"expr": "sum by (tool) (rate(productivity_requests_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Mail Sent",
+      "gridPos": {"x": 0, "y": 14, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(google_mail_sent_total)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Calendar Events Indexed",
+      "gridPos": {"x": 6, "y": 14, "w": 6, "h": 6},
+      "targets": [
+        {"expr": "sum(google_calendar_events_indexed_total)", "refId": "A"}
+      ]
+    }
+  ]
+}
