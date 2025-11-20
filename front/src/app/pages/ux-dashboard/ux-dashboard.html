@@ -4,13 +4,16 @@
     <div>P95 Latência: {{ p95 != null ? (p95 | number:'1.0-0') + ' ms' : '—' }}</div>
     <div>Total: {{ metrics.length }}</div>
   </div>
-  <div class="alert" *ngIf="p95 != null && p95 > 1500">Alerta: P95 acima de 1500ms</div>
+  @if (p95 != null && p95 > 1500) {
+  <div class="alert">Alerta: P95 acima de 1500ms</div>
+  }
   <table class="table">
     <thead>
       <tr><th>Timestamp</th><th>TTFT</th><th>Latência</th><th>Outcome</th><th>Retries</th><th>Provider</th><th>Model</th></tr>
     </thead>
     <tbody>
-      <tr *ngFor="let m of metrics">
+      @for (m of metrics; track m.timestamp) {
+      <tr>
         <td>{{ m.timestamp }}</td>
         <td>{{ m.ttft_ms || '—' }}</td>
         <td>{{ m.latency_ms || '—' }}</td>
@@ -19,6 +22,7 @@
         <td>{{ m.provider || '—' }}</td>
         <td>{{ m.model || '—' }}</td>
       </tr>
+      }
     </tbody>
   </table>
 </div>

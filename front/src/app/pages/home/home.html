@@ -1,162 +1,310 @@
-<!-- Seção Hero -->
-<div class="hero-section">
-  <div class="ai-core">
-    <div class="core-ring"></div>
-    <div class="core-center"></div>
+<!-- Hero Section with Tailwind CSS -->
+<section class="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 overflow-hidden">
+  <!-- Background Pattern -->
+  <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]"></div>
+  <div class="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,119,198,0.1),transparent_50%)]"></div>
+  
+  <!-- Animated particles background -->
+  <canvas class="absolute inset-0 w-full h-full opacity-30" #particlesCanvas></canvas>
+  
+  <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <!-- AI Core Visualization -->
+    <div class="flex justify-center mb-8">
+      <div class="relative w-32 h-32">
+        <!-- Outer ring -->
+        <div class="absolute inset-0 rounded-full border-4 border-purple-400/30 animate-pulse"></div>
+        <!-- Middle ring -->
+        <div class="absolute inset-2 rounded-full border-2 border-purple-300/50 animate-ping"></div>
+        <!-- Core -->
+        <div class="absolute inset-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse-slow"></div>
+        <!-- Center dot -->
+        <div class="absolute inset-8 rounded-full bg-white animate-pulse"></div>
+      </div>
+    </div>
+    
+    <!-- Hero Text -->
+    <div class="space-y-6 animate-fade-in">
+      <h1 class="text-5xl md:text-7xl font-bold">
+        <span class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+          Janus AI
+        </span>
+        <br>
+        <span class="text-3xl md:text-5xl text-slate-300">
+          Cognitive System
+        </span>
+      </h1>
+      
+      <h2 class="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto">
+        A Genesis of Autonomous Intelligence: An Evolving Cognitive Ecosystem
+      </h2>
+      
+      <p class="text-lg text-slate-500 max-w-2xl mx-auto">
+        Janus is a distributed cognitive architecture designed to learn, reason, and self-optimize. 
+        This environment serves as its diagnostic and interaction hub.
+      </p>
+    </div>
+    
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 max-w-2xl mx-auto">
+      <div class="glass-card text-center p-6">
+        <div class="text-3xl font-bold text-purple-400">{{ servicesAvailability() }}%</div>
+        <div class="text-slate-400 mt-2">Availability</div>
+      </div>
+      <div class="glass-card text-center p-6">
+        <div class="text-3xl font-bold text-pink-400">{{ averageResponseTime() }}ms</div>
+        <div class="text-slate-400 mt-2">Response Time</div>
+      </div>
+      <div class="glass-card text-center p-6">
+        <div class="text-3xl font-bold text-cyan-400">{{ workers().length }}</div>
+        <div class="text-slate-400 mt-2">Active Workers</div>
+      </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row gap-4 justify-center mt-12">
+      <button 
+        (click)="runQuickAnalysis()"
+        class="btn-primary flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        Start AI Analysis
+      </button>
+      <button 
+        (click)="refreshData()"
+        class="btn-secondary flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0A8.001 8.001 0 0015.356 19m0 0H20m-5 0v-5"/>
+        </svg>
+        Refresh Data
+      </button>
+    </div>
   </div>
-  <h1>Projeto Janus</h1>
-  <h2>A Gênese da Inteligência Autônoma: Um Ecossistema Cognitivo em Evolução</h2>
-  <p>Janus é uma arquitetura cognitiva distribuída, projetada para aprender, raciocinar e se auto-otimizar. Este site
-    serve como seu ambiente de diagnóstico e interação.</p>
-  <div class="timestamp">{{ now() }}</div>
+</section>
+
+<!-- Real-time Dashboard Charts -->
+<section *ngIf="!loading() && systemStatus() as sys" class="py-20 bg-gradient-to-b from-slate-900 to-slate-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <h2 class="text-4xl font-bold text-white mb-4">Real-time Analytics</h2>
+      <p class="text-xl text-slate-400 max-w-2xl mx-auto">
+        Live system monitoring with interactive charts and performance metrics
+      </p>
+    </div>
+    
+    <!-- Time Range Selector -->
+    <div class="flex justify-between items-center mb-8">
+      <div>
+        <h3 class="text-3xl font-bold text-white mb-2">System Performance</h3>
+        <p class="text-slate-400">Real-time monitoring and analytics</p>
+      </div>
+      <div class="flex gap-2">
+        <button *ngFor="let range of ['1h', '6h', '24h', '7d']" 
+          (click)="onTimeRangeChange(range)"
+          [class.bg-purple-600]="selectedTimeRange() === range"
+          [class.text-white]="selectedTimeRange() === range"
+          [class.bg-slate-800]="selectedTimeRange() !== range"
+          [class.text-slate-300]="selectedTimeRange() !== range"
+          class="px-4 py-2 rounded-lg transition-colors duration-200">
+          {{ range }}
+        </button>
+      </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="flex flex-wrap justify-center gap-4 mb-12">
+      <button 
+        *ngFor="let action of quickActions"
+        (click)="executeQuickAction(action)"
+        class="glass-button group"
+        [class.bg-gradient-to-r]="action.color === 'primary'"
+        [class.from-purple-600]="action.color === 'primary'"
+        [class.to-pink-600]="action.color === 'primary'"
+        [class.bg-gradient-to-r]="action.color === 'accent'"
+        [class.from-cyan-600]="action.color === 'accent'"
+        [class.to-blue-600]="action.color === 'accent'"
+        [class.bg-gradient-to-r]="action.color === 'warn'"
+        [class.from-orange-600]="action.color === 'warn'"
+        [class.to-red-600]="action.color === 'warn'">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="action.icon"/>
+          </svg>
+          {{ action.label }}
+        </span>
+      </button>
+    </div>
+    
+    <!-- Interactive Chart Grid -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <!-- Performance Metrics -->
+      <div class="glass-card p-8">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-2xl font-bold text-white">Performance Metrics</h3>
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span class="text-sm text-slate-400">Live</span>
+          </div>
+        </div>
+        <div class="h-80">
+          <canvas baseChart
+            [data]="performanceChartData()"
+            [options]="performanceChartOptions"
+            [type]="'line'">
+          </canvas>
+        </div>
+      </div>
+      
+      <!-- System Status -->
+      <div class="glass-card p-8">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-2xl font-bold text-white">System Status</h3>
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span class="text-sm text-slate-400">Live</span>
+          </div>
+        </div>
+        <div class="space-y-6">
+          <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
+            <div>
+              <div class="text-sm text-slate-400">System Status</div>
+              <div class="text-xl font-bold text-white">{{ sys.status }}</div>
+            </div>
+            <div class="w-24">
+              <div class="w-full bg-slate-700 rounded-full h-2">
+                <div class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" [style.width.%]="sys.status === 'healthy' ? 100 : 50"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
+            <div>
+              <div class="text-sm text-slate-400">Uptime</div>
+              <div class="text-xl font-bold text-white">{{ formatUptime(sys.uptime_seconds) }}</div>
+            </div>
+            <div class="w-24">
+              <div class="w-full bg-slate-700 rounded-full h-2">
+                <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full" [style.width.%]="100"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
+            <div>
+              <div class="text-sm text-slate-400">Environment</div>
+              <div class="text-xl font-bold text-white">{{ sys.environment }}</div>
+            </div>
+            <div class="w-24">
+              <div class="w-full bg-slate-700 rounded-full h-2">
+                <div class="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" [style.width.%]="100"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Metrics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+      <div *ngFor="let metric of dashboardMetrics(); trackBy: trackByMetricLabel"
+        (mouseenter)="onCardHover(metric.label)"
+        (mouseleave)="onCardHover(null)"
+        [class.scale-105]="hoveredCard() === metric.label"
+        class="glass-card p-6 transition-transform duration-300 cursor-pointer">
+        
+        <div class="flex items-center justify-between mb-4">
+          <div class="p-3 rounded-lg bg-gradient-to-r" [style.background]="metric.color">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path *ngIf="metric.icon === 'shield'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              <path *ngIf="metric.icon === 'speed'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              <path *ngIf="metric.icon === 'trending_up'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+              <path *ngIf="metric.icon === 'memory'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 3v18m0 0a9 9 0 110-18 9 9 0 010 18z"/>
+            </svg>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-bold text-white">{{ metric.value }}{{ metric.unit }}</div>
+            <div class="text-sm text-slate-400">{{ metric.label }}</div>
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1" [class.text-green-400]="metric.trend === 'up'" [class.text-red-400]="metric.trend === 'down'" [class.text-slate-400]="metric.trend === 'stable'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path *ngIf="metric.trend === 'up'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+              <path *ngIf="metric.trend === 'down'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+              <path *ngIf="metric.trend === 'stable'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14"/>
+            </svg>
+            <span class="text-sm">{{ metric.trendValue }}</span>
+          </div>
+          <span class="text-xs text-slate-500">vs last period</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Services Status -->
+    <div class="mt-12">
+      <h3 class="text-2xl font-bold text-white mb-6">Services Status</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div *ngFor="let service of services(); trackBy: trackByServiceName" 
+          (click)="onServiceClick(service)"
+          class="glass-card p-4 cursor-pointer hover:scale-105 transition-transform duration-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-white">{{ service.name }}</div>
+              <div class="text-sm text-slate-400">{{ service.status }}</div>
+            </div>
+            <div class="w-3 h-3 rounded-full" 
+              [class.bg-green-500]="service.status === 'ok'"
+              [class.bg-red-500]="service.status !== 'ok'"
+              [class.animate-pulse]="service.status === 'ok'"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Workers Status -->
+    <div class="mt-12">
+      <h3 class="text-2xl font-bold text-white mb-6">Workers Performance</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div *ngFor="let worker of workers(); trackBy: trackByWorkerId"
+          (click)="onWorkerClick(worker)"
+          class="glass-card p-4 cursor-pointer hover:scale-105 transition-transform duration-200">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium text-white">Worker {{ worker.id }}</div>
+            <div class="w-3 h-3 rounded-full" 
+              [class.bg-green-500]="worker.status === 'running'"
+              [class.bg-yellow-500]="worker.status === 'idle'"
+              [class.bg-red-500]="worker.status === 'error'"
+              [class.animate-pulse]="worker.status === 'running'"></div>
+          </div>
+          <div class="text-sm text-slate-400 mb-2">Status: {{ worker.status }}</div>
+          <div class="text-sm text-slate-400">Tasks: {{ worker.tasks_processed }}</div>
+          
+          <div class="mt-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Tasks:</span>
+              <span class="text-white font-medium">{{ worker.tasks_processed }}</span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Last Update:</span>
+              <span class="text-white font-medium">{{ formatTimeAgo(worker.last_heartbeat) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Loading State -->
+<div *ngIf="loading() || isInitializing()" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex items-center justify-center">
+  <div class="text-center space-y-4">
+    <div class="relative w-16 h-16 mx-auto">
+      <div class="absolute inset-0 border-4 border-purple-500/30 rounded-full animate-ping"></div>
+      <div class="absolute inset-2 border-4 border-purple-500/50 rounded-full animate-pulse"></div>
+      <div class="absolute inset-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-spin"></div>
+    </div>
+    <div class="text-white font-medium">Initializing Janus System...</div>
+    <div class="text-slate-400 text-sm">Connecting to cognitive architecture</div>
+  </div>
 </div>
-
-<!-- Seção 2: A Arquitetura (3 Colunas) -->
-<section class="architecture-section">
-  <h2>A Arquitetura</h2>
-  <div class="architecture-grid">
-    <div class="card">
-      <h3>O Cérebro (Processamento Local)</h3>
-      <p>Núcleo de raciocínio soberano (Ollama) para autonomia. Inclui: Llama 3.2 8B (Orquestrador), Phi-3-mini
-        (Professor/Curador) e Code Llama 7B (Codificador).</p>
-    </div>
-    <div class="card">
-      <h3>O Co-processador (Nuvem Estratégica)</h3>
-      <p>Acesso a modelos de elite (OpenAI, Gemini, Grok) para tarefas de altíssima complexidade, gerenciado por um
-        Roteador Dinâmico.</p>
-    </div>
-    <div class="card">
-      <h3>O Sistema Nervoso (APIs Externas)</h3>
-      <p>Os 'sentidos' de Janus para perceber o mundo digital. Inclui: Tavily Search (Busca Web), HG Brasil (Contexto
-        Local) e Google NLP (Análise de Linguagem).</p>
-    </div>
-  </div>
-</section>
-
-<!-- Seção 3: O Ecossistema -->
-<section class="ecosystem-section">
-  <h2>O Ecossistema (Distribuição)</h2>
-  <div class="card">
-    <h3>Um Sistema Multiagente Distribuído</h3>
-    <p>Utilizando um padrão Orquestrador-Trabalhador sobre LangGraph e RabbitMQ, Janus decompõe problemas complexos em
-      tarefas paralelas, garantindo escalabilidade e resiliência.</p>
-  </div>
-</section>
-
-<!-- Seção 4: O Meta-Agente -->
-<section class="meta-agent-section">
-  <h2>O Meta-Agente (Consciência)</h2>
-  <div class="card">
-    <h3>Auto-Otimização Proativa</h3>
-    <p>O Meta-Agente (Sprint 13) monitora continuamente a saúde do sistema e analisa padrões de falha. É a
-      'autoconsciência diagnóstica' de Janus, transformando-o de reativo para proativo.</p>
-  </div>
-</section>
-
-<!-- Seção 5: Status do Sistema (Teste de Fogo) -->
-<section class="system-status-section">
-  <h2>Diagnóstico do Sistema em Tempo Real</h2>
-  <app-notification-banner></app-notification-banner>
-  <div *ngIf="loading()" class="loading">Carregando status...</div>
-  <div class="status-monitor" *ngIf="!loading()">
-    <div class="status-grid">
-      <div class="status-item">
-        <span class="status-label">ID do Sistema:</span>
-        <span class="status-value">JNS-ARC-1.0</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Status Geral:</span>
-        <span class="status-value online">Operacional</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Barramento (RabbitMQ):</span>
-        <span class="status-value online">Online</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Memória Episódica (Qdrant):</span>
-        <span class="status-value online">Conectada</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Orquestrador (app/core/workers/orchestrator.py):</span>
-        <span class="status-value online">Ativo</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Meta-Agente (app/core/agents/meta_agent.py):</span>
-        <span class="status-value monitoring">Em monitorização</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Nós de Trabalho (app/core/workers/auto_scaler.py):</span>
-        <span class="status-value">7</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Última Análise de Falha:</span>
-        <span class="status-value">{{ now() }}</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Seção 6: Observabilidade em Tempo Real (Gráficos) -->
-<section class="dashboard-section" *ngIf="!loading() && systemStatus() as sys">
-  <h2>Observabilidade em Tempo Real</h2>
-  <div class="dashboard-grid">
-    <article class="card chart">
-      <h3>Status do Sistema</h3>
-      <div class="chart-container">
-        <canvas baseChart [data]="systemStatusChartData()" [type]="'line'" [options]="systemStatusChartOptions"></canvas>
-      </div>
-      <div class="system-metrics">
-        <div class="metric">
-          <span class="label">CPU:</span>
-          <span class="value">{{ currentSystemMetrics().cpu }}%</span>
-        </div>
-        <div class="metric">
-          <span class="label">Memória:</span>
-          <span class="value">{{ currentSystemMetrics().memory }}%</span>
-        </div>
-        <div class="metric">
-          <span class="label">Disco:</span>
-          <span class="value">{{ currentSystemMetrics().disk }}%</span>
-        </div>
-        <div class="metric">
-          <span class="label">Uptime:</span>
-          <span class="value">{{ sys.uptime_seconds }}s</span>
-        </div>
-      </div>
-    </article>
-
-    <article class="card chart">
-      <h3>Saúde dos Serviços</h3>
-      <div class="chart-container">
-        <canvas baseChart [data]="servicesHealthChartData()" [type]="'bar'" [options]="servicesHealthChartOptions"></canvas>
-      </div>
-      <div class="services-summary">
-        <div class="summary-item">
-          <div class="label">Disponibilidade</div>
-          <div class="value">{{ servicesAvailability() }}%</div>
-        </div>
-        <div class="summary-item">
-          <div class="label">Tempo Médio de Resposta</div>
-          <div class="value">{{ averageResponseTime() }}ms</div>
-        </div>
-      </div>
-    </article>
-
-    <article class="card chart">
-      <h3>Desempenho dos Workers</h3>
-      <div class="chart-container">
-        <canvas baseChart [data]="workersPerformanceChartData()" [type]="'line'" [options]="workersPerformanceChartOptions"></canvas>
-      </div>
-      <div class="workers-summary">
-        <div class="summary-item">
-          <div class="label">Throughput</div>
-          <div class="value">{{ currentWorkersPerformance().throughput }} t/min</div>
-        </div>
-        <div class="summary-item">
-          <div class="label">Latência</div>
-          <div class="value" [class.alert]="currentWorkersPerformance().latency > 500">{{ currentWorkersPerformance().latency }}ms</div>
-        </div>
-      </div>
-    </article>
-  </div>
-</section>

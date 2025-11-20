@@ -23,19 +23,22 @@ export class GlobalStateStore {
   // Uma única carga (usada internamente pelo startPolling)
   private fetchOverviewOnce(): Promise<boolean> {
     return new Promise((resolve) => {
+      console.log('[Store] Fetching system overview...');
       this.api.getSystemOverview().pipe(
         take(1),
         timeout({ each: 5000 }),
         retry({ count: 1 })
       ).subscribe({
         next: (overview: SystemOverviewResponse) => {
+          console.log('[Store] System overview received:', overview);
           this.apiHealthy.set(overview.system_status.status === 'ok' ? 'ok' : 'unknown');
           this.systemStatus.set(overview.system_status);
           this.services.set(overview.services_status || []);
           this.workers.set(overview.workers_status || []);
           resolve(true);
         },
-        error: () => {
+        error: (error) => {
+          console.error('[Store] Failed to fetch system overview:', error);
           resolve(false);
         }
       });

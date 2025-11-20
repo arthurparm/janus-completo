@@ -1,4 +1,4 @@
-import {Component, OnInit, inject, ViewChild, ElementRef} from '@angular/core'
+import {Component, OnInit, inject, ViewChild, ElementRef, ChangeDetectionStrategy, ChangeDetectorRef} from '@angular/core'
 import {CommonModule} from '@angular/common'
 import {FormsModule} from '@angular/forms'
 import {JanusApiService, ChatMessage, ChatHistoryResponse} from '../../../services/janus-api.service'
@@ -13,7 +13,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router'
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './chat.html',
-  styleUrl: './chat.scss'
+  styleUrl: './chat.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ChatComponent implements OnInit {
   private api = inject(JanusApiService)

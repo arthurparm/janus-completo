@@ -27,4 +27,12 @@ export class NotificationService {
   notifyInfo(message: string, detail?: string, title?: string): void {
     this.notify({ type: 'info', message, detail, title });
   }
+
+  notifyWarning(message: string, detail?: string, title?: string): void {
+    this.notify({ type: 'warning', message, detail, title });
+  }
+
+  notifySuccess(message: string, detail?: string, title?: string): void {
+    this.notify({ type: 'success', message, detail, title });
+  }
 }

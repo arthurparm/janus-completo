@@ -280,6 +280,23 @@ def read_root():
 def healthz():
     return {"status": "ok"}
 
+@app.get("/health", tags=["System"], summary="Health (detailed)")
+def health():
+    """Health check detalhado com informações do sistema"""
+    health_info = {
+        "status": "ok",
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "tailscale": {
+            "enabled": settings.TAILSCALE_SERVE_ENABLED,
+            "host": settings.TAILSCALE_HOST,
+            "backend_url": settings.TAILSCALE_BACKEND_URL,
+            "frontend_url": settings.TAILSCALE_FRONTEND_URL
+        } if settings.TAILSCALE_SERVE_ENABLED else None
+    }
+    return health_info
+
 try:
     if getattr(settings, "SERVE_STATIC_FILES", False):
         app.mount(

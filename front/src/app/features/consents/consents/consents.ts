@@ -1,12 +1,11 @@
 import {Component, inject} from '@angular/core'
 import {FormsModule} from '@angular/forms'
-import {NgIf, NgFor} from '@angular/common'
 import {JanusApiService, ConsentItem} from '../../../services/janus-api.service'
 
 @Component({
   selector: 'app-consents',
   standalone: true,
-  imports: [FormsModule, NgIf, NgFor],
+  imports: [FormsModule],
   templateUrl: './consents.html',
   styleUrls: ['./consents.scss']
 })

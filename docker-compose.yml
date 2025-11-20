@@ -22,6 +22,24 @@ services:
     networks:
       - janus-net
 
+  front:
+    image: node:20
+    container_name: janus_front
+    working_dir: /app
+    volumes:
+      - ./front:/app
+    environment:
+      - VITE_SUPABASE_URL=https://tfunopczianlvppoabmz.supabase.co
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    command: [ "bash","-lc","npm install && npx ng serve --host 0.0.0.0 --port 4300 --proxy-config proxy.docker.conf.json" ]
+    ports:
+      - "4300:4300"
+    networks:
+      - janus-net
+    depends_on:
+      janus-api:
+        condition: service_started
+
   neo4j:
     image: neo4j:5-community
     container_name: janus_neo4j
@@ -67,7 +85,7 @@ services:
       - ./janus/scripts/init-ollama.sh:/init-ollama.sh
     networks:
       - janus-net
-    entrypoint: [ "/bin/sh", "/init-ollama.sh" ]
+    entrypoint: [ "/bin/sh", "-lc", "tr -d '\r' < /init-ollama.sh > /tmp/init.sh && /bin/sh /tmp/init.sh" ]
     deploy:
       resources:
         reservations:

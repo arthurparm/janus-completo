@@ -1,0 +1,14 @@
+{
+  "/api": {
+    "target": "http://100.114.164.62:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/healthz": {
+    "target": "http://100.114.164.62:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

@@ -15,24 +15,38 @@
   </header>
 
   <main>
-    <div *ngIf="loading" class="skeleton-grid" role="status" aria-live="polite">
-      <div class="skeleton-card" *ngFor="let n of [1,2,3,4,5,6]"></div>
-    </div>
-    <div *ngIf="error" class="error">{{ error }}</div>
-    <div class="grid">
-      <div *ngFor="let it of filtered.slice((page-1)*pageSize, (page-1)*pageSize + pageSize)" class="card">
-        <div class="title">{{ it.title || it.conversation_id }}</div>
-        <div class="snippet" *ngIf="it.last_message">{{ it.last_message.content }}</div>
-        <div class="meta">
-          <span class="chip" [class.new]="statusChip(it)==='Nova'" [class.progress]="statusChip(it)==='Em andamento'" [class.done]="statusChip(it)==='Resolvida'">{{ statusChip(it) }}</span>
-          <span>Atualizado: {{ it.updated_at || '—' }}</span>
-        </div>
-        <div class="actions">
-          <button (click)="open(it)" class="btn-secondary">Abrir</button>
-          <button (click)="rename(it)" class="btn-secondary">Renomear</button>
-          <button (click)="remove(it)">Excluir</button>
-        </div>
+    @if (loading) {
+      <div class="skeleton-grid" role="status" aria-live="polite">
+        @for (i of [1,2,3,4,5,6]; track i) {
+          <div class="skeleton-card">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-text"></div>
+            <div class="skeleton-text"></div>
+          </div>
+        }
       </div>
+    }
+    @if (error) {
+      <div class="error">{{ error }}</div>
+    }
+    <div class="grid">
+      @for (it of filtered.slice((page-1)*pageSize, (page-1)*pageSize + pageSize); track it) {
+        <div class="card">
+          <div class="title">{{ it.title || it.conversation_id }}</div>
+          @if (it.last_message) {
+            <div class="snippet">{{ it.last_message.content }}</div>
+          }
+          <div class="meta">
+            <span class="chip" [class.new]="statusChip(it)==='Nova'" [class.progress]="statusChip(it)==='Em andamento'" [class.done]="statusChip(it)==='Resolvida'">{{ statusChip(it) }}</span>
+            <span>Atualizado: {{ it.updated_at || '—' }}</span>
+          </div>
+          <div class="actions">
+            <button (click)="open(it)" class="btn-secondary">Abrir</button>
+            <button (click)="rename(it)" class="btn-secondary">Renomear</button>
+            <button (click)="remove(it)">Excluir</button>
+          </div>
+        </div>
+      }
     </div>
   </main>
 

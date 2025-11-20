@@ -17,6 +17,9 @@
       <a routerLink="/conversations" routerLinkActive="active" (click)="closeMenu()">Conversas</a>
       <a routerLink="/gaps-janus" routerLinkActive="active" (click)="closeMenu()">Gaps Janus</a>
       <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()">Documentação</a>
+      @if (isAuthenticated) {
+        <button class="logout-btn" (click)="logout(); closeMenu()">Sair</button>
+      }
     </nav>
   </div>
 </header>

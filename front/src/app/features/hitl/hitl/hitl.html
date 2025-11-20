@@ -36,7 +36,8 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let item of items">
+      @for (item of items; track item.node_id) {
+      <tr>
         <td>{{item.node_id}}</td>
         <td>{{item.type}}</td>
         <td>{{item.from_name}} ➜ {{item.to_name}}</td>
@@ -48,6 +49,7 @@
           <button (click)="openReject(item)">Rejeitar</button>
         </td>
       </tr>
+      }
     </tbody>
   </table>
 
@@ -75,14 +77,15 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let ev of auditEvents">
+      @for (ev of auditEvents; track ev.trace_id) {
+      <tr>
         <td>{{(ev.created_at || 0) * 1000 | date:'short'}}</td>
         <td>{{ev.action}}</td>
         <td>{{ev.status}}</td>
         <td>{{ev.endpoint}}</td>
         <td>{{ev.trace_id}}</td>
       </tr>
-    </tbody>
+      }
   </table>
 
   <div class="metrics">
@@ -111,23 +114,29 @@
     <button (click)="exportAudit()">Exportar</button>
   </div>
 
-  <div class="modal" *ngIf="modal.visible">
+  @if (modal.visible) {
+  <div class="modal">
     <div class="modal-body">
       <h3>{{modal.mode === 'promote' ? 'Promover' : 'Rejeitar'}} Item #{{modal.item?.node_id}}</h3>
-      <div *ngIf="modal.mode === 'promote'">
+      @if (modal.mode === 'promote') {
+      <div>
         <label>Justificativa (obrigatória):
           <textarea [(ngModel)]="modal.justification"></textarea>
         </label>
         <button (click)="confirmPromote()" [disabled]="!modal.justification">Confirmar</button>
         <button (click)="closeModal()">Cancelar</button>
       </div>
-      <div *ngIf="modal.mode === 'reject'">
+      }
+      @if (modal.mode === 'reject') {
+      <div>
         <label>Motivo (obrigatório):
           <textarea [(ngModel)]="modal.justification"></textarea>
         </label>
         <button (click)="confirmReject()" [disabled]="!modal.justification">Confirmar</button>
         <button (click)="closeModal()">Cancelar</button>
       </div>
+      }
     </div>
   </div>
+  }
 </div>

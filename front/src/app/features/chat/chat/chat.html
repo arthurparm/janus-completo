@@ -2,8 +2,11 @@
   <header class="chat-header">
     <h2>Janus Chat</h2>
     <div class="status">
-      <span *ngIf="loading">Carregando...</span>
-      <span *ngIf="!loading && conversationId">Conversa: {{ conversationId }}</span>
+      @if (loading || !conversationId) {
+        <span>Carregando...</span>
+      } @else {
+        <span>Conversa: {{ conversationId }}</span>
+      }
     </div>
     <div class="breadcrumbs">
       <a routerLink="/conversations" aria-label="Voltar para conversas">Conversas</a>
@@ -13,22 +16,56 @@
   </header>
 
   <main class="messages" id="messages">
-    <div *ngFor="let m of messages; let i = index" class="message" [class.user]="m.role === 'user'" [class.assistant]="m.role !== 'user'">
-      <div class="bubble">
-        <pre>{{ m.content }}</pre>
-        <button *ngIf="m.role !== 'user'" class="btn-copy" (click)="copyMessage(i)" aria-label="Copiar conteúdo">Copiar</button>
+    <!-- Loading state simples -->
+    @if (loading) {
+      <div class="skeleton-messages">
+        @for (i of [1,2,3]; track i) {
+          <div class="message-skeleton">
+            <div class="skeleton-avatar"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-text"></div>
+              <div class="skeleton-text"></div>
+            </div>
+          </div>
+        }
       </div>
-      <div *ngIf="m.role !== 'user' && citationsByIndex[i]?.length" class="citations">
-        <h4>Fontes</h4>
-        <div class="citation" *ngFor="let c of citationsByIndex[i]">
-          <span class="label">{{ c.file_name || c.file_path || c.title || c.id }}</span>
-          <span class="score">Confiança: {{ c.score | number:'1.0-2' }}</span>
-          <a *ngIf="c.url" [href]="c.url" target="_blank">Abrir</a>
-        </div>
+    }
+    
+    <!-- Actual messages -->
+    @if (!loading) {
+      <div>
+        @for (m of messages; track m; let i = $index) {
+          <div class="message" [class.user]="m.role === 'user'" [class.assistant]="m.role !== 'user'">
+            <div class="bubble">
+              <pre>{{ m.content }}</pre>
+              @if (m.role !== 'user') {
+                <button class="btn-copy" (click)="copyMessage(i)" aria-label="Copiar conteúdo">Copiar</button>
+              }
+            </div>
+            @if (m.role !== 'user' && citationsByIndex[i]?.length) {
+              <div class="citations">
+                <h4>Fontes</h4>
+                @for (c of citationsByIndex[i]; track c) {
+                  <div class="citation">
+                    <span class="label">{{ c.file_name || c.file_path || c.title || c.id }}</span>
+                    <span class="score">Confiança: {{ c.score | number:'1.0-2' }}</span>
+                    @if (c.url) {
+                      <a [href]="c.url" target="_blank">Abrir</a>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+        @if (!messages.length) {
+          <div class="empty">Comece a conversar abaixo.</div>
+        }
+        @if (typingActive) {
+          <div class="typing">Digitando…</div>
+        }
       </div>
-    </div>
-    <div *ngIf="!messages.length && !loading" class="empty">Comece a conversar abaixo.</div>
-    <div *ngIf="typingActive" class="typing">Digitando…</div>
+    }
   </main>
 
   <footer class="input-bar">
@@ -44,19 +81,31 @@
       Arraste e solte arquivos aqui
     </div>
     <input #fileInput type="file" (change)="onFilesSelected($event)">
-    <div *ngIf="uploading" class="loading" role="status" aria-live="polite">Upload: {{ uploadProgress }}%</div>
-    <div *ngIf="attachmentsLoading" class="loading" role="status" aria-live="polite">Carregando anexos…</div>
-    <div *ngIf="attachmentsError" class="error" role="alert">{{ attachmentsError }}</div>
+    @if (uploading) {
+      <div class="loading" role="status" aria-live="polite">Upload: {{ uploadProgress }}%</div>
+    }
+    @if (attachmentsLoading) {
+      <div class="loading" role="status" aria-live="polite">Carregando anexos…</div>
+    }
+    @if (attachmentsError) {
+      <div class="error" role="alert">{{ attachmentsError }}</div>
+    }
     <ul class="attachments-list">
-      <li *ngFor="let a of attachments">
-        <span>{{ a.file_name }} ({{ a.chunks }} chunks)</span>
-        <button (click)="deleteAttachment(a)">Excluir</button>
-      </li>
+      @for (a of attachments; track a) {
+        <li>
+          <span>{{ a.file_name }} ({{ a.chunks }} chunks)</span>
+          <button (click)="deleteAttachment(a)">Excluir</button>
+        </li>
+      }
     </ul>
   </section>
 
-  <div *ngIf="error" class="error">{{ error }}</div>
-  <div *ngIf="reconnecting" class="reconnect">Tentando reconectar...</div>
+  @if (error) {
+    <div class="error">{{ error }}</div>
+  }
+  @if (reconnecting) {
+    <div class="reconnect">Tentando reconectar...</div>
+  }
 
   <section class="media-section">
     <h3>Mídia (WebRTC)</h3>

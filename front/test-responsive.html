@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Design Test</title>
+    <style>
+        /* Test the responsive design principles we implemented */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border-radius: 16px;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e8ba3 100%);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .hero-section {
+            text-align: center;
+            padding: 2rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            backdrop-filter: blur(10px);
+            margin-bottom: 2rem;
+        }
+
+        .ai-core {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 2rem;
+        }
+
+        .core-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: rotate 20s linear infinite;
+        }
+
+        .core-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.6);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Mobile First Responsive Design */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .hero-section {
+                padding: 1rem;
+            }
+            
+            .ai-core {
+                width: 80px;
+                height: 80px;
+                margin-bottom: 1rem;
+            }
+            
+            .core-center {
+                width: 30px;
+                height: 30px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .metric-card {
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            .metric-card:active {
+                transform: scale(0.98);
+                transition: transform 0.1s ease;
+            }
+        }
+
+        /* Animations */
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            backdrop-filter: blur(10px);
+            font-size: 0.9rem;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0;
+        }
+
+        .feature-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .feature-list li:before {
+            content: "✅ ";
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicator">
+        <div>Viewport: <span id="viewport-size"></span></div>
+        <div>Device: <span id="device-type"></span></div>
+        <div>Touch: <span id="touch-support"></span></div>
+    </div>
+
+    <div class="test-container">
+        <div class="hero-section">
+            <div class="ai-core">
+                <div class="core-ring"></div>
+                <div class="core-center"></div>
+            </div>
+            <h1>Janus AI System</h1>
+            <p>Sistema de Inteligência Artificial Cognitiva</p>
+            <p>Responsive Design Test - Mobile First Approach</p>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h3>Disponibilidade</h3>
+                <div style="font-size: 2rem; font-weight: bold;">98.5%</div>
+                <div style="color: var(--text-secondary);">+2.3% vs ontem</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Latência Média</h3>
+                <div style="font-size: 2rem; font-weight: bold;">145ms</div>
+                <div style="color: var(--text-secondary);">-15ms vs ontem</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Throughput</h3>
+                <div style="font-size: 2rem; font-weight: bold;">1,247</div>
+                <div style="color: var(--text-secondary);">+12% vs ontem</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Workers Ativos</h3>
+                <div style="font-size: 2rem; font-weight: bold;">8/10</div>
+                <div style="color: var(--text-secondary);">2 em manutenção</div>
+            </div>
+        </div>
+
+        <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--border-radius); padding: 2rem; backdrop-filter: blur(10px);">
+            <h2>Responsive Features Implemented</h2>
+            <ul class="feature-list">
+                <li>Mobile-first CSS approach</li>
+                <li>Touch-friendly interactions</li>
+                <li>Flexible grid layouts</li>
+                <li>Optimized typography scaling</li>
+                <li>Gesture support (swipe navigation)</li>
+                <li>Reduced motion preferences</li>
+                <li>High DPI screen optimizations</li>
+                <li>Real-time device detection</li>
+                <li>Performance optimizations for mobile</li>
+                <li>Accessible touch targets (44px minimum)</li>
+            </ul>
+
+            <h3>Test Instructions:</h3>
+            <ol style="color: var(--text-secondary);">
+                <li>Resize your browser window to test different breakpoints</li>
+                <li>Test on mobile devices (iOS/Android)</li>
+                <li>Try touch gestures (swipe, tap, hold)</li>
+                <li>Check performance on slower devices</li>
+                <li>Verify accessibility features</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Device detection and viewport monitoring
+        function updateDeviceInfo() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            document.getElementById('viewport-size').textContent = `${width}×${height}`;
+            
+            let deviceType = 'Desktop';
+            if (width <= 480) deviceType = 'Mobile';
+            else if (width <= 768) deviceType = 'Tablet';
+            else if (width <= 1024) deviceType = 'Small Desktop';
+            
+            document.getElementById('device-type').textContent = deviceType;
+            document.getElementById('touch-support').textContent = 'ontouchstart' in window ? 'Yes' : 'No';
+        }
+
+        // Touch event handling
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                console.log(`Swipe ${deltaX > 0 ? 'right' : 'left'} detected`);
+                // Handle swipe navigation
+            }
+        });
+
+        // Initialize and monitor changes
+        updateDeviceInfo();
+        window.addEventListener('resize', updateDeviceInfo);
+        
+        // Add touch feedback
+        document.querySelectorAll('.metric-card').forEach(card => {
+            card.addEventListener('touchstart', () => {
+                card.style.transform = 'scale(0.98)';
+            });
+            
+            card.addEventListener('touchend', () => {
+                setTimeout(() => {
+                    card.style.transform = '';
+                }, 100);
+            });
+        });
+    </script>
+</body>
+</html>

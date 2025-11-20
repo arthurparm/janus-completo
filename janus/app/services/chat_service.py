@@ -936,7 +936,7 @@ class ChatService:
             }
             asyncio.create_task(publish_consolidation_task(consolidation_payload, correlation_id=conversation_id))
         except Exception:
-        pass
+            pass
 
     # Circuit Breaker simples por provider
     def _cb_should_block(self, provider: Optional[str]) -> bool:

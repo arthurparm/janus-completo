@@ -1,4 +1,7 @@
-set -e
+#!/bin/sh
+
+# fail fast em shells compatíveis; ignorar se indisponível
+set -e || true
 
 ollama serve &
 

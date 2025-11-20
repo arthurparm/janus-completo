@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core'
+import { Component, OnInit, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, ConversationsListResponse, ConversationMeta } from '../../../services/janus-api.service'
@@ -9,7 +9,8 @@ import { Router } from '@angular/router'
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './conversations.html',
-  styleUrl: './conversations.scss'
+  styleUrl: './conversations.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConversationsComponent implements OnInit {
   private api = inject(JanusApiService)

@@ -6,12 +6,14 @@
     </label>
     <button (click)="loadConsents()">Carregar</button>
   </div>
-  <table class="table" *ngIf="items.length">
+  @if (items.length) {
+  <table class="table">
     <thead>
       <tr><th>ID</th><th>Escopo</th><th>Concedido</th><th>Expira</th><th>Ações</th></tr>
     </thead>
     <tbody>
-      <tr *ngFor="let item of items; let i = index">
+      @for (item of items; let i = $index; track i) {
+      <tr>
         <td>{{ids[i] || '-'}}</td>
         <td>{{item.scope}}</td>
         <td>{{item.granted}}</td>
@@ -21,8 +23,10 @@
           <button (click)="revoke(ids[i])" [disabled]="!ids[i]">Revogar</button>
         </td>
       </tr>
+      }
     </tbody>
   </table>
+  }
   <div class="grant-form">
     <h3>Novo consentimento</h3>
     <input type="text" [(ngModel)]="newScope" placeholder="Escopo (ex.: calendar.write)"/>

@@ -1,14 +1,48 @@
-<div class="login">
-  <h2>Login (Dev)</h2>
-  <p>Informe seu User ID para emitir um token JWT de desenvolvimento.</p>
-  <form (ngSubmit)="submit()" #f="ngForm">
-    <label>User ID:
-      <input type="number" [(ngModel)]="userId" name="userId" required/>
-    </label>
-    <label>Expira em (s):
-      <input type="number" [(ngModel)]="expires" name="expires" min="60"/>
-    </label>
-    <button type="submit" [disabled]="f.invalid">Emitir Token</button>
-  </form>
-  <div *ngIf="message" class="msg">{{message}}</div>
-</div>
+<section class="login">
+  <div class="panel">
+    <div class="brand">
+      <div class="logo"></div>
+      <h1>Bem-vindo(a) à sua plataforma de IA</h1>
+      <p class="subtitle">Arquitetura autônoma, performance superior e experiência impecável.</p>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="loginEmailPassword()" class="form" aria-label="Login">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" formControlName="email" autocomplete="email" [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched"/>
+        <div class="error" *ngIf="form.controls.email.invalid && form.controls.email.touched">Digite um email válido</div>
+      </div>
+
+      <div class="field">
+        <label for="password">Senha</label>
+        <div class="password">
+          <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password" autocomplete="current-password"/>
+          <button type="button" class="toggle" (click)="togglePassword()" [attr.aria-pressed]="showPassword">{{ showPassword ? 'Ocultar' : 'Mostrar' }}</button>
+        </div>
+        <div class="error" *ngIf="form.controls.password.invalid && form.controls.password.touched">Senha mínima de 6 caracteres</div>
+      </div>
+
+      <div class="extras">
+        <label class="remember">
+          <input type="checkbox" formControlName="remember"/>
+          <span>Lembrar-me</span>
+        </label>
+        <a class="link" href="#">Esqueci minha senha</a>
+      </div>
+
+      <button class="primary" type="submit" [disabled]="form.invalid || loading">{{ loading ? 'Entrando...' : 'Entrar' }}</button>
+
+      <div class="alt-actions">
+        <button type="button" class="sso google" (click)="loginWithGoogle()" [disabled]="loading">Continuar com Google</button>
+        <button type="button" class="sso github" (click)="loginWithGithub()" [disabled]="loading">Continuar com GitHub</button>
+      </div>
+
+      <div class="more">
+        <span>Não tem conta?</span>
+        <a class="link" href="#">Criar conta</a>
+      </div>
+
+      <div class="error global" *ngIf="error">{{ error }}</div>
+    </form>
+  </div>
+</section>

@@ -21,6 +21,14 @@ class UserRepository:
             if not self._session:
                 s.close()
 
+    def get_by_email(self, email: str) -> Optional[User]:
+        s = self._get_session()
+        try:
+            return s.query(User).filter(User.email == email).first()
+        finally:
+            if not self._session:
+                s.close()
+
     def create_user(self, email: Optional[str], display_name: Optional[str]) -> User:
         s = self._get_session()
         try:

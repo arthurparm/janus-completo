@@ -290,6 +290,38 @@ class AppSettings(BaseSettings):
     AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
     AUDIT_RETENTION_DAYS: int = 30
 
+    # Tailscale Serve Configuration
+    TAILSCALE_SERVE_ENABLED: bool = False
+    TAILSCALE_HOST: Optional[str] = None
+    TAILSCALE_BACKEND_URL: Optional[str] = None
+    TAILSCALE_FRONTEND_URL: Optional[str] = None
+    
+    # CORS para Tailscale - adicionar domínios Tailscale aos domínios permitidos
+    @field_validator("CORS_ALLOW_ORIGINS", mode="before")
+    def _add_tailscale_origins(cls, v: Any, info):
+        # Se Tailscale estiver habilitado, adicionar origens Tailscale
+        tailscale_enabled = info.data.get("TAILSCALE_SERVE_ENABLED", False)
+        tailscale_host = info.data.get("TAILSCALE_HOST", "")
+        
+        # Parse existing origins
+        if isinstance(v, str):
+            if v.strip() == "*":
+                origins = ["*"]
+            else:
+                origins = [x.strip() for x in v.split(",") if x.strip()]
+        elif isinstance(v, list):
+            origins = v
+        else:
+            origins = ["*"]
+        
+        # Adicionar origens Tailscale se habilitado
+        if tailscale_enabled and tailscale_host:
+            tailscale_origin = f"https://{tailscale_host}"
+            if tailscale_origin not in origins and "*" not in origins:
+                origins.append(tailscale_origin)
+        
+        return origins
+
     # ======= Validadores para variáveis de ambiente complexas =======
 
     @field_validator("OPENAI_MODELS", "GEMINI_MODELS", mode="before")

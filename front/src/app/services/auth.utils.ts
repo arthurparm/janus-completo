@@ -13,3 +13,19 @@ export function decodeTokenUserId(token: string | null): number | null {
     return null
   }
 }
+
+export function decodeTokenExp(token: string | null): number | null {
+  if (!token) return null
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const body = parts[0]
+    const padded = body + '='.repeat((4 - (body.length % 4)) % 4)
+    const jsonStr = atob(padded.replace(/-/g, '+').replace(/_/g, '/'))
+    const payload = JSON.parse(jsonStr)
+    const exp = Number(payload?.exp)
+    return Number.isFinite(exp) ? exp : null
+  } catch {
+    return null
+  }
+}
