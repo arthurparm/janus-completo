@@ -51,7 +51,7 @@ interface DashboardMetric {
     MatProgressBarModule,
     MatTooltipModule
   ],
-  templateUrl: './home-tailwind.html',
+  templateUrl: './home.html',
   styleUrl: './home.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -942,6 +942,19 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
       const nextIndex = (currentIndex + 1) % chartIds.length;
       this.expandedChart.set(chartIds[nextIndex]);
     }
+  }
+
+  // TrackBy functions for template optimization
+  trackByMetricLabel(index: number, metric: DashboardMetric): string {
+    return metric.label;
+  }
+
+  trackByServiceName(index: number, service: ServiceHealthItem): string {
+    return service.name;
+  }
+
+  trackByWorkerId(index: number, worker: WorkerStatusResponse): string {
+    return worker.id;
   }
 
   // Helper method to calculate progress bar value

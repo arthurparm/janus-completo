@@ -120,14 +120,7 @@ export const routes: Routes = [
           description: 'Histórico de conversas'
         }
       },
-      {
-        path: 'gaps-janus', 
-        loadComponent: () => import('./pages/janus-gaps/janus-gaps').then(m => m.JanusGapsComponent),
-        data: { 
-          title: 'Gaps Janus',
-          description: 'Análise de gaps do sistema'
-        }
-      },
+
       {
         path: 'documentacao',
         loadComponent: () => import('./pages/documentacao/documentacao').then(m => m.Documentacao),

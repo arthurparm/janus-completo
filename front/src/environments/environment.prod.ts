@@ -4,12 +4,12 @@ export const environment = {
     url: 'https://tfunopczianlvppoabmz.supabase.co',
     anonKey: 'sb_publishable_UXz6Oy840f6JQEXiJXe7Lg_LmuosUCA'
   },
-  // Tailscale Serve Configuration
+  // Tailscale Funnel Configuration - Acesso público via Tailscale
   tailscale: {
-    enabled: false, // Set to true when using Tailscale Serve
-    apiUrl: 'https://janus-backend.tailnet-name.ts.net/api',
-    frontendUrl: 'https://janus-frontend.tailnet-name.ts.net'
+    enabled: true, // Tailscale Funnel ativado para produção
+    apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api', // URL pública Tailscale Funnel
+    frontendUrl: 'https://seu-site-locaweb.com.br' // URL do seu site na Locaweb
   },
-  // Default API URL (can be overridden by Tailscale)
-  apiUrl: 'http://localhost:8000/api'
+  // Default API URL - Tailscale Funnel para produção
+  apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api'
 };
