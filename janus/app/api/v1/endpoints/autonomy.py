@@ -171,6 +171,14 @@ async def update_autonomy_plan(
     return {"status": "updated", "steps_count": len(request.plan)}
 
 
+class PolicyUpdateRequest(BaseModel):
+    risk_profile: Optional[str] = Field(None, description="conservative|balanced|aggressive")
+    auto_confirm: Optional[bool] = None
+    allowlist: Optional[List[str]] = None
+    blocklist: Optional[List[str]] = None
+    max_actions_per_cycle: Optional[int] = Field(None, ge=1, le=1000)
+    max_seconds_per_cycle: Optional[int] = Field(None, ge=1, le=3600)
+
 @router.put("/policy", summary="Atualiza configurações de políticas do AutonomyLoop")
 async def update_policy(
     request: PolicyUpdateRequest,
@@ -248,10 +256,3 @@ async def delete_goal(goal_id: str, manager: GoalManager = Depends(get_goal_mana
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meta não encontrada")
     return {"status": "deleted", "goal_id": goal_id}
-class PolicyUpdateRequest(BaseModel):
-    risk_profile: Optional[str] = Field(None, description="conservative|balanced|aggressive")
-    auto_confirm: Optional[bool] = None
-    allowlist: Optional[List[str]] = None
-    blocklist: Optional[List[str]] = None
-    max_actions_per_cycle: Optional[int] = Field(None, ge=1, le=1000)
-    max_seconds_per_cycle: Optional[int] = Field(None, ge=1, le=3600)

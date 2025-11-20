@@ -18,6 +18,9 @@ except Exception:  # pragma: no cover
 # Correlation: trace_id for all logs via contextvar
 TRACE_ID: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="-")
 USER_ID: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="-")
+SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("session_id", default="-")
+CONVERSATION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("conversation_id", default="-")
+PROJECT_ID: contextvars.ContextVar[str] = contextvars.ContextVar("project_id", default="-")
 
 
 class _SamplingProcessor:
@@ -41,6 +44,9 @@ class _SamplingProcessor:
 def _add_trace_correlation(_, __, event_dict: Dict[str, Any]):
     event_dict["trace_id"] = TRACE_ID.get()
     event_dict["user_id"] = USER_ID.get()
+    event_dict["session_id"] = SESSION_ID.get()
+    event_dict["conversation_id"] = CONVERSATION_ID.get()
+    event_dict["project_id"] = PROJECT_ID.get()
     if _OTEL:
         try:
             span = trace.get_current_span()

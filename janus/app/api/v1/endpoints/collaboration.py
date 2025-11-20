@@ -9,7 +9,21 @@ from app.services.collaboration_service import (
     get_collaboration_service
 )
 from app.core.agents import AgentRole
-from app.core.agents.multi_agent_system import TaskPriority, TaskStatus
+try:
+    from app.core.agents.multi_agent_system import TaskPriority, TaskStatus
+except Exception:
+    from enum import Enum
+    class TaskStatus(Enum):  # type: ignore
+        PENDING = "pending"
+        IN_PROGRESS = "in_progress"
+        COMPLETED = "completed"
+        FAILED = "failed"
+        BLOCKED = "blocked"
+    class TaskPriority(Enum):  # type: ignore
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+        CRITICAL = 4
 
 router = APIRouter(tags=["Collaboration"])
 logger = structlog.get_logger(__name__)

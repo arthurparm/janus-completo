@@ -52,6 +52,22 @@ from app.services.observability_service import ObservabilityService
 
 router = APIRouter(tags=["Productivity"], prefix="/productivity")
 
+class OAuthStartRequest(BaseModel):
+    user_id: int
+    scopes: Optional[List[str]] = None
+
+class OAuthStartResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+class OAuthCallbackRequest(BaseModel):
+    user_id: int
+    code: str
+
+class OAuthRefreshRequest(BaseModel):
+    user_id: int
+    provider: str
+
 
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
@@ -74,6 +90,22 @@ class CalendarAddRequest(BaseModel):
     user_id: int
     event: CalendarEvent
     index: Optional[bool] = False
+
+class OAuthStartRequest(BaseModel):
+    user_id: int
+    scopes: Optional[List[str]] = None
+
+class OAuthStartResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+class OAuthCallbackRequest(BaseModel):
+    user_id: int
+    code: str
+
+class OAuthRefreshRequest(BaseModel):
+    user_id: int
+    provider: str
 
 
 @router.post("/calendar/events/add")
@@ -579,18 +611,3 @@ async def google_oauth_refresh(user_id: int, request: Request):
     except Exception:
         pass
     return {"status": "ok"}
-class OAuthStartRequest(BaseModel):
-    user_id: int
-    scopes: List[str] = Field(default_factory=list)
-
-class OAuthStartResponse(BaseModel):
-    authorize_url: str
-    state: str
-
-class OAuthCallbackRequest(BaseModel):
-    user_id: int
-    code: str
-
-class OAuthRefreshRequest(BaseModel):
-    user_id: int
-    provider: str = Field(default="google")

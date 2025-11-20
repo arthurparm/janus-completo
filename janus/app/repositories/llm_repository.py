@@ -1,4 +1,5 @@
 import structlog
+import json
 from typing import Dict, Any, List, Optional
 from app.config import settings
 from app.core.llm.llm_manager import _provider_circuit_breakers  # type: ignore
@@ -116,6 +117,8 @@ class LLMRepository:
                     span.set_attribute("llm.model", getattr(client, "model", "unknown"))
                 except Exception:
                     pass
+            import time as _t
+            _start = _t.time()
             enriched = client.send_enriched(prompt, timeout_s=timeout_seconds)
 
             # Armazena no cache de resposta
@@ -131,6 +134,28 @@ class LLMRepository:
                     output_tokens=enriched.get("output_tokens"),
                     cost_usd=enriched.get("cost_usd"),
                 )
+            except Exception:
+                pass
+            try:
+                from app.repositories.observability_repository import record_audit_event_direct
+                detail = {
+                    "provider": client.provider,
+                    "model": client.model,
+                    "role": role.value,
+                    "input_tokens": enriched.get("input_tokens"),
+                    "output_tokens": enriched.get("output_tokens"),
+                    "cost_usd": enriched.get("cost_usd"),
+                }
+                record_audit_event_direct({
+                    "user_id": int(user_id) if user_id is not None else None,
+                    "endpoint": "llm",
+                    "action": "invoke",
+                    "tool": client.provider,
+                    "status": "ok",
+                    "latency_ms": int((_t.time() - _start) * 1000),
+                    "trace_id": TRACE_ID.get(),
+                    "details_json": json.dumps(detail),
+                })
             except Exception:
                 pass
 

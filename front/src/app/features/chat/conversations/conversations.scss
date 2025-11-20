@@ -1,0 +1,30 @@
+.conv-container { display: flex; flex-direction: column; gap: 12px; padding: 16px }
+.conv-header { display: flex; align-items: center; justify-content: space-between }
+.controls { display: flex; gap: 8px }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px }
+.title { font-weight: 600 }
+.meta { color: #6b7280; font-size: 12px }
+.actions { display: flex; gap: 8px }
+.error { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px }
+.pager { display: flex; gap: 12px; align-items: center; justify-content: center; padding-top: 8px }
+.conv-container { padding: 16px; }
+.conv-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+.btn-secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); display: flex; flex-direction: column; gap: 8px; }
+.title { font-weight: 700; color: #111827; }
+.snippet { color: #374151; font-size: 14px; }
+.meta { display: flex; gap: 8px; align-items: center; color: #6b7280; font-size: 12px; }
+.chip { padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.chip.new { background: #dbeafe; color: #1e40af; }
+.chip.progress { background: #fde68a; color: #92400e; }
+.chip.done { background: #d1fae5; color: #065f46; }
+.actions { display: flex; gap: 8px; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 16px; }
+.error { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.skeleton-card { height: 120px; border-radius: 12px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+@keyframes shimmer { 0% { background-position: 100% 0 } 100% { background-position: -100% 0 } }

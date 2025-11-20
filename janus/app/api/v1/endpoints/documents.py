@@ -58,6 +58,7 @@ async def upload_document(
     service: DocumentIngestionService = Depends(get_doc_service),
     auto_consolidate: Optional[bool] = Form(False),
     knowledge: KnowledgeService = Depends(get_knowledge_service),
+    conversation_id: Optional[str] = Form(None),
 ):
     import time as _t
     _t0 = _t.perf_counter()
@@ -89,7 +90,7 @@ async def upload_document(
 
     cm = (_tracer.start_as_current_span("docs.upload") if _OTEL else nullcontext())
     with cm:  # type: ignore
-        result = await service.ingest_file(user_id=uid, filename=file.filename or "document", content_type=file.content_type or "", data=data)
+        result = await service.ingest_file(user_id=uid, filename=file.filename or "document", content_type=file.content_type or "", data=data, conversation_id=conversation_id)
     consolidation = None
     try:
         if bool(auto_consolidate):
@@ -164,6 +165,125 @@ async def search_documents(
     except Exception:
         pass
     return DocSearchResponse(results=results)
+
+
+class DocListItem(BaseModel):
+    doc_id: str
+    file_name: Optional[str]
+    chunks: int
+    conversation_id: Optional[str]
+    last_index_ts: Optional[int]
+
+
+class DocListResponse(BaseModel):
+    items: List[DocListItem]
+
+
+@router.get("/list", response_model=DocListResponse)
+async def list_documents(
+    user_id: Optional[str] = None,
+    conversation_id: Optional[str] = None,
+    request: Request = None,
+    limit: int = 100,
+):
+    try:
+        hdr_uid = request.headers.get("X-User-Id") if request else None
+    except Exception:
+        hdr_uid = None
+    uid = user_id or hdr_uid
+    if not uid:
+        return DocListResponse(items=[])
+    client = get_qdrant_client()
+    coll = get_or_create_collection(f"user_{uid}")
+    must: List[models.FieldCondition] = [
+        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
+    ]
+    if conversation_id:
+        must.append(models.FieldCondition(key="metadata.conversation_id", match=models.MatchValue(value=conversation_id)))
+    qfilter = models.Filter(must=must)
+    # Busca pontos recentes para obter último timestamp por doc_id
+    hits = client.scroll(collection_name=coll, scroll_filter=qfilter, limit=limit, with_payload=True)
+    # hits -> (points, next_page)
+    points = (hits[0] or [])
+    agg: Dict[str, Dict[str, Any]] = {}
+    for h in points:
+        pid = getattr(h, "id", None)
+        payload = getattr(h, "payload", {}) or {}
+        meta = payload.get("metadata") or {}
+        did = str(meta.get("doc_id"))
+        if not did:
+            continue
+        cur = agg.get(did) or {"doc_id": did, "file_name": meta.get("file_name"), "chunks": 0, "conversation_id": meta.get("conversation_id"), "last_index_ts": 0}
+        cur["chunks"] = int(cur.get("chunks", 0)) + 1
+        try:
+            ts = int(meta.get("timestamp") or 0)
+            if ts > int(cur.get("last_index_ts") or 0):
+                cur["last_index_ts"] = ts
+        except Exception:
+            pass
+        agg[did] = cur
+    items: List[DocListItem] = []
+    for did, v in agg.items():
+        items.append(DocListItem(doc_id=did, file_name=v.get("file_name"), chunks=int(v.get("chunks", 0)), conversation_id=v.get("conversation_id"), last_index_ts=v.get("last_index_ts")))
+    return DocListResponse(items=items)
+
+
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user_id: Optional[str] = None, request: Request = None):
+    try:
+        hdr_uid = request.headers.get("X-User-Id") if request else None
+    except Exception:
+        hdr_uid = None
+    uid = user_id or hdr_uid
+    if not uid:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário")
+    client = get_qdrant_client()
+    coll = get_or_create_collection(f"user_{uid}")
+    try:
+        qfilter = models.Filter(must=[
+            models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
+            models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+            models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
+        ])
+        client.delete(collection_name=coll, points_selector=models.FilterSelector(filter=qfilter))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao excluir documento")
+    return {"status": "ok"}
+
+
+class LinkUrlResponse(BaseModel):
+    doc_id: str
+    status: str
+    chunks: int
+
+
+@router.post("/link-url", response_model=LinkUrlResponse)
+async def link_url(
+    url: str = Form(...),
+    user_id: Optional[str] = None,
+    conversation_id: Optional[str] = Form(None),
+    request: Request = None,
+    service: DocumentIngestionService = Depends(get_doc_service),
+):
+    try:
+        hdr_uid = request.headers.get("X-User-Id") if request else None
+    except Exception:
+        hdr_uid = None
+    uid = user_id or hdr_uid
+    if not uid:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário")
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            ct = resp.headers.get("content-type", "text/html")
+            data = resp.content
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falha ao obter URL")
+    filename = url.split("/")[-1] or "page.html"
+    result = await service.ingest_file(user_id=uid, filename=filename, content_type=ct, data=data, conversation_id=conversation_id)
+    return LinkUrlResponse(doc_id=result.get("doc_id"), status=result.get("status"), chunks=result.get("chunks"))
 
 
 class DocStatusResponse(BaseModel):

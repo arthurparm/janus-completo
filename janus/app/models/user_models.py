@@ -17,6 +17,8 @@ class User(Base):
     roles = relationship("UserRole", back_populates="user")
     __table_args__ = (
         Index("idx_user_lookup", "email", "external_id"),
+        UniqueConstraint("email", name="unique_user_email"),
+        UniqueConstraint("external_id", name="unique_user_external_id"),
     )
 
 class Profile(Base):
@@ -79,7 +81,7 @@ class Message(Base):
 
 
 class Consent(Base):
-    __tablename__ = "consents"
+    __tablename__ = "user_privacy_consents"
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     scope = Column(String(100), nullable=False)
@@ -87,8 +89,8 @@ class Consent(Base):
     created_at = Column(DateTime, default=func.current_timestamp())
     expires_at = Column(DateTime, nullable=True)
     __table_args__ = (
-        UniqueConstraint("user_id", "scope", name="unique_user_scope_consent"),
-        Index("idx_consent_user_scope", "user_id", "scope"),
+        UniqueConstraint("user_id", "scope", name="unique_user_privacy_scope_consent"),
+        Index("idx_privacy_consent_user_scope", "user_id", "scope"),
     )
 
 

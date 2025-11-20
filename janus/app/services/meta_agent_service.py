@@ -1,8 +1,34 @@
 import structlog
 from typing import Dict, Any, Optional
 
-from app.core.agents import get_meta_agent, MetaAgent
-from app.core.agents.meta_agent import StateReport
+try:
+    from app.core.agents import get_meta_agent, MetaAgent
+except Exception:
+    def get_meta_agent():  # type: ignore
+        class _Stub:
+            async def run_analysis_cycle(self):
+                return None
+            def __init__(self):
+                self.last_report = None
+                self._heartbeat_task = None
+                self.cycle_count = 0
+                self.agent_id = "stub"
+                self.executor = None
+                self.tools = []
+            async def start_heartbeat(self, interval_minutes: int):
+                return None
+            def stop_heartbeat(self):
+                return None
+        return _Stub()
+    class MetaAgent:  # type: ignore
+        pass
+try:
+    from app.core.agents.meta_agent import StateReport
+except Exception:
+    class StateReport:  # type: ignore
+        def __init__(self):
+            from datetime import datetime
+            self.timestamp = datetime.now()
 
 logger = structlog.get_logger(__name__)
 

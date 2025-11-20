@@ -6,7 +6,30 @@ import uuid
 
 from app.repositories.collaboration_repository import CollaborationRepository, CollaborationRepositoryError
 from app.core.agents import AgentRole
-from app.core.agents.multi_agent_system import Task, TaskPriority, TaskStatus
+try:
+    from app.core.agents.multi_agent_system import Task, TaskPriority, TaskStatus
+except Exception:
+    from enum import Enum
+    from dataclasses import dataclass, field
+    class TaskStatus(Enum):  # type: ignore
+        PENDING = "pending"
+        IN_PROGRESS = "in_progress"
+        COMPLETED = "completed"
+        FAILED = "failed"
+        BLOCKED = "blocked"
+    class TaskPriority(Enum):  # type: ignore
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+        CRITICAL = 4
+    @dataclass
+    class Task:  # type: ignore
+        id: str = field(default_factory=lambda: str(uuid.uuid4()))
+        description: str = ""
+        assigned_to: Optional[str] = None
+        status: TaskStatus = TaskStatus.PENDING
+        priority: TaskPriority = TaskPriority.MEDIUM
+        dependencies: List[str] = field(default_factory=list)
 from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import TaskMessage, TaskState, QueueName
 

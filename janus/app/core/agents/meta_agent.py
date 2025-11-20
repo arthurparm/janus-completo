@@ -13,9 +13,25 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_core.prompts import PromptTemplate
-from langchain_core.tools import tool
+try:
+    from langchain.agents import AgentExecutor, create_react_agent
+except Exception:
+    class AgentExecutor:  # type: ignore
+        pass
+    def create_react_agent(*args, **kwargs):  # type: ignore
+        return None
+try:
+    from langchain_core.prompts import PromptTemplate
+except Exception:
+    class PromptTemplate:  # type: ignore
+        @classmethod
+        def from_template(cls, t: str):
+            return t
+try:
+    from langchain_core.tools import tool
+except Exception:
+    def tool(fn):  # type: ignore
+        return fn
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority

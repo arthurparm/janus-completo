@@ -8,6 +8,8 @@ try:
     from prometheus_client import Counter, Histogram
     _RAG_REQ = Counter("rag_requests_total", "Total de requisições RAG", ["endpoint", "outcome"])  # type: ignore
     _RAG_LAT = Histogram("rag_latency_seconds", "Latência por endpoint RAG", ["endpoint", "outcome"])  # type: ignore
+    _RAG_RESULTS_TOTAL = Counter("rag_results_total", "Total de resultados retornados", ["endpoint"])  # type: ignore
+    _RAG_SCORES = Histogram("rag_search_scores", "Distribuição de scores de busca", ["endpoint"])  # type: ignore
 except Exception:
     class _Noop:
         def labels(self, *args, **kwargs):
@@ -18,6 +20,8 @@ except Exception:
             pass
     _RAG_REQ = _Noop()  # type: ignore
     _RAG_LAT = _Noop()  # type: ignore
+    _RAG_RESULTS_TOTAL = _Noop()  # type: ignore
+    _RAG_SCORES = _Noop()  # type: ignore
 from app.core.embeddings.embedding_manager import embed_text
 from app.db.vector_store import get_qdrant_client, get_or_create_collection
 from qdrant_client import models
@@ -62,6 +66,8 @@ async def rag_search(
         filters["metadata.doc_id"] = doc_id
     if file_path is not None:
         filters["metadata.file_path"] = file_path
+    # Evita duplicatas por padrão
+    filters["status_not"] = "duplicate"
 
     import time as _t
     _start = _t.perf_counter()
@@ -75,6 +81,13 @@ async def rag_search(
         _RAG_REQ.labels("search", "error").inc()
         _RAG_LAT.labels("search", "error").observe(max(0.0, _t.perf_counter() - _start))
         results = []
+    try:
+        _RAG_RESULTS_TOTAL.labels("search").inc(len(results))
+        for r in results:
+            s = float(r.get("score", 0.0) or 0.0)
+            _RAG_SCORES.labels("search").observe(max(0.0, min(1.0, s)))
+    except Exception:
+        pass
 
     citations: List[Dict[str, Any]] = []
     for r in results:
@@ -150,6 +163,13 @@ async def rag_user_chat_search(
         _RAG_REQ.labels("user_chat", "error").inc()
         _RAG_LAT.labels("user_chat", "error").observe(max(0.0, _t.perf_counter() - _start))
         hits = []
+    try:
+        _RAG_RESULTS_TOTAL.labels("user_chat").inc(len(hits or []))
+        for h in hits or []:
+            s = float(getattr(h, "score", 0.0) or 0.0)
+            _RAG_SCORES.labels("user_chat").observe(max(0.0, min(1.0, s)))
+    except Exception:
+        pass
 
     items: List[Dict[str, Any]] = []
     for h in hits or []:
@@ -219,7 +239,11 @@ async def rag_productivity_search(
     ]
     if type:
         must.append(models.FieldCondition(key="metadata.type", match=models.MatchValue(value=type)))
-    qfilter = models.Filter(must=must) if must else None
+    # Evitar pontos marcados como duplicados
+    must_not: List[models.FieldCondition] = [
+        models.FieldCondition(key="metadata.status", match=models.MatchValue(value="duplicate"))
+    ]
+    qfilter = models.Filter(must=must, must_not=must_not) if must else models.Filter(must_not=must_not)
 
     client = get_qdrant_client()
     import time as _t
@@ -234,6 +258,13 @@ async def rag_productivity_search(
         _RAG_REQ.labels("productivity", "error").inc()
         _RAG_LAT.labels("productivity", "error").observe(max(0.0, _t.perf_counter() - _start))
         hits = []
+    try:
+        _RAG_RESULTS_TOTAL.labels("productivity").inc(len(hits or []))
+        for h in hits or []:
+            s = float(getattr(h, "score", 0.0) or 0.0)
+            _RAG_SCORES.labels("productivity").observe(max(0.0, min(1.0, s)))
+    except Exception:
+        pass
 
     items: List[Dict[str, Any]] = []
     for h in hits or []:
@@ -283,8 +314,8 @@ class RAGUserChatResponse(BaseModel):
     summary="Busca semântica em mensagens pessoais de chat"
 )
 async def rag_user_chat_search(
-    user_id: Optional[str] = None,
     query: str,
+    user_id: Optional[str] = None,
     session_id: Optional[str] = None,
     start_ts_ms: Optional[int] = None,
     end_ts_ms: Optional[int] = None,
@@ -317,7 +348,10 @@ async def rag_user_chat_search(
         if isinstance(end_ts_ms, int):
             rng["lte"] = end_ts_ms
         must.append(models.FieldCondition(key="metadata.timestamp", range=models.Range(**rng)))
-    sc_filter = models.Filter(must=must)
+    must_not_uc: List[models.FieldCondition] = [
+        models.FieldCondition(key="metadata.status", match=models.MatchValue(value="duplicate"))
+    ]
+    sc_filter = models.Filter(must=must, must_not=must_not_uc)
     import time as _t
     _start = _t.perf_counter()
     cm = (_tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext())
@@ -337,6 +371,13 @@ async def rag_user_chat_search(
         _RAG_REQ.labels("user_chat_v2", "error").inc()
         _RAG_LAT.labels("user_chat_v2", "error").observe(max(0.0, _t.perf_counter() - _start))
         res = []
+    try:
+        _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(res or []))
+        for r in res or []:
+            s = float(getattr(r, "score", 0.0) or 0.0)
+            _RAG_SCORES.labels("user_chat_v2").observe(max(0.0, min(1.0, s)))
+    except Exception:
+        pass
     results: List[Dict[str, Any]] = []
     for r in res:
         payload = r.payload or {}
@@ -382,13 +423,21 @@ async def rag_hybrid_search(
     cm = (_tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext())
     try:
         with cm:  # type: ignore
-            results_vec = await service.recall_filtered(query=query, filters={"metadata.user_id": uid}, limit=limit, min_score=min_score)
+            # Exclui duplicados na busca vetorial híbrida
+            results_vec = await service.recall_filtered(query=query, filters={"metadata.user_id": uid, "status_not": "duplicate"}, limit=limit, min_score=min_score)
         _RAG_REQ.labels("hybrid", "success").inc()
         _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
         _RAG_REQ.labels("hybrid", "error").inc()
         _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
         results_vec = []
+    try:
+        _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(results_vec))
+        for r in results_vec:
+            s = float(r.get("score", 0.0) or 0.0)
+            _RAG_SCORES.labels("hybrid").observe(max(0.0, min(1.0, s)))
+    except Exception:
+        pass
     from app.repositories.knowledge_repository import KnowledgeRepository
     from app.db.graph import get_graph_db
     kr = KnowledgeRepository(await get_graph_db())

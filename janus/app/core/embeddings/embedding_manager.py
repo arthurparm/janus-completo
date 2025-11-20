@@ -10,6 +10,31 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 try:
+    from prometheus_client import Counter, Histogram, Gauge  # type: ignore
+    _EMB_REQ = Counter("emb_requests_total", "Requisições de embedding", ["provider", "outcome"])  # type: ignore
+    _EMB_LAT = Histogram("emb_latency_seconds", "Latência de embeddings", ["provider", "outcome"])  # type: ignore
+    _EMB_MODEL_LOADED = Gauge("emb_model_loaded", "Modelo de embeddings carregado", ["provider"])  # type: ignore
+except Exception:
+    class _NoopC:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            pass
+    class _NoopH:
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
+            pass
+    class _NoopG:
+        def labels(self, *a, **k):
+            return self
+        def set(self, *a, **k):
+            pass
+    _EMB_REQ = _NoopC()  # type: ignore
+    _EMB_LAT = _NoopH()  # type: ignore
+    _EMB_MODEL_LOADED = _NoopG()  # type: ignore
+
+try:
     from sentence_transformers import SentenceTransformer  # type: ignore
 except Exception:
     SentenceTransformer = None  # type: ignore
@@ -69,6 +94,10 @@ def _load_local_model() -> SentenceTransformer:
     model_name = _DEFAULT_LOCAL_MODEL
     logger.info(f"Carregando modelo local de embeddings: {model_name}")
     _local_model = SentenceTransformer(model_name)
+    try:
+        _EMB_MODEL_LOADED.labels("local").set(1)
+    except Exception:
+        pass
     return _local_model
 
 
@@ -88,6 +117,10 @@ def _load_openai_embedder() -> OpenAIEmbeddings:
     model_name = _DEFAULT_OPENAI_MODEL
     logger.info(f"Inicializando OpenAIEmbeddings com modelo: {model_name}")
     _openai_embedder = OpenAIEmbeddings(model=model_name, api_key=openai_key)
+    try:
+        _EMB_MODEL_LOADED.labels("openai").set(1)
+    except Exception:
+        pass
     return _openai_embedder
 
 
@@ -142,6 +175,8 @@ def embed_text(text: str) -> List[float]:
 
     for p in providers:
         try:
+            import time as _t
+            _t0 = _t.perf_counter()
             if p == "local":
                 vec = _emb_local([text])[0]
             elif p == "openai":
@@ -149,14 +184,29 @@ def embed_text(text: str) -> List[float]:
             else:
                 continue
             _cache.put(key, vec)
+            try:
+                _EMB_REQ.labels(p, "success").inc()
+                _EMB_LAT.labels(p, "success").observe(max(0.0, _t.perf_counter() - _t0))
+            except Exception:
+                pass
             return vec
         except Exception as e:
             logger.warning(f"Embedding provider '{p}' falhou; tentando fallback. Erro: {e}")
+            try:
+                _EMB_REQ.labels(p, "error").inc()
+                _EMB_LAT.labels(p, "error").observe(0.0)
+            except Exception:
+                pass
             continue
 
     logger.error("Todos provedores de embeddings falharam; usando vetor nulo.")
     null_vec = [0.0] * _TARGET_VECTOR_SIZE
     _cache.put(key, null_vec)
+    try:
+        _EMB_REQ.labels("none", "error").inc()
+        _EMB_LAT.labels("none", "error").observe(0.0)
+    except Exception:
+        pass
     return null_vec
 
 
@@ -173,13 +223,33 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 
     for p in providers:
         try:
+            import time as _t
+            _t0 = _t.perf_counter()
             if p == "local":
-                return _emb_local(texts)
+                res = _emb_local(texts)
             elif p == "openai":
-                return _emb_openai(texts)
+                res = _emb_openai(texts)
+            else:
+                continue
+            try:
+                _EMB_REQ.labels(p, "success").inc()
+                _EMB_LAT.labels(p, "success").observe(max(0.0, _t.perf_counter() - _t0))
+            except Exception:
+                pass
+            return res
         except Exception as e:
             logger.warning(f"Embedding provider batch '{p}' falhou; tentando fallback. Erro: {e}")
+            try:
+                _EMB_REQ.labels(p, "error").inc()
+                _EMB_LAT.labels(p, "error").observe(0.0)
+            except Exception:
+                pass
             continue
 
     logger.error("Batch embeddings: todos provedores falharam; retornando vetores nulos.")
+    try:
+        _EMB_REQ.labels("none", "error").inc()
+        _EMB_LAT.labels("none", "error").observe(0.0)
+    except Exception:
+        pass
     return [[0.0] * _TARGET_VECTOR_SIZE for _ in texts]

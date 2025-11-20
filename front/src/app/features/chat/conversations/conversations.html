@@ -1,0 +1,44 @@
+<div class="conv-container">
+  <header class="conv-header">
+    <h2>Conversas</h2>
+    <div class="controls">
+      <button class="btn-primary" (click)="startNew()" aria-label="Nova conversa">Nova conversa</button>
+      <input [(ngModel)]="q" (input)="applyFilters()" placeholder="Buscar por título ou conteúdo" aria-label="Buscar" />
+      <input type="date" [(ngModel)]="startDate" (change)="applyFilters()" aria-label="Data inicial" />
+      <input type="date" [(ngModel)]="endDate" (change)="applyFilters()" aria-label="Data final" />
+      <select [(ngModel)]="sortKey" (change)="applyFilters()" aria-label="Ordenação">
+        <option value="updated_at">Ordenar por atualização</option>
+        <option value="created_at">Ordenar por criação</option>
+      </select>
+      <button (click)="toggleDir()" aria-label="Direção">{{ sortDir === 'asc' ? 'Asc' : 'Desc' }}</button>
+    </div>
+  </header>
+
+  <main>
+    <div *ngIf="loading" class="skeleton-grid" role="status" aria-live="polite">
+      <div class="skeleton-card" *ngFor="let n of [1,2,3,4,5,6]"></div>
+    </div>
+    <div *ngIf="error" class="error">{{ error }}</div>
+    <div class="grid">
+      <div *ngFor="let it of filtered.slice((page-1)*pageSize, (page-1)*pageSize + pageSize)" class="card">
+        <div class="title">{{ it.title || it.conversation_id }}</div>
+        <div class="snippet" *ngIf="it.last_message">{{ it.last_message.content }}</div>
+        <div class="meta">
+          <span class="chip" [class.new]="statusChip(it)==='Nova'" [class.progress]="statusChip(it)==='Em andamento'" [class.done]="statusChip(it)==='Resolvida'">{{ statusChip(it) }}</span>
+          <span>Atualizado: {{ it.updated_at || '—' }}</span>
+        </div>
+        <div class="actions">
+          <button (click)="open(it)" class="btn-secondary">Abrir</button>
+          <button (click)="rename(it)" class="btn-secondary">Renomear</button>
+          <button (click)="remove(it)">Excluir</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="pager">
+    <button (click)="prevPage()" [disabled]="page===1">Anterior</button>
+    <span>Página {{ page }}</span>
+    <button (click)="nextPage()" [disabled]="(page*pageSize)>=filtered.length">Próxima</button>
+  </footer>
+</div>

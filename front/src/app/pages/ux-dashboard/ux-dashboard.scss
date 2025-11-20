@@ -1,0 +1,30 @@
+.ux-container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px
+}
+
+.summary {
+    display: flex;
+    gap: 16px
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse
+}
+
+.table th,
+.table td {
+    border: 1px solid #e5e7eb;
+    padding: 6px 8px
+}
+
+.alert {
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    padding: 8px 12px;
+    border-radius: 6px
+}

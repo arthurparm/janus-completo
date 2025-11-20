@@ -1,0 +1,14 @@
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px }
+.error { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 6px }
+.table-wrap { overflow-x: auto }
+table { width: 100%; border-collapse: collapse; background: transparent; border: 1px solid #e5e7eb }
+thead th { text-align: left; padding: 8px 10px; background: transparent; border-bottom: 1px solid #e5e7eb }
+tbody td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; text-transform: lowercase }
+.tag.high { background: #fee2e2; color: #b91c1c }
+.tag.medium { background: #fde68a; color: #a16207 }
+.tag.low { background: #d1fae5; color: #065f46 }
+.tag.pending { background: #e5e7eb; color: #374151 }
+.tag.review { background: #dbeafe; color: #1d4ed8 }
+.tag.dropped { background: #f3f4f6; color: #6b7280 }
+.refs code { display: inline-block; margin-right: 6px }

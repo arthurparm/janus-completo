@@ -510,6 +510,7 @@ async def check_consolidation_queue_policy_health() -> Dict[str, Any]:
         from app.core.infrastructure.message_broker import get_broker
         from app.models.schemas import QueueName
         broker = await get_broker()
+        await broker.get_queue_info(QueueName.KNOWLEDGE_CONSOLIDATION.value)
         result = await broker.validate_queue_policy(QueueName.KNOWLEDGE_CONSOLIDATION.value)
         return result
     except Exception as e:

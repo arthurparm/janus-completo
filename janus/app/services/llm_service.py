@@ -4,6 +4,7 @@ from fastapi import Request
 
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.core.llm import ModelRole, ModelPriority
+from app.core.llm import get_llm_client
 from app.core.monitoring.health_monitor import check_llm_manager_health
 from app.config import settings
 
@@ -120,6 +121,23 @@ class LLMService:
         logger.info("Verificando saúde do sistema de LLMs via serviço.")
         # Usa health monitor central para consolidar o estado dos circuit breakers e cache
         return await check_llm_manager_health()
+
+    # --- Provider selection and CB state ---
+    def select_provider(self, role: ModelRole, priority: ModelPriority, user_id: Optional[str] = None, project_id: Optional[str] = None) -> Dict[str, Any]:
+        """Seleciona provider/modelo antecipadamente sem invocar o LLM."""
+        client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
+        return {"provider": getattr(client, "provider", "unknown"), "model": getattr(client, "model", "unknown")}
+
+    def is_provider_open(self, provider: str) -> bool:
+        """Retorna True se o circuit breaker do provider estiver aberto (bloqueado)."""
+        try:
+            breakers = self._repo.get_circuit_breakers()
+            for cb in breakers:
+                if cb.get("provider") == provider and cb.get("state") == "open":
+                    return True
+            return False
+        except Exception:
+            return False
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_llm_service(request: Request) -> LLMService:

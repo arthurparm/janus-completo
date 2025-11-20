@@ -31,6 +31,27 @@ CHAT_SPEND_USD_TOTAL = Counter(
     ["kind"],  # kind: "user" | "project"
 )
 
+# TTFT (Time-To-First-Token) em segundos
+CHAT_TTFT_SECONDS = Histogram(
+    "chat_ttft_seconds",
+    "Tempo até o primeiro token emitido no streaming",
+    ["provider", "model"],
+)
+
+# Contador de erros por código
+CHAT_ERRORS_TOTAL = Counter(
+    "chat_errors_total",
+    "Total de erros no fluxo de chat por código",
+    ["code"],
+)
+
+# Transições de estado de circuit breaker
+CHAT_CB_STATE_CHANGES = Counter(
+    "chat_cb_state_changes_total",
+    "Transições de estado de circuit breaker por provedor",
+    ["provider", "state"],
+)
+
 
 def update_active_conversations(count: int) -> None:
     try:

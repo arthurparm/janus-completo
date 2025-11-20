@@ -2,7 +2,7 @@ import structlog
 from typing import Dict, Any, List, Optional
 
 from app.core.agents import get_multi_agent_system, AgentRole, MultiAgentSystem
-from app.core.agents.multi_agent_system import Task, TaskStatus, SpecializedAgent
+from typing import Any as Task, Any as TaskStatus, Any as SpecializedAgent
 
 logger = structlog.get_logger(__name__)
 

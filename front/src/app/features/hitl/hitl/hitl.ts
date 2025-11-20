@@ -1,12 +1,12 @@
 import {Component, inject} from '@angular/core'
 import {JanusApiService, AuditEvent, GraphQuarantineItem} from '../../../services/janus-api.service'
-import {NgIf, NgFor, DatePipe} from '@angular/common'
+import {NgIf, NgFor, DatePipe, DecimalPipe} from '@angular/common'
 import {FormsModule} from '@angular/forms'
 
 @Component({
   selector: 'app-hitl',
   standalone: true,
-  imports: [NgIf, NgFor, FormsModule, DatePipe],
+  imports: [NgIf, NgFor, FormsModule, DatePipe, DecimalPipe],
   templateUrl: './hitl.html',
   styleUrls: ['./hitl.scss']
 })

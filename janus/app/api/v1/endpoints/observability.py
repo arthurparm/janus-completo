@@ -92,6 +92,10 @@ async def get_metrics_summary(service: ObservabilityService = Depends(get_observ
     """Delega a geração do resumo de métricas para o ObservabilityService."""
     return service.get_metrics_summary()
 
+@router.get("/llm/usage", summary="Resumo de uso de LLMs")
+async def llm_usage(start_ts: Optional[float] = None, end_ts: Optional[float] = None, service: ObservabilityService = Depends(get_observability_service)):
+    return service.get_llm_usage_summary(start_ts, end_ts)
+
 @router.get("/graph/audit", summary="Auditoria de higiene do grafo de conhecimento")
 async def graph_audit(service: ObservabilityService = Depends(get_observability_service)):
     """Executa consultas de auditoria no grafo e retorna um relatório resumido."""

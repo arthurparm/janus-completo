@@ -1,7 +1,7 @@
 import structlog
 from typing import Dict, Any, List, Optional
 from fastapi import Request
-from app.core.agents.multi_agent_system import AgentRole
+from app.core.agents import AgentRole
 from app.repositories.prompt_repository import PromptRepository
 
 from app.repositories.optimization_repository import (

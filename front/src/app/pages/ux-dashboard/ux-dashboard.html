@@ -1,0 +1,24 @@
+<div class="ux-container">
+  <h2>UX Metrics</h2>
+  <div class="summary">
+    <div>P95 Latência: {{ p95 != null ? (p95 | number:'1.0-0') + ' ms' : '—' }}</div>
+    <div>Total: {{ metrics.length }}</div>
+  </div>
+  <div class="alert" *ngIf="p95 != null && p95 > 1500">Alerta: P95 acima de 1500ms</div>
+  <table class="table">
+    <thead>
+      <tr><th>Timestamp</th><th>TTFT</th><th>Latência</th><th>Outcome</th><th>Retries</th><th>Provider</th><th>Model</th></tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let m of metrics">
+        <td>{{ m.timestamp }}</td>
+        <td>{{ m.ttft_ms || '—' }}</td>
+        <td>{{ m.latency_ms || '—' }}</td>
+        <td>{{ m.outcome }}</td>
+        <td>{{ m.retries || 0 }}</td>
+        <td>{{ m.provider || '—' }}</td>
+        <td>{{ m.model || '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

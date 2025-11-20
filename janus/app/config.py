@@ -286,6 +286,9 @@ class AppSettings(BaseSettings):
     OTEL_ENABLED: bool = False
     OTEL_OTLP_ENDPOINT: Optional[str] = None
     OTEL_SERVICE_NAME: Optional[str] = None
+    LOG_SAMPLING_RATE: float = 1.0
+    AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
+    AUDIT_RETENTION_DAYS: int = 30
 
     # ======= Validadores para variáveis de ambiente complexas =======
 

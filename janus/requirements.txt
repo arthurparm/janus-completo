@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic-settings
+python-multipart
 neo4j>=5.15
 qdrant-client
 langchain>=0.1.20
@@ -34,3 +35,5 @@ onnxruntime>=1.17.0
 cryptography>=41.0.0
 # Database: MySQL driver for SQLAlchemy (mysql+pymysql)
 pymysql>=1.1.0
+# Uploads: Form-data parsing required by FastAPI
+python-multipart>=0.0.9

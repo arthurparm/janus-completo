@@ -162,6 +162,41 @@ class ObservabilityService:
             logger.error("Erro no repositório ao consultar eventos de auditoria", exc_info=e)
             raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
 
+    def get_llm_usage_summary(self, start_ts: Optional[float], end_ts: Optional[float]) -> Dict[str, Any]:
+        o = self._repo.get_audit_events(None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0)
+        g = self._repo.get_audit_events(None, "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0)
+        def agg(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+            import json as _json
+            c = len(rows)
+            s_in = 0
+            s_out = 0
+            s_cost = 0.0
+            for r in rows:
+                d = r.get("details_json")
+                if not d:
+                    continue
+                try:
+                    dj = _json.loads(d)
+                    s_in += int(dj.get("input_tokens") or 0)
+                    s_out += int(dj.get("output_tokens") or 0)
+                    s_cost += float(dj.get("cost_usd") or 0.0)
+                except Exception:
+                    pass
+            return {
+                "calls": c,
+                "avg_input_tokens": (s_in / c) if c else 0,
+                "avg_output_tokens": (s_out / c) if c else 0,
+                "avg_cost_usd": (s_cost / c) if c else 0.0,
+            }
+        a_o = agg(o)
+        a_g = agg(g)
+        return {
+            "openai": a_o,
+            "gemini": a_g,
+            "total_calls": a_o["calls"] + a_g["calls"],
+            "window": {"start_ts": start_ts, "end_ts": end_ts},
+        }
+
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_observability_service(request: Request) -> ObservabilityService:

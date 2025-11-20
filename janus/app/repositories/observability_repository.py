@@ -1,4 +1,5 @@
 import structlog
+import json
 from typing import Dict, Any, List, Optional
 from fastapi import Depends
 
@@ -294,6 +295,13 @@ class ObservabilityRepository:
                 status=str(event.get("status")),
                 latency_ms=int(event.get("latency_ms")) if event.get("latency_ms") is not None else None,
                 trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
+                details_json=(
+                    event.get("details_json")
+                    if event.get("details_json") is not None
+                    else (
+                        json.dumps(event.get("detail")) if event.get("detail") is not None else None
+                    )
+                ),
             )
             s.add(ae)
             s.commit()
@@ -337,6 +345,7 @@ class ObservabilityRepository:
                     "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
                     "created_at": getattr(r, "created_at").timestamp() if getattr(r, "created_at", None) else None,
+                    "details_json": r.details_json,
                 }
                 for r in rows
             ]
@@ -354,3 +363,34 @@ async def get_observability_repository(
         pp_handler: PoisonPillHandler = Depends(get_poison_pill_handler)
 ) -> ObservabilityRepository:
     return ObservabilityRepository(monitor, pp_handler)
+
+# Compat: função utilitária direta para registrar eventos de auditoria
+def record_audit_event_direct(event: Dict[str, Any]) -> None:
+    s = mysql_db.get_session_direct()
+    try:
+        ae = AuditEvent(
+            user_id=int(event.get("user_id")) if event.get("user_id") is not None else None,
+            endpoint=str(event.get("endpoint")),
+            action=str(event.get("action")),
+            tool=event.get("tool"),
+            status=str(event.get("status")),
+            latency_ms=int(event.get("latency_ms")) if event.get("latency_ms") is not None else None,
+            trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
+            details_json=(
+                event.get("details_json")
+                if event.get("details_json") is not None
+                else (
+                    json.dumps(event.get("detail")) if event.get("detail") is not None else None
+                )
+            ),
+        )
+        s.add(ae)
+        s.commit()
+    except Exception as e:
+        try:
+            s.rollback()
+        except Exception:
+            pass
+        logger.error("Erro ao registrar evento de auditoria (direct)", exc_info=e)
+    finally:
+        s.close()

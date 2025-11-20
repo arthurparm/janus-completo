@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.services.chat_service import ChatService, get_chat_service, ChatServiceError, ConversationNotFoundError
+from app.services.memory_service import MemoryService, get_memory_service
 from app.core.llm import ModelRole, ModelPriority
 
 router = APIRouter(tags=["Chat"])
@@ -41,6 +42,7 @@ class ChatMessageResponse(BaseModel):
     model: str
     role: str
     conversation_id: str
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ChatMessage(BaseModel):
@@ -84,7 +86,7 @@ async def start_chat(request: ChatStartRequest, service: ChatService = Depends(g
 
 
 @router.post("/message", response_model=ChatMessageResponse, summary="Envia uma mensagem e recebe a resposta do LLM")
-async def send_message(payload: ChatMessageRequest, service: ChatService = Depends(get_chat_service), http: Request = None):
+async def send_message(payload: ChatMessageRequest, service: ChatService = Depends(get_chat_service), http: Request = None, memory: MemoryService = Depends(get_memory_service)):
     try:
         role = ModelRole(payload.role)
         priority = ModelPriority(payload.priority)
@@ -111,6 +113,28 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
     except ChatServiceError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+    # Build citations via vector search on user documents/chat
+    citations: List[Dict[str, Any]] = []
+    try:
+        filters: Dict[str, Any] = {"status_not": "duplicate"}
+        if result.get("conversation_id"):
+            filters["metadata.session_id"] = result.get("conversation_id")
+        if payload.user_id:
+            filters["metadata.user_id"] = str(payload.user_id)
+        vec_results = await memory.recall_filtered(query=payload.message, filters=filters, limit=5, min_score=0.1)
+        for r in vec_results:
+            meta = r.get("metadata") or {}
+            citations.append({
+                "id": r.get("id"),
+                "doc_id": meta.get("doc_id"),
+                "file_path": meta.get("file_path"),
+                "type": meta.get("type"),
+                "origin": meta.get("origin"),
+                "score": r.get("score"),
+            })
+    except Exception:
+        citations = []
+    result["citations"] = citations
     return ChatMessageResponse(**result)
 
 
@@ -189,13 +213,44 @@ async def delete_conversation(conversation_id: str, user_id: Optional[str] = Non
 async def stream_message(conversation_id: str, message: str, role: str = "orchestrator",
                          priority: str = "fast_and_cheap", timeout_seconds: Optional[int] = None,
                          user_id: Optional[str] = None, project_id: Optional[str] = None,
-                         service: ChatService = Depends(get_chat_service)):
+                         service: ChatService = Depends(get_chat_service), http: Request = None):
+    """SSE de respostas do LLM.
+    Protocolo atual: 2025-11.v1.
+    Eventos: protocol, ack, token, partial (compat), heartbeat, done, error.
+    Descontinuação de partial: ver env CHAT_SSE_PARTIAL_DEPRECATE_AT.
+    """
     # valida enum
     try:
         role_enum = ModelRole(role)
         priority_enum = ModelPriority(priority)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role or priority")
+
+    # Valida origem (CORS) para SSE
+    try:
+        allowed = getattr(getattr(http, "app", None).state, "settings", None)
+    except Exception:
+        allowed = None
+    try:
+        from app.config import settings as _settings
+    except Exception:
+        _settings = None
+    if http is not None:
+        origin = (http.headers.get("origin") or "").lower()
+        allowed_origins = []
+        try:
+            allowed_origins = list(getattr(_settings, "CORS_ALLOW_ORIGINS", [])) or []
+        except Exception:
+            allowed_origins = []
+        if allowed_origins and origin and origin not in [o.lower() for o in allowed_origins]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
+
+    # Limita tamanho máximo da mensagem (10KB)
+    try:
+        if message and len(message.encode("utf-8")) > 10 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Message too large")
+    except Exception:
+        pass
 
     try:
         gen = service.stream_message(
@@ -209,4 +264,10 @@ async def stream_message(conversation_id: str, message: str, role: str = "orches
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
-    return StreamingResponse(gen, media_type="text/event-stream")
+    headers = {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(gen, media_type="text/event-stream", headers=headers)

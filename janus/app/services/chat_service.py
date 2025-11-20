@@ -23,6 +23,7 @@ import asyncio
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.core.workers.reflexion_worker import publish_reflexion_task
 from uuid import uuid4
+import os
 
 logger = structlog.get_logger(__name__)
 
@@ -580,7 +581,7 @@ class ChatService:
         return "\n".join(lines)
 
     # Streaming helper: retorna generator de eventos SSE (strings já formatadas)
-    def stream_message(
+    async def stream_message(
             self,
             conversation_id: str,
             message: str,
@@ -590,10 +591,34 @@ class ChatService:
             user_id: Optional[str] = None,
             project_id: Optional[str] = None,
     ):
+        # Config
+        max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
+        default_timeout = int(os.getenv("CHAT_DEFAULT_TIMEOUT_SECONDS", "30"))
+        heartbeat_interval = int(os.getenv("CHAT_HEARTBEAT_INTERVAL_SECONDS", "30"))
+        protocol_version = os.getenv("CHAT_SSE_PROTOCOL_VERSION", "2025-11.v1")
+        deprecate_partial_at = os.getenv("CHAT_SSE_PARTIAL_DEPRECATE_AT", "2026-03-01")
+
+        # Validar tamanho da mensagem
+        try:
+            if message and len(message.encode("utf-8")) > max_bytes:
+                _err = json.dumps({"error": "Message too large", "code": "MessageTooLarge"}, ensure_ascii=False)
+                yield f"event: error\ndata: {_err}\n\n"
+                return
+        except Exception:
+            pass
+
+        start_t_overall = _time.time()
+        trace_id = uuid4().hex
+        try:
+            logger.info("chat.stream", stage="start", conversation_id=conversation_id, trace_id=trace_id)
+        except Exception:
+            pass
         yield "event: start\n\n"
+        _proto = json.dumps({"version": protocol_version, "supports_partial": True, "deprecate_partial_at": deprecate_partial_at}, ensure_ascii=False)
+        yield f"event: protocol\ndata: {_proto}\n\n"
         # add user message
         self._repo.add_message(conversation_id, role="user", text=message)
-        _ack = json.dumps({"conversation_id": conversation_id})
+        _ack = json.dumps({"conversation_id": conversation_id}, ensure_ascii=False)
         yield f"event: ack\ndata: {_ack}\n\n"
 
         # compute prompt
@@ -611,10 +636,22 @@ class ChatService:
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
+            first_token = True
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i:i + 256]
-                _partial = json.dumps({"text": chunk})
-                yield f"event: partial\ndata: {_partial}\n\n"
+                _tok = json.dumps({"text": chunk, "timestamp": int(_time.time()*1000)}, ensure_ascii=False)
+                yield f"event: token\ndata: {_tok}\n\n"
+                # Compatibilidade temporária com clientes antigos
+                yield f"event: partial\ndata: {_tok}\n\n"
+                if first_token:
+                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
+                    first_token = False
+                    try:
+                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
+                        CHAT_TTFT_SECONDS.labels(provider="janus", model="discovery").observe(ttft_ms / 1000.0)
+                        logger.info("chat.stream", stage="ttft", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="discovery", ttft_ms=ttft_ms)
+                    except Exception:
+                        pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
@@ -624,8 +661,14 @@ class ChatService:
                 "conversation_id": conversation_id,
                 "provider": "janus",
                 "model": "discovery",
+                "citations": [],
             })
             yield f"event: done\ndata: {_done}\n\n"
+            try:
+                latency_ms = int((_time.time() - start_t_overall) * 1000)
+                logger.info("chat.stream", stage="done", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="discovery", latency_ms=latency_ms, retries=0)
+            except Exception:
+                pass
             return
 
         # Intercepta geração automática de documentação das ferramentas em streaming
@@ -635,10 +678,21 @@ class ChatService:
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
+            first_token = True
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i:i + 256]
-                _partial = json.dumps({"text": chunk})
-                yield f"event: partial\ndata: {_partial}\n\n"
+                _tok = json.dumps({"text": chunk, "timestamp": int(_time.time()*1000)}, ensure_ascii=False)
+                yield f"event: token\ndata: {_tok}\n\n"
+                yield f"event: partial\ndata: {_tok}\n\n"
+                if first_token:
+                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
+                    first_token = False
+                    try:
+                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
+                        CHAT_TTFT_SECONDS.labels(provider="janus", model="tools_docs").observe(ttft_ms / 1000.0)
+                        logger.info("chat.stream", stage="ttft", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="tools_docs", ttft_ms=ttft_ms)
+                    except Exception:
+                        pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
@@ -648,8 +702,14 @@ class ChatService:
                 "conversation_id": conversation_id,
                 "provider": "janus",
                 "model": "tools_docs",
+                "citations": [],
             })
             yield f"event: done\ndata: {_done}\n\n"
+            try:
+                latency_ms = int((_time.time() - start_t_overall) * 1000)
+                logger.info("chat.stream", stage="done", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="tools_docs", latency_ms=latency_ms, retries=0)
+            except Exception:
+                pass
             return
 
         # Intercepta perguntas de capacidades e responde sem invocar LLM
@@ -660,10 +720,34 @@ class ChatService:
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
             # naive chunking for SSE partials
+            first_token = True
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i:i + 256]
-                _partial = json.dumps({"text": chunk})
-                yield f"event: partial\ndata: {_partial}\n\n"
+                _tok = json.dumps({"text": chunk, "timestamp": int(_time.time()*1000)}, ensure_ascii=False)
+                # TTFT/timeout: se tempo até primeiro token exceder timeout, emitir erro
+                ttft = _time.time() - start_t_overall
+                limit = float(timeout_seconds or default_timeout)
+                if limit > 0 and ttft > limit:
+                    _err = json.dumps({"error": "TTFT timeout", "code": "TTFTTimeout"}, ensure_ascii=False)
+                    try:
+                        from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
+                        CHAT_ERRORS_TOTAL.labels(code="TTFTTimeout").inc()
+                        logger.error("chat.stream", stage="error", conversation_id=conversation_id, trace_id=trace_id, code="TTFTTimeout")
+                    except Exception:
+                        pass
+                    yield f"event: error\ndata: {_err}\n\n"
+                    return
+                yield f"event: token\ndata: {_tok}\n\n"
+                yield f"event: partial\ndata: {_tok}\n\n"
+                if first_token:
+                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
+                    first_token = False
+                    try:
+                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
+                        CHAT_TTFT_SECONDS.labels(provider="janus", model="capabilities").observe(ttft_ms / 1000.0)
+                        logger.info("chat.stream", stage="ttft", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="capabilities", ttft_ms=ttft_ms)
+                    except Exception:
+                        pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
@@ -673,28 +757,67 @@ class ChatService:
                 "conversation_id": conversation_id,
                 "provider": "janus",
                 "model": "capabilities",
+                "citations": [],
             })
             yield f"event: done\ndata: {_done}\n\n"
+            try:
+                latency_ms = int((_time.time() - start_t_overall) * 1000)
+                logger.info("chat.stream", stage="done", conversation_id=conversation_id, trace_id=trace_id, provider="janus", model="capabilities", latency_ms=latency_ms, retries=0)
+            except Exception:
+                pass
             return
 
         try:
+            # Seleção antecipada de provider/modelo e CB early-block
+            pre = self._llm.select_provider(role=role, priority=priority, user_id=user_id, project_id=project_id)
+            current_provider = pre.get("provider")
+            current_model = pre.get("model")
+            if self._llm.is_provider_open(current_provider or ""):
+                _err = json.dumps({"error": "Circuit open", "code": "CircuitOpen"}, ensure_ascii=False)
+                try:
+                    from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
+                    CHAT_ERRORS_TOTAL.labels(code="CircuitOpen").inc()
+                    logger.error("chat.stream", stage="error", conversation_id=conversation_id, trace_id=trace_id, provider=current_provider, model=current_model, code="CircuitOpen")
+                except Exception:
+                    pass
+                yield f"event: error\ndata: {_err}\n\n"
+                return
+
             start_t = _time.time()
-            result = self._llm.invoke_llm(
+            # Executa LLM em thread e emite heartbeats enquanto aguarda
+            task = asyncio.create_task(asyncio.to_thread(self._llm.invoke_llm,
                 prompt=prompt,
                 role=role,
                 priority=priority,
                 timeout_seconds=timeout_seconds,
                 user_id=user_id,
                 project_id=project_id,
-            )
+            ))
+            while not task.done():
+                await asyncio.sleep(max(1, heartbeat_interval))
+                hb = json.dumps({"timestamp": int(_time.time()*1000)}, ensure_ascii=False)
+                yield f"event: heartbeat\ndata: {hb}\n\n"
+            result = await task
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             assistant_text = result.get("response", "")
+            current_provider = result.get("provider")
+            if self._cb_should_block(current_provider):
+                _err = json.dumps({"error": "Circuit open", "code": "CircuitOpen"}, ensure_ascii=False)
+                try:
+                    from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
+                    CHAT_ERRORS_TOTAL.labels(code="CircuitOpen").inc()
+                    logger.error("chat.stream", stage="error", conversation_id=conversation_id, trace_id=trace_id, provider=current_provider, code="CircuitOpen")
+                except Exception:
+                    pass
+                yield f"event: error\ndata: {_err}\n\n"
+                return
             # naive chunking for SSE partials
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i:i + 256]
-                _partial = json.dumps({"text": chunk})
-                yield f"event: partial\ndata: {_partial}\n\n"
+                _tok = json.dumps({"text": chunk, "timestamp": int(_time.time()*1000)}, ensure_ascii=False)
+                yield f"event: token\ndata: {_tok}\n\n"
+                yield f"event: partial\ndata: {_tok}\n\n"
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
@@ -725,16 +848,65 @@ class ChatService:
             except Exception:
                 pass
 
+            # Compute citations near the end based on user/session context
+            citations: List[Dict[str, Any]] = []
+            try:
+                from app.core.embeddings.embedding_manager import embed_text
+                from app.db.vector_store import get_qdrant_client, get_or_create_collection
+                from qdrant_client import models as _models
+                vec = embed_text(message)
+                coll = get_or_create_collection(f"user_{user_id}") if user_id else get_or_create_collection("janus_episodic_memory")
+                must: List[_models.FieldCondition] = []
+                if user_id:
+                    must.append(_models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id))))
+                if conversation_id:
+                    must.append(_models.FieldCondition(key="metadata.session_id", match=_models.MatchValue(value=conversation_id)))
+                must_not: List[_models.FieldCondition] = [
+                    _models.FieldCondition(key="metadata.status", match=_models.MatchValue(value="duplicate"))
+                ]
+                qfilter = _models.Filter(must=must, must_not=must_not) if must else _models.Filter(must_not=must_not)
+                client = get_qdrant_client()
+                hits = client.search(collection_name=coll, query_vector=vec, limit=5, with_payload=True, query_filter=qfilter)
+                for h in hits or []:
+                    payload = getattr(h, "payload", {}) or {}
+                    meta = payload.get("metadata") or {}
+                    citations.append({
+                        "id": getattr(h, "id", None),
+                        "doc_id": meta.get("doc_id"),
+                        "file_path": meta.get("file_path"),
+                        "type": meta.get("type"),
+                        "origin": meta.get("origin"),
+                        "score": float(getattr(h, "score", 0.0) or 0.0),
+                    })
+            except Exception:
+                citations = []
             _done = json.dumps({
                 "conversation_id": conversation_id,
                 "provider": result.get("provider"),
                 "model": result.get("model"),
-            })
+                "citations": citations,
+            }, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
+            self._cb_on_success(current_provider)
+            try:
+                latency_ms = int((_time.time() - start_t_overall) * 1000)
+                logger.info("chat.stream", stage="done", conversation_id=conversation_id, trace_id=trace_id, provider=result.get("provider"), model=result.get("model"), latency_ms=latency_ms, retries=0)
+            except Exception:
+                pass
         except Exception as e:
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="error").observe(max(0.0, _time.time() - start_t))
-            _err = json.dumps({"error": str(e)})
+            _err = json.dumps({"error": str(e), "code": "InvocationError"}, ensure_ascii=False)
+            try:
+                from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
+                CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
+                logger.error("chat.stream", stage="error", conversation_id=conversation_id, trace_id=trace_id, provider=current_provider, code="InvocationError")
+            except Exception:
+                pass
             yield f"event: error\ndata: {_err}\n\n"
+            try:
+                self._cb_on_error(current_provider)
+            except Exception:
+                pass
 
     def _trigger_post_response_events(
             self,
@@ -763,6 +935,62 @@ class ChatService:
                 }
             }
             asyncio.create_task(publish_consolidation_task(consolidation_payload, correlation_id=conversation_id))
+        except Exception:
+        pass
+
+    # Circuit Breaker simples por provider
+    def _cb_should_block(self, provider: Optional[str]) -> bool:
+        try:
+            if not provider:
+                return False
+            state = getattr(self, "_cb_state", {})
+            s = state.get(provider)
+            if not s:
+                return False
+            opened_at = s.get("opened_at") or 0
+            cooldown = int(os.getenv("CHAT_CB_COOLDOWN_SECONDS", "60"))
+            if s.get("state") == "open" and (_time.time() - opened_at) < cooldown:
+                return True
+            return False
+        except Exception:
+            return False
+
+    def _cb_on_error(self, provider: Optional[str]) -> None:
+        try:
+            if not provider:
+                return
+            state = getattr(self, "_cb_state", {})
+            s = state.get(provider) or {"failures": 0, "state": "closed"}
+            s["failures"] = int(s.get("failures", 0)) + 1
+            threshold = int(os.getenv("CHAT_CB_FAILURE_THRESHOLD", "5"))
+            if s["failures"] >= threshold:
+                s["state"] = "open"
+                s["opened_at"] = _time.time()
+                try:
+                    from app.core.monitoring.chat_metrics import CHAT_CB_STATE_CHANGES
+                    CHAT_CB_STATE_CHANGES.labels(provider=provider, state="open").inc()
+                except Exception:
+                    pass
+            state[provider] = s
+            self._cb_state = state
+        except Exception:
+            pass
+
+    def _cb_on_success(self, provider: Optional[str]) -> None:
+        try:
+            if not provider:
+                return
+            state = getattr(self, "_cb_state", {})
+            s = state.get(provider) or {"failures": 0, "state": "closed"}
+            s["failures"] = 0
+            s["state"] = "closed"
+            try:
+                from app.core.monitoring.chat_metrics import CHAT_CB_STATE_CHANGES
+                CHAT_CB_STATE_CHANGES.labels(provider=provider, state="closed").inc()
+            except Exception:
+                pass
+            state[provider] = s
+            self._cb_state = state
         except Exception:
             pass
 

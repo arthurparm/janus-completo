@@ -33,4 +33,9 @@
     </ul>
     <p class="hint">Se algum link não abrir, verifique se o servidor está servindo arquivos estáticos ou acesse pelo repositório.</p>
   </section>
+
+  <section class="comm-docs">
+    <h2>Chat: REST + WebRTC</h2>
+    <p>O chat textual usa REST (`/api/v1/chat/*`). A mídia (áudio/vídeo) utiliza integração básica WebRTC com Janus: inicialização (`Janus.init`), sessão/handle (`Janus.attach`) e configuração de `RTCPeerConnection`. Em falha de WebRTC, o sistema mantém o chat REST e desativa controles de mídia.</p>
+  </section>
 </section>

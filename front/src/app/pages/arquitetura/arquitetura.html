@@ -8,6 +8,16 @@
   </p>
 </section>
 
+<section class="comm-arch" id="sec-comm-arch" aria-labelledby="comm-title">
+  <h2 id="comm-title">Arquitetura de Comunicação (Chat)</h2>
+  <p>O chat textual opera exclusivamente via API REST (`/api/v1/chat/*`), garantindo compatibilidade e previsibilidade. A camada WebRTC é usada opcionalmente para mídia (áudio/vídeo) no navegador, inicializada com Janus (`Janus.init`, `Janus.attach`) e configurada com `RTCPeerConnection`. Em indisponibilidade de WebRTC, o sistema mantém o chat REST integralmente.</p>
+  <ul>
+    <li>Primário: REST para mensagens de chat e histórico.</li>
+    <li>Opcional: WebRTC para mídia; sem uso de datachannel para texto.</li>
+    <li>Fallback automático para REST quando houver falhas de conexão WebRTC.</li>
+  </ul>
+</section>
+
 <section class="intro-overview" id="sec-overview" aria-labelledby="overview-title">
   <h2 id="overview-title">Visão Geral do Sistema</h2>
   <div class="diagram-high-level">

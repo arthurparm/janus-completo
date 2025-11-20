@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Numeric, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Numeric, Index, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.models.config_models import Base
@@ -13,6 +13,8 @@ class Experiment(Base):
     arms = relationship("ExperimentArm", back_populates="experiment", cascade="all, delete-orphan")
     __table_args__ = (
         Index("idx_experiment_user_status", "user_id", "status"),
+        # Evita nomes duplicados por usuário (ou global quando user_id é NULL)
+        UniqueConstraint("name", "user_id", name="unique_experiment_name_user"),
     )
 
 class ExperimentArm(Base):

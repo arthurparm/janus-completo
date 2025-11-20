@@ -11,7 +11,6 @@ from .message_broker import MessageBroker, initialize_broker, close_broker, \
 from .prompt_loader import PromptLoader, prompt_loader, get_prompt, get_prompt_advanced
 from .python_sandbox import PythonSandbox, python_sandbox
 from .rate_limit_middleware import RateLimitMiddleware
-from .reasoning_core import ReasoningSession
 from .resilience import CircuitBreaker, resilient
 
 __all__ = [
@@ -33,8 +32,6 @@ __all__ = [
     "read_file",
     "write_file",
     "list_directory",
-    # Reasoning Core
-    "ReasoningSession",
     # Prompt Loader
     "PromptLoader",
     "prompt_loader",

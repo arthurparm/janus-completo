@@ -1,0 +1,55 @@
+{
+  "title": "Janus RAG Pipeline Overview",
+  "tags": ["janus", "rag", "pipeline"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "heatmap",
+      "title": "Parse Latency by Type",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (le,type) (rate(doc_parse_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "bargauge",
+      "title": "Parse Outcomes",
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+      "options": {"displayMode": "gradient"},
+      "targets": [{"expr": "sum by (type,outcome) (rate(doc_parse_total[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "heatmap",
+      "title": "Embedding Latency by Provider",
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (le,provider,outcome) (rate(emb_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "bargauge",
+      "title": "Embedding Errors by Provider",
+      "gridPos": {"x": 0, "y": 8, "w": 8, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [{"expr": "sum by (provider) (rate(emb_requests_total{outcome=\"error\"}[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "heatmap",
+      "title": "RAG Latency by Endpoint",
+      "gridPos": {"x": 8, "y": 8, "w": 8, "h": 6},
+      "targets": [{"expr": "sum by (le,endpoint,outcome) (rate(rag_latency_seconds_bucket[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "bargauge",
+      "title": "RAG Results per Endpoint",
+      "gridPos": {"x": 16, "y": 8, "w": 8, "h": 6},
+      "options": {"displayMode": "gradient"},
+      "targets": [{"expr": "sum by (endpoint) (rate(rag_results_total[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "heatmap",
+      "title": "Search Scores by Endpoint",
+      "gridPos": {"x": 0, "y": 14, "w": 24, "h": 8},
+      "targets": [{"expr": "sum by (le,endpoint) (rate(rag_search_scores_bucket[5m]))", "refId": "A"}]
+    }
+  ]
+}

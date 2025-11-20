@@ -10,7 +10,11 @@ from app.services.knowledge_service import KnowledgeServiceError
 from app.services.learning_service import LearningServiceError, ModelNotFoundError, TrainingFailedError
 from app.services.llm_service import LLMServiceError, LLMTimeoutError, LLMInvocationError
 from app.services.memory_service import MemoryServiceError
-from app.services.meta_agent_service import MetaAgentServiceError
+try:
+    from app.services.meta_agent_service import MetaAgentServiceError
+except Exception:
+    class MetaAgentServiceError(Exception):  # type: ignore
+        pass
 from app.services.observability_service import ObservabilityServiceError, MessageNotFoundError
 from app.services.optimization_service import OptimizationServiceError
 from app.services.sandbox_service import SandboxError, InvalidInputError

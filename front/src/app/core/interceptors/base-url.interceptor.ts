@@ -15,9 +15,13 @@ export const baseUrlInterceptor: HttpInterceptorFn = (req, next) => {
     const normalizedBase = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
     const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
 
-    // Do not prepend for root health endpoints
-    const skipPaths = ['/healthz', '/readyz'];
-    const shouldSkip = skipPaths.some((p) => normalizedUrl === p || normalizedUrl.startsWith(p + '?'));
+    const skipExact = ['/healthz', '/readyz', '/favicon.ico'];
+    const skipPrefix = ['/assets/'];
+    const skipExt = ['.csv'];
+    const hasSkipExt = skipExt.some(ext => normalizedUrl.toLowerCase().endsWith(ext));
+    const shouldSkip = skipExact.some((p) => normalizedUrl === p || normalizedUrl.startsWith(p + '?')) 
+      || skipPrefix.some((p) => normalizedUrl.startsWith(p))
+      || hasSkipExt;
 
     if (shouldSkip) {
       url = normalizedUrl; // keep as-is for health checks

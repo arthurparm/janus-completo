@@ -1,0 +1,7 @@
+nome;data_descontinuacao;alternativa;motive;impacto_usuarios;plano_migracao
+TextRoom (chat via datachannel);2025-11-18;Chat REST (/api/v1/chat/*);Arquitetura orientada a API, sem RTC;Nenhum no uso atual;Manter via REST, não implementar plugin
+AudioBridge (salas de áudio);2025-11-18;Chat/assistente textual;Projeto não prevê chamadas de áudio;Nenhum;Não implementar, documentar decisão
+SIP (telefonia PSTN);2025-11-18;N/A;Fora de escopo;Nenhum;Não adotar, usar canais existentes
+Record&Play do Janus;2025-11-18;Logs/observabilidade backend;Preferência por registros server-side;Nenhum;Se surgir mídia, avaliar alternativas server-side
+Streaming plugin para consumo;2025-11-18;N/A;Sem necessidade de ingest/egress;Nenhum;Não implementar, se necessário usar serviços dedicados
+Admin API no frontend;2025-11-18;Gestão via backend REST;Segurança e governança centralizadas;Nenhum;Manter administração pelo backend

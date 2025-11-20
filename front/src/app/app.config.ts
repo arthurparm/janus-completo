@@ -1,5 +1,5 @@
 import {ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode} from '@angular/core';
-import {provideRouter, withInMemoryScrolling, PreloadAllModules, withViewTransitions} from '@angular/router';
+import {provideRouter, withInMemoryScrolling, PreloadAllModules} from '@angular/router';
 import {provideHttpClient, withInterceptors} from '@angular/common/http';
 import {provideServiceWorker} from '@angular/service-worker';
 import {baseUrlInterceptor} from './core/interceptors/base-url.interceptor';
@@ -15,8 +15,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideRouter(
       routes,
-      withInMemoryScrolling({ scrollPositionRestoration: 'enabled' }),
-      withViewTransitions()
+      withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })
     ),
     provideHttpClient(withInterceptors([baseUrlInterceptor, authInterceptor, errorLoggerInterceptor, errorMappingInterceptor])),
     // Service Worker habilitado apenas em produção para evitar cache e abortos em dev

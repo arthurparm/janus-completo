@@ -344,6 +344,11 @@ class MessageBroker:
         Valida os argumentos atuais da fila contra os esperados na configuração.
         Retorna um dict com status (healthy/degraded/unhealthy), mensagem e detalhes.
         """
+        # Garante que a fila existe antes de consultar a Management API
+        try:
+            await self.get_queue_info(queue_name)
+        except Exception:
+            pass
         actual = await self.get_queue_policy(queue_name)
         expected = self._get_queue_arguments(queue_name) or {}
 

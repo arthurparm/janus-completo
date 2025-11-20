@@ -1,0 +1,69 @@
+<section class="janus-gaps">
+  <header class="page-header">
+    <h1>Inventário: Frontend vs Janus</h1>
+    <div class="status">
+      <span *ngIf="(loading$ | async)">Carregando...</span>
+      <ng-container *ngIf="(error$ | async) as err">
+        <span class="error">{{ err }}</span>
+      </ng-container>
+    </div>
+  </header>
+
+  <h2>Itens não implementados</h2>
+  <div class="table-wrap" *ngIf="!(loading$ | async)">
+    <table>
+      <thead>
+        <tr>
+          <th>Descrição</th>
+          <th>Data</th>
+          <th>Impacto</th>
+          <th>Prioridade</th>
+          <th>Status</th>
+          <th>Justificativa</th>
+          <th>Referências</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let g of gaps">
+          <td>{{ g.descricao }}</td>
+          <td>{{ g.data_ausencia }}</td>
+          <td>{{ g.impacto }}</td>
+          <td><span class="tag" [class.high]="g.prioridade==='alta'" [class.medium]="g.prioridade==='média'" [class.low]="g.prioridade==='baixa'">{{ g.prioridade }}</span></td>
+          <td><span class="tag" [class.pending]="g.status==='pendente'" [class.review]="g.status==='em análise'" [class.dropped]="g.status==='descartado'">{{ g.status }}</span></td>
+          <td>{{ g.justificativa }}</td>
+          <td class="refs">
+            <ng-container *ngFor="let ref of g.referencias.split('|')">
+              <code>{{ ref }}</code>
+            </ng-container>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Funcionalidades obsoletas (contexto do projeto)</h2>
+  <div class="table-wrap" *ngIf="!(loading$ | async)">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Data</th>
+          <th>Alternativa</th>
+          <th>Motivo</th>
+          <th>Impacto</th>
+          <th>Plano</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let o of obsoletos">
+          <td>{{ o.nome }}</td>
+          <td>{{ o.data_descontinuacao }}</td>
+          <td>{{ o.alternativa }}</td>
+          <td>{{ o.motive }}</td>
+          <td>{{ o.impacto_usuarios }}</td>
+          <td>{{ o.plano_migracao }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

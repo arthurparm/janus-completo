@@ -5,21 +5,70 @@
       <span *ngIf="loading">Carregando...</span>
       <span *ngIf="!loading && conversationId">Conversa: {{ conversationId }}</span>
     </div>
+    <div class="breadcrumbs">
+      <a routerLink="/conversations" aria-label="Voltar para conversas">Conversas</a>
+      <span class="sep">›</span>
+      <span class="status-chip" [class.new]="statusLabel()==='Nova'" [class.progress]="statusLabel()==='Em andamento'" [class.done]="statusLabel()==='Resolvida'">{{ statusLabel() }}</span>
+    </div>
   </header>
 
   <main class="messages" id="messages">
-    <div *ngFor="let m of messages" class="message" [class.user]="m.role === 'user'" [class.assistant]="m.role !== 'user'">
+    <div *ngFor="let m of messages; let i = index" class="message" [class.user]="m.role === 'user'" [class.assistant]="m.role !== 'user'">
       <div class="bubble">
         <pre>{{ m.content }}</pre>
+        <button *ngIf="m.role !== 'user'" class="btn-copy" (click)="copyMessage(i)" aria-label="Copiar conteúdo">Copiar</button>
+      </div>
+      <div *ngIf="m.role !== 'user' && citationsByIndex[i]?.length" class="citations">
+        <h4>Fontes</h4>
+        <div class="citation" *ngFor="let c of citationsByIndex[i]">
+          <span class="label">{{ c.file_name || c.file_path || c.title || c.id }}</span>
+          <span class="score">Confiança: {{ c.score | number:'1.0-2' }}</span>
+          <a *ngIf="c.url" [href]="c.url" target="_blank">Abrir</a>
+        </div>
       </div>
     </div>
     <div *ngIf="!messages.length && !loading" class="empty">Comece a conversar abaixo.</div>
+    <div *ngIf="typingActive" class="typing">Digitando…</div>
   </main>
 
   <footer class="input-bar">
-    <textarea [(ngModel)]="inputText" rows="3" placeholder="Digite sua mensagem..." [disabled]="loading"></textarea>
-    <button (click)="sendMessage()" [disabled]="loading || !inputText.trim()">Enviar</button>
+    <textarea [(ngModel)]="inputText" (keydown.enter)="onEnter($any($event))" rows="3" placeholder="Digite sua mensagem..." [disabled]="loading || streaming"></textarea>
+    <button (click)="sendMessage()" [disabled]="loading || streaming || !inputText.trim()">Enviar</button>
+    <button (click)="cancelStreaming()" [disabled]="!streaming">Cancelar</button>
   </footer>
 
+  <section class="attachments">
+    <h3>Anexos</h3>
+    <div class="assist" aria-live="polite">Arraste arquivos aqui ou selecione para anexar à conversa.</div>
+    <div class="dropzone" (dragover)="allowDrop($event)" (drop)="onDrop($event)" tabindex="0" (keydown)="onDropzoneKey($event)">
+      Arraste e solte arquivos aqui
+    </div>
+    <input #fileInput type="file" (change)="onFilesSelected($event)">
+    <div *ngIf="uploading" class="loading" role="status" aria-live="polite">Upload: {{ uploadProgress }}%</div>
+    <div *ngIf="attachmentsLoading" class="loading" role="status" aria-live="polite">Carregando anexos…</div>
+    <div *ngIf="attachmentsError" class="error" role="alert">{{ attachmentsError }}</div>
+    <ul class="attachments-list">
+      <li *ngFor="let a of attachments">
+        <span>{{ a.file_name }} ({{ a.chunks }} chunks)</span>
+        <button (click)="deleteAttachment(a)">Excluir</button>
+      </li>
+    </ul>
+  </section>
+
   <div *ngIf="error" class="error">{{ error }}</div>
+  <div *ngIf="reconnecting" class="reconnect">Tentando reconectar...</div>
+
+  <section class="media-section">
+    <h3>Mídia (WebRTC)</h3>
+    <div class="media-status">Status: {{ webrtcStatus || 'desconhecido' }}</div>
+    <div class="media-streams">
+      <video #localVideo [muted]="true" autoplay playsinline></video>
+      <video #remoteVideo autoplay playsinline></video>
+    </div>
+    <div class="media-controls">
+      <button (click)="initMedia()">Iniciar mídia</button>
+      <button (click)="stopMedia()" [disabled]="!mediaEnabled">Parar mídia</button>
+    </div>
+    <div class="hint">Se WebRTC não estiver disponível, o chat REST permanece funcional.</div>
+  </section>
 </div>

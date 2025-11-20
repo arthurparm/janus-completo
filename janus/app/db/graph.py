@@ -82,6 +82,11 @@ class GraphDatabase:
                     try:
                         await session.run("CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE")
                         await session.run("CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY")
+                        await session.run("CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY")
                         await session.run("CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)")
                         await session.run("CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)")
                         await session.run("CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)")
