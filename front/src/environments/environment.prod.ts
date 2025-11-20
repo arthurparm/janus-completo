@@ -8,7 +8,7 @@ export const environment = {
   tailscale: {
     enabled: true, // Tailscale Funnel ativado para produção
     apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api', // URL pública Tailscale Funnel
-    frontendUrl: 'https://seu-site-locaweb.com.br' // URL do seu site na Locaweb
+    frontendUrl: 'http://janus.arthinfo.com.br/' // URL do seu site na Locaweb
   },
   // Default API URL - Tailscale Funnel para produção
   apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api'
