@@ -16,7 +16,7 @@ import {MatChipsModule} from '@angular/material/chips';
 import {MatProgressBarModule} from '@angular/material/progress-bar';
 import {MatTooltipModule} from '@angular/material/tooltip';
 
-const UPDATE_INTERVAL_SECONDS = 5;
+const UPDATE_INTERVAL_SECONDS = 30; // Aumentado de 5 para 30 segundos para reduzir carga
 const LATENCY_THRESHOLD_MS = 500;
 
 interface QuickAction {
@@ -172,6 +172,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   }));
   private clockInterval?: any;
+  private historicalDataInterval?: any;
 
   // Dados para gráficos com animações - agora com dados reais
   systemMetricsHistory = signal<Array<{timestamp: Date, cpu: number, memory: number, disk: number}>>([]);
@@ -361,38 +362,51 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   private setupRealDataProcessing(): void {
-    // Processar dados reais do sistema em tempo real usando effect
+    // Processar dados reais do sistema em tempo real usando effect com proteção contra loops
+    let lastSystemStatus: any = null;
+    let lastServices: any[] = [];
+    let lastWorkers: any[] = [];
+    
+    // Use untracked() para evitar dependências cíclicas nos efeitos
     effect(() => {
       const systemStatus = this.store.systemStatus();
-      if (systemStatus) {
-        this.processSystemMetrics(systemStatus);
+      if (systemStatus && systemStatus !== lastSystemStatus) {
+        lastSystemStatus = systemStatus;
+        // Use untracked para evitar que atualizações de sinais disparem novamente o efeito
+        untracked(() => {
+          this.processSystemMetrics(systemStatus);
+        });
       }
     });
 
     effect(() => {
       const services = this.store.services();
-      if (services && services.length > 0) {
-        this.processServicesData(services);
+      if (services && services.length > 0 && services !== lastServices) {
+        lastServices = services;
+        untracked(() => {
+          this.processServicesData(services);
+        });
       }
     });
 
     effect(() => {
       const workers = this.store.workers();
-      if (workers && workers.length > 0) {
-        this.processWorkersData(workers);
+      if (workers && workers.length > 0 && workers !== lastWorkers) {
+        lastWorkers = workers;
+        untracked(() => {
+          this.processWorkersData(workers);
+        });
       }
     });
 
     // Atualizar dados históricos a cada 30 segundos
-    setInterval(() => {
+    this.historicalDataInterval = setInterval(() => {
       this.updateHistoricalData();
     }, 30000);
   }
 
   private processSystemMetrics(systemStatus: any): void {
-    console.log('Processing system metrics:', systemStatus);
     if (!systemStatus) {
-      console.log('No system status data available');
       return;
     }
 
@@ -402,8 +416,6 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
       disk: systemStatus.disk_usage_percent || systemStatus.disk || 0,
       uptime: systemStatus.uptime_seconds || systemStatus.uptime || 0
     };
-
-    console.log('Calculated metrics:', metrics);
 
     // Atualizar métricas atuais
     this.currentSystemMetrics.set(metrics);
@@ -423,22 +435,16 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
         newHistory.shift();
       }
       this.systemMetricsHistory.set(newHistory);
-      console.log('Updated system metrics history:', newHistory.length, 'entries');
     }
   }
 
   private processServicesData(services: ServiceHealthItem[]): void {
-    console.log('Processing services data:', services);
     if (!services || services.length === 0) {
-      console.log('No services data available');
       return;
     }
 
     const availability = this.calculateServicesAvailability(services);
     const avgResponseTime = this.calculateAverageResponseTime(services);
-
-    console.log('Calculated availability:', availability, '%');
-    console.log('Calculated avg response time:', avgResponseTime, 'ms');
 
     // Atualizar histórico de saúde dos serviços
     const history = this.servicesHealthHistory();
@@ -453,21 +459,15 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
       newHistory.shift();
     }
     this.servicesHealthHistory.set(newHistory);
-    console.log('Updated services health history:', newHistory.length, 'entries');
   }
 
   private processWorkersData(workers: WorkerStatusResponse[]): void {
-    console.log('Processing workers data:', workers);
     if (!workers || workers.length === 0) {
-      console.log('No workers data available');
       return;
     }
 
     const throughput = this.calculateWorkersThroughput(workers);
     const latency = this.calculateWorkersLatency(workers);
-
-    console.log('Calculated throughput:', throughput, 't/min');
-    console.log('Calculated latency:', latency, 'ms');
 
     // Atualizar histórico de performance dos workers
     const history = this.workersPerformanceHistory();
@@ -482,7 +482,6 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
       newHistory.shift();
     }
     this.workersPerformanceHistory.set(newHistory);
-    console.log('Updated workers performance history:', newHistory.length, 'entries');
   }
 
   private calculateServicesAvailability(services: ServiceHealthItem[]): number {
@@ -564,14 +563,23 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private updateHistoricalData(): void {
-    // Forçar atualização dos dados históricos
+    // Atualizar dados históricos sem processar novamente para evitar loop infinito
     const currentServices = this.services();
     const currentWorkers = this.workers();
     const currentSystem = this.systemStatus();
 
-    this.processServicesData(currentServices);
-    this.processWorkersData(currentWorkers);
-    this.processSystemMetrics(currentSystem);
+    // Apenas atualizar se houver dados novos significativos
+    if (currentServices && currentServices.length > 0) {
+      this.updateServicesHealth(currentServices);
+    }
+    if (currentWorkers && currentWorkers.length > 0) {
+      this.updateWorkersPerformance(currentWorkers);
+    }
+    if (currentSystem) {
+      this.updateSystemMetrics(currentSystem);
+    }
+    
+    console.log('[Home] Historical data updated at', new Date().toLocaleTimeString());
   }
 
   constructor() {
@@ -616,6 +624,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy(): void { 
     this.store.stopPolling(); 
     if (this.clockInterval) clearInterval(this.clockInterval);
+    if (this.historicalDataInterval) clearInterval(this.historicalDataInterval);
     if (this.particlesAnimation) cancelAnimationFrame(this.particlesAnimation);
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.removeTouchEvents();
@@ -642,13 +651,13 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   refreshData(): void {
-    this.uiService.showLoading({ message: '🔄 Sincronizando dados em tempo real...' });
-    // Stop and restart polling to force a refresh
-    this.store.stopPolling();
-    this.store.startPolling(UPDATE_INTERVAL_SECONDS * 1000);
+    // Atualização silenciosa - não mostrar loading para não interromper a experiência
+    // Forçar atualização dos dados sem reiniciar o polling
+    this.store.refreshWorkers();
+    
+    // Mostrar apenas uma pequena notificação de sucesso após a atualização
     setTimeout(() => {
-      this.uiService.hideLoading();
-      this.uiService.showSuccess('✅ Dados sincronizados com sucesso!');
+      this.uiService.showSuccess('✅ Dados atualizados com sucesso!');
     }, 1500);
   }
 

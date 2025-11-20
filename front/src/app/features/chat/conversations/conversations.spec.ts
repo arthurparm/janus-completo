@@ -22,6 +22,7 @@ class MockJanusApiService {
           conversation_id: 'conv2',
           title: 'Conversation 2',
           created_at: Date.parse('2024-01-03T00:00:00Z'),
+                    
           updated_at: Date.parse('2024-01-04T00:00:00Z')
         }
       ]
@@ -205,16 +206,16 @@ describe('ConversationsComponent', () => {
         {
           conversation_id: 'conv1',
           title: 'Old Conversation',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          last_message: null
+          created_at: Date.parse('2024-01-01T00:00:00Z'),
+          updated_at: Date.parse('2024-01-01T00:00:00Z'),
+          last_message: undefined
         },
         {
           conversation_id: 'conv2',
           title: 'New Conversation',
-          created_at: '2024-01-15T00:00:00Z',
-          updated_at: '2024-01-15T00:00:00Z',
-          last_message: null
+          created_at: Date.parse('2024-01-15T00:00:00Z'),
+          updated_at: Date.parse('2024-01-15T00:00:00Z'),
+          last_message: undefined
         }
       ]
     })
@@ -251,16 +252,16 @@ describe('ConversationsComponent', () => {
         {
           conversation_id: 'conv1',
           title: 'First',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-03T00:00:00Z',
-          last_message: null
+          created_at: Date.parse('2024-01-01T00:00:00Z'),
+          updated_at: Date.parse('2024-01-03T00:00:00Z'),
+          last_message: undefined
         },
         {
           conversation_id: 'conv2',
           title: 'Second',
-          created_at: '2024-01-02T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          last_message: null
+          created_at: Date.parse('2024-01-02T00:00:00Z'),
+          updated_at: Date.parse('2024-01-01T00:00:00Z'),
+          last_message: undefined
         }
       ]
     })
@@ -295,9 +296,9 @@ describe('ConversationsComponent', () => {
       component.items = Array.from({ length: 25 }, (_, i) => ({
         conversation_id: `conv${i}`,
         title: `Conversation ${i}`,
-        created_at: new Date(2024, 0, i + 1).toISOString(),
-        updated_at: new Date(2024, 0, i + 1).toISOString(),
-        last_message: null
+        created_at: Date.parse(new Date(2024, 0, i + 1).toISOString()),
+        updated_at: Date.parse(new Date(2024, 0, i + 1).toISOString()),
+        last_message: undefined
       }))
       component.pageSize = 10
       component.applyFilters()
@@ -340,9 +341,9 @@ describe('ConversationsComponent', () => {
       component.items = [{
         conversation_id: 'conv1',
         title: 'Test Conversation',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-02T00:00:00Z',
-        last_message: null
+        created_at: Date.parse('2024-01-01T00:00:00Z'),
+        updated_at: Date.parse('2024-01-02T00:00:00Z'),
+        last_message: undefined
       }]
       spyOn(window, 'prompt').and.returnValue('New Title')
       spyOn(window, 'confirm').and.returnValue(true)
@@ -431,9 +432,9 @@ describe('ConversationsComponent', () => {
       const conversation = {
         conversation_id: 'conv1',
         title: 'New Conversation',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_message: null
+        created_at: Date.parse(new Date().toISOString()),
+        updated_at: Date.parse(new Date().toISOString()),
+        last_message: undefined
       }
       
       const status = component.statusChip(conversation)
@@ -445,8 +446,8 @@ describe('ConversationsComponent', () => {
       const conversation = {
         conversation_id: 'conv1',
         title: 'Old Conversation',
-        created_at: oldDate,
-        updated_at: oldDate,
+        created_at: Date.parse(oldDate),
+        updated_at: Date.parse(oldDate),  
         last_message: { content: 'Old message', role: 'user' }
       }
       
@@ -459,8 +460,8 @@ describe('ConversationsComponent', () => {
       const conversation = {
         conversation_id: 'conv1',
         title: 'Recent Conversation',
-        created_at: recentDate,
-        updated_at: recentDate,
+        created_at: Date.parse(recentDate),
+        updated_at: Date.parse(recentDate),
         last_message: { content: 'Recent message', role: 'user' }
       }
       
@@ -476,9 +477,9 @@ describe('ConversationsComponent', () => {
       const conversation = {
         conversation_id: 'conv123',
         title: 'Test Conversation',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-02T00:00:00Z',
-        last_message: null
+        created_at: Date.parse('2024-01-01T00:00:00Z'),
+        updated_at: Date.parse('2024-01-02T00:00:00Z'),
+        last_message: undefined
       }
       
       component.open(conversation)

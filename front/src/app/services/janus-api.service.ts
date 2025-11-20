@@ -99,7 +99,16 @@ export interface ChatStartResponse { conversation_id: string }
 export interface ChatMessage { role: string; content: string; timestamp?: string; citations?: Citation[] }
 export interface ChatMessageResponse { message?: ChatMessage; assistant_message?: ChatMessage; messages?: ChatMessage[] }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
-export interface ConversationMeta { conversation_id: string; title?: string; last_message_at?: string; created_at?: number; updated_at?: number; last_message?: ChatMessage }
+export interface ConversationMeta { 
+  conversation_id: string; 
+  title?: string; 
+  last_message_at?: string; 
+  created_at?: number; 
+  updated_at?: number; 
+  last_message?: ChatMessage
+  message_count?: number
+  tags?: string[]
+}
 export interface ConversationsListResponse { conversations: ConversationMeta[] }
 export interface UserRolesResponse { user_id: number; roles: string[] }
 export interface TokenResponse { token: string }

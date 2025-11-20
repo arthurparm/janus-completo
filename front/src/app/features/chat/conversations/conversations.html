@@ -1,58 +1,368 @@
-<div class="conv-container">
-  <header class="conv-header">
-    <h2>Conversas</h2>
-    <div class="controls">
-      <button class="btn-primary" (click)="startNew()" aria-label="Nova conversa">Nova conversa</button>
-      <input [(ngModel)]="q" (input)="applyFilters()" placeholder="Buscar por título ou conteúdo" aria-label="Buscar" />
-      <input type="date" [(ngModel)]="startDate" (change)="applyFilters()" aria-label="Data inicial" />
-      <input type="date" [(ngModel)]="endDate" (change)="applyFilters()" aria-label="Data final" />
-      <select [(ngModel)]="sortKey" (change)="applyFilters()" aria-label="Ordenação">
-        <option value="updated_at">Ordenar por atualização</option>
-        <option value="created_at">Ordenar por criação</option>
-      </select>
-      <button (click)="toggleDir()" aria-label="Direção">{{ sortDir === 'asc' ? 'Asc' : 'Desc' }}</button>
+<!-- Modern Conversations Interface - Inspired by Premium AI Platforms -->
+<div class="conversations-layout">
+  <!-- Header with Advanced Controls -->
+  <header class="conversations-header">
+    <div class="header-content">
+      <div class="header-left">
+        <h1 class="header-title">Conversas</h1>
+        <div class="stats-summary">
+          <span class="stat-item">
+            <span class="stat-number">{{ conversations.length }}</span>
+            <span class="stat-label">total</span>
+          </span>
+          <span class="stat-item" *ngIf="filtered.length !== conversations.length">
+            <span class="stat-number">{{ filtered.length }}</span>
+            <span class="stat-label">filtradas</span>
+          </span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn-primary" (click)="startNew()" aria-label="Nova conversa">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span>Nova conversa</span>
+        </button>
+      </div>
     </div>
   </header>
 
-  <main>
+  <!-- Advanced Filters Bar -->
+  <section class="filters-section">
+    <div class="filters-container">
+      <div class="search-group">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input 
+            type="text" 
+            [(ngModel)]="q" 
+            (input)="applyFilters()" 
+            placeholder="Buscar por título ou conteúdo..."
+            class="search-input"
+            aria-label="Buscar conversas">
+          @if (q) {
+            <button class="clear-search" (click)="clearSearch()" aria-label="Limpar busca">×</button>
+          }
+        </div>
+      </div>
+      
+      <div class="filter-group">
+        <div class="date-filters">
+          <div class="date-input-wrapper">
+            <label for="startDate" class="date-label">De:</label>
+            <input 
+              id="startDate"
+              type="date" 
+              [(ngModel)]="startDate" 
+              (change)="applyFilters()" 
+              class="date-input"
+              aria-label="Data inicial">
+          </div>
+          <div class="date-input-wrapper">
+            <label for="endDate" class="date-label">Até:</label>
+            <input 
+              id="endDate"
+              type="date" 
+              [(ngModel)]="endDate" 
+              (change)="applyFilters()" 
+              class="date-input"
+              aria-label="Data final">
+          </div>
+        </div>
+        
+        <div class="sort-controls">
+          <select 
+            [(ngModel)]="sortKey" 
+            (change)="applyFilters()" 
+            class="sort-select"
+            aria-label="Ordenar conversas">
+            <option value="updated_at">Última atualização</option>
+            <option value="created_at">Data de criação</option>
+            <option value="title">Título</option>
+            <option value="message_count">Número de mensagens</option>
+          </select>
+          
+          <button 
+            class="sort-direction" 
+            (click)="toggleDir()" 
+            [attr.aria-label]="sortDir === 'asc' ? 'Ordem crescente' : 'Ordem decrescente'">
+            <svg class="w-4 h-4" [class.rotate-180]="sortDir === 'desc'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <div class="view-controls">
+        <div class="view-modes">
+          <button 
+            class="view-mode" 
+            [class.active]="viewMode === 'grid'"
+            (click)="setViewMode('grid')"
+            aria-label="Visualização em grade">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+            </svg>
+          </button>
+          <button 
+            class="view-mode" 
+            [class.active]="viewMode === 'list'"
+            (click)="setViewMode('list')"
+            aria-label="Visualização em lista">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="status-filters">
+          <select 
+            [(ngModel)]="statusFilter" 
+            (change)="applyFilters()" 
+            class="status-select"
+            aria-label="Filtrar por status">
+            <option value="">Todos status</option>
+            <option value="new">Novas</option>
+            <option value="progress">Em andamento</option>
+            <option value="done">Resolvidas</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Area -->
+  <main class="content-area">
+    <!-- Loading State -->
     @if (loading) {
-      <div class="skeleton-grid" role="status" aria-live="polite">
-        @for (i of [1,2,3,4,5,6]; track i) {
-          <div class="skeleton-card">
-            <div class="skeleton-title"></div>
-            <div class="skeleton-text"></div>
-            <div class="skeleton-text"></div>
+      <div class="loading-state">
+        <div class="loading-grid" [class.list-view]="viewMode === 'list'">
+          @for (i of [1,2,3,4,5,6]; track i) {
+            <div class="conversation-skeleton" [class.list-item]="viewMode === 'list'">
+              <div class="skeleton-header">
+                <div class="skeleton-avatar"></div>
+                <div class="skeleton-title"></div>
+              </div>
+              <div class="skeleton-content">
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line short"></div>
+              </div>
+              <div class="skeleton-footer">
+                <div class="skeleton-chip"></div>
+                <div class="skeleton-date"></div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+    
+    <!-- Error State -->
+    @if (error && !loading) {
+      <div class="error-state">
+        <div class="error-icon">
+          <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <h3 class="error-title">Erro ao carregar conversas</h3>
+        <p class="error-message">{{ error }}</p>
+        <button class="btn-retry" (click)="retryLoad()">Tentar novamente</button>
+      </div>
+    }
+    
+    <!-- Empty State -->
+    @if (!loading && !error && filtered.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+        </div>
+        <h3 class="empty-title">
+          {{ q || startDate || endDate || statusFilter ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa ainda' }}
+        </h3>
+        <p class="empty-message">
+          {{ q || startDate || endDate || statusFilter ? 'Tente ajustar os filtros' : 'Comece uma nova conversa para começar' }}
+        </p>
+        <button class="btn-primary" (click)="startNew()">Nova conversa</button>
+      </div>
+    }
+    
+    <!-- Conversations Grid/List -->
+    @if (!loading && !error && filtered.length > 0) {
+      <div class="conversations-container" [class.list-view]="viewMode === 'list'">
+        @for (conversation of filtered.slice((page-1)*pageSize, (page-1)*pageSize + pageSize); track conversation) {
+          <div class="conversation-card" [class.list-item]="viewMode === 'list'">
+            <!-- Card Header -->
+            <div class="card-header">
+              <div class="conversation-title">
+                <h3 class="title-text">{{ conversation.title || conversation.conversation_id }}</h3>
+                <span class="message-count" *ngIf="conversation.message_count">{{ conversation.message_count }} mensagens</span>
+              </div>
+              <div class="conversation-meta">
+                <span class="status-badge" [class.new]="statusChip(conversation)==='Nova'" [class.progress]="statusChip(conversation)==='Em andamento'" [class.done]="statusChip(conversation)==='Resolvida'">
+                  {{ statusChip(conversation) }}
+                </span>
+                <span class="update-time">{{ formatTimeAgo(conversation.updated_at) }}</span>
+              </div>
+            </div>
+            
+            <!-- Card Content -->
+            <div class="card-content">
+              @if (conversation.last_message) {
+                <div class="last-message">
+                  <span class="message-prefix">
+                    {{ conversation.last_message.role === 'user' ? 'Você:' : 'AI:' }}
+                  </span>
+                  <span class="message-text">{{ truncateText(conversation.last_message.content, 150) }}</span>
+                </div>
+              }
+              
+              @if (conversation.tags && conversation.tags.length > 0) {
+                <div class="conversation-tags">
+                  @for (tag of conversation.tags.slice(0, 3); track tag) {
+                    <span class="tag">{{ tag }}</span>
+                  }
+                  @if (conversation.tags.length > 3) {
+                    <span class="tag more">+{{ conversation.tags.length - 3 }}</span>
+                  }
+                </div>
+              }
+            </div>
+            
+            <!-- Card Footer -->
+            <div class="card-footer">
+              <div class="conversation-dates">
+                <span class="created-date">Criado: {{ formatDate(conversation.created_at) }}</span>
+                <span class="updated-date" *ngIf="conversation.updated_at !== conversation.created_at">
+                  Atualizado: {{ formatDate(conversation.updated_at) }}
+                </span>
+              </div>
+              
+              <div class="card-actions">
+                <button class="action-btn primary" (click)="open(conversation)" aria-label="Abrir conversa">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                  <span>Abrir</span>
+                </button>
+                
+                <div class="action-menu">
+                  <button class="action-btn secondary" [matMenuTriggerFor]="menu" aria-label="Mais ações">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+                    </svg>
+                  </button>
+                  
+                  <mat-menu #menu="matMenu">
+                    <button mat-menu-item (click)="rename(conversation)">
+                      <mat-icon>edit</mat-icon>
+                      <span>Renomear</span>
+                    </button>
+                    <button mat-menu-item (click)="duplicate(conversation)">
+                      <mat-icon>content_copy</mat-icon>
+                      <span>Duplicar</span>
+                    </button>
+                    <button mat-menu-item (click)="export(conversation)">
+                      <mat-icon>download</mat-icon>
+                      <span>Exportar</span>
+                    </button>
+                    <button mat-menu-item (click)="remove(conversation)" class="delete-item">
+                      <mat-icon>delete</mat-icon>
+                      <span>Excluir</span>
+                    </button>
+                  </mat-menu>
+                </div>
+              </div>
+            </div>
           </div>
         }
       </div>
     }
-    @if (error) {
-      <div class="error">{{ error }}</div>
-    }
-    <div class="grid">
-      @for (it of filtered.slice((page-1)*pageSize, (page-1)*pageSize + pageSize); track it) {
-        <div class="card">
-          <div class="title">{{ it.title || it.conversation_id }}</div>
-          @if (it.last_message) {
-            <div class="snippet">{{ it.last_message.content }}</div>
-          }
-          <div class="meta">
-            <span class="chip" [class.new]="statusChip(it)==='Nova'" [class.progress]="statusChip(it)==='Em andamento'" [class.done]="statusChip(it)==='Resolvida'">{{ statusChip(it) }}</span>
-            <span>Atualizado: {{ it.updated_at || '—' }}</span>
-          </div>
-          <div class="actions">
-            <button (click)="open(it)" class="btn-secondary">Abrir</button>
-            <button (click)="rename(it)" class="btn-secondary">Renomear</button>
-            <button (click)="remove(it)">Excluir</button>
-          </div>
-        </div>
-      }
-    </div>
   </main>
 
-  <footer class="pager">
-    <button (click)="prevPage()" [disabled]="page===1">Anterior</button>
-    <span>Página {{ page }}</span>
-    <button (click)="nextPage()" [disabled]="(page*pageSize)>=filtered.length">Próxima</button>
-  </footer>
+  <!-- Pagination -->
+  @if (!loading && !error && filtered.length > pageSize) {
+    <footer class="pagination-section">
+      <div class="pagination-info">
+        <span class="pagination-text">
+          Mostrando {{ (page-1)*pageSize + 1 }} - {{ getEndIndex() }} de {{ filtered.length }} conversas
+        </span>
+      </div>
+      
+      <div class="pagination-controls">
+        <button 
+          class="pagination-btn" 
+          (click)="firstPage()" 
+          [disabled]="page===1"
+          aria-label="Primeira página">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+          </svg>
+        </button>
+        
+        <button 
+          class="pagination-btn" 
+          (click)="prevPage()" 
+          [disabled]="page===1"
+          aria-label="Página anterior">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        
+        <div class="pagination-pages">
+          @for (pageNum of getVisiblePages(); track pageNum) {
+            <button 
+              class="pagination-page" 
+              [class.active]="pageNum === page"
+              (click)="goToPage(pageNum)"
+              [attr.aria-label]="'Página ' + pageNum">
+              {{ pageNum }}
+            </button>
+          }
+        </div>
+        
+        <button 
+          class="pagination-btn" 
+          (click)="nextPage()" 
+          [disabled]="(page*pageSize)>=filtered.length"
+          aria-label="Próxima página">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        
+        <button 
+          class="pagination-btn" 
+          (click)="lastPage()" 
+          [disabled]="(page*pageSize)>=filtered.length"
+          aria-label="Última página">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="page-size-selector">
+        <label for="pageSize" class="page-size-label">Mostrar:</label>
+        <select 
+          id="pageSize"
+          [(ngModel)]="pageSize" 
+          (change)="onPageSizeChange()" 
+          class="page-size-select"
+          aria-label="Tamanho da página">
+          <option [value]="6">6</option>
+          <option [value]="12">12</option>
+          <option [value]="24">24</option>
+          <option [value]="48">48</option>
+        </select>
+        <span class="page-size-text">por página</span>
+      </div>
+    </footer>
+  }
 </div>

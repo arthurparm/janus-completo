@@ -37,9 +37,17 @@ export class ChatComponent implements OnInit {
   mediaEnabled = false
   localStream: MediaStream | null = null
   remoteStream: MediaStream | null = null
+  sidebarOpen = false
+  voiceActive = false
+  dropZoneActive = false
+  modelTemperature = 0.7
+  
   @ViewChild('localVideo', { static: false }) localVideo?: ElementRef<HTMLVideoElement>
   @ViewChild('remoteVideo', { static: false }) remoteVideo?: ElementRef<HTMLVideoElement>
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>
+  @ViewChild('messageInput', { static: false }) messageInput?: ElementRef<HTMLTextAreaElement>
+  @ViewChild('messagesContainer', { static: false }) messagesContainer?: ElementRef<HTMLElement>
+  
   // Session controls
   // Attachments
   attachments: { doc_id: string; file_name?: string; chunks: number }[] = []
@@ -294,5 +302,67 @@ export class ChatComponent implements OnInit {
     } catch {
       this.notify.notifyError('Não foi possível copiar')
     }
+  }
+
+  // Missing methods from template
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen
+  }
+
+  setQuickAction(action: string) {
+    this.inputText = `Por favor, me ajude com ${action}.`
+    setTimeout(() => {
+      this.messageInput?.nativeElement.focus()
+    }, 100)
+  }
+
+  regenerateMessage(index: number) {
+    // TODO: Implement regenerate functionality
+    console.log('Regenerate message:', index)
+  }
+
+  formatTimestamp(timestamp: string | number | undefined): string {
+    if (!timestamp) return ''
+    const date = new Date(Number(timestamp))
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  clearAttachments() {
+    this.attachments = []
+  }
+
+  toggleVoiceInput() {
+    this.voiceActive = !this.voiceActive
+    if (this.voiceActive) {
+      // TODO: Implement voice input
+      console.log('Voice input activated')
+    }
+  }
+
+  onInputChange() {
+    // Auto-resize textarea
+    const textarea = this.messageInput?.nativeElement
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px'
+    }
+  }
+
+  onDragEnter(event: DragEvent) {
+    event.preventDefault()
+    this.dropZoneActive = true
+  }
+
+  onDragLeave(event: DragEvent) {
+    event.preventDefault()
+    this.dropZoneActive = false
+  }
+
+  clearError() {
+    this.error = null
+  }
+
+  clearAttachmentsError() {
+    this.attachmentsError = null
   }
 }

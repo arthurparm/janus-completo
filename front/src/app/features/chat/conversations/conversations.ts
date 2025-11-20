@@ -3,11 +3,13 @@ import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, ConversationsListResponse, ConversationMeta } from '../../../services/janus-api.service'
 import { Router } from '@angular/router'
+import { MatMenuModule } from '@angular/material/menu'
+import { MatIconModule } from '@angular/material/icon'
 
 @Component({
   selector: 'app-conversations',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatMenuModule, MatIconModule],
   templateUrl: './conversations.html',
   styleUrl: './conversations.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -17,16 +19,19 @@ export class ConversationsComponent implements OnInit {
   private router = inject(Router)
   items: ConversationMeta[] = []
   filtered: ConversationMeta[] = []
+  conversations: ConversationMeta[] = [] // Alias for items
   q = ''
   projectId = ''
   startDate?: string
   endDate?: string
   page = 1
   pageSize = 10
-  sortKey: 'updated_at' | 'created_at' | 'last_message_at' = 'updated_at'
+  sortKey: 'updated_at' | 'created_at' | 'last_message_at' | 'title' | 'message_count' = 'updated_at'
   sortDir: 'asc' | 'desc' = 'desc'
   loading = false
   error: string | null = null
+  viewMode: 'grid' | 'list' = 'grid'
+  statusFilter: 'new' | 'progress' | 'done' | '' = ''
 
   ngOnInit() { this.load() }
 
@@ -44,11 +49,20 @@ export class ConversationsComponent implements OnInit {
 
   applyFilters() {
     const q = this.q.trim().toLowerCase()
-    const base = !q ? this.items : this.items.filter(it => {
+    let base = !q ? this.items : this.items.filter(it => {
       const t = (it.title || '').toLowerCase()
       const c = (it.last_message?.content || '').toLowerCase()
       return t.includes(q) || c.includes(q)
     })
+    
+    // Apply status filter
+    if (this.statusFilter) {
+      base = base.filter(it => {
+        const status = this.statusChip(it).toLowerCase()
+        return status === this.getStatusFilterLabel(this.statusFilter)
+      })
+    }
+    
     const sd = this.startDate ? Date.parse(this.startDate) : undefined
     const ed = this.endDate ? Date.parse(this.endDate) : undefined
     const dateFiltered = base.filter(it => {
@@ -58,12 +72,37 @@ export class ConversationsComponent implements OnInit {
       return true
     })
     const sorted = dateFiltered.sort((a, b) => {
-      const ka = Number((this.sortKey === 'last_message_at' ? Date.parse(a.last_message_at || '') : (a[this.sortKey] || 0)))
-      const kb = Number((this.sortKey === 'last_message_at' ? Date.parse(b.last_message_at || '') : (b[this.sortKey] || 0)))
+      let ka: number, kb: number
+      
+      if (this.sortKey === 'last_message_at') {
+        ka = Date.parse(a.last_message_at || '')
+        kb = Date.parse(b.last_message_at || '')
+      } else if (this.sortKey === 'title') {
+        ka = (a.title || '').toLowerCase().charCodeAt(0) || 0
+        kb = (b.title || '').toLowerCase().charCodeAt(0) || 0
+      } else if (this.sortKey === 'message_count') {
+        ka = a.message_count || 0
+        kb = b.message_count || 0
+      } else {
+        ka = Number(a[this.sortKey] || 0)
+        kb = Number(b[this.sortKey] || 0)
+      }
+      
       return this.sortDir === 'asc' ? ka - kb : kb - ka
     })
+    
     this.filtered = sorted
+    this.conversations = this.items // Update alias
     this.page = 1
+  }
+
+  private getStatusFilterLabel(filter: string): string {
+    switch (filter) {
+      case 'new': return 'nova'
+      case 'progress': return 'em andamento'
+      case 'done': return 'resolvida'
+      default: return ''
+    }
   }
 
   rename(it: ConversationMeta) {
@@ -107,5 +146,96 @@ export class ConversationsComponent implements OnInit {
     if (!hasMsg) return 'Nova'
     if (days > 7) return 'Resolvida'
     return 'Em andamento'
+  }
+
+  // Missing methods from template
+  clearSearch() {
+    this.q = ''
+    this.applyFilters()
+  }
+
+  setViewMode(mode: 'grid' | 'list') {
+    this.viewMode = mode
+  }
+
+  retryLoad() {
+    this.load()
+  }
+
+  formatTimeAgo(timestamp: string | number | undefined): string {
+    if (!timestamp) return ''
+    const date = new Date(Number(timestamp))
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'agora'
+    if (diffMins < 60) return `${diffMins}m atrás`
+    if (diffHours < 24) return `${diffHours}h atrás`
+    if (diffDays < 7) return `${diffDays}d atrás`
+    return date.toLocaleDateString('pt-BR')
+  }
+
+  formatDate(timestamp: string | number | undefined): string {
+    if (!timestamp) return ''
+    return new Date(Number(timestamp)).toLocaleDateString('pt-BR')
+  }
+
+  truncateText(text: string, maxLength: number): string {
+    if (!text) return ''
+    if (text.length <= maxLength) return text
+    return text.substring(0, maxLength) + '...'
+  }
+
+  duplicate(conversation: ConversationMeta) {
+    // TODO: Implement duplicate functionality
+    console.log('Duplicate conversation:', conversation)
+  }
+
+  export(conversation: ConversationMeta) {
+    // TODO: Implement export functionality
+    console.log('Export conversation:', conversation)
+  }
+
+  firstPage() {
+    this.page = 1
+  }
+
+  lastPage() {
+    const maxPage = Math.ceil(this.filtered.length / this.pageSize)
+    this.page = maxPage
+  }
+
+  goToPage(pageNum: number) {
+    this.page = pageNum
+  }
+
+  onPageSizeChange() {
+    this.page = 1
+  }
+
+  getVisiblePages(): number[] {
+    const totalPages = Math.ceil(this.filtered.length / this.pageSize)
+    const currentPage = this.page
+    const maxVisible = 5
+    
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+    let end = Math.min(totalPages, start + maxVisible - 1)
+    
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1)
+    }
+    
+    const pages = []
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+    return pages
+  }
+
+  getEndIndex(): number {
+    return Math.min(this.page * this.pageSize, this.filtered.length)
   }
 }
