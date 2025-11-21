@@ -28,6 +28,7 @@ export class ChatStreamService {
   errors(): Observable<StreamError> { return this.errors$.asObservable() }
 
   start(params: StartParams): void {
+    console.log('[ChatStreamService] Iniciando stream com params:', params)
     this.stop()
     this.status$.next('connecting')
     this.typing$.next(false)
@@ -43,6 +44,7 @@ export class ChatStreamService {
     })
     if (typeof params.timeoutSeconds !== 'undefined') qs.set('timeout_seconds', String(params.timeoutSeconds))
     const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(params.conversationId)}?${qs.toString()}`
+    console.log('[ChatStreamService] URL construída:', url)
     this.open(url)
   }
 
@@ -53,46 +55,120 @@ export class ChatStreamService {
   }
 
   private open(url: string): void {
-    this.lastUrl = url
+    this.lastUrl = url;    console.log('[ChatStreamService] Abrindo EventSource para URL:', url)
     this.es = new EventSource(url)
-    this.es.onopen = () => { this.status$.next('open') }
-    this.es.onerror = () => { this.handleError('connection_error') }
-    this.es.onmessage = (ev) => { this.handleMessage('message', ev.data) }
-    this.es.addEventListener('start', () => { this.status$.next('open') })
-    this.es.addEventListener('ack', (ev: MessageEvent) => { this.handleMessage('ack', ev.data) })
-    this.es.addEventListener('partial', (ev: MessageEvent) => { this.handleMessage('partial', ev.data) })
-    this.es.addEventListener('done', (ev: MessageEvent) => { this.handleMessage('done', ev.data) })
-    this.es.addEventListener('error', (ev: MessageEvent) => { this.handleMessage('error', ev.data) })
-    this.es.addEventListener('heartbeat', (ev: MessageEvent) => { /* keep-alive noop */ })
-    this.es.addEventListener('protocol', (ev: MessageEvent) => { /* future: inspect version */ })
+    
+    this.es.onopen = () => { 
+      console.log('[ChatStreamService] EventSource conectado com sucesso')
+      this.status$.next('open') 
+    }
+    
+    this.es.onerror = (error) => { 
+      console.error('[ChatStreamService] EventSource erro:', error)
+      this.handleError('connection_error') 
+    }
+    
+    this.es.onmessage = (ev) => { 
+      console.log('[ChatStreamService] Mensagem recebida:', ev.data)
+      this.handleMessage('message', ev.data) 
+    }
+    
+    this.es.addEventListener('start', () => { 
+      console.log('[ChatStreamService] Evento start recebido')
+      this.status$.next('open') 
+    })
+    
+    this.es.addEventListener('ack', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Evento ack recebido:', ev.data)
+      this.handleMessage('ack', ev.data) 
+    })
+    
+    this.es.addEventListener('partial', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Evento partial recebido:', ev.data)
+      this.handleMessage('partial', ev.data) 
+    })
+    
+    this.es.addEventListener('token', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Evento token recebido:', ev.data)
+      this.handleMessage('partial', ev.data) 
+    })
+    
+    this.es.addEventListener('done', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Evento done recebido:', ev.data)
+      this.handleMessage('done', ev.data) 
+    })
+    
+    this.es.addEventListener('error', (ev: MessageEvent) => { 
+      console.error('[ChatStreamService] Evento error recebido:', ev.data)
+      this.handleMessage('error', ev.data) 
+    })
+    
+    this.es.addEventListener('heartbeat', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Heartbeat recebido')
+      /* keep-alive noop */ 
+    })
+    
+    this.es.addEventListener('protocol', (ev: MessageEvent) => { 
+      console.log('[ChatStreamService] Evento protocol recebido:', ev.data)
+      /* future: inspect version */ 
+    })
+    
+    // Adicionar listener genérico para debug
+    this.es.addEventListener('message', (ev: MessageEvent) => {
+      console.log('[ChatStreamService] Mensagem genérica recebida:', ev.type, ev.data)
+    })
+    
+    // Listener para qualquer mensagem que não tenha event type específico
+    this.es.onmessage = (ev) => {
+      console.log('[ChatStreamService] onmessage chamado:', ev.data)
+    }
+    
+    console.log('[ChatStreamService] EventSource configurado com listeners')
+    
+    // Timeout para verificar se está recebendo dados
+    setTimeout(() => {
+      console.log('[ChatStreamService] Status após 5 segundos:', this.status$.value)
+      console.log('[ChatStreamService] EventSource prontoState:', this.es?.readyState)
+    }, 5000)
   }
 
   private handleMessage(kind: string, data: any): void {
+    console.log('[ChatStreamService] Processando mensagem tipo:', kind, 'dados:', data)
     try {
       if (kind === 'partial') {
+        console.log('[ChatStreamService] Processando partial message')
         this.status$.next('streaming')
         this.typing$.next(true)
         const parsed = JSON.parse(String(data || '{}'))
+        console.log('[ChatStreamService] Partial parsed:', parsed)
         if (!this.ttftCaptured) { this.ttftCaptured = true }
-        this.partials$.next({ text: String(parsed?.text || '') })
+        const text = String(parsed?.text || '')
+        console.log('[ChatStreamService] Enviando partial text:', text)
+        this.partials$.next({ text: text })
         return
       }
       if (kind === 'done') {
+        console.log('[ChatStreamService] Processando done message')
         this.typing$.next(false)
         const parsed = JSON.parse(String(data || '{}'))
+        console.log('[ChatStreamService] Done parsed:', parsed)
         this.done$.next({ conversation_id: parsed?.conversation_id, provider: parsed?.provider, model: parsed?.model, citations: parsed?.citations })
         this.stop()
         return
       }
       if (kind === 'error') {
+        console.log('[ChatStreamService] Processando error message')
         const parsed = JSON.parse(String(data || '{}'))
         this.handleError(String(parsed?.error || 'error'))
         return
       }
       if (kind === 'ack') {
+        console.log('[ChatStreamService] Processando ack message')
         return
       }
+      console.log('[ChatStreamService] Tipo de mensagem não reconhecido:', kind)
     } catch (e) {
+      console.error('[ChatStreamService] Erro ao processar mensagem:', e)
       this.handleError('parse_error')
     }
   }
