@@ -1,0 +1,94 @@
+/* Sidebar - Tech/Jarvis Style */
+
+.sidebar {
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.section-title {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 0.75rem;
+    padding-left: 0.75rem;
+    opacity: 0.8;
+}
+
+.side-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.side-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+
+    .icon {
+        font-size: 1.25rem;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        filter: grayscale(100%);
+        transition: filter 0.3s;
+    }
+
+    .label {
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    &:hover {
+        background: rgba(0, 212, 255, 0.05);
+        color: var(--cyan);
+        padding-left: 1.25rem;
+        /* Slide effect */
+        border-color: rgba(0, 212, 255, 0.1);
+
+        .icon {
+            filter: grayscale(0%);
+        }
+
+        &::before {
+            opacity: 1;
+        }
+    }
+
+    &.active {
+        background: linear-gradient(90deg, rgba(0, 212, 255, 0.1), transparent);
+        color: var(--cyan);
+        border-left: 3px solid var(--cyan);
+        border-radius: 0 8px 8px 0;
+
+        .icon {
+            filter: grayscale(0%);
+        }
+    }
+
+    /* Hover glow line */
+    &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--cyan);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+}

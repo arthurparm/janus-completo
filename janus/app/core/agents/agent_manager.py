@@ -4,27 +4,7 @@ from typing import Dict, Any
 from starlette.requests import Request
 
 from app.core.infrastructure import AgentType
-try:
-    from app.core.agents.multi_agent_system import MultiAgentSystem, AgentRole
-except Exception:
-    class AgentRole:  # type: ignore
-        def __init__(self, value: str = "generic"):
-            self.value = value
-
-    class _StubAgent:
-        def __init__(self, role: AgentRole):
-            self.agent_id = "stub"
-            self.role = role
-
-    class MultiAgentSystem:  # type: ignore
-        def create_agent(self, role: AgentRole):
-            return _StubAgent(role)
-        def update_agent_config(self, agent_id: str, config: Dict[str, Any]) -> bool:
-            return True
-        def list_agents(self) -> list:
-            return [{"agent_id": "stub", "role": "generic"}]
-        def get_workspace_status(self) -> Dict[str, Any]:
-            return {"workspace": "ok"}
+from app.core.agents.multi_agent_system import MultiAgentSystem, AgentRole, Task, TaskPriority, TaskStatus
 
 logger = structlog.get_logger(__name__)
 
@@ -40,6 +20,19 @@ class AgentManager:
         logger.info("AgentManager inicializado.")
         self._system = MultiAgentSystem()
 
+    def _map_type_to_role(self, agent_type: AgentType) -> AgentRole:
+        """Mapeia AgentType (infra) para AgentRole (sistema multi-agente)."""
+        mapping = {
+            AgentType.ORCHESTRATOR: AgentRole.PROJECT_MANAGER,
+            AgentType.TOOL_USER: AgentRole.RESEARCHER, # Default to Researcher for tools
+            AgentType.META_AGENT: AgentRole.OPTIMIZER,
+            AgentType.REFLEXION_AGENT: AgentRole.TESTER, # Or Tester/Optimizer
+        }
+        # Fallback inteligente
+        if agent_type == AgentType.REFLEXION_AGENT:
+             return AgentRole.OPTIMIZER
+        return mapping.get(agent_type, AgentRole.PROJECT_MANAGER)
+
     async def arun_agent(
             self,
             question: str,
@@ -47,15 +40,43 @@ class AgentManager:
             request: Request
     ) -> Dict[str, Any]:
         """
-        Ponto de entrada para executar um agente.
-        A lógica específica para cada tipo de agente seria chamada aqui.
+        Executa um agente especializado para responder a uma questão.
         """
         logger.info("Executando agente através do AgentManager", agent_type=agent_type.name)
-        await asyncio.sleep(0.1)
-        return {
-            "answer": f"Resposta do agente {agent_type.name} para a pergunta: '{question}'",
-            "intermediate_steps": []
-        }
+        
+        role = self._map_type_to_role(agent_type)
+        
+        # Cria ou recupera um agente para este papel
+        # Nota: MultiAgentSystem.create_agent cria uma nova instância.
+        # Para eficiência, poderíamos cachear, mas por enquanto vamos criar sob demanda 
+        # para garantir isolamento de contexto por request se necessário.
+        agent = self._system.create_agent(role)
+        
+        task = Task(
+            description=question,
+            priority=TaskPriority.HIGH,
+            metadata={"source": "api_request", "agent_type": agent_type.name}
+        )
+        
+        # Registra a tarefa no workspace
+        self._system.workspace.add_task(task)
+        
+        try:
+            result = await agent.execute_task(task)
+            
+            return {
+                "answer": result.get("result", ""),
+                "intermediate_steps": [], # Poderíamos extrair do result se disponível
+                "task_id": task.id,
+                "status": result.get("status")
+            }
+        except Exception as e:
+            logger.error(f"Erro na execução do agente: {e}", exc_info=True)
+            return {
+                "answer": f"Desculpe, ocorreu um erro ao processar sua solicitação: {str(e)}",
+                "intermediate_steps": [],
+                "error": str(e)
+            }
 
     def create_specialized_agent(self, role: AgentRole) -> Dict[str, Any]:
         """Cria um agente especializado delegando ao MultiAgentSystem (config dinâmicas)."""

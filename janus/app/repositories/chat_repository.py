@@ -93,7 +93,29 @@ class ChatRepository:
         return conv
 
     def get_history(self, conversation_id: str) -> List[Dict[str, Any]]:
-        return list(self.get_conversation(conversation_id)["messages"])
+        logger.info(f"Getting history for conversation: {conversation_id}")
+        try:
+            conv = self.get_conversation(conversation_id)
+            messages = conv.get("messages", [])
+            
+            if not isinstance(messages, list):
+                logger.error(f"Invalid messages structure for conversation {conversation_id}: expected list, got {type(messages)}")
+                return []
+            
+            # Validar estrutura das mensagens
+            valid_messages = []
+            for i, msg in enumerate(messages):
+                if isinstance(msg, dict) and "timestamp" in msg and "role" in msg and "text" in msg:
+                    valid_messages.append(msg)
+                else:
+                    logger.warning(f"Invalid message structure at index {i} in conversation {conversation_id}: {msg}")
+            
+            logger.info(f"Returning {len(valid_messages)} valid messages from {len(messages)} total for conversation {conversation_id}")
+            return valid_messages
+            
+        except Exception as e:
+            logger.error(f"Error getting history for conversation {conversation_id}: {e}", exc_info=True)
+            raise
 
     def get_recent_messages(self, conversation_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         messages = self.get_history(conversation_id)

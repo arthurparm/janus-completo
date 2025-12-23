@@ -4,23 +4,13 @@ Versão: `1.0.0` • Status: Ativo • Plataforma: API/Workers • Observabilida
 
 Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA resilientes, com API unificada, roteamento dinâmico de LLMs, memória semântica, ferramentas dinâmicas, fluxo de aprendizagem e observabilidade completa. O design prioriza confiabilidade, desempenho e custo, operando com circuit breakers, orçamentos, caches, métricas e um meta-agente que otimiza a operação com feedback em ciclo fechado.
 
-- Repositório e documentação detalhada:
-  - `docs/Architecture.md` — arquitetura completa e referências de código
-  - `docs/Configuration.md` — variáveis e opções de configuração (Pydantic)
-  - `docs/Usage.md` — guia prático de uso (local/Docker) e cURL
-  - `docs/Examples.md` — exemplos Python/cURL para ferramentas, treino e LLMs
-  - `docs/Troubleshooting.md` — diagnóstico e resolução de problemas
-  - Histórico/Referência: `docs/DOCUMENTACAO JANUS.md`
-
-## Documentação Consolidada
-
-- Manual completo (índice navegável, fluxos, funções críticas, instalação, uso, padrões): `docs/Janus-Manual.md`
-- Complementares:
-  - `docs/Architecture.md` — arquitetura e componentes com fluxos
-  - `docs/Configuration.md` — variáveis, políticas e validações
-  - `docs/Usage.md` — autonomia, endpoints e métricas
-  - `docs/Examples.md` — cURL, Python e Angular
-  - `docs/Troubleshooting.md` — erros comuns e soluções
+- Documentação Oficial:
+  - **Manual Completo**: `docs/Janus-Manual.md` — Guia principal de instalação, uso e arquitetura.
+  - `docs/Configuration.md` — Variáveis de ambiente e configuração detalhada.
+  - `docs/Architecture.md` — Visão técnica da arquitetura e componentes.
+  - `docs/Usage.md` — Guia de operações e endpoints.
+  - `docs/Troubleshooting.md` — Diagnóstico e soluções comuns.
+  - `docs/guides/` — Guias específicos (ex: Tailscale).
 
 
 ## 1. Visão Geral do Sistema
@@ -55,7 +45,7 @@ Janus AI Architect é um sistema de arquitetura cognitiva para aplicações IA r
   - Docker e Docker Compose (recomendado) ou Python `3.11` + `pip`
   - Acesso às chaves dos provedores de LLM (opcionais e configuráveis)
   - Serviços: `RabbitMQ`, `Neo4j`, `Qdrant` (fornecidos por `docker-compose.yml`)
-- Dependências Python: conforme `requirements.txt`
+- Dependências Python: gerenciadas via `Poetry` (`pyproject.toml`)
 - GPU (opcional): suporte a `Ollama` com GPU NVIDIA se disponível
 - Configuração por `.env`:
   - Consulte `docs/Configuration.md` para lista completa e validações
@@ -97,7 +87,7 @@ OLLAMA_BASE_URL=http://ollama:11434
 - Instalação local (sem Docker):
   1) Garantir serviços externos (`RabbitMQ`, `Neo4j`, `Qdrant`) rodando
   2) Python 3.11: `py -3.11 -m venv .venv && .venv\Scripts\activate`
-  3) Instalar deps: `pip install -r requirements.txt`
+  3) Instalar deps: `poetry install`
   4) Configurar `.env` e variáveis de provedores
   5) Executar API: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
@@ -129,7 +119,7 @@ janus-1.0/
 ├── grafana/              # Dashboards (JSON) para importação
 ├── docs/                 # Documentação detalhada
 ├── docker-compose.yml    # Orquestração de serviços
-├── requirements.txt      # Dependências Python
+├── requirements.txt      # (Removido) Gerenciado via Poetry
 ├── pyproject.toml        # Configuração de build/ferramentas
 └── tests/                # Testes (unit/integration)
 ```
@@ -295,7 +285,7 @@ Obrigado por contribuir! Este guia define convenções, ferramentas e o fluxo de
 ## Setup de Desenvolvimento
 - Backend (Python):
   - Crie o ambiente: `py -3.11 -m venv .venv && .venv\\Scripts\\activate`
-  - Instale deps: `pip install -r Janus/requirements.txt`
+  - Instale deps: `poetry install` (dentro de `Janus/`)
   - (Opcional) Instale ferramentas de dev: `pip install ruff black pytest pre-commit`
   - Ative hooks: `pre-commit install`
 - Frontend (Angular):

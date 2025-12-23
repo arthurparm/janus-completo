@@ -166,3 +166,28 @@ class UserActivityResponse(BaseModel):
 async def user_activity(user_id: str, service: ObservabilityService = Depends(get_observability_service)):
     a = service.get_user_activity(user_id)
     return UserActivityResponse(**a)
+
+
+class UxMetricItem(BaseModel):
+    ttft_ms: Optional[float] = None
+    latency_ms: Optional[float] = None
+    outcome: str
+    retries: Optional[int] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    timestamp: float
+
+
+@router.post("/metrics/ux", summary="Registra métrica de UX de chat")
+async def record_ux_metric(item: UxMetricItem, service: ObservabilityService = Depends(get_observability_service)):
+    """Registra uma métrica de UX para análise de desempenho do chat."""
+    # Por enquanto, apenas loga a métrica. Em produção, poderia ser armazenada em banco de dados
+    logger.info("ux_metric_recorded", 
+                ttft_ms=item.ttft_ms, 
+                latency_ms=item.latency_ms, 
+                outcome=item.outcome,
+                retries=item.retries,
+                provider=item.provider,
+                model=item.model,
+                timestamp=item.timestamp)
+    return {"status": "recorded"}

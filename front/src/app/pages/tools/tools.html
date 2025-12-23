@@ -1,0 +1,228 @@
+<div class="tools-layout glass-panel">
+
+    <header class="tools-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="header-title">
+                    <mat-icon>build</mat-icon>
+                    Ferramentas do Sistema
+                </h1>
+                <p class="header-subtitle">Capacidades disponíveis para o agente autônomo</p>
+            </div>
+
+            <div class="header-right">
+                <button class="btn-secondary" (click)="loadData()">
+                    <mat-icon>refresh</mat-icon>
+                    Atualizar
+                </button>
+            </div>
+        </div>
+
+
+        @if (stats) {
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-number">{{ stats.total_tools_registered }}</span>
+                <span class="stat-label">Ferramentas</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{{ stats.total_calls }}</span>
+                <span class="stat-label">Total Chamadas</span>
+            </div>
+            <div class="stat-item success">
+                <span class="stat-number">{{ stats.successful_calls }}</span>
+                <span class="stat-label">Sucesso</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{{ (stats.success_rate * 100).toFixed(1) }}%</span>
+                <span class="stat-label">Taxa de Sucesso</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" [style.width.%]="stats.success_rate * 100"></div>
+            </div>
+        </div>
+        }
+    </header>
+
+
+    <section class="filters-section">
+        <div class="filters-container">
+            <div class="search-group">
+                <div class="search-input-wrapper">
+                    <mat-icon class="search-icon">search</mat-icon>
+                    <input type="text" [(ngModel)]="searchQuery" (input)="applyFilters()"
+                        placeholder="Buscar ferramentas..." class="search-input" aria-label="Buscar ferramentas"
+                        title="Campo de busca">
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <select [(ngModel)]="categoryFilter" (change)="applyFilters()" class="filter-select"
+                    aria-label="Filtrar por categoria" title="Categoria">
+                    <option value="">Todas categorias</option>
+                    @for (cat of categories; track cat) {
+                    <option [value]="cat">{{ cat }}</option>
+                    }
+                </select>
+
+                <select [(ngModel)]="permissionFilter" (change)="applyFilters()" class="filter-select"
+                    aria-label="Filtrar por permissão" title="Permissão">
+                    <option value="">Todas permissões</option>
+                    @for (perm of permissionLevels; track perm) {
+                    <option [value]="perm">{{ perm }}</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </section>
+
+
+    <main class="content-area">
+
+        @if (loading) {
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Carregando ferramentas...</p>
+        </div>
+        }
+
+
+        @if (error && !loading) {
+        <div class="error-state">
+            <mat-icon>error_outline</mat-icon>
+            <h3>Erro ao carregar ferramentas</h3>
+            <p>{{ error }}</p>
+            <button class="btn-primary" (click)="loadData()">Tentar novamente</button>
+        </div>
+        }
+
+
+        @if (!loading && !error && filteredTools.length === 0) {
+        <div class="empty-state">
+            <mat-icon>build</mat-icon>
+            <h3>{{ searchQuery || categoryFilter || permissionFilter ? 'Nenhuma ferramenta encontrada' : 'Nenhuma
+                ferramenta disponível' }}</h3>
+            <p>{{ searchQuery || categoryFilter || permissionFilter ? 'Tente ajustar os filtros' : 'O sistema não possui
+                ferramentas registradas' }}</p>
+        </div>
+        }
+
+
+        @if (!loading && !error && filteredTools.length > 0) {
+        <div class="tools-grid">
+            @for (tool of filteredTools; track tool.name) {
+            <div class="tool-card" [class.selected]="selectedTool?.name === tool.name" (click)="selectTool(tool)">
+
+                <div class="card-header">
+                    <div class="tool-icon">
+                        <mat-icon>{{ getCategoryIcon(tool.category) }}</mat-icon>
+                    </div>
+                    <div class="tool-info">
+                        <h3 class="tool-name">{{ tool.name }}</h3>
+                        <span class="tool-category">{{ tool.category }}</span>
+                    </div>
+                    <div class="permission-badge" [class]="getPermissionColor(tool.permission_level)">
+                        <mat-icon>{{ getPermissionIcon(tool.permission_level) }}</mat-icon>
+                        {{ tool.permission_level }}
+                    </div>
+                </div>
+
+
+                <div class="card-content">
+                    <p class="tool-description">{{ tool.description }}</p>
+
+                    @if (tool.tags.length > 0) {
+                    <div class="tool-tags">
+                        @for (tag of tool.tags.slice(0, 4); track tag) {
+                        <span class="tag">{{ tag }}</span>
+                        }
+                        @if (tool.tags.length > 4) {
+                        <span class="tag more">+{{ tool.tags.length - 4 }}</span>
+                        }
+                    </div>
+                    }
+                </div>
+
+
+                <div class="card-footer">
+                    <div class="tool-meta">
+                        @if (tool.requires_confirmation) {
+                        <span class="meta-item confirmation">
+                            <mat-icon>verified_user</mat-icon>
+                            Requer confirmação
+                        </span>
+                        }
+                        @if (tool.rate_limit_per_minute) {
+                        <span class="meta-item rate-limit">
+                            <mat-icon>speed</mat-icon>
+                            {{ formatRateLimit(tool.rate_limit_per_minute) }}
+                        </span>
+                        }
+                    </div>
+                </div>
+
+
+                @if (selectedTool?.name === tool.name) {
+                <div class="expanded-details">
+                    <div class="details-section">
+                        <h4>Detalhes</h4>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Categoria</span>
+                                <span class="detail-value">{{ tool.category }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Nível de Permissão</span>
+                                <span class="detail-value">{{ tool.permission_level }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Rate Limit</span>
+                                <span class="detail-value">{{ formatRateLimit(tool.rate_limit_per_minute) }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Confirmação</span>
+                                <span class="detail-value">{{ tool.requires_confirmation ? 'Sim' : 'Não' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    @if (tool.tags.length > 0) {
+                    <div class="details-section">
+                        <h4>Tags</h4>
+                        <div class="all-tags">
+                            @for (tag of tool.tags; track tag) {
+                            <span class="tag">{{ tag }}</span>
+                            }
+                        </div>
+                    </div>
+                    }
+                </div>
+                }
+            </div>
+            }
+        </div>
+        }
+    </main>
+
+
+    @if (!loading && !error && tools.length > 0) {
+    <aside class="category-sidebar">
+        <h3 class="sidebar-title">Categorias</h3>
+        <div class="category-list">
+            @for (item of getStatsByCategory() | keyvalue; track item.key) {
+            <button class="category-item" [class.active]="categoryFilter === item.key"
+                (click)="categoryFilter = item.key; applyFilters()">
+                <mat-icon>{{ getCategoryIcon(item.key) }}</mat-icon>
+                <span class="category-name">{{ item.key }}</span>
+                <span class="category-count">{{ item.value }}</span>
+            </button>
+            }
+            @if (categoryFilter) {
+            <button class="category-item clear" (click)="categoryFilter = ''; applyFilters()">
+                <mat-icon>clear</mat-icon>
+                <span class="category-name">Limpar filtro</span>
+            </button>
+            }
+        </div>
+    </aside>
+    }
+</div>

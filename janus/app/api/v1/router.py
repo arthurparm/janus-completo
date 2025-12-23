@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from .endpoints import system_status, knowledge, agent, memory, learning, tasks, context, sandbox, reflexion, tools, \
-    optimization, llm, collaboration, observability, meta_agent, chat, autonomy, workers, system_overview, assistant, users, profiles, rag, documents, autonomy_history, pending_actions, consents, productivity, evaluation, auth, deployment, auto_analysis
+    optimization, llm, collaboration, observability, meta_agent, chat, autonomy, workers, system_overview, assistant, users, profiles, rag, documents, autonomy_history, pending_actions, consents, productivity, evaluation, auth, deployment, auto_analysis, feedback
 from app.config import settings  # Added settings for feature flag
 from app.api.v1.endpoints.workspace import router as workspace_router  # noqa: E402
 
@@ -21,6 +21,7 @@ if getattr(settings, "PUBLIC_API_MINIMAL", False):
     api_router.include_router(deployment.router)
     api_router.include_router(auth.router)
     api_router.include_router(auto_analysis.router, prefix="/auto-analysis")  # Auto-análise simples
+    api_router.include_router(feedback.router)  # Quick Win: Feedback loop
 else:
     # Full API: expose all internal and public endpoints
     api_router.include_router(workspace_router)
@@ -57,3 +58,4 @@ else:
     api_router.include_router(evaluation.router)
     api_router.include_router(deployment.router)
     api_router.include_router(auth.router)
+    api_router.include_router(feedback.router)  # Quick Win: Feedback loop

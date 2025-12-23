@@ -22,6 +22,7 @@ from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.repositories.observability_repository import record_audit_event_direct
+from app.core.infrastructure.python_sandbox import python_sandbox
 try:
     from opentelemetry import trace  # type: ignore
     _OTEL = True
@@ -287,22 +288,42 @@ class DynamicToolGenerator:
 
         def execute_code(**kwargs) -> str:
             try:
-                # Cria namespace isolado
-                namespace = {"__name__": "__dynamic_tool__"}
+                # Executa código no sandbox seguro
+                # Passa os argumentos como contexto
+                result = python_sandbox.execute(code, context=kwargs)
 
-                # Executa código no namespace
-                exec(code, namespace)
+                if not result.success:
+                    logger.error(f"[ActionModule] Erro na execução sandbox: {result.error}")
+                    return f"Erro na execução: {result.error}"
+                
+                # Se houver stdout, retorna
+                if result.output and result.output.strip():
+                     # Se esperar que a função execute dentro do sandbox, precisamos ver se ela foi chamada.
+                     # O sandbox atual executa o código top-level.
+                     # Se o código define uma função, ela estará em 'variables'.
+                     pass
 
-                # Obtém função
-                if function_name not in namespace:
-                    return f"Erro: Função '{function_name}' não encontrada no código"
+                # Verificar se a função alvo está definida nas variáveis locais do sandbox
+                if result.variables and function_name in result.variables:
+                     func_in_sandbox = result.variables[function_name]
+                     if callable(func_in_sandbox):
+                         # NOTA: Chamar a função diretamente aqui ainda executa no contexto deste processo,
+                         # mas as globais dela estão presas ao sandbox.
+                         # O ideal seria que o sandbox suportasse 'call_function', mas o execute() já retorna as vars.
+                         try:
+                            # Tentar executar a função recuperada com os args
+                            # Atenção: objetos complexos podem não funcionar bem entre fronteiras se o sandbox fosse isolado em processo,
+                            # mas aqui é isolamento lógico (exec restricted).
+                            res = func_in_sandbox(**kwargs)
+                            return str(res)
+                         except Exception as call_err:
+                             return f"Erro ao chamar função '{function_name}': {call_err}"
+                
+                # Se a função não foi encontrada mas houve output, retorne o output (comportamento de script)
+                if result.output:
+                    return result.output.strip()
 
-                func = namespace[function_name]
-
-                # Executa função com argumentos
-                result = func(**kwargs)
-
-                return str(result)
+                return f"Erro: Função '{function_name}' não encontrada no código e nenhum output gerado."
 
             except Exception as e:
                 logger.error(f"[ActionModule] Erro ao executar código dinâmico: {e}", exc_info=True)
@@ -310,7 +331,7 @@ class DynamicToolGenerator:
 
         return DynamicToolGenerator.from_function_spec(
             name=name,
-            description=f"{description}\n⚠️ Ferramenta gerada dinamicamente",
+            description=f"{description}\n🛡️ Sandbox Ativado",
             func=execute_code
         )
 

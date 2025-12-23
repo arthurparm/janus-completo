@@ -1,0 +1,263 @@
+<div class="goals-layout glass-panel">
+
+    <header class="goals-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="header-title">
+                    <mat-icon>flag</mat-icon>
+                    Metas Autônomas
+                </h1>
+                <p class="header-subtitle">Gerencie os objetivos do sistema</p>
+            </div>
+
+            <div class="header-right">
+                <button class="btn-primary" (click)="openNewGoalForm()">
+                    <mat-icon>add</mat-icon>
+                    Nova Meta
+                </button>
+            </div>
+        </div>
+
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-number">{{ getStats().total }}</span>
+                <span class="stat-label">Total</span>
+            </div>
+            <div class="stat-item pending">
+                <span class="stat-number">{{ getStats().pending }}</span>
+                <span class="stat-label">Pendentes</span>
+            </div>
+            <div class="stat-item in-progress">
+                <span class="stat-number">{{ getStats().inProgress }}</span>
+                <span class="stat-label">Em Progresso</span>
+            </div>
+            <div class="stat-item completed">
+                <span class="stat-number">{{ getStats().completed }}</span>
+                <span class="stat-label">Concluídas</span>
+            </div>
+            <div class="stat-item failed" *ngIf="getStats().failed > 0">
+                <span class="stat-number">{{ getStats().failed }}</span>
+                <span class="stat-label">Falhou</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" [style.width.%]="getCompletionPercentage()"></div>
+                <span class="progress-label">{{ getCompletionPercentage() }}% concluído</span>
+            </div>
+        </div>
+    </header>
+
+
+    <section class="filters-section">
+        <div class="filters-container">
+            <div class="search-group">
+                <div class="search-input-wrapper">
+                    <mat-icon class="search-icon">search</mat-icon>
+                    <input type="text" [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Buscar metas..."
+                        class="search-input" aria-label="Buscar metas" title="Buscar metas">
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <select [(ngModel)]="statusFilter" (change)="loadGoals()" class="filter-select"
+                    aria-label="Filtrar por status" title="Status da meta">
+                    <option value="">Todos os status</option>
+                    <option value="pending">Pendentes</option>
+                    <option value="in_progress">Em Progresso</option>
+                    <option value="completed">Concluídas</option>
+                    <option value="failed">Falharam</option>
+                </select>
+
+                <div class="sort-controls">
+                    <button class="sort-btn" [class.active]="sortBy === 'priority'" (click)="toggleSort('priority')">
+                        <mat-icon>priority_high</mat-icon>
+                        Prioridade
+                    </button>
+                    <button class="sort-btn" [class.active]="sortBy === 'deadline_ts'"
+                        (click)="toggleSort('deadline_ts')">
+                        <mat-icon>event</mat-icon>
+                        Prazo
+                    </button>
+                    <button class="sort-btn" [class.active]="sortBy === 'created_at'"
+                        (click)="toggleSort('created_at')">
+                        <mat-icon>history</mat-icon>
+                        Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    @if (showNewGoalForm) {
+    <div class="new-goal-overlay" (click)="cancelNewGoal()">
+        <div class="new-goal-modal" (click)="$event.stopPropagation()">
+            <h2 class="modal-title">
+                <mat-icon>add_task</mat-icon>
+                Nova Meta
+            </h2>
+
+            <form (submit)="saveNewGoal(); $event.preventDefault()">
+                <div class="form-group">
+                    <label for="title">Título *</label>
+                    <input id="title" type="text" [(ngModel)]="newGoal.title" name="title"
+                        placeholder="Ex: Otimizar tempo de resposta" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Descrição *</label>
+                    <textarea id="description" [(ngModel)]="newGoal.description" name="description" rows="3"
+                        placeholder="Descreva o objetivo em detalhes..." required></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="priority">Prioridade (1-10)</label>
+                        <input id="priority" type="range" [(ngModel)]="newGoal.priority" name="priority" min="1"
+                            max="10">
+                        <span class="priority-value" [class]="getPriorityClass(newGoal.priority)">
+                            {{ newGoal.priority }}
+                        </span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="deadline">Prazo</label>
+                        <input id="deadline" type="date" [(ngModel)]="newGoal.deadline" name="deadline">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="success_criteria">Critérios de Sucesso</label>
+                    <textarea id="success_criteria" [(ngModel)]="newGoal.success_criteria" name="success_criteria"
+                        rows="2" placeholder="Como saberemos que a meta foi alcançada?"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" (click)="cancelNewGoal()">Cancelar</button>
+                    <button type="submit" class="btn-primary"
+                        [disabled]="saving || !newGoal.title || !newGoal.description">
+                        @if (saving) {
+                        <mat-icon class="spinning">autorenew</mat-icon>
+                        Salvando...
+                        } @else {
+                        <mat-icon>save</mat-icon>
+                        Criar Meta
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    }
+
+
+    <main class="content-area">
+
+        @if (loading) {
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Carregando metas...</p>
+        </div>
+        }
+
+
+        @if (error && !loading) {
+        <div class="error-state">
+            <mat-icon>error_outline</mat-icon>
+            <h3>Erro ao carregar metas</h3>
+            <p>{{ error }}</p>
+            <button class="btn-retry" (click)="loadGoals()">Tentar novamente</button>
+        </div>
+        }
+
+
+        @if (!loading && !error && filteredGoals.length === 0) {
+        <div class="empty-state">
+            <mat-icon>flag</mat-icon>
+            <h3>{{ searchQuery || statusFilter ? 'Nenhuma meta encontrada' : 'Nenhuma meta ainda' }}</h3>
+            <p>{{ searchQuery || statusFilter ? 'Tente ajustar os filtros' : 'Crie sua primeira meta para começar' }}
+            </p>
+            <button class="btn-primary" (click)="openNewGoalForm()">
+                <mat-icon>add</mat-icon>
+                Criar Meta
+            </button>
+        </div>
+        }
+
+
+        @if (!loading && !error && filteredGoals.length > 0) {
+        <div class="goals-grid">
+            @for (goal of filteredGoals; track goal.id) {
+            <div class="goal-card" [class]="'status-' + goal.status" [class.overdue]="isOverdue(goal)">
+
+                <div class="card-header">
+                    <div class="priority-badge" [class]="getPriorityClass(goal.priority)">
+                        {{ goal.priority }}
+                    </div>
+                    <h3 class="goal-title">{{ goal.title }}</h3>
+                    <button class="menu-btn" [matMenuTriggerFor]="goalMenu">
+                        <mat-icon>more_vert</mat-icon>
+                    </button>
+
+                    <mat-menu #goalMenu="matMenu">
+                        @if (goal.status !== 'in_progress') {
+                        <button mat-menu-item (click)="updateStatus(goal, 'in_progress')">
+                            <mat-icon>play_arrow</mat-icon>
+                            <span>Iniciar</span>
+                        </button>
+                        }
+                        @if (goal.status !== 'completed') {
+                        <button mat-menu-item (click)="updateStatus(goal, 'completed')">
+                            <mat-icon>check_circle</mat-icon>
+                            <span>Concluir</span>
+                        </button>
+                        }
+                        @if (goal.status !== 'pending') {
+                        <button mat-menu-item (click)="updateStatus(goal, 'pending')">
+                            <mat-icon>undo</mat-icon>
+                            <span>Voltar para Pendente</span>
+                        </button>
+                        }
+                        @if (goal.status !== 'failed') {
+                        <button mat-menu-item (click)="updateStatus(goal, 'failed')">
+                            <mat-icon>cancel</mat-icon>
+                            <span>Marcar como Falhou</span>
+                        </button>
+                        }
+                        <button mat-menu-item (click)="deleteGoal(goal)" class="delete-item">
+                            <mat-icon>delete</mat-icon>
+                            <span>Excluir</span>
+                        </button>
+                    </mat-menu>
+                </div>
+
+
+                <div class="card-content">
+                    <p class="goal-description">{{ goal.description }}</p>
+
+                    @if (goal.success_criteria) {
+                    <div class="success-criteria">
+                        <mat-icon>check_box</mat-icon>
+                        <span>{{ goal.success_criteria }}</span>
+                    </div>
+                    }
+                </div>
+
+
+                <div class="card-footer">
+                    <div class="status-badge" [class]="'status-' + goal.status">
+                        <mat-icon>{{ getStatusIcon(goal.status) }}</mat-icon>
+                        {{ getStatusLabel(goal.status) }}
+                    </div>
+
+                    <div class="deadline" [class.overdue]="isOverdue(goal)">
+                        <mat-icon>event</mat-icon>
+                        {{ formatDeadline(goal.deadline_ts) }}
+                    </div>
+                </div>
+            </div>
+            }
+        </div>
+        }
+    </main>
+</div>

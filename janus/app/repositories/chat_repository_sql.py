@@ -22,10 +22,35 @@ class ChatRepositorySQL:
             return self._session
         return mysql_db.get_session_direct()
 
+    def _resolve_user_id(self, user_id: str) -> Optional[int]:
+        """
+        Resolve different user ID formats to database user ID.
+        Supports:
+        - Numeric strings: "123" -> 123
+        - Current user placeholder: "current-user" -> None (for now)
+        - User email or external ID: maps to internal user ID
+        """
+        if not user_id:
+            return None
+            
+        # Handle numeric user IDs
+        try:
+            numeric_id = int(user_id)
+            return numeric_id
+        except ValueError:
+            pass
+        
+        # Handle special identifiers
+        if user_id == 'current-user':
+            return None
+        
+        return None
+
     def start_conversation(self, persona: Optional[str], user_id: Optional[str], project_id: Optional[str], title: Optional[str] = None) -> str:
         s = self._get_session()
         try:
-            cs = ChatSession(user_id=int(user_id) if user_id else None, persona=persona, project_id=project_id, title=title or "Nova Conversa")
+            resolved_user_id = self._resolve_user_id(user_id) if user_id else None
+            cs = ChatSession(user_id=resolved_user_id, persona=persona, project_id=project_id, title=title or "Nova Conversa")
             s.add(cs)
             s.commit()
             s.refresh(cs)
@@ -75,6 +100,64 @@ class ChatRepositorySQL:
     def get_history(self, conversation_id: str) -> List[Dict[str, Any]]:
         return list(self.get_conversation(conversation_id)["messages"])
 
+    def get_history_paginated(self, conversation_id: str, limit: int = 50, offset: int = 0, 
+                             before_ts: Optional[float] = None, after_ts: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Retorna histórico paginado de mensagens com metadados.
+        
+        Args:
+            conversation_id: ID da conversa
+            limit: Número máximo de mensagens (max 200)
+            offset: Número de mensagens a pular
+            before_ts: Timestamp para buscar mensagens antes desta data
+            after_ts: Timestamp para buscar mensagens após esta data
+            
+        Returns:
+            Dict com messages, total_count, has_more, next_offset
+        """
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            
+            # Query base
+            q = s.query(Message).filter(Message.session_id == sid)
+            
+            # Filtros por timestamp
+            if before_ts:
+                q = q.filter(Message.timestamp < datetime.fromtimestamp(before_ts))
+            if after_ts:
+                q = q.filter(Message.timestamp > datetime.fromtimestamp(after_ts))
+            
+            # Conta total de mensagens (sem limite)
+            total_count = q.count()
+            
+            # Aplica ordenação e paginação
+            messages = q.order_by(Message.timestamp.asc()).offset(offset).limit(limit).all()
+            
+            def _ts(d: datetime) -> float:
+                return d.timestamp() if isinstance(d, datetime) else float(d)
+                
+            result_messages = [
+                {"timestamp": _ts(m.timestamp), "role": m.role, "text": m.text} 
+                for m in messages
+            ]
+            
+            has_more = (offset + len(result_messages)) < total_count
+            next_offset = offset + len(result_messages) if has_more else None
+            
+            return {
+                "messages": result_messages,
+                "total_count": total_count,
+                "has_more": has_more,
+                "next_offset": next_offset,
+                "limit": limit,
+                "offset": offset
+            }
+            
+        finally:
+            if not self._session:
+                s.close()
+
     def get_recent_messages(self, conversation_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         hist = self.get_history(conversation_id)
         return hist[-limit:] if limit > 0 else hist
@@ -83,8 +166,12 @@ class ChatRepositorySQL:
         s = self._get_session()
         try:
             q = s.query(ChatSession)
+            
+            # Use the resolved user_id instead of direct int conversion
             if user_id:
-                q = q.filter(ChatSession.user_id == int(user_id))
+                resolved_user_id = self._resolve_user_id(user_id)
+                if resolved_user_id is not None:
+                    q = q.filter(ChatSession.user_id == resolved_user_id)
             if project_id:
                 q = q.filter(ChatSession.project_id == project_id)
             items = q.order_by(desc(ChatSession.updated_at)).limit(limit).all()
@@ -116,8 +203,8 @@ class ChatRepositorySQL:
             if cs is None:
                 raise ChatRepositoryError("Conversation not found")
             if user_id:
-                uid = int(user_id)
-                if cs.user_id is not None and cs.user_id != uid:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
                     if not self._user_repo.is_admin(uid):
                         raise ChatRepositoryError("Access denied: user_id mismatch")
             if project_id and cs.project_id and cs.project_id != project_id:
@@ -137,8 +224,8 @@ class ChatRepositorySQL:
             if cs is None:
                 raise ChatRepositoryError("Conversation not found")
             if user_id:
-                uid = int(user_id)
-                if cs.user_id is not None and cs.user_id != uid:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
                     if not self._user_repo.is_admin(uid):
                         raise ChatRepositoryError("Access denied: user_id mismatch")
             if project_id and cs.project_id and cs.project_id != project_id:
@@ -160,8 +247,8 @@ class ChatRepositorySQL:
             if cs is None:
                 raise ChatRepositoryError("Conversation not found")
             if user_id:
-                uid = int(user_id)
-                if cs.user_id is not None and cs.user_id != uid:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
                     if not self._user_repo.is_admin(uid):
                         raise ChatRepositoryError("Access denied: user_id mismatch")
             msg.text = new_text
@@ -182,8 +269,8 @@ class ChatRepositorySQL:
             if cs is None:
                 raise ChatRepositoryError("Conversation not found")
             if user_id:
-                uid = int(user_id)
-                if cs.user_id is not None and cs.user_id != uid:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
                     if not self._user_repo.is_admin(uid):
                         raise ChatRepositoryError("Access denied: user_id mismatch")
             s.delete(msg)
@@ -203,6 +290,16 @@ class ChatRepositorySQL:
             cs.summary = summary
             cs.updated_at = datetime.utcnow()
             s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
+    def count_messages(self, conversation_id: str) -> int:
+        """Conta o número total de mensagens em uma conversa."""
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            return s.query(Message).filter(Message.session_id == sid).count()
         finally:
             if not self._session:
                 s.close()

@@ -79,10 +79,34 @@ class GraphDatabase:
                     await self.register_relationship_type(session, GraphRelationship.SIMILAR_TO.value)
                     await self.register_relationship_type(session, GraphRelationship.FOLLOWED_BY.value)
                     await self.register_relationship_type(session, GraphRelationship.EXTRACTED_FROM.value)
+                    
+                    # JARVIS / Agentic Relationships
+                    await self.register_relationship_type(session, GraphRelationship.HAS_GOAL.value)
+                    await self.register_relationship_type(session, GraphRelationship.HAS_PREFERENCE.value)
+                    await self.register_relationship_type(session, GraphRelationship.IMPLEMENTED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.EXECUTES.value)
+                    await self.register_relationship_type(session, GraphRelationship.NEXT.value)
+                    await self.register_relationship_type(session, GraphRelationship.TRUSTS.value)
+                    await self.register_relationship_type(session, GraphRelationship.BLOCKED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.COMPLETED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.CREATED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.MODIFIED_BY.value)
+                    await self.register_relationship_type(session, GraphRelationship.RESULTS_IN.value)
+
                     try:
+                        # Core Constraints
                         await session.run("CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE")
                         await session.run("CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE")
                         await session.run("CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE")
+                        
+                        # JARVIS Constraints & Indexes
+                        await session.run("CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT goal_id_unique IF NOT EXISTS FOR (g:Goal) REQUIRE g.id IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT episode_id_unique IF NOT EXISTS FOR (e:Episode) REQUIRE e.id IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT action_id_unique IF NOT EXISTS FOR (a:Action) REQUIRE a.id IS UNIQUE")
+                        await session.run("CREATE CONSTRAINT plan_id_unique IF NOT EXISTS FOR (p:Plan) REQUIRE p.id IS UNIQUE")
+                        await session.run("CREATE INDEX episode_timestamp_idx IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)")
+
                         await session.run("CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE")
                         await session.run("CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE")
                         await session.run("CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY")

@@ -14,9 +14,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.agents.output_parsers import ReActSingleInputOutputParser
-from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.prompts import PromptTemplate
 from prometheus_client import Counter, Histogram, Gauge
 
@@ -24,8 +21,39 @@ from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
 from app.core.tools import get_all_tools
 from app.repositories.agent_config_repository import AgentConfigRepository
 from app.core.infrastructure.prompt_loader import get_prompt_advanced
+from app.core.tools.action_module import action_registry, PermissionLevel
+from app.core.tools.os_tools import register_os_tools
+
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 
 logger = logging.getLogger(__name__)
+
+class AgentEventCallbackHandler(BaseCallbackHandler):
+    """Callback handler para transmitir eventos do agente via callback assíncrono."""
+    
+    def __init__(self, async_callback):
+        self.async_callback = async_callback
+        
+    async def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
+        try:
+            await self.async_callback("tool_start", f"Starting tool {serialized.get('name')}: {input_str}")
+        except Exception as e:
+            logger.warning(f"Error in callback: {e}")
+
+    async def on_tool_end(self, output: str, **kwargs: Any) -> Any:
+        try:
+            await self.async_callback("tool_end", f"Tool output: {output[:200]}...")
+        except Exception as e:
+            logger.warning(f"Error in callback: {e}")
+            
+    async def on_agent_action(self, action: Any, **kwargs: Any) -> Any:
+        try:
+            # action tem .tool e .tool_input
+            content = f"Thought: I need to use {action.tool} with input {action.tool_input}"
+            await self.async_callback("agent_thought", content)
+        except Exception as e:
+            logger.warning(f"Error in callback: {e}")
 
 
 def _clean_json_output(text: str) -> str:
@@ -204,6 +232,7 @@ class AgentRole(Enum):
     TESTER = "tester"  # Testes e validação
     DOCUMENTER = "documenter"  # Documentação
     OPTIMIZER = "optimizer"  # Otimização e refatoração
+    SYSADMIN = "sysadmin"  # Administrador de Sistema (OS Agency)
 
 
 class TaskStatus(Enum):
@@ -354,11 +383,17 @@ class SpecializedAgent:
         self.role = role
         self.agent_id = agent_id or f"{role.value}_{uuid.uuid4().hex[:8]}"
         self.workspace = workspace
-        self.executor: Optional[AgentExecutor] = None
+        self.executor: Optional[Any] = None
         self.config_repo = AgentConfigRepository()
+        self.config_repo = AgentConfigRepository()
+        self.event_callback = None
         self._initialize_agent()
         ACTIVE_AGENTS_GAUGE.inc()
         logger.info(f"Agente '{self.agent_id}' ({role.value}) inicializado")
+
+    def set_event_callback(self, callback):
+        """Define callback assíncrono para eventos de progresso."""
+        self.event_callback = callback
 
     def _get_prompt_for_role(self, config) -> str:
         """Obtém o prompt para o papel do agente (do banco ou fallback)."""
@@ -498,8 +533,33 @@ Suas responsabilidades:
 
 Ferramentas: {tools}
 Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
+{agent_scratchpad}""",
+
+            AgentRole.SYSADMIN: """Você é um Administrador de Sistema (SysAdmin) com acesso IRRESTRITO ao servidor.
+
+Suas responsabilidades:
+- Gerenciar o Sistema Operacional e Serviços
+- Instalar dependências (pip, mpm, apt)
+- Diagnosticar problemas de infraestrutura
+- Executar comandos de shell arbitrarios
+
+⚠️ ZONA DE PERIGO ⚠️
+Você possui acesso a ferramentas 'execute_system_command' e escritas em disco irrestritas.
+Use estes poderes com extrema cautela. Antes de rodar um comando destrutivo, verifique duas vezes.
+
+Ferramentas disponíveis: {tools}
+Nomes das ferramentas: {tool_names}
+
+FORMATO OBRIGATÓRIO:
+Thought: [seu raciocínio]
+Action: [nome_ferramenta]
+Action Input: {{"parametro": "valor"}}
+...
+Final Answer: [resposta]
+
 {agent_scratchpad}"""
         }
+
 
         return prompts.get(self.role, prompts[AgentRole.PROJECT_MANAGER])
 
@@ -525,6 +585,7 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
             AgentRole.TESTER: (ModelRole.CODE_GENERATOR, ModelPriority.FAST_AND_CHEAP),
             AgentRole.DOCUMENTER: (ModelRole.KNOWLEDGE_CURATOR, ModelPriority.FAST_AND_CHEAP),
             AgentRole.OPTIMIZER: (ModelRole.CODE_GENERATOR, ModelPriority.HIGH_QUALITY),
+            AgentRole.SYSADMIN: (ModelRole.CODE_GENERATOR, ModelPriority.HIGH_QUALITY),
         }
 
         return llm_mapping.get(self.role, (ModelRole.ORCHESTRATOR, ModelPriority.LOCAL_ONLY))
@@ -551,11 +612,23 @@ Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observ
         llm_role, llm_priority = self._get_llm_config_for_role(config)
         llm = get_llm(role=llm_role, priority=llm_priority)
 
-        # Pega as ferramentas e adiciona wrapper para corrigir parsing
-        tools = get_all_tools()
+        # Selecionar ferramentas baseado no papel
+        tools = self._get_tools_for_role()
         wrapped_tools = [_create_tool_wrapper(tool) for tool in tools]
 
-        agent = create_react_agent(llm, wrapped_tools, prompt)
+        # Tenta importar create_react_agent (novo) ou cria fallback
+        try:
+            from langchain.agents import create_react_agent
+            agent = create_react_agent(llm, wrapped_tools, prompt)
+        except ImportError:
+            # Fallback para versões antigas ou diferentes
+            from langchain.agents import initialize_agent, AgentType
+            agent = initialize_agent(
+                wrapped_tools, 
+                llm, 
+                agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+                verbose=True
+            )
 
         # Mensagem de erro personalizada para parsing
         parsing_error_message = """Erro no formato da sua resposta. Use EXATAMENTE este formato:
@@ -575,15 +648,7 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
             max_iterations = config.execution_config.get('max_iterations', 15)
             max_execution_time = config.execution_config.get('max_execution_time', 180)
 
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=wrapped_tools,  # Usa as ferramentas com wrapper
-            verbose=True,
-            max_iterations=max_iterations,
-            max_execution_time=max_execution_time,
-            early_stopping_method="generate",
-            handle_parsing_errors=parsing_error_message
-        )
+        self.executor = agent
 
     async def execute_task(self, task: Task, max_retries: int = 2) -> Dict[str, Any]:
         """
@@ -612,11 +677,19 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
                     logger.warning(f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}")
                     await asyncio.sleep(2 ** attempt)  # Backoff exponencial
 
+                # Prepare callbacks
+                run_callbacks = []
+                if self.event_callback:
+                    run_callbacks.append(AgentEventCallbackHandler(self.event_callback))
+
                 # Executar a tarefa
                 start_time = asyncio.get_event_loop().time()
+                
+                # Langchain invoke suporta callbacks em config
                 result = await asyncio.to_thread(
                     self.executor.invoke,
-                    {"input": task.description}
+                    {"input": task.description},
+                    {"callbacks": run_callbacks}
                 )
                 duration = asyncio.get_event_loop().time() - start_time
 
@@ -691,6 +764,23 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
         """Recupera mensagens destinadas a este agente."""
         return self.workspace.get_messages_for(self.agent_id)
 
+    def _get_tools_for_role(self):
+        """Filtra ferramentas baseadas no papel do agente."""
+        if self.role == AgentRole.SYSADMIN:
+            # SysAdmin tem acesso a tudo, incluindo ferramentas perigosas
+            return get_all_tools()
+        
+        # Outros agentes recebem apenas ferramentas seguras/padrao
+        # Filtra ferramentas DANGEROUS
+        all_tools = get_all_tools()
+        safe_tools = []
+        for tool in all_tools:
+            meta = action_registry.get_metadata(tool.name)
+            if meta and meta.permission_level == PermissionLevel.DANGEROUS:
+                continue
+            safe_tools.append(tool)
+        return safe_tools
+
     def update_config(self, config):
         """Atualiza a configuração do agente dinamicamente."""
         try:
@@ -716,28 +806,88 @@ class MultiAgentSystem:
         self.workspace = SharedWorkspace()
         self.agents: Dict[str, SpecializedAgent] = {}
         self.project_manager: Optional[SpecializedAgent] = None
+        
+        # Registra ferramentas de SO (SysAdmin)
+        register_os_tools()
+        
         self._ensure_workspace_directory()
         logger.info("Sistema Multi-Agente inicializado")
 
     def _ensure_workspace_directory(self):
         """Garante que o diretório workspace existe."""
         from pathlib import Path
-        workspace_path = Path("/app/workspace")
-        if not workspace_path.exists():
-            workspace_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Diretório workspace criado em: {workspace_path}")
-        else:
-            logger.info(f"Diretório workspace já existe: {workspace_path}")
+        from app.config import settings
+        
+        workspace_path = Path(settings.WORKSPACE_ROOT)
+        try:
+            if not workspace_path.exists():
+                workspace_path.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Diretório workspace criado em: {workspace_path}")
+            else:
+                logger.info(f"Diretório workspace já existe: {workspace_path}")
+        except Exception as e:
+            logger.error(f"Erro ao criar diretório workspace em {workspace_path}: {e}")
+            # Fallback para diretório temporário se não conseguir criar no local configurado
+            import tempfile
+            fallback_path = Path(tempfile.gettempdir()) / "janus_workspace"
+            if not fallback_path.exists():
+                fallback_path.mkdir(parents=True, exist_ok=True)
+            logger.warning(f"Usando diretório fallback: {fallback_path}")
+            # Atualiza o settings para refletir o novo caminho
+            settings.WORKSPACE_ROOT = str(fallback_path)
 
     def create_agent(self, role: AgentRole) -> SpecializedAgent:
-        """Cria um novo agente especializado."""
+        """Cria um novo agente especializado e seu ator correspondente."""
         agent = SpecializedAgent(role, self.workspace)
         self.agents[agent.agent_id] = agent
+
+        # Inicializa o Ator para este agente
+        # Import local para evitar ciclo
+        from app.core.agents.agent_actor import AgentActor
+        actor = AgentActor(agent)
+        
+        # Armazena o ator (em produção, idealmente gerenciado separadamente)
+        # Hack para iniciar o consumidor em background na mesma loop
+        asyncio.create_task(actor.start())
+        
+        logger.info(f"Ator iniciado para agente {agent.agent_id} ({role.value})")
 
         if role == AgentRole.PROJECT_MANAGER and not self.project_manager:
             self.project_manager = agent
 
         return agent
+
+    async def dispatch_task(self, task: Task):
+        """Despacha uma tarefa para a fila do agente responsável."""
+        from app.core.infrastructure.message_broker import get_broker
+        from app.models.schemas import TaskMessage
+        
+        if not task.assigned_to:
+            raise ValueError("Tarefa sem agente atribuído")
+            
+        agent = self.agents.get(task.assigned_to)
+        if not agent:
+            raise ValueError(f"Agente {task.assigned_to} não encontrado")
+            
+        broker = await get_broker()
+        queue_name = f"janus.agent.{agent.role.value}"
+        
+        # Cria payload
+        payload = {
+            "description": task.description,
+            "dependencies": task.dependencies,
+            "metadata": task.metadata
+        }
+        
+        msg = TaskMessage(
+            task_id=task.id,
+            task_type="agent_task",
+            payload=payload,
+            timestamp=datetime.now().timestamp()
+        )
+        
+        await broker.publish(queue_name, msg.model_dump())
+        logger.info(f"Tarefa {task.id} despachada para fila {queue_name}")
 
     def get_agent(self, agent_id: str) -> Optional[SpecializedAgent]:
         """Recupera um agente pelo ID."""
@@ -786,7 +936,23 @@ Retorne em formato estruturado."""
         )
         self.workspace.add_task(pm_task)
 
-        pm_result = await self.project_manager.execute_task(pm_task)
+        # MUDANÇA PARA PARALELISMO:
+        # Em vez de await self.project_manager.execute_task(pm_task),
+        # nós despachamos para a fila.
+        await self.dispatch_task(pm_task)
+        
+        # Para compatibilidade imediata com testes antigos que esperam retorno síncrono,
+        # poderíamos esperar polling aqui. Mas como o objetivo é migrar para async,
+        # retornamos status de "em andamento".
+        
+        return {
+            "project_status": "started",
+            "pm_task_id": pm_task.id,
+            "message": "Projeto iniciado. Acompanhe via eventos ou polling."
+        }
+
+        # O código abaixo fica obsoleto na nova arquitetura e será removido/adaptado
+        # pm_result = await self.project_manager.execute_task(pm_task)
 
         # 2. Criar agentes necessários e distribuir tarefas
         # (Simplificado - em produção, parsear resultado do PM)

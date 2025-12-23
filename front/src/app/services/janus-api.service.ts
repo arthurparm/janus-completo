@@ -1,7 +1,8 @@
-import {Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { API_BASE_URL } from './api.config'
-import {Observable, BehaviorSubject, Subject} from 'rxjs';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { map } from 'rxjs/operators'
 declare const Janus: any;
 
 export interface SystemStatus {
@@ -82,7 +83,7 @@ export interface AuditEvent { id: number; user_id?: number; endpoint?: string; a
 export interface AuditEventsResponse { total: number; events: AuditEvent[] }
 export interface ReviewerMetricsResponse { user_id: number; decisions_total: number; approvals: number; rejections: number; synonyms: number; approval_rate: number; rejection_rate: number; avg_latency_ms: number }
 export interface PeriodReportResponse { period: string; buckets: { bucket: string; total: number; promote: number; reject: number; synonym: number }[] }
-export interface ConsentItem { scope: string; granted: boolean; expires_at?: string|null }
+export interface ConsentItem { scope: string; granted: boolean; expires_at?: string | null }
 export interface ConsentsListResponse { user_id: number; consents: ConsentItem[] }
 
 // Poison pill stats
@@ -95,16 +96,20 @@ export interface ContextInfo { [key: string]: any }
 export interface WebSearchResult { [key: string]: any }
 export interface WebCacheStatus { [key: string]: any }
 
-export interface ChatStartResponse { conversation_id: string }
+export interface ChatStartResponse {
+  conversation_id: string
+  created_at?: number
+  updated_at?: number
+}
 export interface ChatMessage { role: string; content: string; timestamp?: string; citations?: Citation[] }
 export interface ChatMessageResponse { message?: ChatMessage; assistant_message?: ChatMessage; messages?: ChatMessage[] }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
-export interface ConversationMeta { 
-  conversation_id: string; 
-  title?: string; 
-  last_message_at?: string; 
-  created_at?: number; 
-  updated_at?: number; 
+export interface ConversationMeta {
+  conversation_id: string;
+  title?: string;
+  last_message_at?: string;
+  created_at?: number;
+  updated_at?: number;
   last_message?: ChatMessage
   message_count?: number
   tags?: string[]
@@ -137,11 +142,32 @@ export interface DocListItem { doc_id: string; file_name?: string; chunks: numbe
 export interface DocListResponse { items: DocListItem[] }
 export interface Citation { id?: string; title?: string; url?: string; snippet?: string; score?: number; source_type?: string; doc_id?: string; file_path?: string; origin?: string }
 
+// Goals
+export interface Goal {
+  id: string
+  title: string
+  description: string
+  priority: number
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  success_criteria?: string
+  deadline_ts?: number
+  created_at: number
+  updated_at: number
+}
+
+export interface GoalCreateRequest {
+  title: string
+  description: string
+  priority?: number
+  success_criteria?: string
+  deadline_ts?: number
+}
+
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
-@Injectable({providedIn: 'root'})
+@Injectable({ providedIn: 'root' })
 export class JanusApiService {
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
   private buildUrl(path: string): string {
     const p = String(path || '')
     if (p === '/healthz') return p
@@ -187,8 +213,8 @@ export class JanusApiService {
   }
 
   // Basic API health (useful for quick checks)
-  health(): Observable<{status: string}> {
-    return this.http.get<{status: string}>(this.buildUrl(`/healthz`));
+  health(): Observable<{ status: string }> {
+    return this.http.get<{ status: string }>(this.buildUrl(`/healthz`));
   }
 
   // System status overview
@@ -236,22 +262,24 @@ export class JanusApiService {
         out$.next({ status: 'unavailable', error: err })
         return out$.asObservable()
       }
-      Janus.init({ debug: !!opts.debug, callback: () => {
-        out$.next({ status: 'initialized' })
-        this._webrtcInitialized$.next({ status: 'initialized' })
-        try {
-          this._janus = new Janus({
-            server: this._serverUrl,
-            success: () => { this._connectionState$.next('session_ready') },
-            error: (e: any) => { const msg = String(e); this._webrtcError$.next(msg); this._connectionState$.next('session_error'); },
-            destroyed: () => { this._connectionState$.next('session_destroyed') }
-          })
-        } catch (e) {
-          const msg = String(e)
-          this._webrtcError$.next(msg)
-          this._connectionState$.next('session_error')
+      Janus.init({
+        debug: !!opts.debug, callback: () => {
+          out$.next({ status: 'initialized' })
+          this._webrtcInitialized$.next({ status: 'initialized' })
+          try {
+            this._janus = new Janus({
+              server: this._serverUrl,
+              success: () => { this._connectionState$.next('session_ready') },
+              error: (e: any) => { const msg = String(e); this._webrtcError$.next(msg); this._connectionState$.next('session_error'); },
+              destroyed: () => { this._connectionState$.next('session_destroyed') }
+            })
+          } catch (e) {
+            const msg = String(e)
+            this._webrtcError$.next(msg)
+            this._connectionState$.next('session_error')
+          }
         }
-      }})
+      })
     } catch (e) {
       const msg = String(e)
       this._webrtcInitialized$.next({ status: 'failed', error: msg })
@@ -410,7 +438,7 @@ export class JanusApiService {
     return this.http.get<ReviewerMetricsResponse>(this.buildUrl(`/api/v1/observability/hitl/metrics/reviewer?${qs.toString()}`))
   }
 
-  getHitlReports(period: 'daily'|'weekly'|'monthly' = 'daily', start_ts?: number, end_ts?: number): Observable<PeriodReportResponse> {
+  getHitlReports(period: 'daily' | 'weekly' | 'monthly' = 'daily', start_ts?: number, end_ts?: number): Observable<PeriodReportResponse> {
     const qs = new URLSearchParams()
     qs.set('period', period)
     if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
@@ -463,11 +491,74 @@ export class JanusApiService {
     if (typeof timeout_seconds !== 'undefined') body.timeout_seconds = timeout_seconds
     if (user_id) body.user_id = user_id
     if (project_id) body.project_id = project_id
-    return this.http.post<ChatMessageResponse & { citations?: Citation[] }>(this.buildUrl(`/api/v1/chat/message`), body)
+    return this.http.post<ChatMessageResponse & { citations?: Citation[] }>(this.buildUrl(`/api/v1/chat/message`), body).pipe(
+      map((resp: any) => {
+        const assistant_message = { role: String(resp?.role || 'assistant'), content: String(resp?.response || '') }
+        return { ...resp, assistant_message } as any
+      })
+    )
   }
 
   getChatHistory(conversation_id: string): Observable<ChatHistoryResponse> {
-    return this.http.get<ChatHistoryResponse>(this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history`))
+    return this.http.get<ChatHistoryResponse>(this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history`)).pipe(
+      map((resp: any) => {
+        const msgs = Array.isArray(resp?.messages) ? resp.messages : []
+        const mapped = msgs.map((m: any) => ({
+          role: String(m?.role || ''),
+          content: String((m?.content ?? m?.text) || ''),
+          timestamp: m?.timestamp != null ? String(m.timestamp) : undefined,
+        }))
+        return { conversation_id: String(resp?.conversation_id || conversation_id), messages: mapped } as ChatHistoryResponse
+      })
+    )
+  }
+
+  getChatHistoryPaginated(conversation_id: string, params: {
+    limit?: number;
+    offset?: number;
+    before_ts?: number;
+    after_ts?: number;
+  } = {}): Observable<{
+    conversation_id: string;
+    messages: ChatMessage[];
+    total_count: number;
+    has_more: boolean;
+    next_offset?: number;
+    limit: number;
+    offset: number;
+  }> {
+    const qs = new URLSearchParams()
+    if (params.limit) qs.set('limit', String(params.limit))
+    if (params.offset) qs.set('offset', String(params.offset))
+    if (params.before_ts) qs.set('before_ts', String(params.before_ts))
+    if (params.after_ts) qs.set('after_ts', String(params.after_ts))
+
+    const url = this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history${qs.toString() ? '?' + qs.toString() : ''}`)
+
+    return this.http.get<any>(url).pipe(
+      map((resp: any) => {
+        const msgs = Array.isArray(resp?.messages) ? resp.messages : []
+        const mapped = msgs.map((m: any) => ({
+          role: String(m?.role || ''),
+          content: String((m?.content ?? m?.text) || ''),
+          timestamp: m?.timestamp != null ? String(m.timestamp) : undefined,
+        }))
+
+        return {
+          conversation_id: String(resp?.conversation_id || conversation_id),
+          messages: mapped,
+          total_count: Number(resp?.total_count || 0),
+          has_more: Boolean(resp?.has_more || false),
+          next_offset: resp?.next_offset != null ? Number(resp.next_offset) : undefined,
+          limit: Number(resp?.limit || params.limit || 50),
+          offset: Number(resp?.offset || params.offset || 0)
+        }
+      })
+    )
+  }
+
+  checkChatHealth(): Observable<{ status: string, repository_accessible: boolean, total_conversations: number }> {
+    return this.http.get<{ status: string, repository_accessible: boolean, total_conversations: number }>(this.buildUrl('/api/v1/chat/health'))
   }
 
   listConversations(params: { user_id?: string; project_id?: string; limit?: number } = {}): Observable<ConversationsListResponse> {
@@ -475,7 +566,33 @@ export class JanusApiService {
     if (params.user_id) qs.set('user_id', params.user_id)
     if (params.project_id) qs.set('project_id', params.project_id)
     qs.set('limit', String(params.limit ?? 50))
-    return this.http.get<ConversationsListResponse>(this.buildUrl(`/api/v1/chat/conversations?${qs.toString()}`))
+
+    return this.http.get<ConversationsListResponse>(this.buildUrl(`/api/v1/chat/conversations?${qs.toString()}`)).pipe(
+      map((resp: any) => {
+        // Backend now returns array directly, not {conversations: [...]}
+        const items = Array.isArray(resp) ? resp : (Array.isArray(resp?.conversations) ? resp.conversations : [])
+
+        const mapped = items.map((it: any) => {
+          const lm = it?.last_message
+          const last_message = lm && typeof lm === 'object' ? {
+            role: String(lm?.role || ''),
+            content: String((lm?.content ?? lm?.text) || ''),
+            timestamp: lm?.timestamp != null ? String(lm.timestamp) : undefined,
+          } : undefined
+          return {
+            conversation_id: String(it?.conversation_id || ''),
+            title: it?.title,
+            created_at: it?.created_at,
+            updated_at: it?.updated_at,
+            last_message,
+            message_count: it?.message_count,
+            tags: it?.tags,
+          } as ConversationMeta
+        })
+
+        return { conversations: mapped } as ConversationsListResponse
+      })
+    )
   }
 
   renameConversation(conversation_id: string, new_title: string): Observable<{ status: string }> {
@@ -594,7 +711,7 @@ export class JanusApiService {
   }
 
   exportAuditEvents(
-    format: 'csv'|'json',
+    format: 'csv' | 'json',
     params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number; fields?: string[] } = {}
   ): Observable<string> {
     const qs = new URLSearchParams()
@@ -654,6 +771,114 @@ export class JanusApiService {
     form.append('conversation_id', conversation_id)
     if (user_id) form.append('user_id', user_id)
     return this.http.post<UploadResponse>(this.buildUrl(`/api/v1/documents/link-url`), form)
+  }
+
+  // Goals CRUD
+  getGoals(status?: string): Observable<Goal[]> {
+    const qs = new URLSearchParams()
+    if (status) qs.set('status', status)
+    return this.http.get<Goal[]>(this.buildUrl(`/api/v1/autonomy/goals${qs.toString() ? '?' + qs.toString() : ''}`))
+  }
+
+  getGoal(goal_id: string): Observable<Goal> {
+    return this.http.get<Goal>(this.buildUrl(`/api/v1/autonomy/goals/${encodeURIComponent(goal_id)}`))
+  }
+
+  createGoal(req: GoalCreateRequest): Observable<Goal> {
+    return this.http.post<Goal>(this.buildUrl(`/api/v1/autonomy/goals`), req)
+  }
+
+  updateGoalStatus(goal_id: string, status: 'pending' | 'in_progress' | 'completed' | 'failed'): Observable<Goal> {
+    return this.http.patch<Goal>(this.buildUrl(`/api/v1/autonomy/goals/${encodeURIComponent(goal_id)}/status`), { status })
+  }
+
+  deleteGoal(goal_id: string): Observable<{ status: string; goal_id: string }> {
+    return this.http.delete<{ status: string; goal_id: string }>(this.buildUrl(`/api/v1/autonomy/goals/${encodeURIComponent(goal_id)}`))
+  }
+
+  // Tools API
+  getTools(category?: string, permissionLevel?: string, tags?: string): Observable<any> {
+    const qs = new URLSearchParams()
+    if (category) qs.set('category', category)
+    if (permissionLevel) qs.set('permission_level', permissionLevel)
+    if (tags) qs.set('tags', tags)
+    return this.http.get<any>(this.buildUrl(`/api/v1/tools/${qs.toString() ? '?' + qs.toString() : ''}`))
+  }
+
+  getToolDetails(toolName: string): Observable<any> {
+    return this.http.get<any>(this.buildUrl(`/api/v1/tools/${encodeURIComponent(toolName)}`))
+  }
+
+  getToolStats(): Observable<any> {
+    return this.http.get<any>(this.buildUrl(`/api/v1/tools/stats/usage`))
+  }
+
+  getToolCategories(): Observable<{ categories: string[] }> {
+    return this.http.get<{ categories: string[] }>(this.buildUrl(`/api/v1/tools/categories/list`))
+  }
+
+  getToolPermissions(): Observable<{ permission_levels: string[] }> {
+    return this.http.get<{ permission_levels: string[] }>(this.buildUrl(`/api/v1/tools/permissions/list`))
+  }
+
+  // Memory API
+  getMemoryTimeline(params: {
+    start_date?: string
+    end_date?: string
+    query?: string
+    limit?: number
+    min_score?: number
+  } = {}): Observable<any[]> {
+    const qs = new URLSearchParams()
+    if (params.start_date) qs.set('start_date', params.start_date)
+    if (params.end_date) qs.set('end_date', params.end_date)
+    if (params.query) qs.set('query', params.query)
+    if (params.limit) qs.set('limit', String(params.limit))
+    if (params.min_score !== undefined) qs.set('min_score', String(params.min_score))
+    return this.http.get<any[]>(this.buildUrl(`/api/v1/memory/timeline${qs.toString() ? '?' + qs.toString() : ''}`))
+  }
+
+  // Documents API
+  listDocuments(conversationId?: string): Observable<any> {
+    const qs = new URLSearchParams()
+    if (conversationId) qs.set('conversation_id', conversationId)
+    return this.http.get<any>(this.buildUrl(`/api/v1/documents/list${qs.toString() ? '?' + qs.toString() : ''}`))
+  }
+
+  uploadDocument(file: File, conversationId?: string): Observable<{ progress?: number; response?: any }> {
+    const form = new FormData()
+    form.append('file', file)
+    if (conversationId) form.append('conversation_id', conversationId)
+    return this.http.post<any>(this.buildUrl(`/api/v1/documents/upload`), form, { reportProgress: true, observe: 'events' }).pipe(
+      (source: any) => new Observable<{ progress?: number; response?: any }>((observer) => {
+        source.subscribe({
+          next: (event: any) => {
+            const t = event?.type
+            if (t === 1 && typeof event?.loaded === 'number' && typeof event?.total === 'number') {
+              const pct = Math.round((event.loaded / Math.max(1, event.total)) * 100)
+              observer.next({ progress: pct })
+            } else if (t === 4) {
+              observer.next({ response: event?.body })
+              observer.complete()
+            }
+          },
+          error: (err: any) => observer.error(err),
+          complete: () => observer.complete(),
+        })
+      })
+    )
+  }
+
+  searchDocuments(query: string, minScore?: number, docId?: string): Observable<any> {
+    const qs = new URLSearchParams()
+    qs.set('query', query)
+    if (minScore !== undefined) qs.set('min_score', String(minScore))
+    if (docId) qs.set('doc_id', docId)
+    return this.http.get<any>(this.buildUrl(`/api/v1/documents/search?${qs.toString()}`))
+  }
+
+  deleteDocument(docId: string): Observable<any> {
+    return this.http.delete<any>(this.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}`))
   }
 }
 

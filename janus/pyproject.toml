@@ -47,12 +47,34 @@ sentence-transformers = ">=2.2.2"
 # Elevado mínimo para incorporar correções de ReDoS do HF Transformers
 transformers = ">=4.45.2,<4.50.0"
 onnxruntime = ">=1.17.0"
-numpy = ">=1.26.0"
+numpy = ">=1.26.0,<2.0.0"
 
 # Security
 cryptography = ">=41.0.0"
 pymysql = "*"
 sqlalchemy = ">=2.0.0"
+docker = ">=6.1.0"
+msgpack = ">=1.0.7"
+
+# Voice / Audio
+SpeechRecognition = "^3.10.0"
+edge-tts = "^6.1.0"
+pyaudio = "*" # Now supported via Dockerfile additions (portaudio19-dev)
+pyttsx3 = "^2.90"
+openwakeword = "^0.5.1"
+scipy = "^1.11.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.0"
+mypy = "^1.8.0"
+ruff = "^0.1.0"
+black = "^24.0.0"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

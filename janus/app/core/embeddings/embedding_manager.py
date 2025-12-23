@@ -253,3 +253,15 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     except Exception:
         pass
     return [[0.0] * _TARGET_VECTOR_SIZE for _ in texts]
+
+
+async def aembed_text(text: str) -> List[float]:
+    """Wrapper assíncrono para embed_text."""
+    import asyncio
+    return await asyncio.get_event_loop().run_in_executor(None, embed_text, text)
+
+
+async def aembed_texts(texts: List[str]) -> List[List[float]]:
+    """Wrapper assíncrono para embed_texts."""
+    import asyncio
+    return await asyncio.get_event_loop().run_in_executor(None, embed_texts, texts)

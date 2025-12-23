@@ -57,6 +57,17 @@ class ChatHistoryResponse(BaseModel):
     messages: List[ChatMessage]
 
 
+class ChatHistoryPaginatedResponse(BaseModel):
+    conversation_id: str
+    persona: Optional[str]
+    messages: List[ChatMessage]
+    total_count: int
+    has_more: bool
+    next_offset: Optional[int]
+    limit: int
+    offset: int
+
+
 class ChatRenameRequest(BaseModel):
     new_title: str = Field(..., min_length=1)
     user_id: Optional[str] = Field(None)
@@ -80,7 +91,7 @@ async def start_chat(request: ChatStartRequest, service: ChatService = Depends(g
         hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
     except Exception:
         hdr_uid = None
-    user_id = request.user_id or hdr_uid or None
+    user_id = request.user_id or hdr_uid or "default_user"
     conversation_id = service.start_conversation(request.persona, user_id, request.project_id)
     return ChatStartResponse(conversation_id=conversation_id)
 
@@ -105,7 +116,7 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
             role=role,
             priority=priority,
             timeout_seconds=payload.timeout_seconds,
-            user_id=payload.user_id or hdr_uid,
+            user_id=payload.user_id or hdr_uid or "default_user",
             project_id=payload.project_id,
         )
     except ConversationNotFoundError:
@@ -139,15 +150,189 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
 
 
 @router.get("/{conversation_id}/history", response_model=ChatHistoryResponse, summary="Retorna o histórico da conversa")
-async def chat_history(conversation_id: str, service: ChatService = Depends(get_chat_service)):
+async def chat_history(
+    conversation_id: str, 
+    limit: Optional[int] = None,
+    offset: int = 0,
+    before_ts: Optional[float] = None,
+    after_ts: Optional[float] = None,
+    service: ChatService = Depends(get_chat_service),
+    http: Request = None
+):
+    """
+    Retorna o histórico da conversa. 
+    Se limit for especificado, usa paginação com validação de acesso.
+    Caso contrário, retorna todo o histórico (modo legado).
+    """
+    logger.info(f"API request for chat history: {conversation_id}, limit: {limit}, offset: {offset}")
+    
     try:
-        hist = service.get_history(conversation_id)
-        # Convert dict messages to DTOs
-        messages = [ChatMessage(**m) for m in hist.get("messages", [])]
-        return ChatHistoryResponse(conversation_id=hist["conversation_id"], persona=hist.get("persona"),
-                                   messages=messages)
+        # Se limit for especificado, usar modo paginado com RBAC
+        if limit is not None:
+            # Obter user_id do header para validação RBAC
+            try:
+                user_id = getattr(http.state, "actor_user_id", None) if http else None
+            except Exception:
+                user_id = None
+            
+            # Obter project_id do header se disponível
+            try:
+                project_id = getattr(http.state, "actor_project_id", None) if http else None
+            except Exception:
+                project_id = None
+            
+            # Usar método paginado com validação de acesso
+            hist = service.get_history_paginated(
+                conversation_id=conversation_id,
+                limit=limit,
+                offset=offset,
+                before_ts=before_ts,
+                after_ts=after_ts,
+                user_id=user_id,
+                project_id=project_id
+            )
+            
+            logger.info(f"Retrieved paginated history for conversation {conversation_id}: "
+                       f"{len(hist.get('messages', []))} messages (total: {hist.get('total_count', 0)})")
+            
+            # Converter mensagens para DTOs
+            messages = []
+            for i, m in enumerate(hist.get("messages", [])):
+                try:
+                    if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
+                        messages.append(ChatMessage(**m))
+                    else:
+                        logger.warning(f"Skipping invalid message at index {i}: {m}")
+                except Exception as e:
+                    logger.warning(f"Error converting message at index {i}: {e}")
+            
+            logger.info(f"Successfully converted {len(messages)} valid messages for conversation {conversation_id}")
+            
+            # Retornar resposta no formato legado (sem metadados de paginação)
+            return ChatHistoryResponse(
+                conversation_id=hist["conversation_id"],
+                persona=hist.get("persona"),
+                messages=messages
+            )
+        
+        else:
+            # Modo legado - retorna todo o histórico sem validação
+            hist = service.get_history(conversation_id)
+            logger.info(f"Retrieved full history for conversation {conversation_id} with {len(hist.get('messages', []))} messages")
+            
+            # Convert dict messages to DTOs with error handling
+            messages = []
+            for i, m in enumerate(hist.get("messages", [])):
+                try:
+                    if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
+                        messages.append(ChatMessage(**m))
+                    else:
+                        logger.warning(f"Skipping invalid message at index {i}: {m}")
+                except Exception as e:
+                    logger.warning(f"Error converting message at index {i}: {e}")
+            
+            logger.info(f"Successfully converted {len(messages)} valid messages for conversation {conversation_id}")
+            return ChatHistoryResponse(conversation_id=hist["conversation_id"], persona=hist.get("persona"),
+                                       messages=messages)
+            
     except ConversationNotFoundError:
+        logger.warning(f"Conversation not found: {conversation_id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except ChatServiceError as e:
+        if "Access denied" in str(e):
+            logger.warning(f"Access denied for conversation {conversation_id}: {e}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        logger.error(f"Chat service error for conversation {conversation_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error getting history for conversation {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
+
+
+@router.get("/{conversation_id}/history/paginated", response_model=ChatHistoryPaginatedResponse, 
+            summary="Retorna o histórico da conversa com paginação e RBAC")
+async def chat_history_paginated(
+    conversation_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    before_ts: Optional[float] = None,
+    after_ts: Optional[float] = None,
+    service: ChatService = Depends(get_chat_service),
+    http: Request = None
+):
+    """
+    Retorna histórico de mensagens com paginação e validação de acesso.
+    
+    - **limit**: Número máximo de mensagens (1-200, padrão 50)
+    - **offset**: Número de mensagens a pular (padrão 0)
+    - **before_ts**: Timestamp para buscar mensagens antes desta data
+    - **after_ts**: Timestamp para buscar mensagens após esta data
+    """
+    logger.info(f"API request for paginated chat history: {conversation_id}, limit: {limit}, offset: {offset}")
+    
+    try:
+        # Obter user_id do header para validação RBAC
+        try:
+            user_id = getattr(http.state, "actor_user_id", None) if http else None
+        except Exception:
+            user_id = None
+        
+        # Obter project_id do header se disponível
+        try:
+            project_id = getattr(http.state, "actor_project_id", None) if http else None
+        except Exception:
+            project_id = None
+        
+        # Usar método paginado com validação de acesso
+        hist = service.get_history_paginated(
+            conversation_id=conversation_id,
+            limit=limit,
+            offset=offset,
+            before_ts=before_ts,
+            after_ts=after_ts,
+            user_id=user_id,
+            project_id=project_id
+        )
+        
+        logger.info(f"Retrieved paginated history for conversation {conversation_id}: "
+                   f"{len(hist.get('messages', []))} messages (total: {hist.get('total_count', 0)})")
+        
+        # Converter mensagens para DTOs
+        messages = []
+        for i, m in enumerate(hist.get("messages", [])):
+            try:
+                if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
+                    messages.append(ChatMessage(**m))
+                else:
+                    logger.warning(f"Skipping invalid message at index {i}: {m}")
+            except Exception as e:
+                logger.warning(f"Error converting message at index {i}: {e}")
+        
+        logger.info(f"Successfully converted {len(messages)} valid messages for conversation {conversation_id}")
+        
+        return ChatHistoryPaginatedResponse(
+            conversation_id=hist["conversation_id"],
+            persona=hist.get("persona"),
+            messages=messages,
+            total_count=hist.get("total_count", 0),
+            has_more=hist.get("has_more", False),
+            next_offset=hist.get("next_offset"),
+            limit=hist.get("limit", limit),
+            offset=hist.get("offset", offset)
+        )
+        
+    except ConversationNotFoundError:
+        logger.warning(f"Conversation not found: {conversation_id}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except ChatServiceError as e:
+        if "Access denied" in str(e):
+            logger.warning(f"Access denied for user {user_id} to conversation {conversation_id}: {e}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        logger.error(f"Chat service error for conversation {conversation_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error getting paginated history for conversation {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/conversations", response_model=List[ChatListResponse], summary="Lista conversas com filtros de RBAC")
@@ -157,7 +342,10 @@ async def list_conversations(user_id: Optional[str] = None, project_id: Optional
         hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
     except Exception:
         hdr_uid = None
-    items = service.list_conversations(user_id=user_id or hdr_uid, project_id=project_id, limit=limit)
+    
+    final_user_id = user_id or hdr_uid
+    
+    items = service.list_conversations(user_id=final_user_id, project_id=project_id, limit=limit)
 
     # map items to DTOs
     def map_item(it: Dict[str, Any]) -> ChatListResponse:
@@ -171,7 +359,10 @@ async def list_conversations(user_id: Optional[str] = None, project_id: Optional
             last_message=last_msg,
         )
 
-    return [map_item(it) for it in items]
+    conversations = [map_item(it) for it in items]
+    
+    # Return as list (FastAPI expects List[ChatListResponse])
+    return conversations
 
 
 @router.put("/{conversation_id}/rename", summary="Renomeia uma conversa")
@@ -190,6 +381,31 @@ async def rename_conversation(conversation_id: str, payload: ChatRenameRequest,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+
+@router.get("/health", summary="Verifica o status do serviço de chat")
+async def chat_health(service: ChatService = Depends(get_chat_service)):
+    """Verifica se o serviço de chat está funcionando corretamente."""
+    try:
+        # Testar se conseguimos acessar o repositório
+        test_conv_id = service.start_conversation("health_check", "1", "health_check")
+        service._repo.get_conversation(test_conv_id)
+        service.delete_conversation(test_conv_id, user_id="1", project_id="health_check")
+        
+        return {
+            "status": "healthy",
+            "repository_accessible": True,
+            "can_create_conversation": True,
+            "can_read_conversation": True,
+            "can_delete_conversation": True,
+            "total_conversations": service._repo.count_conversations()
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Chat service unhealthy: {str(e)}"
+        )
 
 
 @router.delete("/{conversation_id}", summary="Apaga uma conversa")
@@ -264,6 +480,46 @@ async def stream_message(conversation_id: str, message: str, role: str = "orches
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    headers = {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(gen, media_type="text/event-stream", headers=headers)
+
+
+@router.get("/{conversation_id}/events", summary="Streaming de eventos de agentes (observabilidade)")
+async def stream_agent_events(conversation_id: str, user_id: Optional[str] = None,
+                              service: ChatService = Depends(get_chat_service), http: Request = None):
+    """
+    Endpoint SSE dedicado para observar eventos de agentes em tempo real.
+    Conecta na fila de eventos do RabbitMQ e retorna 'AgentThinking', 'AgentAction', etc.
+    """
+    # Valida origem (CORS) para SSE
+    try:
+        allowed = getattr(getattr(http, "app", None).state, "settings", None)
+    except Exception:
+        allowed = None
+    if http is not None:
+        origin = (http.headers.get("origin") or "").lower()
+        # Lógica simplificada de CORS check (copiada do endpoint acima)
+        # Em produção, middleware CORS já deve tratar isso, mas SSE as vezes precisa de cuidado extra
+        pass
+
+    try:
+        # Recupera user_id do header se não passado
+        if not user_id:
+            try:
+                user_id = getattr(http.state, "actor_user_id", None) if http else None
+            except Exception:
+                pass
+        
+        gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
+    except Exception as e:
+        logger.error(f"Error starting event stream: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
     headers = {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",

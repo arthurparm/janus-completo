@@ -6,6 +6,8 @@ from app.config import settings
 from app.services.agent_service import AgentService
 from app.services.memory_service import MemoryService
 from app.repositories.knowledge_repository import KnowledgeRepository
+from app.services.llm_service import LLMService
+from app.core.llm import ModelRole, ModelPriority
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -20,11 +22,13 @@ class KnowledgeConsolidator:
             self,
             agent_service: AgentService,
             memory_service: MemoryService,
-            knowledge_repo: KnowledgeRepository
+            knowledge_repo: KnowledgeRepository,
+            llm_service: LLMService
     ):
         self._agent_service = agent_service
         self._memory_service = memory_service
         self._knowledge_repo = knowledge_repo
+        self._llm_service = llm_service
         self.is_running = False
         self._task = None
         self.canonical_form_cache = {}
@@ -91,8 +95,58 @@ class KnowledgeConsolidator:
                 concepts = self._extract_concepts(content)
                 if concepts:
                     await self._knowledge_repo.merge_experience_mentions(exp, concepts)
+                
+                # --- Evolution Step: Extract Wisdom (Lessons/Rules) ---
+                await self._extract_and_save_wisdom(content)
+                
             except Exception as e:
                 logger.debug("Falha ao consolidar experiência", exc_info=e)
+
+    async def _extract_issues_and_lessons(self, text: str) -> list:
+        # Mantém compatibilidade com regex simples apenas para conceitos/tags rápidas
+        return self._extract_concepts(text)
+
+    async def _extract_and_save_wisdom(self, text: str):
+        """
+        Usa o LLM para extrair 'Sabedoria' (Lições, Regras, Fatos) do texto bruto.
+        Isso é o que permite a evolução real do sistema.
+        """
+        prompt = (
+            "Analyze the following interaction log or text. "
+            "Extract distinct 'Lessons', 'Rules', or 'User Preferences' that should be permanently remembered "
+            "to improve future performance. "
+            "Ignore trivial chit-chat. Focus on actionable insights.\n\n"
+            f"Content:\n{text}\n\n"
+            "Output format (JSON list of strings): [\"Lesson: Always confirm before delete\", \"Preference: User likes concise answers\"]"
+        )
+        
+        try:
+            response = await self._llm_service.invoke_llm(
+                prompt=prompt,
+                role=ModelRole.KNOWLEDGE_CURATOR,
+                priority=ModelPriority.BACKGROUND_BATCH
+            )
+            content = response.get("response", "")
+            
+            # Tenta parsear JSON
+            import json
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1:
+                json_str = content[start:end+1]
+                lessons = json.loads(json_str)
+                
+                for lesson in lessons:
+                    if isinstance(lesson, str) and len(lesson) > 10:
+                        logger.info(f"Evolução: Nova lição aprendida: {lesson}")
+                        # Salva como uma memória especial de 'Sabedoria'
+                        await self._memory_service.add_experience(
+                            type="lesson",
+                            content=lesson,
+                            metadata={"source": "consolidation_worker", "confidence": 1.0}
+                        )
+        except Exception as e:
+            logger.warning("Falha ao extrair sabedoria via LLM", exc_info=e)
 
     def _extract_concepts(self, text: str) -> list:
         # Extrai termos significativos (MVP): palavras alfanuméricas com tamanho >= 4

@@ -18,6 +18,12 @@ class Experience(BaseModel):
     content: str
     metadata: dict = Field(default_factory=dict)
 
+class ScoredExperience(Experience):
+    """
+    Experience enriquecida com score de similaridade/busca.
+    """
+    score: Optional[float] = None
+
 
 # --- Constantes e Enums da Aplicação ---
 
@@ -38,6 +44,16 @@ class GraphLabel(str, Enum):
     REFLECTION = "Reflection"
     RELATIONSHIP_TYPE = "RelationshipType"
     DOCUMENT = "Document"
+    # JARVIS / Agentic Nodes
+    USER = "User"
+    USER_PREFERENCE = "UserPreference"
+    GOAL = "Goal"
+    PLAN = "Plan"
+    ACTION = "Action"
+    EPISODE = "Episode"
+    MENTAL_STATE = "MentalState"
+    ISSUE = "Issue"
+    OUTCOME = "Outcome"
 
 
 class GraphRelationship(str, Enum):
@@ -67,6 +83,17 @@ class GraphRelationship(str, Enum):
     SIMILAR_TO = "SIMILAR_TO"
     FOLLOWED_BY = "FOLLOWED_BY"
     EXTRACTED_FROM = "EXTRACTED_FROM"
+    # JARVIS / Agentic Relations
+    HAS_GOAL = "HAS_GOAL"
+    HAS_PREFERENCE = "HAS_PREFERENCE"
+    IMPLEMENTED_BY = "IMPLEMENTED_BY"
+    EXECUTES = "EXECUTES"
+    NEXT = "NEXT"  # Temporal sequence
+    TRUSTS = "TRUSTS"
+    BLOCKED_BY = "BLOCKED_BY"
+    COMPLETED_BY = "COMPLETED_BY"
+    CREATED_BY = "CREATED_BY"
+    MODIFIED_BY = "MODIFIED_BY"
     # Adicione outros tipos de relacionamento conforme necessário
 
 

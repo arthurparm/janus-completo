@@ -521,6 +521,43 @@ async def check_consolidation_queue_policy_health() -> Dict[str, Any]:
         }
 
 
+async def check_qdrant_health() -> Dict[str, Any]:
+    """Health check do Qdrant (Episodic Memory)."""
+    try:
+        from app.core.memory.memory_core import MemoryCore
+        # Instancia temporária para checagem (o client é leve)
+        mem = MemoryCore()
+        
+        # Tenta verificar coleção
+        try:
+            await mem.client.get_collection(mem.collection_name)
+            is_healthy = True
+            msg = "Qdrant operacional"
+        except Exception:
+            # Tenta reviver (pode ser problema de conexão transiente)
+            is_healthy = await mem._try_revive_connection()
+            msg = "Qdrant recuperado" if is_healthy else "Qdrant indisponível"
+
+        if is_healthy:
+            return {
+                "status": "healthy",
+                "message": msg,
+                "details": {"collection": mem.collection_name}
+            }
+        else:
+            return {
+                "status": "degraded", # Degraded pois existe fallback de memória
+                "message": "Qdrant offline (fallback memory-only ativo)",
+                "details": {}
+            }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "message": f"Erro crítico Qdrant: {str(e)}",
+            "details": {}
+        }
+
+
 def get_health_monitor() -> HealthMonitor:
     """Obtém a instância global do HealthMonitor."""
     global _health_monitor
@@ -536,6 +573,11 @@ def get_health_monitor() -> HealthMonitor:
         _health_monitor.register_health_check(
             "message_broker",
             check_message_broker_health,
+            is_critical=True
+        )
+        _health_monitor.register_health_check(
+            "episodic_memory_qdrant",
+            check_qdrant_health,
             is_critical=True
         )
         _health_monitor.register_health_check(
@@ -555,3 +597,4 @@ def get_health_monitor() -> HealthMonitor:
         )
 
     return _health_monitor
+

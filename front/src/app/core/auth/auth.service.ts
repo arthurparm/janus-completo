@@ -17,21 +17,28 @@ export interface User {
 export class AuthService {
   private readonly _isAuthenticated = new BehaviorSubject<boolean>(false)
   private readonly _user = new BehaviorSubject<User | null>(null)
-  
+
   readonly isAuthenticated$ = this._isAuthenticated.asObservable()
   readonly user$ = this._user.asObservable()
+
+  get currentUserValue(): User | null {
+    return this._user.value
+  }
 
   constructor(private supa: SupabaseService, private http: HttpClient) {
     this.initializeAuth()
   }
 
   private initializeAuth(): void {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY)
-    if (token) {
-      this._isAuthenticated.next(true)
-      // You could decode the token to get user info here
-      this._user.next({ id: 'current-user', roles: ['user'], permissions: ['read'] })
-    }
+    // BYPASS: Auto-login as Admin
+    console.log('[AuthService] Auto-initializing default admin user (No Auth Mode)')
+    this._isAuthenticated.next(true)
+    this._user.next({
+      id: 'admin',
+      email: 'admin@janus.ai',
+      roles: ['admin', 'sysadmin'],
+      permissions: ['*']
+    })
   }
   async loginWithPassword(email: string, password: string, remember: boolean): Promise<boolean> {
     console.log('[AuthService] loginWithPassword:start', { emailMasked: !!email })
@@ -46,16 +53,16 @@ export class AuthService {
       const janus = String(out?.token || '')
       if (!janus) return false
       localStorage.setItem(AUTH_TOKEN_KEY, janus)
-      
+
       // Update authentication state
       this._isAuthenticated.next(true)
-      this._user.next({ 
-        id: out.user?.id || 'current-user', 
+      this._user.next({
+        id: out.user?.id || 'current-user',
         email: email,
-        roles: out.user?.roles || ['user'], 
-        permissions: out.user?.permissions || ['read'] 
+        roles: out.user?.roles || ['user'],
+        permissions: out.user?.permissions || ['read']
       })
-      
+
       console.log('[AuthService] exchange:ok')
       return true
     } catch {
@@ -63,7 +70,7 @@ export class AuthService {
       return false
     }
   }
-  async loginWithProvider(provider: 'google'|'github'): Promise<boolean> {
+  async loginWithProvider(provider: 'google' | 'github'): Promise<boolean> {
     console.log('[AuthService] loginWithProvider:start', { provider })
     await this.supa.signInWithProviderRedirect(provider)
     console.log('[AuthService] loginWithProvider:redirected', { provider })

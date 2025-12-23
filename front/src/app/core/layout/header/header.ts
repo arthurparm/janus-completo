@@ -1,28 +1,31 @@
-import {Component, inject} from '@angular/core';
-import {RouterLink, RouterLinkActive, Router} from '@angular/router';
-import {AuthService} from '../../auth/auth.service';
-import {AUTH_TOKEN_KEY} from '../../../services/api.config';
+import { Component, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../../auth/auth.service';
+import { CommonModule } from '@angular/common';
+import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/jarvis-avatar.component';
 
 @Component({
   selector: 'app-header',
-  imports: [RouterLink, RouterLinkActive],
+  standalone: true,
+  imports: [RouterLink, RouterLinkActive, CommonModule, JarvisAvatarComponent],
   templateUrl: './header.html',
   styleUrl: './header.scss'
 })
 export class Header {
-  private auth = inject(AuthService)
-  private router = inject(Router)
+  private auth = inject(AuthService);
   isMenuOpen = false;
 
-  get isAuthenticated(): boolean {
-    return !!localStorage.getItem(AUTH_TOKEN_KEY)
+  isAuthenticated$ = this.auth.isAuthenticated$;
+
+  toggleMenu() {
+    this.isMenuOpen = !this.isMenuOpen;
   }
 
-  toggleMenu() { this.isMenuOpen = !this.isMenuOpen; }
-  closeMenu() { this.isMenuOpen = false; }
+  closeMenu() {
+    this.isMenuOpen = false;
+  }
 
-  async logout() {
-    this.auth.logout()
-    await this.router.navigate(['/login'])
+  logout() {
+    this.auth.logout();
   }
 }

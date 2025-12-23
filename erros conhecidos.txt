@@ -1,0 +1,132 @@
+
+  File "/opt/venv/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+
+    await self.middleware_stack(scope, receive, send)
+
+  File "/opt/venv/lib/python3.11/site-packages/starlette/routing.py", line 725, in app
+
+    await self.lifespan(scope, receive, send)
+
+  File "/opt/venv/lib/python3.11/site-packages/starlette/routing.py", line 694, in lifespan
+
+    async with self.lifespan_context(app) as maybe_state:
+
+  File "/usr/local/lib/python3.11/contextlib.py", line 210, in __aenter__
+
+    return await anext(self.gen)
+
+  File "/opt/venv/lib/python3.11/site-packages/fastapi/routing.py", line 204, in merged_lifespan
+
+    async with original_context(app) as maybe_original_state:
+
+  File "/usr/local/lib/python3.11/contextlib.py", line 210, in __aenter__
+
+    return await anext(self.gen)
+
+  File "/app/app/main.py", line 31, in lifespan
+
+    await kernel.startup()
+
+  File "/app/app/core/kernel.py", line 169, in startup
+
+    self.voice_manager.initialize()
+
+  File "/app/app/core/senses/audio/manager.py", line 38, in initialize
+
+    self.wakeword = WakeWordService(models=["hey_jarvis"]) # Placeholder for "Janus"
+
+  File "/app/app/core/senses/audio/wakeword_service.py", line 17, in __init__
+
+    self._initialize()
+
+  File "/app/app/core/senses/audio/wakeword_service.py", line 25, in _initialize
+
+    self.oww_model = Model(self.models)
+
+  File "/opt/venv/lib/python3.11/site-packages/openwakeword/utils.py", line 539, in wrapped
+
+    return func(*args, **new_kwargs)
+
+  File "/opt/venv/lib/python3.11/site-packages/openwakeword/model.py", line 165, in __init__
+
+    self.models[mdl_name] = tflite.Interpreter(model_path=mdl_path, num_threads=1)
+
+  File "/opt/venv/lib/python3.11/site-packages/tflite_runtime/interpreter.py", line 464, in __init__
+
+    self._interpreter = _interpreter_wrapper.CreateWrapperFromFile(
+
+AttributeError: _ARRAY_API not found
+
+
+pydantic_core._pydantic_core.ValidationError: 3 validation errors for TaskMessage
+
+task_id
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+task_type
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+timestamp
+
+  Input should be a valid number, unable to parse string as a number [type=float_parsing, input_value='2025-12-18T13:22:46.395361', input_type=str]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/float_parsing⁠
+
+Mensagem movida para DLX (requeue=False) devido a erro: 3 validation errors for TaskMessage
+
+task_id
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+task_type
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+timestamp
+
+  Input should be a valid number, unable to parse string as a number [type=float_parsing, input_value='2025-12-18T13:22:46.395361', input_type=str]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/float_parsing⁠
+
+Mensagem movida para DLX (requeue=False) devido a erro: 3 validation errors for TaskMessage
+
+task_id
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+task_type
+
+  Field required [type=missing, input_value={'source': 'scheduled_hea...-12-18T13:22:46.395361'}, input_type=dict]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/missing⁠
+
+timestamp
+
+  Input should be a valid number, unable to parse string as a number [type=float_parsing, input_value='2025-12-18T13:22:46.395361', input_type=str]
+
+    For further information visit https://errors.pydantic.dev/2.12/v/float_parsing⁠
+
+Erro ao processar mensagem; reenfileirando
+
+{"error_type": "CircuitOpenError", "error_message": "Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.8s", "circuit_breaker_state": "OPEN", "circuit_breaker_failures": 4, "circuit_breaker_threshold": 3, "offline_mode": false, "collection_name": "janus_episodic_memory", "effective_limit": 50, "cache_results_count": 0, "has_query_vector": true, "query_vector_length": 1536, "event": "qdrant_search_failed_fallback_to_cache", "logger": "app.core.memory.memory_core", "level": "error", "timestamp": "2025-12-18T15:01:58.236771Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-", "exception": "Traceback (most recent call last):\n  File \"/app/app/core/memory/memory_core.py\", line 417, in arecall\n    hits = await _search()\n           ^^^^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 544, in async_wrapper\n    raise last_exception\n  File \"/app/app/core/infrastructure/resilience.py\", line 451, in async_wrapper\n    result = await call()\n             ^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 239, in call_async\n    raise CircuitOpenError(\napp.core.infrastructure.resilience.CircuitOpenError: Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.8s"}
+
+{"event": "[CircuitBreaker] is_open=True! state=OPEN, failures=4, last_failure=1766070118.024575", "logger": "app.core.infrastructure.resilience", "level": "warning", "timestamp": "2025-12-18T15:01:58.239524Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+
+{"error_type": "CircuitOpenError", "error_message": "Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.8s", "circuit_breaker_state": "OPEN", "circuit_breaker_failures": 4, "circuit_breaker_threshold": 3, "offline_mode": false, "collection_name": "janus_episodic_memory", "effective_limit": 50, "cache_results_count": 0, "has_query_vector": true, "query_vector_length": 1536, "event": "qdrant_search_failed_fallback_to_cache", "logger": "app.core.memory.memory_core", "level": "error", "timestamp": "2025-12-18T15:01:58.236771Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-", "exception": "Traceback (most recent call last):\n  File \"/app/app/core/memory/memory_core.py\", line 417, in arecall\n    hits = await _search()\n           ^^^^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 544, in async_wrapper\n    raise last_exception\n  File \"/app/app/core/infrastructure/resilience.py\", line 451, in async_wrapper\n    result = await call()\n             ^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 239, in call_async\n    raise CircuitOpenError(\napp.core.infrastructure.resilience.CircuitOpenError: Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.8s"}
+
+
+{"error_type": "CircuitOpenError", "error_message": "Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.7s", "circuit_breaker_state": "OPEN", "circuit_breaker_failures": 4, "circuit_breaker_threshold": 3, "offline_mode": true, "collection_name": "janus_episodic_memory", "effective_limit": 50, "cache_results_count": 0, "has_query_vector": true, "query_vector_length": 1536, "event": "qdrant_search_failed_fallback_to_cache", "logger": "app.core.memory.memory_core", "level": "error", "timestamp": "2025-12-18T15:01:58.335911Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-", "exception": "Traceback (most recent call last):\n  File \"/app/app/core/memory/memory_core.py\", line 417, in arecall\n    hits = await _search()\n           ^^^^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 544, in async_wrapper\n    raise last_exception\n  File \"/app/app/core/infrastructure/resilience.py\", line 451, in async_wrapper\n    result = await call()\n             ^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 239, in call_async\n    raise CircuitOpenError(\napp.core.infrastructure.resilience.CircuitOpenError: Circuit Breaker est\u00e1 ABERTO para 'protected_call'. Falhas: 4/3. Tempo de recupera\u00e7\u00e3o restante: 29.7s"}
+
+{"error_type": "ResponseHandlingException", "error_message": "", "circuit_breaker_state": "OPEN", "circuit_breaker_failures": 4, "circuit_breaker_threshold": 3, "offline_mode": false, "collection_name": "janus_episodic_memory", "effective_limit": 50, "cache_results_count": 0, "has_query_vector": true, "query_vector_length": 1536, "event": "qdrant_search_failed_fallback_to_cache", "logger": "app.core.memory.memory_core", "level": "error", "timestamp": "2025-12-18T15:03:07.476964Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-", "exception": "Traceback (most recent call last):\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py\", line 101, in map_httpcore_exceptions\n    yield\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py\", line 394, in handle_async_request\n    resp = await self._pool.handle_async_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py\", line 256, in handle_async_request\n    raise exc from None\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py\", line 236, in handle_async_request\n    response = await connection.handle_async_request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection.py\", line 103, in handle_async_request\n    return await self._connection.handle_async_request(request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py\", line 136, in handle_async_request\n    raise exc\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py\", line 106, in handle_async_request\n    ) = await self._receive_response_headers(**kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py\", line 177, in _receive_response_headers\n    event = await self._receive_event(timeout=timeout)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py\", line 217, in _receive_event\n    data = await self._network_stream.read(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py\", line 32, in read\n    with map_exceptions(exc_map):\n  File \"/usr/local/lib/python3.11/contextlib.py\", line 158, in __exit__\n    self.gen.throw(typ, value, traceback)\n  File \"/opt/venv/lib/python3.11/site-packages/httpcore/_exceptions.py\", line 14, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore.ReadTimeout\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api_client.py\", line 223, in send_inner\n    response = await self._async_client.send(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_client.py\", line 1629, in send\n    response = await self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_client.py\", line 1657, in _send_handling_auth\n    response = await self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_client.py\", line 1694, in _send_handling_redirects\n    response = await self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_client.py\", line 1730, in _send_single_request\n    response = await transport.handle_async_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py\", line 393, in handle_async_request\n    with map_httpcore_exceptions():\n  File \"/usr/local/lib/python3.11/contextlib.py\", line 158, in __exit__\n    self.gen.throw(typ, value, traceback)\n  File \"/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py\", line 118, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx.ReadTimeout\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/app/app/core/memory/memory_core.py\", line 417, in arecall\n    hits = await _search()\n           ^^^^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 544, in async_wrapper\n    raise last_exception\n  File \"/app/app/core/infrastructure/resilience.py\", line 451, in async_wrapper\n    result = await call()\n             ^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 246, in call_async\n    result = await coro_func()\n             ^^^^^^^^^^^^^^^^^\n  File \"/app/app/core/infrastructure/resilience.py\", line 441, in protected_call\n    return await func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/app/core/memory/memory_core.py\", line 387, in _search\n    result = await self.client.query_points(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/async_qdrant_client.py\", line 400, in query_points\n    return await self._client.query_points(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/async_qdrant_remote.py\", line 461, in query_points\n    query_result = await self.http.search_api.query_points(\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api/search_api.py\", line 560, in query_points\n    return await self._build_for_query_points(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api_client.py\", line 184, in request\n    return await self.send(request, type_)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api_client.py\", line 201, in send\n    response = await self.middleware(request, self.send_inner)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api_client.py\", line 245, in __call__\n    return await call_next(request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.11/site-packages/qdrant_client/http/api_client.py\", line 225, in send_inner\n    raise ResponseHandlingException(e)\nqdrant_client.http.exceptions.ResponseHandlingException"}

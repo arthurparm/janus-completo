@@ -107,16 +107,34 @@ class KnowledgeService:
             stats = await self._repo.get_node_and_relationship_stats()
             total_nodes = sum(i.get("count", 0) for i in stats["nodes"]) if stats else 0
             total_relationships = sum(i.get("count", 0) for i in stats["relationships"]) if stats else 0
+            
+            # Check memory/Qdrant health
+            from app.core.memory.memory_core import check_memory_health
+            qdrant_healthy = await check_memory_health()
+            
+            # Determine overall status
+            if qdrant_healthy and total_nodes > 0:
+                status = "ok"
+            elif qdrant_healthy or total_nodes > 0:
+                status = "partial"
+            else:
+                status = "degraded"
+                
             return {
-                "status": "ok",
-                "neo4j_connected": True,
+                "status": status,
+                "neo4j_connected": total_nodes > 0,
+                "qdrant_connected": qdrant_healthy,
+                "circuit_breaker_open": not qdrant_healthy,  # Se Qdrant não está saudável, circuit breaker está aberto
                 "total_nodes": total_nodes,
                 "total_relationships": total_relationships,
             }
-        except Exception:
+        except Exception as e:
+            logger.warning("Erro ao verificar status de saúde do conhecimento", exc_info=e)
             return {
                 "status": "degraded",
                 "neo4j_connected": False,
+                "qdrant_connected": False,
+                "circuit_breaker_open": True,
                 "total_nodes": 0,
                 "total_relationships": 0,
             }

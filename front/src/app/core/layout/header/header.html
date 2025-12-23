@@ -1,7 +1,8 @@
 <header class="app-header">
   <div class="wrap">
-    <div class="brand">
-      Projeto Janus<span class="dot">•</span>
+    <div class="brand" routerLink="/">
+      <app-jarvis-avatar [size]="32" state="idle"></app-jarvis-avatar>
+      <span class="brand-text">JANUS<span class="dot">AI</span></span>
     </div>
 
     <button class="menu-toggle" aria-label="Abrir menu" [attr.aria-expanded]="isMenuOpen" (click)="toggleMenu()">
@@ -11,14 +12,18 @@
     </button>
 
     <nav class="nav" id="primary-navigation" aria-label="Navegação principal" [class.open]="isMenuOpen">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMenu()">Home</a>
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+        (click)="closeMenu()">Home</a>
       <a routerLink="/arquitetura" routerLinkActive="active" (click)="closeMenu()">Arquitetura</a>
       <a routerLink="/sprints" routerLinkActive="active" (click)="closeMenu()">Sprints</a>
       <a routerLink="/conversations" routerLinkActive="active" (click)="closeMenu()">Conversas</a>
-      <a routerLink="/gaps-janus" routerLinkActive="active" (click)="closeMenu()">Gaps Janus</a>
-      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()">Documentação</a>
-      @if (isAuthenticated) {
-        <button class="logout-btn" (click)="logout(); closeMenu()">Sair</button>
+      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()">Docs</a>
+
+      <!-- Keep Chat accessible as Neural Link but maybe secondary or icon? Let's add it too as it's critical -->
+      <a routerLink="/chat" routerLinkActive="active" (click)="closeMenu()" class="special-link">Neural Chat</a>
+
+      @if (isAuthenticated$ | async) {
+      <button class="logout-btn" (click)="logout(); closeMenu()">Disconnect</button>
       }
     </nav>
   </div>

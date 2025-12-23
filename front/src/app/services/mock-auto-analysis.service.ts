@@ -31,7 +31,10 @@ export class MockAutoAnalysisService {
         estimated_impact: 'Satisfação do usuário: Boa 📈'
       }
     ],
-    fun_fact: 'Você sabia? Já processei mais de 1000 perguntas! 🤯'
+    fun_fact: 'Você sabia? Já processei mais de 1000 perguntas! 🤯',
+    total_memories: 124,
+    session_duration: '42m',
+    efficiency_score: 98
   }
 
   getHealthCheck(): Observable<AutoAnalysisResponse> {

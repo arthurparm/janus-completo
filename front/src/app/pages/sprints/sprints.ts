@@ -1,9 +1,8 @@
-import {Component, OnInit, OnDestroy} from '@angular/core';
-import {NgFor, NgIf} from '@angular/common';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 
 @Component({
   selector: 'app-sprints',
-  imports: [NgFor, NgIf],
+  imports: [],
   templateUrl: './sprints.html',
   styleUrl: './sprints.scss'
 })
@@ -114,7 +113,7 @@ export class Sprints implements OnInit, OnDestroy {
     this.observeExistingItems();
     // Atualiza linha de progresso da timeline conforme scroll
     this.scrollHandler = () => this.updateTimelineFill();
-    window.addEventListener('scroll', this.scrollHandler, {passive: true});
+    window.addEventListener('scroll', this.scrollHandler, { passive: true });
     this.updateTimelineFill();
 
     // Carregar todos os sprints de uma vez (removendo paginação)
@@ -177,7 +176,7 @@ export class Sprints implements OnInit, OnDestroy {
           }
         }
       },
-      {root: null, threshold: 0.15}
+      { root: null, threshold: 0.15 }
     );
   }
 

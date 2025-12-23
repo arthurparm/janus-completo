@@ -1,81 +1,88 @@
 <section class="page-header">
-  <div class="container">
-    <h1>Log de Sprints: A Evolução de Janus</h1>
-    <p class="subtitle">
-      Um registro cronológico do desenvolvimento de Janus, desde a sua fundação como um sistema distribuído
-      até a gênese de sua consciência proativa. Cada Sprint representa um salto evolutivo.
-    </p>
-  </div>
+  <h1 class="page-title text-purple glow-text">EVOLUTION ROADMAP</h1>
+  <p class="page-subtitle text-muted">
+    CHRONOLOGICAL LOG OF SYSTEM CAPABILITIES // GENESIS TO SINGULARITY
+  </p>
 </section>
 
-<section id="timeline" class="timeline-section">
-  <div id="timelineLine" class="timeline-line" aria-hidden="true"></div>
-
-  <div id="timelineList" class="timeline-list">
-    <!-- Sprints iniciais 1-4 no HTML (para teste de scraping estático) -->
-
-    <article class="timeline-item" data-sprint="1">
-      <div class="timeline-card">
-        <div class="tag">Foco: Infraestrutura</div>
-        <h3>Sprint 1: Espinha Dorsal do Sistema – Fundamentos de Comunicação Distribuída</h3>
-        <p>
-          Foco Principal: Estabelecer uma arquitetura de comunicação assíncrona e distribuída.
-          Implementações Chave: Integração e configuração do RabbitMQ como o principal message broker; padrão
-          Orquestrador-Worker; canais de eventos.
-        </p>
-      </div>
-    </article>
-
-    <article class="timeline-item" data-sprint="2">
-      <div class="timeline-card">
-        <div class="tag">Foco: Memória</div>
-        <h3>Sprint 2: Núcleo Cognitivo – Aprendizagem Baseada em Experiências</h3>
-        <p>
-          Foco Principal: Desenvolver a capacidade de aprendizagem do Janus através de uma Memória Episódica.
-          Implementações Chave: Qdrant como banco de dados vetorial; indexação de experiências; recuperação
-          contextual.
-        </p>
-      </div>
-    </article>
-
-    <article class="timeline-item" data-sprint="3">
-      <div class="timeline-card">
-        <div class="tag">Foco: Conhecimento</div>
-        <h3>Sprint 3: Base de Conhecimento – Memória Semântica e Ontologias</h3>
-        <p>
-          Foco Principal: Construir memória semântica e grafos de conhecimento. Implementações Chave: embeddings;
-          relacionamento conceitual; ingestão de documentação técnica.
-        </p>
-      </div>
-    </article>
-
-    <article class="timeline-item" data-sprint="4">
-      <div class="timeline-card">
-        <div class="tag">Foco: Cognitivo</div>
-        <h3>Sprint 4: Planejamento Cognitivo – Orquestração de Modelos e Ferramentas</h3>
-        <p>
-          Foco Principal: Orquestrar fluxo de pensamento entre diferentes modelos e ferramentas. Implementações
-          Chave: orchestrator; uso de ferramentas; encadeamentos de raciocínio.
-        </p>
-      </div>
-    </article>
-
-    <!-- Itens carregados dinamicamente pelo Angular para manter estilos encapsulados -->
-    <ng-container *ngFor="let s of displayedSprints; trackBy: trackById">
-      <article class="timeline-item" [attr.data-sprint]="s.id">
-        <div class="timeline-card">
-          <div class="tag">Foco: {{ s.focus }}</div>
-          <h3>{{ s.title }}</h3>
-          <p>{{ s.summary }}</p>
-        </div>
-      </article>
-    </ng-container>
+<section id="timeline" class="timeline-section mt-12 relative">
+  <!-- Central Line -->
+  <div
+    class="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-b from-cyan-500 via-purple-500 to-transparent transform -translate-x-1/2 opacity-30">
   </div>
 
-  <div class="timeline-actions" *ngIf="!allLoaded">
-    <button id="loadMoreBtn" class="load-more-btn" (click)="loadMore()" aria-live="polite">
-      <span class="loader" aria-hidden="true"></span>
-      <span class="label">Carregar Mais Sprints</span>
-    </button>
+  <div class="timeline-list space-y-12 max-w-4xl mx-auto relative z-10">
+
+    <!-- Sprint 1 -->
+    <article class="timeline-item flex items-center justify-between w-full group">
+      <div class="w-5/12 text-right pr-8 transition-transform group-hover:-translate-x-2">
+        <div class="text-cyan font-mono text-sm mb-1">CYCLE_01 // INFRASTRUCTURE</div>
+        <h3 class="text-xl font-bold text-white mb-2">System Backbone</h3>
+        <p class="text-sm text-text-secondary">
+          Distribution Architecture initialized. RabbitMQ Event Bus allows asynchronous neural firing across distributed
+          nodes.
+        </p>
+      </div>
+      <div
+        class="w-8 h-8 rounded-full bg-slate-900 border-2 border-cyan shadow-[0_0_15px_rgba(6,182,212,0.5)] z-20 flex items-center justify-center">
+        <div class="w-2 h-2 bg-cyan rounded-full animate-pulse"></div>
+      </div>
+      <div class="w-5/12 pl-8 opacity-50 group-hover:opacity-100 transition-opacity">
+        <div class="glass-panel p-4 text-xs font-mono text-muted">
+          > RabbitMQ Integration: OK<br>
+          > Worker Orchestration: ONLINE
+        </div>
+      </div>
+    </article>
+
+    <!-- Sprint 2 -->
+    <article class="timeline-item flex items-center justify-between w-full flex-row-reverse group">
+      <div class="w-5/12 text-left pl-8 transition-transform group-hover:translate-x-2">
+        <div class="text-purple font-mono text-sm mb-1">CYCLE_02 // MEMORY</div>
+        <h3 class="text-xl font-bold text-white mb-2">Episodic Core</h3>
+        <p class="text-sm text-text-secondary">
+          Long-term memory integration via Qdrant Vector Database. Experience indexing enabled for contextual retrieval.
+        </p>
+      </div>
+      <div
+        class="w-8 h-8 rounded-full bg-slate-900 border-2 border-purple shadow-[0_0_15px_rgba(168,85,247,0.5)] z-20 flex items-center justify-center">
+        <div class="w-2 h-2 bg-purple rounded-full animate-pulse"></div>
+      </div>
+      <div class="w-5/12 pr-8 text-right opacity-50 group-hover:opacity-100 transition-opacity">
+        <div class="glass-panel p-4 text-xs font-mono text-muted">
+          > Vector Storage: ACTIVE<br>
+          > Recall Protocols: 98%
+        </div>
+      </div>
+    </article>
+
+    <!-- Sprint 3 -->
+    <article class="timeline-item flex items-center justify-between w-full group">
+      <div class="w-5/12 text-right pr-8 transition-transform group-hover:-translate-x-2">
+        <div class="text-pink font-mono text-sm mb-1">CYCLE_03 // KNOWLEDGE</div>
+        <h3 class="text-xl font-bold text-white mb-2">Semantic Graph</h3>
+        <p class="text-sm text-text-secondary">
+          Construction of Ontology Graph for deep semantic understanding. Ingestion of technical documentation manuals.
+        </p>
+      </div>
+      <div
+        class="w-8 h-8 rounded-full bg-slate-900 border-2 border-pink shadow-[0_0_15px_rgba(236,72,153,0.5)] z-20 flex items-center justify-center">
+        <div class="w-2 h-2 bg-pink rounded-full animate-pulse"></div>
+      </div>
+      <div class="w-5/12 pl-8 opacity-50 group-hover:opacity-100 transition-opacity">
+        <div class="glass-panel p-4 text-xs font-mono text-muted">
+          > Knowledge Graph: EXPANDING<br>
+          > Semantic Linking: VERIFIED
+        </div>
+      </div>
+    </article>
+
+    <!-- Live Data Loading -->
+    <div class="text-center py-8">
+      <button id="loadMoreBtn" class="glass-button text-cyan hover:bg-cyan/10" (click)="loadMore()">
+        <span class="icon animate-spin mr-2">↻</span> LOAD ARCHIVED CYCLES
+      </button>
+    </div>
+
   </div>
 </section>

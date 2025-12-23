@@ -190,7 +190,7 @@ class AppSettings(BaseSettings):
     STATIC_FILES_DIR: str = "front/janus-angular/public"
 
     # Timeouts de infraestrutura
-    QDRANT_DEFAULT_TIMEOUT_SECONDS: int = 30
+    QDRANT_DEFAULT_TIMEOUT_SECONDS: int = 60
     NEO4J_DEFAULT_TIMEOUT_SECONDS: int = 30
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
@@ -207,38 +207,50 @@ class AppSettings(BaseSettings):
     RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
         "janus.knowledge.consolidation": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.agent.tasks": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.neural.training": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.data.harvesting": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.meta_agent.cycle": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-max-priority": 10
+            "x-max-priority": 10,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.tasks.reflexion": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-max-priority": 10
+            "x-max-priority": 10,
+            "x-dead-letter-exchange": "janus.dlx"
         },
         "janus.failure.detected": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-max-priority": 10
+            "x-max-priority": 10,
+            "x-dead-letter-exchange": "janus.dlx"
+        },
+        "janus.dlq": {
+            "x-message-ttl": 604800000,  # 7 days retention for dead letters
+            "x-max-length": 10000
         },
         "default": {
             "x-message-ttl": 86400000,
-            "x-max-length": 10000
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "janus.dlx"
         }
     }
 
@@ -401,5 +413,8 @@ class AppSettings(BaseSettings):
                             parsed[k.strip()] = 0.0
                 return parsed
         return v or {}
+
+    # Workspace e File System
+    WORKSPACE_ROOT: str = "/app/workspace"
 
 settings = AppSettings()

@@ -12,6 +12,7 @@ from app.core.agents.agent_manager import agent_manager, AgentType
 from app.core.infrastructure.resilience import CircuitBreaker
 from app.core.memory.memory_core import get_memory_db
 from app.db.graph import graph_db
+from app.core.infrastructure.prompt_loader import prompt_loader
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +65,7 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
     iteration = shared.get("iteration", 0)
 
     async def _phase_plan() -> Dict[str, Any]:
-        prompt = "Você é o supervisor do sistema Janus. Seu objetivo é garantir a saúde e eficiência do sistema. Formule um plano para analisar o conhecimento consolidado do sistema em busca de padrões de falha."
+        prompt = prompt_loader.get("meta_agent_plan")
         result = await agent_manager.arun_agent(question=prompt, request=None, agent_type=AgentType.META_AGENT)
         plan = result.get(
             "answer") if result and "answer" in result else "Plano padrão: Consultar o Grafo de Conhecimento por lições aprendidas (Reflections) e analisar padrões."
@@ -89,13 +90,7 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
             return {"analysis": analysis, "has_issue": False}
 
         reflections_str = "\n- ".join(reflections)
-        prompt = f"""Analise estas lições aprendidas (Reflections) extraídas da Memória Semântica do sistema. Existem padrões recorrentes ou uma causa raiz comum que precise de atenção?
-
-        Lições Aprendidas Recentes:
-        - {reflections_str}
-
-        Forneça uma análise concisa e, se aplicável, sugira uma hipótese para a causa raiz.
-        """
+        prompt = prompt_loader.get("meta_agent_act", variables={"learning_lessons": reflections_str})
         
         result = await agent_manager.arun_agent(
             question=prompt,

@@ -170,12 +170,13 @@ class CircuitBreaker:
 
         return wrapper
 
-    async def call_async(self, coro_func: Callable[..., Coroutine]) -> Any:
+    async def call_async(self, coro_func: Callable[..., Coroutine], operation: Optional[str] = None) -> Any:
         """
-        Executa uma função assíncrona protegida pelo circuit breaker.
+        Executa uma função assíncrona protegida pelo circuit breaker com logging detalhado.
 
         Args:
             coro_func: Função assíncrona a ser executada
+            operation: Nome da operação para logs e métricas
 
         Returns:
             Resultado da função
@@ -183,34 +184,95 @@ class CircuitBreaker:
         Raises:
             CircuitOpenError: Se o circuito estiver aberto
         """
-        operation = getattr(coro_func, "__name__", "async_operation")
+        operation = operation or getattr(coro_func, "__name__", "async_operation")
         self._last_operation = operation
+        start_time = time.time()
 
         # Update OPEN time gauge if currently open
         if self.state == CircuitBreakerState.OPEN and self._open_since:
-            _OPEN_TIME_GAUGE.labels(operation=operation).set(
-                max(0.0, time.time() - self._open_since)
+            open_duration = time.time() - self._open_since
+            _OPEN_TIME_GAUGE.labels(operation=operation).set(max(0.0, open_duration))
+            
+            # Log detailed circuit breaker state when attempting call
+            logger.warning(
+                "circuit_breaker_call_attempt_while_open",
+                operation=operation,
+                state=self.state.value,
+                open_duration_seconds=open_duration,
+                recovery_timeout=self.recovery_timeout,
+                failure_count=self.failure_count,
+                failure_threshold=self.failure_threshold,
+                last_failure_time=self.last_failure_time,
+                time_since_last_failure=time.time() - self.last_failure_time if self.last_failure_time else None
             )
 
         if self.state == CircuitBreakerState.OPEN:
             if self.last_failure_time is not None and (
                     time.time() - self.last_failure_time > self.recovery_timeout
             ):
+                old_state = self.state
                 self.state = CircuitBreakerState.HALF_OPEN
                 self._set_state_gauges(operation)
-                logger.warning("circuit_half_open", operation=operation)
+                logger.warning(
+                    "circuit_transition_to_half_open",
+                    operation=operation,
+                    state_transition=f"{old_state.value} -> {self.state.value}",
+                    open_duration=time.time() - self._open_since if self._open_since else 0,
+                    recovery_timeout=self.recovery_timeout,
+                    failure_count=self.failure_count
+                )
             else:
                 self._set_state_gauges(operation)
+                rejection_time = time.time() - start_time
+                recovery_remaining = max(0, self.recovery_timeout - (time.time() - self.last_failure_time)) if self.last_failure_time else self.recovery_timeout
+                
+                logger.error(
+                    "circuit_breaker_rejected_call",
+                    operation=operation,
+                    state=self.state.value,
+                    rejection_time_seconds=rejection_time,
+                    recovery_timeout_remaining=recovery_remaining,
+                    failure_count=self.failure_count,
+                    failure_threshold=self.failure_threshold
+                )
+                
                 raise CircuitOpenError(
-                    f"Circuit Breaker está ABERTO para '{operation}'. Chamada bloqueada."
+                    f"Circuit Breaker está ABERTO para '{operation}'. "
+                    f"Falhas: {self.failure_count}/{self.failure_threshold}. "
+                    f"Tempo de recuperação restante: {recovery_remaining:.1f}s"
                 )
 
         try:
             result = await coro_func()
+            execution_time = time.time() - start_time
             self._on_success(operation)
+            
+            # Log successful execution with timing
+            logger.info(
+                "circuit_breaker_call_success",
+                operation=operation,
+                state=self.state.value,
+                execution_time_seconds=execution_time,
+                failure_count=self.failure_count
+            )
+            
             return result
         except Exception as e:
+            execution_time = time.time() - start_time
             self._on_failure(operation)
+            
+            # Log failure with detailed context
+            logger.error(
+                "circuit_breaker_call_failed",
+                operation=operation,
+                state=self.state.value,
+                execution_time_seconds=execution_time,
+                exception_type=type(e).__name__,
+                exception_message=str(e),
+                failure_count=self.failure_count,
+                failure_threshold=self.failure_threshold
+            )
+            
             raise
 
     def _set_state_gauges(self, operation: str) -> None:
@@ -243,7 +305,8 @@ class CircuitBreaker:
         self._set_state_gauges(operation)
 
     def _on_failure(self, operation: str):
-        """Trata falha da operação."""
+        """Trata falha da operação com logging detalhado."""
+        old_state = self.state
         self.failure_count += 1
         self.last_failure_time = time.time()
 
@@ -252,21 +315,42 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.HALF_OPEN:
             self.state = CircuitBreakerState.OPEN
             self._open_since = time.time()
-            logger.error("circuit_back_to_open_after_failed_test", operation=operation)
+            logger.error(
+                "circuit_back_to_open_after_failed_test",
+                operation=operation,
+                failure_count=self.failure_count,
+                failure_threshold=self.failure_threshold,
+                recovery_timeout=self.recovery_timeout,
+                state_transition=f"{old_state.value} -> {self.state.value}",
+                open_since=self._open_since,
+                last_failure_time=self.last_failure_time
+            )
             import traceback
             logger.warning(
-                f"[CircuitBreaker] State changed to OPEN from HALF_OPEN. Stack:\n{''.join(traceback.format_stack()[-8:])}")
+                f"[CircuitBreaker] State changed to OPEN from HALF_OPEN after failed test. "
+                f"Failures: {self.failure_count}/{self.failure_threshold}, "
+                f"Recovery timeout: {self.recovery_timeout}s. "
+                f"Stack:\n{''.join(traceback.format_stack()[-8:])}")
         elif self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
             self._open_since = time.time()
             logger.error(
                 "circuit_open_threshold_reached",
                 operation=operation,
+                failure_count=self.failure_count,
                 failure_threshold=self.failure_threshold,
+                recovery_timeout=self.recovery_timeout,
+                state_transition=f"{old_state.value} -> {self.state.value}",
+                open_since=self._open_since,
+                last_failure_time=self.last_failure_time
             )
             import traceback
             logger.warning(
-                f"[CircuitBreaker] State changed to OPEN (threshold reached). failures={self.failure_count}, threshold={self.failure_threshold}. Stack:\n{''.join(traceback.format_stack()[-8:])}")
+                f"[CircuitBreaker] CRITICAL: Circuit breaker OPENED due to threshold reached. "
+                f"Failures: {self.failure_count}/{self.failure_threshold}, "
+                f"Recovery timeout: {self.recovery_timeout}s. "
+                f"All calls to '{operation}' will be blocked for {self.recovery_timeout} seconds. "
+                f"Stack:\n{''.join(traceback.format_stack()[-8:])}")
 
         self._set_state_gauges(operation)
 

@@ -11,7 +11,10 @@ services:
     volumes:
       - ./janus/app:/app/app
       - ./janus/workspace:/app/workspace
-    command: [ "sh","-lc","/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
+      - ./janus/tests:/app/tests
+      - ./janus/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: [ "sh", "-lc", "/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
     depends_on:
       neo4j:
         condition: service_healthy
@@ -19,8 +22,17 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
     networks:
       - janus-net
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_ORCHESTRATOR_MODEL=llama3.1:8b
+      - OLLAMA_CODER_MODEL=llama3.1:8b
+      - OLLAMA_CURATOR_MODEL=llama3.1:8b
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
 
   front:
     image: node:20
@@ -31,7 +43,7 @@ services:
     environment:
       - VITE_SUPABASE_URL=https://tfunopczianlvppoabmz.supabase.co
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-    command: [ "bash","-lc","npm install && npx ng serve --host 0.0.0.0 --port 4300 --proxy-config proxy.docker.conf.json" ]
+    command: [ "bash", "-lc", "npm install && npx ng serve --host 0.0.0.0 --port 4300 --proxy-config proxy.docker.conf.json" ]
     ports:
       - "4300:4300"
     networks:
@@ -64,7 +76,7 @@ services:
       start_period: 20s
 
   qdrant:
-    image: qdrant/qdrant:v1.9.2
+    image: qdrant/qdrant:v1.16.0
     container_name: janus_qdrant
     ports:
       - "6333:6333"
@@ -72,6 +84,13 @@ services:
       - ./janus/data/qdrant:/qdrant/storage
     networks:
       - janus-net
+
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   ollama:
     build:

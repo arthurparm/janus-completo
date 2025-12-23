@@ -19,10 +19,20 @@ from app.core.memory.memory_core import get_memory_db
 from app.core.infrastructure.python_sandbox import python_sandbox
 from app.db.graph import graph_db
 from app.core.memory.working_memory import get_working_memory
+import urllib.request
+import urllib.error
+from html.parser import HTMLParser
+import subprocess
+import os
 
 logger = logging.getLogger(__name__)
 
-WORKSPACE_ROOT = Path("/app/workspace").resolve()
+# Importar configurações para workspace root
+from app.core.tools.launcher_tools import launch_app
+from app.config import settings
+
+# Usar WORKSPACE_ROOT das configurações com fallback para compatibilidade
+WORKSPACE_ROOT = Path(settings.WORKSPACE_ROOT).resolve()
 ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
 MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
@@ -528,6 +538,116 @@ def execute_python_expression(expression: str) -> str:
         return f"Erro inesperado: {str(e)}"
 
 
+@tool
+def execute_shell(command: str) -> str:
+    """
+    Executa um comando de shell no sistema operacional.
+    
+    ATENÇÃO: Uso restrito. Apenas comandos seguros são permitidos por padrão.
+    
+    Args:
+        command: O comando a ser executado (ex: "echo hello", "dir", "ls -la")
+        
+    Returns:
+        A saída padrão (stdout) e erro (stderr) combinados.
+    """
+    # Lista de comandos bloqueados por segurança
+    blocked = ["rm", "del", "format", "mv", "shutdown", "reboot"]
+    if any(cmd in command.split() for cmd in blocked):
+        return "Erro: Comando bloqueado por segurança."
+        
+    try:
+        logger.info(f"Executando shell command: {command}")
+        # Timeout de 30s
+        result = subprocess.run(
+            command, 
+            shell=True, 
+            capture_output=True, 
+            text=True, 
+            timeout=30
+        )
+        output = result.stdout
+        if result.stderr:
+            output += f"\nSTDERR: {result.stderr}"
+        return output
+    except subprocess.TimeoutExpired:
+        return "Erro: O comando excedeu o tempo limite de 30s."
+    except Exception as e:
+        logger.error(f"Erro ao executar shell: {e}", exc_info=True)
+        return f"Erro ao executar comando: {e}"
+
+
+# --- Helper for HTML Stripping ---
+class MLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs = True
+        self.text = []
+
+    def handle_data(self, d):
+        self.text.append(d)
+
+    def get_data(self):
+        return "".join(self.text)
+
+def strip_tags(html):
+    try:
+        s = MLStripper()
+        s.feed(html)
+        return s.get_data()
+    except Exception:
+        return html
+
+
+@tool
+def browse_url(url: str) -> str:
+    """
+    Navega em uma URL via HTTP (simulando um browser) e retorna o conteúdo textual principal.
+    
+    Simula um User-Agent de navegador real para evitar bloqueios.
+    Útil para ler artigos, documentações, notícias e qualquer página pública.
+
+    Args:
+        url: A URL completa para acessar (http:// ou https://)
+
+    Returns:
+        O texto extraído da página (HTML limpo) ou mensagem de erro.
+    """
+    if not url.startswith("http"):
+        return "Erro: A URL deve começar com http:// ou https://"
+
+    logger.info(f"Browsing URL: {url}")
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as response:
+            charset = response.headers.get_content_charset() or 'utf-8'
+            html_content = response.read().decode(charset, errors='replace')
+            
+            # Extrair texto limpo
+            text_content = strip_tags(html_content)
+            
+            # Limpeza básica de white-space
+            text_content = "\n".join([line.strip() for line in text_content.splitlines() if line.strip()])
+            
+            # Limitar tamanho para não estourar contexto
+            return text_content[:20000] # Retorna os primeiros 20k caracteres
+            
+    except urllib.error.HTTPError as e:
+        return f"Erro HTTP {e.code}: {e.reason}"
+    except urllib.error.URLError as e:
+        return f"Erro de Conexão: {e.reason}"
+    except Exception as e:
+        logger.error(f"Erro ao navegar na URL {url}: {e}", exc_info=True)
+        return f"Erro inesperado ao acessar URL: {e}"
+
+
 # --- Fábrica de Ferramentas ---
 
 @tool
@@ -557,7 +677,10 @@ unified_tools: List[BaseTool] = [
     search_web,
     get_enriched_context,
     execute_python_code,
-    execute_python_expression
+    execute_python_expression,
+    execute_shell,
+    launch_app,
+    browse_url
 ]
 
 meta_agent_tools: List[BaseTool] = [
@@ -688,6 +811,31 @@ def _register_all_tools_in_action_module():
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=60,
         tags=["python", "sandbox", "computation"]
+    )
+
+    # Ferramenta de Shell (Novo)
+    action_registry.register(
+        execute_shell,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.DANGEROUS,
+        rate_limit_per_minute=10,
+        tags=["shell", "terminal", "system"]
+    )
+
+    action_registry.register(
+        launch_app,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.SAFE,  # Launcher considered safe as it just opens apps
+        rate_limit_per_minute=20,
+        tags=["system", "launcher", "app"]
+    )
+
+    action_registry.register(
+        browse_url,
+        category=ToolCategory.WEB,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=10,
+        tags=["web", "browser", "http", "scrape"]
     )
 
     # Ferramentas defeituosas (Sprint 5) - apenas para Reflexion

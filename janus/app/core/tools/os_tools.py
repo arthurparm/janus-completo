@@ -1,0 +1,145 @@
+import subprocess
+import logging
+from pathlib import Path
+from typing import Optional
+
+from langchain.tools import tool
+from app.core.tools.action_module import (
+    PermissionLevel,
+    ToolCategory,
+    register_tool
+)
+
+logger = logging.getLogger(__name__)
+
+@tool
+def execute_system_command(command: str) -> str:
+    """
+    EXECUTAR COMANDO DE SHELL SEM RESTRIÇÕES.
+    
+    Esta ferramenta permite executar QUALQUER comando no sistema operacional (Windows/Linux).
+    NÃO há lista de bloqueio. USE COM EXTREMA CAUTELA.
+    
+    Permite:
+    - Instalar pacotes (pip, npm, apt, choco)
+    - Gerenciar serviços (systemctl, sc)
+    - Operações de arquivo sistema (mv, rm, cp em qualquer lugar)
+    - Diagnóstico de rede (ping, curl, netstat)
+    
+    Args:
+        command: O comando shell a ser executado.
+        
+    Returns:
+        Stdout combinado com Stderr ou mensagem de erro.
+    """
+    logger.warning(f"⚠️ EXECUTANDO COMANDO DO SISTEMA SEM RESTRIÇÕES: {command}")
+    try:
+        # Timeout maior para operações de SO (ex: instalações)
+        result = subprocess.run(
+            command, 
+            shell=True, 
+            capture_output=True, 
+            text=True, 
+            timeout=300
+        )
+        output = result.stdout
+        if result.stderr:
+            output += f"\n[STDERR]: {result.stderr}"
+        return output
+    except subprocess.TimeoutExpired:
+        return "Erro: Comando excedeu 300 segundos (Timeout)."
+    except Exception as e:
+        logger.error(f"Erro na execução do sistema: {e}", exc_info=True)
+        return f"Erro fatal: {str(e)}"
+
+@tool
+def write_system_file(path: str, content: str) -> str:
+    """
+    Escreve um arquivo em QUALQUER lugar do sistema de arquivos.
+    
+    Args:
+        path: Caminho absoluto ou relativo.
+        content: Conteúdo do arquivo.
+    """
+    try:
+        p = Path(path).resolve()
+        logger.warning(f"⚠️ ESCREVENDO ARQUIVO SISTEMA: {p}")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return f"Arquivo escrito com sucesso em: {p}"
+    except Exception as e:
+        return f"Erro ao escrever arquivo: {e}"
+
+@tool
+def read_system_file(path: str) -> str:
+    """
+    Lê um arquivo de QUALQUER lugar do sistema de arquivos.
+    """
+    try:
+        p = Path(path).resolve()
+        logger.info(f"Lendo arquivo sistema: {p}")
+        if not p.exists():
+            return "Erro: Arquivo não existe."
+        if p.stat().st_size > 10 * 1024 * 1024: # 10MB limit
+            return "Erro: Arquivo muito grande (>10MB)."
+        return p.read_text(encoding="utf-8")
+    except Exception as e:
+        return f"Erro ao ler arquivo: {e}"
+
+@tool
+def list_directory(path: str) -> str:
+    """
+    Lista o conteúdo de um diretório no sistema de arquivos.
+    
+    Args:
+        path: Caminho do diretório.
+    """
+    try:
+        p = Path(path).resolve()
+        logger.info(f"Listando diretório: {p}")
+        if not p.exists():
+            return "Erro: Diretório não existe."
+        if not p.is_dir():
+            return "Erro: O caminho não é um diretório."
+            
+        items = []
+        for item in p.iterdir():
+            type_str = "<DIR>" if item.is_dir() else "<FILE>"
+            items.append(f"{type_str:<7} {item.name}")
+            
+        return "\n".join(items) if items else "(Diretório vazio)"
+    except Exception as e:
+        return f"Erro ao listar diretório: {e}"
+
+def register_os_tools():
+    """Registra as ferramentas de SO no ActionModule com nível PERIGOSO."""
+    
+    register_tool(
+        execute_system_command,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.DANGEROUS,
+        tags=["os", "shell", "admin", "unrestricted"]
+    )
+    
+    register_tool(
+        write_system_file,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.DANGEROUS,
+        tags=["os", "fs", "admin", "unrestricted"]
+    )
+    
+    register_tool(
+        read_system_file,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.DANGEROUS,
+        tags=["os", "fs", "admin", "unrestricted"]
+    )
+    
+    register_tool(
+        list_directory,
+        category=ToolCategory.FILESYSTEM,
+        permission_level=PermissionLevel.DANGEROUS,
+        tags=["os", "fs", "ls"]
+    )
+    
+    logger.info("Ferramentas de SO (DANGEROUS) registradas.")

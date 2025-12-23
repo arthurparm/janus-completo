@@ -3,7 +3,6 @@ import logging
 from typing import Dict, Any, List, Optional
 import json  # Adicionado para json.dumps
 
-from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 from fastapi import Depends  # Adicionado para DI

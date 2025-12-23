@@ -1,17 +1,63 @@
 <aside class="sidebar">
-  <div class="sidebar-title">Módulos</div>
-  <nav class="side-nav">
-    <!-- Link para Dashboard removido -->
-    <a class="side-link" routerLink="/overview">Visão Geral</a>
-    <a class="side-link" routerLink="/chat">Chat Interativo</a>
-    <a class="side-link" routerLink="/chat/modern">🚀 Chat Moderno</a>
-    <a class="side-link" routerLink="/observability">Observabilidade</a>
-    <a class="side-link" routerLink="/agents">Gerenciador de Agentes</a>
-    <a class="side-link" routerLink="/knowledge">Base de Conhecimento</a>
-    <a class="side-link" routerLink="/system">Operações do Sistema</a>
-    <a class="side-link" routerLink="/operations">Operações (Infra)</a>
-    <a class="side-link" routerLink="/hitl">Revisão HITL</a>
-    <a class="side-link" routerLink="/auto-analysis">Auto-Análise</a>
-    <a class="side-link" routerLink="/login">Login (Dev)</a>
-  </nav>
+  <div class="sidebar-section">
+    <h3 class="section-title">PRINCIPAL</h3>
+    <nav class="side-nav">
+      <a class="side-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+        <mat-icon class="icon">home</mat-icon>
+        <span class="label">Início</span>
+      </a>
+      <a class="side-link" routerLink="/conversations" routerLinkActive="active">
+        <mat-icon class="icon">chat</mat-icon>
+        <span class="label">Conversas</span>
+      </a>
+      <a class="side-link" routerLink="/goals" routerLinkActive="active">
+        <mat-icon class="icon">flag</mat-icon>
+        <span class="label">Metas</span>
+      </a>
+      <a class="side-link" routerLink="/tools" routerLinkActive="active">
+        <mat-icon class="icon">build</mat-icon>
+        <span class="label">Ferramentas</span>
+      </a>
+    </nav>
+  </div>
+
+  <div class="sidebar-section">
+    <h3 class="section-title">SISTEMA</h3>
+    <nav class="side-nav">
+      <a class="side-link" routerLink="/arquitetura" routerLinkActive="active">
+        <mat-icon class="icon">account_tree</mat-icon>
+        <span class="label">Arquitetura</span>
+      </a>
+      <a class="side-link" routerLink="/memory" routerLinkActive="active">
+        <mat-icon class="icon">psychology</mat-icon>
+        <span class="label">Memória</span>
+      </a>
+      <a class="side-link" routerLink="/hitl" routerLinkActive="active">
+        <mat-icon class="icon">verified_user</mat-icon>
+        <span class="label">Revisão HITL</span>
+      </a>
+      <a class="side-link" routerLink="/sprints" routerLinkActive="active">
+        <mat-icon class="icon">view_kanban</mat-icon>
+        <span class="label">Sprints</span>
+      </a>
+      <a class="side-link" routerLink="/documents" routerLinkActive="active">
+        <mat-icon class="icon">folder</mat-icon>
+        <span class="label">Documentos</span>
+      </a>
+    </nav>
+  </div>
+
+  <div class="sidebar-section">
+    <h3 class="section-title">DIAGNÓSTICO</h3>
+    <nav class="side-nav">
+      <a class="side-link" routerLink="/auto-analysis" routerLinkActive="active">
+        <mat-icon class="icon">insights</mat-icon>
+        <span class="label">Auto-Análise</span>
+      </a>
+      <a class="side-link" routerLink="/documentacao" routerLinkActive="active">
+        <mat-icon class="icon">menu_book</mat-icon>
+        <span class="label">Documentação</span>
+      </a>
+    </nav>
+  </div>
 </aside>

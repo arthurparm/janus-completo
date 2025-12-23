@@ -1,28 +1,79 @@
-<div class="ux-container">
-  <h2>UX Metrics</h2>
-  <div class="summary">
-    <div>P95 Latência: {{ p95 != null ? (p95 | number:'1.0-0') + ' ms' : '—' }}</div>
-    <div>Total: {{ metrics.length }}</div>
-  </div>
-  @if (p95 != null && p95 > 1500) {
-  <div class="alert">Alerta: P95 acima de 1500ms</div>
-  }
-  <table class="table">
-    <thead>
-      <tr><th>Timestamp</th><th>TTFT</th><th>Latência</th><th>Outcome</th><th>Retries</th><th>Provider</th><th>Model</th></tr>
-    </thead>
-    <tbody>
-      @for (m of metrics; track m.timestamp) {
-      <tr>
-        <td>{{ m.timestamp }}</td>
-        <td>{{ m.ttft_ms || '—' }}</td>
-        <td>{{ m.latency_ms || '—' }}</td>
-        <td>{{ m.outcome }}</td>
-        <td>{{ m.retries || 0 }}</td>
-        <td>{{ m.provider || '—' }}</td>
-        <td>{{ m.model || '—' }}</td>
-      </tr>
+<div class="p-6 max-w-7xl mx-auto">
+  <header class="flex justify-between items-end mb-8 border-b border-white/10 pb-4">
+    <div>
+      <h2 class="text-2xl font-bold text-cyan glow-text tracking-widest">SYSTEM TELEMETRY</h2>
+      <p class="text-sm text-muted">REAL-TIME COGNITIVE PERFORMANCE METRICS</p>
+    </div>
+    <div class="text-right">
+      <div class="text-3xl font-mono text-white font-bold">{{ metrics.length }}</div>
+      <div class="text-xs text-text-secondary">TOTAL EVENTS LOGGED</div>
+    </div>
+  </header>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="glass-panel p-6 flex flex-col justify-between relative overflow-hidden group">
+      <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <span class="material-icons text-4xl">timer</span>
+      </div>
+      <div>
+        <div class="text-sm text-text-secondary uppercase">P95 Latency</div>
+        <div class="text-3xl font-mono font-bold mt-2" [class.text-green-400]="p95 != null && p95 <= 1000"
+          [class.text-yellow-400]="p95 != null && p95 > 1000 && p95 <= 1500"
+          [class.text-red-400]="p95 != null && p95 > 1500">
+          {{ p95 != null ? (p95 | number:'1.0-0') : '—' }} <span class="text-sm font-normal text-muted">ms</span>
+        </div>
+      </div>
+
+      @if (p95 != null && p95 > 1500) {
+      <div class="mt-4 flex items-center gap-2 text-red-400 text-xs animate-pulse">
+        <span class="material-icons text-sm">warning</span> LATENCY CRITICAL
+      </div>
+      } @else {
+      <div class="mt-4 flex items-center gap-2 text-green-400 text-xs">
+        <span class="material-icons text-sm">check_circle</span> NOMINAL
+      </div>
       }
-    </tbody>
-  </table>
+    </div>
+
+    <!-- Add more summary cards here if available from metrics -->
+  </div>
+
+  <!-- Telemetry Table -->
+  <div class="glass-panel overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-white/5 text-xs uppercase font-mono text-muted">
+          <tr>
+            <th class="p-4">Timestamp</th>
+            <th class="p-4">TTFT (ms)</th>
+            <th class="p-4">Latency (ms)</th>
+            <th class="p-4">Outcome</th>
+            <th class="p-4">Retries</th>
+            <th class="p-4">Provider</th>
+            <th class="p-4">Model</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5">
+          @for (m of metrics; track m.timestamp) {
+          <tr class="hover:bg-white/5 transition-colors font-mono">
+            <td class="p-4 text-text-secondary">{{ m.timestamp | date:'HH:mm:ss' }}</td>
+            <td class="p-4 text-white">{{ m.ttft_ms || '—' }}</td>
+            <td class="p-4" [class.text-yellow-400]="m.latency_ms && m.latency_ms > 1000">{{ m.latency_ms || '—' }}</td>
+            <td class="p-4">
+              <span class="px-2 py-1 rounded text-xs" [class.bg-green-500-20]="m.outcome === 'success'"
+                [class.text-green-400]="m.outcome === 'success'" [class.bg-red-500-20]="m.outcome !== 'success'"
+                [class.text-red-400]="m.outcome !== 'success'">
+                {{ m.outcome | uppercase }}
+              </span>
+            </td>
+            <td class="p-4 text-text-secondary">{{ m.retries || 0 }}</td>
+            <td class="p-4 text-text-secondary">{{ m.provider || '—' }}</td>
+            <td class="p-4 text-cyan">{{ m.model || '—' }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>

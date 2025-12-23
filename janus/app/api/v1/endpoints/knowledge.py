@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 
 from app.models.knowledge import CodeEntity
@@ -62,6 +63,8 @@ class KnowledgeQueryRequest(BaseModel):
 class KnowledgeHealthResponse(BaseModel):
     status: str
     neo4j_connected: bool
+    qdrant_connected: bool
+    circuit_breaker_open: bool
     total_nodes: int
     total_relationships: int
 
@@ -150,6 +153,57 @@ async def get_node_types(service: KnowledgeService = Depends(get_knowledge_servi
 async def knowledge_health(service: KnowledgeService = Depends(get_knowledge_service)):
     health = await service.get_health_status()
     return KnowledgeHealthResponse(**health)
+
+
+@router.post("/health/reset-circuit-breaker", summary="Reseta o circuit breaker do Qdrant")
+async def reset_circuit_breaker():
+    """
+    Reseta o circuit breaker do Qdrant manualmente.
+    Útil quando o Qdrant recupera após falhas temporárias.
+    """
+    try:
+        from app.core.memory.memory_core import reset_memory_circuit_breaker
+        await reset_memory_circuit_breaker()
+        return {"message": "Circuit breaker resetado com sucesso"}
+    except Exception as e:
+        logger.error("Erro ao resetar circuit breaker", exc_info=e)
+        raise HTTPException(status_code=500, detail=f"Erro ao resetar circuit breaker: {str(e)}")
+
+
+@router.get("/health/detailed", summary="Status detalhado do sistema de memória")
+async def detailed_health_check(service: KnowledgeService = Depends(get_knowledge_service)):
+    """
+    Retorna status detalhado incluindo circuit breaker, Qdrant e métricas de saúde.
+    """
+    try:
+        # Get basic health from knowledge service
+        basic_health = await service.get_health_status()
+        
+        # Get detailed circuit breaker status
+        from app.core.memory.memory_core import get_memory_db
+        memory_db = await get_memory_db()
+        detailed_status = memory_db.get_circuit_breaker_status()
+        
+        # Get monitoring service status if available
+        from app.core.memory.qdrant_monitoring import get_qdrant_monitoring_service
+        monitoring_service = get_qdrant_monitoring_service()
+        monitoring_status = monitoring_service.get_detailed_metrics() if monitoring_service else None
+        
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "overall_status": "healthy" if detailed_status["system_health"]["is_healthy"] else "degraded",
+            "basic_health": basic_health,
+            "detailed_status": detailed_status,
+            "monitoring": monitoring_status,
+            "recommendations": detailed_status.get("recommendations", [])
+        }
+        
+    except Exception as e:
+        logger.error("Erro ao obter status detalhado", exc_info=e)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Erro ao obter status detalhado: {str(e)}"
+        )
 
 
 @router.post("/consolidate", response_model=ConsolidationResponse,

@@ -1,5 +1,6 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { AUTH_TOKEN_KEY } from '../../services/api.config';
+import { decodeTokenUserId } from '../../services/auth.utils';
 
 /**
  * Opcionalmente anexa Authorization: Bearer <token> quando disponível.
@@ -8,24 +9,39 @@ import { AUTH_TOKEN_KEY } from '../../services/api.config';
  * - Não impõe credenciais; requests anônimas continuam funcionando
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  // Skip if Authorization already present
-  if (req.headers.has('Authorization')) {
-    return next(req);
-  }
-
   try {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (!token) {
-      return next(req);
+    const setHeaders: Record<string, string> = {};
+
+    if (!req.headers.has('Authorization') && token) {
+      setHeaders['Authorization'] = `Bearer ${token}`;
     }
 
-    // Attach bearer token
-    const authReq = req.clone({
-      setHeaders: { Authorization: `Bearer ${token}` }
-    });
-    return next(authReq);
+    if (!req.headers.has('X-User-Id') && token) {
+      const uid = decodeTokenUserId(token);
+      if (uid !== null) {
+        setHeaders['X-User-Id'] = String(uid);
+      }
+    }
+
+    // Debug: Log requests to chat history
+    if (req.url.includes('/api/v1/chat/') && req.url.includes('/history')) {
+      console.log('[AuthInterceptor] Chat history request:', {
+        url: req.url,
+        hasAuthHeader: req.headers.has('Authorization'),
+        hasUserIdHeader: req.headers.has('X-User-Id'),
+        headers: req.headers.keys(),
+        method: req.method
+      });
+    }
+
+    if (Object.keys(setHeaders).length > 0) {
+      const cloned = req.clone({ setHeaders });
+      return next(cloned);
+    }
+
+    return next(req);
   } catch {
-    // localStorage não disponível (SSR/Private mode); segue sem header
     return next(req);
   }
 };

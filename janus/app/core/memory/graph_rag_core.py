@@ -96,25 +96,35 @@ class VectorRetriever:
 
 
 class GraphRetriever:
-    def __init__(self, graph_ref: Optional[Neo4jGraph]):
-        self.graph_ref = graph_ref
+    def __init__(self, async_graph_db: Any, schema_provider: Optional[Neo4jGraph] = None):
+        self.async_graph_db = async_graph_db
+        self.schema_provider = schema_provider
 
-    def retrieve_with_llm(self, question: str) -> List[Dict[str, Any]]:
-        if self.graph_ref is None:
-            raise ConnectionError("Graph RAG Core não está disponível.")
+    async def retrieve_with_llm(self, question: str) -> List[Dict[str, Any]]:
+        # Checagem de disponibilidade do banco
+        if self.async_graph_db is None or self.async_graph_db._driver is None:
+             raise ConnectionError("Graph RAG Core não está disponível (Async DB desconectado).")
+             
         llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
         cypher_chain = cypher_prompt | llm | StrOutputParser()
         t0 = time.perf_counter()
+        
         try:
-            full_schema = _get_full_schema_text()
-            llm_response_cypher = cypher_chain.invoke({"schema": full_schema, "question": question})
+            full_schema = _get_full_schema_text(self.schema_provider)
+            # Invoke é síncrono ou async? LangChain invoke é sync, ainvoke é async.
+            # Vamos usar ainvoke para não bloquear se possível, mas aqui o gargalo era o DB.
+            # O prompt+LLM pode ser demorado.
+            llm_response_cypher = await cypher_chain.ainvoke({"schema": full_schema, "question": question})
             cypher_query = _extract_cypher(llm_response_cypher)
+            
             if not cypher_query or cypher_query.startswith("//"):
                 _RAG_EVENTS.labels("generate_cypher", "empty").inc()
                 _RAG_STAGE_LAT.labels("generate_cypher", "empty").observe(time.perf_counter() - t0)
                 return []
+                
             _RAG_EVENTS.labels("generate_cypher", "success").inc()
             _RAG_STAGE_LAT.labels("generate_cypher", "success").observe(time.perf_counter() - t0)
+            
         except Exception as e:
             _RAG_EVENTS.labels("generate_cypher", "error").inc()
             _RAG_STAGE_LAT.labels("generate_cypher", "error").observe(time.perf_counter() - t0)
@@ -123,7 +133,9 @@ class GraphRetriever:
 
         t1 = time.perf_counter()
         try:
-            result = self.graph_ref.query(cypher_query)
+            # Execução assíncrona usando o pool da aplicação
+            result = await self.async_graph_db.query(cypher_query)
+            
             _RAG_EVENTS.labels("graph_query", "success").inc()
             _RAG_STAGE_LAT.labels("graph_query", "success").observe(time.perf_counter() - t1)
             return result or []
@@ -134,10 +146,12 @@ class GraphRetriever:
             return []
 
 
-def _get_full_schema_text() -> str:
-    if graph is None: return ""
+def _get_full_schema_text(schema_provider: Optional[Neo4jGraph] = None) -> str:
+    # Use o provider passado ou o global se não fornecido
+    provider = schema_provider or graph
+    if provider is None: return ""
     try:
-        schema_val = graph.get_schema if callable(getattr(graph, "get_schema", None)) else getattr(graph, "schema", "")
+        schema_val = provider.get_schema if callable(getattr(provider, "get_schema", None)) else getattr(provider, "schema", "")
         return f"{schema_val}\n(:Function)-[:CALLS]->(:Function)"
     except Exception as e:
         logger.warning(f"Graph RAG Core: Não foi possível obter o schema do grafo: {e}")
@@ -189,8 +203,12 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     Pipeline Graph RAG com estágios: cache -> (graph_retrieval + opcional vector_retrieval) -> rerank -> síntese -> guardas.
     Mantém a assinatura anterior e retorna resposta em texto.
     """
-    if graph is None:
-        raise ConnectionError("Graph RAG Core não está disponível.")
+    # Importar aqui para evitar import circular
+    from app.db.graph import get_graph_db
+    async_db = await get_graph_db()
+    
+    if async_db is None:
+        raise ConnectionError("Graph RAG Core não está disponível (DB não inicializado).")
 
     # Modelo para curadoria/síntese
     llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
@@ -201,9 +219,11 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     graph_ctx: List[Dict[str, Any]] = []
     vector_ctx: List[Dict[str, Any]] = []
     if context is None:
-        # Retrieve from graph via LLM-generated Cypher
-        graph_ret = GraphRetriever(graph)
-        graph_ctx = graph_ret.retrieve_with_llm(question)
+        # Retrieve from graph via LLM-generated Cypher (Async!)
+        # Passamos 'graph' (global sync) apenas para schema introspection
+        graph_ret = GraphRetriever(async_graph_db=async_db, schema_provider=graph)
+        graph_ctx = await graph_ret.retrieve_with_llm(question)
+        
         # Optional: additional vector retrieval from episodic memory
         vector_ret = VectorRetriever()
         vector_ctx = await vector_ret.retrieve(question, k=max(1, min(5, limit)))
@@ -233,7 +253,9 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
 
     t_synth = time.perf_counter()
     try:
-        answer = qa_chain.invoke({"context": context_text, "question": question}).strip()
+        # Synthesis using ainvoke for async compatibility
+        answer = await qa_chain.ainvoke({"context": context_text, "question": question})
+        answer = answer.strip()
         _RAG_EVENTS.labels("synthesis", "success").inc()
         _RAG_STAGE_LAT.labels("synthesis", "success").observe(time.perf_counter() - t_synth)
     except Exception as e:

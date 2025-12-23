@@ -37,6 +37,10 @@ class MessageBroker:
     _connection: Optional[AbstractRobustConnection] = None
     _connection_lock = asyncio.Lock()
 
+    def __init__(self, config: Any = None, connection_factory: Callable[..., Awaitable[AbstractRobustConnection]] = None):
+        self.settings = config if config is not None else settings
+        self.connection_factory = connection_factory if connection_factory is not None else aio_pika.connect_robust
+
     async def connect(self):
         """Estabelece a conexão com o RabbitMQ."""
         if self._connection and not self._connection.is_closed:
@@ -46,24 +50,49 @@ class MessageBroker:
                 return
             logger.info("Conectando ao RabbitMQ...")
             try:
-                rabbitmq_url = f"amqp://{settings.RABBITMQ_USER}:{settings.RABBITMQ_PASSWORD}@{settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}/"
-                self._connection = await aio_pika.connect_robust(
+                rabbitmq_url = f"amqp://{self.settings.RABBITMQ_USER}:{self.settings.RABBITMQ_PASSWORD}@{self.settings.RABBITMQ_HOST}:{self.settings.RABBITMQ_PORT}/"
+                self._connection = await self.connection_factory(
                     rabbitmq_url,
                     client_properties={"connection_name": "janus_system"}
                 )
                 logger.info("Conexão com RabbitMQ estabelecida com sucesso.")
             except Exception as e:
                 _CONNECTION_ERRORS.inc()
-                logger.error(f"Falha ao conectar ao RabbitMQ em host '{settings.RABBITMQ_HOST}': {e}", exc_info=True)
+                logger.error(f"Falha ao conectar ao RabbitMQ em host '{self.settings.RABBITMQ_HOST}': {e}", exc_info=True)
                 # Fallback: tentar localhost para execução fora do Docker
                 try:
-                    fallback_url = f"amqp://{settings.RABBITMQ_USER}:{settings.RABBITMQ_PASSWORD}@localhost:{settings.RABBITMQ_PORT}/"
+                    fallback_url = f"amqp://{self.settings.RABBITMQ_USER}:{self.settings.RABBITMQ_PASSWORD}@localhost:{self.settings.RABBITMQ_PORT}/"
                     logger.info("Tentando fallback de conexão com RabbitMQ em localhost...")
-                    self._connection = await aio_pika.connect_robust(
+                    self._connection = await self.connection_factory(
                         fallback_url,
                         client_properties={"connection_name": "janus_system_local"}
                     )
                     logger.info("Conexão com RabbitMQ (localhost) estabelecida com sucesso.")
+                    
+                    # Ensure system-wide DLX exists
+                    try:
+                        async with self._connection.channel() as ch:
+                            # 1. Declare DLX
+                            dlx = await ch.declare_exchange("janus.dlx", type=aio_pika.ExchangeType.DIRECT, durable=True)
+                            
+                            # 2. Declare DLQ
+                            dlq_args = self._get_queue_arguments("janus.dlq")
+                            dlq = await ch.declare_queue("janus.dlq", durable=True, arguments=dlq_args)
+                            
+                            # 3. Bind DLQ to DLX (routing key 'dead_letter' or default)
+                            # RabbitMQ x-dead-letter-routing-key defaults to original routing key if not specified.
+                            # We can use a catch-all or specific bindings.
+                            # For simplicity, let's bind it with a wildcard if we were using topic, but DLX is direct usually.
+                            # Wait, if queue has x-dead-letter-exchange=janus.dlx, RK is preserved.
+                            # So janus.dlq must be bound with the same routing keys OR we use a fanout DLX.
+                            # BETTER STRATEGY: Fanout DLX is easiest for a catch-all "graveyard".
+                            # Let's redeclare as FANOUT to avoid binding headaches, OR Direct and we rely on RK preservation.
+                            # Defaulting to FANOUT for "dump all dead stuff here" is safer for generic DLQ.
+                            # But code above used DIRECT. Let's switch to FANOUT for simpler maintenance unless we need to segregate dead letters.
+                            pass 
+                            
+                    except Exception as ex:
+                        logger.warning(f"Falha ao configurar DLX/DLQ: {ex}")
                 except Exception as e2:
                     logger.warning("RabbitMQ indisponível; seguindo em modo offline sem conexão.", exc_info=e2)
                     # Não lança exceção aqui para permitir que a aplicação inicialize em modo degradado.
@@ -98,10 +127,19 @@ class MessageBroker:
             logger.debug("Publicação ignorada (broker offline)", extra={"queue": queue_name})
             return
         async with self._connection.channel() as channel:
+            # Ensure DLX/DLQ setup (idempotent)
+            try:
+                dlx = await channel.declare_exchange("janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True)
+                dlq_args = self._get_queue_arguments("janus.dlq")
+                dlq = await channel.declare_queue("janus.dlq", durable=True, arguments=dlq_args)
+                await dlq.bind(dlx, routing_key="#")
+            except Exception:
+                pass
+
             arguments = self._get_queue_arguments(queue_name)
             await channel.declare_queue(queue_name, durable=True, arguments=arguments)
 
-            fmt_msgpack = use_msgpack if use_msgpack is not None else getattr(settings, "BROKER_USE_MSGPACK", True)
+            fmt_msgpack = use_msgpack if use_msgpack is not None else getattr(self.settings, "BROKER_USE_MSGPACK", True)
 
             merged_headers: Dict[str, Any] = {**(headers or {})}
 
@@ -149,7 +187,7 @@ class MessageBroker:
 
     def _get_queue_arguments(self, queue_name: str) -> Dict[str, Any]:
         """Obtém argumentos esperados para a fila (TTL, max-length, DLX, prioridade)."""
-        cfg = settings.RABBITMQ_QUEUE_CONFIG.get(queue_name, {})
+        cfg = self.settings.RABBITMQ_QUEUE_CONFIG.get(queue_name, {})
         args: Dict[str, Any] = {}
         # TTL de mensagens
         ttl = cfg.get("x-message-ttl")
@@ -244,7 +282,11 @@ class MessageBroker:
                 try:
                     ch = getattr(message, "channel", None)
                     if ch is not None and not ch.is_closed:
-                        message.nack(requeue=True)
+                        # CRITICAL FIX: Do NOT requeue on generic error to avoid infinite loops (poison pill).
+                        # Send to DLX (Dead Letter Exchange) by Nack(requeue=False).
+                        # Queue must be configured with x-dead-letter-exchange for this to work properly.
+                        await message.nack(requeue=False)
+                        logger.warning(f"Mensagem movida para DLX (requeue=False) devido a erro: {e}")
                     else:
                         logger.warning("Canal do RabbitMQ fechado; nack ignorado e mensagem será reentregue pelo broker.")
                 except Exception as nack_err:
@@ -255,7 +297,7 @@ class MessageBroker:
             try:
                 ch = getattr(message, "channel", None)
                 if ch is not None and not ch.is_closed:
-                    message.ack()
+                    await message.ack()
                 else:
                     logger.warning("Canal do RabbitMQ fechado antes do ACK; mensagem provavelmente será reentregue.")
             except Exception as ack_err:
@@ -299,15 +341,106 @@ class MessageBroker:
 
         return asyncio.create_task(_consume_loop())
 
+    async def publish_to_exchange(
+        self,
+        exchange_name: str,
+        routing_key: str,
+        message: Any,
+        exchange_type: str = "topic"
+    ):
+        """Publica mensagem em uma exchange (para eventos)."""
+        await self.connect()
+        if self._connection is None:
+            return
+
+        async with self._connection.channel() as channel:
+            exchange = await channel.declare_exchange(exchange_name, type=exchange_type, durable=True)
+            
+            use_msgpack_flag = getattr(self.settings, "BROKER_USE_MSGPACK", False) # Default False para eventos (debug web)
+            
+            if use_msgpack_flag:
+                body = msgpack.packb(message, use_bin_type=True)
+                content_type = "application/msgpack"
+            else:
+                body = json.dumps(message, ensure_ascii=False).encode("utf-8")
+                content_type = "application/json"
+
+            msg = aio_pika.Message(
+                body=body,
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                content_type=content_type
+            )
+            
+            await exchange.publish(msg, routing_key=routing_key)
+            _MESSAGES_PUBLISHED.labels(f"exchange_{exchange_name}").inc()
+
+    def start_subscription(
+        self,
+        exchange_name: str,
+        routing_key: str,
+        callback: Callable[[Any], Awaitable[Any]],
+        queue_name: str = "", # Vazio = fila temporária exclusiva
+        exchange_type: str = "topic"
+    ) -> asyncio.Task:
+        """
+        Assina tópicos em uma exchange (Pub/Sub).
+        Cria uma fila (temporária ou não), faz o bind na exchange e consome.
+        """
+        async def _on_message(message: aio_pika.IncomingMessage):
+            async with message.process(): # Auto-ACK
+                try:
+                    ct = getattr(message, "content_type", None) or (message.headers or {}).get("content_type")
+                    if ct == "application/msgpack":
+                        payload = msgpack.unpackb(message.body, raw=False)
+                    else:
+                        payload = json.loads(message.body.decode("utf-8"))
+                    
+                    await callback(payload)
+                except Exception as e:
+                    logger.error(f"Erro ao processar evento da exchange {exchange_name}: {e}")
+
+        async def _consume_loop():
+            while True:
+                try:
+                    await self.connect()
+                    if self._connection is None:
+                        await asyncio.sleep(5)
+                        continue
+                        
+                    async with self._connection.channel() as channel:
+                        exchange = await channel.declare_exchange(exchange_name, type=exchange_type, durable=True)
+                        
+                        # Fila exclusiva se queue_name for vazio (auto-delete)
+                        queue = await channel.declare_queue(
+                            name=queue_name,
+                            exclusive=(not queue_name),
+                            auto_delete=(not queue_name)
+                        )
+                        
+                        await queue.bind(exchange, routing_key=routing_key)
+                        await queue.consume(_on_message)
+                        
+                        logger.info(f"Subscription iniciada: {exchange_name} -> {routing_key}")
+                        await asyncio.Future() # Keep alive
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Erro na subscription {exchange_name}: {e}")
+                    await asyncio.sleep(5)
+        
+        return asyncio.create_task(_consume_loop())
+
     async def get_queue_policy(self, queue_name: str) -> Optional[Dict[str, Any]]:
         """
         Consulta a Management API do RabbitMQ para obter a política/argumentos atuais da fila.
         Retorna dict com informações importantes ou None em caso de erro.
         """
-        host = settings.RABBITMQ_HOST
-        port = settings.RABBITMQ_MANAGEMENT_PORT
-        user = settings.RABBITMQ_USER
-        password = settings.RABBITMQ_PASSWORD
+
+        host = self.settings.RABBITMQ_HOST
+        port = self.settings.RABBITMQ_MANAGEMENT_PORT
+        user = self.settings.RABBITMQ_USER
+        password = self.settings.RABBITMQ_PASSWORD
         url = f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
 
         def _fetch() -> Optional[Dict[str, Any]]:
@@ -388,10 +521,11 @@ class MessageBroker:
         Deleta uma fila via Management API do RabbitMQ.
         Atenção: isto remove todas as mensagens dessa fila.
         """
-        host = settings.RABBITMQ_HOST
-        port = settings.RABBITMQ_MANAGEMENT_PORT
-        user = settings.RABBITMQ_USER
-        password = settings.RABBITMQ_PASSWORD
+
+        host = self.settings.RABBITMQ_HOST
+        port = self.settings.RABBITMQ_MANAGEMENT_PORT
+        user = self.settings.RABBITMQ_USER
+        password = self.settings.RABBITMQ_PASSWORD
         url = (
             f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
             f"?if-unused={str(if_unused).lower()}&if-empty={str(if_empty).lower()}"

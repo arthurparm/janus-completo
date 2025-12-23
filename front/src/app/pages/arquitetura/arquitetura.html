@@ -1,297 +1,348 @@
 <section class="page-header" id="sec-intro">
-  <h1 class="page-title">Arquitetura do Janus</h1>
-  <p class="page-subtitle">
-    A arquitetura do Janus é projetada com uma filosofia modular e desacoplada, inspirada em microsserviços e sistemas
-    de agentes inteligentes. Isso garante escalabilidade, resiliência e evolução independente dos componentes. A
-    estrutura lógica da aplicação (app/) é dividida em camadas claras: Interface (API), Lógica de Negócios (Serviços),
-    Núcleo Inteligente (Core), Acesso a Dados (Repositórios) e Persistência (Banco de Dados).
+  <h1 class="page-title text-cyan glow-text">ARQUITETURA DO SISTEMA</h1>
+  <p class="page-subtitle text-muted">
+    BLUEPRINT COGNITIVO v2.0 // IA DE DESENVOLVIMENTO AUTÔNOMO
   </p>
+  <div class="glass-panel p-4 mt-4">
+    <p class="text-sm font-mono text-purple">
+      > ANALISANDO SISTEMA...<br>
+      > SUBSISTEMAS LOCAIS: DETECTADOS<br>
+      > PRIVACIDADE DE DADOS: 100% LOCAL
+    </p>
+    <p class="mt-2 text-text-primary">
+      O <strong>Janus</strong> opera como um ecossistema local de alta disponibilidade. Diferente de IAs na nuvem, ele
+      roda inteiramente na sua infraestrutura (Docker).
+      Sua "mente" é composta por uma orquestração de Agentes Especializados que interagem diretamente com seus arquivos,
+      memória vetorial e modelos de linguagem locais.
+    </p>
+  </div>
 </section>
 
-<section class="comm-arch" id="sec-comm-arch" aria-labelledby="comm-title">
-  <h2 id="comm-title">Arquitetura de Comunicação (Chat)</h2>
-  <p>O chat textual opera exclusivamente via API REST (`/api/v1/chat/*`), garantindo compatibilidade e previsibilidade. A camada WebRTC é usada opcionalmente para mídia (áudio/vídeo) no navegador, inicializada com Janus (`Janus.init`, `Janus.attach`) e configurada com `RTCPeerConnection`. Em indisponibilidade de WebRTC, o sistema mantém o chat REST integralmente.</p>
-  <ul>
-    <li>Primário: REST para mensagens de chat e histórico.</li>
-    <li>Opcional: WebRTC para mídia; sem uso de datachannel para texto.</li>
-    <li>Fallback automático para REST quando houver falhas de conexão WebRTC.</li>
-  </ul>
-</section>
+<section class="intro-overview mt-8" id="sec-overview">
+  <h2 class="section-title text-cyan"><span class="icon">🔍</span> FLUXO DE DADOS</h2>
+  <div class="glass-panel p-6 relative overflow-hidden">
+    <div class="absolute top-0 right-0 p-2 text-xs font-mono text-cyan/50">DIAGRAMA_REAL_JNS_02</div>
 
-<section class="intro-overview" id="sec-overview" aria-labelledby="overview-title">
-  <h2 id="overview-title">Visão Geral do Sistema</h2>
-  <div class="diagram-high-level">
-    <h3>Diagrama de Alto Nível</h3>
     <figure class="diagram-svg">
-      <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de blocos mostrando API, Serviços, Core, Repositórios e DB">
+      <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" role="img" class="w-full h-auto drop-shadow-lg">
         <defs>
           <style>
-            .blk { fill: rgba(14,165,233,0.15); stroke: rgba(14,165,233,0.45); }
-            .base { fill: rgba(255,255,255,0.06); stroke: rgba(255,255,255,0.15); }
-            .label { fill: var(--text-primary); font-size: 13px; }
-            .arrow { stroke: rgba(14,165,233,0.85); stroke-width: 2; marker-end: url(#arr); }
+            .blk {
+              fill: rgba(10, 15, 26, 0.8);
+              stroke: #00d4ff;
+              stroke-width: 1.5;
+            }
+
+            .ext {
+              fill: rgba(10, 15, 26, 0.6);
+              stroke: #7c3aed;
+              stroke-width: 1.5;
+              stroke-dasharray: 4;
+            }
+
+            .label {
+              fill: #e0f8ff;
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 13px;
+              font-weight: 600;
+              text-anchor: middle;
+            }
+
+            .sub-label {
+              fill: #9ec8d6;
+              font-family: 'Inter', sans-serif;
+              font-size: 10px;
+              text-anchor: middle;
+            }
+
+            .arrow {
+              stroke: #00d4ff;
+              stroke-width: 2;
+              marker-end: url(#arr);
+              animation: flow 3s infinite linear;
+            }
+
+            .arrow-rev {
+              stroke: #7c3aed;
+              stroke-width: 2;
+              marker-end: url(#arr-p);
+              stroke-dasharray: 4;
+            }
+
+            /* New Classes */
+            .user-node {
+              stroke: #ec4899;
+            }
+
+            .core-node {
+              stroke-width: 3;
+              filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.3));
+            }
+
+            .conn-ai {
+              fill: none;
+            }
+
+            .conn-files {
+              fill: none;
+              stroke: #ec4899;
+            }
+
+            @keyframes flow {
+              to {
+                stroke-dashoffset: -20;
+              }
+            }
           </style>
-          <marker id="arr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(14,165,233,0.85)" />
+          <marker id="arr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6"
+            orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#00d4ff" />
+          </marker>
+          <marker id="arr-p" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6"
+            orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed" />
           </marker>
         </defs>
 
-        <!-- Usuário / Cliente -->
-        <rect x="20" y="90" width="120" height="50" rx="8" class="blk" />
-        <text x="30" y="120" class="label">Usuário / Cliente</text>
 
-        <!-- API -->
-        <rect x="170" y="90" width="120" height="60" rx="8" class="blk" />
-        <text x="180" y="115" class="label">Camada de API</text>
-        <text x="180" y="132" class="label">(app/api)</text>
+        <rect x="20" y="180" width="120" height="60" rx="8" class="blk user-node" />
+        <text x="80" y="205" class="label">VOCÊ</text>
+        <text x="80" y="225" class="sub-label">Desenvolvedor</text>
 
-        <!-- Serviços -->
-        <rect x="330" y="90" width="140" height="60" rx="8" class="blk" />
-        <text x="340" y="115" class="label">Camada de Serviços</text>
-        <text x="340" y="132" class="label">(app/services)</text>
 
-        <!-- Core -->
-        <rect x="510" y="90" width="120" height="60" rx="8" class="blk" />
-        <text x="520" y="115" class="label">Núcleo (Core)</text>
-        <text x="520" y="132" class="label">(app/core)</text>
+        <rect x="200" y="180" width="140" height="60" rx="8" class="blk" />
+        <text x="270" y="205" class="label">INTERFACE</text>
+        <text x="270" y="225" class="sub-label">Angular (Front)</text>
 
-        <!-- Repositórios -->
-        <rect x="660" y="90" width="140" height="60" rx="8" class="blk" />
-        <text x="670" y="115" class="label">Camada de Repositórios</text>
-        <text x="670" y="132" class="label">(app/repositories)</text>
 
-        <!-- DB -->
-        <rect x="660" y="240" width="140" height="70" rx="8" class="blk" />
-        <text x="670" y="270" class="label">Camada de Persistência</text>
-        <text x="670" y="288" class="label">(app/db)</text>
+        <rect x="420" y="160" width="160" height="100" rx="8" class="blk core-node" />
+        <text x="500" y="195" class="label">CORTEX (API)</text>
+        <text x="500" y="215" class="sub-label">Python / FastAPI</text>
+        <text x="500" y="235" class="sub-label">Orquestrador de Agentes</text>
 
-        <!-- Models (transversal) -->
-        <rect x="170" y="240" width="140" height="60" rx="8" class="blk" />
-        <text x="180" y="265" class="label">Modelos de Dados</text>
-        <text x="180" y="282" class="label">(app/models)</text>
 
-        <!-- Base / Fundação -->
-        <rect x="20" y="360" width="860" height="40" rx="6" class="base" />
-        <text x="30" y="385" class="label">Fundação: Inicialização (main.py) + Configuração (config.py)</text>
+        <rect x="660" y="40" width="160" height="80" rx="8" class="ext" />
+        <text x="740" y="75" class="label">MOTOR IA</text>
+        <text x="740" y="95" class="sub-label">Ollama (Llama 3)</text>
+        <text x="740" y="110" class="sub-label">Processamento GPU</text>
 
-        <!-- Fluxos principais -->
-        <line x1="140" y1="115" x2="170" y2="115" class="arrow" /> <!-- Usuário -> API -->
-        <line x1="290" y1="120" x2="330" y2="120" class="arrow" /> <!-- API -> Serviços -->
-        <line x1="470" y1="120" x2="510" y2="120" class="arrow" /> <!-- Serviços -> Core -->
-        <line x1="470" y1="140" x2="660" y2="140" class="arrow" /> <!-- Serviços -> Repositórios -->
-        <line x1="730" y1="150" x2="730" y2="240" class="arrow" /> <!-- Repositórios -> DB -->
 
-        <!-- Models setas transversais -->
-        <line x1="240" y1="240" x2="240" y2="160" class="arrow" /> <!-- models -> API -->
-        <line x1="240" y1="240" x2="400" y2="160" class="arrow" /> <!-- models -> Serviços -->
-        <line x1="240" y1="240" x2="570" y2="160" class="arrow" /> <!-- models -> Core -->
-        <line x1="310" y1="270" x2="660" y2="160" class="arrow" /> <!-- models -> Repositórios -->
+        <rect x="660" y="160" width="160" height="80" rx="8" class="ext" />
+        <text x="740" y="195" class="label">MEMÓRIA</text>
+        <text x="740" y="215" class="sub-label">Qdrant (Vetores)</text>
+        <text x="740" y="230" class="sub-label">Neo4j (Grafos)</text>
+
+
+        <rect x="660" y="280" width="160" height="60" rx="8" class="ext" />
+        <text x="740" y="305" class="label">WORKSPACE</text>
+        <text x="740" y="325" class="sub-label">Arquivos do Projeto</text>
+
+
+        <line x1="140" y1="210" x2="200" y2="210" class="arrow" />
+
+
+        <line x1="340" y1="210" x2="420" y2="210" class="arrow" />
+
+
+        <path d="M 500 160 L 500 80 L 660 80" class="arrow conn-ai" />
+
+
+        <line x1="580" y1="210" x2="660" y2="210" class="arrow" />
+
+
+        <path d="M 500 260 L 500 310 L 660 310" class="arrow conn-files" />
+
       </svg>
-      <figcaption class="diagram-caption">
-        Fluxo: Usuário → API → Serviços. Serviços orquestram tanto o Core quanto os Repositórios; Repositórios acessam a
-        Persistência (DB). Modelos (app/models) são consumidos por API, Serviços, Core e Repositórios. A base (main.py +
-        config.py) inicializa e configura toda a aplicação.
-      </figcaption>
     </figure>
   </div>
 </section>
 
-<section class="layers-detail" id="sec-layers" aria-labelledby="layers-title">
-  <h2 id="layers-title">Componentes Principais por Camada</h2>
-  <p class="section-intro">Explore as camadas da aplicação app/ por meio do acordeão abaixo.</p>
+<section class="layers-detail mt-8" id="sec-layers">
+  <h2 class="section-title text-purple"><span class="icon">🧬</span> COMPONENTES DO SISTEMA</h2>
 
-  <div class="accordion">
-    <details class="accordion-item" open>
-      <summary>Fundação: Configuração e Ponto de Entrada</summary>
-      <p>O arquivo <code>main.py</code> inicializa a aplicação FastAPI, carrega as configurações de <code>config.py</code> e monta os
-        roteadores. Esta fundação provê inicialização previsível e configurações centralizadas.</p>
-    </details>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-    <details class="accordion-item">
-      <summary>Camada de API: A Porta de Entrada</summary>
-      <p>Responsável por requisições HTTP, validação e autenticação. Define os schemas de entrada e saída e expõe os
-        endpoints públicos.</p>
-      <ul class="sub-list">
-        <li>Endpoints principais: <code>endpoints/chat.py</code>, <code>endpoints/agent.py</code>, <code>endpoints/knowledge.py</code>, <code>endpoints/autonomy.py</code>, etc.</li>
+    <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
+      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> CÉREBRO (Janus Core)</h3>
+      <p class="text-sm text-text-secondary mb-3">O centro de comando escrito em Python. É aqui que os Agentes Autônomos
+        "vivem".</p>
+      <ul class="text-xs space-y-2 font-mono text-muted">
+        <li><strong class="text-white">Orquestrador:</strong> Planeja tarefas complexas.</li>
+        <li><strong class="text-white">Coder:</strong> Escreve e edita código real.</li>
+        <li><strong class="text-white">Curator:</strong> Mantém a memória organizada.</li>
       </ul>
-    </details>
+    </div>
 
-    <details class="accordion-item">
-      <summary>Camada de Serviços: Orquestração</summary>
-      <p>Orquestra tarefas, consome o Core e os Repositórios, aplica regras de negócio e consolida respostas.</p>
-      <ul class="sub-list">
-        <li>Serviços-chave: <code>ChatService</code>, <code>MetaAgentService</code>, <code>KnowledgeService</code>, <code>OptimizationService</code>.</li>
+
+    <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
+      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> MOTOR LOCAL (Ollama)</h3>
+      <p class="text-sm text-text-secondary mb-3">A força bruta de inteligência. Roda modelos avançados (como Llama 3)
+        diretamente na sua placa de vídeo.</p>
+      <ul class="text-xs space-y-2 font-mono text-muted">
+        <li>> Processamento 100% Offline e Privado.</li>
+        <li>> Sem custos de API externa.</li>
+        <li>> Alta velocidade de inferência (GPU).</li>
       </ul>
-    </details>
+    </div>
 
-    <details class="accordion-item">
-      <summary>O Núcleo (Core): O Cérebro da IA</summary>
-      <p>A lógica fundamental da IA. Componentes principais:</p>
-      <ul class="sub-list">
-        <li><strong>core/agents</strong>: MetaAgent e MultiAgentSystem.</li>
-        <li><strong>core/autonomy</strong>: GoalManager, Planner, PolicyEngine.</li>
-        <li><strong>core/memory</strong>: KnowledgeGraphManager, GraphRAGCore, WorkingMemory.</li>
-        <li><strong>core/workers</strong>: Processamento assíncrono (Orchestrator e workers especializados).</li>
-        <li><strong>core/optimization</strong>: ReflexionCore, SelfOptimization.</li>
-        <li><strong>core/monitoring</strong>: HealthMonitor, AutoHealer.</li>
-        <li><strong>core/infrastructure</strong>: PythonSandbox, MessageBroker.</li>
+
+    <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
+      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> MEMÓRIA HÍBRIDA</h3>
+      <p class="text-sm text-text-secondary mb-3">O Janus lembra do que você fez usando dois tipos de bancos de dados.
+      </p>
+      <ul class="text-xs space-y-2 font-mono text-muted">
+        <li><strong class="text-white">Qdrant (Vetores):</strong> Entende o "significado" e contexto do código.</li>
+        <li><strong class="text-white">Neo4j (Grafo):</strong> Mapeia como os arquivos se conectam (importações,
+          classes).</li>
       </ul>
-    </details>
+    </div>
 
-    <details class="accordion-item">
-      <summary>Camada de Repositórios: Abstração de Dados</summary>
-      <p>Aplica o Repository Pattern para desacoplar a lógica de negócios da fonte de dados, fornecendo contratos estáveis
-        e testáveis.</p>
-    </details>
 
-    <details class="accordion-item">
-      <summary>Camada de Persistência: A Memória Física</summary>
-      <p>Tecnologias de banco de dados utilizadas:</p>
-      <ul class="sub-list">
-        <li><code>vector_store.py</code>: Banco Vetorial (ex.: Qdrant).</li>
-        <li><code>graph.py</code>: Banco de Grafo.</li>
-        <li><code>mysql_config.py</code>: Banco Relacional/SQL.</li>
+    <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
+      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> INTERFACE VISUAL</h3>
+      <p class="text-sm text-text-secondary mb-3">O painel de controle (onde você está agora). Construído em Angular.
+      </p>
+      <ul class="text-xs space-y-2 font-mono text-muted">
+        <li>> Design "Glassmorphism" Futurista.</li>
+        <li>> Comunicação em Tempo Real (WebSockets).</li>
+        <li>> Visualização de Arquivos e Metas.</li>
       </ul>
-    </details>
-
-    <details class="accordion-item">
-      <summary>Modelos e Esquemas: A Linguagem Comum</summary>
-      <p>O módulo <code>app/models</code> define modelos e schemas (<code>schemas.py</code>, Pydantic) que garantem contratos de dados
-        consistentes entre API, Serviços, Core e Repositórios.</p>
-    </details>
+    </div>
   </div>
 </section>
 
-<section class="sequence-flow" id="sec-sequence" aria-labelledby="sequence-title">
-  <h2 id="sequence-title">Fluxo de Vida de uma Requisição (Exemplo)</h2>
-  <h3 class="sequence-subtitle">Como o Janus Pensa: Uma Consulta de Chat</h3>
+<section class="auto-optimization mt-8" id="sec-optimization">
+  <h2 class="section-title text-pink"><span class="icon">🔄</span> MECANISMO DE AUTO-OTIMIZAÇÃO (Reflexion)</h2>
 
-  <figure class="sequence-diagram">
-    <svg viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de sequência da requisição de chat">
-      <defs>
-        <style>
-          .actor { fill: rgba(14,165,233,0.12); stroke: rgba(14,165,233,0.45); }
-          .actor-label { fill: var(--text-primary); font-size: 12px; }
-          .lifeline { stroke: rgba(255,255,255,0.25); stroke-width: 2; stroke-dasharray: 6 6; }
-          .msg { stroke: rgba(14,165,233,0.85); stroke-width: 2; marker-end: url(#arrow); }
-          .msg-label { fill: var(--text-primary); font-size: 12px; }
-          .msg-optional { stroke: rgba(168,85,247,0.85); stroke-width: 2; stroke-dasharray: 4 5; marker-end: url(#arrow-purple); }
-          .note { fill: rgba(0,0,0,0.35); stroke: rgba(255,255,255,0.12); }
-        </style>
-        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(14,165,233,0.85)" />
-        </marker>
-        <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(168,85,247,0.85)" />
-        </marker>
-      </defs>
+  <div class="glass-panel p-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+      <div class="text-content">
+        <h3 class="text-xl text-white font-bold mb-4">O Ciclo de Aprendizado</h3>
+        <p class="text-text-secondary mb-4">
+          O Janus não apenas executa código; ele aprende com seus erros usando um mecanismo chamado
+          <strong>Reflexion</strong>.
+          Quando uma tarefa falha, ele não desiste. Ele entra em um loop de introspecção:
+        </p>
+        <ol
+          class="list-decimal list-inside space-y-3 text-sm text-muted font-mono bg-black/20 p-4 rounded-lg border border-white/5">
+          <li><strong class="text-cyan">TENTATIVA:</strong> O Agente executa uma ação (ex: escreve um código).</li>
+          <li><strong class="text-pink">AVALIAÇÃO:</strong> O sistema analisa o resultado (Testes, Linters, Erros).</li>
+          <li><strong class="text-purple">REFLEXÃO:</strong> O LLM gera uma crítica verbal sobre O QUE deu errado.</li>
+          <li><strong class="text-green-400">MEMÓRIA:</strong> A lição é salva no Qdrant para o futuro.</li>
+          <li><strong class="text-white">NOVA TENTATIVA:</strong> O Agente tenta de novo, agora com o contexto do erro.
+          </li>
+        </ol>
+      </div>
 
-      <!-- Larguras e posições das colunas -->
-      <!-- x positions: 60, 210, 360, 510, 660, 810, 960, 1110 -->
-      
-      <!-- Cabeçalhos dos participantes -->
-      <rect x="30" y="20" width="120" height="46" rx="8" class="actor" />
-      <text x="40" y="45" class="actor-label">Usuário</text>
+      <div class="diagram-visual flex justify-center">
 
-      <rect x="180" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="190" y="45" class="actor-label">API</text>
-      <text x="190" y="60" class="actor-label">(api/v1/endpoints/chat.py)</text>
+        <svg viewBox="0 0 300 200" class="w-full max-w-sm drop-shadow-2xl">
+          <defs>
+            <linearGradient id="grad-loop" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ec4899" stop-opacity="1" />
+              <stop offset="100%" stop-color="#7c3aed" stop-opacity="1" />
+            </linearGradient>
+          </defs>
+          <circle cx="150" cy="100" r="80" fill="none" stroke="url(#grad-loop)" stroke-width="4" stroke-dasharray="10 5"
+            class="animate-spin-slow" />
 
-      <rect x="330" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="340" y="45" class="actor-label">Serviços</text>
-      <text x="340" y="60" class="actor-label">(services/chat_service.py)</text>
+          <circle cx="150" cy="20" r="15" fill="#00d4ff" />
+          <text x="150" y="25" text-anchor="middle" font-size="20" fill="#0b0f19">🚀</text>
 
-      <rect x="480" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="490" y="45" class="actor-label">Core</text>
-      <text x="490" y="60" class="actor-label">(core/agents/meta_agent.py)</text>
+          <circle cx="230" cy="100" r="15" fill="#ec4899" />
+          <text x="230" y="105" text-anchor="middle" font-size="20" fill="#0b0f19">⚠️</text>
 
-      <rect x="630" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="640" y="45" class="actor-label">Core (Memória)</text>
-      <text x="640" y="60" class="actor-label">(core/memory/memory_core.py)</text>
+          <circle cx="150" cy="180" r="15" fill="#7c3aed" />
+          <text x="150" y="185" text-anchor="middle" font-size="20" fill="#0b0f19">🧠</text>
 
-      <rect x="780" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="790" y="45" class="actor-label">Repositórios</text>
-      <text x="790" y="60" class="actor-label">(repositories/knowledge_repository.py)</text>
+          <circle cx="70" cy="100" r="15" fill="#22c55e" />
+          <text x="70" y="105" text-anchor="middle" font-size="20" fill="#0b0f19">✨</text>
 
-      <rect x="930" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="940" y="45" class="actor-label">Banco de Dados</text>
-      <text x="940" y="60" class="actor-label">(db/vector_store.py; db/graph.py)</text>
+          <text x="150" y="105" text-anchor="middle" fill="white" font-family="monospace" font-size="12">REFLEXION
+            LOOP</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
 
-      <rect x="1080" y="20" width="120" height="64" rx="8" class="actor" />
-      <text x="1090" y="45" class="actor-label">Core (Workers)</text>
-      <text x="1090" y="60" class="actor-label">(core/workers/orchestrator.py)</text>
+<section class="agents-hierarchy mt-8 mb-12" id="sec-agents">
+  <h2 class="section-title text-green-400"><span class="icon">🤖</span> ORQUESTRAÇÃO DE AGENTES</h2>
 
-      <!-- Lifelines -->
-      <line x1="90" y1="90" x2="90" y2="860" class="lifeline" />
-      <line x1="240" y1="90" x2="240" y2="860" class="lifeline" />
-      <line x1="390" y1="90" x2="390" y2="860" class="lifeline" />
-      <line x1="540" y1="90" x2="540" y2="860" class="lifeline" />
-      <line x1="690" y1="90" x2="690" y2="860" class="lifeline" />
-      <line x1="840" y1="90" x2="840" y2="860" class="lifeline" />
-      <line x1="990" y1="90" x2="990" y2="860" class="lifeline" />
-      <line x1="1140" y1="90" x2="1140" y2="860" class="lifeline" />
+  <div class="glass-panel p-6">
+    <p class="text-text-secondary mb-6">
+      O <strong>Meta-Agent</strong> é o supervisor supremo. Ele não realiza tarefas manuais; ele delega para
+      especialistas.
+      Isso permite paralelismo e especialização.
+    </p>
 
-      <!-- Mensagens -->
-      <!-- Usuário -> API: POST /chat (pergunta) -->
-      <line x1="90" y1="130" x2="240" y2="130" class="msg" />
-      <text x="105" y="120" class="msg-label">POST /chat (pergunta)</text>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
 
-      <!-- API -> Serviços: handle_chat_request(pergunta) -->
-      <line x1="240" y1="180" x2="390" y2="180" class="msg" />
-      <text x="250" y="170" class="msg-label">handle_chat_request(pergunta)</text>
+      <div
+        class="agent-card border-2 border-purple/50 bg-purple/10 p-4 rounded-xl text-center relative overflow-hidden">
+        <div class="absolute inset-0 bg-purple/5 blur-xl"></div>
+        <div class="text-4xl mb-2">👑</div>
+        <h4 class="font-bold text-purple mb-1">META-AGENT</h4>
+        <p class="text-xs text-text-secondary">Supervisor & Planejador</p>
+        <div class="mt-2 text-xs font-mono text-purple-300 bg-black/40 rounded p-1">meta_agent.py</div>
+      </div>
 
-      <!-- Serviços -> Core: run_thinking_cycle(pergunta) -->
-      <line x1="390" y1="230" x2="540" y2="230" class="msg" />
-      <text x="400" y="220" class="msg-label">run_thinking_cycle(pergunta)</text>
 
-      <!-- Core -> Core (Memória): retrieve_context(pergunta) -->
-      <line x1="540" y1="280" x2="690" y2="280" class="msg" />
-      <text x="550" y="270" class="msg-label">retrieve_context(pergunta)</text>
+      <div class="agent-card border border-cyan/30 bg-cyan/5 p-4 rounded-xl text-center">
+        <div class="text-4xl mb-2">💻</div>
+        <h4 class="font-bold text-cyan mb-1">CODER</h4>
+        <p class="text-xs text-text-secondary">Escreve, edita e refatora código.</p>
+      </div>
 
-      <!-- Core (Memória) -> Repositórios: find_relevant_chunks(pergunta_embedding) -->
-      <line x1="690" y1="330" x2="840" y2="330" class="msg" />
-      <text x="700" y="320" class="msg-label">find_relevant_chunks(pergunta_embedding)</text>
 
-      <!-- Repositórios -> Banco de Dados: query(embedding) -->
-      <line x1="840" y1="380" x2="990" y2="380" class="msg" />
-      <text x="850" y="370" class="msg-label">query(embedding)</text>
+      <div class="agent-card border border-pink/30 bg-pink/5 p-4 rounded-xl text-center">
+        <div class="text-4xl mb-2">🕵️</div>
+        <h4 class="font-bold text-pink mb-1">REVIEWER</h4>
+        <p class="text-xs text-text-secondary">Analisa segurança e bugs.</p>
+      </div>
 
-      <!-- Banco de Dados --> Repositórios: (retorna chunks) -->
-      <line x1="990" y1="430" x2="840" y2="430" class="msg" />
-      <text x="865" y="420" class="msg-label">retorna chunks</text>
 
-      <!-- Repositórios --> Core (Memória): (retorna chunks) -->
-      <line x1="840" y1="480" x2="690" y2="480" class="msg" />
-      <text x="710" y="470" class="msg-label">retorna chunks</text>
+      <div class="agent-card border border-green-500/30 bg-green-500/5 p-4 rounded-xl text-center">
+        <div class="text-4xl mb-2">📚</div>
+        <h4 class="font-bold text-green-400 mb-1">RESEARCHER</h4>
+        <p class="text-xs text-text-secondary">Busca documentação e exemplos.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-      <!-- Core (Memória) --> Core: (retorna contexto) -->
-      <line x1="690" y1="530" x2="540" y2="530" class="msg" />
-      <text x="560" y="520" class="msg-label">retorna contexto</text>
-
-      <!-- Core -> Core: (formula a resposta) -->
-      <rect x="520" y="560" width="40" height="40" rx="6" class="note" />
-      <text x="505" y="585" class="msg-label">processa</text>
-
-      <!-- Core --> Serviços: (retorna resposta_final) -->
-      <line x1="540" y1="640" x2="390" y2="640" class="msg" />
-      <text x="410" y="630" class="msg-label">resposta_final</text>
-
-      <!-- Serviços --> API: (retorna resposta_final) -->
-      <line x1="390" y1="690" x2="240" y2="690" class="msg" />
-      <text x="260" y="680" class="msg-label">resposta_final</text>
-
-      <!-- API --> Usuário: JSON (resposta_final) -->
-      <line x1="240" y1="740" x2="90" y2="740" class="msg" />
-      <text x="110" y="730" class="msg-label">JSON (resposta_final)</text>
-
-      <!-- Opcional (tracejada): Core -> Core (Workers): schedule_reflexion_task(conversa) -->
-      <line x1="540" y1="800" x2="1140" y2="800" class="msg-optional" />
-      <text x="760" y="790" class="msg-label">schedule_reflexion_task(conversa)</text>
-    </svg>
-    <figcaption class="sequence-caption">
-      Interação típica: Usuário envia pergunta → API encaminha → Serviços orquestram → Core consulta Memória via
-      Repositórios/DB → Core formula resposta → Serviços e API retornam JSON ao Usuário. Opcionalmente, Workers
-      agendam tarefas de reflexão para aprimoramento assíncrono.
-    </figcaption>
-  </figure>
+<section class="tech-specs mt-8 mb-16" id="sec-specs">
+  <div class="glass-panel p-0 overflow-hidden">
+    <table class="w-full text-sm text-left">
+      <thead class="bg-white/5 text-cyan uppercase font-mono">
+        <tr>
+          <th class="p-4">Componente</th>
+          <th class="p-4">Tecnologia (Spec Real)</th>
+          <th class="p-4">Função</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-white/10 text-text-secondary">
+        <tr class="hover:bg-white/5">
+          <td class="p-4 font-bold text-white">Backend Core</td>
+          <td class="p-4 font-mono">Python 3.10+ / FastAPI</td>
+          <td class="p-4">Orquestração, API REST, WebSockets</td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="p-4 font-bold text-white">LLM Server</td>
+          <td class="p-4 font-mono">Ollama (Local) / Llama 3</td>
+          <td class="p-4">Inferência Neural (GPU Acelerada)</td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="p-4 font-bold text-white">Vector DB</td>
+          <td class="p-4 font-mono">Qdrant (Docker)</td>
+          <td class="p-4">RAG, Memória Episódica, Semântica</td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="p-4 font-bold text-white">Frontend</td>
+          <td class="p-4 font-mono">Angular 16+ / SCSS</td>
+          <td class="p-4">Interface Reativa, Glassmorphism</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>

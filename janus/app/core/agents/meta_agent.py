@@ -13,25 +13,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
-try:
-    from langchain.agents import AgentExecutor, create_react_agent
-except Exception:
-    class AgentExecutor:  # type: ignore
-        pass
-    def create_react_agent(*args, **kwargs):  # type: ignore
-        return None
-try:
-    from langchain_core.prompts import PromptTemplate
-except Exception:
-    class PromptTemplate:  # type: ignore
-        @classmethod
-        def from_template(cls, t: str):
-            return t
-try:
-    from langchain_core.tools import tool
-except Exception:
-    def tool(fn):  # type: ignore
-        return fn
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.prompts import PromptTemplate
+from langchain_core.tools import tool
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
@@ -180,6 +164,7 @@ class Recommendation:
     rationale: str
     estimated_impact: str
     priority: int  # 1-5
+    suggested_agent: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -190,7 +175,9 @@ class Recommendation:
             "description": self.description,
             "rationale": self.rationale,
             "estimated_impact": self.estimated_impact,
+            "estimated_impact": self.estimated_impact,
             "priority": self.priority,
+            "suggested_agent": self.suggested_agent,
             "created_at": self.created_at.isoformat()
         }
 
@@ -370,58 +357,134 @@ def get_system_health_metrics() -> str:
 @tool
 def analyze_performance_trends(metric_name: str, hours: int = 24) -> str:
     """
-    Analisa tendências de performance de uma métrica específica.
-
+    Analisa tendências de performance de uma métrica específica baseada em dados em memória.
+    
     Args:
-        metric_name: Nome da métrica (ex: llm_latency, task_duration)
+        metric_name: Nome da métrica (ex: llm_latency, task_duration, component_health)
         hours: Janela de tempo para análise
-
+    
     Returns:
         JSON string com análise de tendências
     """
     import json
+    import statistics
+    from app.core.monitoring.health_monitor import _latency_windows, HealthMonitor, get_health_monitor
+    
+    try:
+        data_points = []
+        
+        # 1. Tentar obter dados de latência do HealthMonitor
+        if "latency" in metric_name:
+            # Tentar inferir o componente pelo nome da métrica ou usar todos
+            component = None
+            if "_" in metric_name:
+                 parts = metric_name.split("_")
+                 if parts[0] in _latency_windows:
+                     component = parts[0]
+            
+            if component:
+                 vals = list(_latency_windows.get(component, []))
+                 data_points = vals
+            else:
+                # Agrega latências de todos os componentes se não especificado
+                all_vals = []
+                for q in _latency_windows.values():
+                    all_vals.extend(list(q))
+                data_points = all_vals
 
-    # Simulação - em produção, consultaria Prometheus
-    analysis = {
-        "metric": metric_name,
-        "time_window_hours": hours,
-        "trend": "stable",
-        "average": "N/A",
-        "p95": "N/A",
-        "message": "Análise de tendências requer integração com Prometheus"
-    }
+        # 2. Se for health score
+        elif "health" in metric_name:
+             monitor = get_health_monitor()
+             # Health monitor armazena apenas último estado, então retornamos snapshot atual
+             # Idealmente teríamos histórico, mas por enquanto usamos estado atual
+             score = monitor.get_system_health().get("score", 0)
+             data_points = [score]
 
-    return json.dumps(analysis, indent=2)
+        if not data_points:
+             return json.dumps({
+                "metric": metric_name,
+                "status": "no_data",
+                "message": f"Sem dados históricos para a métrica '{metric_name}' na memória."
+            })
+            
+        # Calcular estatísticas básicas
+        avg = statistics.mean(data_points) if data_points else 0
+        p95 = statistics.quantiles(data_points, n=20)[-1] if len(data_points) >= 20 else max(data_points) if data_points else 0
+        
+        # Simples detecção de tendência (comparar primeira e segunda metade)
+        trend = "stable"
+        if len(data_points) > 10:
+            mid = len(data_points) // 2
+            first_half = statistics.mean(data_points[:mid])
+            second_half = statistics.mean(data_points[mid:])
+            if second_half > first_half * 1.1:
+                trend = "degrading" # Aumento de latência/valor
+            elif second_half < first_half * 0.9:
+                trend = "improving"
+
+        analysis = {
+            "metric": metric_name,
+            "data_points_count": len(data_points),
+            "trend": trend,
+            "average": round(avg, 4),
+            "p95": round(p95, 4),
+            "min": round(min(data_points), 4) if data_points else 0,
+            "max": round(max(data_points), 4) if data_points else 0
+        }
+
+        return json.dumps(analysis, indent=2)
+
+    except Exception as e:
+        logger.error(f"Erro ao analisar performance: {e}")
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @tool
 def get_resource_usage() -> str:
     """
-    Obtém informações sobre uso de recursos do sistema.
-
+    Obtém informações detalhadas sobre uso de recursos do sistema via psutil.
+    
     Returns:
-        JSON string com uso de CPU, memória, disco, etc.
+        JSON string com uso de CPU, memória, disco e rede.
     """
     try:
         import psutil
+        import os
 
+        # Processo atual
+        process = psutil.Process(os.getpid())
+        
         resources = {
-            "cpu_percent": psutil.cpu_percent(interval=1),
+            "timestamp": datetime.now().isoformat(),
+            "cpu": {
+                "percent_total": psutil.cpu_percent(interval=0.5),
+                "count": psutil.cpu_count(),
+                "load_avg": psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
+            },
             "memory": {
                 "total_gb": round(psutil.virtual_memory().total / (1024 ** 3), 2),
                 "available_gb": round(psutil.virtual_memory().available / (1024 ** 3), 2),
-                "percent_used": psutil.virtual_memory().percent
+                "percent_used": psutil.virtual_memory().percent,
+                "swap_used_percent": psutil.swap_memory().percent
             },
             "disk": {
                 "total_gb": round(psutil.disk_usage('/').total / (1024 ** 3), 2),
                 "free_gb": round(psutil.disk_usage('/').free / (1024 ** 3), 2),
                 "percent_used": psutil.disk_usage('/').percent
+            },
+            "process": {
+                "cpu_percent": process.cpu_percent(interval=None),
+                "memory_info_mb": round(process.memory_info().rss / (1024 * 1024), 2),
+                "threads": process.num_threads()
             }
         }
 
         return json.dumps(resources, indent=2)
 
+    except ImportError:
+         return json.dumps({"status": "error", "message": "Biblioteca 'psutil' não instalada."})
     except Exception as e:
+        logger.error(f"Erro ao obter recursos: {e}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})
 
 
@@ -469,13 +532,13 @@ Final Answer: Relatório estruturado em JSON com:
       "evidence": {{"métrica": "valor"}}
     }}
   ],
-  "recommendations": [
     {{
       "category": "categoria",
       "title": "Título da recomendação",
       "description": "O que fazer",
       "rationale": "Por que fazer",
-      "priority": 1-5
+      "priority": 1-5,
+      "suggested_agent": "sysadmin|coder|researcher|optimizer"
     }}
   ],
   "summary": "Resumo executivo da análise"
@@ -516,12 +579,15 @@ class MetaAgent:
         self._initialize_agent()
 
     def _initialize_agent(self):
-        """Inicializa o executor do Meta-Agente."""
-        # Usar LLM de alta qualidade para análise crítica, sem bind de 'stop'
-        llm = get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
-        self.llm = llm
-        self.executor = None
-        logger.info("Meta-Agente inicializado")
+        """Inicializa o executor do Meta-Agente de forma resiliente."""
+        try:
+            # Usar LLM de alta qualidade para análise crítica
+            llm = get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
+            self.llm = llm
+            logger.info("Meta-Agente inicializado com sucesso.")
+        except Exception as e:
+            logger.warning(f"Meta-Agente iniciou sem LLM (provavelmente sem chaves API ou Ollama offline): {e}")
+            self.llm = None
 
     async def run_analysis_cycle(self) -> StateReport:
         """
@@ -530,6 +596,19 @@ class MetaAgent:
         Returns:
             Relatório de estado com problemas e recomendações
         """
+        # Lazy initialization retry
+        if not self.llm:
+            logger.info("Tentando inicializar LLM do Meta-Agente tardiamente...")
+            self._initialize_agent()
+            if not self.llm:
+                logger.error("Ciclo do Meta-Agente abortado: LLM indisponível.")
+                return StateReport(
+                    status="unknown",
+                    healthy=False,
+                    issues=["LLM indisponível para Meta-Agente"],
+                    recommendations=["Verifique chaves de API ou status do Ollama"]
+                )
+
         cycle_id = f"cycle_{self.cycle_count}_{int(datetime.now().timestamp())}"
         self.cycle_count += 1
 
@@ -580,7 +659,8 @@ class MetaAgent:
                 "    \"title\": \"...\",\n"
                 "    \"description\": \"...\",\n"
                 "    \"rationale\": \"...\",\n"
-                "    \"priority\": 1-5\n"
+                "    \"priority\": 1-5,\n"
+                "    \"suggested_agent\": \"sysadmin|coder|...\"\n"
                 "  }],\n"
                 "  \"summary\": \"Resumo executivo...\"\n"
                 "}"
@@ -620,7 +700,8 @@ class MetaAgent:
                         description=rec.get("description", ""),
                         rationale=rec.get("rationale", ""),
                         estimated_impact=rec.get("estimated_impact", "unknown"),
-                        priority=rec.get("priority", 3)
+                        priority=rec.get("priority", 3),
+                        suggested_agent=rec.get("suggested_agent")
                     )
                     for i, rec in enumerate(report_data.get("recommendations", []))
                 ],
@@ -646,6 +727,9 @@ class MetaAgent:
 
             # Logar relatório
             self._log_report(report)
+
+            # Executar remediação automática para problemas críticos
+            await self._auto_remediate(report)
 
             logger.info(
                 f"Ciclo {cycle_id} concluído: "
@@ -718,6 +802,46 @@ class MetaAgent:
                 )
 
         logger.info("=" * 80)
+
+    async def _auto_remediate(self, report: StateReport):
+        """Tenta remediar automaticamente problemas críticos criando tarefas para agentes."""
+        if not report.recommendations:
+            return
+
+        from app.core.agents.multi_agent_system import get_multi_agent_system, Task, TaskPriority, TaskStatus
+
+        mas = get_multi_agent_system()
+        
+        for rec in report.recommendations:
+            # Apenas cria tarefas para prioridade alta/crítica e com agente sugerido
+            if rec.priority >= 4 and rec.suggested_agent:
+                target_agent_id = None
+                
+                # Tenta mapear o agente sugerido para um ID real
+                # Pega lista de agentes ativos
+                for agent_id, agent in mas.agents.items():
+                    if agent.role.value == rec.suggested_agent.lower():
+                        target_agent_id = agent_id
+                        break
+                
+                if target_agent_id:
+                    logger.info(f"Meta-Agente: Criando tarefa de remediação para {target_agent_id}")
+                    
+                    task = Task(
+                        description=f"[AUTO-REMEDIATION] {rec.title}: {rec.description}",
+                        assigned_to=target_agent_id,
+                        priority=TaskPriority.CRITICAL if rec.priority == 5 else TaskPriority.HIGH,
+                        metadata={
+                            "source": "meta_agent",
+                            "recommendation_id": rec.id,
+                            "rationale": rec.rationale
+                        }
+                    )
+                    
+                    mas.workspace.add_task(task)
+                    await mas.dispatch_task(task)
+                else:
+                    logger.warning(f"Meta-Agente: Agente sugerido '{rec.suggested_agent}' não encontrado para aplicar correção.")
 
     async def start_heartbeat(self, interval_minutes: int = 60):
         """

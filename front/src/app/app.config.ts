@@ -1,18 +1,20 @@
-import {ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode} from '@angular/core';
-import {provideRouter, withInMemoryScrolling, PreloadAllModules} from '@angular/router';
-import {provideHttpClient, withInterceptors} from '@angular/common/http';
-import {provideServiceWorker} from '@angular/service-worker';
-import {baseUrlInterceptor} from './core/interceptors/base-url.interceptor';
-import {errorLoggerInterceptor} from './core/interceptors/error-logger.interceptor';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode } from '@angular/core';
+import { provideRouter, withInMemoryScrolling, PreloadAllModules } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideServiceWorker } from '@angular/service-worker';
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { baseUrlInterceptor } from './core/interceptors/base-url.interceptor';
+import { errorLoggerInterceptor } from './core/interceptors/error-logger.interceptor';
 import { errorMappingInterceptor } from './core/interceptors/error-mapping.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 
-import {routes} from './app.routes';
+import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
+    provideAnimations(),
     provideRouter(
       routes,
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })
