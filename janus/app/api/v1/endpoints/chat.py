@@ -27,7 +27,7 @@ class ChatStartResponse(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
-    conversation_id: str = Field(..., min_length=3)
+    conversation_id: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1)
     role: str = Field("orchestrator")
     priority: str = Field("fast_and_cheap")
@@ -110,7 +110,7 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
     except Exception:
         hdr_uid = None
     try:
-        result: Dict[str, Any] = service.send_message(
+        result: Dict[str, Any] = await service.send_message(
             conversation_id=payload.conversation_id,
             message=payload.message,
             role=role,

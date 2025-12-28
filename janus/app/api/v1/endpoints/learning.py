@@ -128,7 +128,17 @@ async def trigger_harvesting(request: HarvestRequest,
 async def trigger_training(request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)):
     """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
-        result = await learning_service.trigger_training(request.model_type, request.training_config.dict(), model_name=request.model_name, user_id=request.user_id)
+        # Injeta data_source na config se fornecido
+        config_dict = request.training_config.dict()
+        if request.data_source:
+            config_dict["data_source"] = request.data_source
+            
+        result = await learning_service.trigger_training(
+            request.model_type, 
+            config_dict, 
+            model_name=request.model_name, 
+            user_id=request.user_id
+        )
         return result
     except TrainingFailedError as e:
         logger.warning("Falha no treinamento via serviço", error=str(e))
