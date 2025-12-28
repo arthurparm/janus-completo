@@ -90,3 +90,7 @@ janus/workspace/
 
 # Front-end build output
 front/dist/
+
+# Firebase Credentials
+**/serviceAccountKey.json
+janus/app/serviceAccountKey.json
