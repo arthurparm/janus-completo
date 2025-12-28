@@ -7,10 +7,18 @@
                     <mat-icon>flag</mat-icon>
                     Metas Autônomas
                 </h1>
-                <p class="header-subtitle">Gerencie os objetivos do sistema</p>
+                <p class="header-subtitle">
+                    Gerencie os objetivos do sistema
+                    <span *ngIf="usingFallback" class="fallback-badge" title="Modo Offline/API (Sem Realtime)">
+                        <mat-icon>cloud_off</mat-icon> API Mode
+                    </span>
+                </p>
             </div>
 
             <div class="header-right">
+                <button class="btn-refresh" *ngIf="usingFallback" (click)="loadGoalsFromApi()" title="Atualizar Lista">
+                    <mat-icon>refresh</mat-icon>
+                </button>
                 <button class="btn-primary" (click)="openNewGoalForm()">
                     <mat-icon>add</mat-icon>
                     Nova Meta
@@ -48,6 +56,21 @@
     </header>
 
 
+    <!-- OFFLINE WARNING -->
+    @if (isOffline) {
+    <div class="offline-warning-container">
+        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <h2>Sistema Offline</h2>
+        <p>
+            O gerenciamento de Metas Autônomas requer conexão ativa com o Backend.<br>
+            A sincronização de objetivos foi desativada temporariamente.
+        </p>
+        <div class="tech-detail">
+            <span>CODE: CONNECTION_REFUSED</span>
+            <span>COMPONENT: GOAL_ORCHESTRATOR</span>
+        </div>
+    </div>
+    } @else {
     <section class="filters-section">
         <div class="filters-container">
             <div class="search-group">
@@ -260,4 +283,5 @@
         </div>
         }
     </main>
+    }
 </div>

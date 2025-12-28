@@ -1,10 +1,14 @@
-import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core'
+import { Component, OnInit, inject, ChangeDetectorRef, OnDestroy } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, Goal, GoalCreateRequest } from '../../services/janus-api.service'
+import { DemoService } from '../../core/services/demo.service'
 import { MatIconModule } from '@angular/material/icon'
 import { MatDialogModule, MatDialog } from '@angular/material/dialog'
 import { MatMenuModule } from '@angular/material/menu'
+import { Firestore, collection, collectionData, query } from '@angular/fire/firestore';
+import { Subscription, filter, take } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
     selector: 'app-goals',
@@ -13,21 +17,29 @@ import { MatMenuModule } from '@angular/material/menu'
     templateUrl: './goals.html',
     styleUrl: './goals.scss'
 })
-export class GoalsComponent implements OnInit {
+export class GoalsComponent implements OnInit, OnDestroy {
     private api = inject(JanusApiService)
     private cdr = inject(ChangeDetectorRef)
     private dialog = inject(MatDialog)
+    private demoService = inject(DemoService)
+    private firestore = inject(Firestore)
+    private authService = inject(AuthService)
 
     goals: Goal[] = []
     filteredGoals: Goal[] = []
     loading = true
     error: string | null = null
+    private goalsSub?: Subscription;
 
     // Filters
     statusFilter: '' | 'pending' | 'in_progress' | 'completed' | 'failed' = ''
     searchQuery = ''
     sortBy: 'priority' | 'created_at' | 'deadline_ts' = 'priority'
     sortDir: 'asc' | 'desc' = 'desc'
+
+    get isOffline() {
+        return this.demoService.isOffline()
+    }
 
     // New Goal Form
     showNewGoalForm = false
@@ -38,29 +50,81 @@ export class GoalsComponent implements OnInit {
         success_criteria: '',
         deadline: ''
     }
+
     saving = false
+    // Triggering rebuild
+    usingFallback = false
 
     ngOnInit() {
         this.loadGoals()
+    }
+
+    ngOnDestroy() {
+        this.goalsSub?.unsubscribe();
     }
 
     loadGoals() {
         this.loading = true
         this.error = null
 
-        this.api.getGoals(this.statusFilter || undefined).subscribe({
-            next: (goals) => {
-                this.goals = goals
-                this.applyFilters()
-                this.loading = false
-                this.cdr.detectChanges()
+        if (this.demoService.isOffline()) {
+            this.loading = false
+            this.goals = []
+            this.filteredGoals = []
+            return
+        }
+
+        // Wait for Firebase Auth to be ready before connecting to Firestore
+        this.authService.firebaseAuthReady$.pipe(
+            filter(ready => ready),
+            take(1)
+        ).subscribe(() => {
+            this.connectToFirestore()
+        })
+    }
+
+    connectToFirestore() {
+        try {
+            const goalsCollection = query(collection(this.firestore, 'goals'));
+            // Usamos collectionData para ouvir mudanças em tempo real
+            this.goalsSub = collectionData(goalsCollection, { idField: 'id' }).subscribe({
+                next: (data) => {
+                    this.goals = data as Goal[];
+                    this.applyFilters();
+                    this.loading = false;
+                    this.usingFallback = false;
+                    this.cdr.detectChanges();
+                },
+                error: (err) => {
+                    console.error('Error listening to goals (Realtime):', err);
+                    console.warn('Switching to API Fallback mode...');
+                    this.loadGoalsFromApi();
+                }
+            });
+        } catch (err) {
+            console.error('Error initializing Firestore query (Sync):', err);
+            console.warn('Switching to API Fallback mode (Sync Error)...');
+            this.loadGoalsFromApi();
+        }
+    }
+
+    loadGoalsFromApi() {
+        this.usingFallback = true;
+        this.api.listGoals().subscribe({
+            next: (data) => {
+                this.goals = data;
+                this.applyFilters();
+                this.loading = false;
+                this.error = null; // Clear error if API works
+                this.cdr.detectChanges();
             },
             error: (err) => {
-                console.error('Error loading goals:', err)
-                this.error = 'Falha ao carregar metas'
-                this.loading = false
-                this.cdr.detectChanges()
+                console.error('Error loading goals from API:', err);
+                this.error = 'Falha ao carregar metas (API & Realtime)';
+                this.loading = false;
+                this.cdr.detectChanges();
             }
+
         })
     }
 
@@ -148,7 +212,7 @@ export class GoalsComponent implements OnInit {
             next: () => {
                 this.saving = false
                 this.showNewGoalForm = false
-                this.loadGoals()
+                // No need to reload, listener will catch update
             },
             error: (err) => {
                 console.error('Error creating goal:', err)
@@ -162,7 +226,7 @@ export class GoalsComponent implements OnInit {
     updateStatus(goal: Goal, newStatus: 'pending' | 'in_progress' | 'completed' | 'failed') {
         this.api.updateGoalStatus(goal.id, newStatus).subscribe({
             next: () => {
-                this.loadGoals()
+                // No need to reload
             },
             error: (err) => {
                 console.error('Error updating goal status:', err)
@@ -179,7 +243,7 @@ export class GoalsComponent implements OnInit {
 
         this.api.deleteGoal(goal.id).subscribe({
             next: () => {
-                this.loadGoals()
+                // No need to reload
             },
             error: (err) => {
                 console.error('Error deleting goal:', err)

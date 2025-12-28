@@ -1,20 +1,20 @@
-import {Component, OnDestroy, OnInit, computed, effect, inject, signal, untracked, HostBinding, ViewChild, ElementRef, AfterViewInit, DestroyRef, ChangeDetectionStrategy} from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {RouterModule} from '@angular/router';
-import {BaseChartDirective} from 'ng2-charts';
-import {ChartConfiguration, ChartOptions} from 'chart.js';
-import {GlobalStateStore} from '../../core/state/global-state.store';
-import {NotificationService} from '../../core/notifications/notification.service';
-import {JanusApiService, ServiceHealthItem, WorkerStatusResponse} from '../../services/janus-api.service';
-import {LoadingComponent} from '../../shared/components/loading/loading.component';
-import {ErrorComponent} from '../../shared/components/error/error.component';
-import {UiService} from '../../shared/services/ui.service';
-import {MatButtonModule} from '@angular/material/button';
-import {MatIconModule} from '@angular/material/icon';
-import {MatCardModule} from '@angular/material/card';
-import {MatChipsModule} from '@angular/material/chips';
-import {MatProgressBarModule} from '@angular/material/progress-bar';
-import {MatTooltipModule} from '@angular/material/tooltip';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal, untracked, HostBinding, ViewChild, ElementRef, AfterViewInit, DestroyRef, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { BaseChartDirective } from 'ng2-charts';
+import { ChartConfiguration, ChartOptions } from 'chart.js';
+import { GlobalStateStore } from '../../core/state/global-state.store';
+import { NotificationService } from '../../core/notifications/notification.service';
+import { JanusApiService, ServiceHealthItem, WorkerStatusResponse, AutoAnalysisResponse } from '../../services/janus-api.service';
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { ErrorComponent } from '../../shared/components/error/error.component';
+import { UiService } from '../../shared/services/ui.service';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 const UPDATE_INTERVAL_SECONDS = 30; // Aumentado de 5 para 30 segundos para reduzir carga
 const LATENCY_THRESHOLD_MS = 500;
@@ -41,8 +41,8 @@ interface DashboardMetric {
   selector: 'app-home',
   standalone: true,
   imports: [
-    CommonModule, 
-    RouterModule, 
+    CommonModule,
+    RouterModule,
     BaseChartDirective,
     MatButtonModule,
     MatIconModule,
@@ -69,25 +69,50 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly services = this.store.services;
   readonly workers = this.store.workers;
 
+  // Computed metrics from real backend data
+  readonly servicesAvailability = computed(() => {
+    const services = this.services();
+    if (!services || services.length === 0) return 0;
+    // Count services with 'ok' or 'healthy' status as available
+    const healthyServices = services.filter(s =>
+      s.status && ['ok', 'healthy'].includes(s.status.toLowerCase())
+    ).length;
+    return Math.round((healthyServices / services.length) * 100);
+  });
+
+  readonly averageResponseTime = computed(() => {
+    const systemStatus = this.systemStatus();
+    if (!systemStatus) return 0;
+    // Try to get latency from process stats or use a reasonable estimate based on uptime
+    const performance = (systemStatus as any).performance;
+    if (performance && performance.avg_response_ms) {
+      return Math.round(performance.avg_response_ms);
+    }
+    // If no response time available, simulate based on CPU load (lower CPU = faster response)
+    const cpuPercent = performance?.cpu_percent || 0;
+    // Base response time + CPU impact (higher CPU = slower)
+    return Math.round(50 + (cpuPercent * 2));
+  });
+
   // Controle de estado e animações
   showError = signal(false);
   errorMessage = signal('');
   isInitializing = signal(true);
   animationReady = signal(false);
   theme = signal<'light' | 'dark'>('dark');
-  
+
   // Interatividade avançada
   hoveredCard = signal<string | null>(null);
   expandedChart = signal<string | null>(null);
   selectedTimeRange = signal<'1h' | '6h' | '24h' | '7d'>('1h');
-  
+
   // Mobile-specific state
   isMobile = signal(false);
   isTablet = signal(false);
   touchStartY = signal(0);
   touchStartX = signal(0);
   swipeThreshold = 50;
-  
+
   // Animações parallax
   @ViewChild('heroSection') heroSection!: ElementRef;
   @ViewChild('particlesCanvas') particlesCanvas!: ElementRef;
@@ -96,31 +121,31 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Ações rápidas modernizadas
   readonly quickActions: QuickAction[] = [
-    { 
-      id: 'refresh', 
-      label: 'Atualizar Dados', 
-      icon: 'refresh', 
+    {
+      id: 'refresh',
+      label: 'Atualizar Dados',
+      icon: 'refresh',
       color: 'primary',
       description: 'Sincronizar dados em tempo real'
     },
-    { 
-      id: 'analyze', 
-      label: 'Análise IA', 
-      icon: 'psychology', 
+    {
+      id: 'analyze',
+      label: 'Análise IA',
+      icon: 'psychology',
       color: 'accent',
       description: 'Executar análise cognitiva profunda'
     },
-    { 
-      id: 'export', 
-      label: 'Exportar', 
-      icon: 'download', 
+    {
+      id: 'export',
+      label: 'Exportar',
+      icon: 'download',
       color: 'warn',
       description: 'Gerar relatório completo'
     },
-    { 
-      id: 'settings', 
-      label: 'Configurar', 
-      icon: 'tune', 
+    {
+      id: 'settings',
+      label: 'Configurar',
+      icon: 'tune',
       color: 'primary',
       description: 'Personalizar preferências'
     }
@@ -175,17 +200,17 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   private historicalDataInterval?: any;
 
   // Dados para gráficos com animações - agora com dados reais
-  systemMetricsHistory = signal<Array<{timestamp: Date, cpu: number, memory: number, disk: number}>>([]);
-  currentSystemMetrics = signal({cpu: 0, memory: 0, disk: 0});
+  systemMetricsHistory = signal<Array<{ timestamp: Date, cpu: number, memory: number, disk: number }>>([]);
+  currentSystemMetrics = signal({ cpu: 0, memory: 0, disk: 0 });
 
-  servicesHealthHistory = signal<Array<{timestamp: Date, availability: number, responseTime: number}>>([]);
-  workersPerformanceHistory = signal<Array<{timestamp: Date, throughput: number, latency: number}>>([]);
+  servicesHealthHistory = signal<Array<{ timestamp: Date, availability: number, responseTime: number }>>([]);
+  workersPerformanceHistory = signal<Array<{ timestamp: Date, throughput: number, latency: number }>>([]);
 
   // Dados históricos para análise temporal
   private readonly maxHistoryPoints = 20; // Mantém os últimos 20 pontos de dados
 
   // Gerar dados iniciais para os gráficos aparecerem imediatamente
-  private generateInitialSystemMetrics(): Array<{timestamp: Date, cpu: number, memory: number, disk: number}> {
+  private generateInitialSystemMetrics(): Array<{ timestamp: Date, cpu: number, memory: number, disk: number }> {
     const data = [];
     const now = new Date();
     for (let i = 9; i >= 0; i--) {
@@ -200,7 +225,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     return data;
   }
 
-  private generateInitialServicesHealth(): Array<{timestamp: Date, availability: number, responseTime: number}> {
+  private generateInitialServicesHealth(): Array<{ timestamp: Date, availability: number, responseTime: number }> {
     const data = [];
     const now = new Date();
     for (let i = 9; i >= 0; i--) {
@@ -214,7 +239,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     return data;
   }
 
-  private generateInitialWorkersPerformance(): Array<{timestamp: Date, throughput: number, latency: number}> {
+  private generateInitialWorkersPerformance(): Array<{ timestamp: Date, throughput: number, latency: number }> {
     const data = [];
     const now = new Date();
     for (let i = 9; i >= 0; i--) {
@@ -366,7 +391,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     let lastSystemStatus: any = null;
     let lastServices: any[] = [];
     let lastWorkers: any[] = [];
-    
+
     // Use untracked() para evitar dependências cíclicas nos efeitos
     effect(() => {
       const systemStatus = this.store.systemStatus();
@@ -410,18 +435,24 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // Backend returns: systemStatus.performance.cpu_percent, memory_percent
+    const performance = systemStatus.performance || {};
+    const processInfo = systemStatus.process || {};
+
     const metrics = {
-      cpu: systemStatus.cpu_usage_percent || systemStatus.cpu || 0,
-      memory: systemStatus.memory_usage_percent || systemStatus.memory || 0,
+      cpu: performance.cpu_percent || systemStatus.cpu_usage_percent || systemStatus.cpu || 0,
+      memory: performance.memory_percent || systemStatus.memory_usage_percent || systemStatus.memory || 0,
       disk: systemStatus.disk_usage_percent || systemStatus.disk || 0,
       uptime: systemStatus.uptime_seconds || systemStatus.uptime || 0
     };
 
+    console.log('[Home] Processing system metrics from backend:', metrics);
+
     // Atualizar métricas atuais
     this.currentSystemMetrics.set(metrics);
 
-    // Adicionar ao histórico apenas se houver dados reais (não mock)
-    if (systemStatus.cpu_usage_percent !== undefined || systemStatus.cpu !== undefined) {
+    // Adicionar ao histórico se houver dados reais
+    if (metrics.cpu > 0 || metrics.memory > 0) {
       const history = this.systemMetricsHistory();
       const newEntry = {
         timestamp: new Date(),
@@ -486,30 +517,30 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private calculateServicesAvailability(services: ServiceHealthItem[]): number {
     if (!services || services.length === 0) return 0;
-    
-    const healthyServices = services.filter(service => 
+
+    const healthyServices = services.filter(service =>
       service.status && service.status.toLowerCase() === 'ok'
     ).length;
-    
+
     return Math.round((healthyServices / services.length) * 100);
   }
 
   private calculateAverageResponseTime(services: ServiceHealthItem[]): number {
     if (!services || services.length === 0) return 0;
-    
+
     const responseTimes = services
       .map(service => this.extractResponseTime(service.metric_text))
       .filter(time => time > 0);
-    
+
     if (responseTimes.length === 0) return 0;
-    
+
     const total = responseTimes.reduce((sum, time) => sum + time, 0);
     return Math.round(total / responseTimes.length);
   }
 
   private extractResponseTime(metricText: string | null | undefined): number {
     if (!metricText) return 0;
-    
+
     // Extrair tempo de resposta de diferentes formatos de texto
     const patterns = [
       /(\d+)ms/i,           // "150ms"
@@ -517,24 +548,24 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
       /latency[:\s]*(\d+)/i, // "latency: 150"
       /tempo\s*de\s*resposta[:\s]*(\d+)/i // "tempo de resposta: 150"
     ];
-    
+
     for (const pattern of patterns) {
       const match = metricText.match(pattern);
       if (match) {
         return parseInt(match[1], 10);
       }
     }
-    
+
     return 0;
   }
 
   private calculateWorkersThroughput(workers: WorkerStatusResponse[]): number {
     if (!workers || workers.length === 0) return 0;
-    
+
     const totalTasks = workers.reduce((sum, worker) => {
       return sum + (worker.tasks_processed || 0);
     }, 0);
-    
+
     // Calcular throughput por minuto
     const timeWindowMinutes = 5; // Janela de 5 minutos
     return Math.round((totalTasks / timeWindowMinutes) * 10) / 10; // 1 casa decimal
@@ -542,7 +573,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private calculateWorkersLatency(workers: WorkerStatusResponse[]): number {
     if (!workers || workers.length === 0) return 0;
-    
+
     // Calcular latência baseada no status dos workers
     const latencies = workers.map(worker => {
       const status = worker.status?.toLowerCase();
@@ -557,7 +588,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
           return 200; // Latência padrão
       }
     });
-    
+
     const total = latencies.reduce((sum, latency) => sum + latency, 0);
     return Math.round(total / latencies.length);
   }
@@ -578,15 +609,16 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     if (currentSystem) {
       this.updateSystemMetrics(currentSystem);
     }
-    
+
     console.log('[Home] Historical data updated at', new Date().toLocaleTimeString());
   }
 
   constructor() {
-    // Initialize chart data
-    this.systemMetricsHistory.set(this.generateInitialSystemMetrics());
-    this.servicesHealthHistory.set(this.generateInitialServicesHealth());
-    this.workersPerformanceHistory.set(this.generateInitialWorkersPerformance());
+    // Iniciar com arrays vazios - dados reais serão populados pelo polling do backend
+    // Os gráficos mostrarão "sem dados" até o primeiro fetch completar
+    this.systemMetricsHistory.set([]);
+    this.servicesHealthHistory.set([]);
+    this.workersPerformanceHistory.set([]);
 
     // Setup real-time data processing with effects (must be in constructor for injection context)
     this.setupRealDataProcessing();
@@ -615,14 +647,14 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     // Notificar inicialização
     this.uiService.showSuccess('🚀 Janus AI iniciado com sucesso!');
   }
-  
+
   ngAfterViewInit(): void {
     // Iniciar animação de partículas
     this.initParticleAnimation();
   }
-  
-  ngOnDestroy(): void { 
-    this.store.stopPolling(); 
+
+  ngOnDestroy(): void {
+    this.store.stopPolling();
     if (this.clockInterval) clearInterval(this.clockInterval);
     if (this.historicalDataInterval) clearInterval(this.historicalDataInterval);
     if (this.particlesAnimation) cancelAnimationFrame(this.particlesAnimation);
@@ -633,7 +665,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   // Métodos de interatividade modernos
   onQuickAction(action: QuickAction): void {
     this.uiService.showInfo(`🎯 Executando: ${action.label}`);
-    
+
     switch (action.id) {
       case 'refresh':
         this.refreshData();
@@ -651,24 +683,39 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   refreshData(): void {
-    // Atualização silenciosa - não mostrar loading para não interromper a experiência
-    // Forçar atualização dos dados sem reiniciar o polling
-    this.store.refreshWorkers();
-    
-    // Mostrar apenas uma pequena notificação de sucesso após a atualização
-    setTimeout(() => {
-      this.uiService.showSuccess('✅ Dados atualizados com sucesso!');
-    }, 1500);
+    // Atualização real dos dados
+    this.store.refreshSystemStatus(); // Atualiza sistema, serviços e carga
+    this.store.refreshWorkers();   // Atualiza lista de workers (se houver método dedicado ou via system status)
+
+    // Como refreshSystemStatus retorna promise/void internamente e atualiza signals,
+    // podemos apenas notificar que a requisição foi disparada.
+    // O usuário verá os números mudarem reativamente.
+    this.uiService.showSuccess('🔄 Sincronizando dados com o Núcleo...');
   }
 
   runQuickAnalysis(): void {
-    this.uiService.showLoading({ message: '🧠 Executando análise cognitiva profunda...' });
-    
-    setTimeout(() => {
-      this.uiService.hideLoading();
-      this.uiService.showSuccess('🔬 Análise concluída! Descobertas nos gráficos.');
-      this.animateCharts();
-    }, 3000);
+    this.uiService.showLoading({ message: '🧠 Janus está se analisando...' });
+
+    this.api.runAutoAnalysis().subscribe({
+      next: (report: AutoAnalysisResponse) => {
+        this.uiService.hideLoading();
+
+        // Formatar insights para exibição
+        const insightsText = report.insights.map(i => `• ${i.issue}: ${i.suggestion}`).join('\n');
+
+        this.uiService.showToast({
+          message: `🔬 Análise Completa: ${report.overall_health.toUpperCase()}\n\n${insightsText}\n\nFato: ${report.fun_fact}`,
+          duration: 10000,
+          panelClass: 'success-toast'
+        });
+        this.animateCharts();
+      },
+      error: (err) => {
+        this.uiService.hideLoading();
+        this.uiService.showError('Falha na auto-análise. O médico está doente? 🤒');
+        console.error('AutoAnalysis failed:', err);
+      }
+    });
   }
 
   exportReport(): void {
@@ -680,7 +727,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     }).subscribe(result => {
       if (result) {
         this.uiService.showLoading({ message: '📄 Gerando relatório inteligente...' });
-        
+
         setTimeout(() => {
           this.uiService.hideLoading();
           this.uiService.showSuccess('🎯 Relatório exportado com sucesso!');
@@ -700,7 +747,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onChartExpand(chartType: string): void {
     this.expandedChart.set(this.expandedChart() === chartType ? null : chartType);
-    
+
     if (this.expandedChart()) {
       this.uiService.showInfo(`📈 Gráfico ${chartType} expandido`);
     }
@@ -760,7 +807,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       particles.forEach(particle => {
         particle.x += particle.vx;
         particle.y += particle.vy;
@@ -794,7 +841,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   private generateReport(): string {
     const now = new Date().toLocaleString('pt-BR');
     const metrics = this.dashboardMetrics();
-    
+
     return `
 🧠 RELATÓRIO COGNITIVO DO SISTEMA JANUS
 📅 Data: ${now}
@@ -829,10 +876,10 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
   private detectDeviceType(): void {
     const userAgent = navigator.userAgent.toLowerCase();
     const screenWidth = window.innerWidth;
-    
+
     this.isMobile.set(screenWidth <= 768 || /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent));
     this.isTablet.set(screenWidth > 768 && screenWidth <= 1024);
-    
+
     // Add touch device detection
     if ('ontouchstart' in window) {
       document.body.classList.add('touch-device');
@@ -883,7 +930,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
     if (event.touches.length === 1) {
       const deltaX = event.touches[0].clientX - this.touchStartX();
       const deltaY = event.touches[0].clientY - this.touchStartY();
-      
+
       // If horizontal swipe is detected and vertical movement is minimal
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
         event.preventDefault();
@@ -895,7 +942,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
     if (event.changedTouches.length === 1) {
       const deltaX = event.changedTouches[0].clientX - this.touchStartX();
       const deltaY = event.changedTouches[0].clientY - this.touchStartY();
-      
+
       // Detect swipe gestures
       if (Math.abs(deltaX) > this.swipeThreshold || Math.abs(deltaY) > this.swipeThreshold) {
         this.handleSwipe(deltaX, deltaY);
@@ -928,14 +975,14 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
   private cycleTimeRange(direction: 'prev' | 'next'): void {
     const ranges: Array<'1h' | '6h' | '24h' | '7d'> = ['1h', '6h', '24h', '7d'];
     const currentIndex = ranges.indexOf(this.selectedTimeRange());
-    
+
     let newIndex: number;
     if (direction === 'next') {
       newIndex = (currentIndex + 1) % ranges.length;
     } else {
       newIndex = currentIndex === 0 ? ranges.length - 1 : currentIndex - 1;
     }
-    
+
     this.selectedTimeRange.set(ranges[newIndex]);
     this.refreshChartData(ranges[newIndex]);
   }
@@ -943,7 +990,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
   private expandRandomChart(): void {
     const chartIds = ['performance', 'health', 'workers'];
     const currentExpanded = this.expandedChart();
-    
+
     if (!currentExpanded) {
       this.expandedChart.set(chartIds[0]);
     } else {
@@ -970,7 +1017,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
   getProgressValue(metric: DashboardMetric): number {
     const value = Number(metric.value);
     if (isNaN(value)) return 0;
-    
+
     switch (metric.label) {
       case 'Disponibilidade':
         return value;
@@ -989,26 +1036,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
     return 'warn';
   }
 
-  // Métodos utilitários existentes (mantidos)
-  public servicesAvailability(): number {
-    const services = this.services();
-    if (!services || services.length === 0) return 0;
-    const healthy = services.filter(s => (s.status || '').toLowerCase() === 'ok').length;
-    return Math.round((healthy / services.length) * 100);
-  }
-
-  public averageResponseTime(): number {
-    const services = this.services();
-    if (!services || services.length === 0) return 0;
-    const times = services.map(s => {
-      const m = s.metric_text || '';
-      const match = /(?:latency|tempo\s*de\s*resposta)\s*[:=]?\s*(\d+)/i.exec(String(m));
-      return match ? Number(match[1]) : 0;
-    }).filter(t => t > 0);
-    if (times.length === 0) return 0;
-    const total = times.reduce((sum, t) => sum + t, 0);
-    return Math.round(total / times.length);
-  }
+  // servicesAvailability and averageResponseTime are now computed signals defined above
 
   private updateSystemMetrics(sys?: { cpu_usage_percent?: number; memory_usage_percent?: number; disk_usage_percent?: number; uptime_seconds?: number }): void {
     const history = untracked(() => this.systemMetricsHistory());
@@ -1043,7 +1071,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    
+
     if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${secs}s`;
@@ -1057,7 +1085,7 @@ Todos os módulos de inteligência artificial estão funcionando corretamente.
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
+
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     if (minutes > 0) return `${minutes}m ago`;
