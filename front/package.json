@@ -24,6 +24,17 @@
       }
     ]
   },
+  "overrides": {
+    "@angular/animations": "$@angular/animations",
+    "@angular/common": "$@angular/common",
+    "@angular/compiler": "$@angular/compiler",
+    "@angular/compiler-cli": "$@angular/compiler-cli",
+    "@angular/core": "$@angular/core",
+    "@angular/forms": "$@angular/forms",
+    "@angular/platform-browser": "$@angular/platform-browser",
+    "@angular/platform-browser-dynamic": "$@angular/platform-browser-dynamic",
+    "@angular/router": "$@angular/router"
+  },
   "private": true,
   "dependencies": {
     "@angular/animations": "^20.0.0",
@@ -31,15 +42,18 @@
     "@angular/common": "^20.0.0",
     "@angular/compiler": "^20.0.0",
     "@angular/core": "^20.0.0",
+    "@angular/fire": "^20.0.1",
     "@angular/forms": "^20.0.0",
     "@angular/material": "^20.0.0",
     "@angular/platform-browser": "^20.0.0",
+    "@angular/platform-browser-dynamic": "^20.0.0",
     "@angular/router": "^20.0.0",
     "@angular/service-worker": "^20.0.0",
     "@supabase/supabase-js": "^2.47.10",
     "@types/marked": "^5.0.2",
     "@types/prismjs": "^1.26.5",
     "chart.js": "^4.5.1",
+    "firebase": "^12.7.0",
     "gsap": "^3.14.2",
     "marked": "^17.0.1",
     "ng2-charts": "^8.0.0",
