@@ -23,6 +23,7 @@ from .resilience import (
 )
 from .factory import _get_executor, _infer_provider, _infer_model_name, _health_check_ollama
 from .router import get_llm
+from .rate_limiter import get_rate_limiter
 from . import response_cache  # Import cache module
 
 logger = logging.getLogger(__name__)
@@ -281,6 +282,13 @@ class LLMClient:
                 )
             except Exception as e:
                 logger.warning(f"Failed to cache LLM response: {e}")
+
+            # 3. Register usage with rate limiter
+            try:
+                tokens_total = tokens_in_est + tokens_out_est
+                get_rate_limiter().register_usage(self.provider, self.model, tokens=tokens_total, requests=1)
+            except Exception as e:
+                logger.debug(f"Failed to register rate limit usage: {e}")
 
             return sanitized_text
 

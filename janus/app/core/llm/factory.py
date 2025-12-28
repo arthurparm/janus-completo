@@ -97,7 +97,15 @@ def warm_llm_pool(specs: Optional[list[str]] = None) -> Dict[str, int]:
             elif provider == "openai":
                 if not _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
                     continue
-                llm = ChatOpenAI(model=model, temperature=0, client=_get_openai_client())
+                # Ensure client dependencies are initialized
+                _get_openai_client()
+                
+                llm = ChatOpenAI(
+                    model=model,
+                    temperature=0,
+                    api_key=getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)(),
+                    http_client=_openai_http_client
+                )
                 _add_to_pool("openai", model, llm)
             elif provider == "google_gemini":
                 if not _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()):

@@ -18,6 +18,7 @@ from .resilience import _get_from_pool, _add_to_pool, _circuit_closed
 from .factory import (
     _validate_openai_key, _validate_gemini_key, _get_openai_client, _health_check_ollama
 )
+from .rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,15 @@ def get_llm(
             # Lista de modelos elegíveis para este papel
             model_list = list(role_candidates_map.get(provider_key, set())) or p["models"]
             for model_name in model_list:
+                # Verifica disponibilidade de rate limit antes de adicionar candidato
+                rate_limiter = get_rate_limiter()
+                if not rate_limiter.is_available(provider_key, model_name):
+                    availability = rate_limiter.get_availability(provider_key, model_name)
+                    logger.info(
+                        f"Modelo {provider_key}:{model_name} indisponível por rate limit "
+                        f"(uso={availability['usage_percent']:.1%})")
+                    continue
+
                 pricing = _get_model_pricing(provider_key, model_name)
                 cost_per_1k = pricing.input_per_1k_usd + pricing.output_per_1k_usd
                 
