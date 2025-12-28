@@ -58,4 +58,5 @@ else:
     api_router.include_router(evaluation.router)
     api_router.include_router(deployment.router)
     api_router.include_router(auth.router)
+    api_router.include_router(auto_analysis.router, prefix="/auto-analysis")  # Auto-análise do sistema
     api_router.include_router(feedback.router)  # Quick Win: Feedback loop

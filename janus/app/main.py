@@ -57,6 +57,16 @@ async def lifespan(app: FastAPI):
     # Store workers in app state if needed by old shutdown logic, but we use kernel.shutdown now
     app.state.workers = kernel.workers
     
+    # 3. Initialize Rate Limits
+    from app.core.llm.rate_limiter import configure_rate_limits_from_settings
+    if hasattr(settings, "LLM_RATE_LIMITS") and settings.LLM_RATE_LIMITS:
+        configure_rate_limits_from_settings(settings.LLM_RATE_LIMITS, getattr(settings, "LLM_RATE_LIMIT_THRESHOLD", 0.80))
+        logger.info("LLM Rate Limits initialized.")
+
+    # 4. Initialize Firebase (Persistence) - MOVED TO KERNEL
+    # Removed from here to avoid race condition with GoalManager
+    pass
+
     yield
 
     # === SHUTDOWN ===

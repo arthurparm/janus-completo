@@ -64,6 +64,9 @@ pyttsx3 = "^2.90"
 openwakeword = "^0.5.1"
 scipy = "^1.11.0"
 
+# Firebase
+firebase-admin = "^6.5.0"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 pytest-asyncio = "^0.23.0"

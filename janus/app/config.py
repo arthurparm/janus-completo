@@ -21,6 +21,7 @@ class AppSettings(BaseSettings):
     # Feature flags / modos de execução
     DRY_RUN: bool = False
     PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
+    AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
 
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
@@ -46,15 +47,20 @@ class AppSettings(BaseSettings):
     MYSQL_DATABASE: str = "janus_config"
     MYSQL_ROOT_PASSWORD: SecretStr = "janus_root"
 
+    # Firebase
+    FIREBASE_ENABLED: bool = False
+    FIREBASE_CREDENTIALS_PATH: Optional[str] = "/app/app/serviceAccountKey.json"
+    FIREBASE_DATABASE_URL: Optional[str] = None
+
     # LangSmith
     LANGCHAIN_TRACING_V2: str = "true"
     LANGCHAIN_API_KEY: Optional[SecretStr] = None
 
     # Memória
     MEMORY_SHORT_TTL_SECONDS: int = 600
-    MEMORY_SHORT_MAX_ITEMS: int = 256
-    MEMORY_SHORT_SCAN_MAX_ITEMS: int = 128
-    MEMORY_MAX_CONTENT_CHARS: int = 20000
+    MEMORY_SHORT_MAX_ITEMS: int = 1024
+    MEMORY_SHORT_SCAN_MAX_ITEMS: int = 512
+    MEMORY_MAX_CONTENT_CHARS: int = 50000
     MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
     MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
     MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN: int = 5_000_000
@@ -72,7 +78,7 @@ class AppSettings(BaseSettings):
     META_AGENT_MAX_SECONDS: int = 60
 
     # LLM
-    LLM_DEFAULT_TIMEOUT_SECONDS: int = 60
+    LLM_DEFAULT_TIMEOUT_SECONDS: int = 120
     LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
     LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
     LLM_RETRY_MAX_ATTEMPTS: int = 3
@@ -80,10 +86,10 @@ class AppSettings(BaseSettings):
     LLM_RETRY_MAX_BACKOFF_SECONDS: float = 5.0
     LLM_CACHE_TTL_SECONDS: int = 3600
     LLM_RESPONSE_CACHE_USE_MSGPACK: bool = False
-    LLM_POOL_MAX_SIZE: int = 4
+    LLM_POOL_MAX_SIZE: int = 16
     LLM_POOL_TTL_SECONDS: int = 3600
     LLM_POOL_WARM_PROVIDERS: List[str] = []
-    LLM_EXECUTOR_MAX_WORKERS: int = 4
+    LLM_EXECUTOR_MAX_WORKERS: int = 32
     LLM_MAX_PROMPT_LENGTH: int = 100000
     # Política econômica e tetos de custo
     LLM_ECONOMY_POLICY: str = "balanced"  # strict | balanced | quality
@@ -181,6 +187,10 @@ class AppSettings(BaseSettings):
         # Adicione aqui outros modelos (ex.: "gemini-2.5-pro")
     }
 
+    # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
+    # Formato: {"provider:model": {"tpm": int, "rpm": int, "rpd": int, "tpd": int}}
+    LLM_RATE_LIMITS: Dict[str, Dict[str, int]] = {}
+    LLM_RATE_LIMIT_THRESHOLD: float = 0.80  # Começa a evitar modelo quando atinge 80% do limite
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_IP_PER_MIN: int = 60
@@ -259,7 +269,7 @@ class AppSettings(BaseSettings):
     KNOWLEDGE_MIN_CONFIDENCE: float = 0.6
     RAG_HYBRID_VECTOR_WEIGHT: float = 0.7
     RAG_HYBRID_GRAPH_WEIGHT: float = 0.3
-    DOCS_MAX_FILE_SIZE_BYTES: int = 10_000_000
+    DOCS_MAX_FILE_SIZE_BYTES: int = 100_000_000
     DOCS_MAX_POINTS_PER_USER: int = 50000
     PRODUCTIVITY_DAILY_LIMITS: Dict[str, int] = {
         "calendar.write": 500,
@@ -285,8 +295,8 @@ class AppSettings(BaseSettings):
     # Sprint 4: Python Sandbox (epicbox)
     SANDBOX_DOCKER_IMAGE: str = "python:3.11-slim"
     SANDBOX_TIMEOUT_SECONDS: int = 15
-    SANDBOX_MEM_LIMIT_MB: int = 128
-    SANDBOX_CPU_LIMIT: float = 0.5
+    SANDBOX_MEM_LIMIT_MB: int = 16384
+    SANDBOX_CPU_LIMIT: float = 8.0
     SANDBOX_MAX_OUTPUT_LENGTH: int = 25000
 
     # Sprint 5: Reflexion
@@ -412,6 +422,23 @@ class AppSettings(BaseSettings):
                         except Exception:
                             parsed[k.strip()] = 0.0
                 return parsed
+        return v or {}
+
+    @field_validator("LLM_RATE_LIMITS", mode="before")
+    def _parse_rate_limits(cls, v: Any):
+        # Aceita JSON objeto {"provider:model": {"tpm": int, "rpm": int, ...}}
+        if isinstance(v, str):
+            try:
+                obj = json.loads(v)
+                parsed: Dict[str, Dict[str, int]] = {}
+                for model_key, limits in obj.items():
+                    if isinstance(limits, dict):
+                        parsed[str(model_key)] = {
+                            k: int(val) for k, val in limits.items() if val is not None
+                        }
+                return parsed
+            except Exception:
+                return {}
         return v or {}
 
     # Workspace e File System
