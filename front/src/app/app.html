@@ -6,4 +6,13 @@
 </div>
 
 <!-- Main Application -->
+@if (demoService.isOffline()) {
+<div
+    class="fixed bottom-0 left-0 w-full bg-yellow-600/90 text-white text-xs font-bold py-1 z-[9999] shadow-lg backdrop-blur-sm marquee-container border-t border-yellow-400/30">
+    <div class="marquee-content">
+        ⚠ JANUS OFFLINE / MODO DEMONSTRAÇÃO — BACKEND DESCONECTADO — SISTEMA OPERANDO EM ESTADO DE FUNCIONALIDADE
+        REDUZIDA — ALGUNS RECURSOS PODEM ESTAR INDISPONÍVEIS ⚠
+    </div>
+</div>
+}
 <router-outlet></router-outlet>

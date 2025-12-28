@@ -89,7 +89,7 @@ export const routes: Routes = [
 
       {
         path: 'documentacao',
-        loadComponent: () => import('./pages/documentacao/documentacao').then(m => m.Documentacao),
+        loadComponent: () => import('./pages/documentacao/documentacao').then(m => m.DocumentacaoComponent),
         data: {
           title: 'Documentação',
           description: 'Documentação do sistema'
@@ -123,11 +123,21 @@ export const routes: Routes = [
       },
 
       {
-        path: 'goals',
-        loadComponent: () => import('./pages/goals/goals').then(m => m.GoalsComponent),
+        path: 'autonomy',
+        loadComponent: () => import('./pages/autonomy/autonomy').then(m => m.AutonomyComponent),
         data: {
-          title: 'Metas Autônomas',
-          description: 'Gerenciamento de metas do sistema autônomo'
+          title: 'Autonomia',
+          description: 'Torre de Controle do Agente',
+          roles: ['admin'] // Restricted
+        }
+      },
+      {
+        path: 'ops',
+        loadComponent: () => import('./pages/ops/ops').then(m => m.OpsComponent),
+        data: {
+          title: 'LLMOps',
+          description: 'Factory de Modelos e Experimentação',
+          roles: ['admin', 'dev']
         }
       },
       {
@@ -139,11 +149,24 @@ export const routes: Routes = [
         }
       },
       {
-        path: 'memory',
-        loadComponent: () => import('./pages/memory/memory').then(m => m.MemoryComponent),
+        path: 'brain',
+        loadComponent: () => import('./pages/brain/brain').then(m => m.BrainComponent),
         data: {
-          title: 'Memória Episódica',
-          description: 'Linha do tempo de memórias do sistema'
+          title: 'The Brain',
+          description: 'Central de Memória e Conhecimento'
+        }
+      },
+      {
+        path: 'memory',
+        redirectTo: 'brain',
+        pathMatch: 'full'
+      },
+      {
+        path: 'senses',
+        loadComponent: () => import('./pages/senses/senses').then(m => m.SensesComponent),
+        data: {
+          title: 'Senses',
+          description: 'Interfaces de Entrada Multimodal'
         }
       },
       {
