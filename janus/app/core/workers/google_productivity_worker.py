@@ -312,9 +312,12 @@ async def start_google_productivity_consumer():
                         coll = get_or_create_collection(f"user_{user_id}")
                         content = f"To: {str(msg.get('to',''))}\nSubject: {str(msg.get('subject',''))}\n{str(msg.get('body',''))}"
                         vec = embed_text(content)
-                        pid = f"mail:{user_id}:{hash(content)}"
+                        # Fix: Qdrant ID must be UUID or int
+                        composite_id = f"mail:{user_id}:{hash(content)}"
+                        pid = str(uuid5(NAMESPACE_URL, composite_id))
                         payload_q = {
                             "content": content,
+                            "composite_id": composite_id,
                             "metadata": {
                                 "type": "email_message",
                                 "origin": "google",

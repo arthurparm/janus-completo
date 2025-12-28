@@ -76,6 +76,49 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                 f"{result['relationships_created']} relacionamentos criados."
             )
 
+            # --- Notificação de Evento para o Chat HUD ---
+            try:
+                # Se algo foi criado, avisa o frontend
+                if result['entities_created'] > 0 or result['relationships_created'] > 0:
+                    conversation_id = metadata.get("conversation_id")
+                    if conversation_id:
+                        broker = await get_broker()
+                        
+                        # Extrai nomes das entidades para mostrar no HUD
+                        # O result nao retorna os nomes, entao vamos fazer uma estimativa ou
+                        # modificar o consolidator para retornar nomes.
+                        # Por simplicidade, vamos mandar uma mensagem generica por enquanto
+                        # ou tentar pegar do conteudo se for curto.
+                        
+                        # Melhor: Vamos assumir que foi "Memória consolidada com sucesso"
+                        # Idealmente o consolidator retornaria os nomes das entidades.
+                        # Mas vamos mandar o evento.
+                        
+                        event_payload = {
+                            "event_type": "memory_consolidated",
+                            "agent_role": "knowledge_curator",
+                            "content": f"Memória consolidada: {result['entities_created']} novas entidades conectadas.",
+                            "timestamp": datetime.utcnow().timestamp(),
+                            "task_id": task.task_id,
+                            "metadata": {
+                                "entities_count": result['entities_created'],
+                                "relationships_count": result['relationships_created']
+                            }
+                        }
+                        
+                        # Routing key para a conversa específica
+                        routing_key = f"janus.event.conversation.{conversation_id}.memory"
+                        
+                        await broker.publish(
+                            exchange_name="janus.events",
+                            routing_key=routing_key,
+                            message=msgpack.packb(event_payload, use_bin_type=True),
+                            use_msgpack=False # Já empacotamos manualmente
+                        )
+                        logger.debug(f"Evento de memória publicado para {conversation_id}")
+            except Exception as evt_err:
+                logger.warning(f"Falha ao publicar evento de memória: {evt_err}")
+
         else:
             raise ValueError(f"Modo de consolidação desconhecido: {consolidation_mode}")
 

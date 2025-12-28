@@ -3,13 +3,21 @@ import hashlib
 import json
 import logging
 import time
-from typing import Any, Dict, List, Protocol, runtime_checkable, Optional
+from typing import Any, Dict, List, Protocol, runtime_checkable, Optional, Union
 
+from pydantic import BaseModel
 from app.core.infrastructure.filesystem_manager import write_file, read_file
 from app.repositories.memory_repository import MemoryRepository
 from app.core.memory.memory_core import get_memory_db
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_item(item: Union[BaseModel, Dict[str, Any]]) -> Dict[str, Any]:
+    """Converte um item (Pydantic model ou dict) para dicionário."""
+    if isinstance(item, BaseModel):
+        return item.model_dump()
+    return item
 
 TRAINING_DATA_FILE = "training_data.jsonl"
 
@@ -112,7 +120,8 @@ class DataHarvester:
         try:
             # construir exemplos prompt/completion
             training_examples: List[Dict[str, Any]] = []
-            for item in items:
+            for raw_item in items:
+                item = _normalize_item(raw_item)
                 if item.get('content') and item.get('metadata'):
                     prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
                     completion = item['content']
@@ -184,7 +193,8 @@ Dict[str, Any]:
         # Filtragem por pontuação mínima, se disponível
         if min_score is not None:
             filtered: List[Dict[str, Any]] = []
-            for it in items:
+            for raw_it in items:
+                it = _normalize_item(raw_it)
                 score = it.get("score")
                 if score is None:
                     score = (it.get("metadata") or {}).get("score")
@@ -198,7 +208,8 @@ Dict[str, Any]:
             return s[:max_len]
 
         training_examples: List[Dict[str, Any]] = []
-        for item in items:
+        for raw_item in items:
+            item = _normalize_item(raw_item)
             if item.get("content") and item.get("metadata"):
                 prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
                 completion = item["content"]

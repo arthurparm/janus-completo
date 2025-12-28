@@ -25,7 +25,7 @@ from typing import List, Dict, Any, Optional
 
 from prometheus_client import Counter, Histogram, Gauge
 
-from app.core.infrastructure.filesystem_manager import write_file
+from app.core.infrastructure.filesystem_manager import write_file, read_file
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
@@ -92,6 +92,7 @@ class TrainingConfig:
     save_checkpoints: bool = True
     max_examples: Optional[int] = None
     user_id: Optional[str] = None
+    data_source: str = "episodic_memory"
 
 
 @dataclass
@@ -134,6 +135,11 @@ class DatasetPreparator:
         dataset = []
 
         for exp in experiences:
+            # Suporte para dados já formatados (ex: vindos de arquivo JSONL)
+            if "prompt" in exp and "completion" in exp:
+                dataset.append(exp)
+                continue
+
             content = exp.get("content", "")
             exp_type = exp.get("metadata", {}).get("type", "")
 
@@ -323,8 +329,32 @@ class NeuralTrainer:
             self,
             config: TrainingConfig
     ) -> List[Dict[str, Any]]:
-        """Carrega dados de treino da memória episódica."""
+        """Carrega dados de treino da memória episódica ou arquivo."""
         try:
+            if config.data_source == "filesystem":
+                logger.info("[NeuralTrainer] Carregando dados de training_data.jsonl")
+                content = read_file("workspace/training_data.jsonl")
+                if content.startswith("Erro:"):
+                    logger.warning(f"Falha ao ler training_data.jsonl: {content}")
+                    return []
+                
+                experiences = []
+                lines = [ln for ln in content.strip().split('\n') if ln.strip()]
+                
+                # Apply limit if needed
+                if config.max_examples:
+                    lines = lines[:config.max_examples]
+                    
+                for ln in lines:
+                    try:
+                        item = json.loads(ln)
+                        experiences.append(item) 
+                    except Exception:
+                        continue
+                
+                logger.info(f"[NeuralTrainer] Carregados {len(experiences)} exemplos do arquivo")
+                return experiences
+
             query = "experiência de uso de ferramentas e aprendizado"
             memory_db = await get_memory_db()
             experiences = await memory_db.arecall(
