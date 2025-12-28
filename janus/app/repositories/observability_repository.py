@@ -287,8 +287,16 @@ class ObservabilityRepository:
     def record_audit_event(self, event: Dict[str, Any]) -> None:
         s = mysql_db.get_session_direct()
         try:
+            # Converte user_id para int apenas se for um valor numérico válido
+            raw_user_id = event.get("user_id")
+            user_id_int = None
+            if raw_user_id is not None and str(raw_user_id) not in ("-", "", "None"):
+                try:
+                    user_id_int = int(raw_user_id)
+                except (ValueError, TypeError):
+                    user_id_int = None
             ae = AuditEvent(
-                user_id=int(event.get("user_id")) if event.get("user_id") is not None else None,
+                user_id=user_id_int,
                 endpoint=str(event.get("endpoint")),
                 action=str(event.get("action")),
                 tool=event.get("tool"),
@@ -368,8 +376,16 @@ async def get_observability_repository(
 def record_audit_event_direct(event: Dict[str, Any]) -> None:
     s = mysql_db.get_session_direct()
     try:
+        # Converte user_id para int apenas se for um valor numérico válido
+        raw_user_id = event.get("user_id")
+        user_id_int = None
+        if raw_user_id is not None and str(raw_user_id) not in ("-", "", "None"):
+            try:
+                user_id_int = int(raw_user_id)
+            except (ValueError, TypeError):
+                user_id_int = None
         ae = AuditEvent(
-            user_id=int(event.get("user_id")) if event.get("user_id") is not None else None,
+            user_id=user_id_int,
             endpoint=str(event.get("endpoint")),
             action=str(event.get("action")),
             tool=event.get("tool"),

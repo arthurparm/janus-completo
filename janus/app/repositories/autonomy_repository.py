@@ -96,6 +96,20 @@ class AutonomyRepository:
             if not self._session:
                 s.close()
 
+    def get_active_run(self, user_id: Optional[str] = None, project_id: Optional[str] = None) -> Optional[AutonomyRun]:
+        """Recupera a run ativa mais recente (status='running') para permitir restauração após reinício."""
+        s = self._get_session()
+        try:
+            q = s.query(AutonomyRun).filter(AutonomyRun.status == "running")
+            if user_id:
+                q = q.filter(AutonomyRun.user_id == user_id)
+            if project_id:
+                q = q.filter(AutonomyRun.project_id == project_id)
+            return q.order_by(desc(AutonomyRun.started_at)).first()
+        finally:
+            if not self._session:
+                s.close()
+
     def list_runs(self, user_id: Optional[str], project_id: Optional[str], limit: int = 50) -> List[AutonomyRun]:
         s = self._get_session()
         try:

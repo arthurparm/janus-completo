@@ -191,7 +191,8 @@ class LearningRepository:
             early_stopping=bool(tp.get("early_stopping", True)),
             save_checkpoints=bool(tp.get("save_checkpoints", True)),
             max_examples=tp.get("max_examples"),
-            user_id=user_id
+            user_id=user_id,
+            data_source=tp.get("data_source", "episodic_memory")
         )
 
         try:
