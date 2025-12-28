@@ -4,6 +4,8 @@ import { HttpClient } from '@angular/common/http'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
 import { BehaviorSubject, Observable } from 'rxjs'
 import { map } from 'rxjs/operators'
+import { Auth, signInAnonymously } from '@angular/fire/auth'
+import { inject } from '@angular/core'
 
 export interface User {
   id: string
@@ -25,6 +27,10 @@ export class AuthService {
     return this._user.value
   }
 
+  private auth: Auth = inject(Auth)
+  // Expose firebase auth state for components that need to wait for it (like Firestore listeners)
+  readonly firebaseAuthReady$ = new BehaviorSubject<boolean>(false)
+
   constructor(private supa: SupabaseService, private http: HttpClient) {
     this.initializeAuth()
   }
@@ -32,6 +38,23 @@ export class AuthService {
   private initializeAuth(): void {
     // BYPASS: Auto-login as Admin
     console.log('[AuthService] Auto-initializing default admin user (No Auth Mode)')
+
+    // Ensure we have a firebase session for Firestore rules
+    signInAnonymously(this.auth)
+      .then(userCred => {
+        console.log('[AuthService] Firebase Anonymous Auth success:', userCred.user.uid)
+        this.firebaseAuthReady$.next(true)
+      })
+      .catch(err => {
+        if (err.code === 'auth/admin-restricted-operation') {
+          console.warn('[AuthService] Firebase Anonymous Auth failed with "admin-restricted-operation". This usually means Anonymous Auth is disabled in the Firebase Console. Please enable it in Authentication > Sign-in method.')
+        } else {
+          console.error('[AuthService] Firebase Anonymous Auth failed:', err)
+        }
+        // Even if failed, we might want to let components try (or handle error there)
+        this.firebaseAuthReady$.next(true)
+      })
+
     this._isAuthenticated.next(true)
     this._user.next({
       id: 'admin',

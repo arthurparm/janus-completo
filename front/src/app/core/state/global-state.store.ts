@@ -18,7 +18,7 @@ export class GlobalStateStore {
   private pollSub?: Subscription;
   private spinnerSafetyTimeout?: any;
 
-  constructor(private api: JanusApiService) {}
+  constructor(private api: JanusApiService) { }
 
   // Uma única carga (usada internamente pelo startPolling)
   private fetchOverviewOnce(): Promise<boolean> {
@@ -132,6 +132,13 @@ export class GlobalStateStore {
     this.api.getWorkersStatus().pipe(take(1)).subscribe({
       next: (resp) => { console.debug('[Store] refreshWorkers -> received', (resp.workers || []).length); this.workers.set(resp.workers || []); },
       error: (e) => { console.debug('[Store] refreshWorkers -> error', e?.message || e); }
+    });
+  }
+
+  refreshSystemStatus(): void {
+    console.debug('[Store] refreshSystemStatus (manual)');
+    this.fetchOverviewOnce().then(ok => {
+      console.debug('[Store] refreshSystemStatus completed', ok ? 'successfully' : 'with errors');
     });
   }
 }
