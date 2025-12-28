@@ -29,6 +29,28 @@
   </div>
 
 
+  <!-- OFFLINE WARNING -->
+  @if (isOffline) {
+  <div class="offline-warning-container">
+    <div class="warning-icon-wrapper">
+      <svg class="warning-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v-2m2 2l-2-2-2 2" />
+        <line x1="3" y1="3" x2="21" y2="21" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </div>
+    <h2>Histórico Indisponível</h2>
+    <p>
+      O acesso ao histórico de conversas requer conexão ativa com o Backend.<br>
+      A persistência de memória está temporariamente suspensa.
+    </p>
+    <div class="tech-detail">
+      <span>CODE: CONNECTION_REFUSED</span>
+      <span>COMPONENT: CONVERSATION_STORE</span>
+    </div>
+  </div>
+  } @else {
   <div class="filters-section">
     <div class="filters-container">
 
@@ -267,6 +289,7 @@
       Mostrando {{ (page-1)*pageSize + 1 }} - {{ getEndIndex() }} de {{ filteredCount }}
     </span>
   </div>
+  }
   }
 
   @if (showDeleteModal) {

@@ -7,6 +7,7 @@ import { MatMenuModule } from '@angular/material/menu'
 import { MatIconModule } from '@angular/material/icon'
 import { AuthService } from '../../../core/auth/auth.service'
 import { ConversationRefreshService } from '../../../services/conversation-refresh.service'
+import { DemoService } from '../../../core/services/demo.service'
 import { filter, Subject, takeUntil } from 'rxjs'
 
 @Component({
@@ -24,6 +25,7 @@ export class ConversationsComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef)
   private destroy$ = new Subject<void>()
   private refreshService = inject(ConversationRefreshService)
+  private demoService = inject(DemoService)
 
   // User state management
   private currentUser: any = null
@@ -39,6 +41,10 @@ export class ConversationsComponent implements OnInit, OnDestroy {
   get filteredCount(): number {
     return this.filtered?.length || 0
   }
+  get isOffline() {
+    return this.demoService.isOffline()
+  }
+
   q = ''
   projectId = ''
   startDate?: string
@@ -98,6 +104,13 @@ export class ConversationsComponent implements OnInit, OnDestroy {
     this.loading = true
     this.error = null
 
+    if (this.demoService.isOffline()) {
+      this.loading = false
+      this.items = []
+      this.filtered = []
+      return
+    }
+
     // Get the current user from auth service
     this.auth.user$.subscribe(user => {
       const userId = user?.id || undefined
@@ -118,8 +131,16 @@ export class ConversationsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           console.error('❌ ConversationsComponent: API error', err)
-          this.error = 'Falha ao carregar conversas'
-          this.loading = false
+          if (err.status === 0 || err.status === 504) {
+            this.demoService.enableOfflineMode();
+            this.loading = false;
+            this.items = [];
+            this.filtered = [];
+          } else {
+            this.error = 'Falha ao carregar conversas'
+            this.loading = false
+          }
+          this.cdr.detectChanges()
         }
       })
     })

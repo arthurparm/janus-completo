@@ -266,7 +266,8 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
         this.scrollToBottom();
 
-        this.api.sendChatMessage(this.conversationId, content).subscribe({
+        const userId = this.auth.currentUserValue?.id;
+        this.api.sendChatMessage(this.conversationId, content, 'orchestrator', 'fast_and_cheap', undefined, userId).subscribe({
             next: (res) => {
                 if (res.assistant_message) {
                     this.messages.push(res.assistant_message);
@@ -364,6 +365,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             'thought': 'thinking',
             'tool_call': 'tool',
             'memory_access': 'memory',
+            'memory_consolidated': 'memory', // New event type
             'decision': 'decision'
         };
 
