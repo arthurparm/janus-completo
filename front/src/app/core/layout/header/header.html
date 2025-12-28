@@ -5,6 +5,18 @@
       <span class="brand-text">JANUS<span class="dot">AI</span></span>
     </div>
 
+    <!-- System Metrics (Realtime) -->
+    <div class="system-metrics desktop-only" *ngIf="metrics$ | async as m">
+      <div class="metric">
+        <span class="label">CPU</span>
+        <span class="value">{{ m.cpu | number:'1.0-0' }}%</span>
+      </div>
+      <div class="metric">
+        <span class="label">MEM</span>
+        <span class="value">{{ m.memory | number:'1.0-0' }}%</span>
+      </div>
+    </div>
+
     <button class="menu-toggle" aria-label="Abrir menu" [attr.aria-expanded]="isMenuOpen" (click)="toggleMenu()">
       <span class="bar"></span>
       <span class="bar"></span>
@@ -12,15 +24,18 @@
     </button>
 
     <nav class="nav" id="primary-navigation" aria-label="Navegação principal" [class.open]="isMenuOpen">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
-        (click)="closeMenu()">Home</a>
-      <a routerLink="/arquitetura" routerLinkActive="active" (click)="closeMenu()">Arquitetura</a>
-      <a routerLink="/sprints" routerLinkActive="active" (click)="closeMenu()">Sprints</a>
-      <a routerLink="/conversations" routerLinkActive="active" (click)="closeMenu()">Conversas</a>
-      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()">Docs</a>
-
-      <!-- Keep Chat accessible as Neural Link but maybe secondary or icon? Let's add it too as it's critical -->
-      <a routerLink="/chat" routerLinkActive="active" (click)="closeMenu()" class="special-link">Neural Chat</a>
+      <!-- Primary Navigation is now handled by the Sidebar -->
+      <!-- Mobile Navigation Links (Hidden on Desktop) -->
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMenu()"
+        class="mobile-link">Início</a>
+      <a routerLink="/conversations" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Conversas</a>
+      <a routerLink="/goals" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Metas</a>
+      <a routerLink="/tools" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Ferramentas</a>
+      <a routerLink="/arquitetura" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Arquitetura</a>
+      <a routerLink="/memory" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Memória</a>
+      <a routerLink="/documents" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Documentos</a>
+      <a routerLink="/auto-analysis" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Diagnóstico</a>
+      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Documentação</a>
 
       @if (isAuthenticated$ | async) {
       <button class="logout-btn" (click)="logout(); closeMenu()">Disconnect</button>

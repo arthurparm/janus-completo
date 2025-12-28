@@ -3,6 +3,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/jarvis-avatar.component';
+import { Database, objectVal, ref } from '@angular/fire/database';
+import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-header',
@@ -13,9 +15,16 @@ import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/
 })
 export class Header {
   private auth = inject(AuthService);
-  isMenuOpen = false;
+  private db = inject(Database);
 
+  isMenuOpen = false;
   isAuthenticated$ = this.auth.isAuthenticated$;
+
+  metrics$: Observable<any>;
+
+  constructor() {
+    this.metrics$ = objectVal(ref(this.db, 'system/metrics'));
+  }
 
   toggleMenu() {
     this.isMenuOpen = !this.isMenuOpen;
