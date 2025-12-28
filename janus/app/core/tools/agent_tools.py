@@ -247,7 +247,7 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
 # --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
 
 @tool
-def query_knowledge_graph(query: str) -> str:
+def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> str:
     """
     Consulta o grafo de conhecimento semântico (Neo4j) para obter informações estruturadas
     sobre conceitos, ferramentas, erros e relacionamentos consolidados de experiências passadas.
@@ -264,14 +264,19 @@ def query_knowledge_graph(query: str) -> str:
 
     Args:
         query: Consulta em linguagem natural (ex: "Quais ferramentas causam erros de timeout?")
+        consulta: Alias para query (em português), caso o modelo use este nome.
 
     Returns:
         Resultados estruturados do grafo de conhecimento
     """
     try:
+        actual_query = query or consulta or kwargs.get("consulta")
+        if not actual_query:
+            return "Erro: Você deve fornecer uma consulta (parâmetro 'query')."
+
         from app.core.memory.knowledge_graph_manager import knowledge_graph_manager
 
-        result = knowledge_graph_manager.semantic_search(query, limit=10)
+        result = knowledge_graph_manager.semantic_search(actual_query, limit=10)
 
         if not result:
             return f"Nenhum conhecimento relevante encontrado no grafo para a consulta: '{query}'"
@@ -288,7 +293,7 @@ def query_knowledge_graph(query: str) -> str:
 
 
 @tool
-def find_related_concepts(concept: str, max_depth: int = 2) -> str:
+def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
     """
     Encontra conceitos relacionados a partir de um conceito inicial.
 
@@ -328,7 +333,7 @@ def find_related_concepts(concept: str, max_depth: int = 2) -> str:
 
 
 @tool
-def get_entity_details(entity_name: str) -> str:
+def get_entity_details(entity_name: str, **kwargs) -> str:
     """
     Obtém detalhes completos sobre uma entidade no grafo de conhecimento.
 
@@ -380,7 +385,7 @@ def get_entity_details(entity_name: str) -> str:
 # --- Sprint 3: Ferramentas de Contexto Ambiental ---
 
 @tool
-def get_current_datetime() -> str:
+def get_current_datetime(**kwargs) -> str:
     """
     Retorna a data e hora atual do sistema com informações detalhadas.
 
@@ -392,12 +397,13 @@ def get_current_datetime() -> str:
     Returns:
         JSON com data, hora, timestamp, dia da semana, etc
     """
+    # kwargs absorbs extra args like 'config' passed by LangChain
     ctx = context_manager.get_current_context()
     return json.dumps(ctx.datetime_info, indent=2, ensure_ascii=False)
 
 
 @tool
-def get_system_info() -> str:
+def get_system_info(**kwargs) -> str:
     """
     Retorna informações detalhadas sobre o sistema operacional e ambiente de execução.
 
@@ -410,6 +416,7 @@ def get_system_info() -> str:
     Returns:
         JSON com informações do sistema operacional e ambiente
     """
+    # kwargs absorbs extra args like 'config' passed by LangChain
     ctx = context_manager.get_current_context()
     return json.dumps({
         "system": ctx.system_info,

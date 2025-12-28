@@ -553,6 +553,18 @@ IMPORTANTE:
 Question: {input}
 {agent_scratchpad}"""
 
+# --- Retry Logic ---
+import tenacity
+from google.api_core.exceptions import ServiceUnavailable, DeadlineExceeded
+
+# Helper for robust invoking
+class MetaAgentRetryStrategy:
+    @staticmethod
+    def is_retryable_error(exception):
+        return isinstance(exception, (ServiceUnavailable, DeadlineExceeded))
+
+
+
 
 # --- Meta-Agente ---
 
@@ -605,8 +617,8 @@ class MetaAgent:
                 return StateReport(
                     status="unknown",
                     healthy=False,
-                    issues=["LLM indisponível para Meta-Agente"],
-                    recommendations=["Verifique chaves de API ou status do Ollama"]
+                    issues=[DetectedIssue(id="no_llm", title="LLM Indisponível", severity="critical", category="configuration", description="O LLM não pôde ser inicializado, possivelmente devido a chaves de API ausentes ou Ollama offline.", evidence={})],
+                    recommendations=[Recommendation(id="check_api_keys", title="Verificar Chaves de API ou Status do Ollama", category="configuration", description="Certifique-se de que as chaves de API estão configuradas corretamente ou que o servidor Ollama está em execução.", priority=5)]
                 )
 
         cycle_id = f"cycle_{self.cycle_count}_{int(datetime.now().timestamp())}"
@@ -659,16 +671,52 @@ class MetaAgent:
                 "    \"title\": \"...\",\n"
                 "    \"description\": \"...\",\n"
                 "    \"rationale\": \"...\",\n"
+                "    \"estimated_impact\": \"unknown\",\n"
                 "    \"priority\": 1-5,\n"
                 "    \"suggested_agent\": \"sysadmin|coder|...\"\n"
                 "  }],\n"
                 "  \"summary\": \"Resumo executivo...\"\n"
                 "}"
             )
-
-            # Invocar LLM diretamente (sem AgentExecutor) para evitar 'stop'
-            llm_msg = await asyncio.to_thread(self.llm.invoke, task)
-            output = getattr(llm_msg, "content", str(llm_msg))
+            
+            # Use robust retry for LLM invocation
+            try:
+                llm_msg = await self._invoke_llm_with_retry(task)
+                output = getattr(llm_msg, "content", str(llm_msg))
+            except Exception as e:
+                if "429" in str(e) or "quota" in str(e).lower() or "resource" in str(e).lower():
+                    logger.warning(f"Meta-Agente: Cota de API excedida (429). Ciclo abortado graciosamente. Erro: {e}")
+                    return StateReport(
+                        cycle_id=cycle_id,
+                        timestamp=datetime.now(),
+                        overall_status="degraded",
+                        health_score=50,
+                        issues_detected=[DetectedIssue(
+                            id="quota_exceeded", 
+                            title="Desempenho Limitado por Cota de API", 
+                            severity=IssueSeverity.MEDIUM, 
+                            category=IssueCategory.CONFIGURATION,
+                            description="O sistema atingiu o limite de requisições do provedor de LLM, impactando a capacidade de análise.",
+                            evidence={"error": str(e)}
+                        )],
+                        recommendations=[Recommendation(
+                            id="upgrade_plan",
+                            title="Upgrade de Plano ou Troca de Modelo",
+                            category=IssueCategory.CONFIGURATION,
+                            description="Considere usar um modelo pago ou aumentar a cota de requisições do provedor de LLM para restaurar a capacidade total de análise.",
+                            rationale="Limites de API impedem a execução completa do Meta-Agente, reduzindo a capacidade de auto-otimização.",
+                            estimated_impact="Alto: Restaura a capacidade de análise contínua.",
+                            priority=4
+                        )],
+                        summary="Análise parcial: Sistema operando, mas análise avançada suspensa por limite de API.",
+                        metrics_snapshot={
+                            "memory_failures": mem_str,
+                            "system_health": health_str,
+                            "performance_trends": perf_str,
+                            "resource_usage": resources_str
+                        }
+                    )
+                raise e
 
             duration = asyncio.get_event_loop().time() - start_time
 
@@ -705,8 +753,13 @@ class MetaAgent:
                     )
                     for i, rec in enumerate(report_data.get("recommendations", []))
                 ],
-                summary=report_data.get("summary", "Análise concluída"),
-                metrics_snapshot={}
+                summary=report_data.get("summary", "Análise concluída."),
+                metrics_snapshot={
+                    "memory_failures": mem_str,
+                    "system_health": health_str,
+                    "performance_trends": perf_str,
+                    "resource_usage": resources_str
+                }
             )
 
             self.last_report = report
@@ -742,22 +795,76 @@ class MetaAgent:
             return report
 
         except Exception as e:
-            logger.error(f"Erro no ciclo de análise {cycle_id}: {e}", exc_info=True)
+            logger.error(f"Erro fatal no ciclo do Meta-Agente: {e}", exc_info=True)
             META_AGENT_CYCLES.labels(outcome="failure").inc()
 
             # Relatório de erro
             error_report = StateReport(
                 cycle_id=cycle_id,
                 timestamp=datetime.now(),
-                overall_status="unknown",
+                overall_status="critical",
                 health_score=0,
-                issues_detected=[],
-                recommendations=[],
-                summary=f"Erro durante análise: {str(e)}",
+                issues_detected=[DetectedIssue(
+                    id="meta_agent_crash", 
+                    title="Falha no Meta-Agente", 
+                    severity=IssueSeverity.CRITICAL, 
+                    category=IssueCategory.RELIABILITY,
+                    description=f"O Meta-Agente encontrou um erro fatal durante o ciclo de análise: {str(e)}", 
+                    evidence={}
+                )],
+                recommendations=[Recommendation(
+                    id="investigate_error", 
+                    title="Investigar Erro do Meta-Agente", 
+                    category=IssueCategory.RELIABILITY, 
+                    description="Verifique os logs para identificar a causa raiz da falha do Meta-Agente.", 
+                    rationale="Falhas no Meta-Agente impedem a supervisão autônoma do sistema.",
+                    estimated_impact="Crítico: Perda de capacidade de auto-diagnóstico.",
+                    priority=5
+                )],
+                summary=f"Falha na execução da análise: {str(e)}",
                 metrics_snapshot={}
             )
 
             return error_report
+
+    async def _invoke_llm_with_retry(self, task_input: str) -> Any:
+        """Invoca o LLM com retry robusto para lidar com instabilidades de rede (Gemini 503), mas falha rápido em 429."""
+        import random
+        
+        max_attempts = 5
+        base_delay = 2.0
+        
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Meta-Agente: Invocando LLM (Tentativa {attempt+1}/{max_attempts})")
+                return await asyncio.to_thread(self.llm.invoke, task_input)
+            
+            except Exception as e:
+                msg = str(e).lower()
+                
+                # Check for Quota/Rate Limit (Fail Fast)
+                if "429" in msg or "quota" in msg or "resource" in msg:
+                    logger.warning(f"Erro de Cota detectado (429/Quota). Abortando requisição: {e}")
+                    raise e
+                    
+                # Check for connection/transient errors (Retry)
+                if "503" in msg or "handshake" in msg or "connect" in msg or "unavailable" in msg or "timeout" in msg:
+                    if attempt < max_attempts - 1:
+                        delay = base_delay * (2 ** attempt) + (random.random() * 0.5)
+                        logger.warning(f"Erro transiente LLM: {e}. Retentando em {delay:.2f}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                
+                # Default: raise if last attempt, or if unknown error type (could be logic error)
+                # Being conservative: if it's not explicitly connection error, raise logic error?
+                # Let's retry unless it is clearly a 400 Bad Request or something
+                if attempt < max_attempts - 1:
+                     logger.warning(f"Erro genérico LLM: {e}. Retentando por precaução...")
+                     await asyncio.sleep(base_delay)
+                else:    
+                     raise e
+
+        raise RuntimeError("Falha definitiva ao invocar LLM após retries")
 
     def _parse_agent_output(self, output: str) -> Dict[str, Any]:
         """Parse da saída do agente (JSON)."""

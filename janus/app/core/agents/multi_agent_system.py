@@ -617,9 +617,19 @@ Final Answer: [resposta]
         wrapped_tools = [_create_tool_wrapper(tool) for tool in tools]
 
         # Tenta importar create_react_agent (novo) ou cria fallback
+        # Tenta importar create_react_agent (novo) ou cria fallback
         try:
-            from langchain.agents import create_react_agent
+            from langchain.agents import create_react_agent, AgentExecutor
             agent = create_react_agent(llm, wrapped_tools, prompt)
+            agent_executor = AgentExecutor(
+                agent=agent, 
+                tools=wrapped_tools, 
+                verbose=True, 
+                handle_parsing_errors=True,
+                max_iterations=15,
+                max_execution_time=180
+            )
+            self.executor = agent_executor
         except ImportError:
             # Fallback para versões antigas ou diferentes
             from langchain.agents import initialize_agent, AgentType
@@ -629,6 +639,7 @@ Final Answer: [resposta]
                 agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
                 verbose=True
             )
+            self.executor = agent
 
         # Mensagem de erro personalizada para parsing
         parsing_error_message = """Erro no formato da sua resposta. Use EXATAMENTE este formato:
@@ -647,8 +658,6 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
         if config and config.execution_config:
             max_iterations = config.execution_config.get('max_iterations', 15)
             max_execution_time = config.execution_config.get('max_execution_time', 180)
-
-        self.executor = agent
 
     async def execute_task(self, task: Task, max_retries: int = 2) -> Dict[str, Any]:
         """

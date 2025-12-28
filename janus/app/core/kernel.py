@@ -145,6 +145,21 @@ class Kernel:
                 initialize_broker()
             )
             
+            # Initialize Firebase if enabled (Sync, as library is mostly sync/HTTP)
+            if getattr(settings, "FIREBASE_ENABLED", False) and getattr(settings, "FIREBASE_CREDENTIALS_PATH", None):
+                try:
+                    from app.core.infrastructure.firebase import get_firebase_service
+                    cred_path = settings.FIREBASE_CREDENTIALS_PATH
+                    import os
+                    if os.path.exists(cred_path):
+                        db_url = getattr(settings, "FIREBASE_DATABASE_URL", None)
+                        get_firebase_service().initialize(cred_path, db_url)
+                        logger.info("Firebase Service initialized in Kernel.", db_url=db_url)
+                    else:
+                        logger.warning("Firebase credentials not found.", path=cred_path)
+                except Exception as fb_err:
+                    logger.error("Firebase init failed", error=str(fb_err))
+            
             self.graph_db = await get_graph_db()
             self.memory_db = await get_memory_db()
             self.broker = await get_broker()
@@ -328,3 +343,32 @@ class Kernel:
         await initialize_default_jobs(self.scheduler)
         await self.scheduler.start()
         logger.info("Scheduler service started with default jobs.")
+
+        # 5. Auto-Index Codebase (Self-Healing)
+        if getattr(settings, "AUTO_INDEX_ON_STARTUP", True):
+            try:
+                stats = await self.knowledge_service.get_stats()
+                total_nodes = stats.get("total_nodes", 0)
+                # Se tivermos poucos nós (apenas RelationshipType), indexamos
+                if total_nodes < 50:
+                    logger.warning(f"Graph looks empty ({total_nodes} nodes). Triggering auto-indexation...")
+                    # Executamos em background para não bloquear o startup completamente,
+                    # Mas se preferir consistência imediata, poderia ser await.
+                    # Vamos usar create_task para não atrasar o healthcheck do k8s/docker
+                    asyncio.create_task(self._run_auto_index())
+            except Exception as e:
+                logger.error(f"Failed to check/trigger auto-index: {e}")
+
+    async def _run_auto_index(self):
+        """Executa indexação automática e cria usuário admin se necessário."""
+        try:
+            logger.info("Starting automatic codebase indexation...")
+            await self.knowledge_service.index_codebase()
+            
+            # Garante admin user
+            async with await self.graph_db.get_session() as session:
+                await session.run("MERGE (u:User {name: 'Admin'}) SET u.email = 'admin@janus.system'")
+                
+            logger.info("Automatic indexation complete.")
+        except Exception as e:
+            logger.error(f"Error during automatic indexation: {e}", exc_info=True)

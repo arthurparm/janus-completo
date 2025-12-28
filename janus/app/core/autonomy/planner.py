@@ -142,7 +142,7 @@ async def build_plan_for_goal(
         result = llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.ORCHESTRATOR,
-            priority=ModelPriority.HIGH,
+            priority=ModelPriority.HIGH_QUALITY,
             timeout_seconds=timeout_seconds,
             user_id=None,
             project_id=None,
