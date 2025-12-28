@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { API_BASE_URL } from './api.config'
-import { Observable, BehaviorSubject, Subject } from 'rxjs';
-import { map } from 'rxjs/operators'
+import { Observable, BehaviorSubject, Subject, throwError, firstValueFrom } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
+import { AgentEventsService } from '../core/services/agent-events.service';
 declare const Janus: any;
 
 export interface SystemStatus {
@@ -165,6 +166,89 @@ export interface GoalCreateRequest {
 
 export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
 
+// Autonomy
+export interface AutonomyStartRequest {
+  interval_seconds?: number
+  user_id?: string
+  project_id?: string
+  risk_profile?: 'conservative' | 'balanced' | 'aggressive'
+  auto_confirm?: boolean
+  allowlist?: string[]
+  blocklist?: string[]
+  max_actions_per_cycle?: number
+  max_seconds_per_cycle?: number
+  plan?: { tool: string; args: any }[]
+}
+
+export interface AutonomyStatusResponse {
+  active: boolean
+  cycle_count: number
+  last_cycle_at?: number | null
+  config: any
+}
+
+export interface AutonomyPlanResponse {
+  status: string
+  active: boolean
+  steps_count: number
+  plan: { tool: string; args: any }[]
+}
+
+export interface AutonomyPolicyUpdateRequest {
+  risk_profile?: string
+  auto_confirm?: boolean
+  allowlist?: string[]
+  blocklist?: string[]
+  max_actions_per_cycle?: number
+  max_seconds_per_cycle?: number
+}
+
+// Auto Analysis
+export interface HealthInsight {
+  issue: string
+  severity: string
+  suggestion: string
+  estimated_impact: string
+}
+
+export interface AutoAnalysisResponse {
+  timestamp: string
+  overall_health: string
+  insights: HealthInsight[]
+  fun_fact: string
+}
+
+// Knowledge Graph
+export interface KnowledgeStats {
+  total_nodes: number
+  total_relationships: number
+  labels: Record<string, number>
+}
+
+export interface EntityRelationshipItem {
+  related_entity: string
+  related_type: string
+  relationship: string
+  distance: number
+}
+
+export interface EntityRelationshipsResponse {
+  results: EntityRelationshipItem[]
+}
+
+// Reflexion
+export interface ReflexionLesson {
+  id: string
+  content: string
+  score?: number
+  metadata?: any
+}
+
+export interface PostSprintSummaryResponse {
+  lessons: ReflexionLesson[]
+  meta_report?: any
+}
+
 @Injectable({ providedIn: 'root' })
 export class JanusApiService {
   constructor(private http: HttpClient) { }
@@ -218,6 +302,11 @@ export class JanusApiService {
   }
 
   // System status overview
+
+  /**
+    * Obtém o status geral do sistema, incluindo versão, ambiente e métricas de desempenho.
+    * @returns Observable com SystemStatus contendo uptime e carga.
+    */
   getSystemStatus(): Observable<SystemStatus> {
     return this.http.get<SystemStatus>(this.buildUrl(`/api/v1/system/status`));
   }
@@ -355,6 +444,46 @@ export class JanusApiService {
   stopAllWorkers(): Observable<any> {
     return this.http.post(this.buildUrl(`/api/v1/workers/stop-all`), {});
   }
+
+  // Autonomy Loop
+  /**
+    * Inicia o loop de autonomia do agente.
+    * @param req Configurações de inicialização (intervalo, perfil de risco).
+    * @returns Status de confirmação e intervalo configurado.
+    */
+  startAutonomy(req: AutonomyStartRequest): Observable<{ status: string; interval_seconds: number }> {
+    return this.http.post<{ status: string; interval_seconds: number }>(this.buildUrl(`/api/v1/autonomy/start`), req)
+  }
+
+  /**
+    * Interrompe o loop de autonomia imediatamente.
+    * @returns Confirmação de parada.
+    */
+  stopAutonomy(): Observable<{ status: string }> {
+    return this.http.post<{ status: string }>(this.buildUrl(`/api/v1/autonomy/stop`), {})
+  }
+
+  getAutonomyStatus(): Observable<AutonomyStatusResponse> {
+    return this.http.get<AutonomyStatusResponse>(this.buildUrl(`/api/v1/autonomy/status`))
+  }
+
+  getAutonomyPlan(): Observable<AutonomyPlanResponse> {
+    return this.http.get<AutonomyPlanResponse>(this.buildUrl(`/api/v1/autonomy/plan`))
+  }
+
+  updateAutonomyPlan(plan: { tool: string; args: any }[]): Observable<{ status: string; steps_count: number }> {
+    return this.http.put<{ status: string; steps_count: number }>(this.buildUrl(`/api/v1/autonomy/plan`), { plan })
+  }
+
+  updateAutonomyPolicy(req: AutonomyPolicyUpdateRequest): Observable<{ status: string; policy: any }> {
+    return this.http.put<{ status: string; policy: any }>(this.buildUrl(`/api/v1/autonomy/policy`), req)
+  }
+
+
+  runAutoAnalysis(): Observable<AutoAnalysisResponse> {
+    return this.http.get<AutoAnalysisResponse>(this.buildUrl(`/api/v1/auto-analysis/health-check`))
+  }
+
   // LLM subsystem
   listLLMProviders(): Observable<LLMProvidersResponse> {
     return this.http.get<LLMProvidersResponse>(this.buildUrl(`/api/v1/llm/providers`))
@@ -487,11 +616,33 @@ export class JanusApiService {
   }
 
   sendChatMessage(conversation_id: string, content: string, role: string = 'orchestrator', priority: string = 'fast_and_cheap', timeout_seconds?: number, user_id?: string, project_id?: string): Observable<ChatMessageResponse & { citations?: Citation[] }> {
-    const body: any = { conversation_id, message: content, role, priority }
+    // Validate required fields
+    // Validate required fields
+    if (!conversation_id || conversation_id.trim().length < 1) {
+      console.error(`Invalid conversation_id provided to sendChatMessage: '${conversation_id}'`);
+      throw new Error(`Invalid conversation_id: ${conversation_id}`);
+    }
+
+    console.log(`📤 Sending chat message. CID raw: '${conversation_id}', trimmed: '${conversation_id.trim()}'`);
+
+    const body: any = {
+      conversation_id: conversation_id.trim(),
+      message: content,
+      role: role || 'orchestrator',
+      priority: priority || 'fast_and_cheap'
+    };
+
     if (typeof timeout_seconds !== 'undefined') body.timeout_seconds = timeout_seconds
     if (user_id) body.user_id = user_id
     if (project_id) body.project_id = project_id
+
+    console.log('📤 Sending chat message payload:', JSON.stringify(body));
+
     return this.http.post<ChatMessageResponse & { citations?: Citation[] }>(this.buildUrl(`/api/v1/chat/message`), body).pipe(
+      tap({
+        next: (res) => console.log('✅ Chat message success:', res),
+        error: (err) => console.error('❌ Chat message failed:', err)
+      }),
       map((resp: any) => {
         const assistant_message = { role: String(resp?.role || 'assistant'), content: String(resp?.response || '') }
         return { ...resp, assistant_message } as any
@@ -661,10 +812,19 @@ export class JanusApiService {
   }
 
   // Deployment
+  /**
+    * Carrega um modelo para o ambiente de Staging.
+    * @param model_id ID do modelo (ex: 'gpt-4-turbo-custom-v2').
+    * @param rollout_percent Percentual inicial de tráfego (0-100).
+    */
   stageDeployment(model_id: string, rollout_percent: number): Observable<DeploymentStageResponse> {
     return this.http.post<DeploymentStageResponse>(this.buildUrl(`/api/v1/deployment/stage`), { model_id, rollout_percent })
   }
 
+  /**
+    * Promove o modelo de Staging para Produção (100% tráfego).
+    * @param model_id ID do modelo a ser promovido.
+    */
   publishDeployment(model_id: string): Observable<DeploymentPublishResponse> {
     return this.http.post<DeploymentPublishResponse>(this.buildUrl(`/api/v1/deployment/publish?model_id=${encodeURIComponent(model_id)}`), {})
   }
@@ -774,7 +934,7 @@ export class JanusApiService {
   }
 
   // Goals CRUD
-  getGoals(status?: string): Observable<Goal[]> {
+  listGoals(status?: string): Observable<Goal[]> {
     const qs = new URLSearchParams()
     if (status) qs.set('status', status)
     return this.http.get<Goal[]>(this.buildUrl(`/api/v1/autonomy/goals${qs.toString() ? '?' + qs.toString() : ''}`))
@@ -839,17 +999,23 @@ export class JanusApiService {
   }
 
   // Documents API
-  listDocuments(conversationId?: string): Observable<any> {
-    const qs = new URLSearchParams()
-    if (conversationId) qs.set('conversation_id', conversationId)
-    return this.http.get<any>(this.buildUrl(`/api/v1/documents/list${qs.toString() ? '?' + qs.toString() : ''}`))
+  listDocuments(conversationId?: string, userId?: string): Observable<any> {
+    const qs = new URLSearchParams();
+    if (conversationId) qs.set('conversation_id', conversationId);
+    if (userId) qs.set('user_id', userId);
+    const headers = this.headersFor(userId);
+    return this.http.get<any>(this.buildUrl(`/api/v1/documents/list${qs.toString() ? '?' + qs.toString() : ''}`), { headers });
   }
 
-  uploadDocument(file: File, conversationId?: string): Observable<{ progress?: number; response?: any }> {
-    const form = new FormData()
-    form.append('file', file)
-    if (conversationId) form.append('conversation_id', conversationId)
-    return this.http.post<any>(this.buildUrl(`/api/v1/documents/upload`), form, { reportProgress: true, observe: 'events' }).pipe(
+  uploadDocument(file: File, conversationId?: string, userId?: string): Observable<{ progress?: number; response?: any }> {
+    const form = new FormData();
+    form.append('file', file);
+    if (conversationId) form.append('conversation_id', conversationId);
+    if (userId) form.append('user_id', userId);
+
+    const headers = this.headersFor(userId);
+    console.log('[JanusApi] uploadDocument params:', { userId, headers: headers['X-User-Id'] });
+    return this.http.post<any>(this.buildUrl(`/api/v1/documents/upload`), form, { headers, reportProgress: true, observe: 'events' }).pipe(
       (source: any) => new Observable<{ progress?: number; response?: any }>((observer) => {
         source.subscribe({
           next: (event: any) => {
@@ -879,6 +1045,23 @@ export class JanusApiService {
 
   deleteDocument(docId: string): Observable<any> {
     return this.http.delete<any>(this.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}`))
+  }
+
+  // --- BRAIN: Knowledge & Reflexion ---
+
+  getKnowledgeStats(): Observable<KnowledgeStats> {
+    return this.http.get<KnowledgeStats>(this.buildUrl(`/api/v1/knowledge/stats`))
+  }
+
+  getEntityRelationships(entityName: string): Observable<EntityRelationshipsResponse> {
+    // Basic defaults: depth=1, limit=20
+    const qs = new URLSearchParams({ max_depth: '1', limit: '20' })
+    return this.http.get<EntityRelationshipsResponse>(this.buildUrl(`/api/v1/knowledge/entity/${encodeURIComponent(entityName)}/relationships?${qs.toString()}`))
+  }
+
+  getReflexionSummary(limit: number = 10): Observable<PostSprintSummaryResponse> {
+    const qs = new URLSearchParams({ limit: String(limit) })
+    return this.http.get<PostSprintSummaryResponse>(this.buildUrl(`/api/v1/reflexion/summary/post_sprint?${qs.toString()}`))
   }
 }
 
