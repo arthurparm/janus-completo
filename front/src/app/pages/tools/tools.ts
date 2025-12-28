@@ -2,6 +2,7 @@ import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService } from '../../services/janus-api.service'
+import { DemoService } from '../../core/services/demo.service'
 import { MatIconModule } from '@angular/material/icon'
 
 export interface Tool {
@@ -32,6 +33,7 @@ export interface ToolStats {
 export class ToolsComponent implements OnInit {
     private api = inject(JanusApiService)
     private cdr = inject(ChangeDetectorRef)
+    private demoService = inject(DemoService)
 
     tools: Tool[] = []
     filteredTools: Tool[] = []
@@ -48,6 +50,10 @@ export class ToolsComponent implements OnInit {
     permissionFilter = ''
     selectedTool: Tool | null = null
 
+    get isOffline() {
+        return this.demoService.isOffline()
+    }
+
     ngOnInit() {
         this.loadData()
     }
@@ -55,6 +61,13 @@ export class ToolsComponent implements OnInit {
     loadData() {
         this.loading = true
         this.error = null
+
+        if (this.demoService.isOffline()) {
+            this.loading = false
+            this.tools = []
+            this.filteredTools = []
+            return
+        }
 
         // Load tools
         this.api.getTools().subscribe({
@@ -66,8 +79,15 @@ export class ToolsComponent implements OnInit {
             },
             error: (err: any) => {
                 console.error('Error loading tools:', err)
-                this.error = 'Falha ao carregar ferramentas'
-                this.loading = false
+                if (err.status === 0 || err.status === 504) {
+                    this.demoService.enableOfflineMode();
+                    this.loading = false
+                    this.tools = []
+                    this.filteredTools = []
+                } else {
+                    this.error = 'Falha ao carregar ferramentas'
+                    this.loading = false
+                }
                 this.cdr.detectChanges()
             }
         })

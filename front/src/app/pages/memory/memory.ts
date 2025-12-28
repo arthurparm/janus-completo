@@ -2,6 +2,7 @@ import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService } from '../../services/janus-api.service'
+import { DemoService } from '../../core/services/demo.service'
 import { MatIconModule } from '@angular/material/icon'
 
 export interface Memory {
@@ -23,6 +24,7 @@ export interface Memory {
 export class MemoryComponent implements OnInit {
     private api = inject(JanusApiService)
     private cdr = inject(ChangeDetectorRef)
+    private demoService = inject(DemoService)
 
     memories: Memory[] = []
     loading = false
@@ -38,6 +40,10 @@ export class MemoryComponent implements OnInit {
     // Timeline visualization
     groupedMemories: Map<string, Memory[]> = new Map()
 
+    get isOffline() {
+        return this.demoService.isOffline()
+    }
+
     ngOnInit() {
         // Set default date range (last 7 days)
         const now = new Date()
@@ -52,6 +58,13 @@ export class MemoryComponent implements OnInit {
     loadTimeline() {
         this.loading = true
         this.error = null
+
+        if (this.demoService.isOffline()) {
+            this.loading = false
+            this.memories = []
+            this.groupedMemories = new Map()
+            return
+        }
 
         const params: any = {
             limit: this.limit
@@ -79,8 +92,15 @@ export class MemoryComponent implements OnInit {
             },
             error: (err: any) => {
                 console.error('Error loading memories:', err)
-                this.error = 'Falha ao carregar memórias'
-                this.loading = false
+                if (err.status === 0 || err.status === 504) {
+                    this.demoService.enableOfflineMode();
+                    this.loading = false
+                    this.memories = []
+                    this.groupedMemories = new Map()
+                } else {
+                    this.error = 'Falha ao carregar memórias'
+                    this.loading = false
+                }
                 this.cdr.detectChanges()
             }
         })

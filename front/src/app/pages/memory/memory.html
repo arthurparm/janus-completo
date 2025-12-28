@@ -22,6 +22,21 @@
     </header>
 
 
+    <!-- OFFLINE WARNING -->
+    @if (isOffline) {
+    <div class="offline-warning-container">
+        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <h2>Sistema Offline</h2>
+        <p>
+            O acesso à Memória Episódica requer conexão ativa com o Vector Database (Qdrant).<br>
+            A funcionalidade foi desativada temporariamente.
+        </p>
+        <div class="tech-detail">
+            <span>CODE: CONNECTION_REFUSED</span>
+            <span>COMPONENT: MEMORY_CORE</span>
+        </div>
+    </div>
+    } @else {
     <section class="filters-section">
         <div class="filters-container">
             <div class="search-group">
@@ -163,4 +178,5 @@
         </div>
         }
     </main>
+    }
 </div>

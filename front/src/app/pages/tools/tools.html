@@ -45,6 +45,21 @@
     </header>
 
 
+    <!-- OFFLINE WARNING -->
+    @if (isOffline) {
+    <div class="offline-warning-container">
+        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <h2>Sistema Offline</h2>
+        <p>
+            O gerenciamento de ferramentas requer conexão ativa com o Backend do Agente.<br>
+            A funcionalidade foi desativada temporariamente.
+        </p>
+        <div class="tech-detail">
+            <span>CODE: CONNECTION_REFUSED</span>
+            <span>COMPONENT: TOOL_REGISTRY</span>
+        </div>
+    </div>
+    } @else {
     <section class="filters-section">
         <div class="filters-container">
             <div class="search-group">
@@ -224,5 +239,6 @@
             }
         </div>
     </aside>
+    }
     }
 </div>
