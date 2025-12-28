@@ -1,0 +1,123 @@
+<div class="brain-container">
+
+    <header>
+        <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500 font-orbitron">
+            The Brain
+        </h1>
+        <p class="text-text-secondary mt-2">Central de Conhecimento, Memória e Reflexão</p>
+
+        <!-- Global Brain Stats -->
+        <div class="flex gap-4 mt-4" *ngIf="graphStats">
+            <mat-chip-set>
+                <mat-chip>
+                    <mat-icon matChipAvatar>hub</mat-icon>
+                    {{ graphStats.total_nodes }} Nódulos
+                </mat-chip>
+                <mat-chip>
+                    <mat-icon matChipAvatar>share</mat-icon>
+                    {{ graphStats.total_relationships }} Conexões
+                </mat-chip>
+            </mat-chip-set>
+        </div>
+    </header>
+
+    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs" [(selectedIndex)]="selectedTab">
+
+        <!-- Tab 1: Semantic Graph -->
+        <mat-tab label="Semantic Explorer">
+            <div class="py-6">
+
+                <div class="search-bar">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Buscar Conceito no Grafo</mat-label>
+                        <input matInput [(ngModel)]="searchEntity" (keyup.enter)="exploreEntity()"
+                            placeholder="Ex: AuthService">
+                        <button mat-icon-button matSuffix (click)="exploreEntity()">
+                            <mat-icon>search</mat-icon>
+                        </button>
+                    </mat-form-field>
+                </div>
+
+                <div class="constellation-view">
+
+                    <div *ngIf="loadingGraph"
+                        class="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                        <mat-progress-bar mode="indeterminate" class="w-1/2"></mat-progress-bar>
+                    </div>
+
+                    <div *ngIf="!currentEntity && !loadingGraph" class="empty-state">
+                        <mat-icon class="text-6xl mb-4 text-white/20">hub</mat-icon>
+                        <p>Busque uma entidade para explorar suas conexões.</p>
+                    </div>
+
+                    <!-- Center Body -->
+                    <div class="center-node" *ngIf="currentEntity">
+                        {{ currentEntity }}
+                    </div>
+
+                    <!-- Orbiting Satellites (Simple CSS positioning for demo) -->
+                    <div class="orbit-nodes" *ngIf="relationships.length > 0">
+                        <div class="satellite" *ngFor="let rel of relationships; let i = index"
+                            [style.transform]="'rotate(' + (i * (360 / relationships.length)) + 'deg) translate(180px) rotate(-' + (i * (360 / relationships.length)) + 'deg)'">
+                            <span class="font-bold">{{ rel.related_entity }}</span>
+                            <small>{{ rel.relationship }}</small>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-4 text-center text-sm text-text-muted">
+                    * Visualização simplificada 'Costelação'. Para grafo completo use a ferramenta Documents.
+                </div>
+
+            </div>
+        </mat-tab>
+
+        <!-- Tab 2: Reflexion Logs -->
+        <mat-tab label="Reflexion Log">
+            <div class="py-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2>Lições Aprendidas</h2>
+                    <button mat-stroked-button (click)="loadReflexion()">
+                        <mat-icon>refresh</mat-icon> Atualizar
+                    </button>
+                </div>
+
+                <div class="reflexion-list" *ngIf="!loadingReflexion">
+                    <div class="lesson-card" *ngFor="let lesson of lessons">
+                        <mat-icon [color]="getScoreColor(lesson.score)">lightbulb</mat-icon>
+                        <div class="content">
+                            <h4>{{ lesson.content }}</h4>
+                            <div class="meta">
+                                Score: {{ lesson.score | number:'1.2-2' }} • ID: {{ lesson.id | slice:0:8 }}
+                            </div>
+                        </div>
+                        <div class="ml-auto">
+                            <mat-chip [class.bg-green-500]="(lesson.score || 0) > 0.8"
+                                [class.bg-orange-500]="(lesson.score || 0) < 0.5">
+                                {{ (lesson.score || 0) * 100 | number:'1.0-0' }}% Conf
+                            </mat-chip>
+                        </div>
+                    </div>
+                    <div *ngIf="lessons.length === 0" class="text-center p-8 text-text-muted">
+                        Nenhuma lição de reflexão registrada ainda.
+                    </div>
+                </div>
+
+                <div *ngIf="loadingReflexion">
+                    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                </div>
+
+            </div>
+        </mat-tab>
+
+        <!-- Tab 3: Episodic Memory (Legacy) -->
+        <mat-tab label="Timeline Episódica">
+            <div class="py-6">
+                <app-memory></app-memory>
+            </div>
+        </mat-tab>
+
+    </mat-tab-group>
+</div>

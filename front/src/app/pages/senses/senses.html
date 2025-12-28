@@ -1,0 +1,113 @@
+<div class="senses-container">
+
+    <header>
+        <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500 font-orbitron">
+            Senses & Perception
+        </h1>
+        <p class="text-text-secondary mt-2">Interfaces de Entrada Multimodal (Visão e Audição)</p>
+    </header>
+
+    <div class="connection-bar">
+        <mat-icon>settings_ethernet</mat-icon>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>WebRTC Gateway URL</mat-label>
+            <input matInput [(ngModel)]="janusUrl" placeholder="wss://janus.server...">
+        </mat-form-field>
+        <button mat-flat-button [color]="isConnected ? 'warn' : 'primary'"
+            (click)="isConnected ? disconnect() : connect()">
+            {{ isConnected ? 'DISCONNECT' : 'CONNECT' }}
+        </button>
+        <span class="text-sm font-mono ml-2" [class.text-green-400]="isConnected" [class.text-red-400]="!isConnected">
+            {{ statusMessage }}
+        </span>
+    </div>
+
+    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs">
+
+        <!-- Tab 1: Visual Cortex -->
+        <mat-tab label="Visual Cortex">
+            <div class="py-6 cortex-grid">
+
+                <!-- Left: Dropzone -->
+                <div class="vision-panel">
+                    <h2 class="text-xl mb-4">Static Analysis (Dropzone)</h2>
+
+                    <div class="dropzone" [class.dragging]="isDragging" [class.analyzing]="analyzing"
+                        (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)"
+                        (click)="fileInput.click()">
+
+                        <input #fileInput type="file" hidden (change)="onFileSelected($event)" accept="image/*">
+
+                        <div *ngIf="!analyzing && !uploadProgress">
+                            <mat-icon class="text-6xl text-cyan-400 mb-4">add_a_photo</mat-icon>
+                            <h3>Drop Image Here</h3>
+                            <p>or click to browse</p>
+                        </div>
+
+                        <div *ngIf="uploadProgress > 0 && uploadProgress < 100" class="w-full max-w-xs mx-auto">
+                            <p class="mb-2">Uploading...</p>
+                            <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
+                        </div>
+
+                        <div *ngIf="analyzing" class="animate-pulse">
+                            <mat-icon class="text-6xl text-green-400 mb-4 animate-spin">smart_toy</mat-icon>
+                            <h3>Analyzing...</h3>
+                        </div>
+
+                    </div>
+
+                    <div class="analysis-result" *ngIf="lastAnalysisResult">
+                        <mat-icon>check_circle</mat-icon>
+                        <span>{{ lastAnalysisResult }}</span>
+                    </div>
+                </div>
+
+                <!-- Right: Live Feed -->
+                <div class="vision-panel">
+                    <h2 class="text-xl mb-4">Real-time Stream</h2>
+                    <div class="video-feed">
+                        <div class="live-badge" *ngIf="isConnected">LIVE</div>
+                        <video #videoElement autoplay playsinline [muted]="true" *ngIf="isConnected"></video>
+
+                        <div class="placeholder" *ngIf="!isConnected">
+                            <mat-icon>videocam_off</mat-icon>
+                            <span>No Signal</span>
+                        </div>
+                    </div>
+                    <div class="text-sm text-text-muted mt-2">
+                        Stream Status: {{ isConnected ? 'Receiving Packets' : 'Idle' }}
+                    </div>
+                </div>
+
+            </div>
+        </mat-tab>
+
+        <!-- Tab 2: Auditory Cortex -->
+        <mat-tab label="Auditory Cortex">
+            <div class="py-6 max-w-2xl mx-auto text-center">
+
+                <h2 class="text-xl mb-8">Audio Interface</h2>
+
+                <div class="audio-visualizer">
+                    <div class="ripple" [class.active]="isListening"
+                        [style.transform]="'scale(' + (1 + volumeLevel/50) + ')'"></div>
+                    <mat-icon class="text-6xl relative z-10" [class.text-cyan-400]="isListening">mic</mat-icon>
+                </div>
+
+                <div class="flex justify-center gap-4">
+                    <button mat-fab extended color="primary" (click)="toggleMic()">
+                        <mat-icon>{{ isListening ? 'mic_off' : 'mic' }}</mat-icon>
+                        {{ isListening ? 'Mute Microphone' : 'Enable Microphone' }}
+                    </button>
+                </div>
+
+                <p class="mt-8 text-text-secondary">
+                    Fala ativa o sistema de reconhecimento de voz. O áudio do agente é reproduzido automaticamente.
+                </p>
+
+            </div>
+        </mat-tab>
+
+    </mat-tab-group>
+</div>

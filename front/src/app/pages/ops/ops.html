@@ -1,0 +1,169 @@
+<div class="ops-container">
+
+    <header style="margin-bottom: 2rem;">
+        <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 font-orbitron">
+            LLMOps Factory
+        </h1>
+        <p class="text-text-secondary mt-2">Pipeline de Deployment e Experimentação Contínua</p>
+    </header>
+
+    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms">
+
+        <!-- Tab 1: Deployment Pipeline -->
+        <mat-tab label="Deployment Pipeline">
+            <div class="py-6">
+
+                <!-- Pipeline Visualizer -->
+                <div class="pipeline-viz mb-8">
+
+                    <div class="stage-node success">
+                        <mat-icon>science</mat-icon>
+                        <h3>DEV / LAB</h3>
+                        <p>Training & Fine-tuning</p>
+                    </div>
+
+                    <div class="stage-node" [class.active]="stagingModelId">
+                        <mat-icon>layers</mat-icon>
+                        <h3>STAGING</h3>
+                        <p>{{ stagingModelId || 'Empty' }}</p>
+                    </div>
+
+                    <div class="stage-node" [class.active]="rolloutPercent > 0">
+                        <mat-icon>traffic</mat-icon>
+                        <h3>CANARY</h3>
+                        <p>{{ rolloutPercent }}% Traffic</p>
+                    </div>
+
+                    <div class="stage-node active">
+                        <mat-icon>rocket_launch</mat-icon>
+                        <h3>PRODUCTION</h3>
+                        <p>{{ activeModelId }}</p>
+                    </div>
+
+                </div>
+
+                <!-- Controls -->
+                <mat-card class="ops-card">
+                    <mat-card-header>
+                        <mat-card-title>Deployment Controller</mat-card-title>
+                    </mat-card-header>
+                    <mat-card-content>
+                        <div class="grid grid-cols-2 gap-8">
+
+                            <!-- Left: Staging Input -->
+                            <div>
+                                <h3>1. Stage Candidate</h3>
+                                <div class="action-row">
+                                    <mat-form-field appearance="outline" class="w-full">
+                                        <mat-label>Model ID / HuggingFace Tag</mat-label>
+                                        <input matInput [(ngModel)]="stagingModelId"
+                                            placeholder="e.g. gpt-4-turbo-custom-v3">
+                                    </mat-form-field>
+                                    <button mat-raised-button color="accent" (click)="stageModel()"
+                                        [disabled]="isDeploying || !stagingModelId">
+                                        <mat-icon>upload</mat-icon> LOAD
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Right: Promotion -->
+                            <div>
+                                <h3>2. Promote to Production</h3>
+                                <div class="flex flex-col gap-4">
+                                    <div class="flex items-center gap-4">
+                                        <span>Rollout Strategy:</span>
+                                        <mat-chip-listbox>
+                                            <mat-chip-option selected>Canary (10%)</mat-chip-option>
+                                            <mat-chip-option>Blue/Green</mat-chip-option>
+                                            <mat-chip-option color="warn">Big Bang (100%)</mat-chip-option>
+                                        </mat-chip-listbox>
+                                    </div>
+
+                                    <div class="action-row">
+                                        <button mat-flat-button color="primary" class="w-full" (click)="promote()"
+                                            [disabled]="!stagingModelId">
+                                            <mat-icon>publish</mat-icon> PROMOTE CANDIDATE
+                                        </button>
+                                        <button mat-stroked-button color="warn" (click)="rollback()">
+                                            <mat-icon>restore</mat-icon> ROLLBACK
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </mat-card-content>
+                </mat-card>
+
+                <!-- Logs -->
+                <div class="console-output">
+                    <div *ngFor="let line of deploymentLog">{{ line }}</div>
+                </div>
+
+            </div>
+        </mat-tab>
+
+
+        <!-- Tab 2: A/B Testing -->
+        <mat-tab label="A/B Experiments">
+            <div class="py-6">
+
+                <div class="grid grid-cols-3 gap-6">
+                    <!-- Active Experiments List -->
+                    <div class="col-span-2">
+                        <mat-card class="ops-card">
+                            <mat-card-header>
+                                <mat-card-title>Active Experiments</mat-card-title>
+                            </mat-card-header>
+                            <mat-card-content>
+                                <div class="experiment-list">
+                                    <div class="experiment-item" *ngFor="let exp of experiments"
+                                        [class.active]="exp.status === 'active'">
+                                        <div class="meta">
+                                            <h4>{{ exp.name }}</h4>
+                                            <span>ID: {{ exp.id }} • Arms: {{ exp.arms.join(', ') }}</span>
+                                        </div>
+                                        <div class="metrics">
+                                            <div>
+                                                <span>Traffic</span>
+                                                <strong>{{ exp.traffic }}%</strong>
+                                            </div>
+                                            <div>
+                                                <span>P-Value</span>
+                                                <strong>0.04</strong>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <button mat-icon-button><mat-icon>edit</mat-icon></button>
+                                            <button mat-icon-button color="warn"><mat-icon>stop</mat-icon></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </mat-card-content>
+                        </mat-card>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="col-span-1">
+                        <mat-card class="ops-card">
+                            <mat-card-header><mat-card-title>Global Stats</mat-card-title></mat-card-header>
+                            <mat-card-content>
+                                <div class="text-center py-4">
+                                    <h2 class="text-4xl font-bold text-cyan-400">98.2%</h2>
+                                    <p class="text-text-muted">Win Rate (Challenger vs Control)</p>
+                                </div>
+                                <div class="text-center py-4 border-t border-white/10">
+                                    <h2 class="text-4xl font-bold text-purple-400">12</h2>
+                                    <p class="text-text-muted">Total Experiments Run</p>
+                                </div>
+                            </mat-card-content>
+                        </mat-card>
+                    </div>
+                </div>
+
+            </div>
+        </mat-tab>
+
+    </mat-tab-group>
+</div>

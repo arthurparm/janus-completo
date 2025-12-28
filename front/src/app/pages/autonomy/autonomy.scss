@@ -1,0 +1,208 @@
+.autonomy-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    color: var(--text-primary);
+}
+
+// Control Tower Header
+.control-tower {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 3rem;
+    padding: 2rem;
+    background: rgba(13, 20, 35, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1.5rem;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+
+    // Active glow effect
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at left, rgba(0, 255, 200, 0.05), transparent 70%);
+        pointer-events: none;
+    }
+}
+
+.status-indicator {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+
+    mat-icon {
+        font-size: 40px;
+        width: 40px;
+        height: 40px;
+    }
+
+    &.active {
+        color: var(--neon-green);
+        box-shadow: 0 0 30px rgba(0, 255, 100, 0.2);
+
+        .pulse-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--neon-green);
+            animation: pulse-ring 2s infinite;
+        }
+    }
+}
+
+.header-content {
+    flex: 1;
+
+    h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 2.5rem;
+        margin: 0;
+        background-clip: text;
+        background: linear-gradient(90deg, #fff, #aab);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+        font-size: 1rem;
+        letter-spacing: 1px;
+
+        .text-active {
+            color: var(--neon-green);
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 100, 0.5);
+        }
+    }
+}
+
+.giant-toggle {
+    height: 64px;
+    padding: 0 3rem;
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border-radius: 8px;
+
+    mat-icon {
+        margin-right: 12px;
+    }
+}
+
+// Config Deck
+.config-deck {
+    margin-bottom: 2rem;
+    animation: slideDown 0.4s ease-out;
+
+    .dark-card {
+        background: rgba(30, 35, 50, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+
+        mat-card-title {
+            color: var(--text-primary);
+            font-family: 'Orbitron', sans-serif;
+        }
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        padding-top: 1rem;
+    }
+}
+
+// Live Feed
+.live-feed {
+    .feed-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        color: var(--text-secondary);
+
+        h2 {
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+        }
+    }
+
+    .terminal-window {
+        background: #0a0e17;
+        border: 1px solid #1f293a;
+        border-radius: 8px;
+        height: 400px;
+        padding: 1rem;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+        color: #a0a0a0;
+        overflow-y: auto;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+
+        .log-line {
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            padding-bottom: 2px;
+
+            &:first-child {
+                color: var(--neon-green); // Latest log
+                font-weight: bold;
+            }
+        }
+    }
+}
+
+// Utils
+.safe {
+    color: var(--neon-blue);
+}
+
+.balanced {
+    color: var(--neon-purple);
+}
+
+.danger {
+    color: #ff4444;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

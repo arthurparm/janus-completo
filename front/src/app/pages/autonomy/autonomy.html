@@ -1,0 +1,97 @@
+<div class="autonomy-container">
+    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs">
+        <!-- Tab 1: Control Tower (Existing Content) -->
+        <mat-tab label="Control Tower">
+            <div class="tab-content">
+                <!-- Header / Control Tower -->
+                <header class="control-tower">
+                    <div class="status-indicator" [class.active]="status?.active">
+                        <div class="pulse-ring"></div>
+                        <mat-icon>{{ status?.active ? 'autorenew' : 'pause_circle_outline' }}</mat-icon>
+                    </div>
+
+                    <div class="header-content">
+                        <h1>Autonomy Control Tower</h1>
+                        <div class="rt-status-bar" *ngIf="rtStatus">
+                            <span class="state-badge" [class.thinking]="rtStatus.state === 'thinking'"
+                                [class.executing]="rtStatus.state === 'executing'">
+                                {{ rtStatus.state | uppercase }}
+                            </span>
+                            <span class="detail-text">{{ rtStatus.detail }}</span>
+                        </div>
+                        <p class="subtitle" *ngIf="!rtStatus">
+                            Status: <span [class.text-active]="status?.active">{{ status?.active ? 'OPERATIONAL' :
+                                'STANDBY' }}</span>
+                            <span *ngIf="status?.active"> • Cycle #{{ status?.cycle_count }}</span>
+                        </p>
+                    </div>
+
+                    <div class="actions">
+                        <button mat-flat-button [color]="status?.active ? 'warn' : 'primary'" class="giant-toggle"
+                            (click)="toggleAutonomy()" [disabled]="isLoading">
+                            <mat-icon>{{ status?.active ? 'stop' : 'play_arrow' }}</mat-icon>
+                            {{ status?.active ? 'ABORT LOOP' : 'ENGAGE SYSTEM' }}
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Configuration Deck -->
+                <section class="config-deck" *ngIf="!status?.active">
+                    <mat-card class="dark-card">
+                        <mat-card-header>
+                            <mat-icon mat-card-avatar>tune</mat-icon>
+                            <mat-card-title>Mission Parameters</mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content class="form-grid">
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Risk Profile</mat-label>
+                                <mat-select [(ngModel)]="selectedRisk">
+                                    <mat-option value="conservative">
+                                        <span class="safe">🛡️ Conservative</span> (Read-only)
+                                    </mat-option>
+                                    <mat-option value="balanced">
+                                        <span class="balanced">⚖️ Balanced</span> (Safe edits)
+                                    </mat-option>
+                                    <mat-option value="aggressive">
+                                        <span class="danger">🔥 Aggressive</span> (Full access)
+                                    </mat-option>
+                                </mat-select>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Cycle Interval (seconds)</mat-label>
+                                <input matInput type="number" [(ngModel)]="cycleInterval" min="10" max="3600">
+                            </mat-form-field>
+
+                        </mat-card-content>
+                    </mat-card>
+                </section>
+
+                <!-- Live Feed -->
+                <section class="live-feed">
+                    <div class="feed-header">
+                        <mat-icon>terminal</mat-icon>
+                        <h2>Action Log</h2>
+                    </div>
+                    <div class="terminal-window">
+                        <div class="log-line" *ngFor="let log of logs$ | async">
+                            <span class="timestamp" style="color: #666; margin-right: 8px;">{{ log.timestamp |
+                                date:'HH:mm:ss' }}</span>
+                            <span class="level" [style.color]="log.level === 'error' ? '#ff5555' : '#50fa7b'"
+                                style="margin-right: 8px;">[{{ log.level | uppercase }}]</span>
+                            <span class="message">{{ log.message }}</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </mat-tab>
+
+        <!-- Tab 2: Goal Manager -->
+        <mat-tab label="Strategic Goals">
+            <div class="tab-content">
+                <app-goals></app-goals>
+            </div>
+        </mat-tab>
+    </mat-tab-group>
+</div>
