@@ -90,9 +90,11 @@ def _validate_collection_name(collection_name: str) -> str:
     if not collection_name or not collection_name.strip() or len(collection_name) > 255:
         raise ValueError("collection_name inválido.")
     import re
-    if not re.match(r'^[a-zA-Z0-9_-]+$', collection_name):
-        raise ValueError("collection_name contém caracteres inválidos.")
-    return collection_name
+    # Substituir caracteres inválidos por underscore
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', collection_name)
+    if sanitized != collection_name:
+        logger.warning(f"Nome da coleção '{collection_name}' sanitizado para '{sanitized}'")
+    return sanitized
 
 
 @resilient(

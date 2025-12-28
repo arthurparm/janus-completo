@@ -389,7 +389,7 @@ class MemoryCore:
                         query=query_vector,
                         limit=effective_limit,
                         with_payload=True,
-                        timeout=progressive_timeout
+                        timeout=int(progressive_timeout)
                     )
                     return result.points
                 

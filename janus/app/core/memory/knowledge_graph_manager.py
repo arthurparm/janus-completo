@@ -241,3 +241,38 @@ def index_codebase() -> dict:
     logger.info(summary)
 
     return {"message": "Indexação e análise da base de código concluídas.", "summary": summary}
+
+
+class KnowledgeGraphManager:
+    """
+    Gerencia operações de alto nível no Grafo de Conhecimento.
+    """
+    def __init__(self):
+        pass
+
+    async def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Realiza uma busca 'semântica' (por enquanto baseada em texto) no grafo.
+        """
+        cypher_query = """
+        MATCH (n)
+        WHERE (n:Concept OR n:Tool OR n:Error OR n:Solution OR n:Technology) 
+          AND (toLower(n.name) CONTAINS toLower($query) OR toLower(n.description) CONTAINS toLower($query))
+        RETURN n.name as name, labels(n)[0] as type, n.description as summary
+        LIMIT $limit
+        """
+        try:
+            # Use graph_db directly to ensure async awaits work correctly
+            # graph_db is the singleton from app.db.graph
+            if not graph_db:
+                logger.warning("GraphDB not initialized for semantic_search")
+                return []
+                
+            results = await graph_db.query(cypher_query, params={"query": query, "limit": limit}, operation="semantic_search")
+            return results if results else []
+        except Exception as e:
+            logger.error(f"Erro no semantic_search: {e}")
+            return []
+
+# Singleton instance
+knowledge_graph_manager = KnowledgeGraphManager()
