@@ -1,4 +1,6 @@
 import { Component, OnInit, inject, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core'
+import { DemoService } from '../../core/services/demo.service'
+import { AuthService } from '../../core/auth/auth.service'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService } from '../../services/janus-api.service'
@@ -32,6 +34,7 @@ export class DocumentsComponent implements OnInit {
     @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>
 
     private api = inject(JanusApiService)
+    public auth = inject(AuthService)
     private cdr = inject(ChangeDetectorRef)
 
     documents: Document[] = []
@@ -55,6 +58,12 @@ export class DocumentsComponent implements OnInit {
     urlToLink = ''
     uploadProgress = 0
 
+    private demoService = inject(DemoService)
+
+    get isOffline() {
+        return this.demoService.isOffline()
+    }
+
     ngOnInit() {
         this.loadDocuments()
     }
@@ -63,7 +72,15 @@ export class DocumentsComponent implements OnInit {
         this.loading = true
         this.error = null
 
-        this.api.listDocuments().subscribe({
+        // Stop if offline
+        if (this.demoService.isOffline()) {
+            this.loading = false
+            this.documents = []
+            return
+        }
+
+        const userId = this.auth.currentUserValue?.id
+        this.api.listDocuments(undefined, userId).subscribe({
             next: (response: any) => {
                 this.documents = response.items || []
                 this.loading = false
@@ -71,8 +88,14 @@ export class DocumentsComponent implements OnInit {
             },
             error: (err: any) => {
                 console.error('Error loading documents:', err)
-                this.error = 'Falha ao carregar documentos'
-                this.loading = false
+                if (err.status === 0 || err.status === 504) {
+                    this.demoService.enableOfflineMode();
+                    this.loading = false
+                    this.documents = []
+                } else {
+                    this.error = 'Falha ao carregar documentos'
+                    this.loading = false
+                }
                 this.cdr.detectChanges()
             }
         })
@@ -97,7 +120,8 @@ export class DocumentsComponent implements OnInit {
         this.error = null
         this.successMessage = null
 
-        this.api.uploadDocument(file).subscribe({
+        const userId = this.auth.currentUserValue?.id
+        this.api.uploadDocument(file, undefined, userId).subscribe({
             next: (event: any) => {
                 if (event.progress !== undefined) {
                     this.uploadProgress = event.progress
@@ -130,7 +154,8 @@ export class DocumentsComponent implements OnInit {
         this.error = null
         this.successMessage = null
 
-        this.api.linkUrl('', this.urlToLink).subscribe({
+        const userId = this.auth.currentUserValue?.id
+        this.api.linkUrl('', this.urlToLink, userId).subscribe({
             next: (response: any) => {
                 this.uploading = false
                 this.successMessage = `URL indexada com ${response.chunks} chunks`

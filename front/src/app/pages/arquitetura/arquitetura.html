@@ -9,6 +9,12 @@
       > SUBSISTEMAS LOCAIS: DETECTADOS<br>
       > PRIVACIDADE DE DADOS: 100% LOCAL
     </p>
+    @if (apiHealthy === 'ok' && !loading && systemStatus?.version?.includes('DEMO')) {
+    <div
+      class="mt-2 inline-block px-2 py-1 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-xs font-bold">
+      ⚠️ DEMO MODE: CONNECTED TO OFFLINE SNAPSHOT
+    </div>
+    }
     <p class="mt-2 text-text-primary">
       O <strong>Janus</strong> opera como um ecossistema local de alta disponibilidade. Diferente de IAs na nuvem, ele
       roda inteiramente na sua infraestrutura (Docker).

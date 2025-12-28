@@ -6,7 +6,8 @@
             <div class="header-left">
                 <h1 class="header-title">
                     <mat-icon>folder</mat-icon>
-                    Documentos
+                    Documentos <small style="font-size: 12px; color: #888;">(User: {{ auth.currentUserValue?.id ||
+                        'None' }})</small>
                 </h1>
                 <p class="header-subtitle">Gerencie documentos indexados e faça buscas semânticas</p>
             </div>
@@ -60,7 +61,22 @@
     </div>
     }
 
-    <!-- Content Grid -->
+    <!-- OFFLINE WARNING -->
+    @if (isOffline) {
+    <div class="offline-warning-container">
+        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <h2>Sistema Offline</h2>
+        <p>
+            O gerenciamento de documentos requer conexão ativa com o Vector Database (Qdrant).<br>
+            A funcionalidade foi desativada temporariamente para preservar a consistência do sistema.
+        </p>
+        <div class="tech-detail">
+            <span>CODE: CONNECTION_REFUSED</span>
+            <span>COMPONENT: DOCUMENT_INDEXER</span>
+        </div>
+    </div>
+    } @else {
+    <!-- Content Grid (Only visible when online) -->
     <div class="content-grid">
         <!-- Left: Search & Upload Section -->
         <section class="action-section">
@@ -190,4 +206,5 @@
             }
         </section>
     </div>
+    }
 </div>

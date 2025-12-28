@@ -1,91 +1,294 @@
-<section class="page-header">
-  <h1 class="page-title text-cyan glow-text">PROTOCOL DATABASE</h1>
-  <p class="page-subtitle text-muted">
-    ACCESSING SYSTEM MANUALS AND OPERATIONAL GUIDES // LEVEL 1 CLEARANCE
-  </p>
-</section>
+<div class="doc-layout">
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-  <!-- System Blueprint -->
-  <a [routerLink]="['/arquitetura']"
-    class="glass-panel p-6 hover:border-cyan transition-colors group no-underline block">
-    <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">📐</div>
-    <h3 class="text-xl font-bold text-white mb-2">System Blueprints</h3>
-    <p class="text-sm text-text-secondary">
-      Detailed schematics of the neural architecture, services grid, and persistence layers.
-    </p>
-    <div class="mt-4 text-xs font-mono text-cyan opacity-0 group-hover:opacity-100 transition-opacity">
-      > ACCESS BLUEPRINT
+  <!-- Ambient Background Elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Spacious Header Section (No Box) -->
+  <header class="doc-hero">
+    <div class="hero-badge">
+      <span class="pulse-dot"></span>
+      ACESSO NÍVEL 1
     </div>
-  </a>
-
-  <!-- Cognitive Sprints -->
-  <a [routerLink]="['/sprints']" class="glass-panel p-6 hover:border-purple transition-colors group no-underline block">
-    <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">🚀</div>
-    <h3 class="text-xl font-bold text-white mb-2">Evolution Sprints</h3>
-    <p class="text-sm text-text-secondary">
-      Track the evolutionary progress of the Janus system. Current development cycles and future capabilities.
+    <h1 class="hero-title">Banco de <span class="text-cyan">Protocolos</span></h1>
+    <p class="hero-subtitle">
+      Acesse esquemas do sistema, sprints evolutivos e manuais operacionais.<br>
+      Dados persistidos localmente para acesso resiliente.
     </p>
-    <div class="mt-4 text-xs font-mono text-purple opacity-0 group-hover:opacity-100 transition-opacity">
-      > VIEW ROADMAP
+  </header>
+
+  <!-- Main Grid: Massive Cards -->
+  <section class="mega-grid">
+    <!-- Architecture -->
+    <a [routerLink]="['/arquitetura']" class="mega-card cyan-theme group">
+      <div class="card-bg"></div>
+      <div class="card-inner">
+        <div class="icon-huge">📐</div>
+        <div class="content">
+          <h2>Diagramas do Sistema</h2>
+          <p>Mapas de arquitetura neural, topologia de malha de serviço e camadas de persistência.</p>
+          <span class="action-link">ACESSAR ESQUEMAS <i class="material-icons">arrow_forward</i></span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Sprints -->
+    <a [routerLink]="['/sprints']" class="mega-card purple-theme group">
+      <div class="card-bg"></div>
+      <div class="card-inner">
+        <div class="icon-huge">🚀</div>
+        <div class="content">
+          <h2>Sprints de Evolução</h2>
+          <p>Roadmap de desenvolvimento, ciclos ativos e rastreamento de capacidades futuras.</p>
+          <span class="action-link">VER ROADMAP <i class="material-icons">arrow_forward</i></span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Neural Link -->
+    <a [routerLink]="['/chat']" class="mega-card pink-theme group">
+      <div class="card-bg"></div>
+      <div class="card-inner">
+        <div class="icon-huge">🧠</div>
+        <div class="content">
+          <h2>Link Neural</h2>
+          <p>Interface direta com o Meta-Agente para consultas complexas e comandos.</p>
+          <span class="action-link">INICIAR LINK <i class="material-icons">arrow_forward</i></span>
+        </div>
+      </div>
+    </a>
+  </section>
+
+  <!-- JANUS CODEX: Living Manual -->
+  <section class="codex-section">
+    <div class="codex-container">
+      <!-- Sidebar / Index -->
+      <aside class="codex-sidebar">
+        <div class="sidebar-header">
+          <i class="material-icons">library_books</i>
+          <span>SYSTEM_CODEX</span>
+        </div>
+        <ul class="chapter-list">
+          <li [class.active]="activeChapter === 'GENESIS'" (click)="setChapter('GENESIS')">
+            <span class="index">00</span>
+            <span class="title">META-GENESIS</span>
+          </li>
+          <li [class.active]="activeChapter === 'COGNITION'" (click)="setChapter('COGNITION')">
+            <span class="index">01</span>
+            <span class="title">COGNITIVE LOOP</span>
+          </li>
+          <li [class.active]="activeChapter === 'MEMORY'" (click)="setChapter('MEMORY')">
+            <span class="index">02</span>
+            <span class="title">MNEMONIC CORE</span>
+          </li>
+          <li [class.active]="activeChapter === 'INFRA'" (click)="setChapter('INFRA')">
+            <span class="index">03</span>
+            <span class="title">SYNAPTIC INFRA</span>
+          </li>
+          <li [class.active]="activeChapter === 'AUTONOMY'" (click)="setChapter('AUTONOMY')">
+            <span class="index">04</span>
+            <span class="title">AUTONOMY PROTOCOL</span>
+          </li>
+          <li [class.active]="activeChapter === 'DEPLOYMENT'" (click)="setChapter('DEPLOYMENT')">
+            <span class="index">05</span>
+            <span class="title">DEPLOYMENT PIPELINE</span>
+          </li>
+        </ul>
+        <div class="sidebar-footer">
+          <span class="status-indicator online"></span>
+          SYSTEM ONLINE
+        </div>
+      </aside>
+
+      <!-- Reading Screen -->
+      <article class="codex-content">
+
+        <!-- CHAPTER 00: GENESIS -->
+        <div class="chapter-view" *ngIf="activeChapter === 'GENESIS'">
+          <h2 class="chapter-title">00 // META-GENESIS</h2>
+          <div class="text-block">
+            <p class="highlight">O "Janus" não é apenas um chatbot. É uma Arquitetura Cognitiva Resiliente.</p>
+            <p>
+              Projetado para operar além das limitações de uma simples cadeia de "prompts", o Janus implementa um
+              <strong>ciclo de vida autônomo</strong> baseada em agentes especializados. Diferente de sistemas passivos,
+              ele possui uma "consciência" de seu próprio estado operacional, capaz de detectar falhas de conexão,
+              alucinações de LLM e latência excessiva.
+            </p>
+            <h3>Princípios Fundamentais</h3>
+            <ul>
+              <li><strong>Autonomia Supervisionada:</strong> O Meta-Agente vigia os sub-agentes.</li>
+              <li><strong>Resiliência Local:</strong> Capacidade de operar em modo "Offline/Demo" quando o backend cai.
+              </li>
+              <li><strong>Memória Híbrida:</strong> Fusão de vector-search (Qdrant) com cache de curto prazo (LRU).</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- CHAPTER 01: COGNITION -->
+        <div class="chapter-view" *ngIf="activeChapter === 'COGNITION'">
+          <h2 class="chapter-title">01 // COGNITIVE LOOP</h2>
+          <div class="text-block">
+            <p>
+              No coração do sistema reside o <strong>Meta-Agente</strong> (<code>meta_agent.py</code>), uma entidade
+              separada que não interage com usuários humanos. Sua única função é a introspecção.
+            </p>
+            <h3>O Ciclo de Análise</h3>
+            <p>
+              A cada ciclo (configurável, padrão 5min), o Meta-Agente desperta e executa ferramentas de diagnóstico:
+            </p>
+            <div class="code-snippet">
+              <code>> tool: analyze_memory_for_failures()</code><br>
+              <code>> tool: get_system_health_metrics()</code><br>
+              <code>> tool: analyze_performance_trends()</code>
+            </div>
+            <p>
+              Se ele detecta, por exemplo, um aumento na taxa de <code>ContextExceededError</code>, ele pode invocar
+              automaticamente protocolos de "Compressão de Memória" ou alterar a estratégia de roteamento para um
+              modelo com janela de contexto maior (ex: Claude 3.5 Sonnet).
+            </p>
+          </div>
+        </div>
+
+        <!-- CHAPTER 02: MEMORY -->
+        <div class="chapter-view" *ngIf="activeChapter === 'MEMORY'">
+          <h2 class="chapter-title">02 // MNEMONIC CORE</h2>
+          <div class="text-block">
+            <p>
+              A memória do Janus (<code>memory_core.py</code>) rejeita a simplicidade. Ela implementa um sistema
+              de <strong>dupla camada</strong> para garantir velocidade extrema e persistência profunda.
+            </p>
+            <h3>Short-Term: LRU Cache</h3>
+            <p>
+              As interações imediatas vivem em um <code>OrderedDict</code> em memória RAM. Implementa uma política
+              <strong>LRU (Least Recently Used)</strong> com TTL (Time-To-Live) de 600 segundos. Isso garante que
+              o contexto da conversa atual seja recuperado em &lt;2ms, sem tocar no banco de dados.
+            </p>
+            <h3>Long-Term: Qdrant Vector Grid</h3>
+            <p>
+              Quando a memória "esfria", ela é vetorizada (Embeddings) e persistida no Qdrant. O Janus utiliza
+              <strong>PII Masking</strong> (<code>_redact_pii</code>) antes da vetorização para garantir que dados
+              sensíveis como CPFs ou Chaves de API nunca sejam gravados permanentemente no núcleo vetorial.
+            </p>
+          </div>
+        </div>
+
+        <!-- CHAPTER 03: INFRA -->
+        <div class="chapter-view" *ngIf="activeChapter === 'INFRA'">
+          <h2 class="chapter-title">03 // SYNAPTIC INFRA</h2>
+          <div class="text-block">
+            <p>
+              O <strong>LLM Manager</strong> atua como o córtex pré-frontal, decidindo qual "cérebro" usar para qual
+              tarefa.
+            </p>
+            <h3>Roteamento Dinâmico</h3>
+            <p>
+              O Janus não é preso a um provedor. O <code>get_llm(role, priority)</code> avalia em tempo real:
+            </p>
+            <ul>
+              <li><strong>Custo:</strong> Otimiza o budget do projeto.</li>
+              <li><strong>Latência:</strong> Tarefas de UI usam modelos rápidos (Groq/Llama).</li>
+              <li><strong>Complexidade:</strong> Raciocínio profundo usa modelos SOTA (GPT-4o/Claude).</li>
+            </ul>
+            <h3>Circuit Breakers</h3>
+            <p>
+              Inspirado em microserviços, cada provedor (OpenAI, Anthropic, Google) tem um disjuntor. Se a API da OpenAI
+              falhar 3 vezes consecutivas, o sistema "abre o circuito" e roteia automaticamente todo o tráfego para
+              o Anthropic ou Azure, sem que o usuário perceba a falha.
+            </p>
+          </div>
+        </div>
+
+        <!-- CHAPTER 04: AUTONOMY -->
+        <div class="chapter-view" *ngIf="activeChapter === 'AUTONOMY'">
+          <h2 class="chapter-title">04 // AUTONOMY PROTOCOL</h2>
+          <div class="text-block">
+            <p class="highlight">O Janus possui capacidade de <strong>Agência Autônoma</strong>. Ele pode perseguir
+              objetivos
+              de longo prazo sem supervisão humana constante.</p>
+
+            <h3>O Loop de Autonomia</h3>
+            <p>
+              O ciclo principal (<code>AutonomyLoop</code>) opera em intervalos definidos (ex: 60s). Em cada "batida",
+              o agente:
+            </p>
+            <ul>
+              <li><strong>Scaneia Metas:</strong> Verifica objetivos pendentes na fila de prioridade.</li>
+              <li><strong>Planeja Ações:</strong> Decompõe metas em passos acionáveis (Tasks).</li>
+              <li><strong>Executa Ferramentas:</strong> Opera terminais, editores de código ou navegadores.</li>
+              <li><strong>Auto-Crítica:</strong> Avalia se o resultado aproximou o estado do objetivo desejado.</li>
+            </ul>
+
+            <h3>Perfis de Risco</h3>
+            <p>
+              O comportamento do agente é governado por 3 perfis de segurança (Policy Engine):
+            </p>
+            <div class="code-snippet">
+              <code>> CONSERVATIVE: Apenas leitura (ls, cat, grep). Requer aprovação para writes.</code><br>
+              <code>> BALANCED: Pode editar arquivos não-críticos. Bloqueia delete/rm.</code><br>
+              <code>> AGGRESSIVE: Acesso total ao sistema (sudo, rm -rf). USE COM CAUTELA.</code>
+            </div>
+
+            <h3>Controle API</h3>
+            <p>
+              O controle é feito via <code>JanusApiService</code>:
+            </p>
+            <div class="code-snippet">
+              <code>janus.startAutonomy({{ '{' }} risk_profile: 'balanced' {{ '}' }})</code><br>
+              <code>janus.stopAutonomy()</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAPTER 05: DEPLOYMENT -->
+        <div class="chapter-view" *ngIf="activeChapter === 'DEPLOYMENT'">
+          <h2 class="chapter-title">05 // DEPLOYMENT PIPELINE</h2>
+          <div class="text-block">
+            <p>
+              O Janus gerencia o ciclo de vida de seus próprios modelos e capacidades através de um pipeline de
+              <strong>LLMOps</strong> integrado.
+            </p>
+
+            <h3>Estágios de Rollout</h3>
+            <ol style="list-style: decimal; padding-left: 1.5rem; margin-bottom: 2rem; color: var(--text-secondary);">
+              <li style="margin-bottom: 0.5rem"><strong>Stage (Staging):</strong> O modelo candidato é carregado em
+                ambiente isolado.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Pre-Check:</strong> Bateria automatizada de testes (viés,
+                segurança, performance).</li>
+              <li style="margin-bottom: 0.5rem"><strong>Shadow Mode:</strong> O modelo recebe tráfego real mas suas
+                respostas não são mostradas ao usuário.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Promotion:</strong> O modelo substitui o anterior como padrão.
+              </li>
+            </ol>
+
+            <h3>A/B Testing</h3>
+            <p>
+              O sistema suporta experimentos controlados. Usuários podem ser designados aleatoriamente para diferentes
+              "Braços" (Arms) de teste,
+              permitindo comparar a eficácia de diferentes prompts ou modelos base.
+            </p>
+
+            <div class="code-snippet">
+              <code>> POST /api/v1/deployment/stage {{ '{' }} model_id: "gpt-4-turbo-v2" {{ '}' }}</code><br>
+              <code>> POST /api/v1/deployment/precheck</code><br>
+              <code>> POST /api/v1/deployment/publish</code>
+            </div>
+          </div>
+        </div>
+
+      </article>
     </div>
-  </a>
+  </section>
 
-  <!-- Neural Link -->
-  <a [routerLink]="['/chat']" class="glass-panel p-6 hover:border-pink transition-colors group no-underline block">
-    <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">💬</div>
-    <h3 class="text-xl font-bold text-white mb-2">Neural Link</h3>
-    <p class="text-sm text-text-secondary">
-      Direct interface with the Meta-Agent. Initiate conversational protocols and query knowledge base.
-    </p>
-    <div class="mt-4 text-xs font-mono text-pink opacity-0 group-hover:opacity-100 transition-opacity">
-      > OPEN COMM CHANNEL
-    </div>
-  </a>
-</div>
-
-<!-- Technical Manuals -->
-<section class="mt-12">
-  <h2 class="section-title text-muted mb-4">TECHNICAL MANUALS</h2>
-  <div class="glass-panel p-0 overflow-hidden">
-    <div class="grid divide-y divide-white/10">
-      <a href="/README.md" target="_blank"
-        class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors no-underline group">
-        <div class="flex items-center gap-4">
-          <span class="font-mono text-xs text-cyan border border-cyan/30 px-2 py-1 rounded">MANUAL_01</span>
-          <span class="text-text-primary group-hover:text-white">System Quick Start (README)</span>
-        </div>
-        <span class="text-muted text-sm group-hover:translate-x-1 transition-transform">OPEN ></span>
-      </a>
-
-      <a href="/docs/Architecture.md" target="_blank"
-        class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors no-underline group">
-        <div class="flex items-center gap-4">
-          <span class="font-mono text-xs text-purple border border-purple/30 px-2 py-1 rounded">MANUAL_02</span>
-          <span class="text-text-primary group-hover:text-white">Detailed Architecture Specs</span>
-        </div>
-        <span class="text-muted text-sm group-hover:translate-x-1 transition-transform">OPEN ></span>
-      </a>
-
-      <a href="/http/E2E-Production-Scenario.http" target="_blank"
-        class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors no-underline group">
-        <div class="flex items-center gap-4">
-          <span
-            class="font-mono text-xs text-green-400 border border-green-400/30 px-2 py-1 rounded">PROTOCOL_HTTP</span>
-          <span class="text-text-primary group-hover:text-white">Production Scenarios</span>
-        </div>
-        <span class="text-muted text-sm group-hover:translate-x-1 transition-transform">OPEN ></span>
-      </a>
+  <!-- Protocol Warning Footer -->
+  <div
+    class="mt-8 p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-transparent border-l-2 border-red-500 flex gap-4 items-start">
+    <span class="material-icons text-red-400 mt-0.5">warning_amber</span>
+    <div>
+      <h4 class="text-red-400 font-bold font-mono text-sm mb-1">PROTOCOLO DE REDUNDÂNCIA: ATIVO</h4>
+      <p class="text-xs text-text-muted leading-relaxed max-w-3xl">
+        Canais de Áudio/Vídeo utilizam WebRTC. Em caso de falha de conexão, o sistema fará fallback automático para
+        comunicação REST segura.
+      </p>
     </div>
   </div>
-</section>
-
-<div class="mt-8 p-4 border border-red-500/20 bg-red-500/5 rounded-lg">
-  <h4 class="text-red-400 font-bold mb-2 flex items-center gap-2">
-    <span class="material-icons text-sm">warning</span> PROTOCOL OVERRIDE: WEB_RTC
-  </h4>
-  <p class="text-sm text-text-muted">
-    Audio/Video channels utilize standard WebRTC protocols. In case of handshake failure, the system will automatically
-    fallback to secure REST text comms.
-  </p>
 </div>
