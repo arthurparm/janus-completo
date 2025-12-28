@@ -13,10 +13,10 @@ from app.repositories.autonomy_repository import AutonomyRepository
 from app.core.tools.action_module import action_registry
 from fastapi import Request
 
-# NEW IMPORTS
 from app.services.llm_service import LLMService
 from app.core.autonomy.goal_manager import GoalManager, GoalStatus, Goal
 from app.core.autonomy.planner import build_plan_for_goal
+from app.core.infrastructure.realtime import get_realtime_service
 
 logger = structlog.get_logger(__name__)
 
@@ -99,21 +99,38 @@ class AutonomyService:
         ))
         self._running = True
         AUTONOMY_ACTIVE.set(1)
+        
+        # Tenta restaurar uma run ativa existente (ex: após reinício do container)
         try:
-            run = self._repo.create_run(
+            existing_run = self._repo.get_active_run(
                 user_id=self._config.user_id,
-                project_id=self._config.project_id,
-                risk_profile=self._config.risk_profile,
-                auto_confirm=self._config.auto_confirm,
-                allowlist=self._config.allowlist,
-                blocklist=self._config.blocklist,
-                max_actions_per_cycle=self._config.max_actions_per_cycle,
-                max_seconds_per_cycle=self._config.max_seconds_per_cycle,
-                interval_seconds=self._config.interval_seconds,
+                project_id=self._config.project_id
             )
-            self._current_run_id = run.id
-        except Exception:
+            if existing_run:
+                self._current_run_id = existing_run.id
+                self._cycle_count = int(existing_run.cycles or 0)
+                logger.info("AutonomyLoop restaurado de run existente", 
+                           run_id=existing_run.id, 
+                           cycles_restored=self._cycle_count)
+            else:
+                # Cria nova run se não houver ativa
+                run = self._repo.create_run(
+                    user_id=self._config.user_id,
+                    project_id=self._config.project_id,
+                    risk_profile=self._config.risk_profile,
+                    auto_confirm=self._config.auto_confirm,
+                    allowlist=self._config.allowlist,
+                    blocklist=self._config.blocklist,
+                    max_actions_per_cycle=self._config.max_actions_per_cycle,
+                    max_seconds_per_cycle=self._config.max_seconds_per_cycle,
+                    interval_seconds=self._config.interval_seconds,
+                )
+                self._current_run_id = run.id
+                logger.info("AutonomyLoop nova run criada", run_id=run.id)
+        except Exception as e:
+            logger.warning("Erro ao recuperar/criar run de autonomia", exc_info=e)
             self._current_run_id = None
+            
         self._autonomy_task = asyncio.create_task(self._run_loop())
         logger.info("AutonomyLoop iniciado", interval_seconds=config.interval_seconds)
         return True
@@ -224,6 +241,11 @@ class AutonomyService:
         # Perceber: Métricas de saúde
         metrics = await self._optimization_service.get_system_health()
         logger.info("[AutonomyLoop] Perceber: métricas", **metrics)
+        
+        # Realtime: Status & Metrics
+        rt = get_realtime_service()
+        rt.broadcast_status("thinking", "Analisando sistema e metas...")
+        rt.broadcast_metrics(cpu=metrics.get("cpu_percent", 0), memory=metrics.get("memory_percent", 0))
 
         # Seleciona meta atual (se disponível)
         current_goal: Optional[Goal] = None
@@ -242,6 +264,7 @@ class AutonomyService:
             plan = []
             if current_goal and self._llm_service:
                 try:
+                    rt.append_log(f"Gerando plano para meta: {current_goal.title}", "info")
                     plan = await build_plan_for_goal(
                         goal=current_goal,
                         metrics=metrics,
@@ -252,6 +275,7 @@ class AutonomyService:
                     )
                 except Exception as e:
                     logger.error("[AutonomyLoop] Falha ao gerar plano via planner", exc_info=e)
+                    rt.append_log(f"Falha no planejador: {str(e)}", "error")
             if not plan:
                 plan = [
                     {"tool": "get_current_datetime", "args": {}},
@@ -308,6 +332,9 @@ class AutonomyService:
                 except Exception:
                     payload = "" if not args else json.dumps(args, ensure_ascii=False)
 
+                rt.broadcast_status("executing", f"Executando: {tool_name}")
+                rt.append_log(f"Executando ferramenta: {tool_name}", "info")
+                
                 result = await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
                 # Logging aprimorado: preview + tamanho de entrada e saída
                 try:

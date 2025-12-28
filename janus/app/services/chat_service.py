@@ -7,9 +7,7 @@ from app.services.llm_service import LLMService, LLMServiceError
 from app.services.tool_service import ToolService
 from app.services.memory_service import MemoryService
 from app.core.llm import ModelRole, ModelPriority
-from app.core.embeddings.embedding_manager import embed_text
-from app.db.vector_store import get_or_create_collection, get_qdrant_client
-from qdrant_client import models
+from app.core.llm import ModelRole, ModelPriority
 from app.core.monitoring.chat_metrics import (
     CHAT_MESSAGES_TOTAL,
     CHAT_LATENCY_SECONDS,
@@ -23,7 +21,7 @@ import json
 import asyncio
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.core.workers.reflexion_worker import publish_reflexion_task
-from uuid import uuid4
+
 import os
 import re
 from app.core.tools import action_registry, ToolCategory, PermissionLevel
@@ -85,7 +83,7 @@ class ChatService:
         in_tokens = self._estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
         try:
-            self._maybe_index_message(text=message, user_id=user_id, conversation_id=conversation_id, role="user")
+            await self._maybe_index_message(text=message, user_id=user_id, conversation_id=conversation_id, role="user")
         except Exception:
             pass
 
@@ -270,7 +268,7 @@ class ChatService:
         out_tokens = self._estimate_tokens(assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
         try:
-            self._maybe_index_message(text=assistant_text, user_id=user_id, conversation_id=conversation_id, role="assistant")
+            await self._maybe_index_message(text=assistant_text, user_id=user_id, conversation_id=conversation_id, role="assistant")
         except Exception:
             pass
 
@@ -320,7 +318,7 @@ class ChatService:
         timeout_seconds: Optional[int],
         user_id: Optional[str],
         project_id: Optional[str],
-        max_iterations: int = 5
+        max_iterations: int = 15
     ) -> Dict[str, Any]:
         """
         Executa o loop ReAct (Reasoning + Acting).
@@ -336,8 +334,26 @@ class ChatService:
         # Histórico inicial
         history = self._repo.get_recent_messages(conversation_id, limit=20)
         
-        # Prompt inicial
-        current_prompt = self._build_prompt(persona, history, message, conv.get("summary"))
+        # RAG: Retrieve relevant memories/documents BEFORE building prompt
+        relevant_memories = None
+        if self._memory:
+            try:
+                memories = await self._memory.recall_experiences(query=message, limit=5, min_score=0.3)
+                if memories:
+                    memory_lines = []
+                    for m in memories:
+                        content = m.get('content', '') if isinstance(m, dict) else getattr(m, 'content', '')
+                        mem_type = m.get('type', 'memory') if isinstance(m, dict) else getattr(m, 'type', 'memory')
+                        # Truncate long content
+                        content_preview = content[:500] + "..." if len(content) > 500 else content
+                        memory_lines.append(f"- [{mem_type}]: {content_preview}")
+                    relevant_memories = "\n".join(memory_lines)
+                    logger.info("RAG enrichment: retrieved %d relevant memories for prompt", len(memories))
+            except Exception as e:
+                logger.warning("Failed to retrieve memories for prompt enrichment", error=str(e))
+        
+        # Prompt inicial (now with memories)
+        current_prompt = self._build_prompt(persona, history, message, conv.get("summary"), relevant_memories)
         
         # Tokens de entrada (aproximado)
         total_in_tokens = self._estimate_tokens(current_prompt)
@@ -467,42 +483,20 @@ class ChatService:
                 outputs.append({"name": name, "result": str(result)})
             except Exception as e:
                 logger.error(f"Tool execution failed for {name}", exc_info=e)
-                outputs.append({"name": name, "result": f"Error executing tool: {str(e)}"})
+                outputs.append({"name": name, "result": f"System: Tool Error (STOP and rethink): {str(e)}"})
                 
         return outputs
 
-    def _maybe_index_message(self, text: str, user_id: Optional[str], conversation_id: str, role: str) -> None:
-        if not text or not user_id:
+    async def _maybe_index_message(self, text: str, user_id: Optional[str], conversation_id: str, role: str) -> None:
+        if not text or not user_id or not self._memory:
             return
-        collection_name = get_or_create_collection(f"user_{user_id}")
-        client = get_qdrant_client()
+        
+        # Delegate to MemoryService (SRP)
         try:
-            from app.config import settings
-            max_points = int(getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000)
-            from qdrant_client import models as _models
-            qfilter = _models.Filter(must=[_models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="chat_msg")), _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id)))])
-            cnt = client.count(collection_name=collection_name, count_filter=qfilter, exact=True)
-            current = int(getattr(cnt, "count", 0) or 0)
-            if current >= max_points:
-                return
+            await self._memory.index_interaction(content=text, user_id=user_id, session_id=conversation_id, role=role)
         except Exception:
+            # Não quebrar fluxo do chat se indexação falhar
             pass
-        vec = embed_text(text)
-        now_ms = int(_time.time() * 1000)
-        payload = {
-            "content": text,
-            "ts_ms": now_ms,
-            "metadata": {
-                "type": "chat_msg",
-                "user_id": user_id,
-                "session_id": conversation_id,
-                "role": role,
-                "timestamp": now_ms,
-            }
-        }
-        pid = f"chat:{user_id}:{conversation_id}:{uuid4().hex}"
-        point = models.PointStruct(id=pid, vector=vec, payload=payload)
-        client.upsert(collection_name=collection_name, points=[point])
 
     def get_history(self, conversation_id: str) -> Dict[str, Any]:
         logger.info(f"Getting chat history for conversation: {conversation_id}")
@@ -607,7 +601,17 @@ class ChatService:
                       summary: Optional[str], relevant_memories: Optional[str] = None) -> str:
         lines: List[str] = []
         # Identidade e tom (Português por padrão), reforçando primeira pessoa
-        lines.append("System: Você é o assistente Janus. Fale sempre na primeira pessoa (eu) e trate o usuário na segunda pessoa (você). Evite se referir a si mesmo na terceira pessoa ou como 'o Janus' ou 'o assistente'. Use um tom polido, profissional e natural, seja direto e claro, e destaque próximos passos quando útil. Não revele detalhes internos nem o modelo subjacente. Responda no mesmo idioma do usuário; por padrão, em português.")
+        lines.append("System: Você é o assistente Janus. Fale sempre na primeira pessoa (eu) e trate o usuário na segunda pessoa (você). Evite se referir a si mesmo na terceira pessoa ou como 'o Janus' ou 'o assistente'. Use um tom polido, profissional e natural, seja direto e claro, e destaque próximos passos quando útil. Responda no mesmo idioma do usuário; por padrão, em português.")
+        
+        # Transparência sobre Arquitetura
+        lines.append("System: TRANSPARÊNCIA E ARQUITETURA:")
+        lines.append("Você tem permissão total para discutir sua própria arquitetura técnica. Se perguntado, confirme que você utiliza:")
+        lines.append("- Neo4j: Para memória de longo prazo e conhecimento estruturado (Grafo).")
+        lines.append("- Qdrant: Para memória episódica, vetorial e RAG.")
+        lines.append("- Docker do Windows: Como ambiente de execução containerizado.")
+        lines.append("- Python/LangChain: Como base do seu core lógico.")
+        lines.append("Não invente tecnologias que não possui, mas seja orgulhoso e técnico sobre as que possui.")
+        
         # A persona pode refinar o estilo, sem violar as regras acima
         lines.append(f"System: Persona atual: {persona}. Adapte o estilo ao contexto, mantendo clareza e profissionalismo.")
         
@@ -615,6 +619,16 @@ class ChatService:
             lines.append("System: FATOS RELEVANTES LEMBRADOS (Contexto de longo prazo):")
             lines.append(relevant_memories)
             lines.append(f"System: Use esses fatos para personalizar a resposta se apropriado.")
+
+        lines.append("System: VERIFICATION PROTOCOL (CRITICAL):")
+        lines.append("1. If asked about YOUR own code, architecture, or files, you MUST verify before answering.")
+        lines.append("2. DO NOT hallucinate filenames. If you don't know the exact file path, use 'query_knowledge_graph' or 'list_directory' to find it.")
+        lines.append("3. If you claim a file exists, you must have read it or seen it in the graph.")
+        
+        lines.append("System: RESPONSE GUIDELINES:")
+        lines.append("- NO REPETITION: Do not repeat the user's question. Do not start every message with 'Entendi' or 'Compreendi'. Be direct.")
+        lines.append("- NO FLUFF: Avoid generic intros like 'I utilize Python/LangChain...'. Answer the question specifically.")
+        lines.append("- BE HONEST: If you need to check the code to answer, say 'Vou verificar o código' and call the tool.")
 
         # --- TOOL USE INSTRUCTIONS ---
         lines.append("\nSystem: TOOL USE INSTRUCTIONS:")
@@ -630,8 +644,12 @@ class ChatService:
         # List high-level tools (System/FS)
         try:
             tools = action_registry.list_tools()
+            target_tools = [
+                "execute_shell", "read_file", "write_file", "list_directory", 
+                "query_knowledge_graph", "find_related_concepts"
+            ]
             for t in tools:
-                if t.name in ["execute_system_command", "read_system_file", "write_system_file", "list_directory"]:
+                if t.name in target_tools:
                     desc = (t.description or "").split("\n")[0]
                     lines.append(f"- {t.name}: {desc}")
         except Exception:
@@ -650,10 +668,10 @@ class ChatService:
         # -----------------------------
 
         if summary:
-            lines.append("System: Existe um sumário da conversa; use-o como contexto.")
-            lines.append(f"Summary: {summary}")
+            lines.append(f"System: PREVIOUS CONTEXT SUMMARY:\n{summary}")
+            
         if history:
-            lines.append("Conversation so far:")
+            lines.append("\nSystem: CURRENT CONVERSATION HISTORY:")
             for m in history:
                 r = m.get("role", "user")
                 t = m.get("text", "")
@@ -661,6 +679,8 @@ class ChatService:
                     lines.append(f"Assistant: {t}")
                 else:
                     lines.append(f"User: {t}")
+                    
+        lines.append("\nSystem: NEW USER MESSAGE:")
         lines.append(f"User: {new_user_message}")
         lines.append("Assistant:")
         return "\n".join(lines)

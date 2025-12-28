@@ -16,6 +16,12 @@ from fastapi import Request
 
 from app.core.protocols import MemoryRepositoryProtocol
 from app.models.schemas import Experience
+from uuid import uuid4
+import asyncio
+from app.core.embeddings.embedding_manager import embed_text
+from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from qdrant_client import models
+from app.config import settings
 
 logger = structlog.get_logger(__name__)
 _MEMORY_SERVICE_LATENCY = Histogram("memory_service_latency_seconds", "Latência por operação do serviço de memória", ["operation"])
@@ -121,6 +127,71 @@ class MemoryService:
             logger.error("Erro no serviço ao buscar lições recentes", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_recent_lessons", type(e).__name__).inc()
             raise MemoryServiceError(f"Erro ao buscar lições recentes: {e}")
+
+    async def index_interaction(self, content: str, user_id: str, session_id: str, role: str) -> None:
+        """
+        Indexa uma interação de chat (mensagem do usuário ou assistente) no banco vetorial.
+        Executa operações bloqueantes (embedding, IO) em thread separada.
+        """
+        if not content or not user_id:
+            return
+
+        logger.info("Indexando interação no vetor (Memória)", user_id=user_id, role=role)
+        
+        def _sync_index_logic():
+            try:
+                collection_name = get_or_create_collection(f"user_{user_id}")
+                client = get_qdrant_client()
+                
+                max_points = int(getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000)
+                
+                qfilter = models.Filter(
+                    must=[
+                        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="chat_msg")),
+                        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id)))
+                    ]
+                )
+                
+                # Check count
+                cnt = client.count(collection_name=collection_name, count_filter=qfilter, exact=True)
+                current = int(getattr(cnt, "count", 0) or 0)
+                
+                if current >= max_points:
+                    logger.warning("Limite de indexação de chat atingido", user_id=user_id)
+                    return
+
+                # Embed and Upsert
+                vec = embed_text(content)
+                now_ms = int(time.time() * 1000)
+                
+                payload = {
+                    "content": content,
+                    "ts_ms": now_ms,
+                    "metadata": {
+                        "type": "chat_msg",
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "role": role,
+                        "timestamp": now_ms,
+                    }
+                }
+                
+                # Qdrant requires UUID or int as ID. We store the composite ID in metadata for reference.
+                composite_id = f"chat:{user_id}:{session_id}:{uuid4().hex}"
+                payload["composite_id"] = composite_id
+                
+                # Use a proper UUID for the point ID
+                point_id = str(uuid4())
+                point = models.PointStruct(id=point_id, vector=vec, payload=payload)
+                
+                client.upsert(collection_name=collection_name, points=[point])
+                
+            except Exception as e:
+                logger.error("Erro ao indexar interação", exc_info=e)
+                # Suppress error to avoid breaking chat flow
+        
+        # Run in thread pool to avoid blocking async event loop
+        await asyncio.to_thread(_sync_index_logic)
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_memory_service(request: Request) -> MemoryService:

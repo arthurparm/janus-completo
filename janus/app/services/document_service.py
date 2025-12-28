@@ -266,7 +266,7 @@ class DocumentIngestionService:
         ts_ms = __import__("time").time()
         ts_ms = int(ts_ms * 1000)
         for i, vec in enumerate(vectors):
-            pid = f"doc:{user_id}:{doc_id}:{i}"
+            pid = str(uuid4())
             # Hash de conteúdo normalizado para dedupe
             norm = re.sub(r"\s+", " ", chunks[i]).strip().lower()
             content_hash = hashlib.sha256(norm.encode("utf-8")).hexdigest()

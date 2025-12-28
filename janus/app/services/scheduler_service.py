@@ -315,7 +315,7 @@ async def initialize_default_jobs(scheduler: SchedulerService):
     async def meta_agent_analysis():
         try:
             agent = MetaAgent()
-            await asyncio.to_thread(agent.run_analysis_cycle)
+            await agent.run_analysis_cycle()
         except Exception as e:
             logger.error(f"MetaAgent analysis failed: {e}")
     
@@ -330,7 +330,7 @@ async def initialize_default_jobs(scheduler: SchedulerService):
     # Job: Memory Health Check (a cada 10 minutos)
     async def memory_health_check():
         try:
-            memory = get_memory_db()
+            memory = await get_memory_db()
             if memory:
                 await memory.health_check()
         except Exception as e:
