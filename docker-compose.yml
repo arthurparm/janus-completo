@@ -5,7 +5,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: janus_api
     env_file:
-      - ./janus/config/.env
+      - ./janus/app/.env
     ports:
       - "8000:8000"
     volumes:
@@ -14,6 +14,7 @@ services:
       - ./janus/tests:/app/tests
       - ./janus/data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./janus/app/serviceAccountKey.json:/app/app/serviceAccountKey.json:ro
     command: [ "sh", "-lc", "/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
     depends_on:
       neo4j:
@@ -26,13 +27,6 @@ services:
         condition: service_healthy
     networks:
       - janus-net
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_ORCHESTRATOR_MODEL=llama3.1:8b
-      - OLLAMA_CODER_MODEL=llama3.1:8b
-      - OLLAMA_CURATOR_MODEL=llama3.1:8b
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
 
   front:
     image: node:20
@@ -114,7 +108,7 @@ services:
               count: all
               capabilities: [ gpu ]
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /tmp/tags.json && grep -q '\"model\":\"llama3.1:8b\"' /tmp/tags.json && grep -q '\"model\":\"codellama:7b\"' /tmp/tags.json && grep -q '\"model\":\"phi3:mini\"' /tmp/tags.json" ]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /tmp/tags.json && grep -q '\"model\":\"qwen2.5:14b\"' /tmp/tags.json && grep -q '\"model\":\"qwen2.5-coder:14b\"' /tmp/tags.json" ]
       interval: 15s
       timeout: 10s
       retries: 20

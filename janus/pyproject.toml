@@ -31,6 +31,7 @@ structlog = "*"
 prometheus-fastapi-instrumentator = "*"
 prometheus-client = "*"
 psutil = ">=5.9.0"
+google-cloud-monitoring = "^2.19.0"
 
 # Message Broker (RabbitMQ)
 aio-pika = ">=9.0.0"
@@ -64,7 +65,6 @@ pyttsx3 = "^2.90"
 openwakeword = "^0.5.1"
 scipy = "^1.11.0"
 
-# Firebase
 firebase-admin = "^6.5.0"
 
 [tool.poetry.group.dev.dependencies]

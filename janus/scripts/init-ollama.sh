@@ -11,23 +11,18 @@ while ! curl -s -f http://localhost:11434/api/tags > /dev/null; do
 done
 echo "Ollama server is ready."
 
-echo "Pulling orchestrator model: llama3.1:8b"
-ollama pull llama3.1:8b
+echo "Pulling orchestrator/curator model: qwen2.5:14b"
+ollama pull qwen2.5:14b
 
-echo "Pulling coder model: codellama:7b"
-ollama pull codellama:7b
-
-echo "Pulling curator model: phi3:mini"
-ollama pull phi3:mini
+echo "Pulling coder model: qwen2.5-coder:14b"
+ollama pull qwen2.5-coder:14b
 
 echo "Model pulling complete."
 
 echo "Pre-warming models to reduce first-request latency..."
 curl -sS -X POST http://localhost:11434/api/generate \
-  -d '{"model":"llama3.1:8b","prompt":"ping","keep_alive":"30m"}' > /dev/null || true
+  -d '{"model":"qwen2.5:14b","prompt":"ping","keep_alive":"30m"}' > /dev/null || true
 curl -sS -X POST http://localhost:11434/api/generate \
-  -d '{"model":"codellama:7b","prompt":"ping","keep_alive":"30m"}' > /dev/null || true
-curl -sS -X POST http://localhost:11434/api/generate \
-  -d '{"model":"phi3:mini","prompt":"ping","keep_alive":"30m"}' > /dev/null || true
+  -d '{"model":"qwen2.5-coder:14b","prompt":"ping","keep_alive":"30m"}' > /dev/null || true
 
 wait
