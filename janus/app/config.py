@@ -149,9 +149,9 @@ class AppSettings(BaseSettings):
     GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
     GEMINI_MODELS: List[str] = ["gemini-2.5-flash"]
     OLLAMA_HOST: str = "http://ollama:11434"
-    OLLAMA_ORCHESTRATOR_MODEL: str = "llama3.1:8b"
-    OLLAMA_CODER_MODEL: str = "llama3.1:8b"
-    OLLAMA_CURATOR_MODEL: str = "llama3.1:8b"
+    OLLAMA_ORCHESTRATOR_MODEL: str = "qwen2.5:14b"
+    OLLAMA_CODER_MODEL: str = "qwen2.5-coder:14b"
+    OLLAMA_CURATOR_MODEL: str = "qwen2.5:14b"
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor

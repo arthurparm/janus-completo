@@ -49,8 +49,8 @@ class SystemStatusService:
             p = psutil.Process(self._PID)
             rss_mb = float(p.memory_info().rss) / (1024 * 1024)
             proc_info["rss_mb"] = round(rss_mb, 2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to get process info: {e}")
 
         # Métricas de performance (CPU/Memória), se psutil disponível
         perf: Dict[str, Optional[float]] = {}
@@ -58,7 +58,8 @@ class SystemStatusService:
             import psutil  # type: ignore
             perf["cpu_percent"] = float(psutil.cpu_percent(interval=0.0))
             perf["memory_percent"] = float(psutil.virtual_memory().percent)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to get system performance metrics: {e}")
             perf["cpu_percent"] = None
             perf["memory_percent"] = None
 
@@ -70,7 +71,8 @@ class SystemStatusService:
         try:
             providers_cfg = getattr(settings, "LLM_PROVIDERS", {})
             cfg["providers_configured"] = len(providers_cfg) if isinstance(providers_cfg, dict) else 0
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to read providers config: {e}")
             cfg["providers_configured"] = 0
 
         return {

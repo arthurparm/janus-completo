@@ -59,6 +59,7 @@ from app.core.workers.neural_training_worker import start_neural_training_worker
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.senses.audio.manager import VoiceManager
 from app.core.agents.meta_agent_worker import MetaAgentWorker
+from app.core.workers.async_consolidation_worker import start_consolidation_worker
 from app.services.scheduler_service import get_scheduler, initialize_default_jobs
 
 logger = structlog.get_logger(__name__)
@@ -119,6 +120,7 @@ class Kernel:
         # Workers
         self.workers: List[Any] = []
         self._neural_training_task = None
+        self._consolidation_consumer_task = None
         self.scheduler = None
 
     @classmethod
@@ -182,6 +184,10 @@ class Kernel:
         # 4. Observability & Workers
         await self._start_background_processes()
         
+        # 5. Background Warm-up (Non-blocking)
+        asyncio.create_task(self._warm_up_llms_async())
+
+        
         # 5. Senses (Voice)
         try:
             self.voice_manager = VoiceManager()
@@ -203,7 +209,10 @@ class Kernel:
         try:
             if self._neural_training_task:
                 self._neural_training_task.cancel()
-                # await self._neural_training_task # Optional: wait for cancel
+            
+            if self._consolidation_consumer_task:
+                self._consolidation_consumer_task.cancel()
+                # await self._consolidation_consumer_task # Optional
         except Exception:
             pass
 
@@ -277,13 +286,8 @@ class Kernel:
         self.llm_service = LLMService(self.llm_repo)
         self.assistant_service = AssistantService(self.llm_service)
         
-        # Warmup LLM
-        try:
-            warm_specs = getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or []
-            if warm_specs:
-                self.llm_service.warm_pool(warm_specs)
-        except Exception:
-            pass
+        # Warmup LLM moved to startup background task
+        pass
             
         # Goal Manager
         self.goal_manager = GoalManager(self.memory_service)
@@ -328,6 +332,13 @@ class Kernel:
         await knowledge_consolidator.start()
         await data_harvester.start()
         await life_cycle_worker.start()
+
+        # Start Async Knowledge Consolidation Worker (RabbitMQ Consumer)
+        try:
+            self._consolidation_consumer_task = await start_consolidation_worker()
+            logger.info("Async consolidation worker started.")
+        except Exception as e:
+            logger.error(f"Failed to start async consolidation worker: {e}")
         
         # Meta Agent Worker (Persistent Supervisor)
         meta_agent_interval = int(getattr(settings, "META_AGENT_CYCLE_INTERVAL_SECONDS", 3600))
@@ -372,3 +383,15 @@ class Kernel:
             logger.info("Automatic indexation complete.")
         except Exception as e:
             logger.error(f"Error during automatic indexation: {e}", exc_info=True)
+
+    async def _warm_up_llms_async(self):
+        """Warm up LLMs in a separate thread to avoid blocking the event loop."""
+        try:
+            warm_specs = getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or []
+            if warm_specs and self.llm_service:
+                logger.info("Starting background LLM pool warm-up...")
+                # Run the synchronous warm_pool in a thread
+                warmed = await asyncio.to_thread(self.llm_service.warm_pool, warm_specs)
+                logger.info(f"Background LLM warm-up complete. Warmed: {warmed}")
+        except Exception as e:
+            logger.warning(f"Background LLM warm-up failed (non-critical): {e}")

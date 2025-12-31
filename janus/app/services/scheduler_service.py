@@ -358,4 +358,23 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         metadata={"description": "Limpeza diária de logs e cache"}
     )
     
+    # Job: Update Gemini Quotas (a cada 1 hora)
+    async def update_gemini_quotas():
+        try:
+            from app.core.llm.gemini_quota import GeminiQuotaFetcher
+            logger.info("Updating Gemini quotas...")
+            fetcher = GeminiQuotaFetcher()
+            fetcher.fetch_and_update_limits()
+            logger.info("Gemini quotas updated successfully.")
+        except Exception as e:
+            logger.error(f"Failed to update Gemini quotas: {e}")
+            
+    scheduler.register_job(
+        name="update_gemini_quotas",
+        callback=update_gemini_quotas,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=3600,  # 1 hora
+        metadata={"description": "Atualização de cotas da API Gemini via Google Cloud Monitoring"}
+    )
+    
     logger.info(f"Jobs padrão registrados: {len(scheduler.list_jobs())}")
