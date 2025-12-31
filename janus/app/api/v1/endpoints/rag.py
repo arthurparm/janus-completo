@@ -22,8 +22,8 @@ except Exception:
     _RAG_LAT = _Noop()  # type: ignore
     _RAG_RESULTS_TOTAL = _Noop()  # type: ignore
     _RAG_SCORES = _Noop()  # type: ignore
-from app.core.embeddings.embedding_manager import embed_text
-from app.db.vector_store import get_qdrant_client, get_or_create_collection
+from app.core.embeddings.embedding_manager import embed_text, aembed_text
+from app.db.vector_store import get_qdrant_client, get_or_create_collection, get_async_qdrant_client, aget_or_create_collection
 from qdrant_client import models
 try:
     from opentelemetry import trace  # type: ignore
@@ -136,12 +136,17 @@ async def rag_user_chat_search(
     limit: Optional[int] = Query(5, ge=1, le=10),
     min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
 ):
-    from app.core.embeddings.embedding_manager import embed_text
-    from app.db.vector_store import get_qdrant_client, get_or_create_collection
+    from app.core.embeddings.embedding_manager import aembed_text
+    from app.db.vector_store import get_async_qdrant_client, aget_or_create_collection
     from qdrant_client import models
 
-    collection_name = get_or_create_collection(f"user_{user_id}")
-    vec = embed_text(query)
+    # Async
+    try:
+        collection_name = await aget_or_create_collection(f"user_{user_id}")
+        vec = await aembed_text(query)
+    except Exception:
+        # Fallback se falhar
+        return RAGUserChatResponse(answer="Erro na busca.", citations=[])
 
     must: List[models.FieldCondition] = []
     if session_id:
@@ -150,13 +155,13 @@ async def rag_user_chat_search(
         must.append(models.FieldCondition(key="metadata.role", match=models.MatchValue(value=role)))
     qfilter = models.Filter(must=must) if must else None
 
-    client = get_qdrant_client()
+    client = get_async_qdrant_client()
     import time as _t
     _start = _t.perf_counter()
     cm = (_tracer.start_as_current_span("rag.user_chat") if _OTEL else nullcontext())
     try:
         with cm:  # type: ignore
-            hits = client.search(collection_name=collection_name, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+            hits = await client.search(collection_name=collection_name, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -227,12 +232,15 @@ async def rag_productivity_search(
     limit: Optional[int] = Query(5, ge=1, le=10),
     min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
 ):
-    from app.core.embeddings.embedding_manager import embed_text
-    from app.db.vector_store import get_qdrant_client, get_or_create_collection
+    from app.core.embeddings.embedding_manager import aembed_text
+    from app.db.vector_store import get_async_qdrant_client, aget_or_create_collection
     from qdrant_client import models
 
-    coll = get_or_create_collection(f"user_{user_id}")
-    vec = embed_text(query)
+    try:
+        coll = await aget_or_create_collection(f"user_{user_id}")
+        vec = await aembed_text(query)
+    except Exception:
+        return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
 
     must: List[models.FieldCondition] = [
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
@@ -245,13 +253,13 @@ async def rag_productivity_search(
     ]
     qfilter = models.Filter(must=must, must_not=must_not) if must else models.Filter(must_not=must_not)
 
-    client = get_qdrant_client()
+    client = get_async_qdrant_client()
     import time as _t
     _start = _t.perf_counter()
     cm = (_tracer.start_as_current_span("rag.productivity") if _OTEL else nullcontext())
     try:
         with cm:  # type: ignore
-            hits = client.search(collection_name=coll, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
+            hits = await client.search(collection_name=coll, query_vector=vec, limit=limit or 5, with_payload=True, query_filter=qfilter)
         _RAG_REQ.labels("productivity", "success").inc()
         _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -304,16 +312,17 @@ async def rag_productivity_search(
     return RAGProductivityResponse(answer=answer, citations=citations)
 
 
-class RAGUserChatResponse(BaseModel):
+class RAGUserChatResponseV2(BaseModel):
     results: List[Dict[str, Any]]
 
 
 @router.get(
     "/user_chat",
-    response_model=RAGUserChatResponse,
-    summary="Busca semântica em mensagens pessoais de chat"
+    response_model=RAGUserChatResponseV2,
+    summary="Busca semântica em mensagens pessoais de chat",
+    name="user_chat_v2" # Avoid duplicate name
 )
-async def rag_user_chat_search(
+async def rag_user_chat_search_v2(
     query: str,
     user_id: Optional[str] = None,
     session_id: Optional[str] = None,
@@ -329,10 +338,18 @@ async def rag_user_chat_search(
         except Exception:
             user_id = None
     if not user_id:
-        return RAGUserChatResponse(results=[])
-    vec = embed_text(query)
-    client = get_qdrant_client()
-    collection_name = get_or_create_collection(f"user_{user_id}")
+        return RAGUserChatResponseV2(results=[])
+    
+    from app.core.embeddings.embedding_manager import aembed_text
+    from app.db.vector_store import get_async_qdrant_client, aget_or_create_collection
+    
+    try:
+        vec = await aembed_text(query)
+        client = get_async_qdrant_client()
+        collection_name = await aget_or_create_collection(f"user_{user_id}")
+    except Exception:
+         return RAGUserChatResponseV2(results=[])
+
     # Filtro por payload
     must: List[models.FieldCondition] = [
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
@@ -357,7 +374,7 @@ async def rag_user_chat_search(
     cm = (_tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext())
     try:
         with cm:  # type: ignore
-            res = client.search(
+            res = await client.search(
         collection_name=collection_name,
         query_vector=vec,
         limit=limit,
@@ -389,7 +406,7 @@ async def rag_user_chat_search(
             "session_id": meta.get("session_id"),
             "timestamp": meta.get("timestamp"),
         })
-    return RAGUserChatResponse(results=results)
+    return RAGUserChatResponseV2(results=results)
 
 
 class RAGHybridResponse(BaseModel):

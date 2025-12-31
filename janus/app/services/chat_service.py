@@ -54,8 +54,8 @@ class ChatService:
         cid = self._repo.start_conversation(persona, user_id, project_id)
         try:
             update_active_conversations(self._repo.count_conversations())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to update active conversation metrics: {e}")
         return cid
 
     async def send_message(
@@ -74,7 +74,7 @@ class ChatService:
             raise ConversationNotFoundError(str(e)) from e
 
         persona = conv.get("persona") or "assistant"
-        history = self._repo.get_recent_messages(conversation_id, limit=20)
+        history = self._repo.get_recent_messages(conversation_id, limit=60)
         prompt = self._build_prompt(persona, history, message, conv.get("summary"))
 
         # Store user message before invocation
@@ -84,8 +84,8 @@ class ChatService:
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
         try:
             await self._maybe_index_message(text=message, user_id=user_id, conversation_id=conversation_id, role="user")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to index user message for {conversation_id}: {e}")
 
         # Quick Commands (Quick Win) - Comandos com / são processados diretamente
         if self._is_quick_command(message):
@@ -126,8 +126,8 @@ class ChatService:
             try:
                 self._maybe_summarize(conversation_id, role=role, priority=priority, user_id=user_id,
                                       project_id=project_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to trigger summary during discovery for {conversation_id}: {e}")
 
             result = {
                 "response": assistant_text,
@@ -699,7 +699,7 @@ class ChatService:
             priority: ModelPriority,
             user_id: Optional[str],
             project_id: Optional[str],
-            threshold_messages: int = 40,
+            threshold_messages: int = 80,
     ) -> None:
         conv = self._repo.get_conversation(conversation_id)
         msgs = conv.get("messages", [])
@@ -727,9 +727,9 @@ class ChatService:
             )
             summary_text = res.get("response", "")
             self._repo.update_summary(conversation_id, summary_text)
-        except Exception:
-            # falha silenciosa
-            pass
+        except Exception as e:
+            logger.error(f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
+            # Fail silently but log it - summarization is optional but we need to know why it failed
 
     # Conversas: list/rename/delete com RBAC básico
     def list_conversations(self, user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = 50) -> \
@@ -1381,11 +1381,13 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
             # Compute citations near the end based on user/session context
             citations: List[Dict[str, Any]] = []
             try:
-                from app.core.embeddings.embedding_manager import embed_text
-                from app.db.vector_store import get_qdrant_client, get_or_create_collection
+                from app.core.embeddings.embedding_manager import aembed_text
+                from app.db.vector_store import get_async_qdrant_client, aget_or_create_collection
                 from qdrant_client import models as _models
-                vec = embed_text(message)
-                coll = get_or_create_collection(f"user_{user_id}") if user_id else get_or_create_collection("janus_episodic_memory")
+                
+                vec = await aembed_text(message)
+                coll = await aget_or_create_collection(f"user_{user_id}") if user_id else await aget_or_create_collection("janus_episodic_memory")
+                
                 must: List[_models.FieldCondition] = []
                 if user_id:
                     must.append(_models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id))))
@@ -1394,9 +1396,10 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
                 must_not: List[_models.FieldCondition] = [
                     _models.FieldCondition(key="metadata.status", match=_models.MatchValue(value="duplicate"))
                 ]
+                
                 qfilter = _models.Filter(must=must, must_not=must_not) if must else _models.Filter(must_not=must_not)
-                client = get_qdrant_client()
-                hits = client.search(collection_name=coll, query_vector=vec, limit=5, with_payload=True, query_filter=qfilter)
+                client = get_async_qdrant_client()
+                hits = await client.search(collection_name=coll, query_vector=vec, limit=5, with_payload=True, query_filter=qfilter)
                 for h in hits or []:
                     payload = getattr(h, "payload", {}) or {}
                     meta = payload.get("metadata") or {}

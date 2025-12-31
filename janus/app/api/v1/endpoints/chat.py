@@ -143,7 +143,8 @@ async def send_message(payload: ChatMessageRequest, service: ChatService = Depen
                 "origin": meta.get("origin"),
                 "score": r.get("score"),
             })
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to retrieve citations for message: {e}")
         citations = []
     result["citations"] = citations
     return ChatMessageResponse(**result)

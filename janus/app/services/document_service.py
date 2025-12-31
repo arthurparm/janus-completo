@@ -3,8 +3,8 @@ import hashlib
 import re
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
-from qdrant_client import QdrantClient, models
-from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from qdrant_client import models
+from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.repositories.observability_repository import record_audit_event_direct
 try:
@@ -15,7 +15,7 @@ except Exception:
     _OTEL = False
     from contextlib import nullcontext
     _tracer = None
-from app.core.embeddings.embedding_manager import embed_texts
+from app.core.embeddings.embedding_manager import aembed_texts
 try:
     from prometheus_client import Counter  # type: ignore
 except Exception:
@@ -44,12 +44,13 @@ class DocumentIngestionService:
             except Exception:
                 pass
             return s
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Text plain extraction failed: {e}", exc_info=True)
             try:
                 _DOC_PARSE_TOTAL.labels("plain", "error").inc()
                 _DOC_PARSE_LATENCY.labels("plain", "error").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric error recording failed: {e}")
             return ""
 
     def _extract_text_html(self, data: bytes) -> str:
@@ -67,15 +68,16 @@ class DocumentIngestionService:
             try:
                 _DOC_PARSE_TOTAL.labels("html", "success").inc()
                 _DOC_PARSE_LATENCY.labels("html", "success").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric recording failed: {e}")
             return text
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Text html extraction failed: {e}", exc_info=True)
             try:
                 _DOC_PARSE_TOTAL.labels("html", "error").inc()
                 _DOC_PARSE_LATENCY.labels("html", "error").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric error recording failed: {e}")
             return ""
 
     def _extract_text_docx(self, data: bytes) -> str:
@@ -98,15 +100,16 @@ class DocumentIngestionService:
             try:
                 _DOC_PARSE_TOTAL.labels("docx", "success").inc()
                 _DOC_PARSE_LATENCY.labels("docx", "success").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric recording failed: {e}")
             return txt
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Text docx extraction failed: {e}", exc_info=True)
             try:
                 _DOC_PARSE_TOTAL.labels("docx", "error").inc()
                 _DOC_PARSE_LATENCY.labels("docx", "error").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric error recording failed: {e}")
             return ""
 
     def _extract_text_pdf(self, data: bytes) -> str:
@@ -129,15 +132,16 @@ class DocumentIngestionService:
             try:
                 _DOC_PARSE_TOTAL.labels("pdf", "success").inc()
                 _DOC_PARSE_LATENCY.labels("pdf", "success").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric recording failed: {e}")
             return s
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Text pdf extraction failed: {e}", exc_info=True)
             try:
                 _DOC_PARSE_TOTAL.labels("pdf", "error").inc()
                 _DOC_PARSE_LATENCY.labels("pdf", "error").observe(max(0.0, _t.perf_counter() - _t0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Metric error recording failed: {e}")
             return ""
 
     def _chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[str]:
@@ -238,21 +242,22 @@ class DocumentIngestionService:
             return {"doc_id": doc_id, "chunks": 0, "status": "empty"}
 
         _t0 = __import__("time").perf_counter()
-        vectors = embed_texts(chunks)
+        vectors = await aembed_texts(chunks)
         try:
             _DOC_INGEST_LATENCY.observe(max(0.0, __import__("time").perf_counter() - _t0))
         except Exception:
             pass
-        collection_name = get_or_create_collection(f"user_{user_id}")
-        client: QdrantClient = get_qdrant_client()
+        collection_name = await aget_or_create_collection(f"user_{user_id}")
+        client = get_async_qdrant_client()
         try:
             from qdrant_client import models as _models
+            from app.config import settings
             max_points_user = int(getattr(settings, "DOC_INDEX_MAX_POINTS_PER_USER", 500000) or 500000)
             qfilter_user = _models.Filter(must=[
                 _models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="doc_chunk")),
                 _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id))),
             ])
-            cnt_user = client.count(collection_name=collection_name, count_filter=qfilter_user, exact=True)
+            cnt_user = await client.count(collection_name=collection_name, count_filter=qfilter_user, exact=True)
             cur_user = int(getattr(cnt_user, "count", 0) or 0)
             if cur_user >= max_points_user:
                 try:
@@ -278,7 +283,7 @@ class DocumentIngestionService:
                     _models.FieldCondition(key="metadata.content_hash", match=_models.MatchValue(value=content_hash)),
                     _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=str(user_id))),
                 ])
-                cnt_hash = client.count(collection_name=collection_name, count_filter=qfilter_hash, exact=True)
+                cnt_hash = await client.count(collection_name=collection_name, count_filter=qfilter_hash, exact=True)
                 if int(getattr(cnt_hash, "count", 0) or 0) > 0:
                     dup_status = "duplicate"
             except Exception:
@@ -298,7 +303,7 @@ class DocumentIngestionService:
                 "content": chunks[i][:2000],
             }
             points.append(models.PointStruct(id=pid, vector=vec, payload=payload))
-        client.upsert(collection_name=collection_name, points=points)
+        await client.upsert(collection_name=collection_name, points=points)
         try:
             _DOC_INGEST_POINTS_TOTAL.labels("success").inc(len(points))
             _DOC_INGEST_FILES_TOTAL.labels("indexed").inc()
@@ -348,4 +353,3 @@ except Exception:
     _DOC_INGEST_FILES_USER_TOTAL = _NoopC()
     _DOC_PARSE_LATENCY = _NoopH()
     _DOC_PARSE_TOTAL = _NoopC()
-

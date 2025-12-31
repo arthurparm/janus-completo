@@ -247,7 +247,9 @@ async def delete_document(doc_id: str, user_id: Optional[str] = None, request: R
             models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
         ])
         client.delete(collection_name=coll, points_selector=models.FilterSelector(filter=qfilter))
-    except Exception:
+    except Exception as e:
+        import structlog
+        structlog.get_logger(__name__).error(f"Failed to delete document {doc_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao excluir documento")
     return {"status": "ok"}
 
@@ -279,7 +281,9 @@ async def link_url(
             resp = await client.get(url)
             ct = resp.headers.get("content-type", "text/html")
             data = resp.content
-    except Exception:
+    except Exception as e:
+        import structlog
+        structlog.get_logger(__name__).error(f"Failed to fetch URL {url}: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falha ao obter URL")
     filename = url.split("/")[-1] or "page.html"
     result = await service.ingest_file(user_id=uid, filename=filename, content_type=ct, data=data, conversation_id=conversation_id)
