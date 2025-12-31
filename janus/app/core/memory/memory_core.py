@@ -232,7 +232,23 @@ class MemoryCore:
             pass
         payload["metadata"] = meta
 
-        point = models.PointStruct(id=experience.id, payload=payload, vector=vector)
+        # Helper to ensure ID is Qdrant-compliant (UUID or Int)
+        def _ensure_valid_point_id(id_val: str) -> Any:
+            try:
+                # Is it a valid integer?
+                return int(id_val)
+            except ValueError:
+                pass
+            try:
+                # Is it a valid UUID?
+                uuid.UUID(id_val)
+                return id_val
+            except ValueError:
+                # Iterate/Hash to a deterministic UUID
+                return str(uuid.uuid5(uuid.NAMESPACE_DNS, id_val))
+
+        clean_id = _ensure_valid_point_id(experience.id)
+        point = models.PointStruct(id=clean_id, payload=payload, vector=vector)
         if not self._offline:
             try:
                 cm = (_tracer.start_as_current_span("memory.upsert") if _OTEL else nullcontext())

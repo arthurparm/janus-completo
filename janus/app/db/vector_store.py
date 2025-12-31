@@ -125,13 +125,13 @@ def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_V
             try:
                 client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
                                             field_schema=PayloadSchemaType.KEYWORD)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to create 'origin' index for {collection_name}: {e}")
             try:
                 client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
                                             field_schema=PayloadSchemaType.KEYWORD)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to create 'status' index for {collection_name}: {e}")
             logger.info(f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp.")
         except Exception as create_error:
             logger.error(f"Falha ao criar coleção '{collection_name}': {create_error}", exc_info=True)
@@ -164,13 +164,13 @@ async def aget_or_create_collection(collection_name: str, vector_size: int = _DE
             try:
                 await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
                                                         field_schema=PayloadSchemaType.KEYWORD)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to create async 'origin' index for {collection_name}: {e}")
             try:
                 await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
                                                         field_schema=PayloadSchemaType.KEYWORD)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to create async 'status' index for {collection_name}: {e}")
             logger.info(
                 f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async.")
         except Exception as create_error:
@@ -199,13 +199,13 @@ def reset_client():
     if _qdrant_client:
         try:
             _qdrant_client.close()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Error closing sync Qdrant client: {e}")
     if _async_qdrant_client:
         try:
             asyncio.run(_async_qdrant_client.close())
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Error closing async Qdrant client: {e}")
     _qdrant_client = None
     _client_initialized = False
     _init_error = None

@@ -158,10 +158,12 @@ async def start_consolidation_worker():
     await knowledge_consolidator._initialize()
 
     # Inicia consumidor da fila
+    # Reduzido prefetch_count para 2 para mitigar latência no LLM (evitar starvation de requisições interativas)
+    # Originalmente 5, mas com backlog alto, isso pode saturar o Ollama.
     consumer_task = broker.start_consumer(
         queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
         callback=process_consolidation_task,
-        prefetch_count=5  # Processa até 5 tarefas em paralelo
+        prefetch_count=2
     )
 
     logger.info("✓ Worker de consolidação de conhecimento iniciado.")
