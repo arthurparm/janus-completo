@@ -136,7 +136,8 @@ class LLMService:
                 if cb.get("provider") == provider and cb.get("state") == "open":
                     return True
             return False
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to check provider status: {e}")
             return False
 
 # Padrão de Injeção de Dependência: Getter para o serviço

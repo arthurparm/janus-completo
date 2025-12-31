@@ -66,6 +66,10 @@ def get(prompt: str, role: str, priority: str) -> Optional[Dict[str, Any]]:
         if not entry:
             _RESPONSE_CACHE_MISSES.inc()
             return None
+        
+        # LRU: Mover para o final (mais recente)
+        _cache.move_to_end(key)
+        
         ttl = entry.get("ttl", _DEFAULT_TTL)
         if entry["created_at"] + ttl < _now():
             # Expirado; remoção
@@ -73,6 +77,7 @@ def get(prompt: str, role: str, priority: str) -> Optional[Dict[str, Any]]:
             _RESPONSE_CACHE_MISSES.inc()
             _RESPONSE_CACHE_SIZE.set(len(_cache))
             return None
+            
         _RESPONSE_CACHE_HITS.inc()
         _LLM_CACHE_HITS.inc()
         return entry
@@ -83,6 +88,15 @@ def put(prompt: str, role: str, priority: str, response: str, provider: str, mod
         return
     key = _make_key(hash_prompt(prompt), role, priority)
     with _lock:
+        # Se já existe, remove para atualizar e mover pro fim
+        if key in _cache:
+            _cache.pop(key)
+        
+        # Se cheio, remove o mais antigo (primeiro)
+        if len(_cache) >= _MAX_ITEMS:
+            _cache.popitem(last=False)
+            _RESPONSE_CACHE_EVICTIONS.inc()
+
         entry: Dict[str, Any] = {
             "response": response,
             "provider": provider,

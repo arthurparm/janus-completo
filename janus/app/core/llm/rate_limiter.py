@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,10 @@ class ModelUsageTracker:
         
         # Modelos explicitamente marcados como esgotados para o dia (via erro 429 externo)
         self._daily_exhausted: set[str] = set()
+        
+        # Tenta carregar do Firebase se habilitado
+        if getattr(settings, "FIREBASE_ENABLED", False):
+            self.load_limits_from_firebase()
     
     def _start_of_day(self) -> float:
         """Retorna timestamp do início do dia atual (UTC)."""
@@ -98,24 +103,172 @@ class ModelUsageTracker:
                 }
     
     def configure_limits_bulk(self, limits: Dict[str, Dict[str, Any]]):
-        """Configura limites em lote a partir de um dicionário."""
-        for model_spec, limit_dict in limits.items():
+        """Configura limites em lote (ex: do settings)."""
+        for key_str, config_dict in limits.items():
             try:
-                if ":" in model_spec:
-                    provider, model = model_spec.split(":", 1)
+                if ":" in key_str:
+                    provider, model = key_str.split(":", 1)
                 else:
-                    # Assume OpenAI se não especificado
-                    provider, model = "openai", model_spec
+                    provider = key_str
+                    model = "*"
                 
-                config = RateLimitConfig(
-                    tpm=limit_dict.get("tpm"),
-                    rpm=limit_dict.get("rpm"),
-                    rpd=limit_dict.get("rpd"),
-                    tpd=limit_dict.get("tpd"),
+                cfg = RateLimitConfig(
+                    tpm=config_dict.get("tpm"),
+                    rpm=config_dict.get("rpm"),
+                    rpd=config_dict.get("rpd"),
+                    tpd=config_dict.get("tpd"),
                 )
-                self.configure_limits(provider.strip(), model.strip(), config)
+                self.configure_limits(provider, model, cfg)
             except Exception as e:
-                logger.warning(f"Erro ao configurar limite para '{model_spec}': {e}")
+                logger.error(f"Erro ao configurar limite para {key_str}: {e}")
+
+    def load_limits_from_firebase(self):
+        """Carrega limites do Firebase Realtime Database."""
+        if not getattr(settings, "FIREBASE_ENABLED", False):
+            return
+
+        try:
+            from app.core.infrastructure.firebase import get_firebase_service
+            db = get_firebase_service().get_database()
+            ref = db.child("config").child("rate_limits")
+            remote_limits = ref.get()
+            
+            if remote_limits and isinstance(remote_limits, dict):
+                logger.info(f"Carregando {len(remote_limits)} configurações de limite do Firebase.")
+                self.configure_limits_bulk(remote_limits)
+        except Exception as e:
+            logger.warning(f"Falha ao carregar limites do Firebase: {e}")
+
+    def save_limit_to_firebase(self, key: str, config: RateLimitConfig):
+        """Salva um limite específico no Firebase."""
+        if not getattr(settings, "FIREBASE_ENABLED", False):
+            return
+
+        try:
+            from app.core.infrastructure.firebase import get_firebase_service
+            db = get_firebase_service().get_database()
+            ref = db.child("config").child("rate_limits").child(key)
+            
+            data = {
+                "rpm": config.rpm,
+                "tpm": config.tpm,
+                "rpd": config.rpd,
+                "tpd": config.tpd
+            }
+            # Remove None values
+            data = {k: v for k, v in data.items() if v is not None}
+            
+            ref.set(data)
+            logger.debug(f"Limite para {key} salvo no Firebase.")
+        except Exception as e:
+            logger.error(f"Falha ao salvar limite {key} no Firebase: {e}")
+
+    def update_limits_from_headers(self, provider: str, model: str, headers: Dict[str, Any]):
+        """
+        Atualiza limites e uso baseado em headers de resposta da API (ex: OpenAI).
+        Captura 'x-ratelimit-limit-*' e 'x-ratelimit-remaining-*'.
+        """
+        key = self._get_model_key(provider, model)
+        
+        # Normaliza headers para lowercase
+        h = {k.lower(): v for k, v in headers.items()}
+        
+        limit_req = h.get("x-ratelimit-limit-requests")
+        rem_req = h.get("x-ratelimit-remaining-requests")
+        limit_tok = h.get("x-ratelimit-limit-tokens")
+        rem_tok = h.get("x-ratelimit-remaining-tokens")
+        
+        if not any([limit_req, rem_req, limit_tok, rem_tok]):
+            return
+
+        with self._lock:
+            # Garante existência da config/usage se ainda não houver
+            if key not in self._limits:
+                self._limits[key] = RateLimitConfig()
+            if key not in self._usage:
+                self._usage[key] = {
+                    "minute": UsageWindow(window_duration_seconds=60.0),
+                    "day": UsageWindow(window_duration_seconds=86400.0),
+                }
+
+            cfg = self._limits[key]
+            minute_window = self._usage[key]["minute"]
+            
+            # Atualiza Configuração (Max Limits)
+            updated = False
+            if limit_req:
+                try:
+                    val = int(limit_req)
+                    if cfg.rpm != val:
+                        cfg.rpm = val
+                        updated = True
+                except Exception as e:
+                    logger.debug(f"Failed to parse x-ratelimit-limit-requests: {e}")
+            
+            if limit_tok:
+                try:
+                    val = int(limit_tok)
+                    if cfg.tpm != val:
+                        cfg.tpm = val
+                        updated = True
+                except Exception as e:
+                    logger.debug(f"Failed to parse x-ratelimit-limit-tokens: {e}")
+            
+            # Persiste no Firebase se houve alteração na configuração de limites
+            if updated and getattr(settings, "FIREBASE_ENABLED", False):
+                self.save_limit_to_firebase(key, cfg)
+
+            # Atualiza Uso (Remaining)
+            # Se a API diz que restam X, ajustamos nosso contador interno para (Limit - X)
+            # Isso sincroniza nosso estado local com a realidade do servidor
+            if rem_req and cfg.rpm:
+                try:
+                    rem = int(rem_req)
+                    used = max(0, cfg.rpm - rem)
+                    # Se o reset for curto, assumimos que é janela de minuto
+                    minute_window.requests = used
+                    # Atualiza timestamp para evitar reset imediato incorreto
+                    minute_window.window_start = time.time() 
+                except Exception as e:
+                    logger.debug(f"Failed to parse x-ratelimit-remaining-requests: {e}")
+            
+            if rem_tok and cfg.tpm:
+                try:
+                    rem = int(rem_tok)
+                    used = max(0, cfg.tpm - rem)
+                    minute_window.tokens = used
+                    minute_window.window_start = time.time()
+                except Exception as e:
+                    logger.debug(f"Failed to parse x-ratelimit-remaining-tokens: {e}")
+
+            # Atualiza Uso (Sincronização com Servidor)
+            # Usage = Limit - Remaining
+            if limit_req and rem_req:
+                try:
+                    l_r = int(limit_req)
+                    r_r = int(rem_req)
+                    if l_r > 0:
+                        used_r = max(0, l_r - r_r)
+                        # Atualiza janela de minuto
+                        minute_window.requests = used_r
+                        # Como é uma snapshot do servidor, assumimos que isso reflete o estado atual
+                        # Resetamos o window_start para agora para evitar reset imediato
+                        minute_window.window_start = time.time()
+                except Exception as e:
+                    logger.debug(f"Failed to calculate request usage from headers: {e}")
+
+            if limit_tok and rem_tok:
+                try:
+                    l_t = int(limit_tok)
+                    r_t = int(rem_tok)
+                    if l_t > 0:
+                        used_t = max(0, l_t - r_t)
+                        minute_window.tokens = used_t
+                        minute_window.window_start = time.time()
+                except Exception as e:
+                    logger.debug(f"Failed to calculate token usage from headers: {e}")
+            
+            logger.debug(f"RateLimit atualizado via headers para {key}: RPM={cfg.rpm}, TPM={cfg.tpm}, UsedReq={minute_window.requests}, UsedTok={minute_window.tokens}")
     
     def _check_daily_reset(self):
         """Reseta contadores diários se passou da meia-noite."""
@@ -145,6 +298,34 @@ class ModelUsageTracker:
             self._daily_exhausted.add(key)
             logger.warning(f"Modelo {key} marcado como ESGOTADO para o dia. Será liberado à meia-noite UTC.")
     
+    def update_model_limits(self, provider: str, model: str, rpm: Optional[int] = None, rpd: Optional[int] = None, tpm: Optional[int] = None, tpd: Optional[int] = None):
+        """Atualiza limites configurados para um modelo manualmente."""
+        key = self._get_model_key(provider, model)
+        with self._lock:
+            if key not in self._limits:
+                self._limits[key] = RateLimitConfig()
+            
+            cfg = self._limits[key]
+            updated = False
+            
+            if rpm is not None and cfg.rpm != rpm:
+                cfg.rpm = rpm
+                updated = True
+            if rpd is not None and cfg.rpd != rpd:
+                cfg.rpd = rpd
+                updated = True
+            if tpm is not None and cfg.tpm != tpm:
+                cfg.tpm = tpm
+                updated = True
+            if tpd is not None and cfg.tpd != tpd:
+                cfg.tpd = tpd
+                updated = True
+                
+            if updated:
+                logger.info(f"Limites atualizados manualmente para {key}: {cfg}")
+                if getattr(settings, "FIREBASE_ENABLED", False):
+                    self.save_limit_to_firebase(key, cfg)
+
     def register_usage(self, provider: str, model: str, tokens: int = 0, requests: int = 1):
         """Registra uso de tokens/requests para um modelo."""
         key = self._get_model_key(provider, model)

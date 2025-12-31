@@ -30,16 +30,43 @@ def _get_executor(provider_key: str) -> ThreadPoolExecutor:
 _openai_http_client: Optional[httpx.Client] = None
 _openai_client: Optional[OpenAI] = None
 
-def _get_openai_client() -> OpenAI:
-    global _openai_client, _openai_http_client
-    if _openai_client is None:
+def _get_openai_http_client() -> httpx.Client:
+    global _openai_http_client
+    if _openai_http_client is None:
         max_conn = int(getattr(settings, "OPENAI_HTTP_MAX_CONNECTIONS", 100) or 100)
         max_keep = int(getattr(settings, "OPENAI_HTTP_MAX_KEEPALIVE", 20) or 20)
         timeout = float(getattr(settings, "OPENAI_HTTP_TIMEOUT_SECONDS", settings.LLM_DEFAULT_TIMEOUT_SECONDS) or settings.LLM_DEFAULT_TIMEOUT_SECONDS)
         limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=max_keep)
-        _openai_http_client = httpx.Client(limits=limits, timeout=timeout)
+        
+        def _rate_limit_hook(response: httpx.Response):
+            try:
+                # Verifica headers de rate limit (OpenAI e compatíveis)
+                if "x-ratelimit-limit-requests" in response.headers:
+                    model = "unknown"
+                    try:
+                        import json
+                        if response.request.content:
+                            body = json.loads(response.request.content)
+                            model = body.get("model", "unknown")
+                    except:
+                        pass
+                    
+                    from .rate_limiter import get_rate_limiter
+                    # Detecta provider pela URL ou headers (por enquanto hardcoded openai para headers padrão)
+                    provider = "openai" 
+                    get_rate_limiter().update_limits_from_headers(provider, model, dict(response.headers))
+            except Exception as e:
+                logger.warning(f"Erro no hook de rate limit: {e}")
+
+        _openai_http_client = httpx.Client(limits=limits, timeout=timeout, event_hooks={"response": [_rate_limit_hook]})
+    return _openai_http_client
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        http_client = _get_openai_http_client()
         api_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
-        _openai_client = OpenAI(api_key=api_key, http_client=_openai_http_client)
+        _openai_client = OpenAI(api_key=api_key, http_client=http_client)
     return _openai_client
 
 
@@ -61,6 +88,8 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ollama_health")
+        model_name = getattr(llm, "model", "unknown")
+        logger.debug(f"Iniciando health check do Ollama para modelo: {model_name} (timeout={timeout_s}s)")
         future = executor.submit(llm.invoke, "ping")
         future.result(timeout=timeout_s)
         logger.debug("Health check Ollama passou.")
