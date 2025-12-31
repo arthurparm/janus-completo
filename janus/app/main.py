@@ -1,4 +1,5 @@
 import asyncio
+import os
 import contextlib
 from contextlib import asynccontextmanager
 
@@ -21,7 +22,16 @@ from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
 from fastapi.staticfiles import StaticFiles
 
-setup_logging()
+# Determine log path
+# In Docker, we want logs to land in the mapped volume /app/app/janus.log
+if os.path.isdir("/app/app"):
+    log_file = "/app/app/janus.log" 
+elif os.path.exists("app") and os.path.isdir("app"):
+    log_file = "app/janus.log"
+    log_file = "janus.log"
+
+print(f"[DEBUG_INIT] Log file selected: {log_file} (CWD: {os.getcwd()})")
+setup_logging(log_file=log_file)
 logger = structlog.get_logger(__name__)
 
 @asynccontextmanager

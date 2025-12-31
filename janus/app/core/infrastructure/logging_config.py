@@ -2,6 +2,7 @@ import contextvars
 import logging
 import random
 import sys
+import os
 from typing import Any, Dict, Optional
 
 import structlog
@@ -90,13 +91,14 @@ class _LevelFilter(logging.Filter):
         return True
 
 
-def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, int]] = None, sampling: float = 1.0):
+def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, int]] = None, sampling: float = 1.0, log_file: Optional[str] = "janus.log"):
     """Configure structlog to emit JSON with correlation and safety.
 
     Args:
         level: Root logging level.
         module_levels: Optional per-module level overrides.
         sampling: Probability [0..1] to keep info/debug logs (warnings+ are always kept).
+        log_file: Path to the log file (default: "janus.log").
     """
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -104,6 +106,22 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
 
     root = logging.getLogger()
     root.handlers = [handler]
+    
+    if log_file:
+        try:
+            # Ensure directory exists if path has one
+            log_dir = os.path.dirname(log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
+            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler.setFormatter(logging.Formatter("%(message)s"))
+            file_handler.addFilter(_LevelFilter(module_levels))
+            root.addHandler(file_handler)
+        except Exception:
+            # Fallback to stderr if file logging fails, but don't crash
+            print(f"Failed to setup file logging to {log_file}", file=sys.stderr)
+
     root.setLevel(level)
 
     sampling_value = float(getattr(settings, "LOG_SAMPLING_RATE", sampling))

@@ -109,3 +109,7 @@ def add_exception_handlers(app):
     for exc_type in all_service_exceptions:
         if exc_type not in exception_map:
             app.add_exception_handler(exc_type, generic_service_exception_handler)
+
+    # Catch-all for any other unhandled exception (e.g., standard Python exceptions)
+    app.add_exception_handler(Exception, generic_service_exception_handler)
+
