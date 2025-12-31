@@ -60,6 +60,42 @@ def _normalize(values):
     return [(v - min_v) / (max_v - min_v) for v in values]
 
 
+# Models that don't support temperature parameter (o1, o3 series)
+MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset({
+    "o1", "o1-mini", "o1-preview", 
+    "o3", "o3-mini", "o3-mini-2025-01-31"
+})
+
+
+def _model_supports_temperature(model_name: str) -> bool:
+    """Check if a model supports the temperature parameter."""
+    model_lower = model_name.lower()
+    for no_temp_model in MODELS_WITHOUT_TEMPERATURE_SUPPORT:
+        if model_lower == no_temp_model or model_lower.startswith(f"{no_temp_model}-"):
+            return False
+    return True
+
+
+def _create_openai_model(model: str, temperature: float = 0) -> ChatOpenAI:
+    """Create OpenAI model with temperature awareness for o1/o3 models."""
+    api_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
+    
+    if _model_supports_temperature(model):
+        return ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            openai_api_key=api_key,
+            http_client=_get_openai_http_client()
+        )
+    else:
+        logger.debug(f"Model {model} doesn't support temperature, omitting it")
+        return ChatOpenAI(
+            model=model,
+            openai_api_key=api_key,
+            http_client=_get_openai_http_client()
+        )
+
+
 def get_llm(
         role: ModelRole = ModelRole.ORCHESTRATOR,
         priority: ModelPriority = ModelPriority.LOCAL_ONLY,
@@ -123,7 +159,7 @@ def get_llm(
                             if not _validate_openai_key(
                                     getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
                                 raise RuntimeError("OPENAI_API_KEY inválida ou ausente.")
-                            llm = ChatOpenAI(model=model, temperature=temperature, client=_get_openai_client())
+                            llm = _create_openai_model(model, temperature)
                             LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "openai").inc()
                             _add_to_pool("openai", model, llm)
                             return llm
@@ -211,7 +247,7 @@ def get_llm(
         {
             "name": "OpenAI", "provider_key": "openai",
             "enabled": _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()),
-            "initializer_factory": lambda model: ChatOpenAI(model=model, temperature=0, client=_get_openai_client()),
+            "initializer_factory": lambda model: _create_openai_model(model),
             "models": settings.OPENAI_MODELS if getattr(settings, "OPENAI_MODELS", None) else [
                 settings.OPENAI_MODEL_NAME],
         },

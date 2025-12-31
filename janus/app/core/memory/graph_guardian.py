@@ -22,6 +22,9 @@ class RelationType(str, Enum):
     IMPLEMENTS = "IMPLEMENTS"
     INHERITS_FROM = "INHERITS_FROM"
     DEPENDS_ON = "DEPENDS_ON"
+    CREATES = "CREATES"
+    RETURNS = "RETURNS"
+    INCLUDES = "INCLUDES"
 
     # Relações de conhecimento
     USES = "USES"
@@ -30,6 +33,10 @@ class RelationType(str, Enum):
     SOLVES = "SOLVES"
     CAUSED_BY = "CAUSED_BY"
     SOLVED_BY = "SOLVED_BY"
+    CACHES = "CACHES"
+    APPLIED_TO = "APPLIED_TO"
+    INTERACTS_WITH = "INTERACTS_WITH"
+    HAS_MODEL = "HAS_MODEL"
 
     # Relações de experiência
     MENTIONS = "MENTIONS"
@@ -41,6 +48,7 @@ class RelationType(str, Enum):
     PART_OF = "PART_OF"
     HAS_PROPERTY = "HAS_PROPERTY"
     SIMILAR_TO = "SIMILAR_TO"
+
 
 
 class EntityType(str, Enum):
@@ -212,6 +220,36 @@ RELATION_SYNONYMS: Dict[str, RelationType] = {
     "invoca": RelationType.CALLS,
     "is": RelationType.IS_A,
     "part_of": RelationType.PART_OF,
+    
+    # New relationship types
+    "creates": RelationType.CREATES,
+    "cria": RelationType.CREATES,
+    "produces": RelationType.CREATES,
+    "builds": RelationType.CREATES,
+    
+    "returns": RelationType.RETURNS,
+    "retorna": RelationType.RETURNS,
+    "outputs": RelationType.RETURNS,
+    
+    "includes": RelationType.INCLUDES,
+    "inclui": RelationType.INCLUDES,
+    "incorporates": RelationType.INCLUDES,
+    
+    "caches": RelationType.CACHES,
+    "armazena_cache": RelationType.CACHES,
+    "stores": RelationType.CACHES,
+    
+    "applied_to": RelationType.APPLIED_TO,
+    "aplicado_a": RelationType.APPLIED_TO,
+    "applies_to": RelationType.APPLIED_TO,
+    
+    "interacts_with": RelationType.INTERACTS_WITH,
+    "interage_com": RelationType.INTERACTS_WITH,
+    "communicates_with": RelationType.INTERACTS_WITH,
+    
+    "has_model": RelationType.HAS_MODEL,
+    "tem_modelo": RelationType.HAS_MODEL,
+    "uses_model": RelationType.HAS_MODEL,
 }
 
 

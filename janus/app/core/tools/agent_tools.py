@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from langchain.tools import tool, BaseTool
 from pydantic import BaseModel, Field, validator
@@ -89,8 +89,19 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
         return f"Erro inesperado: {e}"
 
 
-@tool
-def read_file(file_path: str) -> str:
+class ReadFileInput(BaseModel):
+    """Input schema for read_file that accepts both 'file_path' and 'path'."""
+    file_path: Optional[str] = Field(default=None, description="Caminho do arquivo a ser lido")
+    path: Optional[str] = Field(default=None, description="Alias para file_path")
+    
+    @property
+    def resolved_path(self) -> str:
+        """Get the actual path, preferring file_path over path."""
+        return self.file_path or self.path or ""
+
+
+@tool(args_schema=ReadFileInput)
+def read_file(file_path: Optional[str] = None, path: Optional[str] = None) -> str:
     """
     Lê o conteúdo completo de um arquivo do sistema de arquivos.
 
@@ -101,11 +112,17 @@ def read_file(file_path: str) -> str:
 
     Args:
         file_path: Caminho do arquivo a ser lido (ex: 'src/main.py', 'config.json')
+        path: Alias para file_path (aceito para compatibilidade)
 
     Returns:
         Conteúdo do arquivo ou mensagem de erro se não encontrado
     """
-    return filesystem_manager.read_file(file_path)
+    # Resolve path from either parameter
+    actual_path = file_path or path
+    if not actual_path:
+        return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path' ou 'path'."
+    return filesystem_manager.read_file(actual_path)
+
 
 
 class ListDirectoryInput(BaseModel):
@@ -247,7 +264,7 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
 # --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
 
 @tool
-def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> str:
+async def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> str:
     """
     Consulta o grafo de conhecimento semântico (Neo4j) para obter informações estruturadas
     sobre conceitos, ferramentas, erros e relacionamentos consolidados de experiências passadas.
@@ -276,7 +293,7 @@ def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> 
 
         from app.core.memory.knowledge_graph_manager import knowledge_graph_manager
 
-        result = knowledge_graph_manager.semantic_search(actual_query, limit=10)
+        result = await knowledge_graph_manager.semantic_search(actual_query, limit=10)
 
         if not result:
             return f"Nenhum conhecimento relevante encontrado no grafo para a consulta: '{query}'"
@@ -333,7 +350,7 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
 
 
 @tool
-def get_entity_details(entity_name: str, **kwargs) -> str:
+async def get_entity_details(entity_name: str, **kwargs) -> str:
     """
     Obtém detalhes completos sobre uma entidade no grafo de conhecimento.
 
@@ -355,7 +372,7 @@ def get_entity_details(entity_name: str, **kwargs) -> str:
         LIMIT 1
         """
 
-        results = graph_db.query(query, {"entity_name": entity_name})
+        results = await graph_db.query(query, {"entity_name": entity_name})
 
         if not results or not results[0]["entity"]:
             return f"Entidade '{entity_name}' não encontrada no grafo."
