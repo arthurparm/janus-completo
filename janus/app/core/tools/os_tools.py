@@ -87,15 +87,21 @@ def read_system_file(path: str) -> str:
         return f"Erro ao ler arquivo: {e}"
 
 @tool
-def list_directory(path: str) -> str:
+def list_directory(path: Optional[str] = None, directory: Optional[str] = None) -> str:
     """
     Lista o conteúdo de um diretório no sistema de arquivos.
     
     Args:
-        path: Caminho do diretório.
+        path: Caminho do diretório (preferencial).
+        directory: Alias para path (opcional).
     """
+    target_path = path or directory
+    
+    if not target_path:
+        return "Erro: Parâmetro 'path' ou 'directory' é obrigatório."
+
     try:
-        p = Path(path).resolve()
+        p = Path(target_path).resolve()
         logger.info(f"Listando diretório: {p}")
         if not p.exists():
             return "Erro: Diretório não existe."

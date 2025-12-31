@@ -62,6 +62,7 @@ class ToolCategory(Enum):
     WEB = "web"
     SYSTEM = "system"
     CUSTOM = "custom"
+    DYNAMIC = "dynamic"
 
 
 class PermissionLevel(Enum):
