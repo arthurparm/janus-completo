@@ -157,6 +157,7 @@ export interface ChatListItem {
 
 export interface ChatHistoryPaginatedResponse {
   conversation_id: string;
+  persona?: string;
   messages: ChatMessage[];
   total_count: number;
   has_more: boolean;

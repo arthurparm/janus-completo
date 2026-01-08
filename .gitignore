@@ -94,3 +94,4 @@ front/dist/
 # Firebase Credentials
 **/serviceAccountKey.json
 janus/app/serviceAccountKey.json
+.agent

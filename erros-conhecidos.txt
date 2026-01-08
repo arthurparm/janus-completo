@@ -1,0 +1,9 @@
+[2025-12-29T14:32:04] [INFO] [knowledge_consolidator]
+Descrição: Ciclo de consolidação concluído com sucesso, processando 1 item.
+---
+[2025-12-29T14:32:30] [INFO] [circuit_breaker]
+Descrição: Circuit breaker inicializado (threshold=10, recovery=60s). Operação normal.
+---
+[Geral] [Observação] [janus_api]
+Descrição: Não foram encontrados erros (ERROR/CRITICAL/EXCEPTION) nas últimas 1000 linhas de log. O sistema aparenta estar estável, com conexões HTTP 200 OK para Qdrant e endpoints de métricas respondendo corretamente.
+---
