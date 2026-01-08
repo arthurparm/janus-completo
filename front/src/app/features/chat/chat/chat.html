@@ -36,8 +36,8 @@
 
         <div class="message-content">
           <div class="sender-name">{{ msg.role === 'user' ? 'Você' : 'Janus' }}</div>
-          <div class="text" [innerHTML]="formatMessage(msg.content)"></div>
-          <div class="meta">{{ msg.timestamp | date:'HH:mm' }}</div>
+          <div class="text" [innerHTML]="formatMessage(msg.text)"></div>
+          <div class="meta">{{ (msg.timestamp || 0) * 1000 | date:'HH:mm' }}</div>
         </div>
       </div>
 
@@ -70,7 +70,7 @@
   </div>
 
 
-  <app-hud-panel *ngIf="hudVisible" [connectionStatus]="'connected'" [title]="'Cognitive Stream'"
-    [thoughts]="agentEvents" (clearThoughts)="clearHud()">
+  <app-hud-panel *ngIf="hudVisible" [connectionStatus]="connectionStatus" [title]="'Cognitive Stream'"
+    [quickStats]="quickStats" [sections]="hudSections" [thoughts]="agentEvents" (clearThoughts)="clearHud()">
   </app-hud-panel>
 </div>

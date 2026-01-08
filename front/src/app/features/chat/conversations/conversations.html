@@ -210,10 +210,9 @@
 
         <div class="card-content">
           <p class="last-message">
-            <span class="message-prefix">{{ conversation.last_message?.role === 'user' ? 'Você:' : 'Janus:' }}</span>
-            {{ conversation.last_message ? truncateText(conversation.last_message.content, 120) : 'Nova conversa
-            iniciada...' }}
-          </p>
+        <span class="message-prefix">{{ conversation.last_message?.role === 'user' ? 'Você:' : 'Janus:' }}</span>
+        {{ conversation.last_message ? truncateText(conversation.last_message.text, 120) : 'Nova conversa iniciada...' }}
+      </p>
 
           <div class="conversation-tags">
             @for (tag of conversation.tags?.slice(0, 3); track tag) {

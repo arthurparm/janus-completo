@@ -1,10 +1,11 @@
 import { Injectable } from '@angular/core'
 import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_RETRY_MAX_SECONDS } from './api.config'
+import { Citation } from './janus-api.service'
 
 type StreamStatus = 'idle' | 'connecting' | 'open' | 'streaming' | 'retrying' | 'closed' | 'error'
 
-export interface StreamDone { conversation_id?: string; provider?: string; model?: string; citations?: any[] }
+export interface StreamDone { conversation_id?: string; provider?: string; model?: string; citations?: Citation[] }
 export interface StreamError { error: string; attempt: number }
 export interface StartParams { conversationId: string; text: string; role?: string; priority?: string; timeoutSeconds?: number }
 
@@ -132,14 +133,14 @@ export class ChatStreamService {
     }, 5000)
   }
 
-  private handleMessage(kind: string, data: any): void {
+  private handleMessage(kind: string, data: string): void {
     console.log('[ChatStreamService] Processando mensagem tipo:', kind, 'dados:', data)
     try {
       if (kind === 'partial') {
         console.log('[ChatStreamService] Processando partial message')
         this.status$.next('streaming')
         this.typing$.next(true)
-        const parsed = JSON.parse(String(data || '{}'))
+        const parsed = JSON.parse(data || '{}') as { text?: string }
         console.log('[ChatStreamService] Partial parsed:', parsed)
         if (!this.ttftCaptured) { this.ttftCaptured = true }
         const text = String(parsed?.text || '')
@@ -150,7 +151,7 @@ export class ChatStreamService {
       if (kind === 'done') {
         console.log('[ChatStreamService] Processando done message')
         this.typing$.next(false)
-        const parsed = JSON.parse(String(data || '{}'))
+        const parsed = JSON.parse(data || '{}') as { conversation_id?: string; provider?: string; model?: string; citations?: Citation[] }
         console.log('[ChatStreamService] Done parsed:', parsed)
         this.done$.next({ conversation_id: parsed?.conversation_id, provider: parsed?.provider, model: parsed?.model, citations: parsed?.citations })
         this.stop()
@@ -158,7 +159,7 @@ export class ChatStreamService {
       }
       if (kind === 'error') {
         console.log('[ChatStreamService] Processando error message')
-        const parsed = JSON.parse(String(data || '{}'))
+        const parsed = JSON.parse(data || '{}') as { error?: string }
         this.handleError(String(parsed?.error || 'error'))
         return
       }

@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
-import { Subscription } from 'rxjs';
+import { Subscription, forkJoin } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
-import { JanusApiService, ChatMessage } from '../../../services/janus-api.service';
+import { JanusApiService, ChatMessage, Tool, ToolListResponse } from '../../../services/janus-api.service';
 import { AgentEventsService, AgentEvent } from '../../../core/services/agent-events.service';
+import { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../../../core/types';
 import { marked } from 'marked';
 import Prism from 'prismjs';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -17,7 +18,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/jarvis-avatar.component';
 import { TypingIndicatorComponent } from '../../../shared/components/typing-indicator/typing-indicator.component';
 import { VoiceOrbComponent } from '../../../shared/components/voice-orb/voice-orb.component';
-import { HudPanelComponent } from '../../../shared/components/hud-panel/hud-panel.component';
+import { HudPanelComponent, HudSection, HudItem, ThoughtEvent } from '../../../shared/components/hud-panel/hud-panel.component';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
@@ -65,12 +66,28 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     // Voice State
     voiceState: VoiceState = 'idle';
-    private recognition: any = null;
+    private recognition: SpeechRecognition | null = null;
     private speechSynthesis: SpeechSynthesis | null = null;
+
+    // HUD connection status
+    connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connecting';
 
     // HUD State
     hudVisible = true;
-    agentEvents: any[] = []; // storing mapped ThoughtEvents
+    agentEvents: ThoughtEvent[] = [];
+
+    // Initial HUD Data
+    quickStats = [
+        { icon: '🧠', label: 'Memory', value: 'Syncing...', status: 'warning' },
+        { icon: '🔧', label: 'Tools', value: 'Checking...', status: 'warning' },
+        { icon: '📡', label: 'Status', value: 'Connecting...', status: 'warning' }
+    ];
+
+    hudSections: HudSection[] = [
+        { id: 'memory', title: 'Active Memory', icon: '💾', collapsed: true, items: [] },
+        { id: 'tools', title: 'Available Tools', icon: '🔧', collapsed: true, items: [] },
+        { id: 'context', title: 'Context', icon: '📋', collapsed: false, items: [] }
+    ];
 
     // Subs
     private subs: Subscription[] = [];
@@ -90,6 +107,7 @@ export class ChatComponent implements OnInit, OnDestroy {
                 this.conversationId = cid;
                 this.loadChat(cid);
                 this.connectHud(cid);
+                this.loadHudData();
             }
         });
 
@@ -127,15 +145,15 @@ export class ChatComponent implements OnInit, OnDestroy {
     // =====================================
 
     private initSpeechRecognition() {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (SpeechRecognition) {
-            this.recognition = new SpeechRecognition();
+        if (SpeechRecognitionCtor) {
+            this.recognition = new SpeechRecognitionCtor();
             this.recognition.continuous = false;
             this.recognition.interimResults = false;
             this.recognition.lang = 'pt-BR'; // Portuguese by default
 
-            this.recognition.onresult = (event: any) => {
+            this.recognition.onresult = (event: SpeechRecognitionEvent) => {
                 const transcript = event.results[0][0].transcript;
                 this.newMessage = transcript;
                 this.voiceState = 'processing';
@@ -148,7 +166,7 @@ export class ChatComponent implements OnInit, OnDestroy {
                 }, 500);
             };
 
-            this.recognition.onerror = (event: any) => {
+            this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
                 console.error('Speech recognition error:', event.error);
                 this.voiceState = 'idle';
                 this.cdr.detectChanges();
@@ -248,6 +266,103 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
     }
 
+    // Load static data for HUD
+    loadHudData() {
+        // 1. Get Tools
+        this.api.getTools().subscribe({
+            next: (res) => {
+                const toolsSection = this.hudSections.find(s => s.id === 'tools');
+                if (toolsSection) {
+                    toolsSection.items = (res.tools || []).map(t => ({
+                        label: t.name,
+                        value: t.enabled ? 'Enabled' : 'Disabled',
+                        status: t.enabled ? 'success' : 'error' as const
+                    }));
+                }
+
+                // Update Quick Stat
+                const toolStat = this.quickStats.find(s => s.label === 'Tools');
+                if (toolStat) {
+                    toolStat.value = `${(res.tools || []).filter(t => t.enabled).length} Ready`;
+                    toolStat.status = 'success';
+                }
+                this.cdr.detectChanges();
+            },
+            error: () => {
+                const toolStat = this.quickStats.find(s => s.label === 'Tools');
+                if (toolStat) {
+                    toolStat.value = 'Error';
+                    toolStat.status = 'error';
+                }
+            }
+        });
+
+        // 2. Get System Status & Context (Parallel)
+        forkJoin({
+            status: this.api.getSystemStatus(),
+            context: this.api.getCurrentContext(),
+            memory: this.api.getMemoryTimeline({ limit: 5 })
+        }).subscribe({
+            next: ({ status, context, memory }) => {
+                // Status Stat
+                const statusStat = this.quickStats.find(s => s.label === 'Status');
+                if (statusStat) {
+                    statusStat.value = status.status === 'ok' ? 'Online' : 'Issues';
+                    statusStat.status = status.status === 'ok' ? 'success' : 'warning';
+                    this.connectionStatus = status.status === 'ok' ? 'connected' : 'disconnected';
+                }
+
+                // Memory Stat and Section
+                const memStat = this.quickStats.find(s => s.label === 'Memory');
+                if (memStat) {
+                    memStat.value = 'Active';
+                    memStat.status = 'success';
+                }
+
+                const memorySection = this.hudSections.find(s => s.id === 'memory');
+                if (memorySection && memory && memory.length > 0) {
+                    memorySection.items = memory.map(m => ({
+                        label: 'Memory',
+                        value: m.content.substring(0, 40) + (m.content.length > 40 ? '...' : ''),
+                        status: 'info' as const,
+                        timestamp: m.ts_ms
+                    }));
+                } else if (memorySection) {
+                    memorySection.items = [];
+                }
+
+
+                // Context Section
+                const contextSection = this.hudSections.find(s => s.id === 'context');
+                if (contextSection) {
+                    const items = [];
+                    if (context['environment']) items.push({ label: 'Environment', value: String(context['environment']), status: 'info' as const });
+                    if (context['system_info']) {
+                        Object.entries(context['system_info']).forEach(([k, v]) => {
+                            items.push({ label: k, value: String(v), status: 'info' as const });
+                        });
+                    }
+                    if (context['datetime_info']) {
+                        const dtInfo = context['datetime_info'] as Record<string, unknown>;
+                        items.push({ label: 'Time', value: String(dtInfo['time'] || ''), status: 'info' as const });
+                    }
+                    contextSection.items = items.slice(0, 6) as HudItem[];
+                }
+
+                this.cdr.detectChanges();
+            },
+            error: (err) => {
+                console.error('HUD Data Error', err);
+                const statusStat = this.quickStats.find(s => s.label === 'Status');
+                if (statusStat) {
+                    statusStat.value = 'Offline';
+                    statusStat.status = 'error';
+                }
+                this.connectionStatus = 'disconnected';
+            }
+        });
+    }
+
     connectHud(cid: string) {
         this.eventsService.disconnect();
         this.eventsService.connect(cid);
@@ -261,7 +376,11 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.sending = true;
 
         // Optimistic UI
-        const tempMsg: ChatMessage = { role: 'user', content: content, timestamp: new Date().toISOString() };
+        const tempMsg: ChatMessage = {
+            role: 'user',
+            text: content,
+            timestamp: Date.now() / 1000 // Seconds
+        };
         this.messages.push(tempMsg);
         this.cdr.detectChanges();
         this.scrollToBottom();
@@ -269,12 +388,18 @@ export class ChatComponent implements OnInit, OnDestroy {
         const userId = this.auth.currentUserValue?.id;
         this.api.sendChatMessage(this.conversationId, content, 'orchestrator', 'fast_and_cheap', undefined, userId).subscribe({
             next: (res) => {
-                if (res.assistant_message) {
-                    this.messages.push(res.assistant_message);
+                if (res.response) {
+                    const msg: ChatMessage = {
+                        role: res.role || 'assistant',
+                        text: res.response,
+                        timestamp: Date.now() / 1000,
+                        citations: res.citations
+                    };
+                    this.messages.push(msg);
                     this.cdr.detectChanges();
 
                     // Optional: speak the response
-                    // this.speakResponse(res.assistant_message.content);
+                    // this.speakResponse(res.response);
                 }
                 this.sending = false;
                 this.cdr.detectChanges();
@@ -334,8 +459,7 @@ export class ChatComponent implements OnInit, OnDestroy {
                 gfm: true
             });
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return (marked.parse(content) as any) as string;
+            return marked.parse(content) as string;
         } catch (e) {
             return this.simpleFormat(content);
         }
@@ -359,21 +483,25 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     // Map AgentEvent to ThoughtEvent for HUD
-    private mapEventToThought(evt: AgentEvent): any {
+    private mapEventToThought(evt: AgentEvent): ThoughtEvent {
         // Map types: 'thought' -> 'thinking', 'tool_call' -> 'tool', etc.
-        const typeMap: Record<string, string> = {
+        const typeMap: Record<string, 'thinking' | 'tool' | 'memory' | 'decision'> = {
             'thought': 'thinking',
+            'agent_thought': 'thinking',
             'tool_call': 'tool',
+            'tool_start': 'tool',
+            'tool_end': 'tool',
             'memory_access': 'memory',
             'memory_consolidated': 'memory', // New event type
-            'decision': 'decision'
+            'decision': 'decision',
+            'system': 'decision' // map generic system msgs too
         };
 
         return {
-            type: typeMap[evt.type] || 'thinking',
+            type: typeMap[evt.event_type] || 'thinking',
             content: evt.content || '',
             timestamp: Date.now(),
-            agent: 'Janus'
+            agent: evt.agent_role || 'Janus'
         };
     }
 
