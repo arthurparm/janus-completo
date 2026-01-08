@@ -620,7 +620,12 @@ class MetaAgentGraphBuilder:
         self.agent = agent_instance
         # Use direct connection for persistence to avoid context manager ambiguity
         import sqlite3
-        self.conn = sqlite3.connect("data/meta_agent_langgraph.db", check_same_thread=False)
+        import os
+        
+        # Ensure data directory exists (using ephemeral /tmp to surpass windows volume locking)
+        db_path = "/tmp/meta_agent_langgraph.db"
+        
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.checkpointer = SqliteSaver(self.conn)
 
     def build(self):

@@ -68,6 +68,10 @@ class GoalManager:
     def _init_sqlite(self):
         """Inicializa SQLite com 'Maximum Robustness': Check, Backup, Connect."""
         try:
+            # Ensure directory exists
+            if self._db_path and os.path.dirname(self._db_path):
+                os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+
             # 1. Self-Healing: Integrity Check on Boot
             if os.path.exists(self._db_path):
                 try:

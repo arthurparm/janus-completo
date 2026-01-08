@@ -49,6 +49,7 @@ class ChatMessage(BaseModel):
     timestamp: float
     role: str
     text: str
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ChatHistoryResponse(BaseModel):
@@ -80,6 +81,9 @@ class ChatListResponse(BaseModel):
     created_at: Optional[float]
     updated_at: Optional[float]
     last_message: Optional[ChatMessage]
+    message_count: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+    last_message_at: Optional[str] = None
 
 
 # --- Endpoints ---
