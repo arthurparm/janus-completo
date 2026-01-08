@@ -47,7 +47,7 @@ tavily-python = ">=0.3.0"
 RestrictedPython = ">=6.0"
 
 # Embeddings / ML
-sentence-transformers = ">=2.2.2"
+sentence-transformers = ">=3.0.0"
 # Elevado mínimo para incorporar correções de ReDoS do HF Transformers
 transformers = ">=4.48.0"
 onnxruntime = ">=1.17.0"
