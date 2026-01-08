@@ -3,12 +3,13 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.models.schemas import ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/timeline", response_model=List[Dict[str, Any]])
+@router.get("/timeline", response_model=List[ScoredExperience])
 async def get_memories_timeline(
     start_date: Optional[str] = Query(None, description="Start date (ISO 8601), inclusive"),
     end_date: Optional[str] = Query(None, description="End date (ISO 8601), inclusive"),

@@ -92,7 +92,7 @@ async def start_chat(request: ChatStartRequest, service: ChatService = Depends(g
     except Exception:
         hdr_uid = None
     user_id = request.user_id or hdr_uid or "default_user"
-    conversation_id = service.start_conversation(request.persona, user_id, request.project_id)
+    conversation_id = await service.start_conversation(request.persona, user_id, request.project_id)
     return ChatStartResponse(conversation_id=conversation_id)
 
 
@@ -346,7 +346,7 @@ async def list_conversations(user_id: Optional[str] = None, project_id: Optional
     
     final_user_id = user_id or hdr_uid
     
-    items = service.list_conversations(user_id=final_user_id, project_id=project_id, limit=limit)
+    items = await service.list_conversations(user_id=final_user_id, project_id=project_id, limit=limit)
 
     # map items to DTOs
     def map_item(it: Dict[str, Any]) -> ChatListResponse:
@@ -375,7 +375,7 @@ async def rename_conversation(conversation_id: str, payload: ChatRenameRequest,
             hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
         except Exception:
             hdr_uid = None
-        service.rename_conversation(conversation_id, payload.new_title, user_id=payload.user_id or hdr_uid,
+        await service.rename_conversation(conversation_id, payload.new_title, user_id=payload.user_id or hdr_uid,
                                     project_id=payload.project_id)
         return {"status": "ok"}
     except ChatServiceError as e:
@@ -389,9 +389,9 @@ async def chat_health(service: ChatService = Depends(get_chat_service)):
     """Verifica se o serviço de chat está funcionando corretamente."""
     try:
         # Testar se conseguimos acessar o repositório
-        test_conv_id = service.start_conversation("health_check", "1", "health_check")
-        service._repo.get_conversation(test_conv_id)
-        service.delete_conversation(test_conv_id, user_id="1", project_id="health_check")
+        test_conv_id = await service.start_conversation("health_check", "1", "health_check")
+        await asyncio.to_thread(service._repo.get_conversation, test_conv_id)
+        await service.delete_conversation(test_conv_id, user_id="1", project_id="health_check")
         
         return {
             "status": "healthy",
@@ -418,7 +418,7 @@ async def delete_conversation(conversation_id: str, user_id: Optional[str] = Non
             hdr_uid = (getattr(http.state, "actor_user_id", None) if http else None)
         except Exception:
             hdr_uid = None
-        service.delete_conversation(conversation_id, user_id=user_id or hdr_uid, project_id=project_id)
+        await service.delete_conversation(conversation_id, user_id=user_id or hdr_uid, project_id=project_id)
         return {"status": "ok"}
     except ChatServiceError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

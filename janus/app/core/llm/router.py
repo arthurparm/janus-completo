@@ -16,7 +16,8 @@ from .pricing import (
 )
 from .resilience import _get_from_pool, _add_to_pool, _circuit_closed
 from .factory import (
-    _validate_openai_key, _validate_gemini_key, _get_openai_client, _health_check_ollama
+    _validate_openai_key, _validate_gemini_key, _get_openai_client, _health_check_ollama,
+    _get_openai_http_client
 )
 from .rate_limiter import get_rate_limiter
 

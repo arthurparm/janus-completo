@@ -9,6 +9,7 @@ import logging
 import re
 from enum import Enum
 from typing import Dict, Optional, Set
+from app.core.memory.semantic_relation_matcher import match_relation_type as match_semantic_relation
 
 logger = logging.getLogger(__name__)
 
@@ -258,10 +259,10 @@ class GraphGuardian:
     Guardião do Grafo: normaliza e valida entidades e relações antes de persistir no Neo4j.
 
     Responsabilidades:
-    1. Normalização de nomes de entidades (lowercase, lematização, sinônimos)
-    2. Padronização de tipos de entidades
-    3. Validação e normalização de tipos de relações
-    4. Garantia de consistência semântica
+    - Normalizar tipos de entidades (classes, funções, erros, conceitos)
+    - Normalizar tipos de relação (verificar enum, sinônimos, semântica)
+    - Prevenir explosão de tipos de relações desconhecidas
+    - Lematizar nomes (singular/plural)
     """
 
     def __init__(self):
@@ -387,31 +388,16 @@ class GraphGuardian:
         if not type_str:
             return None
 
-        # Normaliza para lowercase para comparação
-        normalized_lower = type_str.strip().lower()
-        normalized_upper = type_str.strip().upper()
-
-        # Tenta match direto com enum (case-insensitive)
-        for rel_type in RelationType:
-            if rel_type.value.upper() == normalized_upper or rel_type.name == normalized_upper:
-                return rel_type
-
-        # Tenta sinônimos
-        if normalized_lower in RELATION_SYNONYMS:
-            return RELATION_SYNONYMS[normalized_lower]
-
-        # Limpa underscores e hífens para match flexível
-        clean = normalized_lower.replace('_', '').replace('-', '').replace(' ', '')
-        for syn_key, rel_type in RELATION_SYNONYMS.items():
-            if clean == syn_key.replace('_', '').replace('-', '').replace(' ', ''):
-                return rel_type
-
-        # Se não encontrou, retorna RELATES_TO como fallback genérico
-        logger.warning(
-            f"Tipo de relação '{type_str}' não reconhecido. "
-            f"Usando RELATES_TO como fallback. Considere adicionar ao enum."
-        )
-        return RelationType.RELATES_TO
+        # Tenta match semântico (cobre enum, sinônimos e fuzzy logic)
+        matched_enum, score = match_semantic_relation(type_str)
+        
+        # Convert to local Enum by value
+        try:
+            return RelationType(matched_enum.value)
+        except ValueError:
+            # Se o valor retornado pelo matcher não existir no enum local, fallback
+            logger.warning(f"Relation type mismatch: {matched_enum.value} not in GraphGuardian.RelationType. Fallback to RELATES_TO.")
+            return RelationType.RELATES_TO
 
     def validate_and_normalize_entity(
             self,
