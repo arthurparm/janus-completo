@@ -50,10 +50,11 @@ class ChatService:
         self._tools = tool_service
         self._memory = memory_service
 
-    def start_conversation(self, persona: Optional[str], user_id: Optional[str], project_id: Optional[str]) -> str:
-        cid = self._repo.start_conversation(persona, user_id, project_id)
+    async def start_conversation(self, persona: Optional[str], user_id: Optional[str], project_id: Optional[str]) -> str:
+        cid = await asyncio.to_thread(self._repo.start_conversation, persona, user_id, project_id)
         try:
-            update_active_conversations(self._repo.count_conversations())
+            count = await asyncio.to_thread(self._repo.count_conversations)
+            update_active_conversations(count)
         except Exception as e:
             logger.warning(f"Failed to update active conversation metrics: {e}")
         return cid
@@ -69,16 +70,16 @@ class ChatService:
             project_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            conv = self._repo.get_conversation(conversation_id)
+            conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
         except ChatRepositoryError as e:
             raise ConversationNotFoundError(str(e)) from e
 
         persona = conv.get("persona") or "assistant"
-        history = self._repo.get_recent_messages(conversation_id, limit=60)
+        history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
         prompt = self._build_prompt(persona, history, message, conv.get("summary"))
 
         # Store user message before invocation
-        self._repo.add_message(conversation_id, role="user", text=message)
+        await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         in_tokens = self._estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
@@ -97,7 +98,8 @@ class ChatService:
                 CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
                 # Store assistant response
-                self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
+                # Store assistant response
+                await asyncio.to_thread(self._repo.add_message, conversation_id, role="assistant", text=assistant_text)
                 out_tokens = self._estimate_tokens(assistant_text)
                 CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
@@ -119,12 +121,13 @@ class ChatService:
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
+            # Store assistant response
+            await asyncio.to_thread(self._repo.add_message, conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             try:
-                self._maybe_summarize(conversation_id, role=role, priority=priority, user_id=user_id,
+                await self._maybe_summarize(conversation_id, role=role, priority=priority, user_id=user_id,
                                       project_id=project_id)
             except Exception as e:
                 logger.warning(f"Failed to trigger summary during discovery for {conversation_id}: {e}")
@@ -161,7 +164,8 @@ class ChatService:
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
+            # Store assistant response
+            await asyncio.to_thread(self._repo.add_message, conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
@@ -204,7 +208,8 @@ class ChatService:
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
+            # Store assistant response
+            await asyncio.to_thread(self._repo.add_message, conversation_id, role="assistant", text=assistant_text)
             out_tokens = self._estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
@@ -264,7 +269,7 @@ class ChatService:
 
         # Store assistant response
         assistant_text = result.get("response", "")
-        self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
+        await asyncio.to_thread(self._repo.add_message, conversation_id, role="assistant", text=assistant_text)
         out_tokens = self._estimate_tokens(assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
         try:
@@ -325,14 +330,14 @@ class ChatService:
         Permite que o modelo chame ferramentas sequencialmente até chegar a uma resposta final.
         """
         try:
-            conv = self._repo.get_conversation(conversation_id)
+            conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
         except ChatRepositoryError as e:
             raise ConversationNotFoundError(str(e)) from e
 
         persona = conv.get("persona") or "assistant"
         
         # Histórico inicial
-        history = self._repo.get_recent_messages(conversation_id, limit=20)
+        history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=20)
         
         # RAG: Retrieve relevant memories/documents BEFORE building prompt
         relevant_memories = None
@@ -368,7 +373,8 @@ class ChatService:
             
             # Invocar LLM
             try:
-                result = self._llm.invoke_llm(
+                result = await asyncio.to_thread(
+                    self._llm.invoke_llm,
                     prompt=current_prompt,
                     role=role,
                     priority=priority,
@@ -478,7 +484,7 @@ class ChatService:
                 elif inspect.iscoroutinefunction(tool.func) or (hasattr(tool, "coroutine") and tool.coroutine):
                      result = await tool.func(**args)
                 else:
-                     result = tool.invoke(args)
+                     result = await asyncio.to_thread(tool.invoke, args)
                      
                 outputs.append({"name": name, "result": str(result)})
             except Exception as e:
@@ -692,7 +698,7 @@ class ChatService:
         except Exception:
             return 1
 
-    def _maybe_summarize(
+    async def _maybe_summarize(
             self,
             conversation_id: str,
             role: ModelRole,
@@ -717,7 +723,8 @@ class ChatService:
             snippet.append(f"{prefix}: {t}")
         sum_prompt = "Summarize the following conversation succinctly to preserve context:\n" + "\n".join(snippet)
         try:
-            res = self._llm.invoke_llm(
+            res = await asyncio.to_thread(
+                self._llm.invoke_llm,
                 prompt=sum_prompt,
                 role=ModelRole.KNOWLEDGE_CURATOR,
                 priority=ModelPriority.FAST_AND_CHEAP,
@@ -726,44 +733,45 @@ class ChatService:
                 project_id=project_id,
             )
             summary_text = res.get("response", "")
-            self._repo.update_summary(conversation_id, summary_text)
+            await asyncio.to_thread(self._repo.update_summary, conversation_id, summary_text)
         except Exception as e:
             logger.error(f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
             # Fail silently but log it - summarization is optional but we need to know why it failed
 
     # Conversas: list/rename/delete com RBAC básico
-    def list_conversations(self, user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = 50) -> \
+    async def list_conversations(self, user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = 50) -> \
     List[Dict[str, Any]]:
-        result = self._repo.list_conversations(user_id=user_id, project_id=project_id, limit=limit)
+        result = await asyncio.to_thread(self._repo.list_conversations, user_id=user_id, project_id=project_id, limit=limit)
         return result
 
-    def rename_conversation(self, conversation_id: str, new_title: str, user_id: Optional[str] = None,
+    async def rename_conversation(self, conversation_id: str, new_title: str, user_id: Optional[str] = None,
                             project_id: Optional[str] = None) -> None:
         try:
-            self._repo.rename_conversation(conversation_id, new_title, user_id=user_id, project_id=project_id)
+            await asyncio.to_thread(self._repo.rename_conversation, conversation_id, new_title, user_id=user_id, project_id=project_id)
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 
-    def delete_conversation(self, conversation_id: str, user_id: Optional[str] = None,
+    async def delete_conversation(self, conversation_id: str, user_id: Optional[str] = None,
                             project_id: Optional[str] = None) -> None:
         try:
-            self._repo.delete_conversation(conversation_id, user_id=user_id, project_id=project_id)
+            await asyncio.to_thread(self._repo.delete_conversation, conversation_id, user_id=user_id, project_id=project_id)
             try:
-                update_active_conversations(self._repo.count_conversations())
+                count = await asyncio.to_thread(self._repo.count_conversations)
+                update_active_conversations(count)
             except Exception:
                 pass
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 
-    def update_message(self, conversation_id: str, message_id: int, new_text: str, user_id: Optional[str] = None) -> None:
+    async def update_message(self, conversation_id: str, message_id: int, new_text: str, user_id: Optional[str] = None) -> None:
         try:
-            self._repo.update_message_text(conversation_id, message_id, new_text, user_id=user_id)
+            await asyncio.to_thread(self._repo.update_message_text, conversation_id, message_id, new_text, user_id=user_id)
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 
-    def delete_message(self, conversation_id: str, message_id: int, user_id: Optional[str] = None) -> None:
+    async def delete_message(self, conversation_id: str, message_id: int, user_id: Optional[str] = None) -> None:
         try:
-            self._repo.delete_message(conversation_id, message_id, user_id=user_id)
+            await asyncio.to_thread(self._repo.delete_message, conversation_id, message_id, user_id=user_id)
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 

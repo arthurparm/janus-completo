@@ -47,6 +47,9 @@ class AppSettings(BaseSettings):
     MYSQL_DATABASE: str = "janus_config"
     MYSQL_ROOT_PASSWORD: SecretStr = "janus_root"
 
+    # SQLite - Persistência local
+    SQLITE_DB_PATH: str = "/data/janus.db"
+
     # Firebase
     FIREBASE_ENABLED: bool = False
     FIREBASE_CREDENTIALS_PATH: Optional[str] = "/app/app/serviceAccountKey.json"
