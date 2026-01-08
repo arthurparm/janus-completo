@@ -8,6 +8,7 @@ import { Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/r
 import { Observable, of, catchError, map, tap } from 'rxjs';
 import { LoadingStateService } from '../services/loading-state.service';
 import { NotificationService } from '../notifications/notification.service';
+import { ChatMessage } from '../../services/janus-api.service';
 
 /**
  * Interface base para resolvers com loading e tratamento de erros
@@ -19,20 +20,38 @@ export interface BaseResolver<T> {
   ): Observable<T> | Promise<T> | T;
 }
 
+export interface DashboardMetric {
+  label: string;
+  value: string | number;
+  trend: 'up' | 'down' | 'stable';
+}
+
+export interface DashboardWidget {
+  id: string;
+  type: 'chart' | 'metric';
+  title: string;
+}
+
+export interface DashboardData {
+  metrics: DashboardMetric[];
+  widgets: DashboardWidget[];
+  notifications: unknown[];
+}
+
 /**
  * Resolver de dashboard com pré-carregamento de dados principais
  */
 @Injectable({
   providedIn: 'root'
 })
-export class DashboardResolver implements Resolve<any> {
+export class DashboardResolver implements Resolve<DashboardData | null> {
   private loadingState = inject(LoadingStateService);
   private notificationService = inject(NotificationService);
 
   resolve(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Observable<any> {
+  ): Observable<DashboardData | null> {
     this.loadingState.startLoading('dashboard', { message: 'Carregando dashboard...' });
     
     // Simular carregamento de dados do dashboard
@@ -50,7 +69,7 @@ export class DashboardResolver implements Resolve<any> {
     );
   }
 
-  private loadDashboardMetrics(): any[] {
+  private loadDashboardMetrics(): DashboardMetric[] {
     // Implementar carregamento real de métricas
     return [
       { label: 'Total de Conversas', value: 1234, trend: 'up' },
@@ -59,7 +78,7 @@ export class DashboardResolver implements Resolve<any> {
     ];
   }
 
-  private loadDashboardWidgets(): any[] {
+  private loadDashboardWidgets(): DashboardWidget[] {
     // Implementar carregamento real de widgets
     return [
       { id: 'chat', type: 'chart', title: 'Conversas por Hora' },
@@ -67,10 +86,15 @@ export class DashboardResolver implements Resolve<any> {
     ];
   }
 
-  private loadNotifications(): any[] {
+  private loadNotifications(): unknown[] {
     // Implementar carregamento real de notificações
     return [];
   }
+}
+
+export interface ChatResolverData {
+  conversation: { id: string; title: string } | null;
+  messages: ChatMessage[];
 }
 
 /**
@@ -79,14 +103,14 @@ export class DashboardResolver implements Resolve<any> {
 @Injectable({
   providedIn: 'root'
 })
-export class ChatResolver implements Resolve<any> {
+export class ChatResolver implements Resolve<ChatResolverData> {
   private loadingState = inject(LoadingStateService);
   private notificationService = inject(NotificationService);
 
   resolve(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Observable<any> {
+  ): Observable<ChatResolverData> {
     const conversationId = route.paramMap.get('conversationId');
     
     if (!conversationId) {
@@ -109,10 +133,16 @@ export class ChatResolver implements Resolve<any> {
     );
   }
 
-  private loadMessages(conversationId: string): any[] {
+  private loadMessages(conversationId: string): ChatMessage[] {
     // Implementar carregamento real de mensagens
     return [];
   }
+}
+
+export interface SettingsData {
+  userSettings: Record<string, unknown>;
+  systemSettings: Record<string, unknown>;
+  preferences: Record<string, unknown>;
 }
 
 /**
@@ -121,14 +151,14 @@ export class ChatResolver implements Resolve<any> {
 @Injectable({
   providedIn: 'root'
 })
-export class SettingsResolver implements Resolve<any> {
+export class SettingsResolver implements Resolve<SettingsData> {
   private loadingState = inject(LoadingStateService);
   private notificationService = inject(NotificationService);
 
   resolve(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Observable<any> {
+  ): Observable<SettingsData> {
     this.loadingState.startLoading('settings', { message: 'Carregando configurações...' });
     
     // Simular carregamento de configurações
@@ -146,7 +176,7 @@ export class SettingsResolver implements Resolve<any> {
     );
   }
 
-  private loadUserSettings(): any {
+  private loadUserSettings(): Record<string, unknown> {
     // Implementar carregamento real de configurações do usuário
     return {
       theme: 'dark',
@@ -155,7 +185,7 @@ export class SettingsResolver implements Resolve<any> {
     };
   }
 
-  private loadSystemSettings(): any {
+  private loadSystemSettings(): Record<string, unknown> {
     // Implementar carregamento real de configurações do sistema
     return {
       apiUrl: 'https://api.example.com',
@@ -164,7 +194,7 @@ export class SettingsResolver implements Resolve<any> {
     };
   }
 
-  private loadPreferences(): any {
+  private loadPreferences(): Record<string, unknown> {
     // Implementar carregamento real de preferências
     return {
       autoRefresh: true,
@@ -174,20 +204,26 @@ export class SettingsResolver implements Resolve<any> {
   }
 }
 
+export interface UserData {
+  profile: Record<string, unknown> | null;
+  permissions: string[];
+  roles: string[];
+}
+
 /**
  * Resolver de dados de usuário
  */
 @Injectable({
   providedIn: 'root'
 })
-export class UserResolver implements Resolve<any> {
+export class UserResolver implements Resolve<UserData> {
   private loadingState = inject(LoadingStateService);
   private notificationService = inject(NotificationService);
 
   resolve(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Observable<any> {
+  ): Observable<UserData> {
     this.loadingState.startLoading('user', { message: 'Carregando dados do usuário...' });
     
     // Simular carregamento de dados do usuário
@@ -205,7 +241,7 @@ export class UserResolver implements Resolve<any> {
     );
   }
 
-  private loadUserProfile(): any {
+  private loadUserProfile(): Record<string, unknown> {
     // Implementar carregamento real de perfil do usuário
     return {
       id: '1',

@@ -4,11 +4,12 @@ import { API_BASE_URL } from '../../services/api.config';
 import { AuthService } from '../auth/auth.service';
 
 export interface AgentEvent {
-    type: string;
-    agent: string;
+    task_id: string;
+    agent_role: string;
+    event_type: string;
     content: string;
+    conversation_id: string;
     timestamp: number;
-    task_id?: string;
 }
 
 @Injectable({
@@ -52,7 +53,7 @@ export class AgentEventsService {
         this.eventSource.onmessage = (event) => {
             this.zone.run(() => {
                 try {
-                    const data = JSON.parse(event.data);
+                    const data = JSON.parse(event.data) as AgentEvent;
                     this._events$.next(data);
                 } catch (e) {
                     console.error('[AgentEvents] Error parsing event', e);
@@ -74,7 +75,7 @@ export class AgentEventsService {
         this.eventSource.addEventListener('agent_event', (event: MessageEvent) => {
             this.zone.run(() => {
                 try {
-                    const data = JSON.parse(event.data);
+                    const data = JSON.parse(event.data) as AgentEvent;
                     this._events$.next(data);
                 } catch (e) {
                     console.error('[AgentEvents] Error parsing named event', e);

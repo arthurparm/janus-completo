@@ -16,7 +16,7 @@ export class GlobalStateStore {
   // Controle interno
   private initialized = false;
   private pollSub?: Subscription;
-  private spinnerSafetyTimeout?: any;
+  private spinnerSafetyTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(private api: JanusApiService) { }
 

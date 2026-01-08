@@ -25,10 +25,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login/login').then(m => m.LoginComponent),
     canMatch: [loginRedirectGuard]
   },
-  {
-    path: 'auth/callback',
-    loadComponent: () => import('./features/auth/callback/auth-callback').then(m => m.AuthCallbackComponent)
-  },
+
   {
     path: '',
     component: MainLayout,
@@ -50,6 +47,14 @@ export const routes: Routes = [
         data: {
           title: 'Arquitetura',
           description: 'Visualização da arquitetura do sistema'
+        }
+      },
+      {
+        path: 'goals',
+        loadComponent: () => import('./pages/goals/goals').then(m => m.GoalsComponent),
+        data: {
+          title: 'Metas',
+          description: 'Gestão de Metas e Objetivos'
         }
       },
       {
@@ -104,15 +109,7 @@ export const routes: Routes = [
         }
       },
 
-      {
-        path: 'supabase-config',
-        loadComponent: () => import('./shared/components/supabase-config/supabase-config.component').then(m => m.SupabaseConfigComponent),
-        data: {
-          title: 'Configuração Supabase',
-          description: 'Configuração do Supabase',
-          roles: ['admin']
-        }
-      },
+
       {
         path: 'auto-analysis',
         loadComponent: () => import('./features/auto-analysis/auto-analysis.component').then(m => m.AutoAnalysisComponent),

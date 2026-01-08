@@ -22,7 +22,7 @@ export interface FormFieldConfig {
   minLength?: number;
   maxLength?: number;
   pattern?: string;
-  options?: Array<{value: any; label: string; disabled?: boolean}>;
+  options?: Array<{value: string | number | boolean; label: string; disabled?: boolean}>;
   validationMessages?: Record<string, string>;
   asyncValidators?: string[];
 }
@@ -93,7 +93,7 @@ export interface ErrorState {
   message?: string;
   title?: string;
   code?: string | number;
-  details?: any;
+  details?: unknown;
   retryable?: boolean;
   actions?: ErrorAction[];
 }
