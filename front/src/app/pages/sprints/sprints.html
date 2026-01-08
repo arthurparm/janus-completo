@@ -1,7 +1,7 @@
 <section class="page-header">
-  <h1 class="page-title text-purple glow-text">EVOLUTION ROADMAP</h1>
+  <h1 class="page-title text-purple glow-text">HISTÓRICO DE EVOLUÇÃO</h1>
   <p class="page-subtitle text-muted">
-    CHRONOLOGICAL LOG OF SYSTEM CAPABILITIES // GENESIS TO SINGULARITY
+    Registro cronológico de capacidades do sistema
   </p>
 </section>
 
@@ -16,11 +16,10 @@
     <!-- Sprint 1 -->
     <article class="timeline-item flex items-center justify-between w-full group">
       <div class="w-5/12 text-right pr-8 transition-transform group-hover:-translate-x-2">
-        <div class="text-cyan font-mono text-sm mb-1">CYCLE_01 // INFRASTRUCTURE</div>
-        <h3 class="text-xl font-bold text-white mb-2">System Backbone</h3>
+        <div class="text-cyan font-mono text-sm mb-1">CICLO_01 // INFRAESTRUTURA</div>
+        <h3 class="text-xl font-bold text-white mb-2">Estrutura Base</h3>
         <p class="text-sm text-text-secondary">
-          Distribution Architecture initialized. RabbitMQ Event Bus allows asynchronous neural firing across distributed
-          nodes.
+          Arquitetura distribuída inicializada. Barramento de eventos RabbitMQ permite comunicação assíncrona entre nós.
         </p>
       </div>
       <div
@@ -29,8 +28,8 @@
       </div>
       <div class="w-5/12 pl-8 opacity-50 group-hover:opacity-100 transition-opacity">
         <div class="glass-panel p-4 text-xs font-mono text-muted">
-          > RabbitMQ Integration: OK<br>
-          > Worker Orchestration: ONLINE
+          > Integração RabbitMQ: OK<br>
+          > Orquestração de Workers: ONLINE
         </div>
       </div>
     </article>
@@ -38,10 +37,10 @@
     <!-- Sprint 2 -->
     <article class="timeline-item flex items-center justify-between w-full flex-row-reverse group">
       <div class="w-5/12 text-left pl-8 transition-transform group-hover:translate-x-2">
-        <div class="text-purple font-mono text-sm mb-1">CYCLE_02 // MEMORY</div>
-        <h3 class="text-xl font-bold text-white mb-2">Episodic Core</h3>
+        <div class="text-purple font-mono text-sm mb-1">CICLO_02 // MEMÓRIA</div>
+        <h3 class="text-xl font-bold text-white mb-2">Núcleo Episódico</h3>
         <p class="text-sm text-text-secondary">
-          Long-term memory integration via Qdrant Vector Database. Experience indexing enabled for contextual retrieval.
+          Integração de memória de longo prazo via Qdrant. Indexação de experiência ativada para recuperação contextual.
         </p>
       </div>
       <div
@@ -50,8 +49,8 @@
       </div>
       <div class="w-5/12 pr-8 text-right opacity-50 group-hover:opacity-100 transition-opacity">
         <div class="glass-panel p-4 text-xs font-mono text-muted">
-          > Vector Storage: ACTIVE<br>
-          > Recall Protocols: 98%
+          > Armazenamento Vetorial: ATIVO<br>
+          > Protocolos de Recuperação: 98%
         </div>
       </div>
     </article>
@@ -59,10 +58,10 @@
     <!-- Sprint 3 -->
     <article class="timeline-item flex items-center justify-between w-full group">
       <div class="w-5/12 text-right pr-8 transition-transform group-hover:-translate-x-2">
-        <div class="text-pink font-mono text-sm mb-1">CYCLE_03 // KNOWLEDGE</div>
-        <h3 class="text-xl font-bold text-white mb-2">Semantic Graph</h3>
+        <div class="text-pink font-mono text-sm mb-1">CICLO_03 // CONHECIMENTO</div>
+        <h3 class="text-xl font-bold text-white mb-2">Grafo Semântico</h3>
         <p class="text-sm text-text-secondary">
-          Construction of Ontology Graph for deep semantic understanding. Ingestion of technical documentation manuals.
+          Construção do Grafo de Ontologia para compreensão profunda. Ingestão de manuais técnicos e documentação.
         </p>
       </div>
       <div
@@ -71,8 +70,30 @@
       </div>
       <div class="w-5/12 pl-8 opacity-50 group-hover:opacity-100 transition-opacity">
         <div class="glass-panel p-4 text-xs font-mono text-muted">
-          > Knowledge Graph: EXPANDING<br>
-          > Semantic Linking: VERIFIED
+          > Grafo de Conhecimento: EXPANDINDO<br>
+          > Vínculos Semânticos: VERIFICADO
+        </div>
+      </div>
+    </article>
+
+    <!-- Sprint 11 (Current) -->
+    <article class="timeline-item flex items-center justify-between w-full flex-row-reverse group">
+      <div class="w-5/12 text-left pl-8 transition-transform group-hover:translate-x-2">
+        <div class="text-green-400 font-mono text-sm mb-1">CICLO_11 // SOCIEDADE DE MENTES</div>
+        <h3 class="text-xl font-bold text-white mb-2">Colaboração Multi-Agente</h3>
+        <p class="text-sm text-text-secondary">
+          Evolução para arquitetura de enxame. Agentes especializados (Project Manager, Coder, Tester, Optimizer)
+          colaboram em tempo real.
+        </p>
+      </div>
+      <div
+        class="w-8 h-8 rounded-full bg-slate-900 border-2 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.5)] z-20 flex items-center justify-center">
+        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+      </div>
+      <div class="w-5/12 pr-8 text-right opacity-50 group-hover:opacity-100 transition-opacity">
+        <div class="glass-panel p-4 text-xs font-mono text-muted">
+          > Protocolo: LANGCHAIN_X<br>
+          > Status: EM OPERAÇÃO
         </div>
       </div>
     </article>
@@ -80,7 +101,7 @@
     <!-- Live Data Loading -->
     <div class="text-center py-8">
       <button id="loadMoreBtn" class="glass-button text-cyan hover:bg-cyan/10" (click)="loadMore()">
-        <span class="icon animate-spin mr-2">↻</span> LOAD ARCHIVED CYCLES
+        <span class="icon animate-spin mr-2">↻</span> CARREGAR CICLOS ARQUIVADOS
       </button>
     </div>
 

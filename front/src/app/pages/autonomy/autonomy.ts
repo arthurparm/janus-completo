@@ -133,7 +133,7 @@ export class AutonomyComponent implements OnInit, OnDestroy {
     }
 
     getRiskColor(): string {
-        switch (this.status?.config?.risk_profile || this.selectedRisk) {
+        switch (this.status?.config?.['risk_profile'] || this.selectedRisk) {
             case 'conservative': return 'primary'; // Blue/Green
             case 'balanced': return 'accent'; // Purple/Yellow
             case 'aggressive': return 'warn'; // Red

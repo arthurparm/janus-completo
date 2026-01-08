@@ -5,7 +5,7 @@ import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { GlobalStateStore } from '../../core/state/global-state.store';
 import { NotificationService } from '../../core/notifications/notification.service';
-import { JanusApiService, ServiceHealthItem, WorkerStatusResponse, AutoAnalysisResponse } from '../../services/janus-api.service';
+import { JanusApiService, ServiceHealthItem, WorkerStatusResponse, AutoAnalysisResponse, SystemStatus } from '../../services/janus-api.service';
 import { LoadingComponent } from '../../shared/components/loading/loading.component';
 import { ErrorComponent } from '../../shared/components/error/error.component';
 import { UiService } from '../../shared/services/ui.service';
@@ -15,6 +15,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 const UPDATE_INTERVAL_SECONDS = 30; // Aumentado de 5 para 30 segundos para reduzir carga
 const LATENCY_THRESHOLD_MS = 500;
@@ -49,7 +50,8 @@ interface DashboardMetric {
     MatCardModule,
     MatChipsModule,
     MatProgressBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatProgressSpinnerModule
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss',
@@ -84,12 +86,12 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     const systemStatus = this.systemStatus();
     if (!systemStatus) return 0;
     // Try to get latency from process stats or use a reasonable estimate based on uptime
-    const performance = (systemStatus as any).performance;
-    if (performance && performance.avg_response_ms) {
-      return Math.round(performance.avg_response_ms);
+    const performance = systemStatus.performance;
+    if (performance && performance['avg_response_ms']) {
+      return Math.round(performance['avg_response_ms'] as number);
     }
     // If no response time available, simulate based on CPU load (lower CPU = faster response)
-    const cpuPercent = performance?.cpu_percent || 0;
+    const cpuPercent = performance ? ((performance['cpu_percent'] as number) || 0) : 0;
     // Base response time + CPU impact (higher CPU = slower)
     return Math.round(50 + (cpuPercent * 2));
   });
@@ -116,7 +118,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   // Animações parallax
   @ViewChild('heroSection') heroSection!: ElementRef;
   @ViewChild('particlesCanvas') particlesCanvas!: ElementRef;
-  private particlesAnimation?: any;
+  private particlesAnimation?: number;
   private resizeObserver?: ResizeObserver;
 
   // Ações rápidas modernizadas
@@ -196,8 +198,8 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   }));
-  private clockInterval?: any;
-  private historicalDataInterval?: any;
+  private clockInterval?: ReturnType<typeof setInterval>;
+  private historicalDataInterval?: ReturnType<typeof setInterval>;
 
   // Dados para gráficos com animações - agora com dados reais
   systemMetricsHistory = signal<Array<{ timestamp: Date, cpu: number, memory: number, disk: number }>>([]);
@@ -388,9 +390,9 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private setupRealDataProcessing(): void {
     // Processar dados reais do sistema em tempo real usando effect com proteção contra loops
-    let lastSystemStatus: any = null;
-    let lastServices: any[] = [];
-    let lastWorkers: any[] = [];
+    let lastSystemStatus: SystemStatus | null = null;
+    let lastServices: ServiceHealthItem[] = [];
+    let lastWorkers: WorkerStatusResponse[] = [];
 
     // Use untracked() para evitar dependências cíclicas nos efeitos
     effect(() => {
@@ -430,7 +432,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     }, 30000);
   }
 
-  private processSystemMetrics(systemStatus: any): void {
+  private processSystemMetrics(systemStatus: SystemStatus): void {
     if (!systemStatus) {
       return;
     }
@@ -440,10 +442,10 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     const processInfo = systemStatus.process || {};
 
     const metrics = {
-      cpu: performance.cpu_percent || systemStatus.cpu_usage_percent || systemStatus.cpu || 0,
-      memory: performance.memory_percent || systemStatus.memory_usage_percent || systemStatus.memory || 0,
-      disk: systemStatus.disk_usage_percent || systemStatus.disk || 0,
-      uptime: systemStatus.uptime_seconds || systemStatus.uptime || 0
+      cpu: (performance['cpu_percent'] as number) || (systemStatus['cpu_usage_percent'] as number) || (systemStatus['cpu'] as number) || 0,
+      memory: (performance['memory_percent'] as number) || (systemStatus['memory_usage_percent'] as number) || (systemStatus['memory'] as number) || 0,
+      disk: (systemStatus['disk_usage_percent'] as number) || (systemStatus['disk'] as number) || 0,
+      uptime: systemStatus.uptime_seconds || (systemStatus['uptime'] as number) || 0
     };
 
     console.log('[Home] Processing system metrics from backend:', metrics);
@@ -754,9 +756,9 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onTimeRangeChange(range: string): void {
-    const validRanges: Array<'1h' | '6h' | '24h' | '7d'> = ['1h', '6h', '24h', '7d'];
-    if (validRanges.includes(range as any)) {
-      this.selectedTimeRange.set(range as '1h' | '6h' | '24h' | '7d');
+    const validRanges = ['1h', '6h', '24h', '7d'] as const;
+    if ((validRanges as readonly string[]).includes(range)) {
+      this.selectedTimeRange.set(range as typeof validRanges[number]);
       this.uiService.showInfo(`📅 Visualizando dados dos últimos ${range}`);
       this.refreshChartData(range);
     }

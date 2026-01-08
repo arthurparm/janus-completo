@@ -3,49 +3,49 @@ import { CommonModule } from '@angular/common';
 import { trigger, transition, style, animate } from '@angular/animations';
 
 export interface HudSection {
-    id: string;
-    title: string;
-    icon: string;
-    collapsed: boolean;
-    items: HudItem[];
+  id: string;
+  title: string;
+  icon: string;
+  collapsed: boolean;
+  items: HudItem[];
 }
 
 export interface HudItem {
-    label: string;
-    value: string;
-    status?: 'success' | 'warning' | 'error' | 'info';
-    timestamp?: number;
+  label: string;
+  value: string;
+  status?: 'success' | 'warning' | 'error' | 'info';
+  timestamp?: number;
 }
 
 export interface ThoughtEvent {
-    type: 'thinking' | 'tool' | 'memory' | 'decision';
-    content: string;
-    timestamp: number;
-    agent?: string;
+  type: 'thinking' | 'tool' | 'memory' | 'decision';
+  content: string;
+  timestamp: number;
+  agent?: string;
 }
 
 @Component({
-    selector: 'app-hud-panel',
-    standalone: true,
-    imports: [CommonModule],
-    animations: [
-        trigger('sectionContent', [
-            transition(':enter', [
-                style({ height: 0, opacity: 0 }),
-                animate('200ms ease-out', style({ height: '*', opacity: 1 }))
-            ]),
-            transition(':leave', [
-                animate('150ms ease-in', style({ height: 0, opacity: 0 }))
-            ])
-        ]),
-        trigger('itemEnter', [
-            transition(':enter', [
-                style({ opacity: 0, transform: 'translateX(-10px)' }),
-                animate('300ms ease-out', style({ opacity: 1, transform: 'translateX(0)' }))
-            ])
-        ])
-    ],
-    template: `
+  selector: 'app-hud-panel',
+  standalone: true,
+  imports: [CommonModule],
+  animations: [
+    trigger('sectionContent', [
+      transition(':enter', [
+        style({ height: 0, opacity: 0 }),
+        animate('200ms ease-out', style({ height: '*', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('150ms ease-in', style({ height: 0, opacity: 0 }))
+      ])
+    ]),
+    trigger('itemEnter', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translateX(-10px)' }),
+        animate('300ms ease-out', style({ opacity: 1, transform: 'translateX(0)' }))
+      ])
+    ])
+  ],
+  template: `
     <div class="hud-panel" [class.expanded]="expanded">
       <!-- Panel Header -->
       <div class="panel-header" (click)="toggleExpanded()">
@@ -126,28 +126,33 @@ export interface ThoughtEvent {
       </div>
     </div>
   `,
-    styles: [`
+  styles: [`
     :host {
-      --hud-bg: rgba(10, 15, 26, 0.95);
-      --hud-surface: rgba(17, 24, 39, 0.8);
-      --hud-border: rgba(0, 212, 255, 0.2);
-      --text-primary: #e0f8ff;
-      --text-secondary: #9ec8d6;
-      --text-muted: #6b7280;
-      --accent-cyan: #00d4ff;
-      --accent-purple: #7c3aed;
-      --accent-green: #10b981;
-      --accent-yellow: #ffc107;
-      --accent-red: #ef4444;
+      --hud-bg: #0d1117; /* GitHub Dark Dimmed style background */
+      --hud-surface: #161b22;
+      --hud-border: #30363d;
+      --text-primary: #c9d1d9;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+      
+      /* Professional Status Colors */
+      --accent-cyan: #58a6ff;
+      --accent-purple: #bc8cff;
+      --accent-green: #3fb950;
+      --accent-yellow: #d29922;
+      --accent-red: #f85149;
     }
 
     .hud-panel {
       background: var(--hud-bg);
       border: 1px solid var(--hud-border);
-      border-radius: 12px;
+      border-radius: 6px; /* Tighter radius for professional look */
       overflow: hidden;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.85rem;
+      font-family: 'SF Mono', 'Segoe UI Mono', 'Roboto Mono', monospace; /* System mono fonts first */
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
     }
 
     /* Header */
@@ -155,170 +160,147 @@ export interface ThoughtEvent {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.75rem 1rem;
-      background: linear-gradient(90deg, rgba(0, 212, 255, 0.1), rgba(124, 58, 237, 0.1));
+      padding: 10px 16px;
+      background: var(--hud-surface);
+      border-bottom: 1px solid var(--hud-border);
       cursor: pointer;
-      transition: background 0.2s;
-
+      user-select: none;
+      
       &:hover {
-        background: linear-gradient(90deg, rgba(0, 212, 255, 0.15), rgba(124, 58, 237, 0.15));
+        background: #1c2128;
       }
     }
 
     .header-info {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
 
-      .header-icon { font-size: 1.1rem; }
+      .header-icon { 
+        font-size: 14px; 
+        opacity: 0.8;
+      }
 
       h3 {
         margin: 0;
-        font-size: 0.9rem;
+        font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
       }
     }
 
     .header-controls {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: var(--text-muted);
 
       &.connected {
         background: var(--accent-green);
-        box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-        animation: pulse 2s ease-in-out infinite;
+        box-shadow: 0 0 4px rgba(63, 185, 80, 0.4);
       }
-
-      &.disconnected {
-        background: var(--accent-red);
-      }
-
-      &.connecting {
-        background: var(--accent-yellow);
-        animation: blink 1s linear infinite;
-      }
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+      &.disconnected { background: var(--accent-red); }
+      &.connecting { background: var(--accent-yellow); }
     }
 
     .expand-btn {
       background: transparent;
       border: none;
       color: var(--text-secondary);
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       transition: transform 0.2s;
       
-      svg {
-        width: 16px;
-        height: 16px;
-      }
-
-      &.rotated {
-        transform: rotate(180deg);
-      }
+      svg { width: 14px; height: 14px; }
+      &.rotated { transform: rotate(180deg); }
     }
 
     /* Content */
     .panel-content {
-      border-top: 1px solid var(--hud-border);
-      max-height: 400px;
+      max-height: 600px;
       overflow-y: auto;
-
-      &::-webkit-scrollbar {
-        width: 4px;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: rgba(0, 212, 255, 0.3);
-        border-radius: 2px;
-      }
+      display: flex;
+      flex-direction: column;
     }
 
     /* Quick Stats */
     .quick-stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      background: var(--hud-border);
       border-bottom: 1px solid var(--hud-border);
+      background: var(--hud-bg);
     }
 
     .stat-item {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 0.75rem;
-      background: var(--hud-surface);
+      gap: 12px;
+      padding: 12px 16px;
+      border-right: 1px solid var(--hud-border);
 
-      .stat-icon { font-size: 1rem; }
+      &:last-child { border-right: none; }
+
+      .stat-icon { font-size: 14px; opacity: 0.7; }
 
       .stat-info {
         display: flex;
         flex-direction: column;
+        gap: 2px;
 
         .stat-value {
-          font-size: 0.85rem;
+          font-size: 12px;
           font-weight: 600;
           color: var(--text-primary);
-
+          
           &.success { color: var(--accent-green); }
           &.warning { color: var(--accent-yellow); }
           &.error { color: var(--accent-red); }
         }
 
         .stat-label {
-          font-size: 0.65rem;
-          color: var(--text-muted);
+          font-size: 10px;
+          color: var(--text-secondary);
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          font-weight: 500;
         }
       }
     }
 
     /* Sections */
     .sections {
-      padding: 0.5rem;
+      padding: 1px 0;
+      background: var(--hud-border); /* separator color */
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
     }
 
     .section {
-      margin-bottom: 0.5rem;
-      border: 1px solid var(--hud-border);
-      border-radius: 8px;
-      overflow: hidden;
-
-      &:last-child { margin-bottom: 0; }
+      background: var(--hud-bg);
     }
 
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.5rem 0.75rem;
-      background: var(--hud-surface);
+      padding: 8px 16px;
       cursor: pointer;
-      transition: background 0.2s;
+      user-select: none;
 
       &:hover {
-        background: rgba(0, 212, 255, 0.1);
+        background: var(--hud-surface);
       }
     }
 
@@ -326,223 +308,232 @@ export interface ThoughtEvent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: var(--text-primary);
-      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
 
-      .section-icon { font-size: 0.9rem; }
+      .section-icon { font-size: 12px; }
 
       .item-count {
-        background: var(--accent-cyan);
-        color: var(--hud-bg);
-        font-size: 0.65rem;
-        padding: 1px 6px;
+        background: var(--hud-border);
+        color: var(--text-primary);
+        font-size: 10px;
+        padding: 0 6px;
         border-radius: 10px;
-        font-weight: 700;
+        min-width: 16px;
+        text-align: center;
       }
     }
 
     .chevron {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       color: var(--text-muted);
       transition: transform 0.2s;
-
       &.rotated { transform: rotate(90deg); }
     }
 
     .section-content {
-      padding: 0.5rem;
-      background: rgba(0, 0, 0, 0.2);
+      padding: 8px 16px 12px;
+      border-top: 1px solid var(--hud-border);
+      background: rgba(13, 17, 23, 0.5);
     }
 
     .section-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.35rem 0.5rem;
-      border-radius: 4px;
+      padding: 4px 0;
+      font-size: 12px;
+      border-bottom: 1px dashed rgba(48, 54, 61, 0.5);
+      
+      &:last-child { border-bottom: none; }
 
-      &:hover {
-        background: rgba(0, 212, 255, 0.05);
-      }
-
-      .item-label {
-        color: var(--text-secondary);
-        font-size: 0.75rem;
-      }
-
-      .item-value {
-        font-size: 0.75rem;
-        font-weight: 600;
-
-        &.success { color: var(--accent-green); }
-        &.warning { color: var(--accent-yellow); }
-        &.error { color: var(--accent-red); }
-        &.info { color: var(--accent-cyan); }
-      }
+      .item-label { color: var(--text-secondary); }
+      .item-value { color: var(--text-primary); font-family: monospace; }
     }
 
     .empty-section {
       color: var(--text-muted);
-      font-size: 0.75rem;
-      text-align: center;
-      padding: 0.5rem;
+      font-size: 11px;
+      padding: 4px 0;
       font-style: italic;
     }
 
     /* Thought Stream */
     .thought-stream {
-      border-top: 1px solid var(--hud-border);
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      height: 100%; /* Ensure it spans */
+      min-height: 200px;
+      background: #000000; /* Terminal black */
     }
 
     .stream-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 0.5rem 0.75rem;
-      background: rgba(124, 58, 237, 0.1);
-      color: var(--text-primary);
-      font-size: 0.8rem;
-
-      .stream-icon { font-size: 0.9rem; }
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: var(--hud-surface);
+      border-top: 1px solid var(--hud-border);
+      border-bottom: 1px solid var(--hud-border);
+      
+      span {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.5px;
+      }
 
       .clear-btn {
-        margin-left: auto;
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: none;
+        border: none;
         color: var(--text-muted);
-        font-size: 0.65rem;
-        padding: 2px 8px;
-        border-radius: 4px;
+        font-size: 10px;
         cursor: pointer;
-        transition: all 0.2s;
-
+        padding: 2px 6px;
+        border-radius: 4px;
+        
         &:hover {
-          border-color: var(--accent-red);
+          background: rgba(248, 81, 73, 0.1);
           color: var(--accent-red);
         }
       }
     }
 
     .stream-content {
-      max-height: 200px;
+      flex: 1;
       overflow-y: auto;
-      padding: 0.5rem;
-
-      &::-webkit-scrollbar { width: 3px; }
-      &::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.3); }
+      padding: 12px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      
+      &::-webkit-scrollbar { width: 6px; }
+      &::-webkit-scrollbar-thumb { background: var(--hud-border); border-radius: 3px; }
+      &::-webkit-scrollbar-track { background: transparent; }
     }
 
     .thought-item {
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
-      border-left: 3px solid var(--accent-purple);
-      background: rgba(124, 58, 237, 0.05);
-      border-radius: 0 6px 6px 0;
+      margin-bottom: 8px;
+      padding-left: 10px;
+      border-left: 2px solid var(--text-muted);
+      opacity: 0.9;
+      
+      &.thinking { border-left-color: var(--accent-yellow); color: #e3b341; }
+      &.tool { border-left-color: var(--accent-green); color: #7ee787; }
+      &.memory { border-left-color: var(--accent-cyan); color: #79c0ff; }
+      &.decision { border-left-color: var(--accent-purple); color: #d2a8ff; }
 
-      &.thinking { border-left-color: var(--accent-yellow); }
-      &.tool { border-left-color: var(--accent-green); }
-      &.memory { border-left-color: var(--accent-cyan); }
-      &.decision { border-left-color: var(--accent-purple); }
+      &:last-child {
+         opacity: 1;
+         animation: highlight 1s ease-out;
+      }
+    }
+
+    @keyframes highlight {
+      0% { background: rgba(255, 255, 255, 0.05); }
+      100% { background: transparent; }
     }
 
     .thought-header {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
+      gap: 8px;
+      margin-bottom: 2px;
+      align-items: baseline;
+    }
 
-      .thought-type {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--accent-purple);
-      }
+    .thought-type {
+      font-size: 10px;
+      font-weight: bold;
+      opacity: 0.8;
+    }
 
-      .thought-time {
-        font-size: 0.65rem;
-        color: var(--text-muted);
-      }
+    .thought-time {
+      font-size: 10px;
+      color: var(--text-muted);
     }
 
     .thought-content {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      font-size: 12px;
       line-height: 1.4;
-      word-break: break-word;
+      color: inherit;
+      white-space: pre-wrap; /* Preserve code formatting */
     }
 
     .empty-stream {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
-      padding: 1.5rem;
+      justify-content: center;
+      height: 100%;
       color: var(--text-muted);
-      font-size: 0.75rem;
+      gap: 12px;
 
       .pulse-dot {
-        width: 12px;
-        height: 12px;
+        width: 8px;
+        height: 8px;
+        background: var(--hud-border);
         border-radius: 50%;
-        background: var(--accent-purple);
-        animation: pulse 2s ease-in-out infinite;
+        animation: pulse 3s infinite;
       }
+      
+      span { font-size: 11px; }
     }
   `]
 })
 export class HudPanelComponent implements OnInit, OnDestroy {
-    @Input() title: string = 'System HUD';
-    @Input() expanded: boolean = true;
-    @Input() connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connected';
-    @Input() showThoughtStream: boolean = true;
+  @Input() title: string = 'System HUD';
+  @Input() expanded: boolean = true;
+  @Input() connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connected';
+  @Input() showThoughtStream: boolean = true;
 
-    @Input() quickStats: { icon: string; label: string; value: string; status?: string }[] = [
-        { icon: '🧠', label: 'Memory', value: 'Active', status: 'success' },
-        { icon: '🔧', label: 'Tools', value: 'Ready', status: 'success' },
-        { icon: '📡', label: 'Status', value: 'Online', status: 'success' }
-    ];
+  @Input() quickStats: { icon: string; label: string; value: string; status?: string }[] = [
+    { icon: '🧠', label: 'Memory', value: 'Active', status: 'success' },
+    { icon: '🔧', label: 'Tools', value: 'Ready', status: 'success' },
+    { icon: '📡', label: 'Status', value: 'Online', status: 'success' }
+  ];
 
-    @Input() sections: HudSection[] = [
-        { id: 'memory', title: 'Active Memory', icon: '💾', collapsed: true, items: [] },
-        { id: 'tools', title: 'Available Tools', icon: '🔧', collapsed: true, items: [] },
-        { id: 'context', title: 'Context', icon: '📋', collapsed: true, items: [] }
-    ];
+  @Input() sections: HudSection[] = [
+    { id: 'memory', title: 'Active Memory', icon: '💾', collapsed: true, items: [] },
+    { id: 'tools', title: 'Available Tools', icon: '🔧', collapsed: true, items: [] },
+    { id: 'context', title: 'Context', icon: '📋', collapsed: true, items: [] }
+  ];
 
-    @Input() thoughts: ThoughtEvent[] = [];
+  @Input() thoughts: ThoughtEvent[] = [];
 
-    @Output() clearThoughts = new EventEmitter<void>();
-    @Output() sectionToggle = new EventEmitter<string>();
+  @Output() clearThoughts = new EventEmitter<void>();
+  @Output() sectionToggle = new EventEmitter<string>();
 
-    ngOnInit() { }
+  ngOnInit() { }
 
-    ngOnDestroy() { }
+  ngOnDestroy() { }
 
-    toggleExpanded() {
-        this.expanded = !this.expanded;
-    }
+  toggleExpanded() {
+    this.expanded = !this.expanded;
+  }
 
-    toggleSection(section: HudSection) {
-        section.collapsed = !section.collapsed;
-        this.sectionToggle.emit(section.id);
-    }
+  toggleSection(section: HudSection) {
+    section.collapsed = !section.collapsed;
+    this.sectionToggle.emit(section.id);
+  }
 
-    getThoughtTypeLabel(type: string): string {
-        const labels: Record<string, string> = {
-            'thinking': '💭 Thinking',
-            'tool': '🔧 Tool Call',
-            'memory': '💾 Memory Access',
-            'decision': '⚡ Decision'
-        };
-        return labels[type] || type;
-    }
+  getThoughtTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      'thinking': '💭 Thinking',
+      'tool': '🔧 Tool Call',
+      'memory': '💾 Memory Access',
+      'decision': '⚡ Decision'
+    };
+    return labels[type] || type;
+  }
 
-    formatTime(timestamp: number): string {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-    }
+  formatTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
 }

@@ -3,25 +3,10 @@ import { DemoService } from '../../core/services/demo.service'
 import { AuthService } from '../../core/auth/auth.service'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import { JanusApiService } from '../../services/janus-api.service'
+import { JanusApiService, DocSearchResponse, DocSearchResultItem, DocListResponse, UploadResponse, DocListItem } from '../../services/janus-api.service'
 import { MatIconModule } from '@angular/material/icon'
 
-export interface Document {
-    doc_id: string
-    file_name?: string
-    chunks: number
-    conversation_id?: string
-    last_index_ts?: number
-}
-
-export interface SearchResult {
-    id: string
-    score: number
-    doc_id: string
-    file_name?: string
-    index?: number
-    timestamp?: number
-}
+export type SearchResult = DocSearchResultItem;
 
 @Component({
     selector: 'app-documents',
@@ -37,7 +22,7 @@ export class DocumentsComponent implements OnInit {
     public auth = inject(AuthService)
     private cdr = inject(ChangeDetectorRef)
 
-    documents: Document[] = []
+    documents: DocListItem[] = []
     searchResults: SearchResult[] = []
 
     get totalChunks(): number {
@@ -81,14 +66,15 @@ export class DocumentsComponent implements OnInit {
 
         const userId = this.auth.currentUserValue?.id
         this.api.listDocuments(undefined, userId).subscribe({
-            next: (response: any) => {
+            next: (response: DocListResponse) => {
                 this.documents = response.items || []
                 this.loading = false
                 this.cdr.detectChanges()
             },
-            error: (err: any) => {
+            error: (err: unknown) => {
                 console.error('Error loading documents:', err)
-                if (err.status === 0 || err.status === 504) {
+                const status = (err as { status?: number })?.status;
+                if (status === 0 || status === 504) {
                     this.demoService.enableOfflineMode();
                     this.loading = false
                     this.documents = []
@@ -122,7 +108,7 @@ export class DocumentsComponent implements OnInit {
 
         const userId = this.auth.currentUserValue?.id
         this.api.uploadDocument(file, undefined, userId).subscribe({
-            next: (event: any) => {
+            next: (event: { progress?: number; response?: UploadResponse }) => {
                 if (event.progress !== undefined) {
                     this.uploadProgress = event.progress
                     this.cdr.detectChanges()
@@ -138,7 +124,7 @@ export class DocumentsComponent implements OnInit {
                     }, 5000)
                 }
             },
-            error: (err: any) => {
+            error: (err: unknown) => {
                 console.error('Upload error:', err)
                 this.error = 'Falha ao enviar documento'
                 this.uploading = false
@@ -156,7 +142,7 @@ export class DocumentsComponent implements OnInit {
 
         const userId = this.auth.currentUserValue?.id
         this.api.linkUrl('', this.urlToLink, userId).subscribe({
-            next: (response: any) => {
+            next: (response: UploadResponse) => {
                 this.uploading = false
                 this.successMessage = `URL indexada com ${response.chunks} chunks`
                 this.urlToLink = ''
@@ -166,7 +152,7 @@ export class DocumentsComponent implements OnInit {
                     this.cdr.detectChanges()
                 }, 5000)
             },
-            error: (err: any) => {
+            error: (err: unknown) => {
                 console.error('Link URL error:', err)
                 this.error = 'Falha ao indexar URL'
                 this.uploading = false
@@ -183,12 +169,12 @@ export class DocumentsComponent implements OnInit {
         this.error = null
 
         this.api.searchDocuments(this.searchQuery, this.minScore).subscribe({
-            next: (response: any) => {
+            next: (response: DocSearchResponse) => {
                 this.searchResults = response.results || []
                 this.searching = false
                 this.cdr.detectChanges()
             },
-            error: (err: any) => {
+            error: (err: unknown) => {
                 console.error('Search error:', err)
                 this.error = 'Falha na busca'
                 this.searching = false
@@ -197,7 +183,7 @@ export class DocumentsComponent implements OnInit {
         })
     }
 
-    deleteDocument(doc: Document) {
+    deleteDocument(doc: DocListItem) {
         if (!confirm(`Excluir documento "${doc.file_name || doc.doc_id}"?`)) return
 
         this.api.deleteDocument(doc.doc_id).subscribe({
@@ -209,7 +195,7 @@ export class DocumentsComponent implements OnInit {
                     this.cdr.detectChanges()
                 }, 3000)
             },
-            error: (err: any) => {
+            error: (err: unknown) => {
                 console.error('Delete error:', err)
                 this.error = 'Falha ao excluir documento'
                 this.cdr.detectChanges()

@@ -47,7 +47,7 @@ export class BrainComponent implements OnInit {
 
     // Reflexion State
     lessons: ReflexionLesson[] = [];
-    metaReport: any = null;
+    metaReport: Record<string, unknown> | null = null;
     loadingReflexion = false;
 
     ngOnInit() {
@@ -89,7 +89,7 @@ export class BrainComponent implements OnInit {
         this.api.getReflexionSummary(15).subscribe({
             next: (res) => {
                 this.lessons = res.lessons || [];
-                this.metaReport = res.meta_report;
+                this.metaReport = res.meta_report || null;
                 this.loadingReflexion = false;
             },
             error: (err) => {

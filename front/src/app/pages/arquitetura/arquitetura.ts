@@ -2,9 +2,12 @@ import { Component, OnInit, inject } from '@angular/core';
 import { DemoService } from '../../core/services/demo.service'
 import { JanusApiService, SystemStatus, ServiceHealthItem, WorkersStatusItem, CircuitBreakerStatus, MetricsSummary, QuarantinedMessagesResponse } from '../../services/janus-api.service';
 
+import { CommonModule } from '@angular/common';
+import { MatIconModule } from '@angular/material/icon';
+
 @Component({
   selector: 'app-arquitetura',
-  imports: [],
+  imports: [CommonModule, MatIconModule],
   templateUrl: './arquitetura.html',
   styleUrl: './arquitetura.scss'
 })
@@ -115,8 +118,8 @@ export class Arquitetura implements OnInit {
       { key: 'context_service', name: 'Context Service', status: 'running', metric_text: 'Indexed: 100%' }
     ];
     this.workers = [
-      { id: 'coder-01', status: 'idle', tasks_processed: 124, last_heartbeat: new Date() },
-      { id: 'reviewer-01', status: 'idle', tasks_processed: 56, last_heartbeat: new Date() }
+      { id: 'coder-01', status: 'idle', tasks_processed: 124, last_heartbeat: new Date().toISOString() },
+      { id: 'reviewer-01', status: 'idle', tasks_processed: 56, last_heartbeat: new Date().toISOString() }
     ];
     this.loading = false;
   }

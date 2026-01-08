@@ -1551,3 +1551,90 @@ pre code {
     }
   }
 }
+
+// SVG Diagram Styles
+.diagram-svg {
+  svg {
+    .blk {
+      fill: rgba(10, 15, 26, 0.8);
+      stroke: #00d4ff;
+      stroke-width: 1.5;
+    }
+
+    .ext {
+      fill: rgba(10, 15, 26, 0.6);
+      stroke: #7c3aed;
+      stroke-width: 1.5;
+      stroke-dasharray: 4;
+    }
+
+    .broker {
+      fill: rgba(249, 115, 22, 0.1);
+      stroke: #f97316;
+      stroke-width: 2;
+      filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.4));
+    }
+
+    .label {
+      fill: #e0f8ff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      text-anchor: middle;
+    }
+
+    .sub-label {
+      fill: #9ec8d6;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      text-anchor: middle;
+    }
+
+    .arrow {
+      stroke: #00d4ff;
+      stroke-width: 2;
+      marker-end: url(#arr);
+      animation: flow 3s infinite linear;
+    }
+
+    .arrow-msg {
+      stroke: #f97316;
+      stroke-width: 1.5;
+      marker-end: url(#arr-msg);
+      stroke-dasharray: 4;
+      animation: flow 2s infinite linear;
+    }
+
+    .arrow-rev {
+      stroke: #7c3aed;
+      stroke-width: 2;
+      marker-end: url(#arr-p);
+      stroke-dasharray: 4;
+      animation: flow-rev 3s infinite linear;
+    }
+
+    .user-node {
+      stroke: #ec4899;
+    }
+
+    .core-node {
+      stroke-width: 3;
+      filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.3));
+    }
+
+    .conn-ai {
+      fill: none;
+    }
+
+    .conn-files {
+      fill: none;
+      stroke: #ec4899;
+    }
+
+    @keyframes flow {
+      to {
+        stroke-dashoffset: -20;
+      }
+    }
+  }
+}

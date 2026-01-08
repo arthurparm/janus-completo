@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core'
-import { MatSnackBar, MatSnackBarConfig } from '@angular/material/snack-bar'
-import { MatDialog, MatDialogConfig } from '@angular/material/dialog'
+import { FormGroup } from '@angular/forms'
+import { MatSnackBar, MatSnackBarConfig, MatSnackBarRef } from '@angular/material/snack-bar'
+import { MatDialog, MatDialogConfig, MatDialogRef } from '@angular/material/dialog'
 import { Observable, Subject } from 'rxjs'
 import { LoadingDialogComponent } from '../components/loading-dialog/loading-dialog.component'
 import { ConfirmDialogComponent } from '../components/confirm-dialog/confirm-dialog.component'
@@ -31,8 +32,8 @@ export interface LoadingDialogConfig {
   providedIn: 'root'
 })
 export class UiService {
-  private activeToasts: any[] = []
-  private activeLoadingDialogs: any[] = []
+  private activeToasts: MatSnackBarRef<any>[] = []
+  private activeLoadingDialogs: MatDialogRef<LoadingDialogComponent>[] = []
 
   constructor(
     private snackBar: MatSnackBar,
@@ -100,7 +101,7 @@ export class UiService {
   }
 
   // Loading dialog methods
-  showLoading(config?: LoadingDialogConfig): any {
+  showLoading(config?: LoadingDialogConfig): MatDialogRef<LoadingDialogComponent> {
     const dialogConfig: MatDialogConfig = {
       disableClose: config?.disableClose !== false,
       data: { message: config?.message || 'Carregando...' },
@@ -122,7 +123,7 @@ export class UiService {
 
   hideLoading(): void {
     this.activeLoadingDialogs.forEach(dialog => {
-      if (dialog && !dialog.closed) {
+      if (dialog) {
         dialog.close()
       }
     })
@@ -144,7 +145,7 @@ export class UiService {
   // Utility methods
   dismissAllToasts(): void {
     this.activeToasts.forEach(toast => {
-      if (toast && !toast.dismissed) {
+      if (toast) {
         toast.dismiss()
       }
     })
@@ -157,11 +158,12 @@ export class UiService {
   }
 
   // Form validation helpers
-  getFormValidationErrors(formGroup: any): string[] {
+  getFormValidationErrors(formGroup: FormGroup): string[] {
     const errors: string[] = []
     
     Object.keys(formGroup.controls).forEach(key => {
-      const controlErrors = formGroup.get(key).errors
+      const control = formGroup.get(key)
+      const controlErrors = control?.errors
       if (controlErrors != null) {
         Object.keys(controlErrors).forEach(keyError => {
           errors.push(this.getValidationErrorMessage(key, keyError, controlErrors[keyError]))
@@ -172,8 +174,8 @@ export class UiService {
     return errors
   }
 
-  private getValidationErrorMessage(fieldName: string, errorType: string, errorValue: any): string {
-    const fieldNameMap: { [key: string]: string } = {
+  private getValidationErrorMessage(fieldName: string, errorType: string, errorValue: unknown): string {
+    const fieldNameMap: Record<string, string> = {
       'email': 'Email',
       'password': 'Senha',
       'name': 'Nome',
@@ -184,6 +186,7 @@ export class UiService {
     }
 
     const friendlyFieldName = fieldNameMap[fieldName] || fieldName
+    const errObj = errorValue as { requiredLength?: number }
 
     switch (errorType) {
       case 'required':
@@ -191,9 +194,9 @@ export class UiService {
       case 'email':
         return `Por favor, insira um email válido`
       case 'minlength':
-        return `${friendlyFieldName} deve ter no mínimo ${errorValue.requiredLength} caracteres`
+        return `${friendlyFieldName} deve ter no mínimo ${errObj.requiredLength} caracteres`
       case 'maxlength':
-        return `${friendlyFieldName} deve ter no máximo ${errorValue.requiredLength} caracteres`
+        return `${friendlyFieldName} deve ter no máximo ${errObj.requiredLength} caracteres`
       case 'pattern':
         return `${friendlyFieldName} está em formato inválido`
       case 'mustMatch':

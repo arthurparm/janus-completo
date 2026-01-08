@@ -1,18 +1,18 @@
 <section class="page-header" id="sec-intro">
   <h1 class="page-title text-cyan glow-text">ARQUITETURA DO SISTEMA</h1>
   <p class="page-subtitle text-muted">
-    BLUEPRINT COGNITIVO v2.0 // IA DE DESENVOLVIMENTO AUTÔNOMO
+    Estrutura Técnica e Fluxo de Dados
   </p>
   <div class="glass-panel p-4 mt-4">
     <p class="text-sm font-mono text-purple">
-      > ANALISANDO SISTEMA...<br>
-      > SUBSISTEMAS LOCAIS: DETECTADOS<br>
-      > PRIVACIDADE DE DADOS: 100% LOCAL
+      > STATUS: OPERACIONAL<br>
+      > PRIVACIDADE: 100% LOCAL<br>
+      > SUBSISTEMAS: INTEGRADOS
     </p>
     @if (apiHealthy === 'ok' && !loading && systemStatus?.version?.includes('DEMO')) {
     <div
       class="mt-2 inline-block px-2 py-1 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-xs font-bold">
-      ⚠️ DEMO MODE: CONNECTED TO OFFLINE SNAPSHOT
+      ⚠️ MODO DEMONSTRAÇÃO
     </div>
     }
     <p class="mt-2 text-text-primary">
@@ -27,136 +27,66 @@
 <section class="intro-overview mt-8" id="sec-overview">
   <h2 class="section-title text-cyan"><span class="icon">🔍</span> FLUXO DE DADOS</h2>
   <div class="glass-panel p-6 relative overflow-hidden">
-    <div class="absolute top-0 right-0 p-2 text-xs font-mono text-cyan/50">DIAGRAMA_REAL_JNS_02</div>
+    <div class="absolute top-0 right-0 p-2 text-xs font-mono text-cyan/50">DIAGRAMA_SISTEMA_V2</div>
 
     <figure class="diagram-svg">
-      <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" role="img" class="w-full h-auto drop-shadow-lg">
-        <defs>
-          <style>
-            .blk {
-              fill: rgba(10, 15, 26, 0.8);
-              stroke: #00d4ff;
-              stroke-width: 1.5;
-            }
-
-            .ext {
-              fill: rgba(10, 15, 26, 0.6);
-              stroke: #7c3aed;
-              stroke-width: 1.5;
-              stroke-dasharray: 4;
-            }
-
-            .label {
-              fill: #e0f8ff;
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 13px;
-              font-weight: 600;
-              text-anchor: middle;
-            }
-
-            .sub-label {
-              fill: #9ec8d6;
-              font-family: 'Inter', sans-serif;
-              font-size: 10px;
-              text-anchor: middle;
-            }
-
-            .arrow {
-              stroke: #00d4ff;
-              stroke-width: 2;
-              marker-end: url(#arr);
-              animation: flow 3s infinite linear;
-            }
-
-            .arrow-rev {
-              stroke: #7c3aed;
-              stroke-width: 2;
-              marker-end: url(#arr-p);
-              stroke-dasharray: 4;
-            }
-
-            /* New Classes */
-            .user-node {
-              stroke: #ec4899;
-            }
-
-            .core-node {
-              stroke-width: 3;
-              filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.3));
-            }
-
-            .conn-ai {
-              fill: none;
-            }
-
-            .conn-files {
-              fill: none;
-              stroke: #ec4899;
-            }
-
-            @keyframes flow {
-              to {
-                stroke-dashoffset: -20;
-              }
-            }
-          </style>
-          <marker id="arr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6"
-            orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#00d4ff" />
-          </marker>
-          <marker id="arr-p" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6"
-            orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed" />
-          </marker>
-        </defs>
+      <svg viewBox="0 0 900 450" xmlns="http://www.w3.org/2000/svg" role="img" class="w-full h-auto drop-shadow-lg">
 
 
-        <rect x="20" y="180" width="120" height="60" rx="8" class="blk user-node" />
-        <text x="80" y="205" class="label">VOCÊ</text>
-        <text x="80" y="225" class="sub-label">Desenvolvedor</text>
+
+        <rect x="20" y="190" width="120" height="60" rx="8" class="blk user-node" />
+        <text x="80" y="215" class="label">VOCÊ</text>
+        <text x="80" y="235" class="sub-label">Desenvolvedor</text>
 
 
-        <rect x="200" y="180" width="140" height="60" rx="8" class="blk" />
-        <text x="270" y="205" class="label">INTERFACE</text>
-        <text x="270" y="225" class="sub-label">Angular (Front)</text>
+        <rect x="180" y="190" width="140" height="60" rx="8" class="blk" />
+        <text x="250" y="215" class="label">INTERFACE</text>
+        <text x="250" y="235" class="sub-label">Angular (Front)</text>
 
 
-        <rect x="420" y="160" width="160" height="100" rx="8" class="blk core-node" />
-        <text x="500" y="195" class="label">CORTEX (API)</text>
-        <text x="500" y="215" class="sub-label">Python / FastAPI</text>
-        <text x="500" y="235" class="sub-label">Orquestrador de Agentes</text>
+        <rect x="360" y="170" width="160" height="100" rx="8" class="blk core-node" />
+        <text x="440" y="205" class="label">CORTEX (API)</text>
+        <text x="440" y="225" class="sub-label">FastAPI Kernel</text>
+        <text x="440" y="245" class="sub-label">Gerenciador de Estado</text>
 
 
-        <rect x="660" y="40" width="160" height="80" rx="8" class="ext" />
-        <text x="740" y="75" class="label">MOTOR IA</text>
-        <text x="740" y="95" class="sub-label">Ollama (Llama 3)</text>
-        <text x="740" y="110" class="sub-label">Processamento GPU</text>
+        <rect x="600" y="170" width="120" height="100" rx="8" class="broker" />
+        <text x="660" y="215" class="label" fill="#f97316" style="fill:#fed7aa">EVENT BUS</text>
+        <text x="660" y="235" class="sub-label" fill="#ffedd5" style="fill:#ffedd5">RabbitMQ</text>
 
 
-        <rect x="660" y="160" width="160" height="80" rx="8" class="ext" />
-        <text x="740" y="195" class="label">MEMÓRIA</text>
-        <text x="740" y="215" class="sub-label">Qdrant (Vetores)</text>
-        <text x="740" y="230" class="sub-label">Neo4j (Grafos)</text>
+
+        <rect x="760" y="40" width="120" height="80" rx="8" class="ext" />
+        <text x="820" y="75" class="label">WORKERS</text>
+        <text x="820" y="95" class="sub-label">Agents & AI</text>
 
 
-        <rect x="660" y="280" width="160" height="60" rx="8" class="ext" />
-        <text x="740" y="305" class="label">WORKSPACE</text>
-        <text x="740" y="325" class="sub-label">Arquivos do Projeto</text>
+        <rect x="760" y="170" width="120" height="100" rx="8" class="ext" />
+        <text x="820" y="205" class="label">MEMÓRIA</text>
+        <text x="820" y="225" class="sub-label">Qdrant (RAG)</text>
+        <text x="820" y="245" class="sub-label">Neo4j (Grafo)</text>
 
 
-        <line x1="140" y1="210" x2="200" y2="210" class="arrow" />
+        <rect x="760" y="320" width="120" height="60" rx="8" class="ext" />
+        <text x="820" y="345" class="label">ARQUIVOS</text>
+        <text x="820" y="365" class="sub-label">Sistema Local</text>
 
 
-        <line x1="340" y1="210" x2="420" y2="210" class="arrow" />
+        <!-- Flows -->
+        <line x1="140" y1="220" x2="180" y2="220" class="arrow" />
+        <line x1="320" y1="220" x2="360" y2="220" class="arrow" />
 
+        <!-- API to Broker -->
+        <line x1="520" y1="220" x2="600" y2="220" class="arrow-msg" />
 
-        <path d="M 500 160 L 500 80 L 660 80" class="arrow conn-ai" />
+        <!-- Broker to Agents -->
+        <path d="M 660 170 L 660 80 L 760 80" class="arrow-msg" style="stroke-dasharray:none" />
 
+        <!-- Broker to Memory (Persistence) -->
+        <line x1="720" y1="220" x2="760" y2="220" class="arrow-msg" style="stroke-dasharray:none" />
 
-        <line x1="580" y1="210" x2="660" y2="210" class="arrow" />
-
-
-        <path d="M 500 260 L 500 310 L 660 310" class="arrow conn-files" />
+        <!-- Broker to Files (Actions) -->
+        <path d="M 660 270 L 660 350 L 760 350" class="arrow-msg" style="stroke-dasharray:none" />
 
       </svg>
     </figure>
@@ -169,9 +99,9 @@
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
     <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
-      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> CÉREBRO (Janus Core)</h3>
+      <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> NÚCLEO (Janus Core)</h3>
       <p class="text-sm text-text-secondary mb-3">O centro de comando escrito em Python. É aqui que os Agentes Autônomos
-        "vivem".</p>
+        operam.</p>
       <ul class="text-xs space-y-2 font-mono text-muted">
         <li><strong class="text-white">Orquestrador:</strong> Planeja tarefas complexas.</li>
         <li><strong class="text-white">Coder:</strong> Escreve e edita código real.</li>
@@ -182,7 +112,7 @@
 
     <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
       <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> MOTOR LOCAL (Ollama)</h3>
-      <p class="text-sm text-text-secondary mb-3">A força bruta de inteligência. Roda modelos avançados (como Llama 3)
+      <p class="text-sm text-text-secondary mb-3">A força de inteligência. Roda modelos avançados (como Llama 3)
         diretamente na sua placa de vídeo.</p>
       <ul class="text-xs space-y-2 font-mono text-muted">
         <li>> Processamento 100% Offline e Privado.</li>
@@ -206,36 +136,109 @@
 
     <div class="glass-panel p-5 hover:bg-white/5 transition-all cursor-pointer group">
       <h3 class="text-cyan font-bold mb-2 group-hover:text-white transition-colors">>> INTERFACE VISUAL</h3>
-      <p class="text-sm text-text-secondary mb-3">O painel de controle (onde você está agora). Construído em Angular.
+      <p class="text-sm text-text-secondary mb-3">O painel de controle. Construído em Angular.
       </p>
       <ul class="text-xs space-y-2 font-mono text-muted">
-        <li>> Design "Glassmorphism" Futurista.</li>
-        <li>> Comunicação em Tempo Real (WebSockets).</li>
+        <li>> Design Moderno "Glassmorphism".</li>
+        <li>> Comunicação via API REST / Polling.</li>
         <li>> Visualização de Arquivos e Metas.</li>
       </ul>
     </div>
   </div>
 </section>
 
+<section class="lifecycle-detail mt-8" id="sec-lifecycle">
+  <h2 class="section-title text-orange-400"><span class="icon">⚡</span> CICLO DE VIDA DA TAREFA</h2>
+
+  <div class="relative py-4">
+    <!-- Connecting Line (Desktop) -->
+    <div
+      class="hidden md:block absolute top-1/2 left-4 right-4 h-0.5 bg-gradient-to-r from-cyan via-purple to-green-400 opacity-20 transform -translate-y-1/2 z-0">
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+
+      <!-- Step 1 -->
+      <div
+        class="glass-panel p-6 flex flex-col items-center text-center hover:bg-white/5 transition-all duration-300 group border border-white/5 hover:border-cyan/50 hover:shadow-[0_0_20px_rgba(34,211,238,0.15)] bg-[#0a0f1a]/80 backdrop-blur-md">
+        <div
+          class="w-12 h-12 rounded-full bg-cyan/10 border border-cyan flex items-center justify-center mb-4 text-cyan text-xl font-bold group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+          <mat-icon class="text-xl">http</mat-icon>
+        </div>
+        <h4 class="text-white font-bold mb-2 group-hover:text-cyan transition-colors">Solicitação</h4>
+        <div class="text-xs font-mono text-cyan/70 mb-2">POST /tasks</div>
+        <p class="text-xs text-text-secondary leading-relaxed">
+          O <strong>Janus Kernel</strong> recebe o pedido API, valida o schema e persiste o "Contexto Inicial" no Vector
+          DB.
+        </p>
+      </div>
+
+      <!-- Step 2 -->
+      <div
+        class="glass-panel p-6 flex flex-col items-center text-center hover:bg-white/5 transition-all duration-300 group border border-white/5 hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] bg-[#0a0f1a]/80 backdrop-blur-md">
+        <div
+          class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500 flex items-center justify-center mb-4 text-orange-500 text-xl font-bold group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(249,115,22,0.3)]">
+          <mat-icon class="text-xl">hub</mat-icon>
+        </div>
+        <h4 class="text-white font-bold mb-2 group-hover:text-orange-500 transition-colors">Event Bus</h4>
+        <div class="text-xs font-mono text-orange-500/70 mb-2">RabbitMQ: task.created</div>
+        <p class="text-xs text-text-secondary leading-relaxed">
+          A API publica evento assíncrono. O Frontend recebe <code>202 Accepted</code> e inicia long-polling.
+        </p>
+      </div>
+
+      <!-- Step 3 -->
+      <div
+        class="glass-panel p-6 flex flex-col items-center text-center hover:bg-white/5 transition-all duration-300 group border border-white/5 hover:border-purple/50 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)] bg-[#0a0f1a]/80 backdrop-blur-md">
+        <div
+          class="w-12 h-12 rounded-full bg-purple/10 border border-purple flex items-center justify-center mb-4 text-purple text-xl font-bold group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <mat-icon class="text-xl">psychology</mat-icon>
+        </div>
+        <h4 class="text-white font-bold mb-2 group-hover:text-purple transition-colors">Orquestração</h4>
+        <div class="text-xs font-mono text-purple-400/70 mb-2">Meta-Agent & LLM</div>
+        <p class="text-xs text-text-secondary leading-relaxed">
+          Os Workers analisam a intenção da task e delegam para especialistas (Coder, Researcher) via LLM.
+        </p>
+      </div>
+
+      <!-- Step 4 -->
+      <div
+        class="glass-panel p-6 flex flex-col items-center text-center hover:bg-white/5 transition-all duration-300 group border border-white/5 hover:border-green-400/50 hover:shadow-[0_0_20px_rgba(74,222,128,0.15)] bg-[#0a0f1a]/80 backdrop-blur-md">
+        <div
+          class="w-12 h-12 rounded-full bg-green-400/10 border border-green-400 flex items-center justify-center mb-4 text-green-400 text-xl font-bold group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(74,222,128,0.3)]">
+          <mat-icon class="text-xl">save</mat-icon>
+        </div>
+        <h4 class="text-white font-bold mb-2 group-hover:text-green-400 transition-colors">Execução</h4>
+        <div class="text-xs font-mono text-green-400/70 mb-2">Neo4j & Filesystem</div>
+        <p class="text-xs text-text-secondary leading-relaxed">
+          O Agente executa a ação e salva o resultado no Grafo de Conhecimento. Task marcada como
+          <code>COMPLETED</code>.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <section class="auto-optimization mt-8" id="sec-optimization">
-  <h2 class="section-title text-pink"><span class="icon">🔄</span> MECANISMO DE AUTO-OTIMIZAÇÃO (Reflexion)</h2>
+  <h2 class="section-title text-pink"><span class="icon">🔄</span> OTIMIZAÇÃO CONTÍNUA (Reflexion)</h2>
 
   <div class="glass-panel p-6">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
       <div class="text-content">
-        <h3 class="text-xl text-white font-bold mb-4">O Ciclo de Aprendizado</h3>
+        <h3 class="text-xl text-white font-bold mb-4">Ciclo de Aprendizado</h3>
         <p class="text-text-secondary mb-4">
-          O Janus não apenas executa código; ele aprende com seus erros usando um mecanismo chamado
-          <strong>Reflexion</strong>.
-          Quando uma tarefa falha, ele não desiste. Ele entra em um loop de introspecção:
+          O Janus não apenas executa código; ele aprende com seus erros usando um mecanismo de
+          <strong>Reflexão</strong>.
+          Quando uma tarefa falha, ele entra em um ciclo de análise para corrigir o problema.
         </p>
         <ol
           class="list-decimal list-inside space-y-3 text-sm text-muted font-mono bg-black/20 p-4 rounded-lg border border-white/5">
           <li><strong class="text-cyan">TENTATIVA:</strong> O Agente executa uma ação (ex: escreve um código).</li>
           <li><strong class="text-pink">AVALIAÇÃO:</strong> O sistema analisa o resultado (Testes, Linters, Erros).</li>
-          <li><strong class="text-purple">REFLEXÃO:</strong> O LLM gera uma crítica verbal sobre O QUE deu errado.</li>
-          <li><strong class="text-green-400">MEMÓRIA:</strong> A lição é salva no Qdrant para o futuro.</li>
-          <li><strong class="text-white">NOVA TENTATIVA:</strong> O Agente tenta de novo, agora com o contexto do erro.
+          <li><strong class="text-purple">REFLEXÃO:</strong> O Modelo gera uma crítica sobre a falha.</li>
+          <li><strong class="text-green-400">MEMÓRIA:</strong> A lição é salva para o futuro.</li>
+          <li><strong class="text-white">NOVA TENTATIVA:</strong> O Agente tenta novamente com o novo contexto.
           </li>
         </ol>
       </div>
@@ -264,8 +267,8 @@
           <circle cx="70" cy="100" r="15" fill="#22c55e" />
           <text x="70" y="105" text-anchor="middle" font-size="20" fill="#0b0f19">✨</text>
 
-          <text x="150" y="105" text-anchor="middle" fill="white" font-family="monospace" font-size="12">REFLEXION
-            LOOP</text>
+          <text x="150" y="105" text-anchor="middle" fill="white" font-family="monospace" font-size="12">CICLO
+            REFLEXIVO</text>
         </svg>
       </div>
     </div>
@@ -273,13 +276,12 @@
 </section>
 
 <section class="agents-hierarchy mt-8 mb-12" id="sec-agents">
-  <h2 class="section-title text-green-400"><span class="icon">🤖</span> ORQUESTRAÇÃO DE AGENTES</h2>
+  <h2 class="section-title text-green-400"><span class="icon">🤖</span> ESTRUTURA DE AGENTES (SOCIEDADE DE MENTES)</h2>
 
   <div class="glass-panel p-6">
     <p class="text-text-secondary mb-6">
-      O <strong>Meta-Agent</strong> é o supervisor supremo. Ele não realiza tarefas manuais; ele delega para
-      especialistas.
-      Isso permite paralelismo e especialização.
+      O sistema opera numa arquitetura de "Sociedade de Mentes", onde o <strong>Project Manager</strong> coordena
+      uma equipe de especialistas.
     </p>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -288,31 +290,47 @@
         class="agent-card border-2 border-purple/50 bg-purple/10 p-4 rounded-xl text-center relative overflow-hidden">
         <div class="absolute inset-0 bg-purple/5 blur-xl"></div>
         <div class="text-4xl mb-2">👑</div>
-        <h4 class="font-bold text-purple mb-1">META-AGENT</h4>
-        <p class="text-xs text-text-secondary">Supervisor & Planejador</p>
-        <div class="mt-2 text-xs font-mono text-purple-300 bg-black/40 rounded p-1">meta_agent.py</div>
+        <h4 class="font-bold text-purple mb-1">PROJECT MANAGER</h4>
+        <p class="text-xs text-text-secondary">Coordenação & Planejamento</p>
+        <div class="mt-2 text-xs font-mono text-purple-300 bg-black/40 rounded p-1">AgentRole.PROJECT_MANAGER</div>
       </div>
-
 
       <div class="agent-card border border-cyan/30 bg-cyan/5 p-4 rounded-xl text-center">
         <div class="text-4xl mb-2">💻</div>
         <h4 class="font-bold text-cyan mb-1">CODER</h4>
-        <p class="text-xs text-text-secondary">Escreve, edita e refatora código.</p>
+        <p class="text-xs text-text-secondary">Implementação e Refatoração.</p>
       </div>
-
 
       <div class="agent-card border border-pink/30 bg-pink/5 p-4 rounded-xl text-center">
-        <div class="text-4xl mb-2">🕵️</div>
-        <h4 class="font-bold text-pink mb-1">REVIEWER</h4>
-        <p class="text-xs text-text-secondary">Analisa segurança e bugs.</p>
+        <div class="text-4xl mb-2">🧪</div>
+        <h4 class="font-bold text-pink mb-1">TESTER</h4>
+        <p class="text-xs text-text-secondary">Validação, Testes e QA.</p>
       </div>
-
 
       <div class="agent-card border border-green-500/30 bg-green-500/5 p-4 rounded-xl text-center">
         <div class="text-4xl mb-2">📚</div>
         <h4 class="font-bold text-green-400 mb-1">RESEARCHER</h4>
-        <p class="text-xs text-text-secondary">Busca documentação e exemplos.</p>
+        <p class="text-xs text-text-secondary">Pesquisa e Análise de Dados.</p>
       </div>
+
+      <div class="agent-card border border-yellow-500/30 bg-yellow-500/5 p-4 rounded-xl text-center">
+        <div class="text-4xl mb-2">📝</div>
+        <h4 class="font-bold text-yellow-400 mb-1">DOCUMENTER</h4>
+        <p class="text-xs text-text-secondary">Documentação Técnica e Guias.</p>
+      </div>
+
+      <div class="agent-card border border-blue-500/30 bg-blue-500/5 p-4 rounded-xl text-center">
+        <div class="text-4xl mb-2">⚡</div>
+        <h4 class="font-bold text-blue-400 mb-1">OPTIMIZER</h4>
+        <p class="text-xs text-text-secondary">Performance e Best Practices.</p>
+      </div>
+
+      <div class="agent-card border border-red-500/30 bg-red-500/5 p-4 rounded-xl text-center opacity-70">
+        <div class="text-4xl mb-2">🔧</div>
+        <h4 class="font-bold text-red-400 mb-1">SYSADMIN</h4>
+        <p class="text-xs text-text-secondary">Operações de Sistema (Restrito).</p>
+      </div>
+
     </div>
   </div>
 </section>
@@ -323,7 +341,7 @@
       <thead class="bg-white/5 text-cyan uppercase font-mono">
         <tr>
           <th class="p-4">Componente</th>
-          <th class="p-4">Tecnologia (Spec Real)</th>
+          <th class="p-4">Tecnologia</th>
           <th class="p-4">Função</th>
         </tr>
       </thead>
