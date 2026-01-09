@@ -1,8 +1,8 @@
-import { Injectable, inject } from '@angular/core'
+import { Injectable } from '@angular/core'
 import { FormGroup } from '@angular/forms'
 import { MatSnackBar, MatSnackBarConfig, MatSnackBarRef } from '@angular/material/snack-bar'
 import { MatDialog, MatDialogConfig, MatDialogRef } from '@angular/material/dialog'
-import { Observable, Subject } from 'rxjs'
+import { Observable } from 'rxjs'
 import { LoadingDialogComponent } from '../components/loading-dialog/loading-dialog.component'
 import { ConfirmDialogComponent } from '../components/confirm-dialog/confirm-dialog.component'
 
@@ -38,7 +38,7 @@ export class UiService {
   constructor(
     private snackBar: MatSnackBar,
     private dialog: MatDialog
-  ) {}
+  ) { }
 
   // Toast/Snackbar methods
   showToast(config: ToastConfig): void {
@@ -110,7 +110,7 @@ export class UiService {
 
     const loadingRef = this.dialog.open(LoadingDialogComponent, dialogConfig)
     this.activeLoadingDialogs.push(loadingRef)
-    
+
     loadingRef.afterClosed().subscribe(() => {
       const index = this.activeLoadingDialogs.indexOf(loadingRef)
       if (index > -1) {
@@ -160,7 +160,7 @@ export class UiService {
   // Form validation helpers
   getFormValidationErrors(formGroup: FormGroup): string[] {
     const errors: string[] = []
-    
+
     Object.keys(formGroup.controls).forEach(key => {
       const control = formGroup.get(key)
       const controlErrors = control?.errors
@@ -170,7 +170,7 @@ export class UiService {
         })
       }
     })
-    
+
     return errors
   }
 
@@ -209,31 +209,31 @@ export class UiService {
   // File upload helpers
   formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes'
-    
+
     const k = 1024
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   validateFile(file: File, allowedTypes: string[], maxSizeInMB: number): { valid: boolean; error?: string } {
     // Check file type
-    if (allowedTypes.length > 0 && !allowedTypes.some(type => 
+    if (allowedTypes.length > 0 && !allowedTypes.some(type =>
       file.type === type || file.name.toLowerCase().endsWith(type.toLowerCase())
     )) {
-      return { 
-        valid: false, 
-        error: `Tipo de arquivo não permitido. Tipos permitidos: ${allowedTypes.join(', ')}` 
+      return {
+        valid: false,
+        error: `Tipo de arquivo não permitido. Tipos permitidos: ${allowedTypes.join(', ')}`
       }
     }
 
     // Check file size
     const maxSizeInBytes = maxSizeInMB * 1024 * 1024
     if (file.size > maxSizeInBytes) {
-      return { 
-        valid: false, 
-        error: `Arquivo muito grande. Tamanho máximo: ${maxSizeInMB}MB` 
+      return {
+        valid: false,
+        error: `Arquivo muito grande. Tamanho máximo: ${maxSizeInMB}MB`
       }
     }
 
@@ -243,7 +243,7 @@ export class UiService {
   // Date/Time helpers
   formatDate(date: Date | string, format: string = 'dd/MM/yyyy'): string {
     const dateObj = typeof date === 'string' ? new Date(date) : date
-    
+
     if (isNaN(dateObj.getTime())) {
       return ''
     }

@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { AutoAnalysisService, AutoAnalysisResponse, HealthInsight } from '../../services/auto-analysis.service'
+import { AutoAnalysisService, AutoAnalysisResponse } from '../../services/auto-analysis.service'
 import { MockAutoAnalysisService } from '../../services/mock-auto-analysis.service'
 import { MatCardModule } from '@angular/material/card'
 import { MatIconModule } from '@angular/material/icon'

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, ChangeDetectorRef, OnDestroy } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import { JanusApiService, Goal, GoalCreateRequest } from '../../services/janus-api.service'
+import { JanusApiService, Goal } from '../../services/janus-api.service'
 import { DemoService } from '../../core/services/demo.service'
 import { MatIconModule } from '@angular/material/icon'
 import { MatDialogModule, MatDialog } from '@angular/material/dialog'

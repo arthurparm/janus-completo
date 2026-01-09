@@ -5,7 +5,7 @@
 
 import { Injectable, inject } from '@angular/core';
 import { CanActivate, CanActivateChild, CanLoad, Router, ActivatedRouteSnapshot, RouterStateSnapshot, Route, UrlSegment } from '@angular/router';
-import { Observable, map, take, tap } from 'rxjs';
+import { Observable, map, take } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -32,8 +32,8 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   canLoad(
-    route: Route,
-    segments: UrlSegment[]
+    _route: Route,
+    _segments: UrlSegment[]
   ): Observable<boolean> | Promise<boolean> | boolean {
     return this.checkAuthForLoad();
   }
@@ -48,11 +48,11 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
 
         // Redirecionar para login com URL de retorno
         const returnUrl = state?.url || route?.url?.join('/') || '/';
-        this.router.navigate(['/auth/login'], { 
+        this.router.navigate(['/auth/login'], {
           queryParams: { returnUrl },
           replaceUrl: true
         });
-        
+
         this.notificationService.notifyWarning('Acesso negado', 'Por favor, faça login para acessar esta página');
         return false;
       })
@@ -82,7 +82,7 @@ export class RoleGuard implements CanActivate {
 
   canActivate(route: ActivatedRouteSnapshot): Observable<boolean> | Promise<boolean> | boolean {
     const requiredRoles = route.data['roles'] as string[];
-    
+
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
     }
@@ -96,7 +96,7 @@ export class RoleGuard implements CanActivate {
         }
 
         const hasRole = requiredRoles.some(role => user.roles?.includes(role) || false);
-        
+
         if (!hasRole) {
           this.notificationService.notifyError('Acesso negado', 'Você não tem permissão para acessar esta página');
           this.router.navigate(['/dashboard']);
@@ -119,7 +119,7 @@ export class PermissionGuard implements CanActivate {
 
   canActivate(route: ActivatedRouteSnapshot): Observable<boolean> | Promise<boolean> | boolean {
     const requiredPermissions = route.data['permissions'] as string[];
-    
+
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
     }
@@ -132,10 +132,10 @@ export class PermissionGuard implements CanActivate {
           return false;
         }
 
-        const hasPermission = requiredPermissions.every(permission => 
+        const hasPermission = requiredPermissions.every(permission =>
           user.permissions?.includes(permission) || false
         );
-        
+
         if (!hasPermission) {
           this.notificationService.notifyError('Acesso negado', 'Você não tem as permissões necessárias para acessar esta página');
           this.router.navigate(['/dashboard']);

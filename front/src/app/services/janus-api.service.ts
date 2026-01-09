@@ -1,10 +1,10 @@
+/* eslint-disable no-console */
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
 import { API_BASE_URL } from './api.config'
-import { Observable, BehaviorSubject, Subject, throwError, firstValueFrom } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
-import { AgentEventsService } from '../core/services/agent-events.service';
-import { JanusStatic, JanusSession, JanusPluginHandle, JanusInitOptions } from '../core/types';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
+import { JanusStatic, JanusSession, JanusPluginHandle } from '../core/types';
 declare const Janus: JanusStatic;
 
 export interface SystemStatus {
@@ -130,7 +130,12 @@ export interface ChatMessage {
 export interface Tool {
   name: string;
   description: string;
-  args_schema: Record<string, unknown>;
+  args_schema?: Record<string, unknown>;
+  category?: string;
+  permission_level?: string;
+  rate_limit_per_minute?: number;
+  requires_confirmation?: boolean;
+  tags?: string[];
   enabled?: boolean;
 }
 
@@ -980,36 +985,8 @@ export class JanusApiService {
     return this.http.get(this.buildUrl(`/api/v1/observability/audit/export?${qs.toString()}`), { responseType: 'text' })
   }
 
-  // Documents
-  uploadAttachmentWithProgress(conversation_id: string, file: File, user_id?: string): Observable<{ progress?: number; response?: UploadResponse }> {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('conversation_id', conversation_id)
-    if (user_id) form.append('user_id', user_id)
-    return this.http.post<UploadResponse>(this.buildUrl(`/api/v1/documents/upload`), form, { reportProgress: true, observe: 'events' }).pipe(
-      map((event: HttpEvent<UploadResponse>) => {
-        if (event.type === HttpEventType.UploadProgress) {
-          const pct = Math.round((event.loaded / Math.max(1, event.total || 1)) * 100)
-          return { progress: pct }
-        } else if (event.type === HttpEventType.Response) {
-          return { response: event.body || undefined }
-        }
-        return {}
-      })
-    )
-  }
+  // Documents - consolidated below
 
-  listAttachments(conversation_id: string, user_id?: string): Observable<DocListResponse> {
-    const qs = new URLSearchParams()
-    if (user_id) qs.set('user_id', user_id)
-    qs.set('conversation_id', conversation_id)
-    return this.http.get<DocListResponse>(this.buildUrl(`/api/v1/documents/list?${qs.toString()}`))
-  }
-
-  deleteAttachment(doc_id: string, user_id?: string): Observable<{ status: string }> {
-    const headers = this.headersFor(user_id)
-    return this.http.delete<{ status: string }>(this.buildUrl(`/api/v1/documents/${encodeURIComponent(doc_id)}`), { headers })
-  }
 
   linkUrl(conversation_id: string, url: string, user_id?: string): Observable<UploadResponse> {
     const form = new FormData()

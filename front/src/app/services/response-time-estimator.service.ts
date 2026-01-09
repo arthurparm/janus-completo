@@ -148,7 +148,7 @@ export class ResponseTimeEstimatorService {
   private hasFileReferences(message: string): boolean {
     const filePatterns = [
       /\w+\.\w+/g,             // file.ext
-      /\/[\w\/\-\.]+/g,        // /path/to/file
+      /\/[\w/.-]+/g,           // /path/to/file
       /\w+:\/\/[^\s]+/g         // URLs
     ]
     

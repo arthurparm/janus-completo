@@ -432,11 +432,11 @@ export type Nullable<T> = T | null;
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 export type RequiredKeys<T> = {
-  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+  [K in keyof T]-?: undefined extends T[K] ? never : K;
 }[keyof T];
 
 export type OptionalKeys<T> = {
-  [K in keyof T]-?: {} extends Pick<T, K> ? K : never;
+  [K in keyof T]-?: undefined extends T[K] ? K : never;
 }[keyof T];
 
 // Tipos para estados de loading

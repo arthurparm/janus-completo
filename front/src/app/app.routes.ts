@@ -1,22 +1,22 @@
 import { Routes, CanMatchFn, Router } from '@angular/router';
 import { MainLayout } from './core/layout/main-layout/main-layout';
 import { inject } from '@angular/core'
-import { AUTH_TOKEN_KEY } from './services/api.config'
-import { decodeTokenUserId, decodeTokenExp } from './services/auth.utils'
-import { DashboardResolver, ChatResolver, SettingsResolver, UserResolver } from './core/guards'
+import { DashboardResolver, ChatResolver, UserResolver } from './core/guards'
 
 export const authGuard: CanMatchFn = () => {
-  const r = inject(Router)
+  const _router = inject(Router)
   // BYPASS: Authentication disabled by user request
+  // eslint-disable-next-line no-console
   console.log('[AuthGuard] Bypassing auth check (Dev Mode)')
   return true
 }
 
 export const loginRedirectGuard: CanMatchFn = () => {
-  const r = inject(Router)
+  const router = inject(Router)
   // BYPASS: Redirect to home as login is disabled
+  // eslint-disable-next-line no-console
   console.log('[LoginRedirectGuard] Auth disabled, redirecting to home')
-  return r.parseUrl('/')
+  return router.parseUrl('/')
 }
 
 export const routes: Routes = [

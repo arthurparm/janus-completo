@@ -1,11 +1,11 @@
-import {CanMatchFn, Router} from '@angular/router'
-import {inject} from '@angular/core'
-import {JanusApiService} from '../../services/janus-api.service'
-import {AUTH_TOKEN_KEY} from '../../services/api.config'
-import {decodeTokenUserId} from '../../services/auth.utils'
-import {map, catchError, of} from 'rxjs'
+import { CanMatchFn, Router } from '@angular/router'
+import { inject } from '@angular/core'
+import { JanusApiService } from '../../services/janus-api.service'
+import { AUTH_TOKEN_KEY } from '../../services/api.config'
+import { decodeTokenUserId } from '../../services/auth.utils'
+import { map, catchError, of } from 'rxjs'
 
-export const hitlRoleGuard: CanMatchFn = (route, segments) => {
+export const hitlRoleGuard: CanMatchFn = (_route, _segments) => {
   const router = inject(Router)
   const api = inject(JanusApiService)
   let uid: number | null = null

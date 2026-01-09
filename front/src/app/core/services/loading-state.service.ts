@@ -34,8 +34,8 @@ export class LoadingStateService {
   startLoading(key: string, config?: LoadingConfig): void
   startLoading(key: string, message?: string): void
   startLoading(key: string, configOrMessage?: LoadingConfig | string): void {
-    const config: LoadingConfig = typeof configOrMessage === 'string' 
-      ? { message: configOrMessage } 
+    const config: LoadingConfig = typeof configOrMessage === 'string'
+      ? { message: configOrMessage }
       : configOrMessage || {}
     const currentStates = this.loadingStates()
     const newState: LoadingState = {
@@ -44,7 +44,7 @@ export class LoadingStateService {
       progress: config?.progress || 0,
       timestamp: Date.now()
     }
-    
+
     currentStates.set(key, newState)
     this.loadingStates.set(new Map(currentStates))
 
@@ -63,7 +63,7 @@ export class LoadingStateService {
   updateProgress(key: string, progress: number): void {
     const currentStates = this.loadingStates()
     const existingState = currentStates.get(key)
-    
+
     if (existingState) {
       existingState.progress = progress
       this.loadingStates.set(new Map(currentStates))
@@ -76,7 +76,7 @@ export class LoadingStateService {
   updateMessage(key: string, message: string): void {
     const currentStates = this.loadingStates()
     const existingState = currentStates.get(key)
-    
+
     if (existingState) {
       existingState.message = message
       this.loadingStates.set(new Map(currentStates))
@@ -89,21 +89,21 @@ export class LoadingStateService {
   stopLoading(key: string): void {
     const currentStates = this.loadingStates()
     const existingState = currentStates.get(key)
-    
+
     if (existingState) {
       existingState.isLoading = false
       existingState.completedAt = Date.now()
-      
+
       // Remove após um pequeno delay para permitir animações
       setTimeout(() => {
         const states = this.loadingStates()
         states.delete(key)
         this.loadingStates.set(new Map(states))
-        
+
         // Verifica se ainda há loading global/HTTP ativo
         const hasGlobalLoading = Array.from(states.values()).some(s => s.isLoading && s.global)
         const hasHttpLoading = Array.from(states.values()).some(s => s.isLoading && s.http)
-        
+
         this.globalLoading.set(hasGlobalLoading)
         this.httpLoading.set(hasHttpLoading)
       }, 300)
@@ -139,11 +139,11 @@ export class LoadingStateService {
    */
   forceStopAll(): void {
     const states = this.loadingStates()
-    states.forEach((state, key) => {
+    states.forEach((state, _key) => {
       state.isLoading = false
       state.completedAt = Date.now()
     })
-    
+
     setTimeout(() => {
       this.clearAll()
     }, 300)

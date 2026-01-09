@@ -15,6 +15,9 @@
       Acesse esquemas do sistema, sprints evolutivos e manuais operacionais.<br>
       Dados persistidos localmente para acesso resiliente.
     </p>
+    <p class="hero-subtitle" style="margin-top:0.5rem">
+      Manual Completo atualizado disponível em <strong>docs/Janus-Manual-v2.md</strong>.
+    </p>
   </header>
 
   <!-- Main Grid: Massive Cards -->
@@ -93,6 +96,18 @@
             <span class="index">05</span>
             <span class="title">DEPLOYMENT PIPELINE</span>
           </li>
+          <li [class.active]="activeChapter === 'API'" (click)="setChapter('API')">
+            <span class="index">06</span>
+            <span class="title">API SURFACE</span>
+          </li>
+          <li [class.active]="activeChapter === 'SECURITY'" (click)="setChapter('SECURITY')">
+            <span class="index">07</span>
+            <span class="title">SECURITY & GOVERNANCE</span>
+          </li>
+          <li [class.active]="activeChapter === 'TROUBLESHOOTING'" (click)="setChapter('TROUBLESHOOTING')">
+            <span class="index">08</span>
+            <span class="title">TROUBLESHOOTING</span>
+          </li>
         </ul>
         <div class="sidebar-footer">
           <span class="status-indicator online"></span>
@@ -107,19 +122,28 @@
         <div class="chapter-view" *ngIf="activeChapter === 'GENESIS'">
           <h2 class="chapter-title">00 // META-GENESIS</h2>
           <div class="text-block">
-            <p class="highlight">O "Janus" não é apenas um chatbot. É uma Arquitetura Cognitiva Resiliente.</p>
+            <p class="highlight">O "Janus" não é apenas um chatbot. É uma Arquitetura Cognitiva Resiliente (ACR).</p>
             <p>
-              Projetado para operar além das limitações de uma simples cadeia de "prompts", o Janus implementa um
-              <strong>ciclo de vida autônomo</strong> baseada em agentes especializados. Diferente de sistemas passivos,
-              ele possui uma "consciência" de seu próprio estado operacional, capaz de detectar falhas de conexão,
-              alucinações de LLM e latência excessiva.
+              O objetivo não é “responder bem uma vez”, mas operar bem por longos períodos: com custo controlado, contexto
+              persistente, tolerância a falhas e capacidade de evolução. Para isso, o Janus foi pensado como um sistema
+              de ciclos e camadas, e não como uma única cadeia de prompts.
             </p>
             <h3>Princípios Fundamentais</h3>
             <ul>
-              <li><strong>Autonomia Supervisionada:</strong> O Meta-Agente vigia os sub-agentes.</li>
-              <li><strong>Resiliência Local:</strong> Capacidade de operar em modo "Offline/Demo" quando o backend cai.
-              </li>
-              <li><strong>Memória Híbrida:</strong> Fusão de vector-search (Qdrant) com cache de curto prazo (LRU).</li>
+              <li><strong>Autonomia supervisionada:</strong> loops de ação, com governança de risco.</li>
+              <li><strong>Memória híbrida:</strong> Qdrant (vetor) + Neo4j (grafo) + cache LRU/TTL (hot path).</li>
+              <li><strong>Roteamento de LLM:</strong> custo/latência/qualidade + budgets + circuit breakers.</li>
+              <li><strong>Consolidação assíncrona:</strong> conhecimento estruturado extraído em background.</li>
+              <li><strong>Observabilidade:</strong> métricas e eventos para detectar degradação cedo.</li>
+            </ul>
+            <h3>Decisões Arquiteturais (Como o Janus foi pensado)</h3>
+            <p>
+              Cada decisão existe para reduzir um tipo de risco de produção:
+            </p>
+            <ul>
+              <li><strong>Vetor + Grafo:</strong> similaridade para recall e relações para consistência.</li>
+              <li><strong>Hot/Cold Path:</strong> chat rápido agora, extração de conhecimento depois.</li>
+              <li><strong>Supervisor dedicado:</strong> problemas aparecem em métricas antes de virar incidente.</li>
             </ul>
           </div>
         </div>
@@ -129,22 +153,30 @@
           <h2 class="chapter-title">01 // COGNITIVE LOOP</h2>
           <div class="text-block">
             <p>
-              No coração do sistema reside o <strong>Meta-Agente</strong> (<code>meta_agent.py</code>), uma entidade
-              separada que não interage com usuários humanos. Sua única função é a introspecção.
+              No coração do sistema reside o <strong>Meta-Agente</strong> (<code>meta_agent.py</code>): uma entidade
+              separada do chat, dedicada a introspecção, diagnóstico e recomendações. Ele opera como um grafo de estado
+              (LangGraph) e não como um script linear.
             </p>
             <h3>O Ciclo de Análise</h3>
             <p>
-              A cada ciclo (configurável, padrão 5min), o Meta-Agente desperta e executa ferramentas de diagnóstico:
+              A cada ciclo, o Meta-Agente segue um OODA com reflexão de segurança:
             </p>
+            <ol style="list-style: decimal; padding-left: 1.5rem; margin-bottom: 1.5rem; color: var(--text-secondary);">
+              <li style="margin-bottom: 0.5rem"><strong>Monitor:</strong> coleta métricas e sinais de saúde.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Diagnose:</strong> formula hipótese de causa raiz.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Plan:</strong> propõe ações corretivas ou otimizações.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Reflect:</strong> critica o plano (segurança/impacto).</li>
+              <li style="margin-bottom: 0.5rem"><strong>Execute:</strong> executa ferramentas aprovadas.</li>
+            </ol>
             <div class="code-snippet">
               <code>> tool: analyze_memory_for_failures()</code><br>
               <code>> tool: get_system_health_metrics()</code><br>
               <code>> tool: analyze_performance_trends()</code>
             </div>
             <p>
-              Se ele detecta, por exemplo, um aumento na taxa de <code>ContextExceededError</code>, ele pode invocar
-              automaticamente protocolos de "Compressão de Memória" ou alterar a estratégia de roteamento para um
-              modelo com janela de contexto maior (ex: Claude 3.5 Sonnet).
+              Se ele detecta aumento de latência, erros de provedor, ou degradação na recuperação de memória, ele pode
+              recomendar ações como ajustar prioridade, reduzir custo esperado, alterar o provedor preferencial ou
+              disparar rotinas de consolidação/limpeza.
             </p>
           </div>
         </div>
@@ -154,20 +186,30 @@
           <h2 class="chapter-title">02 // MNEMONIC CORE</h2>
           <div class="text-block">
             <p>
-              A memória do Janus (<code>memory_core.py</code>) rejeita a simplicidade. Ela implementa um sistema
-              de <strong>dupla camada</strong> para garantir velocidade extrema e persistência profunda.
+              A memória do Janus é uma pipeline: salvar rápido, recuperar com qualidade e consolidar conhecimento
+              estruturado com baixo custo no caminho frio.
             </p>
-            <h3>Short-Term: LRU Cache</h3>
+            <h3>Hot Path: Cache de Curto Prazo (LRU + TTL)</h3>
             <p>
               As interações imediatas vivem em um <code>OrderedDict</code> em memória RAM. Implementa uma política
               <strong>LRU (Least Recently Used)</strong> com TTL (Time-To-Live) de 600 segundos. Isso garante que
               o contexto da conversa atual seja recuperado em &lt;2ms, sem tocar no banco de dados.
             </p>
-            <h3>Long-Term: Qdrant Vector Grid</h3>
+            <h3>Long-Term: Qdrant (Vetor) + Neo4j (Grafo)</h3>
             <p>
-              Quando a memória "esfria", ela é vetorizada (Embeddings) e persistida no Qdrant. O Janus utiliza
-              <strong>PII Masking</strong> (<code>_redact_pii</code>) antes da vetorização para garantir que dados
-              sensíveis como CPFs ou Chaves de API nunca sejam gravados permanentemente no núcleo vetorial.
+              No Qdrant, o sistema mantém “episódios” para recall por similaridade. Em background, um worker de
+              consolidação extrai entidades e relações e persiste no Neo4j, formando um grafo de conhecimento perene.
+            </p>
+            <h3>Pipeline defensivo (Por que é seguro)</h3>
+            <ul>
+              <li><strong>Quotas por origem:</strong> limita flooding de experiências por janela.</li>
+              <li><strong>PII Redaction:</strong> mascara dados sensíveis antes de gerar embeddings.</li>
+              <li><strong>Modo degradado:</strong> se Qdrant cair, o sistema evita travar o chat.</li>
+            </ul>
+            <h3>Consolidação assíncrona (Cold Path)</h3>
+            <p>
+              Tarefas de consolidação são publicadas em fila. O worker processa em lote ou individualmente e pode
+              publicar eventos de “memória consolidada” para o HUD da conversa.
             </p>
           </div>
         </div>
@@ -182,19 +224,70 @@
             </p>
             <h3>Roteamento Dinâmico</h3>
             <p>
-              O Janus não é preso a um provedor. O <code>get_llm(role, priority)</code> avalia em tempo real:
+              O Janus não é preso a um provedor. O <code>get_llm(role, priority)</code> avalia em tempo real e pontua
+              candidatos, equilibrando custo, latência e histórico de falhas:
             </p>
             <ul>
-              <li><strong>Custo:</strong> Otimiza o budget do projeto.</li>
-              <li><strong>Latência:</strong> Tarefas de UI usam modelos rápidos (Groq/Llama).</li>
-              <li><strong>Complexidade:</strong> Raciocínio profundo usa modelos SOTA (GPT-4o/Claude).</li>
+              <li><strong>Budget:</strong> bloqueia chamada se custo esperado ultrapassar limite.</li>
+              <li><strong>Latência:</strong> prioriza modelos rápidos quando a prioridade exige.</li>
+              <li><strong>Qualidade:</strong> tarefas críticas sobem para modelos SOTA.</li>
             </ul>
+            <h3>Cache e previsibilidade de custo</h3>
+            <p>
+              O subsistema mantém cache de instâncias e pode manter cache de respostas por TTL. Isso reduz chamadas
+              repetidas e estabiliza custo em picos.
+            </p>
+            <h3>Sequência lógica do Chat (Ponta a ponta)</h3>
+            <ol style="list-style: decimal; padding-left: 1.5rem; margin-bottom: 1.5rem; color: var(--text-secondary);">
+              <li style="margin-bottom: 0.5rem"><strong>Validar entrada:</strong> role/priority e limites (ex.: payload grande).</li>
+              <li style="margin-bottom: 0.5rem"><strong>Carregar conversa:</strong> persona, histórico e resumo.</li>
+              <li style="margin-bottom: 0.5rem"><strong>RAG leve:</strong> recuperar memórias relevantes e anexar ao prompt.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Selecionar LLM:</strong> score + budget + saúde do provedor.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Invocar:</strong> enviar prompt, aplicar timeout e retries.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Ferramentas:</strong> se houver tool calls, executar e reinvocar.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Persistir e medir:</strong> salvar mensagens, tokens/custo/latência.</li>
+              <li style="margin-bottom: 0.5rem"><strong>Assíncrono:</strong> publicar consolidação/reflexion para evolução.</li>
+            </ol>
+            <div class="code-snippet">
+              <code>> POST /api/v1/chat/start</code><br>
+              <code>> POST /api/v1/chat/message</code><br>
+              <code>> GET /api/v1/chat/stream/{{ '{' }}conversation_id{{ '}' }}?message=...</code>
+            </div>
             <h3>Circuit Breakers</h3>
             <p>
               Inspirado em microserviços, cada provedor (OpenAI, Anthropic, Google) tem um disjuntor. Se a API da OpenAI
               falhar 3 vezes consecutivas, o sistema "abre o circuito" e roteia automaticamente todo o tráfego para
-              o Anthropic ou Azure, sem que o usuário perceba a falha.
+              um provedor alternativo, sem que o usuário precise repetir a requisição.
             </p>
+            <h3>Mensageria e Workers (Cold Path)</h3>
+            <p>
+              O Janus separa o caminho quente (chat) do caminho frio (consolidação, reflexion, treino e rotinas longas)
+              usando filas RabbitMQ. Isso mantém a resposta do chat rápida e empurra tarefas pesadas para workers
+              assíncronos.
+            </p>
+            <ul>
+              <li><strong>Hot path:</strong> responde e persiste rápido.</li>
+              <li><strong>Cold path:</strong> consome filas e consolida conhecimento em background.</li>
+              <li><strong>Poison pill:</strong> erros não ficam reprocessando para sempre; mensagens problemáticas podem ir para DLQ.</li>
+            </ul>
+            <div class="code-snippet">
+              <code>> POST /api/v1/workers/start-all</code><br>
+              <code>> GET  /api/v1/workers/status</code><br>
+              <code>> POST /api/v1/workers/stop-all</code><br>
+              <code>> GET  /api/v1/tasks/queue/janus.knowledge.consolidation</code>
+            </div>
+            <h3>Ferramentas e Sandbox (Ação com governança)</h3>
+            <p>
+              Ferramentas são a camada de ação do sistema: funções locais (built-in) e ferramentas dinâmicas criadas em
+              runtime. Toda execução passa por política (perfil de risco, allowlist/blocklist e rate limit) e pode ser
+              exigida aprovação humana em ações sensíveis (Pending Actions).
+            </p>
+            <div class="code-snippet">
+              <code>> GET  /api/v1/tools</code><br>
+              <code>> POST /api/v1/tools/create/from-function</code><br>
+              <code>> GET  /api/v1/sandbox/capabilities</code><br>
+              <code>> POST /api/v1/sandbox/execute</code>
+            </div>
           </div>
         </div>
 
@@ -220,13 +313,19 @@
 
             <h3>Perfis de Risco</h3>
             <p>
-              O comportamento do agente é governado por 3 perfis de segurança (Policy Engine):
+              O comportamento do agente é governado por perfis de segurança (Policy Engine), que validam ferramentas,
+              aplicam rate limit e quotas por ciclo:
             </p>
             <div class="code-snippet">
-              <code>> CONSERVATIVE: Apenas leitura (ls, cat, grep). Requer aprovação para writes.</code><br>
-              <code>> BALANCED: Pode editar arquivos não-críticos. Bloqueia delete/rm.</code><br>
-              <code>> AGGRESSIVE: Acesso total ao sistema (sudo, rm -rf). USE COM CAUTELA.</code>
+              <code>> CONSERVATIVE: READ_ONLY/SAFE liberados. WRITE pode exigir confirmação. DANGEROUS bloqueado.</code><br>
+              <code>> BALANCED: READ_ONLY/SAFE/WRITE liberados. DANGEROUS só com allowlist.</code><br>
+              <code>> AGGRESSIVE: quase tudo liberado. DANGEROUS ainda requer allowlist.</code>
             </div>
+            <h3>Reflexion (Qualidade) e Sinais de Falha</h3>
+            <p>
+              Em paralelo, o sistema pode disparar ciclos de reflexão. Se o score cair abaixo do limiar, um sinal de
+              falha é publicado para a malha reagir (ex.: registrar lição, ajustar estratégia, priorizar consolidação).
+            </p>
 
             <h3>Controle API</h3>
             <p>
@@ -246,6 +345,11 @@
             <p>
               O Janus gerencia o ciclo de vida de seus próprios modelos e capacidades através de um pipeline de
               <strong>LLMOps</strong> integrado.
+            </p>
+            <h3>Observabilidade de Produção</h3>
+            <p>
+              O sistema expõe métricas via <code>/metrics</code> para Prometheus e dashboards no Grafana. Isso permite
+              acompanhar custo por role, latência, erros, cache hit rate e saúde dos serviços (Qdrant/Neo4j/RabbitMQ).
             </p>
 
             <h3>Estágios de Rollout</h3>
@@ -268,9 +372,92 @@
             </p>
 
             <div class="code-snippet">
-              <code>> POST /api/v1/deployment/stage {{ '{' }} model_id: "gpt-4-turbo-v2" {{ '}' }}</code><br>
-              <code>> POST /api/v1/deployment/precheck</code><br>
-              <code>> POST /api/v1/deployment/publish</code>
+              <code>> POST /api/v1/deployment/stage {{ '{' }} model_id: "gpt-4-turbo-v2", rollout_percent: 10 {{ '}' }}</code><br>
+              <code>> POST /api/v1/deployment/precheck?model_id=gpt-4-turbo-v2</code><br>
+              <code>> POST /api/v1/deployment/publish?model_id=gpt-4-turbo-v2</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAPTER 06: API -->
+        <div class="chapter-view" *ngIf="activeChapter === 'API'">
+          <h2 class="chapter-title">06 // API SURFACE</h2>
+          <div class="text-block">
+            <p class="highlight">A API do Janus é única (<code>/api/v1</code>) e suporta modo Full e Minimal.</p>
+
+            <h3>Modos de exposição</h3>
+            <ul>
+              <li><strong>Full API:</strong> expõe endpoints internos e públicos (operação completa).</li>
+              <li><strong>Minimal API:</strong> expõe o mínimo para uso controlado (chat + governança + deploy + feedback).</li>
+            </ul>
+            <p>
+              Se um endpoint “sumir”, é comum que o backend esteja em modo Minimal (<code>PUBLIC_API_MINIMAL</code>).
+            </p>
+
+            <h3>Contratos mais usados</h3>
+            <div class="code-snippet">
+              <code>> POST /api/v1/chat/start</code><br>
+              <code>> POST /api/v1/chat/message</code><br>
+              <code>> GET  /api/v1/chat/stream/{{ '{' }}conversation_id{{ '}' }}?message=...</code><br>
+              <code>> GET  /api/v1/chat/{{ '{' }}conversation_id{{ '}' }}/events</code><br>
+              <code>> POST /api/v1/auth/token</code><br>
+              <code>> POST /api/v1/consents</code><br>
+              <code>> GET  /api/v1/pending_actions</code>
+            </div>
+
+            <h3>Middlewares e compatibilidade</h3>
+            <ul>
+              <li><strong>Correlation ID:</strong> rastreio de requests ponta a ponta.</li>
+              <li><strong>Rate limit:</strong> protege custo e estabilidade.</li>
+              <li><strong>MsgPack (opcional):</strong> se <code>Accept: application/msgpack</code>, o backend pode responder binário.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- CHAPTER 07: SECURITY -->
+        <div class="chapter-view" *ngIf="activeChapter === 'SECURITY'">
+          <h2 class="chapter-title">07 // SECURITY & GOVERNANCE</h2>
+          <div class="text-block">
+            <p class="highlight">O Janus foi pensado para agência supervisionada, não agência irrestrita.</p>
+
+            <h3>Camadas de proteção</h3>
+            <ul>
+              <li><strong>API Key global (opcional):</strong> <code>X-API-Key</code> quando <code>PUBLIC_API_KEY</code> está definido.</li>
+              <li><strong>Actor binding:</strong> identifica o usuário via <code>Authorization: Bearer ...</code> ou <code>X-User-Id</code>.</li>
+              <li><strong>RBAC simples:</strong> rotas sensíveis exigem admin (ex.: deploy, tokens para terceiros).</li>
+              <li><strong>Policy Engine:</strong> valida tool calls por perfil de risco e permissões.</li>
+              <li><strong>Consentimentos:</strong> escopos <code>scope:*</code> exigem opt-in do usuário.</li>
+              <li><strong>Pending actions:</strong> força human-in-the-loop quando necessário.</li>
+            </ul>
+
+            <h3>Perfis de Risco</h3>
+            <div class="code-snippet">
+              <code>> CONSERVATIVE: READ_ONLY/SAFE liberados. WRITE pode exigir confirmação. DANGEROUS bloqueado.</code><br>
+              <code>> BALANCED: READ_ONLY/SAFE/WRITE liberados. DANGEROUS só com allowlist.</code><br>
+              <code>> AGGRESSIVE: quase tudo liberado. DANGEROUS ainda requer allowlist.</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAPTER 08: TROUBLESHOOTING -->
+        <div class="chapter-view" *ngIf="activeChapter === 'TROUBLESHOOTING'">
+          <h2 class="chapter-title">08 // TROUBLESHOOTING</h2>
+          <div class="text-block">
+            <h3>Erros comuns</h3>
+            <ul>
+              <li><strong>401 Unauthorized:</strong> confira <code>X-API-Key</code> quando o modo público estiver ativo.</li>
+              <li><strong>403 Forbidden:</strong> o backend não encontrou ator (use Bearer token ou <code>X-User-Id</code>).</li>
+              <li><strong>Endpoint não encontrado:</strong> verifique se o backend está em modo Minimal.</li>
+              <li><strong>Broker offline:</strong> tarefas assíncronas não rodam (RabbitMQ).</li>
+              <li><strong>MsgPack inesperado:</strong> remova <code>Accept: application/msgpack</code> do cliente.</li>
+            </ul>
+
+            <h3>Links de diagnóstico</h3>
+            <div class="code-snippet">
+              <code>> GET /healthz</code><br>
+              <code>> GET /health</code><br>
+              <code>> GET /metrics</code><br>
+              <code>> GET /api/v1/tasks/health/rabbitmq</code>
             </div>
           </div>
         </div>

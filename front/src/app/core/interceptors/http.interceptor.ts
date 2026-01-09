@@ -4,8 +4,8 @@
  */
 
 import { Injectable, inject } from '@angular/core';
-import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpErrorResponse, HttpResponse } from '@angular/common/http';
-import { Observable, throwError, finalize, catchError, tap, timeout } from 'rxjs';
+import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError, finalize, catchError, timeout } from 'rxjs';
 import { LoadingStateService } from '../services/loading-state.service';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -44,7 +44,7 @@ export class LoadingInterceptor implements HttpInterceptor {
       '/api/health',
       '/api/ping'
     ];
-    
+
     return skipUrls.some(url => req.url.includes(url));
   }
 }
@@ -73,50 +73,50 @@ export class ErrorInterceptor implements HttpInterceptor {
         title = 'Requisição Inválida';
         message = error.error?.message || 'Dados inválidos fornecidos';
         break;
-      
+
       case 401:
         title = 'Não Autorizado';
         message = 'Sessão expirada. Por favor, faça login novamente.';
         this.handleUnauthorized();
         break;
-      
+
       case 403:
         title = 'Acesso Negado';
         message = 'Você não tem permissão para realizar esta ação.';
         break;
-      
+
       case 404:
         title = 'Não Encontrado';
         message = 'O recurso solicitado não foi encontrado.';
         break;
-      
+
       case 409:
         title = 'Conflito';
         message = error.error?.message || 'Conflito com o estado atual do recurso.';
         break;
-      
+
       case 422:
         title = 'Entidade Não Processável';
         message = error.error?.message || 'Os dados fornecidos não puderam ser processados.';
         break;
-      
+
       case 429:
         title = 'Muitas Requisições';
         message = 'Você excedeu o limite de requisições. Por favor, aguarde.';
         break;
-      
+
       case 500:
         title = 'Erro do Servidor';
         message = 'Ocorreu um erro no servidor. Por favor, tente novamente.';
         break;
-      
+
       case 502:
       case 503:
       case 504:
         title = 'Serviço Indisponível';
         message = 'O serviço está temporariamente indisponível. Por favor, tente novamente.';
         break;
-      
+
       default:
         if (error.status >= 400 && error.status < 500) {
           title = 'Erro de Cliente';
@@ -136,12 +136,12 @@ export class ErrorInterceptor implements HttpInterceptor {
     // Limpar autenticação local
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Redirecionar para login com mensagem
-    this.router.navigate(['/login'], { 
-      queryParams: { 
-        message: 'Sessão expirada. Por favor, faça login novamente.' 
-      } 
+    this.router.navigate(['/login'], {
+      queryParams: {
+        message: 'Sessão expirada. Por favor, faça login novamente.'
+      }
     });
   }
 }

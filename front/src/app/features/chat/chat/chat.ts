@@ -7,11 +7,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { Subscription, forkJoin } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
-import { JanusApiService, ChatMessage, Tool, ToolListResponse } from '../../../services/janus-api.service';
+import { JanusApiService, ChatMessage } from '../../../services/janus-api.service';
 import { AgentEventsService, AgentEvent } from '../../../core/services/agent-events.service';
 import { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../../../core/types';
 import { marked } from 'marked';
-import Prism from 'prismjs';
 import { AuthService } from '../../../core/auth/auth.service';
 
 // Import new components
@@ -469,13 +468,13 @@ export class ChatComponent implements OnInit, OnDestroy {
         if (!content) return '';
         // Protect code blocks from processing
         const codeBlocks: string[] = [];
-        let protectedContent = content.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        const protectedContent = content.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
             codeBlocks.push(`<pre><code class="language-${lang}">${this.escapeHtml(code)}</code></pre>`);
             return `__CODEBLOCK_${codeBlocks.length - 1}__`;
         });
 
         // Basic markdown-like formatting
-        let formatted = protectedContent
+        const formatted = protectedContent
             .replace(/>/g, '&gt;')
             .replace(/\n/g, '<br>'); // ensure newlines are handled
 

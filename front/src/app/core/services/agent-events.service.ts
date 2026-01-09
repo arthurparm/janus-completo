@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { Injectable, NgZone } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { API_BASE_URL } from '../../services/api.config';
@@ -61,7 +62,7 @@ export class AgentEventsService {
             });
         };
 
-        this.eventSource.onerror = (error) => {
+        this.eventSource.onerror = (_error) => {
             this.zone.run(() => {
                 // EventSource automatically retries, but we logs it
                 // If state is CLOSED (2), we might need manual reconnect logic or let it be.

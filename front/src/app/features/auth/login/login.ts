@@ -1,9 +1,8 @@
-import {Component, inject} from '@angular/core'
-import {ReactiveFormsModule, FormBuilder, Validators} from '@angular/forms'
-import {NgIf} from '@angular/common'
-import {Router} from '@angular/router'
-import {AUTH_TOKEN_KEY} from '../../../services/api.config'
-import {AuthService} from '../../../core/auth/auth.service'
+import { Component, inject } from '@angular/core'
+import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
+import { NgIf } from '@angular/common'
+import { Router } from '@angular/router'
+import { AuthService } from '../../../core/auth/auth.service'
 
 @Component({
   selector: 'app-login',

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { Injectable, signal } from '@angular/core';
 import { JanusApiService, SystemStatus, ServiceHealthItem, WorkerStatusResponse, SystemOverviewResponse } from '../../services/janus-api.service';
 import { take, timeout, retry } from 'rxjs/operators';

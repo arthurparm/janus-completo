@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { HttpInterceptorFn } from '@angular/common/http';
 import { AUTH_TOKEN_KEY } from '../../services/api.config';
 import { decodeTokenUserId } from '../../services/auth.utils';

@@ -5,7 +5,7 @@
 
 import { Injectable, inject } from '@angular/core';
 import { Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { Observable, of, catchError, map, tap } from 'rxjs';
+import { Observable, of, catchError, tap } from 'rxjs';
 import { LoadingStateService } from '../services/loading-state.service';
 import { NotificationService } from '../notifications/notification.service';
 import { ChatMessage } from '../../services/janus-api.service';
@@ -49,11 +49,11 @@ export class DashboardResolver implements Resolve<DashboardData | null> {
   private notificationService = inject(NotificationService);
 
   resolve(
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    _route: ActivatedRouteSnapshot,
+    _state: RouterStateSnapshot
   ): Observable<DashboardData | null> {
     this.loadingState.startLoading('dashboard', { message: 'Carregando dashboard...' });
-    
+
     // Simular carregamento de dados do dashboard
     return of({
       metrics: this.loadDashboardMetrics(),
@@ -61,7 +61,7 @@ export class DashboardResolver implements Resolve<DashboardData | null> {
       notifications: this.loadNotifications()
     }).pipe(
       tap(() => this.loadingState.stopLoading('dashboard')),
-      catchError(error => {
+      catchError(_error => {
         this.loadingState.stopLoading('dashboard');
         this.notificationService.notifyError('Erro ao carregar dashboard', 'Não foi possível carregar os dados do dashboard');
         return of(null);
@@ -109,23 +109,23 @@ export class ChatResolver implements Resolve<ChatResolverData> {
 
   resolve(
     route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    _state: RouterStateSnapshot
   ): Observable<ChatResolverData> {
     const conversationId = route.paramMap.get('conversationId');
-    
+
     if (!conversationId) {
       return of({ conversation: null, messages: [] });
     }
 
     this.loadingState.startLoading('chat', { message: 'Carregando conversa...' });
-    
+
     // Simular carregamento de dados da conversa
     return of({
       conversation: { id: conversationId, title: 'Conversa #' + conversationId },
       messages: this.loadMessages(conversationId)
     }).pipe(
       tap(() => this.loadingState.stopLoading('chat')),
-      catchError(error => {
+      catchError(_error => {
         this.loadingState.stopLoading('chat');
         this.notificationService.notifyError('Erro ao carregar conversa', 'Não foi possível carregar os dados da conversa');
         return of({ conversation: null, messages: [] });
@@ -133,7 +133,7 @@ export class ChatResolver implements Resolve<ChatResolverData> {
     );
   }
 
-  private loadMessages(conversationId: string): ChatMessage[] {
+  private loadMessages(_conversationId: string): ChatMessage[] {
     // Implementar carregamento real de mensagens
     return [];
   }
@@ -156,11 +156,11 @@ export class SettingsResolver implements Resolve<SettingsData> {
   private notificationService = inject(NotificationService);
 
   resolve(
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    _route: ActivatedRouteSnapshot,
+    _state: RouterStateSnapshot
   ): Observable<SettingsData> {
     this.loadingState.startLoading('settings', { message: 'Carregando configurações...' });
-    
+
     // Simular carregamento de configurações
     return of({
       userSettings: this.loadUserSettings(),
@@ -168,7 +168,7 @@ export class SettingsResolver implements Resolve<SettingsData> {
       preferences: this.loadPreferences()
     }).pipe(
       tap(() => this.loadingState.stopLoading('settings')),
-      catchError(error => {
+      catchError(_error => {
         this.loadingState.stopLoading('settings');
         this.notificationService.notifyError('Erro ao carregar configurações', 'Não foi possível carregar as configurações');
         return of({ userSettings: {}, systemSettings: {}, preferences: {} });
@@ -221,11 +221,11 @@ export class UserResolver implements Resolve<UserData> {
   private notificationService = inject(NotificationService);
 
   resolve(
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    _route: ActivatedRouteSnapshot,
+    _state: RouterStateSnapshot
   ): Observable<UserData> {
     this.loadingState.startLoading('user', { message: 'Carregando dados do usuário...' });
-    
+
     // Simular carregamento de dados do usuário
     return of({
       profile: this.loadUserProfile(),
@@ -233,7 +233,7 @@ export class UserResolver implements Resolve<UserData> {
       roles: this.loadUserRoles()
     }).pipe(
       tap(() => this.loadingState.stopLoading('user')),
-      catchError(error => {
+      catchError(_error => {
         this.loadingState.stopLoading('user');
         this.notificationService.notifyError('Erro ao carregar dados do usuário', 'Não foi possível carregar os dados do usuário');
         return of({ profile: null, permissions: [], roles: [] });

@@ -1,8 +1,9 @@
+/* eslint-disable no-console */
 import { Injectable, inject } from '@angular/core'
 import { HttpClient } from '@angular/common/http'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
 import { BehaviorSubject, firstValueFrom } from 'rxjs'
-import { Auth, signInAnonymously, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut, User as FirebaseUser, idToken } from '@angular/fire/auth'
+import { Auth, signInAnonymously, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut, User as FirebaseUser } from '@angular/fire/auth'
 
 export interface User {
   id: string
@@ -85,10 +86,11 @@ export class AuthService {
     }
   }
 
-  async loginWithPassword(email: string, password: string, remember: boolean): Promise<boolean> {
+  async loginWithPassword(email: string, password: string, _remember: boolean): Promise<boolean> {
+    // eslint-disable-next-line no-console
     console.log('[AuthService] loginWithPassword:start', { emailMasked: !!email })
     try {
-      const cred = await signInWithEmailAndPassword(this.auth, email, password)
+      await signInWithEmailAndPassword(this.auth, email, password)
       // onAuthStateChanged will handle the rest
       return true
     } catch (err) {
