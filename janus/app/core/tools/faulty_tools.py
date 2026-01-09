@@ -11,13 +11,12 @@ problemas comuns em ferramentas e APIs.
 import json
 import random
 import time
-from typing import Any, Dict
-from typing import List
+from typing import Any
 
-from langchain.tools import tool, BaseTool
-
+from langchain.tools import BaseTool, tool
 
 # ==================== FERRAMENTAS DEFEITUOSAS ====================
+
 
 @tool
 def faulty_calculator(expression: str) -> str:
@@ -34,12 +33,7 @@ def faulty_calculator(expression: str) -> str:
     failure_mode = random.random()
 
     if failure_mode < 0.3:  # 30% de falha
-        failure_type = random.choice([
-            "wrong_result",
-            "exception",
-            "invalid_format",
-            "timeout"
-        ])
+        failure_type = random.choice(["wrong_result", "exception", "invalid_format", "timeout"])
 
         if failure_type == "wrong_result":
             # Retorna resultado errado mas plausível
@@ -47,13 +41,15 @@ def faulty_calculator(expression: str) -> str:
                 correct = eval(expression)
                 if isinstance(correct, (int, float)):
                     wrong = correct + random.randint(-10, 10) + random.random()
-                    return json.dumps({
-                        "success": True,
-                        "result": wrong,
-                        "expression": expression,
-                        "note": "DEFEITO: Resultado incorreto"
-                    })
-            except:
+                    return json.dumps(
+                        {
+                            "success": True,
+                            "result": wrong,
+                            "expression": expression,
+                            "note": "DEFEITO: Resultado incorreto",
+                        }
+                    )
+            except Exception:
                 pass
 
         elif failure_type == "exception":
@@ -64,24 +60,14 @@ def faulty_calculator(expression: str) -> str:
 
         elif failure_type == "timeout":
             time.sleep(0.5)  # Simula timeout leve
-            return json.dumps({
-                "success": False,
-                "error": "Timeout ao processar cálculo"
-            })
+            return json.dumps({"success": False, "error": "Timeout ao processar cálculo"})
 
     # Funcionamento normal (70%)
     try:
         result = eval(expression)
-        return json.dumps({
-            "success": True,
-            "result": result,
-            "expression": expression
-        })
+        return json.dumps({"success": True, "result": result, "expression": expression})
     except Exception as e:
-        return json.dumps({
-            "success": False,
-            "error": str(e)
-        })
+        return json.dumps({"success": False, "error": str(e)})
 
 
 @tool
@@ -102,7 +88,9 @@ def unreliable_weather_api(city: str) -> str:
         raise ConnectionError("SIMULADO: Falha ao conectar com serviço de clima")
 
     elif failure_mode < 0.3:  # 20% - JSON quebrado
-        return '{"city": "' + city + '", "temperature": 25, "conditions": "sunny"'  # JSON incompleto
+        return (
+            '{"city": "' + city + '", "temperature": 25, "conditions": "sunny"'
+        )  # JSON incompleto
 
     elif failure_mode < 0.7:  # 40% - dados incompletos
         incomplete_data = {
@@ -114,13 +102,15 @@ def unreliable_weather_api(city: str) -> str:
         return json.dumps(incomplete_data)
 
     # Funcionamento normal (30%)
-    return json.dumps({
-        "city": city,
-        "temperature": random.randint(15, 30),
-        "conditions": random.choice(["sunny", "cloudy", "rainy"]),
-        "humidity": random.randint(40, 90),
-        "wind_speed": random.randint(0, 30)
-    })
+    return json.dumps(
+        {
+            "city": city,
+            "temperature": random.randint(15, 30),
+            "conditions": random.choice(["sunny", "cloudy", "rainy"]),
+            "humidity": random.randint(40, 90),
+            "wind_speed": random.randint(0, 30),
+        }
+    )
 
 
 @tool
@@ -148,15 +138,14 @@ def slow_database_query(query: str) -> str:
         time.sleep(random.uniform(0.05, 0.15))
 
     # Retorna resultado fictício
-    return json.dumps({
-        "success": True,
-        "query": query,
-        "results": [
-            {"id": i, "data": f"Record {i}"}
-            for i in range(random.randint(1, 5))
-        ],
-        "execution_time_ms": random.randint(50, 2000)
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "query": query,
+            "results": [{"id": i, "data": f"Record {i}"} for i in range(random.randint(1, 5))],
+            "execution_time_ms": random.randint(50, 2000),
+        }
+    )
 
 
 @tool
@@ -183,9 +172,9 @@ Linha 5: Final do arquivo
 """
 
     if failure_mode < 0.05:  # 5% - conteúdo embaralhado
-        lines = sample_content.split('\n')
+        lines = sample_content.split("\n")
         random.shuffle(lines)
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     elif failure_mode < 0.15:  # 10% - arquivo "não encontrado"
         raise FileNotFoundError(f"SIMULADO: Arquivo '{file_path}' não encontrado")
@@ -194,7 +183,7 @@ Linha 5: Final do arquivo
         return "����� ERRO DE ENCODING ����� " + sample_content[:20]
 
     elif failure_mode < 0.55:  # 25% - conteúdo truncado
-        truncated = sample_content[:len(sample_content) // 2]
+        truncated = sample_content[: len(sample_content) // 2]
         return truncated + "\n... [CONTEÚDO TRUNCADO]"
 
     # Funcionamento normal (45%)
@@ -202,7 +191,7 @@ Linha 5: Final do arquivo
 
 
 @tool
-def flaky_api_call(endpoint: str, data: Dict[str, Any]) -> str:
+def flaky_api_call(endpoint: str, data: dict[str, Any]) -> str:
     """
     API que falha intermitentemente com diferentes códigos de erro HTTP.
 
@@ -219,52 +208,60 @@ def flaky_api_call(endpoint: str, data: Dict[str, Any]) -> str:
     failure_mode = random.random()
 
     if failure_mode < 0.05:  # 5% - 400 Bad Request
-        return json.dumps({
-            "status": 400,
-            "error": "Bad Request",
-            "message": "Parâmetros inválidos fornecidos"
-        })
+        return json.dumps(
+            {"status": 400, "error": "Bad Request", "message": "Parâmetros inválidos fornecidos"}
+        )
 
     elif failure_mode < 0.15:  # 10% - 429 Rate Limited
-        return json.dumps({
-            "status": 429,
-            "error": "Too Many Requests",
-            "message": "Limite de taxa excedido. Tente novamente em 60 segundos",
-            "retry_after": 60
-        })
+        return json.dumps(
+            {
+                "status": 429,
+                "error": "Too Many Requests",
+                "message": "Limite de taxa excedido. Tente novamente em 60 segundos",
+                "retry_after": 60,
+            }
+        )
 
     elif failure_mode < 0.30:  # 15% - 503 Service Unavailable
-        return json.dumps({
-            "status": 503,
-            "error": "Service Unavailable",
-            "message": "Serviço temporariamente indisponível"
-        })
+        return json.dumps(
+            {
+                "status": 503,
+                "error": "Service Unavailable",
+                "message": "Serviço temporariamente indisponível",
+            }
+        )
 
     elif failure_mode < 0.50:  # 20% - 500 Internal Server Error
-        return json.dumps({
-            "status": 500,
-            "error": "Internal Server Error",
-            "message": "Erro interno do servidor",
-            "trace_id": f"err_{random.randint(1000, 9999)}"
-        })
+        return json.dumps(
+            {
+                "status": 500,
+                "error": "Internal Server Error",
+                "message": "Erro interno do servidor",
+                "trace_id": f"err_{random.randint(1000, 9999)}",
+            }
+        )
 
     elif failure_mode < 0.60:  # 10% - 200 OK mas dados inválidos
-        return json.dumps({
-            "status": 200,
-            "data": None,  # Deveria ter dados mas está null
-            "message": "Success"
-        })
+        return json.dumps(
+            {
+                "status": 200,
+                "data": None,  # Deveria ter dados mas está null
+                "message": "Success",
+            }
+        )
 
     # 40% - Sucesso real
-    return json.dumps({
-        "status": 200,
-        "data": {
-            "endpoint": endpoint,
-            "request_data": data,
-            "response": "Operação bem-sucedida",
-            "timestamp": time.time()
+    return json.dumps(
+        {
+            "status": 200,
+            "data": {
+                "endpoint": endpoint,
+                "request_data": data,
+                "response": "Operação bem-sucedida",
+                "timestamp": time.time(),
+            },
         }
-    })
+    )
 
 
 @tool
@@ -280,7 +277,7 @@ def memory_leaking_processor(data: str) -> str:
     Use para treinar detecção de memory leaks.
     """
     # Simula contador global (na prática, seria uma variável de classe)
-    call_count = getattr(memory_leaking_processor, '_call_count', 0) + 1
+    call_count = getattr(memory_leaking_processor, "_call_count", 0) + 1
     memory_leaking_processor._call_count = call_count
 
     processing_time = 0.1 + (call_count * 0.2)  # Fica mais lento a cada chamada
@@ -290,16 +287,19 @@ def memory_leaking_processor(data: str) -> str:
 
     time.sleep(min(processing_time, 2.0))
 
-    return json.dumps({
-        "success": True,
-        "processed_data": f"Processed: {data[:50]}...",
-        "call_count": call_count,
-        "memory_usage_mb": call_count * 100,  # Cresce linearmente
-        "warning": "Uso de memória aumentando!" if call_count > 3 else None
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "processed_data": f"Processed: {data[:50]}...",
+            "call_count": call_count,
+            "memory_usage_mb": call_count * 100,  # Cresce linearmente
+            "warning": "Uso de memória aumentando!" if call_count > 3 else None,
+        }
+    )
 
 
 # ==================== FERRAMENTAS DE DIAGNÓSTICO ====================
+
 
 @tool
 def validate_tool_output(tool_name: str, output: str, expected_format: str) -> str:
@@ -335,12 +335,15 @@ def validate_tool_output(tool_name: str, output: str, expected_format: str) -> s
     if not output.strip():
         issues.append("Saída vazia")
 
-    return json.dumps({
-        "tool_name": tool_name,
-        "valid": len(issues) == 0,
-        "issues": issues,
-        "output_length": len(output)
-    }, indent=2)
+    return json.dumps(
+        {
+            "tool_name": tool_name,
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "output_length": len(output),
+        },
+        indent=2,
+    )
 
 
 @tool
@@ -350,15 +353,15 @@ def reset_faulty_tools() -> str:
 
     Útil para começar testes do zero.
     """
-    if hasattr(memory_leaking_processor, '_call_count'):
-        delattr(memory_leaking_processor, '_call_count')
+    if hasattr(memory_leaking_processor, "_call_count"):
+        delattr(memory_leaking_processor, "_call_count")
 
     return "Estado das ferramentas defeituosas resetado com sucesso."
 
 
 # ==================== LISTA DE FERRAMENTAS ====================
 
-faulty_tools: List[BaseTool] = [
+faulty_tools: list[BaseTool] = [
     faulty_calculator,
     unreliable_weather_api,
     slow_database_query,
@@ -366,10 +369,10 @@ faulty_tools: List[BaseTool] = [
     flaky_api_call,
     memory_leaking_processor,
     validate_tool_output,
-    reset_faulty_tools
+    reset_faulty_tools,
 ]
 
 
-def get_faulty_tools() -> List[BaseTool]:
+def get_faulty_tools() -> list[BaseTool]:
     """Retorna lista de ferramentas defeituosas para treinamento."""
     return faulty_tools

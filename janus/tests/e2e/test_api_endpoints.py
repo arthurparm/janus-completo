@@ -31,7 +31,7 @@ def test_send_message_echo(api_client, active_conversation):
 
 def test_browse_url_tool_trigger(api_client, active_conversation):
     """Verify that asking to browse a URL triggers the browse_url tool logic."""
-    # Note: This relies on the LLM interpreting the intent correctly. 
+    # Note: This relies on the LLM interpreting the intent correctly.
     # Providing a very clear instruction.
     payload = {
         "conversation_id": active_conversation,
@@ -55,7 +55,7 @@ def test_anonymous_memory_support(api_client):
     resp = api_client.post("/chat/start", json={"persona": "helpful"})
     assert resp.status_code == 200
     cid = resp.json()["conversation_id"]
-    
+
     # Send message
     msg_payload = {
         "conversation_id": cid,
@@ -65,7 +65,7 @@ def test_anonymous_memory_support(api_client):
     }
     resp = api_client.post("/chat/message", json=msg_payload)
     assert resp.status_code == 200
-    
+
     # Verify we can retrieve history (implies persistence worked under default user)
     hist_resp = api_client.get(f"/chat/{cid}/history")
     assert hist_resp.status_code == 200

@@ -1,12 +1,13 @@
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 
 from app.core.agents.multi_agent_system import SpecializedAgent, Task, TaskStatus
 from app.core.infrastructure.message_broker import MessageBroker, get_broker
 from app.models.schemas import TaskMessage
 
 logger = logging.getLogger(__name__)
+
 
 class AgentActor:
     """
@@ -15,11 +16,11 @@ class AgentActor:
 
     def __init__(self, agent: SpecializedAgent):
         self.agent = agent
-        self.broker: Optional[MessageBroker] = None
+        self.broker: MessageBroker | None = None
         self.queue_name = f"janus.agent.{agent.role.value}"
         self.results_queue = "janus.agent.results"
         self._is_running = False
-        self._consumer_task: Optional[asyncio.Task] = None
+        self._consumer_task: asyncio.Task | None = None
 
     async def start(self):
         """Inicia o ator e o consumidor da fila."""
@@ -34,7 +35,7 @@ class AgentActor:
         self._consumer_task = self.broker.start_consumer(
             queue_name=self.queue_name,
             callback=self._on_message,
-            prefetch_count=1  # Um agente processa uma tarefa por vez para evitar sobrecarga
+            prefetch_count=1,  # Um agente processa uma tarefa por vez para evitar sobrecarga
         )
 
     async def stop(self):
@@ -51,7 +52,7 @@ class AgentActor:
     async def _on_message(self, message: TaskMessage):
         """Callback processar mensagem da fila."""
         logger.info(f"AgentActor {self.agent.role.value} recebeu tarefa: {message.task_id}")
-        
+
         try:
             # Reconstrói objeto Task (simplificado)
             # Na prática, o payload deve conter tudo que o agente precisa
@@ -59,15 +60,15 @@ class AgentActor:
             task = Task(
                 id=message.task_id,
                 description=task_data.get("description", ""),
-                status=TaskStatus.PENDING, # Será atualizado pelo agente
+                status=TaskStatus.PENDING,  # Será atualizado pelo agente
                 dependencies=task_data.get("dependencies", []),
-                metadata=task_data.get("metadata", {})
+                metadata=task_data.get("metadata", {}),
             )
-            
+
             # Callbacks de progresso
             async def on_agent_event(event_type: str, content: str):
-                 conversation_id = task.metadata.get("conversation_id", "global")
-                 await self._publish_event(task.id, event_type, content, conversation_id)
+                conversation_id = task.metadata.get("conversation_id", "global")
+                await self._publish_event(task.id, event_type, content, conversation_id)
 
             # Injeta callback no agente (requer suporte no SpecializedAgent)
             # Para não quebrar, verificamos se o agente suporta
@@ -76,21 +77,23 @@ class AgentActor:
 
             # Executa a tarefa usando a lógica do agente
             result = await self.agent.execute_task(task)
-            
+
             # Publica resultado
             await self._publish_result(result)
-            
+
         except Exception as e:
             logger.error(f"Erro fatal no AgentActor {self.agent.role.value}: {e}", exc_info=True)
             # Tenta publicar erro
-            await self._publish_result({
-                "task_id": message.task_id,
-                "status": "failed",
-                "error": str(e),
-                "agent_role": self.agent.role.value
-            })
+            await self._publish_result(
+                {
+                    "task_id": message.task_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "agent_role": self.agent.role.value,
+                }
+            )
 
-    async def _publish_result(self, result: Dict[str, Any]):
+    async def _publish_result(self, result: dict[str, Any]):
         """Publica o resultado na fila de resultados."""
         if not self.broker:
             return
@@ -101,19 +104,18 @@ class AgentActor:
                 task_id=result.get("task_id", "unknown"),
                 task_type="task_result",
                 payload=result,
-                timestamp=asyncio.get_event_loop().time()
+                timestamp=asyncio.get_event_loop().time(),
             )
-            
-            await self.broker.publish(
-                queue_name=self.results_queue,
-                message=msg.model_dump()
-            )
+
+            await self.broker.publish(queue_name=self.results_queue, message=msg.model_dump())
             logger.info(f"Resultado da tarefa {msg.task_id} publicado por {self.agent.role.value}")
-            
+
         except Exception as e:
             logger.error(f"Erro ao publicar resultado da tarefa {result.get('task_id')}: {e}")
 
-    async def _publish_event(self, task_id: str, event_type: str, content: str, conversation_id: str = "global"):
+    async def _publish_event(
+        self, task_id: str, event_type: str, content: str, conversation_id: str = "global"
+    ):
         """Publica um evento de progresso na exchange de eventos."""
         if not self.broker:
             return
@@ -125,17 +127,17 @@ class AgentActor:
                 "event_type": event_type,
                 "content": content,
                 "conversation_id": conversation_id,
-                "timestamp": asyncio.get_event_loop().time()
+                "timestamp": asyncio.get_event_loop().time(),
             }
-            
+
             # Routing key estruturada: janus.event.conversation.{cid}.agent.{role}
-            routing_key = f"janus.event.conversation.{conversation_id}.agent.{self.agent.role.value}"
-            
-            await self.broker.publish_to_exchange(
-                exchange_name="janus.events",
-                routing_key=routing_key,
-                message=event_payload
+            routing_key = (
+                f"janus.event.conversation.{conversation_id}.agent.{self.agent.role.value}"
             )
-            
+
+            await self.broker.publish_to_exchange(
+                exchange_name="janus.events", routing_key=routing_key, message=event_payload
+            )
+
         except Exception as e:
             logger.warning(f"Erro ao publicar evento {event_type} para tarefa {task_id}: {e}")

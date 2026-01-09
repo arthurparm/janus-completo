@@ -1,4 +1,5 @@
-from typing import Protocol, Any, Dict, Optional, List
+from typing import Any, Protocol
+
 from neo4j import AsyncTransaction
 
 
@@ -9,7 +10,7 @@ class MessageBrokerProtocol(Protocol):
 
     async def publish(self, queue_name: str, message: str) -> None: ...
 
-    async def get_queue_info(self, queue_name: str) -> Optional[Dict[str, Any]]: ...
+    async def get_queue_info(self, queue_name: str) -> dict[str, Any] | None: ...
 
     async def health_check(self) -> bool: ...
 
@@ -19,15 +20,19 @@ class GraphDBProtocol(Protocol):
     Define a interface para um banco de dados de grafo.
     """
 
-    async def query(self, cypher_query: str, params: Optional[Dict[str, Any]] = None,
-                    operation: Optional[str] = None) -> List[Dict[str, Any]]: ...
+    async def query(
+        self, cypher_query: str, params: dict[str, Any] | None = None, operation: str | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    async def execute(self, cypher_query: str, params: Optional[Dict[str, Any]] = None,
-                      operation: Optional[str] = None) -> None: ...
+    async def execute(
+        self, cypher_query: str, params: dict[str, Any] | None = None, operation: str | None = None
+    ) -> None: ...
 
     async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int: ...
 
-    async def merge_relationship(self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str) -> None: ...
+    async def merge_relationship(
+        self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str
+    ) -> None: ...
 
     async def get_driver(self) -> Any: ...  # Retorno genérico para uso em transações
 
@@ -39,13 +44,33 @@ class MemoryDBProtocol(Protocol):
 
     async def amemorize(self, experience: Any) -> None: ...
 
-    async def arecall(self, query: str, limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def arecall(
+        self, query: str, limit: int | None = 10, min_score: float | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    async def arecall_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def arecall_filtered(
+        self,
+        query: str | None,
+        filters: dict[str, Any],
+        limit: int | None = 10,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
-    async def arecall_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def arecall_by_timeframe(
+        self,
+        query: str | None,
+        start_ts_ms: int | None,
+        end_ts_ms: int | None,
+        limit: int | None = 10,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
-    async def arecall_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def arecall_recent_failures(
+        self,
+        limit: int | None = 10,
+        timeframe_seconds: int | None = None,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
 
 class MemoryRepositoryProtocol(Protocol):
@@ -55,12 +80,37 @@ class MemoryRepositoryProtocol(Protocol):
 
     async def save_experience(self, experience: Any) -> None: ...
 
-    async def search_experiences(self, query: str, limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def search_experiences(
+        self, query: str, limit: int | None = 10, min_score: float | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    async def search_filtered(self, query: Optional[str], filters: Dict[str, Any], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def search_filtered(
+        self,
+        query: str | None,
+        filters: dict[str, Any],
+        limit: int | None = 10,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
-    async def search_by_timeframe(self, query: Optional[str], start_ts_ms: Optional[int], end_ts_ms: Optional[int], limit: Optional[int] = 10, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def search_by_timeframe(
+        self,
+        query: str | None,
+        start_ts_ms: int | None,
+        end_ts_ms: int | None,
+        limit: int | None = 10,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
-    async def search_recent_failures(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def search_recent_failures(
+        self,
+        limit: int | None = 10,
+        timeframe_seconds: int | None = None,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...
 
-    async def search_recent_lessons(self, limit: Optional[int] = 10, timeframe_seconds: Optional[int] = None, min_score: Optional[float] = None) -> List[Dict[str, Any]]: ...
+    async def search_recent_lessons(
+        self,
+        limit: int | None = 10,
+        timeframe_seconds: int | None = None,
+        min_score: float | None = None,
+    ) -> list[dict[str, Any]]: ...

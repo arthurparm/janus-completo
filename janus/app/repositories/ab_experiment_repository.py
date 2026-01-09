@@ -1,12 +1,14 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session
-from app.db.mysql_config import mysql_db
-from app.models.ab_experiment_models import Experiment, ExperimentArm, ExperimentResult
-from app.models.ab_assignment_models import ExperimentAssignment
 import random
 
+from sqlalchemy.orm import Session
+
+from app.db.mysql_config import mysql_db
+from app.models.ab_assignment_models import ExperimentAssignment
+from app.models.ab_experiment_models import Experiment, ExperimentArm, ExperimentResult
+
+
 class ABExperimentRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -14,7 +16,7 @@ class ABExperimentRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def create_experiment(self, name: str, user_id: Optional[str]) -> Experiment:
+    def create_experiment(self, name: str, user_id: str | None) -> Experiment:
         s = self._get_session()
         try:
             exp = Experiment(name=name, user_id=user_id)
@@ -38,7 +40,7 @@ class ABExperimentRepository:
             if not self._session:
                 s.close()
 
-    def list_experiments(self, user_id: Optional[str], limit: int = 50) -> List[Experiment]:
+    def list_experiments(self, user_id: str | None, limit: int = 50) -> list[Experiment]:
         s = self._get_session()
         try:
             q = s.query(Experiment)
@@ -49,10 +51,17 @@ class ABExperimentRepository:
             if not self._session:
                 s.close()
 
-    def add_result(self, experiment_id: int, arm_id: int, metric_name: str, metric_value: float) -> ExperimentResult:
+    def add_result(
+        self, experiment_id: int, arm_id: int, metric_name: str, metric_value: float
+    ) -> ExperimentResult:
         s = self._get_session()
         try:
-            res = ExperimentResult(experiment_id=experiment_id, arm_id=arm_id, metric_name=metric_name, metric_value=metric_value)
+            res = ExperimentResult(
+                experiment_id=experiment_id,
+                arm_id=arm_id,
+                metric_name=metric_name,
+                metric_value=metric_value,
+            )
             s.add(res)
             s.commit()
             s.refresh(res)
@@ -64,7 +73,14 @@ class ABExperimentRepository:
     def assign_user(self, experiment_id: int, user_id: str) -> ExperimentAssignment:
         s = self._get_session()
         try:
-            existing = s.query(ExperimentAssignment).filter(ExperimentAssignment.experiment_id == experiment_id, ExperimentAssignment.user_id == user_id).first()
+            existing = (
+                s.query(ExperimentAssignment)
+                .filter(
+                    ExperimentAssignment.experiment_id == experiment_id,
+                    ExperimentAssignment.user_id == user_id,
+                )
+                .first()
+            )
             if existing:
                 return existing
             arms = s.query(ExperimentArm).filter(ExperimentArm.experiment_id == experiment_id).all()
@@ -83,7 +99,14 @@ class ABExperimentRepository:
     def get_assignment(self, experiment_id: int, user_id: str) -> ExperimentAssignment | None:
         s = self._get_session()
         try:
-            return s.query(ExperimentAssignment).filter(ExperimentAssignment.experiment_id == experiment_id, ExperimentAssignment.user_id == user_id).first()
+            return (
+                s.query(ExperimentAssignment)
+                .filter(
+                    ExperimentAssignment.experiment_id == experiment_id,
+                    ExperimentAssignment.user_id == user_id,
+                )
+                .first()
+            )
         finally:
             if not self._session:
                 s.close()

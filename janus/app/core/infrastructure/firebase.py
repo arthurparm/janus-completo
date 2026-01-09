@@ -1,10 +1,10 @@
-import firebase_admin
-from firebase_admin import credentials, firestore, db
 import logging
-from typing import Optional
-from app.config import settings
+
+import firebase_admin
+from firebase_admin import credentials, db, firestore
 
 logger = logging.getLogger(__name__)
+
 
 class FirebaseService:
     _instance = None
@@ -16,7 +16,7 @@ class FirebaseService:
             cls._instance._initialized = False
         return cls._instance
 
-    def initialize(self, service_account_path: str, database_url: Optional[str] = None):
+    def initialize(self, service_account_path: str, database_url: str | None = None):
         if self._initialized:
             return
 
@@ -24,8 +24,8 @@ class FirebaseService:
             cred = credentials.Certificate(service_account_path)
             options = {}
             if database_url:
-                options['databaseURL'] = database_url
-            
+                options["databaseURL"] = database_url
+
             firebase_admin.initialize_app(cred, options)
             self._client = firestore.client()
             logger.info("Firebase Admin initialized successfully.")
@@ -44,6 +44,7 @@ class FirebaseService:
             raise RuntimeError("Firebase not initialized. Call initialize() first.")
         # db reference root
         return db.reference()
+
 
 def get_firebase_service() -> FirebaseService:
     return FirebaseService()

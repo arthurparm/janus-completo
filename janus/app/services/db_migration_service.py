@@ -1,9 +1,11 @@
+from typing import Any
+
 import structlog
-from typing import Dict, Any, List, Optional
 
 from app.db.mysql_config import mysql_db
 
 logger = structlog.get_logger(__name__)
+
 
 class DBMigrationService:
     def _get_session(self):
@@ -25,28 +27,64 @@ class DBMigrationService:
         except Exception:
             return False
 
-    def validate_schema(self) -> Dict[str, Any]:
+    def validate_schema(self) -> dict[str, Any]:
         s = self._get_session()
         try:
-            checks: List[Dict[str, Any]] = []
+            checks: list[dict[str, Any]] = []
+
             def add(table: str, name: str, kind: str, exists: bool):
                 checks.append({"table": table, "name": name, "kind": kind, "exists": exists})
 
-            add("users", "idx_user_lookup", "index", self._index_exists(s, "users", "idx_user_lookup"))
-            add("profiles", "idx_profile_user", "index", self._index_exists(s, "profiles", "idx_profile_user"))
-            add("sessions", "idx_session_user", "index", self._index_exists(s, "sessions", "idx_session_user"))
-            add("messages", "idx_message_session_ts", "index", self._index_exists(s, "messages", "idx_message_session_ts"))
-            add("roles", "unique_role_name", "constraint", self._constraint_exists(s, "roles", "unique_role_name"))
-            add("consents", "unique_user_scope_consent", "constraint", self._constraint_exists(s, "consents", "unique_user_scope_consent"))
-            add("consents", "idx_consent_user_scope", "index", self._index_exists(s, "consents", "idx_consent_user_scope"))
+            add(
+                "users",
+                "idx_user_lookup",
+                "index",
+                self._index_exists(s, "users", "idx_user_lookup"),
+            )
+            add(
+                "profiles",
+                "idx_profile_user",
+                "index",
+                self._index_exists(s, "profiles", "idx_profile_user"),
+            )
+            add(
+                "sessions",
+                "idx_session_user",
+                "index",
+                self._index_exists(s, "sessions", "idx_session_user"),
+            )
+            add(
+                "messages",
+                "idx_message_session_ts",
+                "index",
+                self._index_exists(s, "messages", "idx_message_session_ts"),
+            )
+            add(
+                "roles",
+                "unique_role_name",
+                "constraint",
+                self._constraint_exists(s, "roles", "unique_role_name"),
+            )
+            add(
+                "consents",
+                "unique_user_scope_consent",
+                "constraint",
+                self._constraint_exists(s, "consents", "unique_user_scope_consent"),
+            )
+            add(
+                "consents",
+                "idx_consent_user_scope",
+                "index",
+                self._index_exists(s, "consents", "idx_consent_user_scope"),
+            )
             ok = all(c["exists"] for c in checks)
             return {"status": "ok" if ok else "missing", "checks": checks}
         finally:
             s.close()
 
-    def migrate_schema(self) -> Dict[str, Any]:
+    def migrate_schema(self) -> dict[str, Any]:
         s = self._get_session()
-        applied: List[str] = []
+        applied: list[str] = []
         try:
             if not self._index_exists(s, "users", "idx_user_lookup"):
                 s.execute("ALTER TABLE users ADD INDEX idx_user_lookup (email, external_id)")
@@ -58,13 +96,17 @@ class DBMigrationService:
                 s.execute("ALTER TABLE sessions ADD INDEX idx_session_user (user_id, updated_at)")
                 applied.append("sessions.idx_session_user")
             if not self._index_exists(s, "messages", "idx_message_session_ts"):
-                s.execute("ALTER TABLE messages ADD INDEX idx_message_session_ts (session_id, timestamp)")
+                s.execute(
+                    "ALTER TABLE messages ADD INDEX idx_message_session_ts (session_id, timestamp)"
+                )
                 applied.append("messages.idx_message_session_ts")
             if not self._constraint_exists(s, "roles", "unique_role_name"):
                 s.execute("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)")
                 applied.append("roles.unique_role_name")
             if not self._constraint_exists(s, "consents", "unique_user_scope_consent"):
-                s.execute("ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)")
+                s.execute(
+                    "ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"
+                )
                 applied.append("consents.unique_user_scope_consent")
             if not self._index_exists(s, "consents", "idx_consent_user_scope"):
                 s.execute("ALTER TABLE consents ADD INDEX idx_consent_user_scope (user_id, scope)")
@@ -91,5 +133,6 @@ class DBMigrationService:
             return {"status": "error", "detail": str(e), "changes": applied}
         finally:
             s.close()
+
 
 db_migration_service = DBMigrationService()

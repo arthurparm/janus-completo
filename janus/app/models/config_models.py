@@ -3,15 +3,22 @@ Modelos SQLAlchemy para Configuration-as-Data.
 Permite que o Meta-Agent modifique prompts e configurações dinamicamente.
 """
 
-from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, Integer,
-    Numeric, String, Text, UniqueConstraint, Index
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
 )
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -21,6 +28,7 @@ Base = declarative_base()
 
 class PriorityLevel(str, Enum):
     """Níveis de prioridade para configurações de agentes."""
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -29,6 +37,7 @@ class PriorityLevel(str, Enum):
 
 class OptimizationType(str, Enum):
     """Tipos de otimização realizadas pelo Meta-Agent."""
+
     PROMPT_UPDATE = "PROMPT_UPDATE"
     CONFIG_UPDATE = "CONFIG_UPDATE"
     MODEL_CHANGE = "MODEL_CHANGE"
@@ -36,6 +45,7 @@ class OptimizationType(str, Enum):
 
 class TargetType(str, Enum):
     """Tipos de alvo para otimizações."""
+
     AGENT = "AGENT"
     PROMPT = "PROMPT"
 
@@ -45,6 +55,7 @@ class Prompt(Base):
     Modelo para armazenar prompts versionados.
     Permite que o Meta-Agent atualize prompts dinamicamente.
     """
+
     __tablename__ = "prompts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -56,7 +67,9 @@ class Prompt(Base):
     language = Column(String(10), default="pt-BR")
     model_target = Column(String(50), default="general")
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
     created_by = Column(String(100), default="system")
 
     # Relacionamentos
@@ -64,11 +77,17 @@ class Prompt(Base):
 
     # Índices
     __table_args__ = (
-        Index('idx_prompt_lookup', 'prompt_name', 'namespace', 'is_active'),
-        Index('idx_prompt_version', 'prompt_name', 'prompt_version'),
-        Index('idx_active_prompts', 'is_active', 'namespace'),
-        UniqueConstraint('prompt_name', 'namespace', 'is_active', 'language', 'model_target',
-                         name='unique_active_prompt'),
+        Index("idx_prompt_lookup", "prompt_name", "namespace", "is_active"),
+        Index("idx_prompt_version", "prompt_name", "prompt_version"),
+        Index("idx_active_prompts", "is_active", "namespace"),
+        UniqueConstraint(
+            "prompt_name",
+            "namespace",
+            "is_active",
+            "language",
+            "model_target",
+            name="unique_active_prompt",
+        ),
     )
 
     def __repr__(self):
@@ -80,6 +99,7 @@ class AgentConfiguration(Base):
     Modelo para configurações dinâmicas de agentes.
     Permite que o Meta-Agent otimize configurações baseado em performance.
     """
+
     __tablename__ = "agent_configurations"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -97,7 +117,9 @@ class AgentConfiguration(Base):
     cost_budget_usd = Column(Numeric(10, 4), default=Decimal("0.05"))
     performance_threshold = Column(Numeric(3, 2), default=Decimal("0.8"))
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
     created_by = Column(String(100), default="system")
 
     # Relacionamentos
@@ -105,10 +127,10 @@ class AgentConfiguration(Base):
 
     # Índices
     __table_args__ = (
-        Index('idx_agent_lookup', 'agent_name', 'agent_role', 'is_active'),
-        Index('idx_agent_provider', 'llm_provider', 'llm_model'),
-        Index('idx_active_configs', 'is_active', 'agent_role'),
-        UniqueConstraint('agent_name', 'agent_role', 'is_active', name='unique_active_agent'),
+        Index("idx_agent_lookup", "agent_name", "agent_role", "is_active"),
+        Index("idx_agent_provider", "llm_provider", "llm_model"),
+        Index("idx_active_configs", "is_active", "agent_role"),
+        UniqueConstraint("agent_name", "agent_role", "is_active", name="unique_active_agent"),
     )
 
     def __repr__(self):
@@ -120,6 +142,7 @@ class OptimizationHistory(Base):
     Modelo para rastrear otimizações realizadas pelo Meta-Agent.
     Permite análise de impacto e rollback se necessário.
     """
+
     __tablename__ = "optimization_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -138,9 +161,9 @@ class OptimizationHistory(Base):
 
     # Índices
     __table_args__ = (
-        Index('idx_optimization_type', 'optimization_type', 'created_at'),
-        Index('idx_target_history', 'target_type', 'target_id', 'created_at'),
-        Index('idx_performance_tracking', 'performance_before', 'performance_after'),
+        Index("idx_optimization_type", "optimization_type", "created_at"),
+        Index("idx_target_history", "target_type", "target_id", "created_at"),
+        Index("idx_performance_tracking", "performance_before", "performance_after"),
     )
 
     def __repr__(self):

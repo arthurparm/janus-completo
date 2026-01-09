@@ -1,7 +1,10 @@
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+
 from app.core.infrastructure.message_broker import MessageBroker
+
 
 class MockSettings:
     RABBITMQ_USER = "mock_user"
@@ -19,10 +22,10 @@ async def test_message_broker_di_connect():
     """
     mock_settings = MockSettings()
     mock_factory = AsyncMock()
-    
+
     broker = MessageBroker(config=mock_settings, connection_factory=mock_factory)
     await broker.connect()
-    
+
     # Verify factory called with mock settings
     expected_url = f"amqp://{mock_settings.RABBITMQ_USER}:{mock_settings.RABBITMQ_PASSWORD}@{mock_settings.RABBITMQ_HOST}:{mock_settings.RABBITMQ_PORT}/"
     mock_factory.assert_called_once()
@@ -41,10 +44,10 @@ async def test_message_broker_di_defaults():
             global_settings.RABBITMQ_PASSWORD = "global_pass"
             global_settings.RABBITMQ_HOST = "global_host"
             global_settings.RABBITMQ_PORT = 5672
-            
+
             broker = MessageBroker()
             await broker.connect()
-            
+
             expected_url = "amqp://global_user:global_pass@global_host:5672/"
             mock_connect.assert_called_once()
             call_args = mock_connect.call_args

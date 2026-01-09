@@ -1,13 +1,12 @@
 import ast
-import asyncio
 import logging
 import os
 import time
-from typing import List, Dict, Any, Optional, Protocol
+from typing import Any, Protocol
 
 from prometheus_client import Counter, Histogram
 
-from app.core.infrastructure.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.db.graph import graph_db
 
 logger = logging.getLogger(__name__)
@@ -15,14 +14,20 @@ logger = logging.getLogger(__name__)
 CODEBASE_DIR = "/app"
 
 # Metrics
-_KG_QUERIES = Counter("kg_queries_total", "Total de queries ao grafo", ["operation", "outcome", "exception_type"])
-_KG_LATENCY = Histogram("kg_query_latency_seconds", "Latência por query ao grafo", ["operation", "outcome"])
+_KG_QUERIES = Counter(
+    "kg_queries_total", "Total de queries ao grafo", ["operation", "outcome", "exception_type"]
+)
+_KG_LATENCY = Histogram(
+    "kg_query_latency_seconds", "Latência por query ao grafo", ["operation", "outcome"]
+)
 
 _CB = CircuitBreaker(failure_threshold=3, recovery_timeout=15)
 
 
 class GraphPort(Protocol):
-    def query(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:  # pragma: no cover - interface
+    def query(
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> Any:  # pragma: no cover - interface
         ...
 
 
@@ -30,10 +35,10 @@ class Neo4jRepository:
     def __init__(self, port: GraphPort):
         self.port = port
 
-    def _do_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def _do_query(self, query: str, params: dict[str, Any] | None = None) -> Any:
         return self.port.query(query, params=params or {})
 
-    def query(self, operation: str, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def query(self, operation: str, query: str, params: dict[str, Any] | None = None) -> Any:
         wrapped = resilient(
             max_attempts=3,
             initial_backoff=0.25,
@@ -60,17 +65,17 @@ repo = Neo4jRepository(graph_db)
 class CodeParser(ast.NodeVisitor):
     def __init__(self, file_path: str):
         self.file_path = file_path
-        self.functions: List[Dict[str, Any]] = []
-        self.classes: List[Dict[str, Any]] = []
-        self.calls: List[Dict[str, Any]] = []
+        self.functions: list[dict[str, Any]] = []
+        self.classes: list[dict[str, Any]] = []
+        self.calls: list[dict[str, Any]] = []
         self._current_function: str | None = None
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        self.classes.append({'name': node.name, 'line': node.lineno})
+        self.classes.append({"name": node.name, "line": node.lineno})
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.functions.append({'name': node.name, 'line': node.lineno})
+        self.functions.append({"name": node.name, "line": node.lineno})
         previous_function = self._current_function
         self._current_function = node.name
         self.generic_visit(node)
@@ -84,16 +89,18 @@ class CodeParser(ast.NodeVisitor):
             callee_name = node.func.attr
 
         if self._current_function and callee_name:
-            self.calls.append({
-                'caller': self._current_function,
-                'callee': callee_name,
-            })
+            self.calls.append(
+                {
+                    "caller": self._current_function,
+                    "callee": callee_name,
+                }
+            )
         self.generic_visit(node)
 
 
 def _parse_python_file(file_path: str) -> CodeParser | None:
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             source_code = f.read()
         tree = ast.parse(source_code)
         parser = CodeParser(file_path)
@@ -112,13 +119,13 @@ def _create_code_entities_in_graph(parser: CodeParser):
         repo.query(
             "merge_function",
             "MATCH (f:File:CodeFile {path: $file_path}) MERGE (func:Function:CodeFunction {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(func)",
-            params={"file_path": file_path, "name": func['name']}
+            params={"file_path": file_path, "name": func["name"]},
         )
     for cls in parser.classes:
         repo.query(
             "merge_class",
             "MATCH (f:File:CodeFile {path: $file_path}) MERGE (c:Class:CodeClass {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
-            params={"file_path": file_path, "name": cls['name']}
+            params={"file_path": file_path, "name": cls["name"]},
         )
 
 
@@ -133,6 +140,7 @@ async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
     try:
         # Lazy import para evitar carga na inicialização e dependências circulares
         from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+
         stats = await knowledge_consolidator.consolidate_batch(limit=limit)
 
         summary = (
@@ -141,7 +149,7 @@ async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
             f"{stats['total_entities']} entidades e {stats['total_relationships']} "
             f"relacionamentos criados no grafo em {stats['elapsed_seconds']:.2f}s."
         )
-        if stats['failed'] > 0:
+        if stats["failed"] > 0:
             summary += f" {stats['failed']} experiências falharam."
 
         logger.info(summary)
@@ -150,10 +158,7 @@ async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
 
     except Exception as e:
         logger.error(f"Erro na consolidação de experiências: {e}", exc_info=True)
-        return {
-            "message": "Erro na consolidação de experiências.",
-            "summary": f"Erro: {str(e)}"
-        }
+        return {"message": "Erro na consolidação de experiências.", "summary": f"Erro: {e!s}"}
 
 
 def index_codebase() -> dict:
@@ -198,10 +203,13 @@ def index_codebase() -> dict:
     _ensure_indexes()
 
     logger.info("Limpando entidades de código antigas do grafo...")
-    repo.query("cleanup_code_entities", "MATCH (n) WHERE n:CodeFunction OR n:CodeClass OR n:CodeFile DETACH DELETE n")
+    repo.query(
+        "cleanup_code_entities",
+        "MATCH (n) WHERE n:CodeFunction OR n:CodeClass OR n:CodeFile DETACH DELETE n",
+    )
 
     total_files, total_funcs, total_classes = 0, 0, 0
-    all_calls_to_process: List[Dict[str, Any]] = []
+    all_calls_to_process: list[dict[str, Any]] = []
 
     logger.info("Primeira passada: Analisando arquivos e criando nós de entidade...")
     for root, _, files in os.walk(CODEBASE_DIR):
@@ -213,11 +221,13 @@ def index_codebase() -> dict:
                 if parser:
                     _create_code_entities_in_graph(parser)
                     for call in parser.calls:
-                        all_calls_to_process.append({
-                            "caller_name": call['caller'],
-                            "callee_name": call['callee'],
-                            "file_path": file_path
-                        })
+                        all_calls_to_process.append(
+                            {
+                                "caller_name": call["caller"],
+                                "callee_name": call["callee"],
+                                "file_path": file_path,
+                            }
+                        )
 
                     total_files += 1
                     total_funcs += len(parser.functions)
@@ -233,9 +243,9 @@ def index_codebase() -> dict:
         MERGE (caller)-[r:CALLS]->(callee)
         RETURN count(r) as created_relationships
         """,
-        params={"calls": all_calls_to_process}
+        params={"calls": all_calls_to_process},
     )
-    total_calls = sum(res.get('created_relationships', 0) for res in result) if result else 0
+    total_calls = sum(res.get("created_relationships", 0) for res in result) if result else 0
 
     summary = f"Análise de código concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {total_calls} chamadas internas criadas."
     logger.info(summary)
@@ -247,16 +257,17 @@ class KnowledgeGraphManager:
     """
     Gerencia operações de alto nível no Grafo de Conhecimento.
     """
+
     def __init__(self):
         pass
 
-    async def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def semantic_search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """
         Realiza uma busca 'semântica' (por enquanto baseada em texto) no grafo.
         """
         cypher_query = """
         MATCH (n)
-        WHERE (n:Concept OR n:Tool OR n:Error OR n:Solution OR n:Technology) 
+        WHERE (n:Concept OR n:Tool OR n:Error OR n:Solution OR n:Technology)
           AND (toLower(n.name) CONTAINS toLower($query) OR toLower(n.description) CONTAINS toLower($query))
         RETURN n.name as name, labels(n)[0] as type, n.description as summary
         LIMIT $limit
@@ -267,12 +278,15 @@ class KnowledgeGraphManager:
             if not graph_db:
                 logger.warning("GraphDB not initialized for semantic_search")
                 return []
-                
-            results = await graph_db.query(cypher_query, params={"query": query, "limit": limit}, operation="semantic_search")
+
+            results = await graph_db.query(
+                cypher_query, params={"query": query, "limit": limit}, operation="semantic_search"
+            )
             return results if results else []
         except Exception as e:
             logger.error(f"Erro no semantic_search: {e}")
             return []
+
 
 # Singleton instance
 knowledge_graph_manager = KnowledgeGraphManager()

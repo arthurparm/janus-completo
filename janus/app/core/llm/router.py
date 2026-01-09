@@ -1,25 +1,32 @@
-import random
-from typing import Dict, Any, Optional, List
 import logging
+import random
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
 from prometheus_client import Counter, Gauge
 
 from app.config import settings
-from .types import ModelRole, ModelPriority
-from .pricing import (
-    _get_model_pricing, _budget_allows, _model_penalty_factors, _expected_k_ema_by_role, 
-    _model_stats, ModelStats
-)
-from .resilience import _get_from_pool, _add_to_pool, _circuit_closed
+
 from .factory import (
-    _validate_openai_key, _validate_gemini_key, _get_openai_client, _health_check_ollama,
-    _get_openai_http_client
+    _get_openai_http_client,
+    _health_check_ollama,
+    _validate_gemini_key,
+    _validate_openai_key,
+)
+from .pricing import (
+    ModelStats,
+    _budget_allows,
+    _expected_k_ema_by_role,
+    _get_model_pricing,
+    _model_penalty_factors,
+    _model_stats,
 )
 from .rate_limiter import get_rate_limiter
+from .resilience import _add_to_pool, _circuit_closed, _get_from_pool
+from .types import ModelPriority, ModelRole
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +34,7 @@ logger = logging.getLogger(__name__)
 LLM_ROUTER_COUNTER = Counter(
     "llm_router_model_selected_total",
     "Contador para os modelos selecionados pelo roteador dinâmico",
-    ["role", "priority", "model_name", "provider"]
+    ["role", "priority", "model_name", "provider"],
 )
 LLM_SELECTION_SCORE = Gauge(
     "llm_selection_score",
@@ -50,6 +57,7 @@ LLM_EXPLORATION_DECISIONS = Counter(
     ["role", "priority"],
 )
 
+
 def _normalize(values):
     # Evita divisão por zero; retorna lista de valores normalizados [0..1]
     if not values:
@@ -62,10 +70,9 @@ def _normalize(values):
 
 
 # Models that don't support temperature parameter (o1, o3 series)
-MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset({
-    "o1", "o1-mini", "o1-preview", 
-    "o3", "o3-mini", "o3-mini-2025-01-31"
-})
+MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset(
+    {"o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o3-mini-2025-01-31"}
+)
 
 
 def _model_supports_temperature(model_name: str) -> bool:
@@ -79,30 +86,28 @@ def _model_supports_temperature(model_name: str) -> bool:
 
 def _create_openai_model(model: str, temperature: float = 0) -> ChatOpenAI:
     """Create OpenAI model with temperature awareness for o1/o3 models."""
-    api_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
-    
+    api_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+
     if _model_supports_temperature(model):
         return ChatOpenAI(
             model=model,
             temperature=temperature,
             openai_api_key=api_key,
-            http_client=_get_openai_http_client()
+            http_client=_get_openai_http_client(),
         )
     else:
         logger.debug(f"Model {model} doesn't support temperature, omitting it")
         return ChatOpenAI(
-            model=model,
-            openai_api_key=api_key,
-            http_client=_get_openai_http_client()
+            model=model, openai_api_key=api_key, http_client=_get_openai_http_client()
         )
 
 
 def get_llm(
-        role: ModelRole = ModelRole.ORCHESTRATOR,
-        priority: ModelPriority = ModelPriority.LOCAL_ONLY,
-        cache_key: str = "",
-        exclude_providers: Optional[list[str]] = None,
-        config: Optional[Dict[str, Any]] = None
+    role: ModelRole = ModelRole.ORCHESTRATOR,
+    priority: ModelPriority = ModelPriority.LOCAL_ONLY,
+    cache_key: str = "",
+    exclude_providers: list[str] | None = None,
+    config: dict[str, Any] | None = None,
 ) -> BaseChatModel:
     """Obtém uma instância de um modelo de linguagem com base no papel e na prioridade.
     Suporta overrides via configuração (provider/model/temperature/exclude_providers/priority).
@@ -135,46 +140,67 @@ def get_llm(
                 if pooled:
                     return pooled
                 if exclude_providers and provider in exclude_providers:
-                    logger.warning(f"Provedor '{provider}' excluído por configuração; ignorando override.")
+                    logger.warning(
+                        f"Provedor '{provider}' excluído por configuração; ignorando override."
+                    )
                 else:
                     try:
                         if provider == "ollama":
-                            model_kwargs: Dict[str, Any] = {}
-                            if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
-                            if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
-                            if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
-                            if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-                            if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                            model_kwargs: dict[str, Any] = {}
+                            if settings.OLLAMA_NUM_CTX:
+                                model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+                            if settings.OLLAMA_NUM_THREAD:
+                                model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+                            if settings.OLLAMA_NUM_BATCH:
+                                model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+                            if settings.OLLAMA_GPU_LAYERS:
+                                model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                            if settings.OLLAMA_KEEP_ALIVE:
+                                model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
                             llm = ChatOllama(
                                 base_url=settings.OLLAMA_HOST,
                                 model=model,
                                 temperature=temperature,
                                 model_kwargs=model_kwargs,
                             )
-                            if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
+                            if not _health_check_ollama(
+                                llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3
+                            ):
                                 raise RuntimeError(f"Health check falhou para modelo '{model}'")
-                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "ollama").inc()
+                            LLM_ROUTER_COUNTER.labels(
+                                role.value, priority.value, model, "ollama"
+                            ).inc()
                             _add_to_pool("ollama", model, llm)
                             return llm
                         elif provider == "openai":
                             if not _validate_openai_key(
-                                    getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
+                                getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+                            ):
                                 raise RuntimeError("OPENAI_API_KEY inválida ou ausente.")
                             llm = _create_openai_model(model, temperature)
-                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "openai").inc()
+                            LLM_ROUTER_COUNTER.labels(
+                                role.value, priority.value, model, "openai"
+                            ).inc()
                             _add_to_pool("openai", model, llm)
                             return llm
                         elif provider == "google_gemini":
                             if not _validate_gemini_key(
-                                    getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()):
+                                getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+                            ):
                                 raise RuntimeError("GEMINI_API_KEY inválida ou ausente.")
                             llm = ChatGoogleGenerativeAI(
                                 model=model,
                                 temperature=temperature,
-                                google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value',
-                                                        lambda: None)() or None),
+                                google_api_key=(
+                                    getattr(
+                                        settings.GEMINI_API_KEY, "get_secret_value", lambda: None
+                                    )()
+                                    or None
+                                ),
                             )
-                            LLM_ROUTER_COUNTER.labels(role.value, priority.value, model, "google_gemini").inc()
+                            LLM_ROUTER_COUNTER.labels(
+                                role.value, priority.value, model, "google_gemini"
+                            ).inc()
                             _add_to_pool("google_gemini", model, llm)
                             return llm
                         else:
@@ -196,7 +222,9 @@ def get_llm(
     }
     local_model_name = model_map.get(role, settings.OLLAMA_ORCHESTRATOR_MODEL)
 
-    pooled_local = _get_from_pool("ollama", local_model_name) if priority == ModelPriority.LOCAL_ONLY else None
+    pooled_local = (
+        _get_from_pool("ollama", local_model_name) if priority == ModelPriority.LOCAL_ONLY else None
+    )
     if pooled_local:
         return pooled_local
 
@@ -207,12 +235,17 @@ def get_llm(
             if exclude_providers and "ollama" in exclude_providers:
                 raise RuntimeError("Provedor local 'ollama' está excluído para esta seleção.")
             # Model kwargs para tunar desempenho do OllaM
-            model_kwargs: Dict[str, Any] = {}
-            if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
-            if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
-            if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
-            if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-            if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+            model_kwargs: dict[str, Any] = {}
+            if settings.OLLAMA_NUM_CTX:
+                model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+            if settings.OLLAMA_NUM_THREAD:
+                model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+            if settings.OLLAMA_NUM_BATCH:
+                model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+            if settings.OLLAMA_GPU_LAYERS:
+                model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+            if settings.OLLAMA_KEEP_ALIVE:
+                model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
 
             llm = ChatOllama(
                 base_url=settings.OLLAMA_HOST,
@@ -229,28 +262,40 @@ def get_llm(
             _add_to_pool("ollama", local_model_name, llm)
             return llm
         except Exception as e:
-            logger.error(f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True)
+            logger.error(
+                f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True
+            )
             raise RuntimeError(f"Falha crítica ao carregar modelo local. Causa: {e}") from e
 
     # Provedores de Nuvem (catálogo com factories por modelo)
     cloud_catalog = [
         {
-            "name": "Google Gemini", "provider_key": "google_gemini",
-            "enabled": _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()),
+            "name": "Google Gemini",
+            "provider_key": "google_gemini",
+            "enabled": _validate_gemini_key(
+                getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+            ),
             "initializer_factory": lambda model: ChatGoogleGenerativeAI(
                 model=model,
                 temperature=0,
-                google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)() or None),
+                google_api_key=(
+                    getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
+                ),
             ),
-            "models": settings.GEMINI_MODELS if getattr(settings, "GEMINI_MODELS", None) else [
-                settings.GEMINI_MODEL_NAME],
+            "models": settings.GEMINI_MODELS
+            if getattr(settings, "GEMINI_MODELS", None)
+            else [settings.GEMINI_MODEL_NAME],
         },
         {
-            "name": "OpenAI", "provider_key": "openai",
-            "enabled": _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()),
+            "name": "OpenAI",
+            "provider_key": "openai",
+            "enabled": _validate_openai_key(
+                getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+            ),
             "initializer_factory": lambda model: _create_openai_model(model),
-            "models": settings.OPENAI_MODELS if getattr(settings, "OPENAI_MODELS", None) else [
-                settings.OPENAI_MODEL_NAME],
+            "models": settings.OPENAI_MODELS
+            if getattr(settings, "OPENAI_MODELS", None)
+            else [settings.OPENAI_MODEL_NAME],
         },
     ]
 
@@ -262,7 +307,7 @@ def get_llm(
         raw_role_candidates = getattr(settings, "LLM_CLOUD_MODEL_CANDIDATES", {}).get(role_key, [])
 
         # Mapa provider->set(models) derivado de LLM_CLOUD_MODEL_CANDIDATES
-        role_candidates_map: Dict[str, set] = {}
+        role_candidates_map: dict[str, set] = {}
         for spec in raw_role_candidates:
             try:
                 provider_key, model_name = spec.split(":", 1)
@@ -275,7 +320,9 @@ def get_llm(
             provider_key = p["provider_key"]
             if exclude_providers and provider_key in exclude_providers:
                 continue
-            if not (p["enabled"] and _circuit_closed(provider_key) and _budget_allows(provider_key)):
+            if not (
+                p["enabled"] and _circuit_closed(provider_key) and _budget_allows(provider_key)
+            ):
                 continue
 
             # Lista de modelos elegíveis para este papel
@@ -287,51 +334,72 @@ def get_llm(
                     availability = rate_limiter.get_availability(provider_key, model_name)
                     logger.info(
                         f"Modelo {provider_key}:{model_name} indisponível por rate limit "
-                        f"(uso={availability['usage_percent']:.1%})")
+                        f"(uso={availability['usage_percent']:.1%})"
+                    )
                     continue
 
                 pricing = _get_model_pricing(provider_key, model_name)
                 cost_per_1k = pricing.input_per_1k_usd + pricing.output_per_1k_usd
-                
+
                 # Fetch stats from pricing module (or rather, the shared state)
                 stats = _model_stats.get(provider_key, {}).get(model_name, ModelStats())
 
-                candidates.append({
-                    "name": p["name"],
-                    "provider_key": provider_key,
-                    "model_name": model_name,
-                    "initializer_factory": p["initializer_factory"],
-                    "pricing": pricing,
-                    "stats": stats,
-                    "cost_per_1k": cost_per_1k,
-                })
+                candidates.append(
+                    {
+                        "name": p["name"],
+                        "provider_key": provider_key,
+                        "model_name": model_name,
+                        "initializer_factory": p["initializer_factory"],
+                        "pricing": pricing,
+                        "stats": stats,
+                        "cost_per_1k": cost_per_1k,
+                    }
+                )
 
         if candidates:
             role_key = role.value
             # Filtra por teto de custo estimado por papel (usa EMA dinâmica)
-            expected_k = float(_expected_k_ema_by_role.get(role_key, float(
-                getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).get(role_key, 2.0))))
-            max_cost = float(getattr(settings, "LLM_MAX_COST_PER_REQUEST_USD", {}).get(role_key, float("inf")))
+            expected_k = float(
+                _expected_k_ema_by_role.get(
+                    role_key,
+                    float(getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).get(role_key, 2.0)),
+                )
+            )
+            max_cost = float(
+                getattr(settings, "LLM_MAX_COST_PER_REQUEST_USD", {}).get(role_key, float("inf"))
+            )
             filtered = []
             for c in candidates:
                 expected_cost = expected_k * c["cost_per_1k"]
                 try:
-                    LLM_EXPECTED_COST_USD.labels(priority=priority.value, provider=c["provider_key"],
-                                                 model=c["model_name"], role=role_key).set(expected_cost)
+                    LLM_EXPECTED_COST_USD.labels(
+                        priority=priority.value,
+                        provider=c["provider_key"],
+                        model=c["model_name"],
+                        role=role_key,
+                    ).set(expected_cost)
                 except Exception:
                     pass
                 if expected_cost <= max_cost:
                     filtered.append(c)
                 else:
                     logger.info(
-                        f"Candidato filtrado por custo: {c['provider_key']}:{c['model_name']} (expected_cost={expected_cost:.4f} > max_cost={max_cost:.4f}, role={role_key})")
+                        f"Candidato filtrado por custo: {c['provider_key']}:{c['model_name']} (expected_cost={expected_cost:.4f} > max_cost={max_cost:.4f}, role={role_key})"
+                    )
 
-            candidates = filtered or candidates  # se todos foram filtrados, usa originais para evitar vazio
+            candidates = (
+                filtered or candidates
+            )  # se todos foram filtrados, usa originais para evitar vazio
             # Normalizações para scoring
             cost_norm = _normalize([c["cost_per_1k"] for c in candidates])
-            latencies = [c["stats"].avg_latency if c["stats"].total_requests > 0 else 1.0 for c in candidates]
+            latencies = [
+                c["stats"].avg_latency if c["stats"].total_requests > 0 else 1.0 for c in candidates
+            ]
             lat_norm = _normalize(latencies)
-            success_rates = [c["stats"].success_rate if c["stats"].total_requests > 0 else 0.7 for c in candidates]
+            success_rates = [
+                c["stats"].success_rate if c["stats"].total_requests > 0 else 0.7
+                for c in candidates
+            ]
 
             scored = []
             for idx, c in enumerate(candidates):
@@ -344,15 +412,20 @@ def get_llm(
                         w_cost, w_lat, w_fail = 0.45, 0.35, 0.20
                     else:  # balanced
                         w_cost, w_lat, w_fail = 0.60, 0.30, 0.10
-                    score = w_cost * cost_norm[idx] + w_lat * lat_norm[idx] + w_fail * failure_penalty
+                    score = (
+                        w_cost * cost_norm[idx] + w_lat * lat_norm[idx] + w_fail * failure_penalty
+                    )
                     # Aplica penalização pós-execução acumulada ao score
                     pf = _model_penalty_factors.get(c["provider_key"], {}).get(c["model_name"], 1.0)
                     if pf > 1.0:
                         score = score / pf
                     scored.append((score, c))
-                    LLM_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"]).set(score)
-                    LLM_MODEL_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"],
-                                                     model=c["model_name"]).set(score)
+                    LLM_SELECTION_SCORE.labels(
+                        priority=priority.value, provider=c["provider_key"]
+                    ).set(score)
+                    LLM_MODEL_SELECTION_SCORE.labels(
+                        priority=priority.value, provider=c["provider_key"], model=c["model_name"]
+                    ).set(score)
                 else:  # HIGH_QUALITY
                     if econ == "strict":
                         alpha = 0.20
@@ -366,9 +439,12 @@ def get_llm(
                     if pf > 1.0:
                         score = score / pf
                     scored.append((score, c))
-                    LLM_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"]).set(score)
-                    LLM_MODEL_SELECTION_SCORE.labels(priority=priority.value, provider=c["provider_key"],
-                                                     model=c["model_name"]).set(score)
+                    LLM_SELECTION_SCORE.labels(
+                        priority=priority.value, provider=c["provider_key"]
+                    ).set(score)
+                    LLM_MODEL_SELECTION_SCORE.labels(
+                        priority=priority.value, provider=c["provider_key"], model=c["model_name"]
+                    ).set(score)
 
             # Ordenação por score
             if priority == ModelPriority.FAST_AND_CHEAP:
@@ -385,7 +461,8 @@ def get_llm(
                 except Exception:
                     pass
                 logger.info(
-                    f"Exploração ativada (p={explore_p:.2f}). Priorizando candidato alternativo index={alt_idx}.")
+                    f"Exploração ativada (p={explore_p:.2f}). Priorizando candidato alternativo index={alt_idx}."
+                )
 
             for score, cand in scored:
                 logger.info(
@@ -393,30 +470,39 @@ def get_llm(
                 )
                 try:
                     llm = cand["initializer_factory"](cand["model_name"])
-                    logger.info(f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso.")
-                    LLM_ROUTER_COUNTER.labels(role.value, priority.value, cand["model_name"],
-                                              cand["provider_key"]).inc()
+                    logger.info(
+                        f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso."
+                    )
+                    LLM_ROUTER_COUNTER.labels(
+                        role.value, priority.value, cand["model_name"], cand["provider_key"]
+                    ).inc()
                     _add_to_pool(cand["provider_key"], cand["model_name"], llm)
                     return llm
                 except Exception as e:
                     logger.warning(
                         f"Falha ao inicializar '{cand['provider_key']}:{cand['model_name']}' (score={score:.3f}): {e}",
-                        exc_info=True)
+                        exc_info=True,
+                    )
 
     # Fallback final para o modelo local
     logger.warning("Estratégias de nuvem falharam ou desabilitadas. Recorrendo ao modelo local.")
     try:
         if exclude_providers and "ollama" in exclude_providers:
             raise RuntimeError("Fallback local desativado: 'ollama' está excluído.")
-        
+
         # Recalcular model kwargs localmente ou pegar de constants
         # Para simplificar aqui, assumimos defaults ou hardcoded similares
-        model_kwargs: Dict[str, Any] = {}
-        if settings.OLLAMA_NUM_CTX: model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
-        if settings.OLLAMA_NUM_THREAD: model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
-        if settings.OLLAMA_NUM_BATCH: model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
-        if settings.OLLAMA_GPU_LAYERS: model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-        if settings.OLLAMA_KEEP_ALIVE: model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+        model_kwargs: dict[str, Any] = {}
+        if settings.OLLAMA_NUM_CTX:
+            model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
+        if settings.OLLAMA_NUM_THREAD:
+            model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
+        if settings.OLLAMA_NUM_BATCH:
+            model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
+        if settings.OLLAMA_GPU_LAYERS:
+            model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+        if settings.OLLAMA_KEEP_ALIVE:
+            model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
 
         llm = ChatOllama(
             base_url=settings.OLLAMA_HOST,
@@ -425,11 +511,16 @@ def get_llm(
             model_kwargs=model_kwargs,
         )
         if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
-            raise RuntimeError(f"Health check falhou para modelo local '{local_model_name}' no fallback")
+            raise RuntimeError(
+                f"Health check falhou para modelo local '{local_model_name}' no fallback"
+            )
 
         LLM_ROUTER_COUNTER.labels(role.value, "fallback", local_model_name, "ollama").inc()
         _add_to_pool("ollama", local_model_name, llm)
         return llm
     except Exception as e:
-        logger.critical(f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}", exc_info=True)
+        logger.critical(
+            f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}",
+            exc_info=True,
+        )
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e

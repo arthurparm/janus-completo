@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple, List
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -18,10 +18,10 @@ from prometheus_client import Counter, Histogram
 from qdrant_client import AsyncQdrantClient
 
 from app.config import settings
-from app.core.infrastructure.resilience import resilient, CircuitBreaker
-from app.core.llm.llm_manager import ModelRole, ModelPriority, get_llm
-from app.core.memory.memory_core import decrypt_text, get_memory_db
+from app.core.infrastructure.resilience import CircuitBreaker, resilient
+from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
 from app.core.memory.graph_guardian import graph_guardian
+from app.core.memory.memory_core import decrypt_text, get_memory_db
 from app.db.graph import get_graph_db
 from app.db.vector_store import get_async_qdrant_client
 from app.models.schemas import Experience
@@ -32,20 +32,16 @@ logger = logging.getLogger(__name__)
 CONSOLIDATION_COUNTER = Counter(
     "knowledge_consolidation_total",
     "Total de consolidações de conhecimento",
-    ["outcome", "exception_type"]
+    ["outcome", "exception_type"],
 )
 CONSOLIDATION_LATENCY = Histogram(
     "knowledge_consolidation_latency_seconds",
     "Latência de consolidação de conhecimento",
-    ["outcome"]
+    ["outcome"],
 )
-ENTITIES_EXTRACTED = Counter(
-    "knowledge_entities_extracted_total",
-    "Total de entidades extraídas"
-)
+ENTITIES_EXTRACTED = Counter("knowledge_entities_extracted_total", "Total de entidades extraídas")
 RELATIONSHIPS_CREATED = Counter(
-    "knowledge_relationships_created_total",
-    "Total de relacionamentos criados no grafo"
+    "knowledge_relationships_created_total", "Total de relacionamentos criados no grafo"
 )
 
 # Circuit Breaker para operações de consolidação
@@ -92,8 +88,8 @@ class KnowledgeConsolidator:
     """Worker que consolida memória episódica em memória semântica."""
 
     def __init__(self):
-        self.qdrant_client: Optional[AsyncQdrantClient] = None
-        self.llm: Optional[BaseChatModel] = None
+        self.qdrant_client: AsyncQdrantClient | None = None
+        self.llm: BaseChatModel | None = None
         self._initialized = False
 
     async def _initialize(self):
@@ -112,8 +108,7 @@ class KnowledgeConsolidator:
         try:
             # LLM para extração
             self.llm = get_llm(
-                role=ModelRole.KNOWLEDGE_CURATOR,
-                priority=ModelPriority.FAST_AND_CHEAP
+                role=ModelRole.KNOWLEDGE_CURATOR, priority=ModelPriority.FAST_AND_CHEAP
             )
             logger.info(f"LLM inicializado para consolidação: {self.llm.__class__.__name__}")
         except Exception as e:
@@ -131,7 +126,7 @@ class KnowledgeConsolidator:
 
         self._initialized = True
 
-    def _chunk_text(self, text: str, chunk_size: int = 2000, overlap: int = 200) -> List[str]:
+    def _chunk_text(self, text: str, chunk_size: int = 2000, overlap: int = 200) -> list[str]:
         """Divide texto em chunks com overlap para extração robusta."""
         try:
             if not isinstance(text, str):
@@ -139,7 +134,7 @@ class KnowledgeConsolidator:
             t = text.strip()
             if len(t) <= chunk_size:
                 return [t]
-            chunks: List[str] = []
+            chunks: list[str] = []
             start = 0
             end = chunk_size
             while start < len(t):
@@ -154,10 +149,8 @@ class KnowledgeConsolidator:
             return [text]
 
     async def _extract_knowledge_with_llm(
-            self,
-            experience_content: str,
-            metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, experience_content: str, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Usa LLM para extrair conhecimento estruturado de uma experiência.
 
@@ -174,19 +167,19 @@ class KnowledgeConsolidator:
         # Formata prompt
         prompt_text = EXTRACTION_PROMPT.format(
             experience_content=experience_content[:2000],  # Limita tamanho
-            metadata=json.dumps(metadata, indent=2, ensure_ascii=False)[:500]
+            metadata=json.dumps(metadata, indent=2, ensure_ascii=False)[:500],
         )
 
         messages = [
             SystemMessage(content="Você é um especialista em extração de conhecimento."),
-            HumanMessage(content=prompt_text)
+            HumanMessage(content=prompt_text),
         ]
 
         # Invoca LLM
         start = time.perf_counter()
         try:
             # Usa ainvoke se disponível, senão invoke
-            if hasattr(self.llm, 'ainvoke'):
+            if hasattr(self.llm, "ainvoke"):
                 response = await self.llm.ainvoke(messages)
             else:
                 # Fallback síncrono
@@ -196,14 +189,14 @@ class KnowledgeConsolidator:
             logger.debug(f"Extração LLM concluída em {elapsed:.2f}s")
 
             # Parse JSON da resposta
-            response_text = response.content if hasattr(response, 'content') else str(response)
+            response_text = response.content if hasattr(response, "content") else str(response)
 
             # Tenta extrair JSON da resposta (pode vir com markdown)
             response_text = response_text.strip()
-            if '```json' in response_text:
-                response_text = response_text.split('```json')[1].split('```')[0]
-            elif '```' in response_text:
-                response_text = response_text.split('```')[1].split('```')[0]
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
 
             result = json.loads(response_text)
 
@@ -226,11 +219,8 @@ class KnowledgeConsolidator:
             return {"entities": [], "relationships": [], "insights": []}
 
     async def _persist_to_neo4j(
-            self,
-            experience_id: str,
-            extracted_data: Dict[str, Any],
-            source_metadata: Dict[str, Any]
-    ) -> Tuple[int, int]:
+        self, experience_id: str, extracted_data: dict[str, Any], source_metadata: dict[str, Any]
+    ) -> tuple[int, int]:
         """
         Persiste entidades e relacionamentos extraídos no Neo4j.
 
@@ -259,9 +249,9 @@ class KnowledgeConsolidator:
                 params={
                     "exp_id": experience_id,
                     "timestamp": source_metadata.get("timestamp", datetime.utcnow().isoformat()),
-                    "exp_type": source_metadata.get("type", "unknown")
+                    "exp_type": source_metadata.get("type", "unknown"),
                 },
-                operation="create_experience_node"
+                operation="create_experience_node",
             )
         except Exception as e:
             logger.error(f"Erro ao criar nó de experiência: {e}")
@@ -275,15 +265,17 @@ class KnowledgeConsolidator:
                 ne = graph_guardian.validate_and_normalize_entity(
                     name=entity["name"],
                     entity_type=entity.get("type", "CONCEPT"),
-                    properties=entity.get("properties", {})
+                    properties=entity.get("properties", {}),
                 )
                 props = ne["properties"]
-                props["original_name"] = ne.get("original_name", ne["name"]) 
-                normalized_entities.append({
-                    "name": ne["name"],
-                    "type": ne["type"],
-                    "properties": props,
-                })
+                props["original_name"] = ne.get("original_name", ne["name"])
+                normalized_entities.append(
+                    {
+                        "name": ne["name"],
+                        "type": ne["type"],
+                        "properties": props,
+                    }
+                )
             except ValueError as ve:
                 logger.warning(f"Entidade inválida ignorada: {entity.get('name')} - {ve}")
             except Exception as e:
@@ -296,6 +288,7 @@ class KnowledgeConsolidator:
                     tx = await session.begin_transaction()
                     try:
                         from collections import defaultdict
+
                         groups = defaultdict(list)
                         for ne in normalized_entities:
                             groups[ne["type"]].append(ne)
@@ -338,7 +331,7 @@ class KnowledgeConsolidator:
                     from_entity=rel["from"],
                     to_entity=rel["to"],
                     rel_type=rel.get("type", "RELATES_TO"),
-                    properties=rel.get("properties", {})
+                    properties=rel.get("properties", {}),
                 )
                 if nr is None:
                     logger.debug(f"Relacionamento inválido ignorado: {rel}")
@@ -346,20 +339,24 @@ class KnowledgeConsolidator:
                 props = nr["properties"]
                 if "confidence" not in props:
                     props["confidence"] = 0.5
-                props["original_from"] = nr.get("original_from", nr["from"]) 
-                props["original_to"] = nr.get("original_to", nr["to"]) 
+                props["original_from"] = nr.get("original_from", nr["from"])
+                props["original_to"] = nr.get("original_to", nr["to"])
                 if source_metadata.get("source_snippet"):
                     props["source_snippet"] = source_metadata.get("source_snippet")
-                normalized_rels.append({
-                    "from_name": nr["from"],
-                    "to_name": nr["to"],
-                    "type": nr["type"],
-                    "properties": props,
-                })
+                normalized_rels.append(
+                    {
+                        "from_name": nr["from"],
+                        "to_name": nr["to"],
+                        "type": nr["type"],
+                        "properties": props,
+                    }
+                )
             except Exception as e:
-                logger.error(f"Erro ao normalizar relacionamento {rel.get('from')} -> {rel.get('to')}: {e}")
+                logger.error(
+                    f"Erro ao normalizar relacionamento {rel.get('from')} -> {rel.get('to')}: {e}"
+                )
 
-        def _should_quarantine(rel: Dict[str, Any]) -> bool:
+        def _should_quarantine(rel: dict[str, Any]) -> bool:
             t = rel.get("type")
             a = rel.get("from_name", "")
             b = rel.get("to_name", "")
@@ -377,8 +374,8 @@ class KnowledgeConsolidator:
                 pass
             return False
 
-        quarantined: List[Dict[str, Any]] = []
-        valid_rels: List[Dict[str, Any]] = []
+        quarantined: list[dict[str, Any]] = []
+        valid_rels: list[dict[str, Any]] = []
         for nr in normalized_rels:
             if _should_quarantine(nr):
                 quarantined.append(nr)
@@ -391,6 +388,7 @@ class KnowledgeConsolidator:
                     tx = await session.begin_transaction()
                     try:
                         from collections import defaultdict
+
                         groups = defaultdict(list)
                         for nr in valid_rels:
                             groups[nr["type"]].append(nr)
@@ -455,8 +453,14 @@ class KnowledgeConsolidator:
                                 type=q.get("type"),
                                 from_name=q.get("from_name"),
                                 to_name=q.get("to_name"),
-                                confidence=float(q.get("properties", {}).get("confidence", 0.0)) if isinstance(q.get("properties"), dict) else 0.0,
-                                source_snippet=(q.get("properties", {}).get("source_snippet") if isinstance(q.get("properties"), dict) else None),
+                                confidence=float(q.get("properties", {}).get("confidence", 0.0))
+                                if isinstance(q.get("properties"), dict)
+                                else 0.0,
+                                source_snippet=(
+                                    q.get("properties", {}).get("source_snippet")
+                                    if isinstance(q.get("properties"), dict)
+                                    else None
+                                ),
                                 exp_id=experience_id,
                             )
                         await tx.commit()
@@ -468,21 +472,20 @@ class KnowledgeConsolidator:
         insights = extracted_data.get("insights", [])
         if insights:
             try:
-                insights_text = "\n".join([
-                    f"- {ins.get('text')} (conf: {ins.get('confidence', 0.5)})"
-                    for ins in insights[:5]  # Limita a 5 insights
-                ])
+                insights_text = "\n".join(
+                    [
+                        f"- {ins.get('text')} (conf: {ins.get('confidence', 0.5)})"
+                        for ins in insights[:5]  # Limita a 5 insights
+                    ]
+                )
 
                 await db.query(
                     """
                     MATCH (e:Experience {id: $exp_id})
                     SET e.insights = $insights_text
                     """,
-                    params={
-                        "exp_id": experience_id,
-                        "insights_text": insights_text
-                    },
-                    operation="store_insights"
+                    params={"exp_id": experience_id, "insights_text": insights_text},
+                    operation="store_insights",
                 )
             except Exception as e:
                 logger.error(f"Erro ao armazenar insights: {e}")
@@ -495,14 +498,11 @@ class KnowledgeConsolidator:
         max_backoff=10.0,
         circuit_breaker=_consolidation_cb,
         retry_on=(Exception,),
-        operation_name="knowledge_consolidation"
+        operation_name="knowledge_consolidation",
     )
     async def consolidate_experience(
-            self,
-            experience_id: str,
-            experience_content: str,
-            metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, experience_id: str, experience_content: str, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Consolida uma experiência episódica em conhecimento semântico.
         """
@@ -513,7 +513,9 @@ class KnowledgeConsolidator:
         try:
             db = await get_memory_db()
             exp_type = str((metadata or {}).get("type") or "knowledge_event")
-            exp = Experience(id=experience_id, type=exp_type, content=experience_content, metadata=metadata)
+            exp = Experience(
+                id=experience_id, type=exp_type, content=experience_content, metadata=metadata
+            )
             await db.amemorize(exp)
         except Exception:
             logger.debug("Falha ao salvar experiência na memória episódica", exc_info=True)
@@ -534,11 +536,7 @@ class KnowledgeConsolidator:
                 md["chunk_index"] = idx
                 md["chunk_total"] = len(chunks)
                 extracted = await self._extract_knowledge_with_llm(chunk, md)
-                num_entities, num_rels = await self._persist_to_neo4j(
-                    experience_id,
-                    extracted,
-                    md
-                )
+                num_entities, num_rels = await self._persist_to_neo4j(experience_id, extracted, md)
                 total_entities += num_entities
                 total_rels += num_rels
                 total_insights += len(extracted.get("insights", []))
@@ -550,7 +548,7 @@ class KnowledgeConsolidator:
                 "relationships_created": total_rels,
                 "insights_count": total_insights,
                 "elapsed_seconds": elapsed,
-                "status": "success"
+                "status": "success",
             }
             CONSOLIDATION_COUNTER.labels("success", "").inc()
             CONSOLIDATION_LATENCY.labels("success").observe(elapsed)
@@ -563,17 +561,10 @@ class KnowledgeConsolidator:
             elapsed = time.perf_counter() - start
             CONSOLIDATION_COUNTER.labels("error", type(e).__name__).inc()
             CONSOLIDATION_LATENCY.labels("error").observe(elapsed)
-            logger.error(
-                f"Erro na consolidação da experiência {experience_id}: {e}",
-                exc_info=True
-            )
+            logger.error(f"Erro na consolidação da experiência {experience_id}: {e}", exc_info=True)
             raise
 
-    async def consolidate_batch(
-        self,
-        limit: int = 10,
-        min_score: float = 0.0
-    ) -> Dict[str, Any]:
+    async def consolidate_batch(self, limit: int = 10, min_score: float = 0.0) -> dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.
         """
@@ -589,7 +580,7 @@ class KnowledgeConsolidator:
             "failed": 0,
             "total_entities": 0,
             "total_relationships": 0,
-            "elapsed_seconds": 0.0
+            "elapsed_seconds": 0.0,
         }
 
         try:
@@ -598,9 +589,13 @@ class KnowledgeConsolidator:
                 collection_name=settings.QDRANT_COLLECTION_EPISODIC,
                 limit=limit,
                 with_payload=True,
-                with_vectors=False
+                with_vectors=False,
             )
-            points = scroll_result[0] if isinstance(scroll_result, tuple) else getattr(scroll_result, "points", [])
+            points = (
+                scroll_result[0]
+                if isinstance(scroll_result, tuple)
+                else getattr(scroll_result, "points", [])
+            )
             logger.info(f"Encontradas {len(points)} experiências para consolidar.")
             for point in points:
                 stats["total_processed"] += 1
@@ -610,7 +605,9 @@ class KnowledgeConsolidator:
                     try:
                         content = decrypt_text(raw_content, point.payload.get("metadata"))
                     except Exception as e:
-                        logger.warning(f"Failed to decrypt experience {exp_id}: {e}. Using raw content.")
+                        logger.warning(
+                            f"Failed to decrypt experience {exp_id}: {e}. Using raw content."
+                        )
                         content = raw_content
                     if not content or len(content.strip()) < 10:
                         logger.debug(f"Ignorando experiência {exp_id} (conteúdo vazio).")
@@ -649,14 +646,16 @@ class KnowledgeConsolidator:
                 RETURN e.consolidated_at IS NOT NULL AS consolidated
                 """,
                 params={"exp_id": experience_id},
-                operation="check_consolidated"
+                operation="check_consolidated",
             )
             return result[0].get("consolidated", False) if result else False
         except Exception as e:
             logger.warning(f"Erro ao verificar consolidação: {e}")
             return False
 
-    async def consolidate_document(self, user_id: str, doc_id: str, limit: int = 50) -> Dict[str, Any]:
+    async def consolidate_document(
+        self, user_id: str, doc_id: str, limit: int = 50
+    ) -> dict[str, Any]:
         await self._initialize()
         start_time = time.perf_counter()
         try:
@@ -666,18 +665,37 @@ class KnowledgeConsolidator:
 
         try:
             from qdrant_client import models as _models
-            qfilter = _models.Filter(must=[
-                _models.FieldCondition(key="metadata.user_id", match=_models.MatchValue(value=user_id)),
-                _models.FieldCondition(key="metadata.doc_id", match=_models.MatchValue(value=doc_id)),
-                _models.FieldCondition(key="metadata.type", match=_models.MatchValue(value="doc_chunk")),
-            ])
+
+            qfilter = _models.Filter(
+                must=[
+                    _models.FieldCondition(
+                        key="metadata.user_id", match=_models.MatchValue(value=user_id)
+                    ),
+                    _models.FieldCondition(
+                        key="metadata.doc_id", match=_models.MatchValue(value=doc_id)
+                    ),
+                    _models.FieldCondition(
+                        key="metadata.type", match=_models.MatchValue(value="doc_chunk")
+                    ),
+                ]
+            )
         except Exception:
             qfilter = None
 
         coll_name = f"user_{user_id}"
         try:
-            scroll_result = await client.scroll(collection_name=coll_name, limit=limit, with_payload=True, with_vectors=False, filter=qfilter)  # type: ignore
-            points = scroll_result[0] if isinstance(scroll_result, tuple) else getattr(scroll_result, "points", [])
+            scroll_result = await client.scroll(
+                collection_name=coll_name,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+                filter=qfilter,
+            )  # type: ignore
+            points = (
+                scroll_result[0]
+                if isinstance(scroll_result, tuple)
+                else getattr(scroll_result, "points", [])
+            )
         except Exception as e:
             raise ValueError(f"Falha ao obter chunks do documento: {e}")
 
@@ -696,7 +714,9 @@ class KnowledgeConsolidator:
                 """,
                 params={
                     "doc_id": doc_id,
-                    "file_name": points[0].payload.get("metadata", {}).get("file_name") if points else None,
+                    "file_name": points[0].payload.get("metadata", {}).get("file_name")
+                    if points
+                    else None,
                     "user_id": user_id,
                 },
                 operation="create_document_node",
@@ -727,8 +747,10 @@ class KnowledgeConsolidator:
                         properties=entity.get("properties", {}),
                     )
                     props = ne["properties"]
-                    props["original_name"] = ne.get("original_name", ne["name"])  
-                    normalized_entities.append({"name": ne["name"], "type": ne["type"], "properties": props})
+                    props["original_name"] = ne.get("original_name", ne["name"])
+                    normalized_entities.append(
+                        {"name": ne["name"], "type": ne["type"], "properties": props}
+                    )
                 except Exception:
                     continue
 
@@ -738,6 +760,7 @@ class KnowledgeConsolidator:
                     async with await db.get_session() as session:
                         tx = await session.begin_transaction()
                         from collections import defaultdict
+
                         groups = defaultdict(list)
                         for ne in normalized_entities:
                             groups[ne["type"]].append(ne)
@@ -780,12 +803,14 @@ class KnowledgeConsolidator:
                         continue
                     props = nr["properties"]
                     props["source_chunk"] = str(p.id)
-                    normalized_rels.append({
-                        "from_name": nr["from"],
-                        "to_name": nr["to"],
-                        "type": nr["type"],
-                        "properties": props,
-                    })
+                    normalized_rels.append(
+                        {
+                            "from_name": nr["from"],
+                            "to_name": nr["to"],
+                            "type": nr["type"],
+                            "properties": props,
+                        }
+                    )
                 except Exception:
                     continue
 
@@ -794,6 +819,7 @@ class KnowledgeConsolidator:
                     async with await db.get_session() as session:
                         tx = await session.begin_transaction()
                         from collections import defaultdict
+
                         groups = defaultdict(list)
                         for nr in normalized_rels:
                             groups[nr["type"]].append(nr)

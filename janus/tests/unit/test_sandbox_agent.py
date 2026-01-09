@@ -1,5 +1,6 @@
-import types
 import sys
+import types
+
 import pytest
 
 from app.core.workers.sandbox_agent_worker import _run_in_docker

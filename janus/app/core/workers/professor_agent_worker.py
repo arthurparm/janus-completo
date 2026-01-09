@@ -4,17 +4,18 @@ Professor Agent Worker
 Consome a fila JANUS.tasks.agent.professor, revisa código com LLM e decide
 se retorna ao CodeAgent para correções ou segue para Sandbox.
 """
+
 import logging
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, TaskState, QueueName
-from app.services.collaboration_service import CollaborationService
+from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
-from app.services.llm_service import LLMService
 from app.repositories.llm_repository import LLMRepository
-from app.core.llm import ModelRole, ModelPriority
+from app.services.collaboration_service import CollaborationService
+from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +66,14 @@ async def process_professor_task(task: TaskMessage) -> None:
         )
         review = result.get("response", "")
         state.data_payload["review_notes"] = review
-        state.history.append({
-            "agent_role": "professor",
-            "action": "code_reviewed",
-            "notes": f"errors={'yes' if _has_errors(review) else 'no'}",
-            "timestamp": datetime.utcnow().timestamp(),
-        })
+        state.history.append(
+            {
+                "agent_role": "professor",
+                "action": "code_reviewed",
+                "notes": f"errors={'yes' if _has_errors(review) else 'no'}",
+                "timestamp": datetime.utcnow().timestamp(),
+            }
+        )
 
         if _has_errors(review):
             state.next_agent_role = "coder"
@@ -81,7 +84,7 @@ async def process_professor_task(task: TaskMessage) -> None:
         await service.pass_task(state)
         logger.info(
             "ProfessorAgent revisou e encaminhou",
-            extra={"task_id": state.task_id, "next": state.next_agent_role}
+            extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
         logger.error(f"ProfessorAgent falhou: {e}", exc_info=True)

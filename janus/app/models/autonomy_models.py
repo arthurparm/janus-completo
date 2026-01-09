@@ -1,8 +1,9 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Numeric, Index
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class AutonomyRun(Base):
     __tablename__ = "autonomy_runs"
@@ -21,9 +22,8 @@ class AutonomyRun(Base):
     started_at = Column(DateTime, default=func.current_timestamp())
     stopped_at = Column(DateTime, nullable=True)
     steps = relationship("AutonomyStep", back_populates="run", cascade="all, delete-orphan")
-    __table_args__ = (
-        Index("idx_autonomy_run_user", "user_id", "project_id", "status"),
-    )
+    __table_args__ = (Index("idx_autonomy_run_user", "user_id", "project_id", "status"),)
+
 
 class AutonomyStep(Base):
     __tablename__ = "autonomy_steps"
@@ -40,6 +40,4 @@ class AutonomyStep(Base):
     duration_seconds = Column(Numeric(10, 4), default=0)
     created_at = Column(DateTime, default=func.current_timestamp())
     run = relationship("AutonomyRun", back_populates="steps")
-    __table_args__ = (
-        Index("idx_autonomy_step_run_cycle", "run_id", "cycle"),
-    )
+    __table_args__ = (Index("idx_autonomy_step_run_cycle", "run_id", "cycle"),)

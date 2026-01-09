@@ -1,15 +1,18 @@
-import structlog
 import asyncio
-from typing import Optional
+
+import structlog
+
 from app.core.senses.audio.interfaces import STTProvider
 
 logger = structlog.get_logger(__name__)
+
 
 class STTService(STTProvider):
     """
     Speech-to-Text Service using the 'SpeechRecognition' library.
     Supports Google Web Speech API (default) and others.
     """
+
     def __init__(self):
         self.recognizer = None
         self.microphone = None
@@ -19,6 +22,7 @@ class STTService(STTProvider):
     def _initialize(self):
         try:
             import speech_recognition as sr
+
             self.recognizer = sr.Recognizer()
             self.microphone = sr.Microphone()
             self._available = True
@@ -33,10 +37,8 @@ class STTService(STTProvider):
             logger.warning("STT unavailable. Cannot listen.")
             return ""
 
-        import speech_recognition as sr
-        
         loop = asyncio.get_event_loop()
-        
+
         try:
             # Run blocking audio I/O in executor
             text = await loop.run_in_executor(None, self._listen_sync)
@@ -47,6 +49,7 @@ class STTService(STTProvider):
 
     def _listen_sync(self) -> str:
         import speech_recognition as sr
+
         with self.microphone as source:
             logger.info("Listening... (adjusting for ambient noise)")
             self.recognizer.adjust_for_ambient_noise(source, duration=0.5)

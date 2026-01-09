@@ -1,31 +1,31 @@
-import asyncio
+import json
 import os
-import contextlib
 from contextlib import asynccontextmanager
 
+import msgpack
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import json
-import msgpack
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.exception_handlers import add_exception_handlers
 from app.api.v1.router import api_router
 from app.config import settings
-
 from app.core.infrastructure import (
-    CorrelationMiddleware, RateLimitMiddleware, setup_logging, setup_tracing
+    CorrelationMiddleware,
+    RateLimitMiddleware,
+    setup_logging,
+    setup_tracing,
 )
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
-from fastapi.staticfiles import StaticFiles
 
 # Determine log path
 # In Docker, we want logs to land in the mapped volume /app/app/janus.log
 if os.path.isdir("/app/app"):
-    log_file = "/app/app/janus.log" 
+    log_file = "/app/app/janus.log"
 elif os.path.exists("app") and os.path.isdir("app"):
     log_file = "app/janus.log"
     log_file = "janus.log"
@@ -33,6 +33,7 @@ elif os.path.exists("app") and os.path.isdir("app"):
 print(f"[DEBUG_INIT] Log file selected: {log_file} (CWD: {os.getcwd()})")
 setup_logging(log_file=log_file)
 logger = structlog.get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI):
     app.state.memory_db = kernel.memory_db
     app.state.broker = kernel.broker
     app.state.agent_manager = kernel.agent_manager
-    
+
     app.state.agent_service = kernel.agent_service
     app.state.memory_service = kernel.memory_service
     app.state.knowledge_service = kernel.knowledge_service
@@ -63,14 +64,17 @@ async def lifespan(app: FastAPI):
     app.state.chat_service = kernel.chat_service
     app.state.assistant_service = kernel.assistant_service
     app.state.goal_manager = kernel.goal_manager
-    
+
     # Store workers in app state if needed by old shutdown logic, but we use kernel.shutdown now
     app.state.workers = kernel.workers
-    
+
     # 3. Initialize Rate Limits
     from app.core.llm.rate_limiter import configure_rate_limits_from_settings
+
     if hasattr(settings, "LLM_RATE_LIMITS") and settings.LLM_RATE_LIMITS:
-        configure_rate_limits_from_settings(settings.LLM_RATE_LIMITS, getattr(settings, "LLM_RATE_LIMIT_THRESHOLD", 0.80))
+        configure_rate_limits_from_settings(
+            settings.LLM_RATE_LIMITS, getattr(settings, "LLM_RATE_LIMIT_THRESHOLD", 0.80)
+        )
         logger.info("LLM Rate Limits initialized.")
 
     # 4. Initialize Firebase (Persistence) - MOVED TO KERNEL
@@ -88,7 +92,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Janus: An autonomous, modular AI software architect with a clean, decoupled architecture.",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 setup_tracing(app)
 
@@ -104,12 +108,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 add_exception_handlers(app)
- 
+
 # --- Autenticação por API Key (global) ---
 # Se a variável de ambiente PUBLIC_API_KEY estiver definida, exige o header X-API-Key
 API_KEY = getattr(settings, "PUBLIC_API_KEY", None)
 
 if API_KEY:
+
     @app.middleware("http")
     async def require_api_key(request: Request, call_next):
         path = request.url.path
@@ -122,6 +127,7 @@ if API_KEY:
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
 
+
 @app.middleware("http")
 async def actor_binding(request: Request, call_next):
     try:
@@ -130,7 +136,9 @@ async def actor_binding(request: Request, call_next):
         request.state.actor_user_id = None
     return await call_next(request)
 
+
 app.include_router(api_router, prefix="/api/v1")
+
 
 @app.middleware("http")
 async def msgpack_content_negotiation(request: Request, call_next):
@@ -148,13 +156,16 @@ async def msgpack_content_negotiation(request: Request, call_next):
                 return response
     return response
 
+
 @app.get("/", include_in_schema=False)
 def read_root():
     return {"message": f"Welcome to {settings.APP_NAME}. Docs available at /docs"}
 
+
 @app.get("/healthz", tags=["System"], summary="Health (basic)")
 def healthz():
     return {"status": "ok"}
+
 
 @app.get("/health", tags=["System"], summary="Health (detailed)")
 def health():
@@ -168,16 +179,22 @@ def health():
             "enabled": settings.TAILSCALE_SERVE_ENABLED,
             "host": settings.TAILSCALE_HOST,
             "backend_url": settings.TAILSCALE_BACKEND_URL,
-            "frontend_url": settings.TAILSCALE_FRONTEND_URL
-        } if settings.TAILSCALE_SERVE_ENABLED else None
+            "frontend_url": settings.TAILSCALE_FRONTEND_URL,
+        }
+        if settings.TAILSCALE_SERVE_ENABLED
+        else None,
     }
     return health_info
+
 
 try:
     if getattr(settings, "SERVE_STATIC_FILES", False):
         app.mount(
             "/static",
-            StaticFiles(directory=getattr(settings, "STATIC_FILES_DIR", "front/janus-angular/public"), check_dir=False),
+            StaticFiles(
+                directory=getattr(settings, "STATIC_FILES_DIR", "front/janus-angular/public"),
+                check_dir=False,
+            ),
             name="static",
         )
 
@@ -187,7 +204,9 @@ try:
             path = request.url.path
             if path.startswith("/static/") and response.status_code == 200:
                 try:
-                    response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+                    response.headers.setdefault(
+                        "Cache-Control", "public, max-age=31536000, immutable"
+                    )
                 except Exception:
                     pass
             return response

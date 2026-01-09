@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from app.repositories.observability_repository import ObservabilityRepository
 

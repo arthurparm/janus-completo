@@ -21,11 +21,11 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
-from app.core.infrastructure.filesystem_manager import write_file, read_file
+from app.core.infrastructure.filesystem_manager import read_file, write_file
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
@@ -34,32 +34,28 @@ logger = logging.getLogger(__name__)
 # ==================== MÉTRICAS ====================
 
 _TRAINING_JOBS = Counter(
-    "neural_training_jobs_total",
-    "Total de jobs de treinamento",
-    ["model_type", "outcome"]
+    "neural_training_jobs_total", "Total de jobs de treinamento", ["model_type", "outcome"]
 )
 
 _TRAINING_LATENCY = Histogram(
-    "neural_training_latency_seconds",
-    "Duração de treinamento de modelos"
+    "neural_training_latency_seconds", "Duração de treinamento de modelos"
 )
 
 _MODEL_ACCURACY = Gauge(
-    "neural_model_accuracy",
-    "Acurácia do modelo treinado",
-    ["model_name", "model_version"]
+    "neural_model_accuracy", "Acurácia do modelo treinado", ["model_name", "model_version"]
 )
 
 _TRAINING_EXAMPLES = Gauge(
-    "neural_training_examples_count",
-    "Número de exemplos no dataset de treino"
+    "neural_training_examples_count", "Número de exemplos no dataset de treino"
 )
 
 
 # ==================== ENUMS ====================
 
+
 class ModelType(Enum):
     """Tipos de modelos que podem ser treinados."""
+
     LLM_FINETUNING = "llm_finetuning"  # Fine-tune de LLM existente
     CLASSIFIER = "classifier"  # Classificador de intenções/categorias
     PREDICTOR = "predictor"  # Preditor de próximas ações
@@ -68,6 +64,7 @@ class ModelType(Enum):
 
 class TrainingStatus(Enum):
     """Status de um job de treinamento."""
+
     PENDING = "pending"
     PREPARING_DATA = "preparing_data"
     TRAINING = "training"
@@ -78,38 +75,42 @@ class TrainingStatus(Enum):
 
 # ==================== DATACLASSES ====================
 
+
 @dataclass
 class TrainingConfig:
     """Configuração para treinamento de modelo."""
+
     model_type: ModelType
     model_name: str
-    base_model: Optional[str] = None  # Modelo base para fine-tuning
+    base_model: str | None = None  # Modelo base para fine-tuning
     learning_rate: float = 1e-5
     batch_size: int = 8
     num_epochs: int = 3
     validation_split: float = 0.2
     early_stopping: bool = True
     save_checkpoints: bool = True
-    max_examples: Optional[int] = None
-    user_id: Optional[str] = None
+    max_examples: int | None = None
+    user_id: str | None = None
     data_source: str = "episodic_memory"
 
 
 @dataclass
 class TrainingResult:
     """Resultado de um job de treinamento."""
+
     model_name: str
     model_version: str
     status: TrainingStatus
-    accuracy: Optional[float] = None
-    loss: Optional[float] = None
+    accuracy: float | None = None
+    loss: float | None = None
     training_time_seconds: float = 0.0
     num_examples: int = 0
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ==================== PREPARADOR DE DATASETS ====================
+
 
 class DatasetPreparator:
     """
@@ -119,10 +120,7 @@ class DatasetPreparator:
     tipos de modelos.
     """
 
-    def prepare_for_llm_finetuning(
-            self,
-            experiences: List[Dict[str, Any]]
-    ) -> List[Dict[str, str]]:
+    def prepare_for_llm_finetuning(self, experiences: list[dict[str, Any]]) -> list[dict[str, str]]:
         """
         Prepara dataset para fine-tuning de LLM (formato chat/completion).
 
@@ -169,9 +167,8 @@ class DatasetPreparator:
         return dataset
 
     def prepare_for_classification(
-            self,
-            experiences: List[Dict[str, Any]]
-    ) -> tuple[List[str], List[str]]:
+        self, experiences: list[dict[str, Any]]
+    ) -> tuple[list[str], list[str]]:
         """
         Prepara dataset para treinamento de classificador.
 
@@ -191,42 +188,32 @@ class DatasetPreparator:
         logger.info(f"[DatasetPreparator] Preparados {len(texts)} exemplos para classificação")
         return texts, labels
 
-    def prepare_for_prediction(
-            self,
-            experiences: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def prepare_for_prediction(self, experiences: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Prepara dataset para predição de próximas ações.
 
         Cria pares de (contexto histórico) -> (próxima ação)
         """
         # Ordena por timestamp
-        sorted_exps = sorted(
-            experiences,
-            key=lambda x: x.get("metadata", {}).get("timestamp", 0)
-        )
+        sorted_exps = sorted(experiences, key=lambda x: x.get("metadata", {}).get("timestamp", 0))
 
         dataset = []
         window_size = 5  # Usa últimas 5 ações como contexto
 
         for i in range(window_size, len(sorted_exps)):
-            context = sorted_exps[i - window_size:i]
+            context = sorted_exps[i - window_size : i]
             next_action = sorted_exps[i]
 
-            context_text = "\n".join(
-                exp.get("content", "")[:100] for exp in context
-            )
+            context_text = "\n".join(exp.get("content", "")[:100] for exp in context)
 
-            dataset.append({
-                "context": context_text,
-                "next_action": next_action.get("content", "")
-            })
+            dataset.append({"context": context_text, "next_action": next_action.get("content", "")})
 
         logger.info(f"[DatasetPreparator] Preparados {len(dataset)} exemplos para predição")
         return dataset
 
 
 # ==================== TREINADOR DE MODELOS ====================
+
 
 class NeuralTrainer:
     """
@@ -245,10 +232,7 @@ class NeuralTrainer:
         self.models_dir = Path("/app/workspace/models")
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
-    async def train_model(
-            self,
-            config: TrainingConfig
-    ) -> TrainingResult:
+    async def train_model(self, config: TrainingConfig) -> TrainingResult:
         """
         Treina um modelo com a configuração especificada.
 
@@ -271,7 +255,7 @@ class NeuralTrainer:
                     model_name=config.model_name,
                     model_version="0.0.0",
                     status=TrainingStatus.FAILED,
-                    error="Nenhum dado de treino disponível"
+                    error="Nenhum dado de treino disponível",
                 )
 
             _TRAINING_EXAMPLES.set(len(experiences))
@@ -297,15 +281,12 @@ class NeuralTrainer:
             # Métricas
             _TRAINING_JOBS.labels(
                 config.model_type.value,
-                "success" if result.status == TrainingStatus.COMPLETED else "failure"
+                "success" if result.status == TrainingStatus.COMPLETED else "failure",
             ).inc()
             _TRAINING_LATENCY.observe(elapsed)
 
             if result.accuracy is not None:
-                _MODEL_ACCURACY.labels(
-                    config.model_name,
-                    result.model_version
-                ).set(result.accuracy)
+                _MODEL_ACCURACY.labels(config.model_name, result.model_version).set(result.accuracy)
 
             # Memoriza resultado
             await self._memorize_training(config, result)
@@ -322,13 +303,10 @@ class NeuralTrainer:
                 model_version="0.0.0",
                 status=TrainingStatus.FAILED,
                 error=str(e),
-                training_time_seconds=time.perf_counter() - start_time
+                training_time_seconds=time.perf_counter() - start_time,
             )
 
-    async def _load_training_data(
-            self,
-            config: TrainingConfig
-    ) -> List[Dict[str, Any]]:
+    async def _load_training_data(self, config: TrainingConfig) -> list[dict[str, Any]]:
         """Carrega dados de treino da memória episódica ou arquivo."""
         try:
             if config.data_source == "filesystem":
@@ -337,33 +315,32 @@ class NeuralTrainer:
                 if content.startswith("Erro:"):
                     logger.warning(f"Falha ao ler training_data.jsonl: {content}")
                     return []
-                
+
                 experiences = []
-                lines = [ln for ln in content.strip().split('\n') if ln.strip()]
-                
+                lines = [ln for ln in content.strip().split("\n") if ln.strip()]
+
                 # Apply limit if needed
                 if config.max_examples:
-                    lines = lines[:config.max_examples]
-                    
+                    lines = lines[: config.max_examples]
+
                 for ln in lines:
                     try:
                         item = json.loads(ln)
-                        experiences.append(item) 
+                        experiences.append(item)
                     except Exception:
                         continue
-                
+
                 logger.info(f"[NeuralTrainer] Carregados {len(experiences)} exemplos do arquivo")
                 return experiences
 
             query = "experiência de uso de ferramentas e aprendizado"
             memory_db = await get_memory_db()
-            experiences = await memory_db.arecall(
-                query=query,
-                limit=config.max_examples or 1000
-            )
+            experiences = await memory_db.arecall(query=query, limit=config.max_examples or 1000)
             if config.user_id:
                 uid = str(config.user_id)
-                experiences = [e for e in experiences if str(e.get("metadata", {}).get("user_id", "")) == uid]
+                experiences = [
+                    e for e in experiences if str(e.get("metadata", {}).get("user_id", "")) == uid
+                ]
 
             logger.info(f"[NeuralTrainer] Carregadas {len(experiences)} experiências para treino")
             return experiences
@@ -372,11 +349,7 @@ class NeuralTrainer:
             logger.error(f"[NeuralTrainer] Erro ao carregar dados: {e}", exc_info=True)
             return []
 
-    def _prepare_dataset(
-            self,
-            model_type: ModelType,
-            experiences: List[Dict[str, Any]]
-    ) -> Any:
+    def _prepare_dataset(self, model_type: ModelType, experiences: list[dict[str, Any]]) -> Any:
         """Prepara dataset baseado no tipo de modelo."""
         if model_type == ModelType.LLM_FINETUNING:
             return self.preparator.prepare_for_llm_finetuning(experiences)
@@ -387,11 +360,7 @@ class NeuralTrainer:
         else:
             return experiences
 
-    async def _train(
-            self,
-            config: TrainingConfig,
-            dataset: Any
-    ) -> TrainingResult:
+    async def _train(self, config: TrainingConfig, dataset: Any) -> TrainingResult:
         """
         Executa treinamento do modelo.
 
@@ -418,14 +387,10 @@ class NeuralTrainer:
             status=TrainingStatus.TRAINING,
             accuracy=simulated_accuracy,
             loss=simulated_loss,
-            num_examples=len(dataset)
+            num_examples=len(dataset),
         )
 
-    async def _validate(
-            self,
-            config: TrainingConfig,
-            result: TrainingResult
-    ) -> TrainingResult:
+    async def _validate(self, config: TrainingConfig, result: TrainingResult) -> TrainingResult:
         """Valida performance do modelo em dataset de validação."""
         logger.info(f"[NeuralTrainer] Validando modelo {config.model_name}...")
 
@@ -437,11 +402,7 @@ class NeuralTrainer:
 
         return result
 
-    async def _save_model(
-            self,
-            config: TrainingConfig,
-            result: TrainingResult
-    ) -> TrainingResult:
+    async def _save_model(self, config: TrainingConfig, result: TrainingResult) -> TrainingResult:
         """Salva modelo treinado em disco."""
         logger.info(f"[NeuralTrainer] Salvando modelo {config.model_name}...")
 
@@ -460,8 +421,8 @@ class NeuralTrainer:
             "config": {
                 "learning_rate": config.learning_rate,
                 "batch_size": config.batch_size,
-                "num_epochs": config.num_epochs
-            }
+                "num_epochs": config.num_epochs,
+            },
         }
 
         metadata_file = str(model_path / "metadata.json")
@@ -472,28 +433,26 @@ class NeuralTrainer:
 
         return result
 
-    async def _memorize_training(
-            self,
-            config: TrainingConfig,
-            result: TrainingResult
-    ):
+    async def _memorize_training(self, config: TrainingConfig, result: TrainingResult):
         """Memoriza resultado do treinamento."""
         try:
             memory_db = await get_memory_db()
-            await memory_db.amemorize(Experience(
-                type="neural_training",
-                content=f"Modelo '{config.model_name}' treinado com sucesso\n"
-                        f"Acurácia: {result.accuracy:.2%}\n"
-                        f"Exemplos: {result.num_examples}\n"
-                        f"Tempo: {result.training_time_seconds:.1f}s",
-                metadata={
-                    "model_name": config.model_name,
-                    "model_version": result.model_version,
-                    "model_type": config.model_type.value,
-                    "accuracy": result.accuracy,
-                    "origin": "neural_training"
-                }
-            ))
+            await memory_db.amemorize(
+                Experience(
+                    type="neural_training",
+                    content=f"Modelo '{config.model_name}' treinado com sucesso\n"
+                    f"Acurácia: {result.accuracy:.2%}\n"
+                    f"Exemplos: {result.num_examples}\n"
+                    f"Tempo: {result.training_time_seconds:.1f}s",
+                    metadata={
+                        "model_name": config.model_name,
+                        "model_version": result.model_version,
+                        "model_type": config.model_type.value,
+                        "accuracy": result.accuracy,
+                        "origin": "neural_training",
+                    },
+                )
+            )
         except Exception as e:
             logger.warning(f"Falha ao memorizar treino: {e}")
 

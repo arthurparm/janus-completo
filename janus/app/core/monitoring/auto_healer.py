@@ -12,27 +12,31 @@ Ações implementadas:
 - Reset oportunista de circuit breakers de provedores LLM abertos por muito tempo
 - Disparo de ciclo do Meta-Agente quando saúde geral degradada
 """
+
 import asyncio
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
-from app.core.monitoring.health_monitor import get_health_monitor, HealthStatus
 from app.core.infrastructure.message_broker import get_broker
+from app.core.monitoring.health_monitor import HealthStatus, get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.models.schemas import QueueName
 
 logger = logging.getLogger(__name__)
 
 # Flags/estado interno
-_healer_task: Optional[asyncio.Task] = None
-_last_actions: Dict[str, float] = {}
+_healer_task: asyncio.Task | None = None
+_last_actions: dict[str, float] = {}
 
 # Configuração via settings (com defaults seguros)
 try:
     from app.config import settings
+
     _HEAL_INTERVAL = int(getattr(settings, "AUTO_HEALER_INTERVAL_SECONDS", 30) or 30)
-    _LLM_CB_FORCE_RESET_SECONDS = float(getattr(settings, "LLM_CB_FORCE_RESET_SECONDS", 300) or 300.0)
+    _LLM_CB_FORCE_RESET_SECONDS = float(
+        getattr(settings, "LLM_CB_FORCE_RESET_SECONDS", 300) or 300.0
+    )
     _LLM_PENALTY_DECAY = float(getattr(settings, "LLM_PENALTY_DECAY", 0.10) or 0.10)
     _META_AGENT_ON_DEGRADE = bool(getattr(settings, "AUTO_HEALER_META_AGENT_ON_DEGRADE", True))
 except Exception:
@@ -67,7 +71,7 @@ async def _reconcile_queue_policies() -> None:
             try:
                 res = await broker.reconcile_queue_policy(q, force_delete=True)
                 logger.info(
-                    f"Auto-Healer: reconciliada política da fila '{q}' (status={res.get('status','unknown')})."
+                    f"Auto-Healer: reconciliada política da fila '{q}' (status={res.get('status', 'unknown')})."
                 )
             except Exception as qe:
                 logger.error(f"Auto-Healer: erro ao reconciliar fila '{q}': {qe}", exc_info=True)
@@ -90,7 +94,7 @@ async def _heal_llm_manager() -> None:
     """Decai penalizações e reseta circuitos abertos por muito tempo."""
     try:
         # Import interno para evitar ciclos
-        from app.core.llm.llm_manager import _provider_circuit_breakers, _model_penalty_factors
+        from app.core.llm.llm_manager import _model_penalty_factors, _provider_circuit_breakers
 
         # Decaimento suave das penalizações (não abaixo de 1.0)
         try:
@@ -115,17 +119,20 @@ async def _heal_llm_manager() -> None:
                             f"Auto-Healer: CircuitBreaker de '{provider}' resetado (aberto há muito tempo)."
                         )
             except Exception:
-                logger.warning(f"Auto-Healer: erro ao avaliar/resetar circuit breaker de '{provider}'.")
+                logger.warning(
+                    f"Auto-Healer: erro ao avaliar/resetar circuit breaker de '{provider}'."
+                )
     except Exception as e:
         logger.error(f"Auto-Healer: falha ao curar LLM Manager: {e}", exc_info=True)
 
 
-async def _maybe_trigger_meta_agent(system_status: Dict[str, Any]) -> None:
+async def _maybe_trigger_meta_agent(system_status: dict[str, Any]) -> None:
     """Dispara um ciclo do Meta-Agente em caso de degradação do sistema."""
     try:
         if not _META_AGENT_ON_DEGRADE:
             return
         from app.core.workers.meta_agent_worker import publish_meta_agent_cycle
+
         status = system_status.get("status", "unknown")
         score = int(system_status.get("score", 0) or 0)
         if status in {"degraded", "unhealthy"}:
@@ -135,14 +142,12 @@ async def _maybe_trigger_meta_agent(system_status: Dict[str, Any]) -> None:
             if now - last > max(60.0, _HEAL_INTERVAL * 2):
                 _last_actions["meta_agent_cycle"] = now
                 await publish_meta_agent_cycle(mode="auto_heal")
-                logger.info(
-                    f"Auto-Healer: meta-agente acionado (status={status}, score={score})."
-                )
+                logger.info(f"Auto-Healer: meta-agente acionado (status={status}, score={score}).")
     except Exception as e:
         logger.error(f"Auto-Healer: falha ao acionar meta-agente: {e}", exc_info=True)
 
 
-async def start_auto_healer(interval_seconds: Optional[int] = None) -> asyncio.Task:
+async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task:
     """
     Inicia a tarefa de auto-healing em background.
 
@@ -170,7 +175,10 @@ async def start_auto_healer(interval_seconds: Optional[int] = None) -> asyncio.T
                 # 1) Broker
                 try:
                     comp_broker = monitor.last_results.get("message_broker")
-                    if comp_broker and comp_broker.status in {HealthStatus.UNHEALTHY, HealthStatus.DEGRADED}:
+                    if comp_broker and comp_broker.status in {
+                        HealthStatus.UNHEALTHY,
+                        HealthStatus.DEGRADED,
+                    }:
                         await _heal_message_broker()
                 except Exception:
                     pass
@@ -178,7 +186,10 @@ async def start_auto_healer(interval_seconds: Optional[int] = None) -> asyncio.T
                 # 2) Políticas de filas
                 try:
                     comp_queue = monitor.last_results.get("rabbitmq_consolidation_queue_policy")
-                    if comp_queue and comp_queue.status in {HealthStatus.UNHEALTHY, HealthStatus.DEGRADED}:
+                    if comp_queue and comp_queue.status in {
+                        HealthStatus.UNHEALTHY,
+                        HealthStatus.DEGRADED,
+                    }:
                         await _reconcile_queue_policies()
                 except Exception:
                     pass
@@ -186,7 +197,10 @@ async def start_auto_healer(interval_seconds: Optional[int] = None) -> asyncio.T
                 # 3) Poison Pills
                 try:
                     comp_pp = monitor.last_results.get("poison_pill_handler")
-                    if comp_pp and comp_pp.status in {HealthStatus.UNHEALTHY, HealthStatus.DEGRADED}:
+                    if comp_pp and comp_pp.status in {
+                        HealthStatus.UNHEALTHY,
+                        HealthStatus.DEGRADED,
+                    }:
                         await _heal_poison_pills()
                 except Exception:
                     pass
@@ -194,7 +208,10 @@ async def start_auto_healer(interval_seconds: Optional[int] = None) -> asyncio.T
                 # 4) LLM Manager (decay/reset)
                 try:
                     comp_llm = monitor.last_results.get("llm_manager")
-                    if comp_llm and comp_llm.status in {HealthStatus.UNHEALTHY, HealthStatus.DEGRADED}:
+                    if comp_llm and comp_llm.status in {
+                        HealthStatus.UNHEALTHY,
+                        HealthStatus.DEGRADED,
+                    }:
                         await _heal_llm_manager()
                     else:
                         # Mesmo saudável, aplicamos um leve decaimento contínuo das penalizações

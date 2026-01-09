@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from app.models.schemas import TaskMessage, TaskState

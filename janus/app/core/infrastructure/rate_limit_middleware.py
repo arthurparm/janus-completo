@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import Dict, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -9,7 +8,7 @@ from app.config import settings
 
 
 class _TokenBucket:
-    def __init__(self, rate_per_minute: int, burst: Optional[int] = None):
+    def __init__(self, rate_per_minute: int, burst: int | None = None):
         self.capacity = max(1, burst or rate_per_minute)
         self.tokens = self.capacity
         self.rate_per_sec = rate_per_minute / 60.0
@@ -36,11 +35,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.enabled = getattr(settings, "RATE_LIMIT_ENABLED", True)
         self.ip_limit = max(1, getattr(settings, "RATE_LIMIT_PER_IP_PER_MIN", 60))
         self.key_limit = max(1, getattr(settings, "RATE_LIMIT_PER_KEY_PER_MIN", 300))
-        self._buckets_ip: Dict[str, _TokenBucket] = {}
-        self._buckets_key: Dict[str, _TokenBucket] = {}
+        self._buckets_ip: dict[str, _TokenBucket] = {}
+        self._buckets_key: dict[str, _TokenBucket] = {}
         self._lock = asyncio.Lock()
 
-    async def _get_bucket(self, store: Dict[str, _TokenBucket], key: str, rate: int) -> _TokenBucket:
+    async def _get_bucket(
+        self, store: dict[str, _TokenBucket], key: str, rate: int
+    ) -> _TokenBucket:
         b = store.get(key)
         if b is not None:
             return b
@@ -67,7 +68,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip_bucket = await self._get_bucket(self._buckets_ip, client_ip, self.ip_limit)
         if not await ip_bucket.allow():
             return Response(
-                content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per IP)","instance":"%s"}' % path,
+                content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per IP)","instance":"%s"}'
+                % path,
                 media_type="application/problem+json",
                 status_code=429,
                 headers={"Retry-After": "60"},
@@ -78,7 +80,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             key_bucket = await self._get_bucket(self._buckets_key, api_key, self.key_limit)
             if not await key_bucket.allow():
                 return Response(
-                    content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per API key)","instance":"%s"}' % path,
+                    content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per API key)","instance":"%s"}'
+                    % path,
                     media_type="application/problem+json",
                     status_code=429,
                     headers={"Retry-After": "60"},

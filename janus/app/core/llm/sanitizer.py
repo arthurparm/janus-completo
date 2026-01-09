@@ -1,8 +1,9 @@
-import re
 import logging
-from typing import Optional, Any
+import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
 
 class ContentSanitizer:
     """Handles sanitization of LLM outputs (identity enforcement, safety)."""
@@ -19,7 +20,7 @@ class ContentSanitizer:
         try:
             if not getattr(self.settings, "IDENTITY_ENFORCEMENT_ENABLED", False):
                 return text
-            
+
             sanitized = text
             # Remove common disclaimers (English/Portuguese)
             patterns_remove = [
@@ -33,7 +34,9 @@ class ContentSanitizer:
                 sanitized = re.sub(pat, "", sanitized)
 
             # Replace model/provider names with identity
-            identity = getattr(self.settings, "AGENT_IDENTITY_NAME", None) or getattr(self.settings, "APP_NAME", "Janus")
+            identity = getattr(self.settings, "AGENT_IDENTITY_NAME", None) or getattr(
+                self.settings, "APP_NAME", "Janus"
+            )
             patterns_replace = [
                 r"(?i)\bGPT[- ]?\d(?:\.\d)?\b",
                 r"(?i)\bChatGPT\b",

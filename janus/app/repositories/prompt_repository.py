@@ -3,20 +3,20 @@ Repositório para gerenciar prompts dinâmicos.
 Permite que o Meta-Agent atualize prompts baseado em análises de performance.
 """
 
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
+from sqlalchemy.orm import Session
 
-from app.models.config_models import Prompt
 from app.db.mysql_config import mysql_db
+from app.models.config_models import Prompt
 
 
 class PromptRepository:
     """Repositório para operações CRUD em prompts."""
 
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -26,29 +26,33 @@ class PromptRepository:
         return mysql_db.get_session_direct()
 
     def get_active_prompt(
-            self,
-            prompt_name: str,
-            namespace: str = "default",
-            language: str = "pt-BR",
-            model_target: str = "general"
-    ) -> Optional[Prompt]:
+        self,
+        prompt_name: str,
+        namespace: str = "default",
+        language: str = "pt-BR",
+        model_target: str = "general",
+    ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
         session = self._get_session()
         try:
-            return session.query(Prompt).filter(
-                and_(
-                    Prompt.prompt_name == prompt_name,
-                    Prompt.namespace == namespace,
-                    Prompt.language == language,
-                    Prompt.model_target == model_target,
-                    Prompt.is_active == True
+            return (
+                session.query(Prompt)
+                .filter(
+                    and_(
+                        Prompt.prompt_name == prompt_name,
+                        Prompt.namespace == namespace,
+                        Prompt.language == language,
+                        Prompt.model_target == model_target,
+                        Prompt.is_active,
+                    )
                 )
-            ).first()
+                .first()
+            )
         finally:
             if not self._session:
                 session.close()
 
-    def get_prompt_by_id(self, prompt_id: int) -> Optional[Prompt]:
+    def get_prompt_by_id(self, prompt_id: int) -> Prompt | None:
         """Obtém prompt por ID."""
         session = self._get_session()
         try:
@@ -57,30 +61,30 @@ class PromptRepository:
             if not self._session:
                 session.close()
 
-    def get_prompt_versions(self, prompt_name: str, namespace: str = "default") -> List[Prompt]:
+    def get_prompt_versions(self, prompt_name: str, namespace: str = "default") -> list[Prompt]:
         """Obtém todas as versões de um prompt."""
         session = self._get_session()
         try:
-            return session.query(Prompt).filter(
-                and_(
-                    Prompt.prompt_name == prompt_name,
-                    Prompt.namespace == namespace
-                )
-            ).order_by(desc(Prompt.created_at)).all()
+            return (
+                session.query(Prompt)
+                .filter(and_(Prompt.prompt_name == prompt_name, Prompt.namespace == namespace))
+                .order_by(desc(Prompt.created_at))
+                .all()
+            )
         finally:
             if not self._session:
                 session.close()
 
     def create_prompt_version(
-            self,
-            prompt_name: str,
-            prompt_text: str,
-            version: str,
-            namespace: str = "default",
-            language: str = "pt-BR",
-            model_target: str = "general",
-            created_by: str = "meta-agent",
-            activate: bool = False
+        self,
+        prompt_name: str,
+        prompt_text: str,
+        version: str,
+        namespace: str = "default",
+        language: str = "pt-BR",
+        model_target: str = "general",
+        created_by: str = "meta-agent",
+        activate: bool = False,
     ) -> Prompt:
         """Cria uma nova versão de prompt."""
         session = self._get_session()
@@ -97,7 +101,7 @@ class PromptRepository:
                 namespace=namespace,
                 language=language,
                 model_target=model_target,
-                created_by=created_by
+                created_by=created_by,
             )
 
             session.add(new_prompt)
@@ -118,11 +122,7 @@ class PromptRepository:
 
             # Desativar versão atual
             self._deactivate_prompt(
-                session,
-                prompt.prompt_name,
-                prompt.namespace,
-                prompt.language,
-                prompt.model_target
+                session, prompt.prompt_name, prompt.namespace, prompt.language, prompt.model_target
             )
 
             # Ativar nova versão
@@ -135,34 +135,33 @@ class PromptRepository:
                 session.close()
 
     def _deactivate_prompt(
-            self,
-            session: Session,
-            prompt_name: str,
-            namespace: str,
-            language: str,
-            model_target: str
+        self, session: Session, prompt_name: str, namespace: str, language: str, model_target: str
     ):
         """Desativa prompt ativo atual."""
-        current_active = session.query(Prompt).filter(
-            and_(
-                Prompt.prompt_name == prompt_name,
-                Prompt.namespace == namespace,
-                Prompt.language == language,
-                Prompt.model_target == model_target,
-                Prompt.is_active == True
+        current_active = (
+            session.query(Prompt)
+            .filter(
+                and_(
+                    Prompt.prompt_name == prompt_name,
+                    Prompt.namespace == namespace,
+                    Prompt.language == language,
+                    Prompt.model_target == model_target,
+                    Prompt.is_active,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if current_active:
             current_active.is_active = False
             current_active.updated_at = datetime.utcnow()
 
     def search_prompts(
-            self,
-            name_pattern: Optional[str] = None,
-            namespace: Optional[str] = None,
-            active_only: bool = True
-    ) -> List[Prompt]:
+        self,
+        name_pattern: str | None = None,
+        namespace: str | None = None,
+        active_only: bool = True,
+    ) -> list[Prompt]:
         """Busca prompts por padrão."""
         session = self._get_session()
         try:
@@ -175,26 +174,26 @@ class PromptRepository:
                 query = query.filter(Prompt.namespace == namespace)
 
             if active_only:
-                query = query.filter(Prompt.is_active == True)
+                query = query.filter(Prompt.is_active)
 
             return query.order_by(desc(Prompt.updated_at)).all()
         finally:
             if not self._session:
                 session.close()
 
-    def get_prompt_stats(self) -> Dict[str, Any]:
+    def get_prompt_stats(self) -> dict[str, Any]:
         """Obtém estatísticas dos prompts."""
         session = self._get_session()
         try:
             total_prompts = session.query(Prompt).count()
-            active_prompts = session.query(Prompt).filter(Prompt.is_active == True).count()
+            active_prompts = session.query(Prompt).filter(Prompt.is_active).count()
             namespaces = session.query(Prompt.namespace).distinct().count()
 
             return {
                 "total_prompts": total_prompts,
                 "active_prompts": active_prompts,
                 "namespaces": namespaces,
-                "inactive_prompts": total_prompts - active_prompts
+                "inactive_prompts": total_prompts - active_prompts,
             }
         finally:
             if not self._session:

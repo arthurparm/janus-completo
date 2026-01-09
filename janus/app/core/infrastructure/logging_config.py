@@ -1,11 +1,12 @@
 import contextvars
 import logging
+import os
 import random
 import sys
-import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import structlog
+
 from app.config import settings
 
 try:
@@ -20,7 +21,9 @@ except Exception:  # pragma: no cover
 TRACE_ID: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="-")
 USER_ID: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="-")
 SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("session_id", default="-")
-CONVERSATION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("conversation_id", default="-")
+CONVERSATION_ID: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "conversation_id", default="-"
+)
 PROJECT_ID: contextvars.ContextVar[str] = contextvars.ContextVar("project_id", default="-")
 
 
@@ -30,7 +33,7 @@ class _SamplingProcessor:
     def __init__(self, sampling: float = 1.0):
         self.sampling = max(0.0, min(1.0, sampling))
 
-    def __call__(self, logger: Any, method_name: str, event_dict: Dict[str, Any]):
+    def __call__(self, logger: Any, method_name: str, event_dict: dict[str, Any]):
         if self.sampling >= 1.0:
             return event_dict
         # Always keep warnings and above
@@ -42,7 +45,7 @@ class _SamplingProcessor:
         raise structlog.DropEvent
 
 
-def _add_trace_correlation(_, __, event_dict: Dict[str, Any]):
+def _add_trace_correlation(_, __, event_dict: dict[str, Any]):
     event_dict["trace_id"] = TRACE_ID.get()
     event_dict["user_id"] = USER_ID.get()
     event_dict["session_id"] = SESSION_ID.get()
@@ -63,7 +66,7 @@ def _add_trace_correlation(_, __, event_dict: Dict[str, Any]):
 _SENSITIVE_KEYS = ("api_key", "apikey", "password", "secret", "token", "authorization")
 
 
-def _redact_secrets(_, __, event_dict: Dict[str, Any]):
+def _redact_secrets(_, __, event_dict: dict[str, Any]):
     def _mask(value: Any) -> Any:
         s = str(value)
         if len(s) <= 8:
@@ -80,7 +83,7 @@ def _redact_secrets(_, __, event_dict: Dict[str, Any]):
 class _LevelFilter(logging.Filter):
     """Optional per-module level overrides."""
 
-    def __init__(self, module_levels: Optional[Dict[str, int]] = None):
+    def __init__(self, module_levels: dict[str, int] | None = None):
         super().__init__()
         self.module_levels = module_levels or {}
 
@@ -91,7 +94,12 @@ class _LevelFilter(logging.Filter):
         return True
 
 
-def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, int]] = None, sampling: float = 1.0, log_file: Optional[str] = "janus.log"):
+def setup_logging(
+    level: int = logging.INFO,
+    module_levels: dict[str, int] | None = None,
+    sampling: float = 1.0,
+    log_file: str | None = "janus.log",
+):
     """Configure structlog to emit JSON with correlation and safety.
 
     Args:
@@ -106,14 +114,14 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
 
     root = logging.getLogger()
     root.handlers = [handler]
-    
+
     if log_file:
         try:
             # Ensure directory exists if path has one
             log_dir = os.path.dirname(log_file)
             if log_dir and not os.path.exists(log_dir):
                 os.makedirs(log_dir, exist_ok=True)
-            
+
             file_handler = logging.FileHandler(log_file, encoding="utf-8")
             file_handler.setFormatter(logging.Formatter("%(message)s"))
             file_handler.addFilter(_LevelFilter(module_levels))
@@ -148,15 +156,17 @@ def setup_logging(level: int = logging.INFO, module_levels: Optional[Dict[str, i
         cache_logger_on_first_use=True,
     )
 
+
 def setup_tracing(app=None):
     try:
         if not getattr(settings, "OTEL_ENABLED", False):
             return
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-        from opentelemetry import trace
+
         service_name = getattr(settings, "OTEL_SERVICE_NAME", settings.APP_NAME)
         endpoint = getattr(settings, "OTEL_OTLP_ENDPOINT", None)
         resource = Resource.create({"service.name": service_name})
@@ -168,6 +178,7 @@ def setup_tracing(app=None):
         trace.set_tracer_provider(provider)
         if app is not None:
             from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
             FastAPIInstrumentor.instrument_app(app)
     except Exception:
         pass

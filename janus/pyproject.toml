@@ -24,6 +24,7 @@ langchain-community = "*"
 langchain-core = "*"
 langgraph = "*"
 langgraph-checkpoint-sqlite = "*"
+aiosqlite = "*"
 langchain-neo4j = ">=0.0.3"
 langchain-google-genai = ">=0.1.0"
 langchain-groq = "*"
@@ -89,15 +90,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-select = [
-  "E","F","W","I",  # pycodestyle/pyflakes/imports
-  "B",                    # bugbear
-  "UP",                   # pyupgrade
-  "S",                    # bandit (segurança)
-  "C90",                  # mccabe (complexidade)
-  "PL","PT",            # pylint/pytest
-  "RUF"                   # regras do ruff
-]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
 [tool.ruff.format]

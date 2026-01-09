@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class PendingAction(Base):
     __tablename__ = "pending_actions"
@@ -13,6 +15,4 @@ class PendingAction(Base):
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=func.current_timestamp())
     decided_at = Column(DateTime, nullable=True)
-    __table_args__ = (
-        Index("idx_pending_actions_user_status", "user_id", "status"),
-    )
+    __table_args__ = (Index("idx_pending_actions_user_status", "user_id", "status"),)

@@ -6,10 +6,8 @@ Comprehensive tests for audio services, API endpoints, and repository layer.
 """
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
 
+import pytest
 
 # ============================================================================
 # AUDIO/SENSES TESTS
@@ -17,7 +15,7 @@ from datetime import datetime
 
 class TestAudioInterfaces:
     """Tests for audio interfaces."""
-    
+
     def test_audio_interfaces_import(self):
         """Test audio interfaces can be imported."""
         try:
@@ -31,7 +29,7 @@ class TestAudioInterfaces:
 
 class TestSTTService:
     """Tests for Speech-to-Text service."""
-    
+
     def test_stt_service_import(self):
         """Test STTService can be imported."""
         try:
@@ -40,18 +38,18 @@ class TestSTTService:
             print("✓ STTService import available")
         except Exception as e:
             print(f"⚠ STTService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_stt_service_initialization(self):
         """Test STTService initialization."""
         try:
             from app.core.senses.audio.stt_service import STTService
-            
+
             service = STTService()
-            
+
             assert service is not None
             assert hasattr(service, 'transcribe') or hasattr(service, 'process')
-            
+
             print("✓ STTService initialization working")
         except Exception as e:
             print(f"⚠ STTService init: {e}")
@@ -59,7 +57,7 @@ class TestSTTService:
 
 class TestTTSService:
     """Tests for Text-to-Speech service."""
-    
+
     def test_tts_service_import(self):
         """Test TTSService can be imported."""
         try:
@@ -68,18 +66,18 @@ class TestTTSService:
             print("✓ TTSService import available")
         except Exception as e:
             print(f"⚠ TTSService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_tts_service_initialization(self):
         """Test TTSService initialization."""
         try:
             from app.core.senses.audio.tts_service import TTSService
-            
+
             service = TTSService()
-            
+
             assert service is not None
             assert hasattr(service, 'synthesize') or hasattr(service, 'speak')
-            
+
             print("✓ TTSService initialization working")
         except Exception as e:
             print(f"⚠ TTSService init: {e}")
@@ -87,7 +85,7 @@ class TestTTSService:
 
 class TestWakeWordService:
     """Tests for WakeWord detection service."""
-    
+
     def test_wakeword_service_import(self):
         """Test WakeWordService can be imported."""
         try:
@@ -100,7 +98,7 @@ class TestWakeWordService:
 
 class TestAudioManager:
     """Tests for AudioManager."""
-    
+
     def test_audio_manager_import(self):
         """Test AudioManager can be imported."""
         try:
@@ -117,7 +115,7 @@ class TestAudioManager:
 
 class TestAPIRouter:
     """Tests for API v1 router."""
-    
+
     def test_v1_router_import(self):
         """Test v1 router can be imported."""
         try:
@@ -126,15 +124,15 @@ class TestAPIRouter:
             print("✓ API v1 router available")
         except Exception as e:
             print(f"⚠ API v1 router: {e}")
-    
+
     def test_api_router_has_routes(self):
         """Test router has routes defined."""
         try:
             from app.api.v1.router import router
-            
+
             routes = list(router.routes)
             assert len(routes) > 0
-            
+
             print(f"✓ API router has {len(routes)} routes")
         except Exception as e:
             print(f"⚠ API router routes: {e}")
@@ -142,7 +140,7 @@ class TestAPIRouter:
 
 class TestExceptionHandlers:
     """Tests for exception handlers."""
-    
+
     def test_exception_handlers_import(self):
         """Test exception handlers can be imported."""
         try:
@@ -155,7 +153,7 @@ class TestExceptionHandlers:
 
 class TestProblemDetails:
     """Tests for problem details (RFC 7807)."""
-    
+
     def test_problem_details_import(self):
         """Test ProblemDetail can be imported."""
         try:
@@ -172,7 +170,7 @@ class TestProblemDetails:
 
 class TestChatRepository:
     """Tests for ChatRepository."""
-    
+
     def test_chat_repository_import(self):
         """Test ChatRepository can be imported."""
         try:
@@ -185,7 +183,7 @@ class TestChatRepository:
 
 class TestChatRepositorySQL:
     """Tests for ChatRepositorySQL."""
-    
+
     def test_chat_repository_sql_import(self):
         """Test ChatRepositorySQL can be imported."""
         try:
@@ -198,7 +196,7 @@ class TestChatRepositorySQL:
 
 class TestKnowledgeRepository:
     """Tests for KnowledgeRepository."""
-    
+
     def test_knowledge_repository_import(self):
         """Test KnowledgeRepository can be imported."""
         try:
@@ -211,7 +209,7 @@ class TestKnowledgeRepository:
 
 class TestLearningRepository:
     """Tests for LearningRepository."""
-    
+
     def test_learning_repository_import(self):
         """Test LearningRepository can be imported."""
         try:
@@ -224,7 +222,7 @@ class TestLearningRepository:
 
 class TestLLMRepository:
     """Tests for LLMRepository."""
-    
+
     def test_llm_repository_import(self):
         """Test LLMRepository can be imported."""
         try:
@@ -237,7 +235,7 @@ class TestLLMRepository:
 
 class TestObservabilityRepository:
     """Tests for ObservabilityRepository."""
-    
+
     def test_observability_repository_import(self):
         """Test ObservabilityRepository can be imported."""
         try:
@@ -250,7 +248,7 @@ class TestObservabilityRepository:
 
 class TestAgentConfigRepository:
     """Tests for AgentConfigRepository."""
-    
+
     def test_agent_config_repository_import(self):
         """Test AgentConfigRepository can be imported."""
         try:
@@ -263,7 +261,7 @@ class TestAgentConfigRepository:
 
 class TestAgentRepository:
     """Tests for AgentRepository."""
-    
+
     def test_agent_repository_import(self):
         """Test AgentRepository can be imported."""
         try:
@@ -276,7 +274,7 @@ class TestAgentRepository:
 
 class TestAutonomyRepository:
     """Tests for AutonomyRepository."""
-    
+
     def test_autonomy_repository_import(self):
         """Test AutonomyRepository can be imported."""
         try:
@@ -289,7 +287,7 @@ class TestAutonomyRepository:
 
 class TestCollaborationRepository:
     """Tests for CollaborationRepository."""
-    
+
     def test_collaboration_repository_import(self):
         """Test CollaborationRepository can be imported."""
         try:
@@ -302,7 +300,7 @@ class TestCollaborationRepository:
 
 class TestContextRepository:
     """Tests for ContextRepository."""
-    
+
     def test_context_repository_import(self):
         """Test ContextRepository can be imported."""
         try:
@@ -315,7 +313,7 @@ class TestContextRepository:
 
 class TestDeploymentRepository:
     """Tests for DeploymentRepository."""
-    
+
     def test_deployment_repository_import(self):
         """Test DeploymentRepository can be imported."""
         try:
@@ -328,7 +326,7 @@ class TestDeploymentRepository:
 
 class TestMemoryRepository:
     """Tests for MemoryRepository."""
-    
+
     def test_memory_repository_import(self):
         """Test MemoryRepository can be imported."""
         try:
@@ -341,7 +339,7 @@ class TestMemoryRepository:
 
 class TestOptimizationRepository:
     """Tests for OptimizationRepository."""
-    
+
     def test_optimization_repository_import(self):
         """Test OptimizationRepository can be imported."""
         try:
@@ -354,7 +352,7 @@ class TestOptimizationRepository:
 
 class TestPendingActionRepository:
     """Tests for PendingActionRepository."""
-    
+
     def test_pending_action_repository_import(self):
         """Test PendingActionRepository can be imported."""
         try:
@@ -367,7 +365,7 @@ class TestPendingActionRepository:
 
 class TestPromptRepository:
     """Tests for PromptRepository."""
-    
+
     def test_prompt_repository_import(self):
         """Test PromptRepository can be imported."""
         try:
@@ -380,7 +378,7 @@ class TestPromptRepository:
 
 class TestReflexionRepository:
     """Tests for ReflexionRepository."""
-    
+
     def test_reflexion_repository_import(self):
         """Test ReflexionRepository can be imported."""
         try:
@@ -393,7 +391,7 @@ class TestReflexionRepository:
 
 class TestSandboxRepository:
     """Tests for SandboxRepository."""
-    
+
     def test_sandbox_repository_import(self):
         """Test SandboxRepository can be imported."""
         try:
@@ -406,7 +404,7 @@ class TestSandboxRepository:
 
 class TestTaskRepository:
     """Tests for TaskRepository."""
-    
+
     def test_task_repository_import(self):
         """Test TaskRepository can be imported."""
         try:
@@ -419,7 +417,7 @@ class TestTaskRepository:
 
 class TestToolRepository:
     """Tests for ToolRepository."""
-    
+
     def test_tool_repository_import(self):
         """Test ToolRepository can be imported."""
         try:
@@ -432,7 +430,7 @@ class TestToolRepository:
 
 class TestUserRepository:
     """Tests for UserRepository."""
-    
+
     def test_user_repository_import(self):
         """Test UserRepository can be imported."""
         try:
@@ -445,7 +443,7 @@ class TestUserRepository:
 
 class TestABExperimentRepository:
     """Tests for ABExperimentRepository."""
-    
+
     def test_ab_experiment_repository_import(self):
         """Test ABExperimentRepository can be imported."""
         try:
@@ -458,7 +456,7 @@ class TestABExperimentRepository:
 
 class TestConsentRepository:
     """Tests for ConsentRepository."""
-    
+
     def test_consent_repository_import(self):
         """Test ConsentRepository can be imported."""
         try:
@@ -478,13 +476,13 @@ async def run_all_tests():
     print("=" * 60)
     print("JANUS AUDIO, API & REPOSITORIES TEST SUITE")
     print("=" * 60)
-    
+
     results = {
         "passed": 0,
         "failed": 0,
         "skipped": 0
     }
-    
+
     test_classes = [
         # Audio/Senses
         TestAudioInterfaces(),
@@ -521,10 +519,10 @@ async def run_all_tests():
         TestABExperimentRepository(),
         TestConsentRepository(),
     ]
-    
+
     for test_class in test_classes:
         print(f"\n--- {test_class.__class__.__name__} ---")
-        
+
         for method_name in dir(test_class):
             if method_name.startswith("test_"):
                 method = getattr(test_class, method_name)
@@ -537,11 +535,11 @@ async def run_all_tests():
                 except Exception as e:
                     print(f"✗ {method_name}: {e}")
                     results["failed"] += 1
-    
+
     print("\n" + "=" * 60)
     print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
     print("=" * 60)
-    
+
     return results["failed"] == 0
 
 if __name__ == "__main__":

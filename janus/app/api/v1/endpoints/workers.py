@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -8,7 +8,7 @@ from app.core.workers.orchestrator import start_all_workers
 router = APIRouter(tags=["Workers"])
 
 
-def _task_status(task: asyncio.Task) -> Dict[str, Any]:
+def _task_status(task: asyncio.Task) -> dict[str, Any]:
     try:
         running = not task.done() and not task.cancelled()
         done = task.done()
@@ -33,8 +33,15 @@ def _task_status(task: asyncio.Task) -> Dict[str, Any]:
 async def start_workers(request: Request):
     app = request.app
     # Prevent double-start if any existing worker is still running
-    current: List[Dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
-    if any((isinstance(w.get("task"), asyncio.Task) and not w["task"].done() and not w["task"].cancelled()) for w in current):
+    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    if any(
+        (
+            isinstance(w.get("task"), asyncio.Task)
+            and not w["task"].done()
+            and not w["task"].cancelled()
+        )
+        for w in current
+    ):
         raise HTTPException(status_code=400, detail="Workers already running. Stop them first.")
 
     workers = await start_all_workers()
@@ -68,7 +75,7 @@ async def start_workers(request: Request):
 @router.post("/stop-all", summary="Stop all orchestrator-managed workers")
 async def stop_workers(request: Request):
     app = request.app
-    current: List[Dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
     if not current:
         return {"status": "ok", "message": "No workers tracked", "count": 0}
 
@@ -87,7 +94,7 @@ async def stop_workers(request: Request):
 @router.get("/status", summary="Get status for orchestrator-managed workers")
 async def workers_status(request: Request):
     app = request.app
-    current: List[Dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
     return {
         "tracked": len(current),
         "workers": [{"name": w["name"], **_task_status(w["task"])} for w in current],

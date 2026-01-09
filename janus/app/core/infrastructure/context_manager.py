@@ -9,15 +9,15 @@ Responsável por enriquecer o contexto do agente com informações sobre o ambie
 
 import logging
 import platform
-import time
 import threading
+import time
 from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
+import msgpack
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from pydantic import BaseModel, Field
-import msgpack
 
 from app.config import settings
 
@@ -32,32 +32,29 @@ except Exception:
     _PROM_ENABLED = False
 
 if _PROM_ENABLED:
-    _WEB_CACHE_HITS = Counter(
-        "context_web_cache_hits_total",
-        "Total de hits no cache de busca web"
-    )
+    _WEB_CACHE_HITS = Counter("context_web_cache_hits_total", "Total de hits no cache de busca web")
     _WEB_CACHE_MISSES = Counter(
-        "context_web_cache_misses_total",
-        "Total de misses no cache de busca web"
+        "context_web_cache_misses_total", "Total de misses no cache de busca web"
     )
     _WEB_CACHE_SIZE = Gauge(
-        "context_web_cache_size",
-        "Itens atualmente armazenados no cache de busca web"
+        "context_web_cache_size", "Itens atualmente armazenados no cache de busca web"
     )
 
 
 class ContextInfo(BaseModel):
     """Informações de contexto ambiental."""
+
     timestamp: str = Field(description="Timestamp UTC atual")
-    datetime_info: Dict[str, str] = Field(description="Informações detalhadas de data/hora")
-    system_info: Dict[str, str] = Field(description="Informações do sistema")
+    datetime_info: dict[str, str] = Field(description="Informações detalhadas de data/hora")
+    system_info: dict[str, str] = Field(description="Informações do sistema")
     environment: str = Field(description="Ambiente de execução")
 
 
 class WebSearchResult(BaseModel):
     """Resultado de busca na web."""
+
     query: str = Field(description="Query utilizada")
-    results: List[Dict[str, Any]] = Field(description="Resultados da busca")
+    results: list[dict[str, Any]] = Field(description="Resultados da busca")
     timestamp: str = Field(description="Timestamp da busca")
 
     def to_msgpack(self) -> bytes:
@@ -75,11 +72,11 @@ class ContextManager:
     """
 
     def __init__(self):
-        self._tavily_client: Optional[TavilySearchAPIWrapper] = None
+        self._tavily_client: TavilySearchAPIWrapper | None = None
         self._init_web_search()
 
         # Cache de busca web (LRU + TTL)
-        self._web_cache: "OrderedDict[str, Tuple[float, WebSearchResult]]" = OrderedDict()
+        self._web_cache: OrderedDict[str, tuple[float, WebSearchResult]] = OrderedDict()
         self._web_cache_lock = threading.Lock()
         self._cache_hits = 0
         self._cache_misses = 0
@@ -109,7 +106,7 @@ class ContextManager:
             ContextInfo com timestamp, data/hora e informações do sistema
         """
         logger.info("[GET_CURRENT_CONTEXT] Iniciando obtenção de contexto atual")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         context = ContextInfo(
             timestamp=now.isoformat(),
@@ -120,26 +117,24 @@ class ContextManager:
                 "day_of_week": now.strftime("%A"),
                 "month": now.strftime("%B"),
                 "year": str(now.year),
-                "unix_timestamp": str(int(now.timestamp()))
+                "unix_timestamp": str(int(now.timestamp())),
             },
             system_info={
                 "platform": platform.system(),
                 "platform_version": platform.version(),
                 "architecture": platform.machine(),
-                "python_version": platform.python_version()
+                "python_version": platform.python_version(),
             },
-            environment=settings.ENVIRONMENT
+            environment=settings.ENVIRONMENT,
         )
 
         logger.info(
-            f"[GET_CURRENT_CONTEXT] ✓ Contexto obtido - {context.datetime_info['utc']}, {context.system_info['platform']}")
+            f"[GET_CURRENT_CONTEXT] ✓ Contexto obtido - {context.datetime_info['utc']}, {context.system_info['platform']}"
+        )
         return context
 
     def search_web(
-            self,
-            query: str,
-            max_results: int = 5,
-            search_depth: str = "basic"
+        self, query: str, max_results: int = 5, search_depth: str = "basic"
     ) -> WebSearchResult:
         """
         Realiza busca na web usando Tavily.
@@ -155,12 +150,14 @@ class ContextManager:
         Raises:
             RuntimeError: Se o cliente Tavily não estiver disponível
         """
-        logger.info(f"[SEARCH_WEB] Iniciando busca - query='{query}', max_results={max_results}, depth={search_depth}")
+        logger.info(
+            f"[SEARCH_WEB] Iniciando busca - query='{query}', max_results={max_results}, depth={search_depth}"
+        )
 
         # Verifica cache antes de chamar Tavily
         key = self._make_cache_key(query, max_results, search_depth)
         now = time.time()
-        cached: Optional[WebSearchResult] = None
+        cached: WebSearchResult | None = None
         with self._web_cache_lock:
             item = self._web_cache.get(key)
             if item:
@@ -186,46 +183,44 @@ class ContextManager:
 
         if not self._tavily_client:
             logger.warning("[SEARCH_WEB] ⚠️ Tavily não disponível. Retornando resultados vazios.")
-            return WebSearchResult(
-                query=query,
-                results=[],
-                timestamp=datetime.now(timezone.utc).isoformat()
-            )
+            return WebSearchResult(query=query, results=[], timestamp=datetime.now(UTC).isoformat())
 
         try:
             logger.info(f"[SEARCH_WEB] Chamando Tavily API para '{query}'")
             # Tavily API call - usa método run() que retorna string formatada
             raw_results = self._tavily_client.raw_results(
-                query=query,
-                max_results=max_results,
-                search_depth=search_depth
+                query=query, max_results=max_results, search_depth=search_depth
             )
 
             logger.info(f"[SEARCH_WEB] Tavily API respondeu - tipo: {type(raw_results)}")
             logger.info(
-                f"[SEARCH_WEB] Raw results keys: {raw_results.keys() if isinstance(raw_results, dict) else 'N/A'}")
+                f"[SEARCH_WEB] Raw results keys: {raw_results.keys() if isinstance(raw_results, dict) else 'N/A'}"
+            )
 
             # Estrutura os resultados
             results = []
             if isinstance(raw_results, dict) and "results" in raw_results:
-                logger.info(f"[SEARCH_WEB] Encontrado campo 'results' com {len(raw_results['results'])} itens")
+                logger.info(
+                    f"[SEARCH_WEB] Encontrado campo 'results' com {len(raw_results['results'])} itens"
+                )
                 for item in raw_results["results"][:max_results]:
-                    results.append({
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "content": item.get("content", ""),
-                        "score": item.get("score", 0.0)
-                    })
+                    results.append(
+                        {
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "content": item.get("content", ""),
+                            "score": item.get("score", 0.0),
+                        }
+                    )
             else:
                 logger.warning(
-                    f"[SEARCH_WEB] ⚠️ Formato inesperado - tipo={type(raw_results)}, conteúdo={str(raw_results)[:200]}")
+                    f"[SEARCH_WEB] ⚠️ Formato inesperado - tipo={type(raw_results)}, conteúdo={str(raw_results)[:200]}"
+                )
 
             logger.info(f"[SEARCH_WEB] ✓ Busca concluída: '{query}' - {len(results)} resultados")
 
             result_obj = WebSearchResult(
-                query=query,
-                results=results,
-                timestamp=datetime.now(timezone.utc).isoformat()
+                query=query, results=results, timestamp=datetime.now(UTC).isoformat()
             )
 
             # Armazenar no cache
@@ -241,17 +236,13 @@ class ContextManager:
 
         except Exception as e:
             logger.error(f"[SEARCH_WEB] ❌ Erro ao buscar na web: {e}", exc_info=True)
-            return WebSearchResult(
-                query=query,
-                results=[],
-                timestamp=datetime.now(timezone.utc).isoformat()
-            )
+            return WebSearchResult(query=query, results=[], timestamp=datetime.now(UTC).isoformat())
 
     def _make_cache_key(self, query: str, max_results: int, search_depth: str) -> str:
         q = (query or "").strip().lower()
         return f"{q}|{max_results}|{search_depth}"
 
-    def get_web_cache_status(self) -> Dict[str, Any]:
+    def get_web_cache_status(self) -> dict[str, Any]:
         """Retorna status atual do cache de busca web."""
         with self._web_cache_lock:
             size = len(self._web_cache)
@@ -260,11 +251,11 @@ class ContextManager:
             "ttl_seconds": self._cache_ttl,
             "max_items": self._cache_max_items,
             "hits": self._cache_hits,
-            "misses": self._cache_misses
+            "misses": self._cache_misses,
         }
         return status
 
-    def invalidate_web_cache(self, query: Optional[str] = None) -> Dict[str, Any]:
+    def invalidate_web_cache(self, query: str | None = None) -> dict[str, Any]:
         """Invalida entradas do cache. Se query for None, limpa todo o cache."""
         removed = 0
         with self._web_cache_lock:
@@ -282,11 +273,8 @@ class ContextManager:
         return {"removed": removed, "remaining": len(self._web_cache)}
 
     def get_enriched_context(
-            self,
-            query: Optional[str] = None,
-            include_web_search: bool = False,
-            max_web_results: int = 3
-    ) -> Dict[str, Any]:
+        self, query: str | None = None, include_web_search: bool = False, max_web_results: int = 3
+    ) -> dict[str, Any]:
         """
         Retorna contexto enriquecido, opcionalmente incluindo busca na web.
 
@@ -298,19 +286,20 @@ class ContextManager:
         Returns:
             Dict com contexto completo
         """
-        logger.info(f"[GET_ENRICHED_CONTEXT] Iniciando - include_web={include_web_search}, query='{query}'")
+        logger.info(
+            f"[GET_ENRICHED_CONTEXT] Iniciando - include_web={include_web_search}, query='{query}'"
+        )
 
         logger.info("[GET_ENRICHED_CONTEXT] Obtendo contexto ambiental")
-        context = {
-            "environmental": self.get_current_context().model_dump(),
-            "web_search": None
-        }
+        context = {"environmental": self.get_current_context().model_dump(), "web_search": None}
 
         if include_web_search and query:
             logger.info(f"[GET_ENRICHED_CONTEXT] Incluindo busca web para '{query}'")
             web_results = self.search_web(query, max_results=max_web_results)
             context["web_search"] = web_results.model_dump()
-            logger.info(f"[GET_ENRICHED_CONTEXT] ✓ Busca web incluída - {len(web_results.results)} resultados")
+            logger.info(
+                f"[GET_ENRICHED_CONTEXT] ✓ Busca web incluída - {len(web_results.results)} resultados"
+            )
         else:
             logger.info("[GET_ENRICHED_CONTEXT] Busca web não solicitada")
 
@@ -318,10 +307,10 @@ class ContextManager:
         return context
 
     def format_context_for_prompt(
-            self,
-            include_datetime: bool = True,
-            include_system: bool = False,
-            web_results: Optional[WebSearchResult] = None
+        self,
+        include_datetime: bool = True,
+        include_system: bool = False,
+        web_results: WebSearchResult | None = None,
     ) -> str:
         """
         Formata o contexto como string para inclusão em prompts.
@@ -335,7 +324,8 @@ class ContextManager:
             String formatada com o contexto
         """
         logger.info(
-            f"[FORMAT_CONTEXT] Iniciando formatação - datetime={include_datetime}, system={include_system}, has_web={web_results is not None}")
+            f"[FORMAT_CONTEXT] Iniciando formatação - datetime={include_datetime}, system={include_system}, has_web={web_results is not None}"
+        )
 
         parts = []
 
@@ -352,7 +342,9 @@ class ContextManager:
             parts.append(f"Ambiente: {ctx.environment}")
 
         if web_results and web_results.results:
-            logger.info(f"[FORMAT_CONTEXT] Incluindo {len(web_results.results)} resultados de busca web")
+            logger.info(
+                f"[FORMAT_CONTEXT] Incluindo {len(web_results.results)} resultados de busca web"
+            )
             parts.append(f"\nResultados da Busca Web ('{web_results.query}'):")
             for i, result in enumerate(web_results.results, 1):
                 parts.append(f"{i}. {result['title']}")

@@ -1,10 +1,11 @@
-import structlog
-from typing import Dict, Any, Optional
-import time
-import platform
 import os
+import platform
 import threading
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
+from typing import Any
+
+import structlog
 
 from app.config import settings
 
@@ -19,14 +20,14 @@ class SystemStatusService:
     _START_TS = time.time()
     _PID = os.getpid()
 
-    def get_system_status(self) -> Dict[str, Any]:
+    def get_system_status(self) -> dict[str, Any]:
         """
         Coleta e retorna informações de status da aplicação.
-        
+
         No futuro, pode ser expandido para incluir health checks de dependências.
         """
         logger.info("Coletando status do sistema.")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         uptime_s = max(0.0, time.time() - self._START_TS)
 
         # Info de sistema
@@ -39,13 +40,14 @@ class SystemStatusService:
         }
 
         # Info de processo
-        proc_info: Dict[str, Any] = {
+        proc_info: dict[str, Any] = {
             "pid": self._PID,
             "threads": threading.active_count(),
         }
         # Tenta incluir memória RSS via psutil, se disponível
         try:
             import psutil  # type: ignore
+
             p = psutil.Process(self._PID)
             rss_mb = float(p.memory_info().rss) / (1024 * 1024)
             proc_info["rss_mb"] = round(rss_mb, 2)
@@ -53,9 +55,10 @@ class SystemStatusService:
             logger.debug(f"Failed to get process info: {e}")
 
         # Métricas de performance (CPU/Memória), se psutil disponível
-        perf: Dict[str, Optional[float]] = {}
+        perf: dict[str, float | None] = {}
         try:
             import psutil  # type: ignore
+
             perf["cpu_percent"] = float(psutil.cpu_percent(interval=0.0))
             perf["memory_percent"] = float(psutil.virtual_memory().percent)
         except Exception as e:
@@ -70,7 +73,9 @@ class SystemStatusService:
         }
         try:
             providers_cfg = getattr(settings, "LLM_PROVIDERS", {})
-            cfg["providers_configured"] = len(providers_cfg) if isinstance(providers_cfg, dict) else 0
+            cfg["providers_configured"] = (
+                len(providers_cfg) if isinstance(providers_cfg, dict) else 0
+            )
         except Exception as e:
             logger.debug(f"Failed to read providers config: {e}")
             cfg["providers_configured"] = 0

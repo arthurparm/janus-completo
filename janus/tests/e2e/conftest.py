@@ -1,7 +1,8 @@
-import pytest
 import os
-import requests
 from typing import Generator
+
+import pytest
+import requests
 
 # Helper to allow running tests both locally (against container) and inside container
 # Default to "janus-api" service name (for inside container), fallback to localhost
@@ -27,7 +28,7 @@ def api_client():
         def post(self, path, **kwargs):
             url = f"{BASE_URL}{path}"
             return requests.post(url, **kwargs)
-            
+
     return Client()
 
 @pytest.fixture(scope="module")
@@ -37,8 +38,8 @@ def active_conversation(api_client) -> Generator[str, None, None]:
     assert resp.status_code == 200
     conversation_id = resp.json().get("conversation_id")
     assert conversation_id is not None
-    
+
     yield conversation_id
-    
+
     # Teardown
     api_client.post("/chat/end", json={"conversation_id": conversation_id})

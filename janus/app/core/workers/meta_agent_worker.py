@@ -4,22 +4,23 @@ Meta-Agent Cycle Worker
 Consome mensagens da fila janus.meta_agent.cycle e dispara ciclos de análise
 pontuais do Meta-Agente.
 """
+
 import logging
-import uuid
 import time
+import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
 from prometheus_client import Counter, Histogram
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.memory.memory_core import get_memory_db
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, QueueName
+from app.models.schemas import QueueName, TaskMessage
 
 # Novas dependências para persistência de falhas em memória
 from app.repositories.memory_repository import MemoryRepository
 from app.services.memory_service import MemoryService
-from app.core.memory.memory_core import get_memory_db
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ _META_AGENT_PROCESSING_SECONDS = Histogram(
 )
 
 # Instância lazy para MemoryService (reutilizada entre handlers)
-_memory_service: Optional[MemoryService] = None
+_memory_service: MemoryService | None = None
 
 
 async def _ensure_memory_initialized() -> None:
@@ -61,6 +62,7 @@ async def process_meta_agent_cycle(task: TaskMessage) -> None:
     start = time.perf_counter()
     try:
         from app.core.agents.meta_agent import get_meta_agent
+
         meta_agent = get_meta_agent()
         report = await meta_agent.run_analysis_cycle()
 
@@ -85,7 +87,7 @@ async def publish_meta_agent_cycle(mode: str = "single", priority: int = 5) -> s
     Prioridade padrão 5 (0-9). A fila deve possuir `x-max-priority`.
     """
     task_id = str(uuid.uuid4())
-    payload: Dict[str, Any] = {"mode": mode}
+    payload: dict[str, Any] = {"mode": mode}
     task_message = TaskMessage(
         task_id=task_id,
         task_type="meta_agent_cycle",
@@ -152,11 +154,13 @@ async def process_failure_event(task: TaskMessage) -> None:
         }
         # Anexar contexto relevante se presente
         if isinstance(context, dict):
-            meta.update({
-                "conversation_id": context.get("conversation_id"),
-                "interaction_id": context.get("interaction_id"),
-                "task_preview": (context.get("task") or "")[:300],
-            })
+            meta.update(
+                {
+                    "conversation_id": context.get("conversation_id"),
+                    "interaction_id": context.get("interaction_id"),
+                    "task_preview": (context.get("task") or "")[:300],
+                }
+            )
         await _memory_service.add_experience(
             type="action_failure",
             content=f"Failure detected: {reason}",

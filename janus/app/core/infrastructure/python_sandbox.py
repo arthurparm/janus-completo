@@ -5,11 +5,10 @@ Executa código Python de forma isolada e segura usando RestrictedPython.
 
 import io
 import logging
-import sys
 import time
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Any
 
 from app.config import settings
 
@@ -19,13 +18,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionResult:
     """Resultado da execução de código Python."""
+
     success: bool
     output: str
     exit_code: int
-    error: Optional[str] = None
+    error: str | None = None
     execution_time: float = 0.0
     timeout: bool = False
-    variables: Optional[Dict[str, Any]] = None
+    variables: dict[str, Any] | None = None
 
 
 class PythonSandbox:
@@ -41,37 +41,77 @@ class PythonSandbox:
 
     def __init__(self):
         self.allowed_modules = {
-            'math', 'random', 'datetime', 'json', 're',
-            'collections', 'itertools', 'functools',
-            'statistics', 'decimal', 'fractions', 'time'
+            "math",
+            "random",
+            "datetime",
+            "json",
+            "re",
+            "collections",
+            "itertools",
+            "functools",
+            "statistics",
+            "decimal",
+            "fractions",
+            "time",
         }
         logger.info(f"Sandbox Python configurado com módulos permitidos: {self.allowed_modules}")
 
     def _safe_import(self, name, *args, **kwargs):
         """Import hook seguro que só permite módulos whitelist."""
-        if name.split('.')[0] in self.allowed_modules:
+        if name.split(".")[0] in self.allowed_modules:
             return __import__(name, *args, **kwargs)
-        raise ImportError(f"Módulo '{name}' não permitido. Permitidos: {', '.join(sorted(self.allowed_modules))}")
+        raise ImportError(
+            f"Módulo '{name}' não permitido. Permitidos: {', '.join(sorted(self.allowed_modules))}"
+        )
 
-    def _create_safe_globals(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _create_safe_globals(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Cria um dicionário de globals seguro com apenas builtins permitidos."""
         safe_builtins = {
-            'abs': abs, 'all': all, 'any': any, 'bin': bin, 'bool': bool,
-            'chr': chr, 'dict': dict, 'divmod': divmod, 'enumerate': enumerate,
-            'filter': filter, 'float': float, 'format': format, 'hex': hex,
-            'int': int, 'isinstance': isinstance, 'len': len, 'list': list,
-            'map': map, 'max': max, 'min': min, 'oct': oct, 'ord': ord,
-            'pow': pow, 'print': print, 'range': range, 'reversed': reversed,
-            'round': round, 'set': set, 'slice': slice, 'sorted': sorted,
-            'str': str, 'sum': sum, 'tuple': tuple, 'type': type, 'zip': zip,
-            'True': True, 'False': False, 'None': None,
-            '__import__': self._safe_import,  # Hook de import seguro
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "bin": bin,
+            "bool": bool,
+            "chr": chr,
+            "dict": dict,
+            "divmod": divmod,
+            "enumerate": enumerate,
+            "filter": filter,
+            "float": float,
+            "format": format,
+            "hex": hex,
+            "int": int,
+            "isinstance": isinstance,
+            "len": len,
+            "list": list,
+            "map": map,
+            "max": max,
+            "min": min,
+            "oct": oct,
+            "ord": ord,
+            "pow": pow,
+            "print": print,
+            "range": range,
+            "reversed": reversed,
+            "round": round,
+            "set": set,
+            "slice": slice,
+            "sorted": sorted,
+            "str": str,
+            "sum": sum,
+            "tuple": tuple,
+            "type": type,
+            "zip": zip,
+            "True": True,
+            "False": False,
+            "None": None,
+            "__import__": self._safe_import,  # Hook de import seguro
         }
 
         safe_globals = {
-            '__builtins__': safe_builtins,
-            '__name__': '__sandbox__',
-            '__doc__': None,
+            "__builtins__": safe_builtins,
+            "__name__": "__sandbox__",
+            "__doc__": None,
         }
 
         # Adiciona contexto fornecido pelo usuário
@@ -80,7 +120,7 @@ class PythonSandbox:
 
         return safe_globals
 
-    def execute(self, code: str, context: Optional[Dict[str, Any]] = None) -> ExecutionResult:
+    def execute(self, code: str, context: dict[str, Any] | None = None) -> ExecutionResult:
         """
         Executa um bloco de código Python no sandbox.
 
@@ -94,7 +134,9 @@ class PythonSandbox:
         start_time = time.time()
 
         if not code or not code.strip():
-            return ExecutionResult(success=False, output="", error="Código vazio fornecido", exit_code=-1)
+            return ExecutionResult(
+                success=False, output="", error="Código vazio fornecido", exit_code=-1
+            )
 
         try:
             logger.info(f"[SANDBOX] Executando código - {len(code)} caracteres")
@@ -118,7 +160,7 @@ class PythonSandbox:
             stderr_output = stderr_capture.getvalue()
 
             if len(output) > settings.SANDBOX_MAX_OUTPUT_LENGTH:
-                output = output[:settings.SANDBOX_MAX_OUTPUT_LENGTH] + "\n... (output truncado)"
+                output = output[: settings.SANDBOX_MAX_OUTPUT_LENGTH] + "\n... (output truncado)"
 
             return ExecutionResult(
                 success=True,
@@ -127,7 +169,7 @@ class PythonSandbox:
                 exit_code=0,
                 execution_time=execution_time,
                 timeout=False,
-                variables=safe_locals
+                variables=safe_locals,
             )
 
         except ImportError as e:
@@ -137,7 +179,7 @@ class PythonSandbox:
                 output="",
                 error=f"Importação bloqueada: {e}. Módulos permitidos: {', '.join(sorted(self.allowed_modules))}",
                 exit_code=1,
-                execution_time=time.time() - start_time
+                execution_time=time.time() - start_time,
             )
 
         except Exception as e:
@@ -145,9 +187,9 @@ class PythonSandbox:
             return ExecutionResult(
                 success=False,
                 output="",
-                error=f"{type(e).__name__}: {str(e)}",
+                error=f"{type(e).__name__}: {e!s}",
                 exit_code=1,
-                execution_time=time.time() - start_time
+                execution_time=time.time() - start_time,
             )
 
     def execute_expression(self, expression: str) -> ExecutionResult:

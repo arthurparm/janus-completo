@@ -1,12 +1,14 @@
-import requests
-import json
 import sys
+
+import requests
 
 # Inside Docker, localhost:8000 is the server itself
 BASE_URL = "http://localhost:8000"
 
+
 def log(msg):
     print(f"[TEST] {msg}")
+
 
 def check_health():
     try:
@@ -21,6 +23,7 @@ def check_health():
         log(f"Health check ERROR: {e}")
         return False
 
+
 def check_rag():
     try:
         # User Chat V1 (GET /user-chat)
@@ -28,20 +31,23 @@ def check_rag():
         params = {"query": "test", "user_id": "test_user", "session_id": "test_verification_conv"}
         resp = requests.get(f"{BASE_URL}/api/v1/rag/user-chat", params=params, headers=headers)
         if resp.status_code == 200:
-             log("RAG User Chat V1 PASSED")
+            log("RAG User Chat V1 PASSED")
         else:
-             log(f"RAG User Chat V1 FAILED: {resp.status_code} - {resp.text}")
+            log(f"RAG User Chat V1 FAILED: {resp.status_code} - {resp.text}")
 
         # User Chat V2 (GET /user_chat)
         params_v2 = {"query": "test v2", "user_id": "test_user"}
-        resp_v2 = requests.get(f"{BASE_URL}/api/v1/rag/user_chat", params=params_v2, headers=headers)
+        resp_v2 = requests.get(
+            f"{BASE_URL}/api/v1/rag/user_chat", params=params_v2, headers=headers
+        )
         if resp_v2.status_code == 200:
-             log("RAG User Chat V2 PASSED")
+            log("RAG User Chat V2 PASSED")
         else:
-             log(f"RAG User Chat V2 FAILED: {resp_v2.status_code} - {resp_v2.text}")
-             
+            log(f"RAG User Chat V2 FAILED: {resp_v2.status_code} - {resp_v2.text}")
+
     except Exception as e:
         log(f"RAG check ERROR: {e}")
+
 
 def check_chat():
     try:
@@ -50,7 +56,7 @@ def check_chat():
             "conversation_id": "test_chat_verification",
             "message": "test message",
             "role": "orchestrator",
-            "priority": "fast_and_cheap"
+            "priority": "fast_and_cheap",
         }
         with requests.post(url, json=payload, stream=True) as r:
             if r.status_code == 200:
@@ -63,6 +69,7 @@ def check_chat():
                 log(f"Chat Stream FAILED: {r.status_code} - {r.text}")
     except Exception as e:
         log(f"Chat check ERROR: {e}")
+
 
 if __name__ == "__main__":
     if check_health():

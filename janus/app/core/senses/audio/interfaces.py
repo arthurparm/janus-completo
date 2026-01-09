@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+
 
 class STTProvider(ABC):
     """
     Abstract Base Class for Speech-to-Text Providers.
     """
+
     @abstractmethod
     async def listen(self) -> str:
         """
@@ -13,10 +14,12 @@ class STTProvider(ABC):
         """
         pass
 
+
 class TTSProvider(ABC):
     """
     Abstract Base Class for Text-to-Speech Providers.
     """
+
     @abstractmethod
     async def speak(self, text: str) -> None:
         """

@@ -1,7 +1,6 @@
 import logging
 import time
 from collections import OrderedDict
-from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -10,26 +9,34 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 try:
-    from prometheus_client import Counter, Histogram, Gauge  # type: ignore
+    from prometheus_client import Counter, Gauge, Histogram  # type: ignore
+
     _EMB_REQ = Counter("emb_requests_total", "Requisições de embedding", ["provider", "outcome"])  # type: ignore
     _EMB_LAT = Histogram("emb_latency_seconds", "Latência de embeddings", ["provider", "outcome"])  # type: ignore
     _EMB_MODEL_LOADED = Gauge("emb_model_loaded", "Modelo de embeddings carregado", ["provider"])  # type: ignore
 except Exception:
+
     class _NoopC:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             pass
+
     class _NoopH:
         def labels(self, *a, **k):
             return self
+
         def observe(self, *a, **k):
             pass
+
     class _NoopG:
         def labels(self, *a, **k):
             return self
+
         def set(self, *a, **k):
             pass
+
     _EMB_REQ = _NoopC()  # type: ignore
     _EMB_LAT = _NoopH()  # type: ignore
     _EMB_MODEL_LOADED = _NoopG()  # type: ignore
@@ -45,7 +52,11 @@ except Exception:
     OpenAIEmbeddings = None  # type: ignore
 
 # === Config Defaults ===
-_DEFAULT_LOCAL_MODEL = getattr(settings, "EMBEDDINGS_LOCAL_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+_DEFAULT_LOCAL_MODEL = getattr(
+    settings,
+    "EMBEDDINGS_LOCAL_MODEL_NAME",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+)
 _DEFAULT_OPENAI_MODEL = getattr(settings, "EMBEDDINGS_OPENAI_MODEL_NAME", "text-embedding-3-small")
 _TARGET_VECTOR_SIZE = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
 _PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai"
@@ -57,9 +68,9 @@ class _TTLCache:
     def __init__(self, max_items: int, ttl_seconds: int):
         self.max_items = max_items
         self.ttl_seconds = ttl_seconds
-        self._store: OrderedDict[str, Tuple[float, List[float]]] = OrderedDict()
+        self._store: OrderedDict[str, tuple[float, list[float]]] = OrderedDict()
 
-    def get(self, key: str) -> Optional[List[float]]:
+    def get(self, key: str) -> list[float] | None:
         now = time.time()
         val = self._store.get(key)
         if not val:
@@ -71,7 +82,7 @@ class _TTLCache:
         self._store.move_to_end(key)
         return vec
 
-    def put(self, key: str, vec: List[float]) -> None:
+    def put(self, key: str, vec: list[float]) -> None:
         self._store[key] = (time.time(), vec)
         self._store.move_to_end(key)
         while len(self._store) > self.max_items:
@@ -81,8 +92,8 @@ class _TTLCache:
 # Simple per-text cache to avoid re-embedding repeated inputs
 _cache = _TTLCache(max_items=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
 
-_local_model: Optional[SentenceTransformer] = None
-_openai_embedder: Optional[OpenAIEmbeddings] = None
+_local_model: SentenceTransformer | None = None
+_openai_embedder: OpenAIEmbeddings | None = None
 
 
 def _load_local_model() -> SentenceTransformer:
@@ -109,7 +120,11 @@ def _load_openai_embedder() -> OpenAIEmbeddings:
         raise RuntimeError("langchain_openai não está disponível para embeddings")
     # Se não houver API key, falhar cedo
     try:
-        openai_key = settings.OPENAI_API_KEY.get_secret_value() if getattr(settings, "OPENAI_API_KEY", None) else None
+        openai_key = (
+            settings.OPENAI_API_KEY.get_secret_value()
+            if getattr(settings, "OPENAI_API_KEY", None)
+            else None
+        )
     except Exception:
         openai_key = None
     if not openai_key:
@@ -124,7 +139,7 @@ def _load_openai_embedder() -> OpenAIEmbeddings:
     return _openai_embedder
 
 
-def _pad_or_truncate(vec: List[float], size: int) -> List[float]:
+def _pad_or_truncate(vec: list[float], size: int) -> list[float]:
     if len(vec) == size:
         return vec
     if len(vec) > size:
@@ -133,11 +148,11 @@ def _pad_or_truncate(vec: List[float], size: int) -> List[float]:
     return vec + [0.0] * (size - len(vec))
 
 
-def _normalize_vectors(vectors: List[List[float]], size: int) -> List[List[float]]:
+def _normalize_vectors(vectors: list[list[float]], size: int) -> list[list[float]]:
     return [_pad_or_truncate(list(map(float, v)), size) for v in vectors]
 
 
-def _emb_local(texts: List[str]) -> List[List[float]]:
+def _emb_local(texts: list[str]) -> list[list[float]]:
     model = _load_local_model()
     arr = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
     if isinstance(arr, np.ndarray):
@@ -147,13 +162,13 @@ def _emb_local(texts: List[str]) -> List[List[float]]:
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
 
 
-def _emb_openai(texts: List[str]) -> List[List[float]]:
+def _emb_openai(texts: list[str]) -> list[list[float]]:
     embedder = _load_openai_embedder()
     vectors = embedder.embed_documents(texts)
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
 
 
-def embed_text(text: str) -> List[float]:
+def embed_text(text: str) -> list[float]:
     """
     Retorna embedding para um único texto, com fallback automático.
 
@@ -176,6 +191,7 @@ def embed_text(text: str) -> List[float]:
     for p in providers:
         try:
             import time as _t
+
             _t0 = _t.perf_counter()
             if p == "local":
                 vec = _emb_local([text])[0]
@@ -210,7 +226,7 @@ def embed_text(text: str) -> List[float]:
     return null_vec
 
 
-def embed_texts(texts: List[str]) -> List[List[float]]:
+def embed_texts(texts: list[str]) -> list[list[float]]:
     """Versão em lote com fallback; usa o mesmo provedor escolhido que o embed_text."""
     if not texts:
         return []
@@ -224,6 +240,7 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     for p in providers:
         try:
             import time as _t
+
             _t0 = _t.perf_counter()
             if p == "local":
                 res = _emb_local(texts)
@@ -255,13 +272,15 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     return [[0.0] * _TARGET_VECTOR_SIZE for _ in texts]
 
 
-async def aembed_text(text: str) -> List[float]:
+async def aembed_text(text: str) -> list[float]:
     """Wrapper assíncrono para embed_text."""
     import asyncio
+
     return await asyncio.get_event_loop().run_in_executor(None, embed_text, text)
 
 
-async def aembed_texts(texts: List[str]) -> List[List[float]]:
+async def aembed_texts(texts: list[str]) -> list[list[float]]:
     """Wrapper assíncrono para embed_texts."""
     import asyncio
+
     return await asyncio.get_event_loop().run_in_executor(None, embed_texts, texts)

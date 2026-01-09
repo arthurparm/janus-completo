@@ -1,11 +1,12 @@
-from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
 from app.db.mysql_config import mysql_db
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 
+
 class AutonomyRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -13,16 +14,18 @@ class AutonomyRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def create_run(self,
-                   user_id: Optional[str],
-                   project_id: Optional[str],
-                   risk_profile: str,
-                   auto_confirm: bool,
-                   allowlist: List[str],
-                   blocklist: List[str],
-                   max_actions_per_cycle: int,
-                   max_seconds_per_cycle: int,
-                   interval_seconds: int) -> AutonomyRun:
+    def create_run(
+        self,
+        user_id: str | None,
+        project_id: str | None,
+        risk_profile: str,
+        auto_confirm: bool,
+        allowlist: list[str],
+        blocklist: list[str],
+        max_actions_per_cycle: int,
+        max_seconds_per_cycle: int,
+        interval_seconds: int,
+    ) -> AutonomyRun:
         s = self._get_session()
         try:
             run = AutonomyRun(
@@ -64,16 +67,26 @@ class AutonomyRepository:
             if run:
                 run.status = "stopped"
                 from datetime import datetime
+
                 run.stopped_at = datetime.utcnow()
                 s.commit()
         finally:
             if not self._session:
                 s.close()
 
-    def add_step(self, run_id: int, cycle: int, tool: str,
-                 input_preview: Optional[str], input_length: int,
-                 result_preview: Optional[str], result_length: int,
-                 success: bool, error: Optional[str], duration_seconds: float) -> AutonomyStep:
+    def add_step(
+        self,
+        run_id: int,
+        cycle: int,
+        tool: str,
+        input_preview: str | None,
+        input_length: int,
+        result_preview: str | None,
+        result_length: int,
+        success: bool,
+        error: str | None,
+        duration_seconds: float,
+    ) -> AutonomyStep:
         s = self._get_session()
         try:
             step = AutonomyStep(
@@ -96,7 +109,9 @@ class AutonomyRepository:
             if not self._session:
                 s.close()
 
-    def get_active_run(self, user_id: Optional[str] = None, project_id: Optional[str] = None) -> Optional[AutonomyRun]:
+    def get_active_run(
+        self, user_id: str | None = None, project_id: str | None = None
+    ) -> AutonomyRun | None:
         """Recupera a run ativa mais recente (status='running') para permitir restauração após reinício."""
         s = self._get_session()
         try:
@@ -110,7 +125,9 @@ class AutonomyRepository:
             if not self._session:
                 s.close()
 
-    def list_runs(self, user_id: Optional[str], project_id: Optional[str], limit: int = 50) -> List[AutonomyRun]:
+    def list_runs(
+        self, user_id: str | None, project_id: str | None, limit: int = 50
+    ) -> list[AutonomyRun]:
         s = self._get_session()
         try:
             q = s.query(AutonomyRun)
@@ -123,7 +140,7 @@ class AutonomyRepository:
             if not self._session:
                 s.close()
 
-    def get_run(self, run_id: int) -> Optional[AutonomyRun]:
+    def get_run(self, run_id: int) -> AutonomyRun | None:
         s = self._get_session()
         try:
             return s.query(AutonomyRun).filter(AutonomyRun.id == run_id).first()
@@ -131,7 +148,9 @@ class AutonomyRepository:
             if not self._session:
                 s.close()
 
-    def list_steps(self, run_id: int, cycle: Optional[int] = None, limit: int = 100) -> List[AutonomyStep]:
+    def list_steps(
+        self, run_id: int, cycle: int | None = None, limit: int = 100
+    ) -> list[AutonomyStep]:
         s = self._get_session()
         try:
             q = s.query(AutonomyStep).filter(AutonomyStep.run_id == run_id)

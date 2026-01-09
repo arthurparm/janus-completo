@@ -1,10 +1,11 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
 import logging
+from abc import ABC, abstractmethod
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
+
 
 class LLMAdapter(ABC):
     """Abstract adapter for LLM provider specifics."""
@@ -21,6 +22,7 @@ class LLMAdapter(ABC):
         """Invokes the underlying model."""
         return self.base_model.invoke(prompt, **kwargs)
 
+
 class OpenAIAdapter(LLMAdapter):
     def apply_output_limit(self, max_output_tokens: int) -> None:
         try:
@@ -28,23 +30,25 @@ class OpenAIAdapter(LLMAdapter):
             if isinstance(mk, dict):
                 mk["max_tokens"] = max_output_tokens
             else:
-                setattr(self.base_model, "model_kwargs", {"max_tokens": max_output_tokens})
+                self.base_model.model_kwargs = {"max_tokens": max_output_tokens}
         except Exception as e:
             logger.warning(f"Failed to apply output limit for OpenAI: {e}")
+
 
 class GeminiAdapter(LLMAdapter):
     def apply_output_limit(self, max_output_tokens: int) -> None:
         try:
             if hasattr(self.base_model, "max_output_tokens"):
-                setattr(self.base_model, "max_output_tokens", max_output_tokens)
+                self.base_model.max_output_tokens = max_output_tokens
             else:
                 mk = getattr(self.base_model, "model_kwargs", None)
                 if isinstance(mk, dict):
                     mk["max_output_tokens"] = max_output_tokens
                 else:
-                    setattr(self.base_model, "model_kwargs", {"max_output_tokens": max_output_tokens})
+                    self.base_model.model_kwargs = {"max_output_tokens": max_output_tokens}
         except Exception as e:
             logger.warning(f"Failed to apply output limit for Gemini: {e}")
+
 
 class OllamaAdapter(LLMAdapter):
     def apply_output_limit(self, max_output_tokens: int) -> None:
@@ -54,17 +58,19 @@ class OllamaAdapter(LLMAdapter):
         # In the original code, Ollama wasn't explicitly handled in _apply_output_limit block
         # (it fell through the if/elif), so we keep it as no-op or basic model_kwargs support.
         try:
-           mk = getattr(self.base_model, "model_kwargs", None)
-           if isinstance(mk, dict):
-               mk["num_predict"] = max_output_tokens # Common param for Ollama
-           else:
-               # Try configuring if possible, otherwise ignore
-               pass
+            mk = getattr(self.base_model, "model_kwargs", None)
+            if isinstance(mk, dict):
+                mk["num_predict"] = max_output_tokens  # Common param for Ollama
+            else:
+                # Try configuring if possible, otherwise ignore
+                pass
         except Exception:
-            pass # Silent fail pattern for optional config
+            pass  # Silent fail pattern for optional config
+
 
 class GenericAdapter(LLMAdapter):
     """Fallback adapter for unknown providers."""
+
     def apply_output_limit(self, max_output_tokens: int) -> None:
         pass
 

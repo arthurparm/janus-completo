@@ -14,25 +14,31 @@ Funcionalidades:
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Callable, Any, Type
+from typing import Any
 
 from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
+
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
-from app.repositories.observability_repository import record_audit_event_direct
 from app.core.infrastructure.python_sandbox import python_sandbox
+from app.repositories.observability_repository import record_audit_event_direct
+
 try:
     from opentelemetry import trace  # type: ignore
+
     _OTEL = True
     _tracer = trace.get_tracer(__name__)
 except Exception:
     _OTEL = False
     from contextlib import nullcontext
+
     _tracer = None
-from pydantic import BaseModel
 import inspect
+
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -41,20 +47,22 @@ logger = logging.getLogger(__name__)
 _TOOL_CALLS = Counter(
     "action_module_tool_calls_total",
     "Total de chamadas de ferramentas",
-    ["tool_name", "category", "outcome"]
+    ["tool_name", "category", "outcome"],
 )
 
 _TOOL_LATENCY = Histogram(
     "action_module_tool_latency_seconds",
     "Latência de execução de ferramentas",
-    ["tool_name", "category"]
+    ["tool_name", "category"],
 )
 
 
 # ==================== ENUMS ====================
 
+
 class ToolCategory(Enum):
     """Categorias de ferramentas disponíveis."""
+
     FILESYSTEM = "filesystem"
     API = "api"
     DATABASE = "database"
@@ -67,6 +75,7 @@ class ToolCategory(Enum):
 
 class PermissionLevel(Enum):
     """Níveis de permissão para ferramentas."""
+
     READ_ONLY = "read_only"
     SAFE = "safe"
     WRITE = "write"
@@ -75,30 +84,34 @@ class PermissionLevel(Enum):
 
 # ==================== DATACLASSES ====================
 
+
 @dataclass
 class ToolMetadata:
     """Metadados sobre uma ferramenta."""
+
     name: str
     category: ToolCategory
     description: str
     permission_level: PermissionLevel
-    rate_limit_per_minute: Optional[int] = None
+    rate_limit_per_minute: int | None = None
     requires_confirmation: bool = False
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
 class ToolCall:
     """Registro de uma chamada de ferramenta."""
+
     tool_name: str
     timestamp: float
     duration_seconds: float
     success: bool
-    error: Optional[str] = None
-    input_args: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    input_args: dict[str, Any] = field(default_factory=dict)
 
 
 # ==================== GERADOR DE FERRAMENTAS ====================
+
 
 class DynamicToolGenerator:
     """
@@ -110,10 +123,7 @@ class DynamicToolGenerator:
 
     @staticmethod
     def from_function_spec(
-            name: str,
-            description: str,
-            func: Callable,
-            args_schema: Optional[Type[BaseModel]] = None
+        name: str, description: str, func: Callable, args_schema: type[BaseModel] | None = None
     ) -> BaseTool:
         """
         Cria uma ferramenta LangChain a partir de uma função Python.
@@ -131,9 +141,14 @@ class DynamicToolGenerator:
             is_async = inspect.iscoroutinefunction(func)
             if args_schema:
                 if is_async:
+
                     @tool(description=description, args_schema=args_schema)
                     async def dynamic_tool(*args, **kwargs):
-                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        cm = (
+                            _tracer.start_as_current_span("tool.execute")
+                            if _OTEL
+                            else nullcontext()
+                        )
                         async with cm as span:  # type: ignore
                             if _OTEL and span is not None:
                                 try:
@@ -148,9 +163,14 @@ class DynamicToolGenerator:
                                     pass
                             return await func(*args, **kwargs)
                 else:
+
                     @tool(description=description, args_schema=args_schema)
                     def dynamic_tool(*args, **kwargs):
-                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
+                        cm = (
+                            _tracer.start_as_current_span("tool.execute")
+                            if _OTEL
+                            else nullcontext()
+                        )
                         with cm as span:  # type: ignore
                             if _OTEL and span is not None:
                                 try:
@@ -164,41 +184,42 @@ class DynamicToolGenerator:
                                 except Exception:
                                     pass
                             return func(*args, **kwargs)
+            elif is_async:
+
+                @tool(description=description)
+                async def dynamic_tool(*args, **kwargs):
+                    cm = _tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext()
+                    async with cm as span:  # type: ignore
+                        if _OTEL and span is not None:
+                            try:
+                                tid = TRACE_ID.get()
+                                sid = USER_ID.get()
+                                if tid and tid != "-":
+                                    span.set_attribute("janus.trace_id", tid)
+                                if sid and sid != "-":
+                                    span.set_attribute("janus.user_id", sid)
+                                span.set_attribute("tool.name", name)
+                            except Exception:
+                                pass
+                        return await func(*args, **kwargs)
             else:
-                if is_async:
-                    @tool(description=description)
-                    async def dynamic_tool(*args, **kwargs):
-                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
-                        async with cm as span:  # type: ignore
-                            if _OTEL and span is not None:
-                                try:
-                                    tid = TRACE_ID.get()
-                                    sid = USER_ID.get()
-                                    if tid and tid != "-":
-                                        span.set_attribute("janus.trace_id", tid)
-                                    if sid and sid != "-":
-                                        span.set_attribute("janus.user_id", sid)
-                                    span.set_attribute("tool.name", name)
-                                except Exception:
-                                    pass
-                            return await func(*args, **kwargs)
-                else:
-                    @tool(description=description)
-                    def dynamic_tool(*args, **kwargs):
-                        cm = (_tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext())
-                        with cm as span:  # type: ignore
-                            if _OTEL and span is not None:
-                                try:
-                                    tid = TRACE_ID.get()
-                                    sid = USER_ID.get()
-                                    if tid and tid != "-":
-                                        span.set_attribute("janus.trace_id", tid)
-                                    if sid and sid != "-":
-                                        span.set_attribute("janus.user_id", sid)
-                                    span.set_attribute("tool.name", name)
-                                except Exception:
-                                    pass
-                            return func(*args, **kwargs)
+
+                @tool(description=description)
+                def dynamic_tool(*args, **kwargs):
+                    cm = _tracer.start_as_current_span("tool.execute") if _OTEL else nullcontext()
+                    with cm as span:  # type: ignore
+                        if _OTEL and span is not None:
+                            try:
+                                tid = TRACE_ID.get()
+                                sid = USER_ID.get()
+                                if tid and tid != "-":
+                                    span.set_attribute("janus.trace_id", tid)
+                                if sid and sid != "-":
+                                    span.set_attribute("janus.user_id", sid)
+                                span.set_attribute("tool.name", name)
+                            except Exception:
+                                pass
+                        return func(*args, **kwargs)
 
             # Renomeia a ferramenta para o nome desejado
             dynamic_tool.name = name
@@ -213,11 +234,11 @@ class DynamicToolGenerator:
 
     @staticmethod
     def from_api_endpoint(
-            name: str,
-            description: str,
-            endpoint_url: str,
-            method: str = "GET",
-            headers: Optional[Dict[str, str]] = None
+        name: str,
+        description: str,
+        endpoint_url: str,
+        method: str = "GET",
+        headers: dict[str, str] | None = None,
     ) -> BaseTool:
         """
         Cria ferramenta que chama um endpoint HTTP.
@@ -261,15 +282,12 @@ class DynamicToolGenerator:
         return DynamicToolGenerator.from_function_spec(
             name=name,
             description=f"{description}\nEndpoint: {method} {endpoint_url}",
-            func=api_call
+            func=api_call,
         )
 
     @staticmethod
     def from_python_code(
-            name: str,
-            description: str,
-            code: str,
-            function_name: str = "execute"
+        name: str, description: str, code: str, function_name: str = "execute"
     ) -> BaseTool:
         """
         Cria ferramenta a partir de código Python fornecido como string.
@@ -296,30 +314,30 @@ class DynamicToolGenerator:
                 if not result.success:
                     logger.error(f"[ActionModule] Erro na execução sandbox: {result.error}")
                     return f"Erro na execução: {result.error}"
-                
+
                 # Se houver stdout, retorna
                 if result.output and result.output.strip():
-                     # Se esperar que a função execute dentro do sandbox, precisamos ver se ela foi chamada.
-                     # O sandbox atual executa o código top-level.
-                     # Se o código define uma função, ela estará em 'variables'.
-                     pass
+                    # Se esperar que a função execute dentro do sandbox, precisamos ver se ela foi chamada.
+                    # O sandbox atual executa o código top-level.
+                    # Se o código define uma função, ela estará em 'variables'.
+                    pass
 
                 # Verificar se a função alvo está definida nas variáveis locais do sandbox
                 if result.variables and function_name in result.variables:
-                     func_in_sandbox = result.variables[function_name]
-                     if callable(func_in_sandbox):
-                         # NOTA: Chamar a função diretamente aqui ainda executa no contexto deste processo,
-                         # mas as globais dela estão presas ao sandbox.
-                         # O ideal seria que o sandbox suportasse 'call_function', mas o execute() já retorna as vars.
-                         try:
+                    func_in_sandbox = result.variables[function_name]
+                    if callable(func_in_sandbox):
+                        # NOTA: Chamar a função diretamente aqui ainda executa no contexto deste processo,
+                        # mas as globais dela estão presas ao sandbox.
+                        # O ideal seria que o sandbox suportasse 'call_function', mas o execute() já retorna as vars.
+                        try:
                             # Tentar executar a função recuperada com os args
                             # Atenção: objetos complexos podem não funcionar bem entre fronteiras se o sandbox fosse isolado em processo,
                             # mas aqui é isolamento lógico (exec restricted).
                             res = func_in_sandbox(**kwargs)
                             return str(res)
-                         except Exception as call_err:
-                             return f"Erro ao chamar função '{function_name}': {call_err}"
-                
+                        except Exception as call_err:
+                            return f"Erro ao chamar função '{function_name}': {call_err}"
+
                 # Se a função não foi encontrada mas houve output, retorne o output (comportamento de script)
                 if result.output:
                     return result.output.strip()
@@ -331,13 +349,12 @@ class DynamicToolGenerator:
                 return f"Erro na execução: {e}"
 
         return DynamicToolGenerator.from_function_spec(
-            name=name,
-            description=f"{description}\n🛡️ Sandbox Ativado",
-            func=execute_code
+            name=name, description=f"{description}\n🛡️ Sandbox Ativado", func=execute_code
         )
 
 
 # ==================== REGISTRO DE FERRAMENTAS ====================
+
 
 class ActionRegistry:
     """
@@ -352,19 +369,19 @@ class ActionRegistry:
     """
 
     def __init__(self):
-        self._tools: Dict[str, BaseTool] = {}
-        self._metadata: Dict[str, ToolMetadata] = {}
-        self._call_history: List[ToolCall] = []
-        self._rate_limits: Dict[str, List[float]] = {}  # tool_name -> timestamps
+        self._tools: dict[str, BaseTool] = {}
+        self._metadata: dict[str, ToolMetadata] = {}
+        self._call_history: list[ToolCall] = []
+        self._rate_limits: dict[str, list[float]] = {}  # tool_name -> timestamps
 
     def register(
-            self,
-            tool: BaseTool,
-            category: ToolCategory = ToolCategory.CUSTOM,
-            permission_level: PermissionLevel = PermissionLevel.SAFE,
-            rate_limit_per_minute: Optional[int] = None,
-            requires_confirmation: bool = False,
-            tags: Optional[List[str]] = None
+        self,
+        tool: BaseTool,
+        category: ToolCategory = ToolCategory.CUSTOM,
+        permission_level: PermissionLevel = PermissionLevel.SAFE,
+        rate_limit_per_minute: int | None = None,
+        requires_confirmation: bool = False,
+        tags: list[str] | None = None,
     ) -> None:
         """
         Registra uma ferramenta no sistema.
@@ -390,7 +407,7 @@ class ActionRegistry:
             permission_level=permission_level,
             rate_limit_per_minute=rate_limit_per_minute,
             requires_confirmation=requires_confirmation,
-            tags=tags or []
+            tags=tags or [],
         )
 
         logger.info(f"[ActionModule] Ferramenta registrada: {name} [{category.value}]")
@@ -402,20 +419,20 @@ class ActionRegistry:
             del self._metadata[tool_name]
             logger.info(f"[ActionModule] Ferramenta removida: {tool_name}")
 
-    def get_tool(self, name: str) -> Optional[BaseTool]:
+    def get_tool(self, name: str) -> BaseTool | None:
         """Obtém uma ferramenta pelo nome."""
         return self._tools.get(name)
 
-    def get_metadata(self, name: str) -> Optional[ToolMetadata]:
+    def get_metadata(self, name: str) -> ToolMetadata | None:
         """Obtém metadados de uma ferramenta."""
         return self._metadata.get(name)
 
     def list_tools(
-            self,
-            category: Optional[ToolCategory] = None,
-            permission_level: Optional[PermissionLevel] = None,
-            tags: Optional[List[str]] = None
-    ) -> List[BaseTool]:
+        self,
+        category: ToolCategory | None = None,
+        permission_level: PermissionLevel | None = None,
+        tags: list[str] | None = None,
+    ) -> list[BaseTool]:
         """
         Lista ferramentas com filtros opcionais.
 
@@ -429,7 +446,7 @@ class ActionRegistry:
         """
         tools = []
 
-        for name, tool in self._tools.items():
+        for name, tool_instance in self._tools.items():
             metadata = self._metadata[name]
 
             # Aplica filtros
@@ -442,7 +459,7 @@ class ActionRegistry:
             if tags and not any(tag in metadata.tags for tag in tags):
                 continue
 
-            tools.append(tool)
+            tools.append(tool_instance)
 
         return tools
 
@@ -465,8 +482,7 @@ class ActionRegistry:
             self._rate_limits[tool_name] = []
 
         self._rate_limits[tool_name] = [
-            ts for ts in self._rate_limits[tool_name]
-            if ts > one_minute_ago
+            ts for ts in self._rate_limits[tool_name] if ts > one_minute_ago
         ]
 
         # Verifica limite
@@ -474,12 +490,12 @@ class ActionRegistry:
         return current_calls < metadata.rate_limit_per_minute
 
     def record_call(
-            self,
-            tool_name: str,
-            duration: float,
-            success: bool,
-            error: Optional[str] = None,
-            input_args: Optional[Dict[str, Any]] = None
+        self,
+        tool_name: str,
+        duration: float,
+        success: bool,
+        error: str | None = None,
+        input_args: dict[str, Any] | None = None,
     ) -> None:
         """Registra uma chamada de ferramenta para telemetria."""
         now = time.time()
@@ -496,7 +512,7 @@ class ActionRegistry:
             duration_seconds=duration,
             success=success,
             error=error,
-            input_args=input_args or {}
+            input_args=input_args or {},
         )
         self._call_history.append(call)
 
@@ -509,7 +525,7 @@ class ActionRegistry:
         category = metadata.category.value if metadata else "unknown"
         outcome = "success" if success else "error"
         try:
-            cm = (_tracer.start_as_current_span("tool.call") if _OTEL else nullcontext())
+            cm = _tracer.start_as_current_span("tool.call") if _OTEL else nullcontext()
             with cm as span:  # type: ignore
                 if _OTEL and span is not None:
                     try:
@@ -530,19 +546,21 @@ class ActionRegistry:
         _TOOL_CALLS.labels(tool_name, category, outcome).inc()
         _TOOL_LATENCY.labels(tool_name, category).observe(duration)
         try:
-            record_audit_event_direct({
-                "user_id": USER_ID.get(),
-                "endpoint": f"tool:{tool_name}",
-                "action": "tool_call",
-                "tool": tool_name,
-                "status": outcome,
-                "latency_ms": int(duration * 1000),
-                "trace_id": TRACE_ID.get(),
-            })
+            record_audit_event_direct(
+                {
+                    "user_id": USER_ID.get(),
+                    "endpoint": f"tool:{tool_name}",
+                    "action": "tool_call",
+                    "tool": tool_name,
+                    "status": outcome,
+                    "latency_ms": int(duration * 1000),
+                    "trace_id": TRACE_ID.get(),
+                }
+            )
         except Exception:
             pass
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Retorna estatísticas de uso de ferramentas."""
         total_calls = len(self._call_history)
         successful_calls = sum(1 for c in self._call_history if c.success)
@@ -550,11 +568,7 @@ class ActionRegistry:
         tool_usage = {}
         for call in self._call_history:
             if call.tool_name not in tool_usage:
-                tool_usage[call.tool_name] = {
-                    "total": 0,
-                    "success": 0,
-                    "avg_duration": 0.0
-                }
+                tool_usage[call.tool_name] = {"total": 0, "success": 0, "avg_duration": 0.0}
             tool_usage[call.tool_name]["total"] += 1
             if call.success:
                 tool_usage[call.tool_name]["success"] += 1
@@ -570,7 +584,7 @@ class ActionRegistry:
             "total_calls": total_calls,
             "successful_calls": successful_calls,
             "success_rate": round(successful_calls / total_calls, 3) if total_calls > 0 else 0.0,
-            "tool_usage": tool_usage
+            "tool_usage": tool_usage,
         }
 
 
@@ -582,21 +596,18 @@ action_registry = ActionRegistry()
 
 # ==================== FUNÇÕES DE CONVENIÊNCIA ====================
 
-def register_tool(
-        tool: BaseTool,
-        category: ToolCategory = ToolCategory.CUSTOM,
-        **kwargs
-) -> None:
+
+def register_tool(tool: BaseTool, category: ToolCategory = ToolCategory.CUSTOM, **kwargs) -> None:
     """Atalho para registrar ferramenta no registro global."""
     action_registry.register(tool, category=category, **kwargs)
 
 
 def create_tool_from_function(
-        name: str,
-        description: str,
-        func: Callable,
-        category: ToolCategory = ToolCategory.CUSTOM,
-        **kwargs
+    name: str,
+    description: str,
+    func: Callable,
+    category: ToolCategory = ToolCategory.CUSTOM,
+    **kwargs,
 ) -> BaseTool:
     """
     Cria e registra ferramenta a partir de função Python.
@@ -609,11 +620,11 @@ def create_tool_from_function(
     return tool
 
 
-def get_all_tools() -> List[BaseTool]:
+def get_all_tools() -> list[BaseTool]:
     """Retorna todas as ferramentas registradas."""
     return list(action_registry._tools.values())
 
 
-def get_tools_by_category(category: ToolCategory) -> List[BaseTool]:
+def get_tools_by_category(category: ToolCategory) -> list[BaseTool]:
     """Retorna ferramentas de uma categoria específica."""
     return action_registry.list_tools(category=category)

@@ -1,7 +1,6 @@
 """
 Unit tests for Prometheus metrics singleton pattern in memory module.
 """
-import pytest
 
 
 def test_no_duplicate_metric_registration(monkeypatch):
@@ -44,11 +43,11 @@ def test_metrics_module_exports():
     Verify that the metrics module exports the expected metric objects.
     """
     from app.core.memory.metrics import (
+        memory_operations_total,
+        memory_quota_rejections_total,
         memory_short_cache_hits_total,
         memory_short_cache_misses_total,
         memory_short_cache_size,
-        memory_quota_rejections_total,
-        memory_operations_total,
     )
 
     # All should be non-None

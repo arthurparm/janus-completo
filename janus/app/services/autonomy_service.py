@@ -1,62 +1,53 @@
 import asyncio
-import time
 import json
+import time
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Any
 
 import structlog
-from prometheus_client import Counter, Histogram, Gauge
-
-from app.core.autonomy.policy_engine import PolicyEngine, PolicyConfig
-from app.services.optimization_service import OptimizationService
-from app.repositories.autonomy_repository import AutonomyRepository
-from app.core.tools.action_module import action_registry
 from fastapi import Request
+from prometheus_client import Counter, Gauge, Histogram
 
-from app.services.llm_service import LLMService
-from app.core.autonomy.goal_manager import GoalManager, GoalStatus, Goal
+from app.core.autonomy.goal_manager import Goal, GoalManager, GoalStatus
 from app.core.autonomy.planner import build_plan_for_goal
+from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
 from app.core.infrastructure.realtime import get_realtime_service
+from app.core.tools.action_module import action_registry
+from app.repositories.autonomy_repository import AutonomyRepository
+from app.services.llm_service import LLMService
+from app.services.optimization_service import OptimizationService
 
 logger = structlog.get_logger(__name__)
 
 
 # === Métricas Prometheus ===
 AUTONOMY_CYCLES = Counter(
-    "autonomy_loop_cycles_total",
-    "Total de ciclos do AutonomyLoop",
-    ["outcome"]
+    "autonomy_loop_cycles_total", "Total de ciclos do AutonomyLoop", ["outcome"]
 )
 
 AUTONOMY_LATENCY = Histogram(
-    "autonomy_loop_cycle_duration_seconds",
-    "Duração dos ciclos do AutonomyLoop"
+    "autonomy_loop_cycle_duration_seconds", "Duração dos ciclos do AutonomyLoop"
 )
 
 AUTONOMY_ACTIONS = Counter(
-    "autonomy_loop_actions_total",
-    "Ações executadas pelo AutonomyLoop",
-    ["outcome"]
+    "autonomy_loop_actions_total", "Ações executadas pelo AutonomyLoop", ["outcome"]
 )
 
-AUTONOMY_ACTIVE = Gauge(
-    "autonomy_loop_active",
-    "Indicador se o loop de autonomia está ativo"
-)
+AUTONOMY_ACTIVE = Gauge("autonomy_loop_active", "Indicador se o loop de autonomia está ativo")
 
 
 @dataclass
 class AutonomyConfig:
     interval_seconds: int = 60
-    user_id: Optional[str] = None
-    project_id: Optional[str] = None
+    user_id: str | None = None
+    project_id: str | None = None
     risk_profile: str = "balanced"
     auto_confirm: bool = True
     allowlist: list[str] = field(default_factory=list)
     blocklist: list[str] = field(default_factory=list)
     max_actions_per_cycle: int = 20
     max_seconds_per_cycle: int = 60
-    plan: list[Dict[str, Any]] = field(default_factory=list)
+    plan: list[dict[str, Any]] = field(default_factory=list)
 
 
 class AutonomyService:
@@ -68,18 +59,24 @@ class AutonomyService:
     Fechamento de loop (Refletir/Otimizar) será integrado em etapas seguintes.
     """
 
-    def __init__(self, optimization_service: OptimizationService, llm_service: Optional[LLMService] = None, goal_manager: Optional[GoalManager] = None, repo: Optional[AutonomyRepository] = None):
+    def __init__(
+        self,
+        optimization_service: OptimizationService,
+        llm_service: LLMService | None = None,
+        goal_manager: GoalManager | None = None,
+        repo: AutonomyRepository | None = None,
+    ):
         self._optimization_service = optimization_service
         self._llm_service = llm_service
         self._goal_manager = goal_manager
         self._config = AutonomyConfig()
         self._policy = PolicyEngine(PolicyConfig())
-        self._autonomy_task: Optional[asyncio.Task] = None
+        self._autonomy_task: asyncio.Task | None = None
         self._running = False
         self._cycle_count = 0
-        self._last_cycle_at: Optional[float] = None
+        self._last_cycle_at: float | None = None
         self._repo = repo or AutonomyRepository()
-        self._current_run_id: Optional[int] = None
+        self._current_run_id: int | None = None
 
     def _is_active(self) -> bool:
         return self._autonomy_task is not None and not self._autonomy_task.done()
@@ -89,29 +86,32 @@ class AutonomyService:
             logger.warning("Tentativa de iniciar AutonomyLoop já ativo.")
             return False
         self._config = config
-        self._policy = PolicyEngine(PolicyConfig(
-            risk_profile=config.risk_profile,
-            auto_confirm=config.auto_confirm,
-            allowlist=set(config.allowlist or []),
-            blocklist=set(config.blocklist or []),
-            max_actions_per_cycle=config.max_actions_per_cycle,
-            max_seconds_per_cycle=config.max_seconds_per_cycle,
-        ))
+        self._policy = PolicyEngine(
+            PolicyConfig(
+                risk_profile=config.risk_profile,
+                auto_confirm=config.auto_confirm,
+                allowlist=set(config.allowlist or []),
+                blocklist=set(config.blocklist or []),
+                max_actions_per_cycle=config.max_actions_per_cycle,
+                max_seconds_per_cycle=config.max_seconds_per_cycle,
+            )
+        )
         self._running = True
         AUTONOMY_ACTIVE.set(1)
-        
+
         # Tenta restaurar uma run ativa existente (ex: após reinício do container)
         try:
             existing_run = self._repo.get_active_run(
-                user_id=self._config.user_id,
-                project_id=self._config.project_id
+                user_id=self._config.user_id, project_id=self._config.project_id
             )
             if existing_run:
                 self._current_run_id = existing_run.id
                 self._cycle_count = int(existing_run.cycles or 0)
-                logger.info("AutonomyLoop restaurado de run existente", 
-                           run_id=existing_run.id, 
-                           cycles_restored=self._cycle_count)
+                logger.info(
+                    "AutonomyLoop restaurado de run existente",
+                    run_id=existing_run.id,
+                    cycles_restored=self._cycle_count,
+                )
             else:
                 # Cria nova run se não houver ativa
                 run = self._repo.create_run(
@@ -130,7 +130,7 @@ class AutonomyService:
         except Exception as e:
             logger.warning("Erro ao recuperar/criar run de autonomia", exc_info=e)
             self._current_run_id = None
-            
+
         self._autonomy_task = asyncio.create_task(self._run_loop())
         logger.info("AutonomyLoop iniciado", interval_seconds=config.interval_seconds)
         return True
@@ -153,7 +153,7 @@ class AutonomyService:
         logger.info("AutonomyLoop parado")
         return True
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         return {
             "active": self._is_active(),
             "cycle_count": self._cycle_count,
@@ -169,10 +169,10 @@ class AutonomyService:
                 "user_id": self._config.user_id,
                 "project_id": self._config.project_id,
                 "plan": self._config.plan,
-            }
+            },
         }
 
-    def update_plan(self, plan: list[Dict[str, Any]]) -> None:
+    def update_plan(self, plan: list[dict[str, Any]]) -> None:
         """Atualiza o plano de execução usado nos ciclos seguintes.
 
         A alteração é aplicada imediatamente a `self._config.plan` e será
@@ -181,9 +181,15 @@ class AutonomyService:
         self._config.plan = plan or []
         logger.info("Plano de execução atualizado", steps=len(self._config.plan))
 
-    def update_policy_config(self, risk_profile: Optional[str] = None, auto_confirm: Optional[bool] = None,
-                             allowlist: Optional[list[str]] = None, blocklist: Optional[list[str]] = None,
-                             max_actions_per_cycle: Optional[int] = None, max_seconds_per_cycle: Optional[int] = None) -> None:
+    def update_policy_config(
+        self,
+        risk_profile: str | None = None,
+        auto_confirm: bool | None = None,
+        allowlist: list[str] | None = None,
+        blocklist: list[str] | None = None,
+        max_actions_per_cycle: int | None = None,
+        max_seconds_per_cycle: int | None = None,
+    ) -> None:
         if risk_profile is not None:
             self._config.risk_profile = risk_profile
         if auto_confirm is not None:
@@ -196,19 +202,23 @@ class AutonomyService:
             self._config.max_actions_per_cycle = max_actions_per_cycle
         if isinstance(max_seconds_per_cycle, int) and max_seconds_per_cycle > 0:
             self._config.max_seconds_per_cycle = max_seconds_per_cycle
-        self._policy = PolicyEngine(PolicyConfig(
+        self._policy = PolicyEngine(
+            PolicyConfig(
+                risk_profile=self._config.risk_profile,
+                auto_confirm=self._config.auto_confirm,
+                allowlist=set(self._config.allowlist or []),
+                blocklist=set(self._config.blocklist or []),
+                max_actions_per_cycle=self._config.max_actions_per_cycle,
+                max_seconds_per_cycle=self._config.max_seconds_per_cycle,
+            )
+        )
+        logger.info(
+            "Configuração de políticas atualizada",
             risk_profile=self._config.risk_profile,
             auto_confirm=self._config.auto_confirm,
-            allowlist=set(self._config.allowlist or []),
-            blocklist=set(self._config.blocklist or []),
-            max_actions_per_cycle=self._config.max_actions_per_cycle,
-            max_seconds_per_cycle=self._config.max_seconds_per_cycle,
-        ))
-        logger.info("Configuração de políticas atualizada",
-                    risk_profile=self._config.risk_profile,
-                    auto_confirm=self._config.auto_confirm,
-                    allowlist=len(self._config.allowlist),
-                    blocklist=len(self._config.blocklist))
+            allowlist=len(self._config.allowlist),
+            blocklist=len(self._config.blocklist),
+        )
 
     async def _run_loop(self):
         try:
@@ -241,14 +251,16 @@ class AutonomyService:
         # Perceber: Métricas de saúde
         metrics = await self._optimization_service.get_system_health()
         logger.info("[AutonomyLoop] Perceber: métricas", **metrics)
-        
+
         # Realtime: Status & Metrics
         rt = get_realtime_service()
         rt.broadcast_status("thinking", "Analisando sistema e metas...")
-        rt.broadcast_metrics(cpu=metrics.get("cpu_percent", 0), memory=metrics.get("memory_percent", 0))
+        rt.broadcast_metrics(
+            cpu=metrics.get("cpu_percent", 0), memory=metrics.get("memory_percent", 0)
+        )
 
         # Seleciona meta atual (se disponível)
-        current_goal: Optional[Goal] = None
+        current_goal: Goal | None = None
         try:
             if self._goal_manager:
                 current_goal = self._goal_manager.get_next_goal()
@@ -271,11 +283,11 @@ class AutonomyService:
                         llm_service=self._llm_service,
                         policy=self._policy,
                         max_steps=self._config.max_actions_per_cycle,
-                        timeout_seconds=max(5, self._config.max_seconds_per_cycle)
+                        timeout_seconds=max(5, self._config.max_seconds_per_cycle),
                     )
                 except Exception as e:
                     logger.error("[AutonomyLoop] Falha ao gerar plano via planner", exc_info=e)
-                    rt.append_log(f"Falha no planejador: {str(e)}", "error")
+                    rt.append_log(f"Falha no planejador: {e!s}", "error")
             if not plan:
                 plan = [
                     {"tool": "get_current_datetime", "args": {}},
@@ -284,7 +296,7 @@ class AutonomyService:
 
         # Executar: respeitando PolicyEngine e rate limits
         self._policy.reset_cycle_quota()
-        
+
         for step_idx, step in enumerate(plan):
             if not self._policy.can_continue_cycle():
                 logger.info("[AutonomyLoop] Quotas do ciclo atingidas; interrompendo execução")
@@ -296,36 +308,48 @@ class AutonomyService:
             critical = step.get("critical", True)
             max_retries = step.get("retry", 0)
             fallback_tool_name = step.get("fallback_tool")
-            
+
             # Execução do passo com retries e fallback
             step_success = False
             attempts = 0
-            
+
             # Loop de Tentativas (Original + Retries)
             while attempts <= max_retries:
                 attempts += 1
-                
+
                 # Validação de Policy
                 decision = self._policy.validate_tool_call(tool_name, args)
                 if not decision.allowed:
-                    logger.warning("[AutonomyLoop] Ação bloqueada", tool=tool_name, reason=decision.reason)
+                    logger.warning(
+                        "[AutonomyLoop] Ação bloqueada", tool=tool_name, reason=decision.reason
+                    )
                     AUTONOMY_ACTIONS.labels("blocked").inc()
                     # Bloqueio de policy é falha terminal para este passo, não adianta retry
-                    break 
+                    break
 
                 if decision.require_confirmation:
                     try:
-                        from app.repositories.pending_action_repository import PendingActionRepository
                         import json as _json
+
+                        from app.repositories.pending_action_repository import (
+                            PendingActionRepository,
+                        )
+
                         par = PendingActionRepository()
-                        par.create(user_id=str(self._config.user_id or ""), tool_name=tool_name, args_json=_json.dumps(args, ensure_ascii=False), run_id=self._current_run_id, cycle=self._cycle_count + 1)
+                        par.create(
+                            user_id=str(self._config.user_id or ""),
+                            tool_name=tool_name,
+                            args_json=_json.dumps(args, ensure_ascii=False),
+                            run_id=self._current_run_id,
+                            cycle=self._cycle_count + 1,
+                        )
                         AUTONOMY_ACTIONS.labels("blocked").inc()
                         logger.info("[AutonomyLoop] Ação enviada para aprovação", tool=tool_name)
                     except Exception:
                         pass
                     # Ação pendente conta como sucesso parcial (não falhou, apenas pausou)
                     # Mas para o planner, interrompemos fluxo imediato
-                    step_success = True 
+                    step_success = True
                     break
 
                 tool = action_registry.get_tool(tool_name)
@@ -347,54 +371,75 @@ class AutonomyService:
                     try:
                         if getattr(tool, "args_schema", None):
                             payload = args or {}
+                        elif isinstance(args, dict) and "tool_input" in args:
+                            payload = args["tool_input"]
                         else:
-                            if isinstance(args, dict) and "tool_input" in args:
-                                payload = args["tool_input"]
-                            else:
-                                payload = "" if not args else json.dumps(args, ensure_ascii=False)
+                            payload = "" if not args else json.dumps(args, ensure_ascii=False)
                     except Exception:
                         payload = "" if not args else json.dumps(args, ensure_ascii=False)
 
                     # Log & Broadcast
-                    rt.broadcast_status("executing", f"Executando: {tool_name} (Tentativa {attempts}/{max_retries + 1})")
+                    rt.broadcast_status(
+                        "executing",
+                        f"Executando: {tool_name} (Tentativa {attempts}/{max_retries + 1})",
+                    )
                     rt.append_log(f"Executando: {tool_name}", "info")
-                    
+
                     # RUN
-                    result = await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
+                    result = (
+                        await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
+                    )
                     success = True
                     step_success = True
-                    
+
                     # Formatting output for logs
                     try:
-                        payload_str = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
+                        payload_str = (
+                            payload
+                            if isinstance(payload, str)
+                            else json.dumps(payload, ensure_ascii=False)
+                        )
                     except Exception:
                         payload_str = str(payload)
                     input_preview = payload_str[:300]
                     input_length = len(payload_str)
-                    
+
                     try:
-                        result_str = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
+                        result_str = (
+                            result
+                            if isinstance(result, str)
+                            else json.dumps(result, ensure_ascii=False)
+                        )
                     except Exception:
                         result_str = str(result)
                     result_preview = result_str[:500]
                     result_length = len(result_str)
 
-                    logger.info("[AutonomyLoop] Ação executada com sucesso",
-                                tool=tool_name,
-                                attempt=attempts,
-                                result_preview=result_preview)
+                    logger.info(
+                        "[AutonomyLoop] Ação executada com sucesso",
+                        tool=tool_name,
+                        attempt=attempts,
+                        result_preview=result_preview,
+                    )
                     AUTONOMY_ACTIONS.labels("success").inc()
 
                 except Exception as e:
                     success = False
                     error_msg = str(e)
-                    logger.error("[AutonomyLoop] Erro na execução", tool=tool_name, attempt=attempts, exc_info=e)
+                    logger.error(
+                        "[AutonomyLoop] Erro na execução",
+                        tool=tool_name,
+                        attempt=attempts,
+                        exc_info=e,
+                    )
                     AUTONOMY_ACTIONS.labels("error").inc()
                 finally:
                     # Telemetria
                     dur = time.perf_counter() - t0
                     try:
-                        action_registry.record_call(tool_name, dur, success=success, error=error_msg, input_args=args)
+                        action_registry.record_call(
+                            tool_name, dur, success=success, error=error_msg, input_args=args
+                        )
                     except Exception:
                         pass
                     try:
@@ -413,81 +458,105 @@ class AutonomyService:
                             )
                     except Exception:
                         pass
-                
+
                 if success:
-                    break # Sai do loop de retries
-                
+                    break  # Sai do loop de retries
+
                 # Se falhou e ainda tem retries, wait before retry
                 if attempts <= max_retries:
                     logger.info(f"[AutonomyLoop] Retentando {tool_name} em 2s...")
                     await asyncio.sleep(2)
-            
+
             # Fim do loop de retries. Se falhou todas as vezes:
             if not step_success:
                 logger.error(f"[AutonomyLoop] Passo falhou definitivamente: {tool_name}")
-                
+
                 # Tenta Fallback se existir (Lógica Local Rapid Recovery)
                 if fallback_tool_name:
                     logger.info(f"[AutonomyLoop] Tentando fallback: {fallback_tool_name}")
                     fallback_tool = action_registry.get_tool(fallback_tool_name)
                     if fallback_tool:
                         try:
-                            fallback_res = await fallback_tool.arun(args) if hasattr(fallback_tool, "arun") else fallback_tool.run(args)
-                            logger.info(f"[AutonomyLoop] Fallback {fallback_tool_name} executado com sucesso")
-                            step_success = True # Recuperado pelo fallback
+                            fallback_res = (
+                                await fallback_tool.arun(args)
+                                if hasattr(fallback_tool, "arun")
+                                else fallback_tool.run(args)
+                            )
+                            logger.info(
+                                f"[AutonomyLoop] Fallback {fallback_tool_name} executado com sucesso"
+                            )
+                            step_success = True  # Recuperado pelo fallback
                         except Exception as e:
                             logger.error(f"[AutonomyLoop] Fallback também falhou: {e}")
-                            error_msg = f"Primary and Fallback failed. Last error: {str(e)}"
+                            error_msg = f"Primary and Fallback failed. Last error: {e!s}"
 
                 # Se falhou (mesmo após fallback) e é crítico -> DYNAMIC REPLANNING (SOTA)
                 # [NEW] SEMANTIC VERIFICATION: Mesmo se step_success=True, verificar se o output presta.
                 if step_success and critical:
                     try:
                         from app.core.autonomy.planner import verify_outcome
-                        verification = await verify_outcome(current_goal, step, result if 'result' in locals() else None, None, self._llm_service) # type: ignore
+
+                        verification = await verify_outcome(
+                            current_goal,
+                            step,
+                            result if "result" in locals() else None,
+                            None,
+                            self._llm_service,
+                        )  # type: ignore
                         if not verification.get("success", True):
-                            logger.warning(f"[AutonomyLoop] Verificação semântica falhou: {verification.get('reason')}")
-                            rt.append_log(f"Resultado rejeitado: {verification.get('reason')}", "warning")
-                            step_success = False # Força falha para triggerar replanning
-                            error_msg = f"Semantic Verification Failed: {verification.get('reason')}"
+                            logger.warning(
+                                f"[AutonomyLoop] Verificação semântica falhou: {verification.get('reason')}"
+                            )
+                            rt.append_log(
+                                f"Resultado rejeitado: {verification.get('reason')}", "warning"
+                            )
+                            step_success = False  # Força falha para triggerar replanning
+                            error_msg = (
+                                f"Semantic Verification Failed: {verification.get('reason')}"
+                            )
                     except Exception as e_ver:
                         logger.error("Erro na verificação semântica", exc_info=e_ver)
 
                 if not step_success and critical:
-                    logger.warning(f"[AutonomyLoop] Falha crítica em {tool_name}. Iniciando REPLANNING...")
-                    rt.append_log(f"Falha crítica. Replanejando...", "warning")
-                    
+                    logger.warning(
+                        f"[AutonomyLoop] Falha crítica em {tool_name}. Iniciando REPLANNING..."
+                    )
+                    rt.append_log("Falha crítica. Replanejando...", "warning")
+
                     try:
                         from app.core.autonomy.planner import replan_goal
-                        
+
                         # Calcula passos restantes
-                        remaining = plan[step_idx+1:]
-                        
+                        remaining = plan[step_idx + 1 :]
+
                         replan_decision = await replan_goal(
-                            goal=current_goal, # type: ignore
+                            goal=current_goal,  # type: ignore
                             failed_step=step,
                             error_msg=str(error_msg),
                             remaining_steps=remaining,
-                            llm_service=self._llm_service, # type: ignore
-                            policy=self._policy
+                            llm_service=self._llm_service,  # type: ignore
+                            policy=self._policy,
                         )
-                        
+
                         action = replan_decision.get("action", "ABORT")
                         logger.info(f"[AutonomyLoop] Decisão de Replanejamento: {action}")
-                        
+
                         if action == "IGNORE":
                             logger.info("Replanejador decidiu ignorar falha. Continuando.")
                             rt.append_log("Falha ignorada pelo replanejador.", "info")
-                            continue # Vai para o próximo passo do loop for
-                            
+                            continue  # Vai para o próximo passo do loop for
+
                         elif action == "RETRY_WITH_ARGS":
                             new_args = replan_decision.get("new_args", {})
-                            logger.info("Replanejador sugeriu novos argumentos. Retentando...", new_args=new_args)
+                            logger.info(
+                                "Replanejador sugeriu novos argumentos. Retentando...",
+                                new_args=new_args,
+                            )
                             rt.append_log("Retentando com novos parâmetros...", "info")
                             # Modifica o passo atual e reseta tentativas - hack elegante:
                             # Não podemos resetar o 'enumerate', mas podemos executar in-place agora ou
                             # inserir um novo passo na lista? A lista 'plan' é iterável.
-                            # Melhor: Executar recursivamente/diretamente agora. 
+                            # Melhor: Executar recursivamente/diretamente agora.
                             # Simplificação: Apenas logamos que vamos tentar na proxima iteração?
                             # Não, o loop já passou. Vamos inserir na posição seguinte do plano e continuar?
                             # Mas queremos executar AGORA.
@@ -495,41 +564,47 @@ class AutonomyService:
                             # Assim o 'for' vai pegar ele na próxima iteração.
                             retry_step = step.copy()
                             retry_step["args"] = new_args
-                            retry_step["retry"] = 0 # Um retry já basta
+                            retry_step["retry"] = 0  # Um retry já basta
                             # Inserimos logo a frente
                             plan.insert(step_idx + 1, retry_step)
-                            continue 
-                            
+                            continue
+
                         elif action == "NEW_PLAN":
                             new_steps = replan_decision.get("new_steps", [])
                             if new_steps:
-                                logger.info(f"Replanejador gerou novo plano com {len(new_steps)} passos.")
+                                logger.info(
+                                    f"Replanejador gerou novo plano com {len(new_steps)} passos."
+                                )
                                 rt.append_log("Novo plano adotado.", "success")
                                 # Atualiza o plano self._config.plan SE quisermos persistir
                                 # Mas aqui estamos num loop local 'plan'.
                                 # Vamos substituir os passos restantes.
-                                # Python permite modificar lista enquanto itera SE tivermos cuidado, 
+                                # Python permite modificar lista enquanto itera SE tivermos cuidado,
                                 # mas 'enumerate' usa iterador. Modificar lista futura pode ser tricky.
                                 # Mais seguro: Truncar lista atual e estender.
-                                del plan[step_idx+1:] # Remove restantes antigos
-                                plan.extend(new_steps) # Adiciona novos
+                                del plan[step_idx + 1 :]  # Remove restantes antigos
+                                plan.extend(new_steps)  # Adiciona novos
                                 # O loop for vai continuar, consumindo os novos passos
                                 continue
                             else:
-                                logger.warning("Replanejador sugeriu NEW_PLAN mas enviou lista vazia. Abortando.")
+                                logger.warning(
+                                    "Replanejador sugeriu NEW_PLAN mas enviou lista vazia. Abortando."
+                                )
                                 break
-                                
+
                         elif action == "ABORT":
                             logger.error("Replanejador decidiu ABORTAR.")
                             rt.append_log("Replanejador abortou a meta.", "error")
                             break
-                            
+
                     except Exception as e_replan:
                         logger.error("Erro crítico no sistema de Replanejamento", exc_info=e_replan)
-                        rt.append_log(f"Erro no replanejador: {str(e_replan)}", "error")
+                        rt.append_log(f"Erro no replanejador: {e_replan!s}", "error")
                         break
 
-                    logger.error("[AutonomyLoop] Passo crítico falhou e replanejamento não recuperou. Abortando.")
+                    logger.error(
+                        "[AutonomyLoop] Passo crítico falhou e replanejamento não recuperou. Abortando."
+                    )
                     break
 
 

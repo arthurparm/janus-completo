@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Dict, List, Any
+from typing import Any
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        extra='ignore', env_file='app/.env', env_file_encoding='utf-8'
+        extra="ignore", env_file="app/.env", env_file_encoding="utf-8"
     )
 
     # App
@@ -26,7 +26,7 @@ class AppSettings(BaseSettings):
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
     # Pode ser configurada via variável de ambiente CORS_ALLOW_ORIGINS (JSON ou CSV)
-    CORS_ALLOW_ORIGINS: List[str] = ["*"]
+    CORS_ALLOW_ORIGINS: list[str] = ["*"]
 
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
@@ -36,7 +36,7 @@ class AppSettings(BaseSettings):
     # Qdrant
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
-    QDRANT_API_KEY: Optional[SecretStr] = None
+    QDRANT_API_KEY: SecretStr | None = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
 
     # MySQL - Configuration-as-Data
@@ -52,12 +52,12 @@ class AppSettings(BaseSettings):
 
     # Firebase
     FIREBASE_ENABLED: bool = False
-    FIREBASE_CREDENTIALS_PATH: Optional[str] = "/app/app/serviceAccountKey.json"
-    FIREBASE_DATABASE_URL: Optional[str] = None
+    FIREBASE_CREDENTIALS_PATH: str | None = "/app/app/serviceAccountKey.json"
+    FIREBASE_DATABASE_URL: str | None = None
 
     # LangSmith
     LANGCHAIN_TRACING_V2: str = "true"
-    LANGCHAIN_API_KEY: Optional[SecretStr] = None
+    LANGCHAIN_API_KEY: SecretStr | None = None
 
     # Memória
     MEMORY_SHORT_TTL_SECONDS: int = 600
@@ -67,7 +67,7 @@ class AppSettings(BaseSettings):
     MEMORY_QUOTA_WINDOW_SECONDS: int = 3600
     MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN: int = 200
     MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN: int = 5_000_000
-    MEMORY_ENCRYPTION_KEY: Optional[str] = None
+    MEMORY_ENCRYPTION_KEY: str | None = None
     MEMORY_PII_REDACT: bool = True
 
     # Raciocínio
@@ -91,18 +91,18 @@ class AppSettings(BaseSettings):
     LLM_RESPONSE_CACHE_USE_MSGPACK: bool = False
     LLM_POOL_MAX_SIZE: int = 16
     LLM_POOL_TTL_SECONDS: int = 3600
-    LLM_POOL_WARM_PROVIDERS: List[str] = []
+    LLM_POOL_WARM_PROVIDERS: list[str] = []
     LLM_EXECUTOR_MAX_WORKERS: int = 32
     LLM_MAX_PROMPT_LENGTH: int = 100000
     # Política econômica e tetos de custo
     LLM_ECONOMY_POLICY: str = "balanced"  # strict | balanced | quality
-    LLM_MAX_COST_PER_REQUEST_USD: Dict[str, float] = {
+    LLM_MAX_COST_PER_REQUEST_USD: dict[str, float] = {
         "orchestrator": 0.02,
         "code_generator": 0.05,
         "knowledge_curator": 0.01,
     }
     # Tokens esperados (em milhares) por requisição por papel (input+output total)
-    LLM_EXPECTED_KTOKENS_BY_ROLE: Dict[str, float] = {
+    LLM_EXPECTED_KTOKENS_BY_ROLE: dict[str, float] = {
         "orchestrator": 2.0,
         "code_generator": 3.0,
         "knowledge_curator": 1.5,
@@ -120,13 +120,13 @@ class AppSettings(BaseSettings):
     TIMEOUT_AUTO_TUNE_ENABLED: bool = True
     TIMEOUT_AUTO_TUNE_PERCENTILE: float = 0.95
     TIMEOUT_AUTO_TUNE_PAD_SECONDS: float = 0.5
-    TIMEOUT_MIN_SECONDS_MAP: Dict[str, float] = {
+    TIMEOUT_MIN_SECONDS_MAP: dict[str, float] = {
         "llm": 5.0,
         "qdrant_search": 3.0,
         "neo4j_query": 3.0,
         "rabbitmq_management": 2.0,
     }
-    TIMEOUT_MAX_SECONDS_MAP: Dict[str, float] = {
+    TIMEOUT_MAX_SECONDS_MAP: dict[str, float] = {
         "llm": 180.0,
         "qdrant_search": 120.0,
         "neo4j_query": 120.0,
@@ -142,15 +142,15 @@ class AppSettings(BaseSettings):
     LLM_COST_PENALTY_MAX_FACTOR: float = 2.0
 
     # LLM Providers
-    OPENAI_API_KEY: Optional[SecretStr] = None
+    OPENAI_API_KEY: SecretStr | None = None
     OPENAI_MODEL_NAME: str = "gpt-4o"
-    OPENAI_MODELS: List[str] = ["gpt-4o"]
+    OPENAI_MODELS: list[str] = ["gpt-4o"]
     OPENAI_HTTP_MAX_CONNECTIONS: int = 100
     OPENAI_HTTP_MAX_KEEPALIVE: int = 20
     OPENAI_HTTP_TIMEOUT_SECONDS: float = 60.0
-    GEMINI_API_KEY: Optional[SecretStr] = None
+    GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
-    GEMINI_MODELS: List[str] = ["gemini-2.5-flash"]
+    GEMINI_MODELS: list[str] = ["gemini-2.5-flash"]
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_ORCHESTRATOR_MODEL: str = "qwen2.5:14b"
     OLLAMA_CODER_MODEL: str = "qwen2.5-coder:14b"
@@ -171,28 +171,28 @@ class AppSettings(BaseSettings):
     OLLAMA_COST_PER_1K_INPUT_USD: float = 0.0
     OLLAMA_COST_PER_1K_OUTPUT_USD: float = 0.0
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
-    OLLAMA_KEEP_ALIVE: Optional[str] = "30m"  # mantém modelos carregados para reduzir cold-start
-    OLLAMA_NUM_CTX: Optional[int] = 4096  # contexto máximo por requisição
-    OLLAMA_NUM_THREAD: Optional[int] = None  # threads CPU (auto se None)
-    OLLAMA_NUM_BATCH: Optional[int] = None  # tamanho de batch de tokens
-    OLLAMA_GPU_LAYERS: Optional[int] = None  # camadas na GPU (auto se None)
+    OLLAMA_KEEP_ALIVE: str | None = "30m"  # mantém modelos carregados para reduzir cold-start
+    OLLAMA_NUM_CTX: int | None = 4096  # contexto máximo por requisição
+    OLLAMA_NUM_THREAD: int | None = None  # threads CPU (auto se None)
+    OLLAMA_NUM_BATCH: int | None = None  # tamanho de batch de tokens
+    OLLAMA_GPU_LAYERS: int | None = None  # camadas na GPU (auto se None)
 
-    # Modularidade: candidatos por papel (ex.: "orchestrator": ["openai:gpt-4o", "google_gemini:gemini-2.5-pro"]) 
-    LLM_CLOUD_MODEL_CANDIDATES: Dict[str, List[str]] = {}
+    # Modularidade: candidatos por papel (ex.: "orchestrator": ["openai:gpt-4o", "google_gemini:gemini-2.5-pro"])
+    LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {}
 
     # Tabelas de preço por modelo (se ausente, usa preço default do provedor)
-    OPENAI_MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    OPENAI_MODEL_PRICING: dict[str, dict[str, float]] = {
         "gpt-4o": {"input_per_1k_usd": 5.0, "output_per_1k_usd": 15.0},
         # Adicione aqui outros modelos (ex.: "gpt-4", "gpt-5")
     }
-    GEMINI_MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    GEMINI_MODEL_PRICING: dict[str, dict[str, float]] = {
         "gemini-2.5-flash": {"input_per_1k_usd": 0.5, "output_per_1k_usd": 1.5},
         # Adicione aqui outros modelos (ex.: "gemini-2.5-pro")
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
     # Formato: {"provider:model": {"tpm": int, "rpm": int, "rpd": int, "tpd": int}}
-    LLM_RATE_LIMITS: Dict[str, Dict[str, int]] = {}
+    LLM_RATE_LIMITS: dict[str, dict[str, int]] = {}
     LLM_RATE_LIMIT_THRESHOLD: float = 0.80  # Começa a evitar modelo quando atinge 80% do limite
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -207,7 +207,7 @@ class AppSettings(BaseSettings):
     NEO4J_DEFAULT_TIMEOUT_SECONDS: int = 30
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
-    AUTH_JWT_SECRET: Optional[str] = None
+    AUTH_JWT_SECRET: str | None = None
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
 
     # Sprint 1: RabbitMQ
@@ -217,54 +217,54 @@ class AppSettings(BaseSettings):
     RABBITMQ_PASSWORD: str = "janus_pass"
     RABBITMQ_MANAGEMENT_PORT: int = 15672
     BROKER_USE_MSGPACK: bool = True
-    RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
+    RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, int]] = {
         "janus.knowledge.consolidation": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.agent.tasks": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.neural.training": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.data.harvesting": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.meta_agent.cycle": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
             "x-max-priority": 10,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.tasks.reflexion": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
             "x-max-priority": 10,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.failure.detected": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
             "x-max-priority": 10,
-            "x-dead-letter-exchange": "janus.dlx"
+            "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.dlq": {
             "x-message-ttl": 604800000,  # 7 days retention for dead letters
-            "x-max-length": 10000
+            "x-max-length": 10000,
         },
         "default": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
-            "x-dead-letter-exchange": "janus.dlx"
-        }
+            "x-dead-letter-exchange": "janus.dlx",
+        },
     }
 
     # Sprint 2: Knowledge Consolidator
@@ -274,24 +274,24 @@ class AppSettings(BaseSettings):
     RAG_HYBRID_GRAPH_WEIGHT: float = 0.3
     DOCS_MAX_FILE_SIZE_BYTES: int = 100_000_000
     DOCS_MAX_POINTS_PER_USER: int = 50000
-    PRODUCTIVITY_DAILY_LIMITS: Dict[str, int] = {
+    PRODUCTIVITY_DAILY_LIMITS: dict[str, int] = {
         "calendar.write": 500,
         "mail.send": 100,
         "notes.write": 1000,
     }
-    GOOGLE_OAUTH_CLIENT_ID: Optional[SecretStr] = None
-    GOOGLE_OAUTH_CLIENT_SECRET: Optional[SecretStr] = None
-    GOOGLE_OAUTH_REDIRECT_URI: Optional[str] = None
-    TRAINING_GPU_BUDGET_PER_USER: Dict[str, float] = {}
-    RABBITMQ_QUEUE_CONFIG: Dict[str, Dict[str, int]] = {
+    GOOGLE_OAUTH_CLIENT_ID: SecretStr | None = None
+    GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
+    GOOGLE_OAUTH_REDIRECT_URI: str | None = None
+    TRAINING_GPU_BUDGET_PER_USER: dict[str, float] = {}
+    RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, int]] = {
         "janus.neural.training": {"x-max-priority": 5, "x-message-ttl": 3600000},
         "janus.productivity.google": {"x-max-priority": 5, "x-message-ttl": 600000},
     }
     MIN_DEPLOY_ACCURACY: float = 0.7
-    LLM_AB_EXPERIMENT_ID: Optional[int] = None
+    LLM_AB_EXPERIMENT_ID: int | None = None
 
     # Sprint 3: Web Search
-    TAVILY_API_KEY: Optional[SecretStr] = None
+    TAVILY_API_KEY: SecretStr | None = None
     CONTEXT_WEB_CACHE_TTL_SECONDS: int = 1800
     CONTEXT_WEB_CACHE_MAX_ITEMS: int = 512
 
@@ -309,25 +309,25 @@ class AppSettings(BaseSettings):
 
     # Observabilidade
     OTEL_ENABLED: bool = False
-    OTEL_OTLP_ENDPOINT: Optional[str] = None
-    OTEL_SERVICE_NAME: Optional[str] = None
+    OTEL_OTLP_ENDPOINT: str | None = None
+    OTEL_SERVICE_NAME: str | None = None
     LOG_SAMPLING_RATE: float = 1.0
     AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
     AUDIT_RETENTION_DAYS: int = 30
 
     # Tailscale Serve Configuration
     TAILSCALE_SERVE_ENABLED: bool = False
-    TAILSCALE_HOST: Optional[str] = None
-    TAILSCALE_BACKEND_URL: Optional[str] = None
-    TAILSCALE_FRONTEND_URL: Optional[str] = None
-    
+    TAILSCALE_HOST: str | None = None
+    TAILSCALE_BACKEND_URL: str | None = None
+    TAILSCALE_FRONTEND_URL: str | None = None
+
     # CORS para Tailscale - adicionar domínios Tailscale aos domínios permitidos
     @field_validator("CORS_ALLOW_ORIGINS", mode="before")
     def _add_tailscale_origins(cls, v: Any, info):
         # Se Tailscale estiver habilitado, adicionar origens Tailscale
         tailscale_enabled = info.data.get("TAILSCALE_SERVE_ENABLED", False)
         tailscale_host = info.data.get("TAILSCALE_HOST", "")
-        
+
         # Parse existing origins
         if isinstance(v, str):
             if v.strip() == "*":
@@ -338,13 +338,13 @@ class AppSettings(BaseSettings):
             origins = v
         else:
             origins = ["*"]
-        
+
         # Adicionar origens Tailscale se habilitado
         if tailscale_enabled and tailscale_host:
             tailscale_origin = f"https://{tailscale_host}"
             if tailscale_origin not in origins and "*" not in origins:
                 origins.append(tailscale_origin)
-        
+
         return origins
 
     # ======= Validadores para variáveis de ambiente complexas =======
@@ -370,7 +370,7 @@ class AppSettings(BaseSettings):
             s = v.strip()
             try:
                 obj = json.loads(s)
-                parsed: Dict[str, List[str]] = {}
+                parsed: dict[str, list[str]] = {}
                 for k, val in obj.items():
                     if isinstance(val, list):
                         parsed[k] = [str(x).strip() for x in val if str(x).strip()]
@@ -389,7 +389,7 @@ class AppSettings(BaseSettings):
             try:
                 obj = json.loads(v)
 
-                def coerce(d: Dict[str, Any]) -> Dict[str, float]:
+                def coerce(d: dict[str, Any]) -> dict[str, float]:
                     return {
                         "input_per_1k_usd": float(d.get("input_per_1k_usd", 0.0)),
                         "output_per_1k_usd": float(d.get("output_per_1k_usd", 0.0)),
@@ -407,7 +407,7 @@ class AppSettings(BaseSettings):
             s = v.strip()
             try:
                 obj = json.loads(s)
-                parsed: Dict[str, float] = {}
+                parsed: dict[str, float] = {}
                 for k, val in obj.items():
                     try:
                         parsed[str(k)] = float(val)
@@ -415,7 +415,7 @@ class AppSettings(BaseSettings):
                         parsed[str(k)] = 0.0
                 return parsed
             except Exception:
-                parsed: Dict[str, float] = {}
+                parsed: dict[str, float] = {}
                 parts = [x.strip() for x in s.split(",") if x.strip()]
                 for p in parts:
                     if "=" in p:
@@ -433,7 +433,7 @@ class AppSettings(BaseSettings):
         if isinstance(v, str):
             try:
                 obj = json.loads(v)
-                parsed: Dict[str, Dict[str, int]] = {}
+                parsed: dict[str, dict[str, int]] = {}
                 for model_key, limits in obj.items():
                     if isinstance(limits, dict):
                         parsed[str(model_key)] = {
@@ -446,5 +446,6 @@ class AppSettings(BaseSettings):
 
     # Workspace e File System
     WORKSPACE_ROOT: str = "/app/workspace"
+
 
 settings = AppSettings()

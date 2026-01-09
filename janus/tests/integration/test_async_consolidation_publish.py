@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from app.core.workers.async_consolidation_worker import publish_consolidation_task

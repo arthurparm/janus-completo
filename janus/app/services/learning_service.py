@@ -1,34 +1,48 @@
-import structlog
-from typing import Dict, Any, List, Optional
 from datetime import datetime
-from fastapi import Depends
-from app.core.infrastructure.filesystem_manager import read_file
+from typing import Any
 
-from app.repositories.learning_repository import LearningRepository, get_learning_repository, ModelInfo
+import structlog
+from fastapi import Depends
+
+from app.core.infrastructure.filesystem_manager import read_file
 from app.core.workers.neural_training_worker import publish_neural_training_task
+from app.repositories.learning_repository import (
+    LearningRepository,
+    ModelInfo,
+    get_learning_repository,
+)
 
 logger = structlog.get_logger(__name__)
 
 # --- Custom Service-Layer Exceptions ---
 
+
 class LearningServiceError(Exception):
     """Base exception for learning service errors."""
+
     pass
+
 
 class ModelNotFoundError(LearningServiceError):
     """Raised when a model is not found."""
+
     pass
+
 
 class TrainingFailedError(LearningServiceError):
     """Raised when the training process fails."""
+
     pass
 
 
 class ExperimentNotFoundError(LearningServiceError):
     """Raised when an experiment is not found."""
+
     pass
 
+
 # --- Learning Service ---
+
 
 class LearningService:
     """
@@ -38,11 +52,23 @@ class LearningService:
     def __init__(self, repo: LearningRepository):
         self._repo = repo
 
-    async def trigger_harvesting(self, limit: int, query: Optional[str] = None, min_score: Optional[float] = None, origin: Optional[str] = None) -> \
-    Dict[str, Any]:
-        logger.info("Orquestrando coleta de dados para treinamento", limit=limit, query=query, min_score=min_score)
+    async def trigger_harvesting(
+        self,
+        limit: int,
+        query: str | None = None,
+        min_score: float | None = None,
+        origin: str | None = None,
+    ) -> dict[str, Any]:
+        logger.info(
+            "Orquestrando coleta de dados para treinamento",
+            limit=limit,
+            query=query,
+            min_score=min_score,
+        )
         try:
-            result = await self._repo.run_harvesting(limit=limit, query=query, min_score=min_score, origin=origin)
+            result = await self._repo.run_harvesting(
+                limit=limit, query=query, min_score=min_score, origin=origin
+            )
             if "bem-sucedida" in result.get("message", ""):
                 self._repo.increment_harvested_count(limit)
             return result
@@ -50,7 +76,13 @@ class LearningService:
             logger.error("Erro no serviço ao orquestrar coleta de dados", exc_info=e)
             raise LearningServiceError("Falha ao orquestrar a coleta de dados.") from e
 
-    async def trigger_training(self, model_type: str, training_config: Dict[str, Any], model_name: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
+    async def trigger_training(
+        self,
+        model_type: str,
+        training_config: dict[str, Any],
+        model_name: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
         """Publica uma tarefa de treinamento na fila e retorna o ack com task_id."""
         logger.info("Agendando treinamento de novo modelo", model_type=model_type)
         try:
@@ -67,7 +99,7 @@ class LearningService:
                 dataset_version=dataset_info.get("version"),
                 model_name=derived_model_name,
                 training_params=tp,
-                user_id=user_id
+                user_id=user_id,
             )
             ack = {
                 "message": "Treinamento agendado.",
@@ -77,17 +109,17 @@ class LearningService:
                 "queued_at": datetime.utcnow().isoformat(),
                 "dataset_version": dataset_info.get("version"),
                 "dataset_num_examples": dataset_info.get("num_examples"),
-                "model_name": derived_model_name
+                "model_name": derived_model_name,
             }
             return ack
         except Exception as e:
             logger.error("Erro inesperado ao agendar treinamento", exc_info=e)
             raise LearningServiceError("Falha ao agendar o treinamento.") from e
 
-    def get_training_status(self) -> Optional[Dict[str, Any]]:
+    def get_training_status(self) -> dict[str, Any] | None:
         return self._repo.get_active_training_session()
 
-    def list_all_models(self) -> List[ModelInfo]:
+    def list_all_models(self) -> list[ModelInfo]:
         return self._repo.get_all_models()
 
     def get_model_details(self, model_id: str) -> ModelInfo:
@@ -96,32 +128,33 @@ class LearningService:
             raise ModelNotFoundError(f"Modelo '{model_id}' não encontrado.")
         return model
 
-    def get_learning_statistics(self) -> Dict[str, Any]:
+    def get_learning_statistics(self) -> dict[str, Any]:
         return self._repo.get_stats()
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         logger.info("Verificando saúde do módulo de aprendizado.")
         return {
             "status": "healthy",
             "module": "neural_learning",
             "harvester_running": self._repo.is_harvester_healthy(),
             "training_capacity_available": True,  # Mock
-            "data_quality_score": 0.92  # Mock
+            "data_quality_score": 0.92,  # Mock
         }
 
-    async def preview_dataset(self, limit: int = 20) -> Dict[str, Any]:
+    async def preview_dataset(self, limit: int = 20) -> dict[str, Any]:
         """Retorna os primeiros N exemplos do dataset de treino para inspeção rápida."""
         try:
             content = read_file("workspace/training_data.jsonl")
             if content.startswith("Erro:"):
                 return {"examples": [], "total": 0}
 
-            lines = [ln for ln in content.strip().split('\n') if ln.strip()][:limit]
+            lines = [ln for ln in content.strip().split("\n") if ln.strip()][:limit]
             examples = []
             for ln in lines:
                 try:
                     # cada linha é um JSON
                     import json
+
                     examples.append(json.loads(ln))
                 except Exception:
                     # ignora linhas inválidas
@@ -131,25 +164,26 @@ class LearningService:
             logger.error("Erro ao pré-visualizar dataset", exc_info=e)
             raise LearningServiceError("Falha ao pré-visualizar o dataset.") from e
 
-    def evaluate_model(self, model_id: str, test_data_limit: int = 50) -> Dict[str, Any]:
+    def evaluate_model(self, model_id: str, test_data_limit: int = 50) -> dict[str, Any]:
         """Avalia um modelo treinado usando dados disponíveis no workspace."""
         model = self._repo.find_model_by_id(model_id)
         if not model:
             raise ModelNotFoundError(f"Modelo '{model_id}' não encontrado.")
 
         try:
-            content = read_file(f"workspace/training_data.jsonl")
+            content = read_file("workspace/training_data.jsonl")
             if content.startswith("Erro:"):
                 # Sem arquivo de treino; retornar avaliação mock com aviso
-                metrics = {"accuracy": 0.0, "f1": 0.0, "precision": 0.0, "recall": 0.0,
-                           "note": "Sem dados de treino disponíveis"}
-                return {
-                    "model_id": model_id,
-                    "examples_evaluated": 0,
-                    "metrics": metrics
+                metrics = {
+                    "accuracy": 0.0,
+                    "f1": 0.0,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "note": "Sem dados de treino disponíveis",
                 }
+                return {"model_id": model_id, "examples_evaluated": 0, "metrics": metrics}
 
-            lines = content.strip().split('\n')[:test_data_limit]
+            lines = content.strip().split("\n")[:test_data_limit]
             examples_evaluated = len(lines)
             # Métricas simuladas baseadas na quantidade avaliada
             base = max(0.5, min(0.95, 0.7 + examples_evaluated / 1000))
@@ -162,7 +196,7 @@ class LearningService:
             return {
                 "model_id": model_id,
                 "examples_evaluated": examples_evaluated,
-                "metrics": metrics
+                "metrics": metrics,
             }
         except Exception as e:
             logger.error("Erro ao avaliar modelo", exc_info=e)
@@ -170,13 +204,13 @@ class LearningService:
 
     # ===== Dataset Version and Experiments =====
 
-    def get_dataset_version_info(self) -> Dict[str, Any]:
+    def get_dataset_version_info(self) -> dict[str, Any]:
         return self._repo.get_dataset_version_info()
 
-    def list_experiments(self) -> List[Dict[str, Any]]:
+    def list_experiments(self) -> list[dict[str, Any]]:
         return self._repo.list_experiments()
 
-    def get_experiment_details(self, experiment_id: str) -> Dict[str, Any]:
+    def get_experiment_details(self, experiment_id: str) -> dict[str, Any]:
         exp = self._repo.get_experiment(experiment_id)
         if not exp:
             raise ExperimentNotFoundError(f"Experimento '{experiment_id}' não encontrado.")
@@ -184,5 +218,7 @@ class LearningService:
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço
-def get_learning_service(repo: LearningRepository = Depends(get_learning_repository)) -> LearningService:
+def get_learning_service(
+    repo: LearningRepository = Depends(get_learning_repository),
+) -> LearningService:
     return LearningService(repo)

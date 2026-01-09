@@ -1,13 +1,11 @@
 import asyncio
 import logging
-from typing import Set, Optional
 
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession, AsyncTransaction
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession, AsyncTransaction
 from prometheus_client import Counter, Histogram
-from fastapi import Depends
 
 from app.config import settings
-from app.core.infrastructure.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.models.schemas import GraphRelationship
 
 logger = logging.getLogger(__name__)
@@ -17,14 +15,16 @@ _DB_QUERIES = Counter("neo4j_queries_total", "Total de queries ao Neo4j", ["oper
 _DB_LATENCY = Histogram("neo4j_query_latency_seconds", "Latência por query ao Neo4j", ["operation"])
 _DB_CB = CircuitBreaker(failure_threshold=5, recovery_timeout=30)
 
+
 class GraphDatabase:
     """
     Gerencia a conexão e as operações com o banco de dados Neo4j.
     Instanciada como um singleton gerenciado pelo ciclo de vida da aplicação.
     """
-    _driver: Optional[AsyncDriver] = None
+
+    _driver: AsyncDriver | None = None
     _ontology_lock = asyncio.Lock()
-    _known_relationship_types: Set[str] = set()
+    _known_relationship_types: set[str] = set()
     _offline: bool = False
 
     async def connect(self):
@@ -32,7 +32,7 @@ class GraphDatabase:
             try:
                 self._driver = AsyncGraphDatabase.driver(
                     settings.NEO4J_URI,
-                    auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value())
+                    auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value()),
                 )
                 await self._initialize_ontology()
                 logger.info("Conexão com Neo4j estabelecida.")
@@ -55,83 +55,181 @@ class GraphDatabase:
                 async with self._driver.session() as session:
                     await self.register_relationship_type(session, GraphRelationship.CONTAINS.value)
                     await self.register_relationship_type(session, GraphRelationship.CALLS.value)
-                    await self.register_relationship_type(session, GraphRelationship.IS_SYNONYM_OF.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.IS_SYNONYM_OF.value
+                    )
                     # Tipos adicionais (arestas tipificadas)
                     await self.register_relationship_type(session, GraphRelationship.IMPORTS.value)
                     await self.register_relationship_type(session, GraphRelationship.DEFINES.value)
-                    await self.register_relationship_type(session, GraphRelationship.INHERITS_FROM.value)
-                    await self.register_relationship_type(session, GraphRelationship.IMPLEMENTS.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.INHERITS_FROM.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.IMPLEMENTS.value
+                    )
                     await self.register_relationship_type(session, GraphRelationship.USES.value)
                     await self.register_relationship_type(session, GraphRelationship.IS_A.value)
-                    await self.register_relationship_type(session, GraphRelationship.EXAMPLE_OF.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.EXAMPLE_OF.value
+                    )
                     await self.register_relationship_type(session, GraphRelationship.PART_OF.value)
-                    await self.register_relationship_type(session, GraphRelationship.DEPENDS_ON.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.DEPENDS_ON.value
+                    )
                     await self.register_relationship_type(session, GraphRelationship.ENABLES.value)
                     await self.register_relationship_type(session, GraphRelationship.PRODUCES.value)
-                    await self.register_relationship_type(session, GraphRelationship.RESULTS_IN.value)
-                    await self.register_relationship_type(session, GraphRelationship.RELATES_TO.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.RESULTS_IN.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.RELATES_TO.value
+                    )
                     await self.register_relationship_type(session, GraphRelationship.MENTIONS.value)
                     await self.register_relationship_type(session, GraphRelationship.CAUSES.value)
                     await self.register_relationship_type(session, GraphRelationship.SOLVES.value)
-                    await self.register_relationship_type(session, GraphRelationship.CAUSED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.SOLVED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.HAS_PROPERTY.value)
-                    await self.register_relationship_type(session, GraphRelationship.SIMILAR_TO.value)
-                    await self.register_relationship_type(session, GraphRelationship.FOLLOWED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.EXTRACTED_FROM.value)
-                    
+                    await self.register_relationship_type(
+                        session, GraphRelationship.CAUSED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.SOLVED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.HAS_PROPERTY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.SIMILAR_TO.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.FOLLOWED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.EXTRACTED_FROM.value
+                    )
+
                     # JARVIS / Agentic Relationships
                     await self.register_relationship_type(session, GraphRelationship.HAS_GOAL.value)
-                    await self.register_relationship_type(session, GraphRelationship.HAS_PREFERENCE.value)
-                    await self.register_relationship_type(session, GraphRelationship.IMPLEMENTED_BY.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.HAS_PREFERENCE.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.IMPLEMENTED_BY.value
+                    )
                     await self.register_relationship_type(session, GraphRelationship.EXECUTES.value)
                     await self.register_relationship_type(session, GraphRelationship.NEXT.value)
                     await self.register_relationship_type(session, GraphRelationship.TRUSTS.value)
-                    await self.register_relationship_type(session, GraphRelationship.BLOCKED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.COMPLETED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.CREATED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.MODIFIED_BY.value)
-                    await self.register_relationship_type(session, GraphRelationship.RESULTS_IN.value)
+                    await self.register_relationship_type(
+                        session, GraphRelationship.BLOCKED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.COMPLETED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.CREATED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.MODIFIED_BY.value
+                    )
+                    await self.register_relationship_type(
+                        session, GraphRelationship.RESULTS_IN.value
+                    )
 
                     try:
                         # Core Constraints
-                        await session.run("CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE")
-                        
-                        # JARVIS Constraints & Indexes
-                        await session.run("CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT goal_id_unique IF NOT EXISTS FOR (g:Goal) REQUIRE g.id IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT episode_id_unique IF NOT EXISTS FOR (e:Episode) REQUIRE e.id IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT action_id_unique IF NOT EXISTS FOR (a:Action) REQUIRE a.id IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT plan_id_unique IF NOT EXISTS FOR (p:Plan) REQUIRE p.id IS UNIQUE")
-                        await session.run("CREATE INDEX episode_timestamp_idx IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)")
+                        await session.run(
+                            "CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE"
+                        )
 
-                        await session.run("CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE")
-                        await session.run("CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY")
-                        await session.run("CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY")
-                        await session.run("CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)")
-                        await session.run("CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)")
-                        await session.run("CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)")
-                        await session.run("CREATE INDEX person_name_idx IF NOT EXISTS FOR (p:Person) ON (p.name)")
-                        await session.run("CREATE INDEX error_name_idx IF NOT EXISTS FOR (e:Error) ON (e.name)")
-                        await session.run("CREATE INDEX solution_name_idx IF NOT EXISTS FOR (s:Solution) ON (s.name)")
-                        await session.run("CREATE INDEX pattern_name_idx IF NOT EXISTS FOR (p:Pattern) ON (p.name)")
-                        await session.run("CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)")
-                        await session.run("CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)")
-                        await session.run("CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)")
-                        await session.run("CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)")
-                        await session.run("CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)")
-                        await session.run("CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)")
-                        await session.run("CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)")
+                        # JARVIS Constraints & Indexes
+                        await session.run(
+                            "CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT goal_id_unique IF NOT EXISTS FOR (g:Goal) REQUIRE g.id IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT episode_id_unique IF NOT EXISTS FOR (e:Episode) REQUIRE e.id IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT action_id_unique IF NOT EXISTS FOR (a:Action) REQUIRE a.id IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT plan_id_unique IF NOT EXISTS FOR (p:Plan) REQUIRE p.id IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE INDEX episode_timestamp_idx IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)"
+                        )
+
+                        await session.run(
+                            "CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY"
+                        )
+                        await session.run(
+                            "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY"
+                        )
+                        await session.run(
+                            "CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX person_name_idx IF NOT EXISTS FOR (p:Person) ON (p.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX error_name_idx IF NOT EXISTS FOR (e:Error) ON (e.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX solution_name_idx IF NOT EXISTS FOR (s:Solution) ON (s.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX pattern_name_idx IF NOT EXISTS FOR (p:Pattern) ON (p.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)"
+                        )
+                        await session.run(
+                            "CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)"
+                        )
+                        await session.run(
+                            "CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)"
+                        )
+                        await session.run(
+                            "CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)"
+                        )
+                        await session.run(
+                            "CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)"
+                        )
+                        await session.run(
+                            "CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)"
+                        )
                     except Exception:
                         try:
-                            await session.run("CREATE CONSTRAINT ON (e:Experience) ASSERT e.id IS UNIQUE")
+                            await session.run(
+                                "CREATE CONSTRAINT ON (e:Experience) ASSERT e.id IS UNIQUE"
+                            )
                         except Exception:
                             pass
                         try:
-                            await session.run("CREATE CONSTRAINT ON (t:RelationshipType) ASSERT t.name IS UNIQUE")
+                            await session.run(
+                                "CREATE CONSTRAINT ON (t:RelationshipType) ASSERT t.name IS UNIQUE"
+                            )
                         except Exception:
                             pass
                         try:
@@ -196,7 +294,7 @@ class GraphDatabase:
         # Usa transação ou sessão para registrar um tipo de relacionamento
         if self._driver is None:
             return
-        query = f"MERGE (t:RelationshipType {{name: $rel_type}})"
+        query = "MERGE (t:RelationshipType {name: $rel_type})"
         await tx_or_session.run(query, rel_type=rel_type)
         self._known_relationship_types.add(rel_type)
 
@@ -218,11 +316,20 @@ class GraphDatabase:
             return []
         start = None
         try:
-            from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
+            from app.core.monitoring.health_monitor import (
+                get_timeout_recommendation,
+                record_latency,
+            )
+
             start = asyncio.get_event_loop().time()
             async with self._driver.session() as session:
-                _timeout = get_timeout_recommendation("neo4j_query", float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30))
-                result = await asyncio.wait_for(session.run(cypher_query, params or {}), timeout=float(_timeout))
+                _timeout = get_timeout_recommendation(
+                    "neo4j_query",
+                    float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+                )
+                result = await asyncio.wait_for(
+                    session.run(cypher_query, params or {}), timeout=float(_timeout)
+                )
                 rows = [record.data() async for record in result]
                 _DB_QUERIES.labels(op, "success").inc()
                 if start is not None:
@@ -240,6 +347,7 @@ class GraphDatabase:
                 _DB_LATENCY.labels(op).observe(_elapsed)
                 try:
                     from app.core.monitoring.health_monitor import record_latency
+
                     record_latency("neo4j_query", _elapsed)
                 except Exception:
                     pass
@@ -263,11 +371,20 @@ class GraphDatabase:
             return None
         start = None
         try:
-            from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
+            from app.core.monitoring.health_monitor import (
+                get_timeout_recommendation,
+                record_latency,
+            )
+
             start = asyncio.get_event_loop().time()
             async with self._driver.session() as session:
-                _timeout = get_timeout_recommendation("neo4j_query", float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30))
-                await asyncio.wait_for(session.run(cypher_query, params or {}), timeout=float(_timeout))
+                _timeout = get_timeout_recommendation(
+                    "neo4j_query",
+                    float(getattr(settings, "NEO4J_DEFAULT_TIMEOUT_SECONDS", 30) or 30),
+                )
+                await asyncio.wait_for(
+                    session.run(cypher_query, params or {}), timeout=float(_timeout)
+                )
                 _DB_QUERIES.labels(op, "success").inc()
                 if start is not None:
                     _elapsed = asyncio.get_event_loop().time() - start
@@ -283,6 +400,7 @@ class GraphDatabase:
                 _DB_LATENCY.labels(op).observe(_elapsed)
                 try:
                     from app.core.monitoring.health_monitor import record_latency
+
                     record_latency("neo4j_query", _elapsed)
                 except Exception:
                     pass
@@ -300,7 +418,9 @@ class GraphDatabase:
             pass
         return record["node_id"]
 
-    async def merge_relationship(self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str):
+    async def merge_relationship(
+        self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str
+    ):
         await self.register_relationship_type(tx, rel_type)
         query = f"MATCH (a), (b) WHERE id(a) = $source_id AND id(b) = $target_id MERGE (a)-[:`{rel_type}`]->(b)"
         start = asyncio.get_event_loop().time()
@@ -329,9 +449,11 @@ class GraphDatabase:
             logger.warning(f"Neo4j health check falhou: {e}")
             return False
 
+
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
-_graph_db_instance: Optional[GraphDatabase] = None
+_graph_db_instance: GraphDatabase | None = None
+
 
 async def initialize_graph_db():
     """Inicializa a instância singleton do GraphDatabase."""
@@ -340,10 +462,12 @@ async def initialize_graph_db():
         _graph_db_instance = GraphDatabase()
         await _graph_db_instance.connect()
 
+
 async def close_graph_db():
     """Fecha a conexão da instância singleton."""
     if _graph_db_instance:
         await _graph_db_instance.close()
+
 
 async def get_graph_db() -> GraphDatabase:
     """Função getter para injeção de dependência, retorna a instância singleton."""

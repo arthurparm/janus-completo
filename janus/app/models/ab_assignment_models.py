@@ -1,11 +1,15 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class ExperimentAssignment(Base):
     __tablename__ = "experiment_assignments"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
+    experiment_id = Column(
+        Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False
+    )
     user_id = Column(String(100), nullable=False)
     arm_id = Column(Integer, ForeignKey("experiment_arms.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=func.current_timestamp())

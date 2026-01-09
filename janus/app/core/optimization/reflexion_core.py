@@ -4,23 +4,22 @@ Sprint 5: Sistema Reflexion - Auto-otimização e Aprendizado com Erros (Async)
 Implementa o padrão Reflexion de forma assíncrona.
 """
 
+import json
 import logging
 import time
-import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List, Callable, Awaitable
-
-from prometheus_client import Counter, Histogram
+from typing import Any
 
 from app.config import settings
-from app.core.agents.agent_manager import agent_manager, AgentType
-from app.core.llm.llm_manager import get_llm_client, ModelRole, ModelPriority
+from app.core.agents.agent_manager import AgentType, agent_manager
+from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm_client
 from app.services.memory_service import MemoryService
-from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
 
 # (Métricas omitidas para brevidade)
+
 
 @dataclass
 class ReflexionConfig:
@@ -33,8 +32,9 @@ class ReflexionConfig:
         return ReflexionConfig(
             max_iterations=settings.REFLEXION_MAX_ITERATIONS,
             max_time_seconds=settings.REFLEXION_MAX_TIME_SECONDS,
-            success_threshold=settings.REFLEXION_SUCCESS_THRESHOLD
+            success_threshold=settings.REFLEXION_SUCCESS_THRESHOLD,
         )
+
 
 @dataclass
 class ReflexionStep:
@@ -43,33 +43,36 @@ class ReflexionStep:
     observation: str
     reflection: str
     score: float
-    improvements: List[str]
+    improvements: list[str]
     timestamp: float
+
 
 class ReflexionSession:
     """Executa um ciclo completo de Reflexion para uma tarefa de forma assíncrona."""
 
     def __init__(
-            self,
-            task: str,
-            memory_service: MemoryService,
-            evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
-            config: Optional[ReflexionConfig] = None
+        self,
+        task: str,
+        memory_service: MemoryService,
+        evaluator: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
+        config: ReflexionConfig | None = None,
     ):
         self.task = task.strip()
         self.memory_service = memory_service
         self.evaluator = evaluator or self._specialized_evaluator
         self.config = config or ReflexionConfig.from_settings()
-        self._llm = get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP)
+        self._llm = get_llm_client(
+            role=ModelRole.ORCHESTRATOR, priority=ModelPriority.FAST_AND_CHEAP
+        )
         self._start_time = time.perf_counter()
-        self._steps: List[ReflexionStep] = []
-        self._lessons_learned: List[str] = []
+        self._steps: list[ReflexionStep] = []
+        self._lessons_learned: list[str] = []
 
     def _time_remaining(self) -> float:
         elapsed = time.perf_counter() - self._start_time
         return max(0.0, self.config.max_time_seconds - elapsed)
 
-    async def _default_evaluator(self, task: str, result: str) -> Dict[str, Any]:
+    async def _default_evaluator(self, task: str, result: str) -> dict[str, Any]:
         prompt = f"""Avalie criticamente o resultado da seguinte tarefa.
 
 TAREFA: {task}
@@ -82,35 +85,57 @@ Seu JSON:"""
         try:
             evaluation_str = await self._llm.asend(prompt, timeout_s=30)
             evaluation_str = evaluation_str.strip()
-            if evaluation_str.startswith('```'):
-                lines = evaluation_str.split('\n')
-                evaluation_str = '\n'.join([l for l in lines if not l.startswith('```')])
+            if evaluation_str.startswith("```"):
+                lines = evaluation_str.split("\n")
+                evaluation_str = "\n".join([line for line in lines if not line.startswith("```")])
             evaluation_str = evaluation_str.strip()
 
             evaluation = json.loads(evaluation_str)
-            if "score" not in evaluation: evaluation["score"] = 0.5
-            if "strengths" not in evaluation: evaluation["strengths"] = []
-            if "issues" not in evaluation: evaluation["issues"] = []
-            if "suggestions" not in evaluation: evaluation["suggestions"] = []
+            if "score" not in evaluation:
+                evaluation["score"] = 0.5
+            if "strengths" not in evaluation:
+                evaluation["strengths"] = []
+            if "issues" not in evaluation:
+                evaluation["issues"] = []
+            if "suggestions" not in evaluation:
+                evaluation["suggestions"] = []
             return evaluation
         except Exception as e:
-            logger.error(f"Erro no avaliador: {e}. Response: {evaluation_str if 'evaluation_str' in locals() else 'N/A'}", exc_info=False)
-            return {"score": 0.3, "issues": ["Falha na avaliação"], "suggestions": ["Tente novamente"], "strengths": []}
+            logger.error(
+                f"Erro no avaliador: {e}. Response: {evaluation_str if 'evaluation_str' in locals() else 'N/A'}",
+                exc_info=False,
+            )
+            return {
+                "score": 0.3,
+                "issues": ["Falha na avaliação"],
+                "suggestions": ["Tente novamente"],
+                "strengths": [],
+            }
 
-    async def _execute_action(self, iteration: int, previous_reflections: List[str]) -> str:
+    async def _execute_action(self, iteration: int, previous_reflections: list[str]) -> str:
         context = ""
         if previous_reflections:
-            context = "\n\nAPRENDIZADOS DAS TENTATIVAS ANTERIORES:\n" + "\n".join(previous_reflections)
+            context = "\n\nAPRENDIZADOS DAS TENTATIVAS ANTERIORES:\n" + "\n".join(
+                previous_reflections
+            )
         enhanced_task = f"{self.task}{context}"
         try:
             logger.info(f"[Reflexion] Iteração {iteration}: Executando ação")
-            result = await agent_manager.arun_agent(question=enhanced_task, request=None, agent_type=AgentType.TOOL_USER)
-            return result.get("answer", "Sem resposta do agente.") if result else "Agente não retornou resultado."
+            result = await agent_manager.arun_agent(
+                question=enhanced_task, request=None, agent_type=AgentType.TOOL_USER
+            )
+            return (
+                result.get("answer", "Sem resposta do agente.")
+                if result
+                else "Agente não retornou resultado."
+            )
         except Exception as e:
             logger.error(f"[Reflexion] Erro na execução: {e}", exc_info=True)
             return f"ERRO: {e}"
 
-    async def _reflect(self, iteration: int, action: str, observation: str, evaluation: Dict[str, Any]) -> str:
+    async def _reflect(
+        self, iteration: int, action: str, observation: str, evaluation: dict[str, Any]
+    ) -> str:
         reflection_prompt = f"""Você é um agente reflexivo. Analise a tentativa:
 
 ITERAÇÃO: {iteration}
@@ -127,7 +152,7 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             logger.error(f"[Reflexion] Erro na reflexão: {e}", exc_info=True)
             return f"Reflexão falhou: {e}."
 
-    async def _specialized_evaluator(self, task: str, observation: str) -> Dict[str, Any]:
+    async def _specialized_evaluator(self, task: str, observation: str) -> dict[str, Any]:
         """Seleciona avaliador especializado com base na natureza da tarefa."""
         task_type = self._classify_task_type(task)
         if task_type == "coding":
@@ -139,22 +164,45 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
 
     def _classify_task_type(self, task: str) -> str:
         t = task.lower()
-        coding_keywords = ["code", "python", "bug", "function", "refactor", "test", "error", "compile", "lint"]
-        research_keywords = ["research", "web", "search", "explain", "summarize", "document", "compare", "source"]
+        coding_keywords = [
+            "code",
+            "python",
+            "bug",
+            "function",
+            "refactor",
+            "test",
+            "error",
+            "compile",
+            "lint",
+        ]
+        research_keywords = [
+            "research",
+            "web",
+            "search",
+            "explain",
+            "summarize",
+            "document",
+            "compare",
+            "source",
+        ]
         if any(k in t for k in coding_keywords):
             return "coding"
         if any(k in t for k in research_keywords):
             return "research"
         return "general"
 
-    async def _evaluate_coding(self, observation: str) -> Dict[str, Any]:
+    async def _evaluate_coding(self, observation: str) -> dict[str, Any]:
         """Heurística rápida para avaliação de tarefas de código sem depender do LLM."""
         obs = observation.lower()
-        has_error = any(x in obs for x in ["traceback", "error", "exception", "failed", "cannot", "undefined"])
+        has_error = any(
+            x in obs for x in ["traceback", "error", "exception", "failed", "cannot", "undefined"]
+        )
         passed_tests = any(x in obs for x in ["tests passed", "all tests", "success", "ok"])
-        runtime_ok = any(x in obs for x in ["executed", "ran", "output", "result"]) and not has_error
+        runtime_ok = (
+            any(x in obs for x in ["executed", "ran", "output", "result"]) and not has_error
+        )
         score = 0.2
-        suggestions: List[str] = []
+        suggestions: list[str] = []
         if has_error:
             score = 0.2
             suggestions.append("Inspecione logs e mensagens de exceção para root cause.")
@@ -171,13 +219,13 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             suggestions.append("Executar testes básicos e checar tratamentos de erro.")
         return {"score": score, "suggestions": suggestions}
 
-    async def _evaluate_research(self, observation: str) -> Dict[str, Any]:
+    async def _evaluate_research(self, observation: str) -> dict[str, Any]:
         """Heurística para avaliação de pesquisas: verifica relevância e fontes."""
         length = len(observation)
         has_links = observation.count("http://") + observation.count("https://")
         mentions_date = any(x in observation.lower() for x in ["202", "today", "recent", "latest"])
         score = 0.3
-        suggestions: List[str] = []
+        suggestions: list[str] = []
         if length > 500:
             score += 0.3
         if has_links >= 2:
@@ -192,11 +240,11 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             suggestions.append("Resuma pontos-chave e destaque contradições entre fontes.")
         return {"score": score, "suggestions": suggestions}
 
-    async def arun(self) -> Dict[str, Any]:
+    async def arun(self) -> dict[str, Any]:
         iteration = 0
         best_result = None
         best_score = 0.0
-        reflections: List[str] = []
+        reflections: list[str] = []
         logger.info(f"[Reflexion] Iniciando ciclo para tarefa: {self.task[:100]}...")
 
         while iteration < self.config.max_iterations and self._time_remaining() > 10:
@@ -212,8 +260,16 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             reflections.append(reflection)
 
             self._steps.append(
-                ReflexionStep(iteration, self.task, action_result, reflection, score, evaluation.get("suggestions", []),
-                              time.perf_counter()))
+                ReflexionStep(
+                    iteration,
+                    self.task,
+                    action_result,
+                    reflection,
+                    score,
+                    evaluation.get("suggestions", []),
+                    time.perf_counter(),
+                )
+            )
 
             if score > best_score:
                 best_score = score
@@ -222,7 +278,7 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             await self.memory_service.add_experience(
                 type="reflexion_iteration",
                 content=f"Tarefa: {self.task}\nScore: {score:.2f}\nReflexão: {reflection}",
-                metadata={"iteration": iteration, "score": score, "origin": "reflexion_core"}
+                metadata={"iteration": iteration, "score": score, "origin": "reflexion_core"},
             )
 
             if score >= self.config.success_threshold:
@@ -237,13 +293,15 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
             "best_score": best_score,
             "steps": self._steps,
             "lessons_learned": self._lessons_learned,
-            "elapsed_seconds": elapsed_time
+            "elapsed_seconds": elapsed_time,
         }
 
     async def _extract_lessons(self):
-        if not self._steps: return
+        if not self._steps:
+            return
         all_reflections = "\n\n".join(
-            [f"Iteração {s.iteration} (score: {s.score:.2f}):\n{s.reflection}" for s in self._steps])
+            [f"Iteração {s.iteration} (score: {s.score:.2f}):\n{s.reflection}" for s in self._steps]
+        )
         lesson_prompt = f"""Analise estas reflexões e extraia 3-5 LIÇÕES GERAIS e acionáveis em formato de lista.
 
 {all_reflections}
@@ -251,20 +309,31 @@ REFLEXÃO: O que devo fazer diferente na próxima tentativa para melhorar o scor
 LIÇÕES APRENDIDAS:"""
         try:
             lessons_text = await self._llm.asend(lesson_prompt, timeout_s=30)
-            self._lessons_learned = [line.strip("- ") for line in lessons_text.split('\n') if
-                                     line.strip().startswith("-")]
+            self._lessons_learned = [
+                line.strip("- ")
+                for line in lessons_text.split("\n")
+                if line.strip().startswith("-")
+            ]
             if self._lessons_learned:
                 await self.memory_service.add_experience(
                     type="lessons_learned",
                     content=f"Tarefa: {self.task}\nLições: {self._lessons_learned}",
-                    metadata={"origin": "reflexion_core"}
+                    metadata={"origin": "reflexion_core"},
                 )
-                logger.info(f"[Reflexion] {len(self._lessons_learned)} lições aprendidas e memorizadas")
+                logger.info(
+                    f"[Reflexion] {len(self._lessons_learned)} lições aprendidas e memorizadas"
+                )
         except Exception as e:
             logger.error(f"[Reflexion] Erro ao extrair lições: {e}", exc_info=True)
 
 
-async def arun_with_reflexion(task: str, memory_service: MemoryService, evaluator: Optional[Callable[[str, str], Awaitable[Dict[str, Any]]]] = None,
-                              config: Optional[ReflexionConfig] = None) -> Dict[str, Any]:
-    session = ReflexionSession(task=task, memory_service=memory_service, evaluator=evaluator, config=config)
+async def arun_with_reflexion(
+    task: str,
+    memory_service: MemoryService,
+    evaluator: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
+    config: ReflexionConfig | None = None,
+) -> dict[str, Any]:
+    session = ReflexionSession(
+        task=task, memory_service=memory_service, evaluator=evaluator, config=config
+    )
     return await session.arun()

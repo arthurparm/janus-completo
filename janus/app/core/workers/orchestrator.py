@@ -4,6 +4,7 @@ Orquestrador de Workers
 Centraliza a inicialização de todos os workers e tarefas em background
 usando imports lazy para evitar ciclos de importação.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,19 +16,22 @@ async def start_all_workers():
     Retorna a lista de tarefas/consumidores iniciados.
     """
     # Imports lazy para evitar ciclos entre módulos de workers/monitoring
-    from app.core.workers.async_consolidation_worker import start_consolidation_worker
-    from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
-    from app.core.workers.neural_training_worker import start_neural_training_worker
-    from app.core.workers.meta_agent_worker import start_meta_agent_worker, start_failure_event_consumer
-    from app.core.workers.reflexion_worker import start_reflexion_worker
-    from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.monitoring import start_auto_healer
-    from app.core.workers.router_worker import start_router_worker
-    from app.core.workers.code_agent_worker import start_code_agent_worker
-    from app.core.workers.professor_agent_worker import start_professor_agent_worker
-    from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
+    from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
+    from app.core.workers.async_consolidation_worker import start_consolidation_worker
+    from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.workers.autonomy_worker import start_autonomy_worker
+    from app.core.workers.code_agent_worker import start_code_agent_worker
     from app.core.workers.google_productivity_worker import start_google_productivity_consumer
+    from app.core.workers.meta_agent_worker import (
+        start_failure_event_consumer,
+        start_meta_agent_worker,
+    )
+    from app.core.workers.neural_training_worker import start_neural_training_worker
+    from app.core.workers.professor_agent_worker import start_professor_agent_worker
+    from app.core.workers.reflexion_worker import start_reflexion_worker
+    from app.core.workers.router_worker import start_router_worker
+    from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
 
     logger.info("Iniciando orquestrador de workers...")
 

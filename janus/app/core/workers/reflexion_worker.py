@@ -8,24 +8,23 @@ Quando detectar falha ou baixa eficiência, publica "janus.failure.detected".
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
-from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, QueueName
-
-from app.repositories.memory_repository import MemoryRepository
-from app.services.memory_service import MemoryService
 from app.core.memory.memory_core import get_memory_db
+from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
+from app.models.schemas import QueueName, TaskMessage
+from app.repositories.memory_repository import MemoryRepository
 from app.repositories.reflexion_repository import ReflexionRepository
+from app.services.memory_service import MemoryService
 from app.services.reflexion_service import ReflexionService
 
 logger = logging.getLogger(__name__)
 
 # Instâncias lazy (criadas em start_reflexion_worker)
-_memory_service: Optional[MemoryService] = None
-_reflexion_service: Optional[ReflexionService] = None
+_memory_service: MemoryService | None = None
+_reflexion_service: ReflexionService | None = None
 
 
 async def _ensure_services_initialized() -> None:
@@ -39,7 +38,9 @@ async def _ensure_services_initialized() -> None:
         _reflexion_service = ReflexionService(repo=repo)
 
 
-async def publish_reflexion_task(payload: Dict[str, Any], correlation_id: Optional[str] = None) -> Dict[str, Any]:
+async def publish_reflexion_task(
+    payload: dict[str, Any], correlation_id: str | None = None
+) -> dict[str, Any]:
     """Publica uma tarefa de Reflexion na fila interna."""
     broker = await get_broker()
     task_message = TaskMessage(
@@ -57,7 +58,7 @@ async def publish_reflexion_task(payload: Dict[str, Any], correlation_id: Option
     return {"status": "ok", "task_id": task_message.task_id}
 
 
-async def _publish_failure_signal(reason: str, score: float, context: Dict[str, Any]) -> None:
+async def _publish_failure_signal(reason: str, score: float, context: dict[str, Any]) -> None:
     broker = await get_broker()
     failure_payload = {
         "reason": reason,
@@ -92,7 +93,7 @@ async def process_reflexion_task(task: TaskMessage) -> None:
     task_text = payload.get("task") or payload.get("prompt") or ""
     interaction_id = payload.get("interaction_id")
     conversation_id = payload.get("conversation_id")
-    overrides: Dict[str, Any] = payload.get("config_overrides", {})
+    overrides: dict[str, Any] = payload.get("config_overrides", {})
 
     if not task_text:
         logger.warning(f"Tarefa de Reflexion vazia. task_id={task.task_id}")
@@ -103,7 +104,9 @@ async def process_reflexion_task(task: TaskMessage) -> None:
     )
 
     try:
-        result = await _reflexion_service.run_reflexion_cycle(task=task_text, config_overrides=overrides)
+        result = await _reflexion_service.run_reflexion_cycle(
+            task=task_text, config_overrides=overrides
+        )
         success = bool(result.get("success", False))
         best_score = float(result.get("best_score", 0.0))
         lessons = result.get("lessons_learned", [])

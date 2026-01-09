@@ -6,11 +6,9 @@ Comprehensive tests for all service layer components.
 """
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
-from datetime import datetime
-from typing import Dict, Any, Optional
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # ============================================================================
 # TEST 1: ChatService
@@ -18,117 +16,117 @@ from typing import Dict, Any, Optional
 
 class TestChatService:
     """Comprehensive tests for ChatService."""
-    
+
     def test_chat_service_import(self):
         """Test ChatService can be imported."""
         try:
-            from app.services.chat_service import ChatService, ChatServiceError
+            from app.services.chat_service import ChatService
             assert ChatService is not None
             print("✓ ChatService import available")
         except Exception as e:
             print(f"⚠ ChatService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_chat_service_initialization(self):
         """Test ChatService can be initialized with mocks."""
         try:
             from app.services.chat_service import ChatService
-            
+
             mock_repo = MagicMock()
             mock_llm = MagicMock()
-            
+
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
-            
+
             assert service.repo == mock_repo
             assert service.llm_service == mock_llm
-            
+
             print("✓ ChatService initialization working")
         except Exception as e:
             print(f"⚠ ChatService init: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_start_conversation(self):
         """Test starting a new conversation."""
         try:
             from app.services.chat_service import ChatService
-            
+
             mock_repo = MagicMock()
             mock_repo.create_conversation = AsyncMock(return_value="conv-123")
             mock_llm = MagicMock()
-            
+
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
-            
+
             conv_id = await service.start_conversation(
                 persona="assistant",
                 user_id="user-1",
                 project_id="proj-1"
             )
-            
+
             assert conv_id == "conv-123"
             mock_repo.create_conversation.assert_called_once()
-            
+
             print("✓ ChatService start_conversation working")
         except Exception as e:
             print(f"⚠ ChatService start_conversation: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_get_history(self):
         """Test getting conversation history."""
         try:
             from app.services.chat_service import ChatService
-            
+
             mock_repo = MagicMock()
             mock_repo.get_messages = AsyncMock(return_value=[
                 {"role": "user", "content": "Hello"},
                 {"role": "assistant", "content": "Hi there!"}
             ])
             mock_llm = MagicMock()
-            
+
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
-            
+
             history = await service.get_history("conv-123")
-            
+
             assert len(history) == 2
             assert history[0]["content"] == "Hello"
-            
+
             print("✓ ChatService get_history working")
         except Exception as e:
             print(f"⚠ ChatService get_history: {e}")
-    
+
     def test_is_quick_command(self):
         """Test quick command detection."""
         try:
             from app.services.chat_service import ChatService
-            
+
             mock_repo = MagicMock()
             mock_llm = MagicMock()
-            
+
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
-            
+
             # Test various commands
-            assert service._is_quick_command("/help") == True
-            assert service._is_quick_command("/status") == True
-            assert service._is_quick_command("hello") == False
-            
+            assert service._is_quick_command("/help")
+            assert service._is_quick_command("/status")
+            assert not service._is_quick_command("hello")
+
             print("✓ ChatService quick command detection working")
         except Exception as e:
             print(f"⚠ ChatService quick command: {e}")
-    
+
     def test_estimate_tokens(self):
         """Test token estimation."""
         try:
             from app.services.chat_service import ChatService
-            
+
             mock_repo = MagicMock()
             mock_llm = MagicMock()
-            
+
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
-            
+
             tokens = service._estimate_tokens("Hello, how are you doing today?")
-            
+
             assert tokens > 0
             assert isinstance(tokens, int)
-            
+
             print(f"✓ ChatService token estimation: {tokens} tokens")
         except Exception as e:
             print(f"⚠ ChatService token estimation: {e}")
@@ -140,65 +138,65 @@ class TestChatService:
 
 class TestAutonomyService:
     """Comprehensive tests for AutonomyService."""
-    
+
     def test_autonomy_service_import(self):
         """Test AutonomyService can be imported."""
         try:
-            from app.services.autonomy_service import AutonomyService, AutonomyConfig
+            from app.services.autonomy_service import AutonomyConfig, AutonomyService
             assert AutonomyService is not None
             assert AutonomyConfig is not None
             print("✓ AutonomyService import available")
         except Exception as e:
             print(f"⚠ AutonomyService import: {e}")
-    
+
     def test_autonomy_config_defaults(self):
         """Test AutonomyConfig default values."""
         try:
             from app.services.autonomy_service import AutonomyConfig
-            
+
             config = AutonomyConfig()
-            
+
             assert config.interval_seconds == 60
             assert config.risk_profile == "balanced"
-            assert config.auto_confirm == True
+            assert config.auto_confirm
             assert config.max_actions_per_cycle == 20
-            
+
             print("✓ AutonomyConfig defaults correct")
         except Exception as e:
             print(f"⚠ AutonomyConfig defaults: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_autonomy_service_initialization(self):
         """Test AutonomyService initialization."""
         try:
             from app.services.autonomy_service import AutonomyService
-            
+
             mock_optimization = MagicMock()
-            
+
             service = AutonomyService(optimization_service=mock_optimization)
-            
+
             assert service is not None
             assert service._optimization_service == mock_optimization
-            
+
             print("✓ AutonomyService initialization working")
         except Exception as e:
             print(f"⚠ AutonomyService init: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_autonomy_get_status(self):
         """Test getting autonomy status."""
         try:
             from app.services.autonomy_service import AutonomyService
-            
+
             mock_optimization = MagicMock()
-            
+
             service = AutonomyService(optimization_service=mock_optimization)
-            
+
             status = service.get_status()
-            
+
             assert "is_active" in status
             assert "cycles_completed" in status
-            
+
             print(f"✓ AutonomyService get_status: {status}")
         except Exception as e:
             print(f"⚠ AutonomyService get_status: {e}")
@@ -210,7 +208,7 @@ class TestAutonomyService:
 
 class TestOptimizationService:
     """Comprehensive tests for OptimizationService."""
-    
+
     def test_optimization_service_import(self):
         """Test OptimizationService can be imported."""
         try:
@@ -219,15 +217,15 @@ class TestOptimizationService:
             print("✓ OptimizationService import available")
         except Exception as e:
             print(f"⚠ OptimizationService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_optimization_service_collect_metrics(self):
         """Test metrics collection."""
         try:
             from app.services.optimization_service import OptimizationService
-            
+
             service = OptimizationService()
-            
+
             if hasattr(service, 'collect_metrics'):
                 metrics = await service.collect_metrics()
                 assert isinstance(metrics, dict)
@@ -244,7 +242,7 @@ class TestOptimizationService:
 
 class TestDocumentService:
     """Comprehensive tests for DocumentIngestionService."""
-    
+
     def test_document_service_import(self):
         """Test DocumentIngestionService can be imported."""
         try:
@@ -261,7 +259,7 @@ class TestDocumentService:
 
 class TestFeedbackService:
     """Comprehensive tests for FeedbackService."""
-    
+
     def test_feedback_service_import(self):
         """Test FeedbackService can be imported."""
         try:
@@ -278,7 +276,7 @@ class TestFeedbackService:
 
 class TestCollaborationService:
     """Comprehensive tests for CollaborationService."""
-    
+
     def test_collaboration_service_import(self):
         """Test CollaborationService can be imported."""
         try:
@@ -295,7 +293,7 @@ class TestCollaborationService:
 
 class TestObservabilityService:
     """Comprehensive tests for ObservabilityService."""
-    
+
     def test_observability_service_import(self):
         """Test ObservabilityService can be imported."""
         try:
@@ -312,7 +310,7 @@ class TestObservabilityService:
 
 class TestToolService:
     """Comprehensive tests for ToolService."""
-    
+
     def test_tool_service_import(self):
         """Test ToolService can be imported."""
         try:
@@ -321,15 +319,15 @@ class TestToolService:
             print("✓ ToolService import available")
         except Exception as e:
             print(f"⚠ ToolService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_tool_service_list_tools(self):
         """Test listing available tools."""
         try:
             from app.services.tool_service import ToolService
-            
+
             service = ToolService()
-            
+
             if hasattr(service, 'list_tools'):
                 tools = await service.list_tools()
                 assert isinstance(tools, list)
@@ -346,7 +344,7 @@ class TestToolService:
 
 class TestKnowledgeService:
     """Comprehensive tests for KnowledgeService."""
-    
+
     def test_knowledge_service_import(self):
         """Test KnowledgeService can be imported."""
         try:
@@ -363,7 +361,7 @@ class TestKnowledgeService:
 
 class TestLearningService:
     """Comprehensive tests for LearningService."""
-    
+
     def test_learning_service_import(self):
         """Test LearningService can be imported."""
         try:
@@ -380,7 +378,7 @@ class TestLearningService:
 
 class TestDedupeService:
     """Comprehensive tests for DedupeService."""
-    
+
     def test_dedupe_service_import(self):
         """Test DedupeService can be imported."""
         try:
@@ -397,7 +395,7 @@ class TestDedupeService:
 
 class TestMemoryService:
     """Comprehensive tests for MemoryService."""
-    
+
     def test_memory_service_import(self):
         """Test MemoryService can be imported."""
         try:
@@ -414,7 +412,7 @@ class TestMemoryService:
 
 class TestLLMService:
     """Comprehensive tests for LLMService."""
-    
+
     def test_llm_service_import(self):
         """Test LLMService can be imported."""
         try:
@@ -423,17 +421,17 @@ class TestLLMService:
             print("✓ LLMService import available")
         except Exception as e:
             print(f"⚠ LLMService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_llm_service_initialization(self):
         """Test LLMService initialization."""
         try:
             from app.services.llm_service import LLMService
-            
+
             service = LLMService()
-            
+
             assert service is not None
-            
+
             print("✓ LLMService initialization working")
         except Exception as e:
             print(f"⚠ LLMService init: {e}")
@@ -445,7 +443,7 @@ class TestLLMService:
 
 class TestLocalLLMService:
     """Comprehensive tests for LocalLLMService."""
-    
+
     def test_local_llm_service_import(self):
         """Test LocalLLMService can be imported."""
         try:
@@ -462,7 +460,7 @@ class TestLocalLLMService:
 
 class TestAssistantService:
     """Comprehensive tests for AssistantService."""
-    
+
     def test_assistant_service_import(self):
         """Test AssistantService can be imported."""
         try:
@@ -479,7 +477,7 @@ class TestAssistantService:
 
 class TestTaskService:
     """Comprehensive tests for TaskService."""
-    
+
     def test_task_service_import(self):
         """Test TaskService can be imported."""
         try:
@@ -496,7 +494,7 @@ class TestTaskService:
 
 class TestReflexionService:
     """Comprehensive tests for ReflexionService."""
-    
+
     def test_reflexion_service_import(self):
         """Test ReflexionService can be imported."""
         try:
@@ -513,7 +511,7 @@ class TestReflexionService:
 
 class TestMetaAgentService:
     """Comprehensive tests for MetaAgentService."""
-    
+
     def test_meta_agent_service_import(self):
         """Test MetaAgentService can be imported."""
         try:
@@ -530,7 +528,7 @@ class TestMetaAgentService:
 
 class TestContextService:
     """Comprehensive tests for ContextService."""
-    
+
     def test_context_service_import(self):
         """Test ContextService can be imported."""
         try:
@@ -547,7 +545,7 @@ class TestContextService:
 
 class TestSandboxServiceFull:
     """Comprehensive tests for SandboxService."""
-    
+
     def test_sandbox_service_import(self):
         """Test SandboxService can be imported."""
         try:
@@ -564,7 +562,7 @@ class TestSandboxServiceFull:
 
 class TestSystemStatusService:
     """Comprehensive tests for SystemStatusService."""
-    
+
     def test_system_status_service_import(self):
         """Test SystemStatusService can be imported."""
         try:
@@ -573,19 +571,19 @@ class TestSystemStatusService:
             print("✓ SystemStatusService import available")
         except Exception as e:
             print(f"⚠ SystemStatusService import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_get_status(self):
         """Test getting system status."""
         try:
             from app.services.system_status_service import SystemStatusService
-            
+
             service = SystemStatusService()
-            
+
             if hasattr(service, 'get_status'):
                 status = await service.get_status()
                 assert isinstance(status, dict)
-                print(f"✓ SystemStatusService get_status working")
+                print("✓ SystemStatusService get_status working")
             else:
                 print("⚠ SystemStatusService no get_status method")
         except Exception as e:
@@ -598,7 +596,7 @@ class TestSystemStatusService:
 
 class TestCodeAnalysisService:
     """Comprehensive tests for CodeAnalysisService."""
-    
+
     def test_code_analysis_service_import(self):
         """Test CodeAnalysisService can be imported."""
         try:
@@ -615,7 +613,7 @@ class TestCodeAnalysisService:
 
 class TestAgentService:
     """Comprehensive tests for AgentService."""
-    
+
     def test_agent_service_import(self):
         """Test AgentService can be imported."""
         try:
@@ -632,7 +630,7 @@ class TestAgentService:
 
 class TestABTestingService:
     """Comprehensive tests for ABTestingService."""
-    
+
     def test_ab_testing_service_import(self):
         """Test ABTestingService can be imported."""
         try:
@@ -649,7 +647,7 @@ class TestABTestingService:
 
 class TestBiasCheckService:
     """Comprehensive tests for BiasCheckService."""
-    
+
     def test_bias_check_service_import(self):
         """Test BiasCheckService can be imported."""
         try:
@@ -666,7 +664,7 @@ class TestBiasCheckService:
 
 class TestDBMigrationService:
     """Comprehensive tests for DBMigrationService."""
-    
+
     def test_db_migration_service_import(self):
         """Test DBMigrationService can be imported."""
         try:
@@ -686,13 +684,13 @@ async def run_all_tests():
     print("=" * 60)
     print("JANUS SERVICES TEST SUITE")
     print("=" * 60)
-    
+
     results = {
         "passed": 0,
         "failed": 0,
         "skipped": 0
     }
-    
+
     test_classes = [
         TestChatService(),
         TestAutonomyService(),
@@ -721,10 +719,10 @@ async def run_all_tests():
         TestBiasCheckService(),
         TestDBMigrationService(),
     ]
-    
+
     for test_class in test_classes:
         print(f"\n--- {test_class.__class__.__name__} ---")
-        
+
         for method_name in dir(test_class):
             if method_name.startswith("test_"):
                 method = getattr(test_class, method_name)
@@ -737,11 +735,11 @@ async def run_all_tests():
                 except Exception as e:
                     print(f"✗ {method_name}: {e}")
                     results["failed"] += 1
-    
+
     print("\n" + "=" * 60)
     print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
     print("=" * 60)
-    
+
     return results["failed"] == 0
 
 if __name__ == "__main__":

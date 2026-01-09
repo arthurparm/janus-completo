@@ -1,16 +1,18 @@
-import structlog
 import asyncio
+
 import numpy as np
-from typing import List, Optional
+import structlog
 
 logger = structlog.get_logger(__name__)
+
 
 class WakeWordService:
     """
     Service for detecting wake words using 'openwakeword'.
     Runs locally and efficiently.
     """
-    def __init__(self, models: List[str] = ["hey_jarvis"]):
+
+    def __init__(self, models: list[str] = ["hey_jarvis"]):
         self.models = models
         self.oww_model = None
         self._available = False
@@ -19,7 +21,8 @@ class WakeWordService:
     def _initialize(self):
         try:
             from openwakeword.model import Model
-            # Download models if needed is handled by openwakeword usually, 
+
+            # Download models if needed is handled by openwakeword usually,
             # but sometimes needs explicit download.
             # We'll rely on auto-download or pre-existence.
             self.oww_model = Model(self.models)
@@ -40,13 +43,13 @@ class WakeWordService:
             # If unavailable, we shouldn't block. We might return True to fallback to "Always Listening" or False to disable.
             # For now, let's return False so we don't spam STT.
             logger.debug("WakeWord unavailable.")
-            await asyncio.sleep(1) # Prevent busy loop
+            await asyncio.sleep(1)  # Prevent busy loop
             return False
 
         # We need PyAudio to stream audio
-        try:
-            import pyaudio
-        except ImportError:
+        import importlib.util
+
+        if importlib.util.find_spec("pyaudio") is None:
             logger.warning("pyaudio not found. Cannot listen for wake word.")
             await asyncio.sleep(1)
             return False
@@ -59,21 +62,19 @@ class WakeWordService:
 
     def _listen_loop_sync(self) -> bool:
         import pyaudio
-        
+
         CHUNK = 1280
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 16000
-        
+
         p = pyaudio.PyAudio()
         stream = None
-        
+
         try:
-            stream = p.open(format=FORMAT,
-                            channels=CHANNELS,
-                            rate=RATE,
-                            input=True,
-                            frames_per_buffer=CHUNK)
+            stream = p.open(
+                format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK
+            )
         except Exception as e:
             logger.error(f"Failed to open audio stream: {e}")
             return False
@@ -83,23 +84,23 @@ class WakeWordService:
             while True:
                 # Get audio
                 audio = np.frombuffer(stream.read(CHUNK), dtype=np.int16)
-                
+
                 # Feed to openwakeword
                 # requires shape (N samples)
                 prediction = self.oww_model.predict(audio)
-                
+
                 # Check predictions
                 # prediction is a dict: {'key': score, ...}
                 for model_name in self.models:
                     score = prediction.get(model_name, 0.0)
-                    if score > 0.5: # Threshold
+                    if score > 0.5:  # Threshold
                         logger.info(f"Wake Word Detected: {model_name} (Score: {score:.2f})")
                         detected = True
                         break
-                
+
                 if detected:
                     break
-                    
+
         except Exception as e:
             logger.error(f"Error in wake word loop: {e}")
         finally:
@@ -107,5 +108,5 @@ class WakeWordService:
                 stream.stop_stream()
                 stream.close()
             p.terminate()
-            
+
         return detected

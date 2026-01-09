@@ -1,7 +1,8 @@
+
 import pytest
-import asyncio
-from app.services.chat_service import ChatService
+
 from app.repositories.chat_repository_sql import ChatRepositorySQL
+from app.services.chat_service import ChatService
 
 
 class DummyLLMService:
@@ -21,8 +22,8 @@ async def test_cb_early_block_emits_error_circuit_open():
   svc = ChatService(repo, DummyLLMService(), None)
   cid = svc.start_conversation("assistant", None, None)
   gen = svc.stream_message(conversation_id=cid, message="hello", role=None, priority=None)
-  lines = [l async for l in gen]
-  errs = [l for l in lines if l.startswith("event: error")]
+  lines = [line async for line in gen]
+  errs = [line for line in lines if line.startswith("event: error")]
   assert errs, lines
-  payloads = [l.split("data:")[-1].strip() for l in errs]
+  payloads = [line.split("data:")[-1].strip() for line in errs]
   assert any("CircuitOpen" in p for p in payloads)

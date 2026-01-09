@@ -1,8 +1,19 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Index, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -12,7 +23,9 @@ class User(Base):
     display_name = Column(String(100), nullable=True)
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
     profiles = relationship("Profile", back_populates="user")
     roles = relationship("UserRole", back_populates="user")
     __table_args__ = (
@@ -20,6 +33,7 @@ class User(Base):
         UniqueConstraint("email", name="unique_user_email"),
         UniqueConstraint("external_id", name="unique_user_external_id"),
     )
+
 
 class Profile(Base):
     __tablename__ = "profiles"
@@ -29,20 +43,20 @@ class Profile(Base):
     language = Column(String(10), default="pt-BR")
     style_prefs = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
-    user = relationship("User", back_populates="profiles")
-    __table_args__ = (
-        Index("idx_profile_user", "user_id"),
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
     )
+    user = relationship("User", back_populates="profiles")
+    __table_args__ = (Index("idx_profile_user", "user_id"),)
+
 
 class Role(Base):
     __tablename__ = "roles"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
-    __table_args__ = (
-        UniqueConstraint("name", name="unique_role_name"),
-    )
+    __table_args__ = (UniqueConstraint("name", name="unique_role_name"),)
+
 
 class UserRole(Base):
     __tablename__ = "user_roles"
@@ -52,6 +66,7 @@ class UserRole(Base):
     user = relationship("User", back_populates="roles")
     role = relationship("Role")
 
+
 class Session(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -60,12 +75,13 @@ class Session(Base):
     project_id = Column(String(100), nullable=True)
     title = Column(String(200), nullable=False)
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
     summary = Column(Text, nullable=True)
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
-    __table_args__ = (
-        Index("idx_session_user", "user_id", "updated_at"),
-    )
+    __table_args__ = (Index("idx_session_user", "user_id", "updated_at"),)
+
 
 class Message(Base):
     __tablename__ = "messages"
@@ -75,9 +91,7 @@ class Message(Base):
     role = Column(String(20), nullable=False)
     text = Column(Text, nullable=False)
     session = relationship("Session", back_populates="messages")
-    __table_args__ = (
-        Index("idx_message_session_ts", "session_id", "timestamp"),
-    )
+    __table_args__ = (Index("idx_message_session_ts", "session_id", "timestamp"),)
 
 
 class Consent(Base):
@@ -124,7 +138,9 @@ class OAuthToken(Base):
     refresh_token = Column(Text, nullable=True)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
     __table_args__ = (
         UniqueConstraint("user_id", "provider", name="unique_user_provider_token"),
         Index("idx_oauth_user_provider", "user_id", "provider"),

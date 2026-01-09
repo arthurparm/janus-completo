@@ -1,10 +1,11 @@
-from typing import Optional
 from sqlalchemy.orm import Session
+
 from app.db.mysql_config import mysql_db
 from app.models.consent_models import Consent
 
+
 class ConsentRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -15,7 +16,12 @@ class ConsentRepository:
     def is_granted(self, user_id: str, scope: str) -> bool:
         s = self._get_session()
         try:
-            c = s.query(Consent).filter(Consent.user_id == user_id, Consent.scope == scope).order_by(Consent.created_at.desc()).first()
+            c = (
+                s.query(Consent)
+                .filter(Consent.user_id == user_id, Consent.scope == scope)
+                .order_by(Consent.created_at.desc())
+                .first()
+            )
             if not c:
                 return False
             return (c.granted or "True") == "True" and c.revoked_at is None

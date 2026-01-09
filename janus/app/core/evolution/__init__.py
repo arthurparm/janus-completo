@@ -13,18 +13,27 @@ Usage:
 """
 
 from app.core.evolution.evolution_manager import EvolutionManager
-from app.core.evolution.reflector_agent import ReflectorAgent, ReflectionReport, FailurePattern
-from app.core.evolution.self_study_manager import SelfStudyManager, StudySession, quick_self_reflection
 from app.core.evolution.prompts import (
-    TOOL_SPECIFICATION_PROMPT,
     TOOL_GENERATION_PROMPT,
-    tool_validation_prompt
+    TOOL_SPECIFICATION_PROMPT,
+    tool_validation_prompt,
+)
+from app.core.evolution.reflector_agent import FailurePattern, ReflectionReport, ReflectorAgent
+from app.core.evolution.self_study_manager import (
+    SelfStudyManager,
+    StudySession,
+    quick_self_reflection,
 )
 
 # JanusLab and SafeEvolution may not be available if Docker SDK is not installed
 try:
     from app.core.evolution.janus_lab import JanusLabManager, LabConfig, LabResult, quick_lab_test
-    from app.core.evolution.safe_evolution_manager import SafeEvolutionManager, SafeEvolutionSession, dream
+    from app.core.evolution.safe_evolution_manager import (
+        SafeEvolutionManager,
+        SafeEvolutionSession,
+        dream,
+    )
+
     JANUS_LAB_AVAILABLE = True
 except ImportError:
     JanusLabManager = None
@@ -37,22 +46,22 @@ except ImportError:
     JANUS_LAB_AVAILABLE = False
 
 __all__ = [
-    "EvolutionManager",
-    "ReflectorAgent",
-    "ReflectionReport",
-    "FailurePattern",
-    "SelfStudyManager",
-    "StudySession",
-    "quick_self_reflection",
-    "TOOL_SPECIFICATION_PROMPT",
+    "JANUS_LAB_AVAILABLE",
     "TOOL_GENERATION_PROMPT",
-    "tool_validation_prompt",
+    "TOOL_SPECIFICATION_PROMPT",
+    "EvolutionManager",
+    "FailurePattern",
     "JanusLabManager",
     "LabConfig",
     "LabResult",
-    "quick_lab_test",
+    "ReflectionReport",
+    "ReflectorAgent",
     "SafeEvolutionManager",
     "SafeEvolutionSession",
+    "SelfStudyManager",
+    "StudySession",
     "dream",
-    "JANUS_LAB_AVAILABLE"
+    "quick_lab_test",
+    "quick_self_reflection",
+    "tool_validation_prompt",
 ]

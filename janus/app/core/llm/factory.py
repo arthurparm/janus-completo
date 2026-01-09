@@ -1,21 +1,24 @@
-from typing import Dict, Any, Optional
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import logging
-import httpx
-from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from typing import Any
 
+import httpx
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from langchain_core.language_models.chat_models import BaseChatModel
+from openai import OpenAI
 
 from app.config import settings
-from .resilience import _add_to_pool, _get_from_pool, LLM_POOL_WARMS, _pool_key
+
+from .resilience import LLM_POOL_WARMS, _add_to_pool, _get_from_pool, _pool_key
 
 logger = logging.getLogger(__name__)
 
 # Pool de executores por provedor
-_llm_executors: Dict[str, ThreadPoolExecutor] = {}
+_llm_executors: dict[str, ThreadPoolExecutor] = {}
+
 
 def _get_executor(provider_key: str) -> ThreadPoolExecutor:
     max_workers = int(getattr(settings, "LLM_EXECUTOR_MAX_WORKERS", 4) or 4)
@@ -27,17 +30,21 @@ def _get_executor(provider_key: str) -> ThreadPoolExecutor:
     return ex
 
 
-_openai_http_client: Optional[httpx.Client] = None
-_openai_client: Optional[OpenAI] = None
+_openai_http_client: httpx.Client | None = None
+_openai_client: OpenAI | None = None
+
 
 def _get_openai_http_client() -> httpx.Client:
     global _openai_http_client
     if _openai_http_client is None:
         max_conn = int(getattr(settings, "OPENAI_HTTP_MAX_CONNECTIONS", 100) or 100)
         max_keep = int(getattr(settings, "OPENAI_HTTP_MAX_KEEPALIVE", 20) or 20)
-        timeout = float(getattr(settings, "OPENAI_HTTP_TIMEOUT_SECONDS", settings.LLM_DEFAULT_TIMEOUT_SECONDS) or settings.LLM_DEFAULT_TIMEOUT_SECONDS)
+        timeout = float(
+            getattr(settings, "OPENAI_HTTP_TIMEOUT_SECONDS", settings.LLM_DEFAULT_TIMEOUT_SECONDS)
+            or settings.LLM_DEFAULT_TIMEOUT_SECONDS
+        )
         limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=max_keep)
-        
+
         def _rate_limit_hook(response: httpx.Response):
             try:
                 # Verifica headers de rate limit (OpenAI e compatíveis)
@@ -45,39 +52,46 @@ def _get_openai_http_client() -> httpx.Client:
                     model = "unknown"
                     try:
                         import json
+
                         if response.request.content:
                             body = json.loads(response.request.content)
                             model = body.get("model", "unknown")
-                    except:
+                    except Exception:
                         pass
-                    
+
                     from .rate_limiter import get_rate_limiter
+
                     # Detecta provider pela URL ou headers (por enquanto hardcoded openai para headers padrão)
-                    provider = "openai" 
-                    get_rate_limiter().update_limits_from_headers(provider, model, dict(response.headers))
+                    provider = "openai"
+                    get_rate_limiter().update_limits_from_headers(
+                        provider, model, dict(response.headers)
+                    )
             except Exception as e:
                 logger.warning(f"Erro no hook de rate limit: {e}")
 
-        _openai_http_client = httpx.Client(limits=limits, timeout=timeout, event_hooks={"response": [_rate_limit_hook]})
+        _openai_http_client = httpx.Client(
+            limits=limits, timeout=timeout, event_hooks={"response": [_rate_limit_hook]}
+        )
     return _openai_http_client
+
 
 def _get_openai_client() -> OpenAI:
     global _openai_client
     if _openai_client is None:
         http_client = _get_openai_http_client()
-        api_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
+        api_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
         _openai_client = OpenAI(api_key=api_key, http_client=http_client)
     return _openai_client
 
 
-def _validate_gemini_key(key: Optional[str]) -> bool:
+def _validate_gemini_key(key: str | None) -> bool:
     if not key or not key.startswith("AIza") or len(key) < 30:
         logger.warning("GEMINI_API_KEY parece inválido.")
         return False
     return True
 
 
-def _validate_openai_key(key: Optional[str]) -> bool:
+def _validate_openai_key(key: str | None) -> bool:
     if not key or not key.startswith("sk-") or len(key) < 20:
         logger.warning("OPENAI_API_KEY parece inválido.")
         return False
@@ -89,21 +103,25 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     try:
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ollama_health")
         model_name = getattr(llm, "model", "unknown")
-        logger.debug(f"Iniciando health check do Ollama para modelo: {model_name} (timeout={timeout_s}s)")
+        logger.debug(
+            f"Iniciando health check do Ollama para modelo: {model_name} (timeout={timeout_s}s)"
+        )
         future = executor.submit(llm.invoke, "ping")
         future.result(timeout=timeout_s)
         logger.debug("Health check Ollama passou.")
         return True
     except Exception as e:
-        logger.error(f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError))
+        logger.error(
+            f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError)
+        )
         return False
     finally:
         if executor:
             executor.shutdown(wait=False, cancel_futures=True)
 
 
-def warm_llm_pool(specs: Optional[list[str]] = None) -> Dict[str, int]:
-    warmed: Dict[str, int] = {}
+def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
+    warmed: dict[str, int] = {}
     items = specs or list(getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or [])
     for spec in items:
         try:
@@ -113,34 +131,52 @@ def warm_llm_pool(specs: Optional[list[str]] = None) -> Dict[str, int]:
             if _get_from_pool(provider, model):
                 continue
             if provider == "ollama":
-                mk: Dict[str, Any] = {}
-                if settings.OLLAMA_NUM_CTX: mk["num_ctx"] = settings.OLLAMA_NUM_CTX
-                if settings.OLLAMA_NUM_THREAD: mk["num_thread"] = settings.OLLAMA_NUM_THREAD
-                if settings.OLLAMA_NUM_BATCH: mk["num_batch"] = settings.OLLAMA_NUM_BATCH
-                if settings.OLLAMA_GPU_LAYERS: mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-                if settings.OLLAMA_KEEP_ALIVE: mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
-                llm = ChatOllama(base_url=settings.OLLAMA_HOST, model=model, temperature=0, model_kwargs=mk)
-                if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
+                mk: dict[str, Any] = {}
+                if settings.OLLAMA_NUM_CTX:
+                    mk["num_ctx"] = settings.OLLAMA_NUM_CTX
+                if settings.OLLAMA_NUM_THREAD:
+                    mk["num_thread"] = settings.OLLAMA_NUM_THREAD
+                if settings.OLLAMA_NUM_BATCH:
+                    mk["num_batch"] = settings.OLLAMA_NUM_BATCH
+                if settings.OLLAMA_GPU_LAYERS:
+                    mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+                if settings.OLLAMA_KEEP_ALIVE:
+                    mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+                llm = ChatOllama(
+                    base_url=settings.OLLAMA_HOST, model=model, temperature=0, model_kwargs=mk
+                )
+                if not _health_check_ollama(
+                    llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3
+                ):
                     continue
                 _add_to_pool("ollama", model, llm)
             elif provider == "openai":
-                if not _validate_openai_key(getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()):
+                if not _validate_openai_key(
+                    getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+                ):
                     continue
                 # Ensure client dependencies are initialized
                 _get_openai_client()
-                
+
                 llm = ChatOpenAI(
                     model=model,
                     temperature=0,
-                    api_key=getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)(),
-                    http_client=_openai_http_client
+                    api_key=getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)(),
+                    http_client=_openai_http_client,
                 )
                 _add_to_pool("openai", model, llm)
             elif provider == "google_gemini":
-                if not _validate_gemini_key(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()):
+                if not _validate_gemini_key(
+                    getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+                ):
                     continue
-                llm = ChatGoogleGenerativeAI(model=model, temperature=0,
-                                             google_api_key=(getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)() or None))
+                llm = ChatGoogleGenerativeAI(
+                    model=model,
+                    temperature=0,
+                    google_api_key=(
+                        getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
+                    ),
+                )
                 _add_to_pool("google_gemini", model, llm)
             else:
                 continue
@@ -154,10 +190,14 @@ def warm_llm_pool(specs: Optional[list[str]] = None) -> Dict[str, int]:
             pass
     return warmed
 
+
 def _infer_provider(llm: BaseChatModel) -> str:
-    if isinstance(llm, ChatOllama): return "ollama"
-    if isinstance(llm, ChatOpenAI): return "openai"
-    if isinstance(llm, ChatGoogleGenerativeAI): return "google_gemini"
+    if isinstance(llm, ChatOllama):
+        return "ollama"
+    if isinstance(llm, ChatOpenAI):
+        return "openai"
+    if isinstance(llm, ChatGoogleGenerativeAI):
+        return "google_gemini"
     return "unknown"
 
 

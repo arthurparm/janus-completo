@@ -1,19 +1,19 @@
-import asyncio
-import logging
-from typing import Dict, Any, List, Optional
 import json  # Adicionado para json.dumps
+import logging
+from typing import Any
 
+from langchain.agents import create_react_agent
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
-from fastapi import Depends  # Adicionado para DI
 
-from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
+from app.core.llm.llm_manager import ModelPriority, ModelRole
 from app.core.memory.memory_core import get_memory_db  # Usar o getter
 
 logger = logging.getLogger(__name__)
 
 
 # --- Ferramentas de Raciocínio (Exemplos) ---
+
 
 @tool
 async def search_memory(query: str, limit: int = 5) -> str:
@@ -41,11 +41,14 @@ class ReasoningSession:
     Gerencia uma sessão de raciocínio para um agente.
     """
 
-    def __init__(self, llm_manager_instance, tools: List[Any]):
-        self.llm = llm_manager_instance.get_llm(role=ModelRole.REASONING, priority=ModelPriority.HIGH_QUALITY)
+    def __init__(self, llm_manager_instance, tools: list[Any]):
+        self.llm = llm_manager_instance.get_llm(
+            role=ModelRole.REASONING, priority=ModelPriority.HIGH_QUALITY
+        )
         self.tools = tools
         self.prompt = PromptTemplate.from_template(
-            """Você é um assistente de raciocínio. Responda à pergunta: {input}""")
+            """Você é um assistente de raciocínio. Responda à pergunta: {input}"""
+        )
         self.agent_executor = create_react_agent(self.llm, self.tools, self.prompt)
 
     async def solve_question(self, question: str) -> str:
@@ -55,6 +58,7 @@ class ReasoningSession:
         except Exception as e:
             logger.error(f"Erro na sessão de raciocínio: {e}", exc_info=True)
             return f"Erro ao processar a pergunta: {e}"
+
 
 # --- Funções Legadas (para compatibilidade, a serem refatoradas) ---
 

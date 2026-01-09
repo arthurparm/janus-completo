@@ -1,20 +1,28 @@
-import structlog
 import json
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import structlog
 from fastapi import Depends
 
-from app.core.monitoring import get_health_monitor, HealthMonitor
-from app.core.monitoring.poison_pill_handler import get_poison_pill_handler, PoisonPillHandler, QuarantinedMessage
+from app.core.monitoring import HealthMonitor, get_health_monitor
+from app.core.monitoring.poison_pill_handler import (
+    PoisonPillHandler,
+    QuarantinedMessage,
+    get_poison_pill_handler,
+)
 from app.db.graph import get_graph_db
 from app.db.mysql_config import mysql_db
-from app.models.user_models import Session as ChatSession, Message, AuditEvent
 from app.db.vector_store import get_collection_info
+from app.models.autonomy_models import AutonomyRun, AutonomyStep
+from app.models.user_models import AuditEvent, Message
+from app.models.user_models import Session as ChatSession
 
 logger = structlog.get_logger(__name__)
 
 
 class ObservabilityRepositoryError(Exception):
     """Base exception for observability repository errors."""
+
     pass
 
 
@@ -28,7 +36,7 @@ class ObservabilityRepository:
         self._monitor = monitor
         self._pp_handler = pp_handler
 
-    async def get_system_health(self) -> Dict[str, Any]:
+    async def get_system_health(self) -> dict[str, Any]:
         logger.debug("Buscando saúde agregada do sistema via repositório.")
         try:
             return self._monitor.get_system_health()
@@ -36,7 +44,7 @@ class ObservabilityRepository:
             logger.error("Erro no repositório ao buscar saúde do sistema", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao buscar a saúde do sistema.") from e
 
-    async def check_all_components(self) -> Dict[str, Dict[str, Any]]:
+    async def check_all_components(self) -> dict[str, dict[str, Any]]:
         logger.debug("Disparando health check de todos os componentes via repositório.")
         try:
             results = await self._monitor.check_all_components()
@@ -45,25 +53,29 @@ class ObservabilityRepository:
             logger.error("Erro no repositório ao executar health checks", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao executar os health checks.") from e
 
-    async def get_component_health(self, component: str) -> Dict[str, Any]:
+    async def get_component_health(self, component: str) -> dict[str, Any]:
         logger.debug("Checando saúde de componente via repositório", component=component)
         try:
             result = await self._monitor.check_component(component)
             return result.to_dict()
         except Exception as e:
-            logger.error("Erro no repositório ao verificar componente", component=component, exc_info=e)
-            raise ObservabilityRepositoryError(f"Falha ao verificar health do componente '{component}'.") from e
+            logger.error(
+                "Erro no repositório ao verificar componente", component=component, exc_info=e
+            )
+            raise ObservabilityRepositoryError(
+                f"Falha ao verificar health do componente '{component}'."
+            ) from e
 
-    async def get_llm_manager_health(self) -> Dict[str, Any]:
+    async def get_llm_manager_health(self) -> dict[str, Any]:
         return await self.get_component_health("llm_manager")
 
-    async def get_multi_agent_system_health(self) -> Dict[str, Any]:
+    async def get_multi_agent_system_health(self) -> dict[str, Any]:
         return await self.get_component_health("multi_agent_system")
 
-    async def get_poison_pill_handler_health(self) -> Dict[str, Any]:
+    async def get_poison_pill_handler_health(self) -> dict[str, Any]:
         return await self.get_component_health("poison_pill_handler")
 
-    def get_quarantined_messages(self, queue: Optional[str] = None) -> List[QuarantinedMessage]:
+    def get_quarantined_messages(self, queue: str | None = None) -> list[QuarantinedMessage]:
         logger.debug("Buscando mensagens em quarentena via repositório", queue=queue)
         return self._pp_handler.get_quarantined_messages(queue=queue)
 
@@ -71,7 +83,9 @@ class ObservabilityRepository:
         logger.debug("Liberando mensagem da quarentena via repositório", message_id=message_id)
         msg = self._pp_handler.release_from_quarantine(message_id, allow_retry)
         if not msg:
-            raise ObservabilityRepositoryError(f"Mensagem com ID '{message_id}' não encontrada na quarentena.")
+            raise ObservabilityRepositoryError(
+                f"Mensagem com ID '{message_id}' não encontrada na quarentena."
+            )
         return msg
 
     def cleanup_expired_quarantine(self) -> int:
@@ -82,14 +96,14 @@ class ObservabilityRepository:
             logger.error("Erro no repositório ao limpar quarentena expirada", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao limpar quarentena expirada.") from e
 
-    def get_poison_pill_stats(self, queue: Optional[str] = None) -> Dict[str, Any]:
+    def get_poison_pill_stats(self, queue: str | None = None) -> dict[str, Any]:
         logger.debug("Buscando estatísticas de poison pills via repositório", queue=queue)
         return self._pp_handler.get_failure_stats(queue=queue)
 
-    def get_metrics_summary(self) -> Dict[str, Any]:
+    def get_metrics_summary(self) -> dict[str, Any]:
         logger.debug("Coletando resumo de métricas do sistema via repositório.")
-        from app.core.llm import _provider_circuit_breakers, _llm_pool
         from app.core.agents import get_multi_agent_system
+        from app.core.llm import _llm_pool, _provider_circuit_breakers
 
         llm_stats = {
             "pool_keys": len(_llm_pool),
@@ -97,25 +111,21 @@ class ObservabilityRepository:
             "circuit_breakers": {
                 provider: {"state": cb.state.value, "failure_count": cb.failure_count}
                 for provider, cb in _provider_circuit_breakers.items()
-            }
+            },
         }
 
         ma_system = get_multi_agent_system()
         ma_stats = {
             "active_agents": len(ma_system.agents),
             "workspace_tasks": len(ma_system.workspace.tasks),
-            "workspace_artifacts": len(ma_system.workspace.artifacts)
+            "workspace_artifacts": len(ma_system.workspace.artifacts),
         }
 
         pp_stats = self._pp_handler.get_health_status()
 
-        return {
-            "llm": llm_stats,
-            "multi_agent": ma_stats,
-            "poison_pills": pp_stats
-        }
+        return {"llm": llm_stats, "multi_agent": ma_stats, "poison_pills": pp_stats}
 
-    def get_user_metrics(self, user_id: str) -> Dict[str, Any]:
+    def get_user_metrics(self, user_id: str) -> dict[str, Any]:
         s = mysql_db.get_session_direct()
         try:
             convs = s.query(ChatSession).filter(ChatSession.user_id == int(user_id)).all()
@@ -127,7 +137,7 @@ class ObservabilityRepository:
                 msgs = s.query(Message).filter(Message.session_id == c.id).all()
                 total_messages += len(msgs)
                 for m in msgs:
-                    tlen = len((m.text or ""))
+                    tlen = len(m.text or "")
                     approx_tokens = max(1, int(tlen / 4))
                     if (m.role or "").lower() == "user":
                         in_tokens += approx_tokens
@@ -149,14 +159,24 @@ class ObservabilityRepository:
         finally:
             s.close()
 
-    def get_user_activity(self, user_id: str) -> Dict[str, Any]:
+    def get_user_activity(self, user_id: str) -> dict[str, Any]:
         s = mysql_db.get_session_direct()
         try:
             runs = s.query(AutonomyRun).filter(AutonomyRun.user_id == user_id).all()
             runs_count = len(runs)
-            steps_count = s.query(AutonomyStep).join(AutonomyRun, AutonomyStep.run_id == AutonomyRun.id).filter(AutonomyRun.user_id == user_id).count()
-            import math
-            durations = [float(x.duration_seconds) for x in s.query(AutonomyStep.duration_seconds).join(AutonomyRun, AutonomyStep.run_id == AutonomyRun.id).filter(AutonomyRun.user_id == user_id).all()]
+            steps_count = (
+                s.query(AutonomyStep)
+                .join(AutonomyRun, AutonomyStep.run_id == AutonomyRun.id)
+                .filter(AutonomyRun.user_id == user_id)
+                .count()
+            )
+            durations = [
+                float(x.duration_seconds)
+                for x in s.query(AutonomyStep.duration_seconds)
+                .join(AutonomyRun, AutonomyStep.run_id == AutonomyRun.id)
+                .filter(AutonomyRun.user_id == user_id)
+                .all()
+            ]
             avg_step_duration = (sum(durations) / len(durations)) if durations else 0.0
             return {
                 "user_id": user_id,
@@ -167,7 +187,7 @@ class ObservabilityRepository:
         finally:
             s.close()
 
-    async def get_graph_audit_report(self) -> Dict[str, Any]:
+    async def get_graph_audit_report(self) -> dict[str, Any]:
         """
         Executa consultas de auditoria no Neo4j para avaliar a higiene do grafo.
 
@@ -183,37 +203,36 @@ class ObservabilityRepository:
             db = await get_graph_db()
             rel_types_rows = await db.query(
                 "MATCH ()-[r]->() RETURN DISTINCT type(r) AS rel ORDER BY rel",
-                operation="audit_rel_types"
+                operation="audit_rel_types",
             )
             rel_types_present = [row.get("rel") for row in rel_types_rows]
 
             registered_rows = await db.query(
                 "MATCH (t:RelationshipType) RETURN DISTINCT t.name AS name ORDER BY name",
-                operation="audit_registered_rel_types"
+                operation="audit_registered_rel_types",
             )
             rel_types_registered = [row.get("name") for row in registered_rows]
 
             unregistered_rows = await db.query(
                 "MATCH ()-[r]->() WITH DISTINCT type(r) AS rel MATCH (t:RelationshipType) RETURN rel WHERE NOT rel IN collect(t.name)",
-                operation="audit_unregistered_rel_types"
+                operation="audit_unregistered_rel_types",
             )
             rel_types_unregistered = [row.get("rel") for row in unregistered_rows]
 
             nonstandard_rows = await db.query(
                 "MATCH ()-[r]->() WITH DISTINCT type(r) AS t WHERE NOT t =~ '^[A-Z_]+$' RETURN t",
-                operation="audit_nonstandard_rel_types"
+                operation="audit_nonstandard_rel_types",
             )
             rel_types_nonstandard = [row.get("t") for row in nonstandard_rows]
 
             quarantine_rows = await db.query(
-                "MATCH (q:Quarantine) RETURN COUNT(q) AS total",
-                operation="audit_quarantine_count"
+                "MATCH (q:Quarantine) RETURN COUNT(q) AS total", operation="audit_quarantine_count"
             )
             quarantine_count = (quarantine_rows[0].get("total") if quarantine_rows else 0) or 0
 
             mentions_rows = await db.query(
                 "MATCH (:Experience)-[r:MENTIONS]->() RETURN COUNT(r) AS total",
-                operation="audit_mentions_count"
+                operation="audit_mentions_count",
             )
             mentions_count = (mentions_rows[0].get("total") if mentions_rows else 0) or 0
 
@@ -229,7 +248,7 @@ class ObservabilityRepository:
             logger.error("Erro ao executar auditoria do grafo", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao executar auditoria do grafo.") from e
 
-    async def get_graph_quarantine_items(self, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_graph_quarantine_items(self, limit: int = 100) -> list[dict[str, Any]]:
         try:
             db = await get_graph_db()
             rows = await db.query(
@@ -240,9 +259,11 @@ class ObservabilityRepository:
             return rows
         except Exception as e:
             logger.error("Erro ao listar itens de quarentena do grafo", exc_info=e)
-            raise ObservabilityRepositoryError("Falha ao listar itens de quarentena do grafo.") from e
+            raise ObservabilityRepositoryError(
+                "Falha ao listar itens de quarentena do grafo."
+            ) from e
 
-    async def promote_quarantine_item(self, node_id: int) -> Dict[str, Any]:
+    async def promote_quarantine_item(self, node_id: int) -> dict[str, Any]:
         try:
             db = await get_graph_db()
             async with await db.get_session() as session:
@@ -284,7 +305,7 @@ class ObservabilityRepository:
             logger.error("Erro ao promover item de quarentena", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao promover item de quarentena.") from e
 
-    def record_audit_event(self, event: Dict[str, Any]) -> None:
+    def record_audit_event(self, event: dict[str, Any]) -> None:
         s = mysql_db.get_session_direct()
         try:
             # Converte user_id para int apenas se for um valor numérico válido
@@ -301,7 +322,9 @@ class ObservabilityRepository:
                 action=str(event.get("action")),
                 tool=event.get("tool"),
                 status=str(event.get("status")),
-                latency_ms=int(event.get("latency_ms")) if event.get("latency_ms") is not None else None,
+                latency_ms=int(event.get("latency_ms"))
+                if event.get("latency_ms") is not None
+                else None,
                 trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
                 details_json=(
                     event.get("details_json")
@@ -320,7 +343,16 @@ class ObservabilityRepository:
         finally:
             s.close()
 
-    def get_audit_events(self, user_id: Optional[str], tool: Optional[str], status: Optional[str], start_ts: Optional[float], end_ts: Optional[float], limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def get_audit_events(
+        self,
+        user_id: str | None,
+        tool: str | None,
+        status: str | None,
+        start_ts: float | None,
+        end_ts: float | None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         s = mysql_db.get_session_direct()
         try:
             q = s.query(AuditEvent)
@@ -335,9 +367,11 @@ class ObservabilityRepository:
                 q = q.filter(AuditEvent.status == str(status))
             if start_ts is not None:
                 from datetime import datetime
+
                 q = q.filter(AuditEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
             if end_ts is not None:
                 from datetime import datetime
+
                 q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
             q = q.order_by(AuditEvent.created_at.desc())
             q = q.offset(int(offset)).limit(int(limit))
@@ -352,7 +386,9 @@ class ObservabilityRepository:
                     "status": r.status,
                     "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
-                    "created_at": getattr(r, "created_at").timestamp() if getattr(r, "created_at", None) else None,
+                    "created_at": r.created_at.timestamp()
+                    if getattr(r, "created_at", None)
+                    else None,
                     "details_json": r.details_json,
                 }
                 for r in rows
@@ -366,14 +402,16 @@ class ObservabilityRepository:
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
 
+
 async def get_observability_repository(
-        monitor: HealthMonitor = Depends(get_health_monitor),
-        pp_handler: PoisonPillHandler = Depends(get_poison_pill_handler)
+    monitor: HealthMonitor = Depends(get_health_monitor),
+    pp_handler: PoisonPillHandler = Depends(get_poison_pill_handler),
 ) -> ObservabilityRepository:
     return ObservabilityRepository(monitor, pp_handler)
 
+
 # Compat: função utilitária direta para registrar eventos de auditoria
-def record_audit_event_direct(event: Dict[str, Any]) -> None:
+def record_audit_event_direct(event: dict[str, Any]) -> None:
     s = mysql_db.get_session_direct()
     try:
         # Converte user_id para int apenas se for um valor numérico válido
@@ -390,14 +428,14 @@ def record_audit_event_direct(event: Dict[str, Any]) -> None:
             action=str(event.get("action")),
             tool=event.get("tool"),
             status=str(event.get("status")),
-            latency_ms=int(event.get("latency_ms")) if event.get("latency_ms") is not None else None,
+            latency_ms=int(event.get("latency_ms"))
+            if event.get("latency_ms") is not None
+            else None,
             trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
             details_json=(
                 event.get("details_json")
                 if event.get("details_json") is not None
-                else (
-                    json.dumps(event.get("detail")) if event.get("detail") is not None else None
-                )
+                else (json.dumps(event.get("detail")) if event.get("detail") is not None else None)
             ),
         )
         s.add(ae)

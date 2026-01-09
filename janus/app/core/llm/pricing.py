@@ -1,9 +1,11 @@
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any
+
 from prometheus_client import Counter, Gauge
 
 from app.config import settings
-from .types import ProviderPricing, ProviderStats, ModelStats
+
+from .types import ModelStats, ProviderPricing, ProviderStats
 
 # Metrics
 LLM_PROVIDER_SPEND_USD = Counter(
@@ -33,20 +35,20 @@ LLM_EXPECTED_KTOKENS_GAUGE = Gauge(
 )
 
 # State
-_provider_stats: Dict[str, ProviderStats] = {
+_provider_stats: dict[str, ProviderStats] = {
     "openai": ProviderStats(),
     "google_gemini": ProviderStats(),
     "ollama": ProviderStats(),
 }
 
-_model_stats: Dict[str, Dict[str, ModelStats]] = {
+_model_stats: dict[str, dict[str, ModelStats]] = {
     "openai": {},
     "google_gemini": {},
     "ollama": {},
 }
 
 # Pricing por provedor (valores padrão via settings; Ollama ~ 0)
-_provider_pricing: Dict[str, ProviderPricing] = {
+_provider_pricing: dict[str, ProviderPricing] = {
     "openai": ProviderPricing(
         input_per_1k_usd=settings.OPENAI_COST_PER_1K_INPUT_USD,
         output_per_1k_usd=settings.OPENAI_COST_PER_1K_OUTPUT_USD,
@@ -62,24 +64,24 @@ _provider_pricing: Dict[str, ProviderPricing] = {
 }
 
 # Orçamentos mensais por provedor
-_provider_budgets_usd: Dict[str, float] = {
+_provider_budgets_usd: dict[str, float] = {
     "openai": settings.OPENAI_MONTHLY_BUDGET_USD,
     "google_gemini": settings.GEMINI_MONTHLY_BUDGET_USD,
     "ollama": settings.OLLAMA_MONTHLY_BUDGET_USD,
 }
 
 # Rastreamento de gastos acumulados
-_provider_spend_usd: Dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}
+_provider_spend_usd: dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}
 
 # Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
-_model_penalty_factors: Dict[str, Dict[str, float]] = {
+_model_penalty_factors: dict[str, dict[str, float]] = {
     "openai": {},
     "google_gemini": {},
     "ollama": {},
 }
 
 # EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
-_expected_k_ema_by_role: Dict[str, float] = {}
+_expected_k_ema_by_role: dict[str, float] = {}
 for _role_key, _k in getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).items():
     try:
         _expected_k_ema_by_role[_role_key] = float(_k)
@@ -95,11 +97,13 @@ except Exception:
 
 # Orçamentos diários multitenant (USD)
 _tenant_user_daily_budget_usd: float = getattr(settings, "TENANT_USER_DAILY_BUDGET_USD", 0.0) or 0.0
-_tenant_project_daily_budget_usd: float = getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
+_tenant_project_daily_budget_usd: float = (
+    getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
+)
 
 # Rastreamento de gastos por usuário/projeto (reset diário)
-_tenant_user_spend_usd: Dict[str, Dict[str, Any]] = {}
-_tenant_project_spend_usd: Dict[str, Dict[str, Any]] = {}
+_tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
+_tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
 
 
 def _today_str() -> str:
@@ -128,22 +132,32 @@ def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
         if provider == "openai":
             mp = settings.OPENAI_MODEL_PRICING.get(model_name)
             if mp:
-                return ProviderPricing(mp.get("input_per_1k_usd", settings.OPENAI_COST_PER_1K_INPUT_USD),
-                                       mp.get("output_per_1k_usd", settings.OPENAI_COST_PER_1K_OUTPUT_USD))
-            return ProviderPricing(settings.OPENAI_COST_PER_1K_INPUT_USD, settings.OPENAI_COST_PER_1K_OUTPUT_USD)
+                return ProviderPricing(
+                    mp.get("input_per_1k_usd", settings.OPENAI_COST_PER_1K_INPUT_USD),
+                    mp.get("output_per_1k_usd", settings.OPENAI_COST_PER_1K_OUTPUT_USD),
+                )
+            return ProviderPricing(
+                settings.OPENAI_COST_PER_1K_INPUT_USD, settings.OPENAI_COST_PER_1K_OUTPUT_USD
+            )
         if provider == "google_gemini":
             mp = settings.GEMINI_MODEL_PRICING.get(model_name)
             if mp:
-                return ProviderPricing(mp.get("input_per_1k_usd", settings.GEMINI_COST_PER_1K_INPUT_USD),
-                                       mp.get("output_per_1k_usd", settings.GEMINI_COST_PER_1K_OUTPUT_USD))
-            return ProviderPricing(settings.GEMINI_COST_PER_1K_INPUT_USD, settings.GEMINI_COST_PER_1K_OUTPUT_USD)
+                return ProviderPricing(
+                    mp.get("input_per_1k_usd", settings.GEMINI_COST_PER_1K_INPUT_USD),
+                    mp.get("output_per_1k_usd", settings.GEMINI_COST_PER_1K_OUTPUT_USD),
+                )
+            return ProviderPricing(
+                settings.GEMINI_COST_PER_1K_INPUT_USD, settings.GEMINI_COST_PER_1K_OUTPUT_USD
+            )
         # ollama
-        return ProviderPricing(settings.OLLAMA_COST_PER_1K_INPUT_USD, settings.OLLAMA_COST_PER_1K_OUTPUT_USD)
+        return ProviderPricing(
+            settings.OLLAMA_COST_PER_1K_INPUT_USD, settings.OLLAMA_COST_PER_1K_OUTPUT_USD
+        )
     except Exception:
         return ProviderPricing(0.0, 0.0)
 
 
-def _tenant_budget_remaining(kind: str, id_: Optional[str]) -> float:
+def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
     if not id_:
         return float("inf")
     today = _today_str()
@@ -153,17 +167,25 @@ def _tenant_budget_remaining(kind: str, id_: Optional[str]) -> float:
         if not entry or entry.get("date") != today:
             _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
             entry = _tenant_user_spend_usd[id_]
-        return max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0)) if budget > 0 else float("inf")
+        return (
+            max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0))
+            if budget > 0
+            else float("inf")
+        )
     else:  # project
         budget = _tenant_project_daily_budget_usd
         entry = _tenant_project_spend_usd.get(id_)
         if not entry or entry.get("date") != today:
             _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
             entry = _tenant_project_spend_usd[id_]
-        return max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0)) if budget > 0 else float("inf")
+        return (
+            max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0))
+            if budget > 0
+            else float("inf")
+        )
 
 
-def _register_tenant_spend(kind: str, id_: Optional[str], cost_usd: float):
+def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
     if not id_:
         return
     today = _today_str()
@@ -181,7 +203,9 @@ def _register_tenant_spend(kind: str, id_: Optional[str], cost_usd: float):
         entry = _tenant_project_spend_usd.get(id_)
         if not entry or entry.get("date") != today:
             _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
-        _tenant_project_spend_usd[id_]["usd"] = (_tenant_project_spend_usd[id_]["usd"] or 0.0) + cost_usd
+        _tenant_project_spend_usd[id_]["usd"] = (
+            _tenant_project_spend_usd[id_]["usd"] or 0.0
+        ) + cost_usd
         try:
             LLM_TENANT_SPEND_USD.labels(kind="project", id=id_).inc(cost_usd)
         except Exception:

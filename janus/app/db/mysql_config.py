@@ -2,11 +2,11 @@
 Configuração do banco de dados MySQL para Configuration-as-Data.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
-from sqlalchemy import create_engine, Engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from app.config import settings
@@ -39,14 +39,10 @@ class MySQLDatabase:
             pool_pre_ping=True,
             pool_recycle=3600,
             pool_timeout=30,
-            echo=settings.ENVIRONMENT == "development"
+            echo=settings.ENVIRONMENT == "development",
         )
 
-        self._session_factory = sessionmaker(
-            bind=self._engine,
-            autocommit=False,
-            autoflush=False
-        )
+        self._session_factory = sessionmaker(bind=self._engine, autocommit=False, autoflush=False)
 
     @property
     def engine(self) -> Engine:

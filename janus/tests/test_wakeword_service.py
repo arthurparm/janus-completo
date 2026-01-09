@@ -1,9 +1,9 @@
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from app.core.senses.audio.wakeword_service import WakeWordService
-
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.core.senses.audio.wakeword_service import WakeWordService
 
 # Mock module availability before patch attempts to resolve it
 mock_oww = MagicMock()
@@ -29,7 +29,7 @@ async def test_wait_for_wake_word():
     """
     with patch("openwakeword.model.Model") as MockModel, \
          patch("pyaudio.PyAudio") as MockPyAudio:
-        
+
         # Setup Model Prediction Mock
         model_instance = MockModel.return_value
         # return score 0.0 first call, 0.9 second call
@@ -37,16 +37,16 @@ async def test_wait_for_wake_word():
             {"test_model": 0.0},
             {"test_model": 0.9}
         ]
-        
+
         # Setup Audio Stream Mock
         p_instance = MockPyAudio.return_value
         stream_instance = p_instance.open.return_value
         stream_instance.read.return_value = b'\x00' * 1280
-        
+
         service = WakeWordService(models=["test_model"])
-        
+
         detected = await service.wait_for_wake_word()
-        
+
         assert detected is True
         assert model_instance.predict.call_count == 2
         stream_instance.stop_stream.assert_called_once()

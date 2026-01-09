@@ -1,34 +1,40 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-import msgpack
+from typing import Any
 
+import msgpack
+from pydantic import BaseModel, Field
 
 # --- Schemas de Dados ---
+
 
 class Experience(BaseModel):
     """
     Representa uma única experiência ou evento a ser memorizado.
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     type: str
     content: str
     metadata: dict = Field(default_factory=dict)
+
 
 class ScoredExperience(Experience):
     """
     Experience enriquecida com score de similaridade/busca.
     """
-    score: Optional[float] = None
+
+    score: float | None = None
 
 
 # --- Constantes e Enums da Aplicação ---
 
+
 class GraphLabel(str, Enum):
     """Labels para nós no Grafo de Conhecimento (Neo4j)."""
+
     FILE = "File"
     CODE_FILE = "CodeFile"
     FUNCTION = "Function"
@@ -58,6 +64,7 @@ class GraphLabel(str, Enum):
 
 class GraphRelationship(str, Enum):
     """Tipos de relacionamento no Grafo de Conhecimento (Neo4j)."""
+
     CONTAINS = "CONTAINS"
     CALLS = "CALLS"
     IMPORTS = "IMPORTS"
@@ -99,11 +106,13 @@ class GraphRelationship(str, Enum):
 
 class VectorCollection(str, Enum):
     """Nomes das coleções no Banco de Dados Vetorial (Qdrant)."""
+
     EPISODIC_MEMORY = "janus_episodic_memory"
 
 
 class QueueName(str, Enum):
     """Nomes das filas no Message Broker (RabbitMQ)."""
+
     KNOWLEDGE_CONSOLIDATION = "janus.knowledge.consolidation"
     AGENT_TASKS = "janus.agent.tasks"
     NEURAL_TRAINING = "janus.neural.training"
@@ -123,6 +132,7 @@ class TaskMessage(BaseModel):
     """
     Representa uma mensagem de tarefa para o message broker.
     """
+
     task_id: str
     task_type: str
     payload: dict = Field(default_factory=dict)
@@ -139,9 +149,10 @@ class TaskMessage(BaseModel):
 
 class TaskStateEvent(BaseModel):
     """Evento de histórico de um TaskState."""
-    agent_role: Optional[str] = None
+
+    agent_role: str | None = None
     action: str
-    notes: Optional[str] = None
+    notes: str | None = None
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
 
 
@@ -150,11 +161,13 @@ class SystemStatusResponse(BaseModel):
     message: str
     timestamp: datetime
 
+
 class ServiceStatusResponse(BaseModel):
     name: str
     status: str
     message: str
     last_check: datetime
+
 
 class WorkerStatusResponse(BaseModel):
     id: str
@@ -162,10 +175,11 @@ class WorkerStatusResponse(BaseModel):
     last_heartbeat: datetime
     tasks_processed: int
 
+
 class SystemOverviewResponse(BaseModel):
     system_status: SystemStatusResponse
-    services_status: List[ServiceStatusResponse]
-    workers_status: List[WorkerStatusResponse]
+    services_status: list[ServiceStatusResponse]
+    workers_status: list[WorkerStatusResponse]
 
 
 class TaskState(BaseModel):
@@ -175,15 +189,16 @@ class TaskState(BaseModel):
     - Os agentes atualizam `data_payload` e `history` a cada passo.
     - `next_agent_role` define para qual agente o estado deve ser roteado.
     """
+
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     original_goal: str
-    current_agent_role: Optional[str] = None
-    next_agent_role: Optional[str] = None
-    data_payload: Dict[str, Any] = Field(default_factory=dict)
-    history: List[TaskStateEvent] = Field(default_factory=list)
+    current_agent_role: str | None = None
+    next_agent_role: str | None = None
+    data_payload: dict[str, Any] = Field(default_factory=dict)
+    history: list[TaskStateEvent] = Field(default_factory=list)
     status: str = Field(default="in_progress")
     retries: int = Field(default=0)
-    meta: Dict[str, Any] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
 
     def to_msgpack(self) -> bytes:

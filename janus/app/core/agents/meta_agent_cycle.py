@@ -1,21 +1,22 @@
 import asyncio
-import logging
 import time
+from collections.abc import Callable
 from enum import Enum
-from typing import Optional, Dict, Any, Callable
+from typing import Any
 
 import structlog
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
-from app.core.agents.agent_manager import agent_manager, AgentType
+from app.core.agents.agent_manager import AgentType, agent_manager
+from app.core.infrastructure.prompt_loader import prompt_loader
 from app.core.infrastructure.resilience import CircuitBreaker
 from app.core.memory.memory_core import get_memory_db
 from app.db.graph import graph_db
-from app.core.infrastructure.prompt_loader import prompt_loader
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
+
 
 class Phase(Enum):
     PLAN = "plan"
@@ -23,21 +24,28 @@ class Phase(Enum):
     OBSERVE = "observe"
     REFINE = "refine"
 
-_META_EVENTS = Counter("meta_agent_events_total", "Eventos do meta-agente por fase", ["phase", "outcome"])
-_META_LAT = Histogram("meta_agent_phase_latency_seconds", "Latência por fase do meta-agente", ["phase", "outcome"])
 
-_interrupt_event: Optional[asyncio.Event] = None
+_META_EVENTS = Counter(
+    "meta_agent_events_total", "Eventos do meta-agente por fase", ["phase", "outcome"]
+)
+_META_LAT = Histogram(
+    "meta_agent_phase_latency_seconds", "Latência por fase do meta-agente", ["phase", "outcome"]
+)
+
+_interrupt_event: asyncio.Event | None = None
 _meta_agent_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=300)
 
 _MAX_CONSECUTIVE_FAILURES = 10
 _PHASE_TIMEOUT = getattr(settings, "META_AGENT_PHASE_TIMEOUT", 180)
+
 
 def request_stop_current_cycle():
     global _interrupt_event
     if _interrupt_event is not None:
         _interrupt_event.set()
 
-async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> Dict[str, Any]:
+
+async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> dict[str, Any]:
     phase_name = phase.value
     start = time.perf_counter()
     try:
@@ -48,7 +56,7 @@ async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> Dict[str,
         _META_LAT.labels(phase.value, "success").observe(elapsed)
         logger.info(f"META-AGENT: Fase {phase_name} concluída com sucesso em {elapsed:.2f}s.")
         return {"ok": True, "result": result}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         elapsed = time.perf_counter() - start
         _META_EVENTS.labels(phase.value, "timeout").inc()
         _META_LAT.labels(phase.value, "timeout").observe(elapsed)
@@ -61,17 +69,23 @@ async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> Dict[str,
         logger.error(f"META-AGENT: Erro na fase {phase_name}: {e}", exc_info=True)
         return {"ok": False, "error": str(e), "result": None}
 
-async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
+
+async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
     iteration = shared.get("iteration", 0)
 
-    async def _phase_plan() -> Dict[str, Any]:
+    async def _phase_plan() -> dict[str, Any]:
         prompt = prompt_loader.get("meta_agent_plan")
-        result = await agent_manager.arun_agent(question=prompt, request=None, agent_type=AgentType.META_AGENT)
-        plan = result.get(
-            "answer") if result and "answer" in result else "Plano padrão: Consultar o Grafo de Conhecimento por lições aprendidas (Reflections) e analisar padrões."
+        result = await agent_manager.arun_agent(
+            question=prompt, request=None, agent_type=AgentType.META_AGENT
+        )
+        plan = (
+            result.get("answer")
+            if result and "answer" in result
+            else "Plano padrão: Consultar o Grafo de Conhecimento por lições aprendidas (Reflections) e analisar padrões."
+        )
         return {"plan": plan}
 
-    async def _phase_act() -> Dict[str, Any]:
+    async def _phase_act() -> dict[str, Any]:
         logger.info("Consultando Grafo de Conhecimento por lições aprendidas (Reflections).")
         reflections = []
         try:
@@ -81,8 +95,12 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
                 result = await session.run(query)
                 reflections = [record["insight"] for record in await result.list()]
         except Exception as e:
-            logger.error(f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True)
-            return {"analysis": "Falha crítica ao acessar a Memória Semântica (Grafo de Conhecimento)."}
+            logger.error(
+                f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True
+            )
+            return {
+                "analysis": "Falha crítica ao acessar a Memória Semântica (Grafo de Conhecimento)."
+            }
 
         if not reflections:
             analysis = "Nenhuma reflexão (lição aprendida) encontrada no Grafo de Conhecimento. O sistema parece estável ou ainda não consolidou novas falhas."
@@ -90,18 +108,24 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
             return {"analysis": analysis, "has_issue": False}
 
         reflections_str = "\n- ".join(reflections)
-        prompt = prompt_loader.get("meta_agent_act", variables={"learning_lessons": reflections_str})
-        
+        prompt = prompt_loader.get(
+            "meta_agent_act", variables={"learning_lessons": reflections_str}
+        )
+
         result = await agent_manager.arun_agent(
             question=prompt,
             request=None,
             agent_type=AgentType.META_AGENT,
         )
 
-        analysis = result.get("answer", "Falha ao analisar as reflexões.") if result else "Nenhuma resposta do agente."
+        analysis = (
+            result.get("answer", "Falha ao analisar as reflexões.")
+            if result
+            else "Nenhuma resposta do agente."
+        )
         return {"analysis": analysis, "has_issue": True}
 
-    async def _phase_observe(act_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _phase_observe(act_result: dict[str, Any] | None) -> dict[str, Any]:
         if not act_result:
             return {"has_issue": True, "analysis": "Fase ACT falhou, impossível observar."}
 
@@ -110,7 +134,7 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
         has_issue = act_result.get("has_issue", False)
         return {"has_issue": has_issue, "analysis": analysis}
 
-    async def _phase_refine(obs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _phase_refine(obs: dict[str, Any] | None) -> dict[str, Any]:
         if not obs:
             return {"refinement": "Fase OBSERVE falhou, impossível refinar."}
         if obs.get("has_issue"):
@@ -120,27 +144,39 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
         return {"refinement": refinement}
 
     res_plan = await _run_phase(Phase.PLAN, _phase_plan)
-    if res_plan.get("ok"): shared["hypothesis"] = res_plan.get("result", {}).get("plan")
+    if res_plan.get("ok"):
+        shared["hypothesis"] = res_plan.get("result", {}).get("plan")
 
     try:
         memory_db = await get_memory_db()
         await memory_db.amemorize(
-            Experience(type="meta_agent_checkpoint", content=f"PLAN[{iteration}]: {shared.get('hypothesis')}",
-                       metadata={"origin": "meta_agent"}))
+            Experience(
+                type="meta_agent_checkpoint",
+                content=f"PLAN[{iteration}]: {shared.get('hypothesis')}",
+                metadata={"origin": "meta_agent"},
+            )
+        )
     except Exception as e:
         logger.warning(f"Falha ao salvar checkpoint PLAN: {e}")
 
     res_act = await _run_phase(Phase.ACT, _phase_act)
     res_obs = await _run_phase(Phase.OBSERVE, _phase_observe, res_act.get("result"))
-    if res_obs.get("ok"): shared["observations"].append(res_obs.get("result"))
+    if res_obs.get("ok"):
+        shared["observations"].append(res_obs.get("result"))
 
     res_ref = await _run_phase(Phase.REFINE, _phase_refine, res_obs.get("result"))
-    if res_ref.get("ok"): shared["refinements"].append(res_ref.get("result"))
+    if res_ref.get("ok"):
+        shared["refinements"].append(res_ref.get("result"))
 
     try:
         memory_db = await get_memory_db()
-        await memory_db.amemorize(Experience(type="meta_agent_checkpoint", content=f"OBSERVE/REFINE[{iteration}]",
-                                               metadata={"origin": "meta_agent"}))
+        await memory_db.amemorize(
+            Experience(
+                type="meta_agent_checkpoint",
+                content=f"OBSERVE/REFINE[{iteration}]",
+                metadata={"origin": "meta_agent"},
+            )
+        )
     except Exception as e:
         logger.warning(f"Falha ao salvar checkpoint pós-ciclo: {e}")
 
@@ -150,6 +186,7 @@ async def _execute_meta_cycle(shared: Dict[str, Any]) -> bool:
         return False
 
     return True
+
 
 async def run_meta_agent_cycle():
     logger.info("Ciclo de vida do Meta-Agente iniciado.")
@@ -167,12 +204,20 @@ async def run_meta_agent_cycle():
             logger.info("=" * 80)
             logger.info("META-AGENTE: Iniciando ciclo de auto-análise...")
             start_cycle = time.perf_counter()
-            shared = {"hypothesis": None, "actions": [], "observations": [], "refinements": [], "iteration": 0}
+            shared = {
+                "hypothesis": None,
+                "actions": [],
+                "observations": [],
+                "refinements": [],
+                "iteration": 0,
+            }
 
             async def protected_cycle():
                 iteration = 0
-                while iteration < settings.META_AGENT_MAX_ITERATIONS and (
-                        time.perf_counter() - start_cycle) < settings.META_AGENT_MAX_SECONDS:
+                while (
+                    iteration < settings.META_AGENT_MAX_ITERATIONS
+                    and (time.perf_counter() - start_cycle) < settings.META_AGENT_MAX_SECONDS
+                ):
                     if _interrupt_event.is_set():
                         logger.warning("META-AGENTE: Interrupção solicitada. Encerrando ciclo.")
                         break
@@ -186,7 +231,12 @@ async def run_meta_agent_cycle():
             iteration_count = await _meta_agent_breaker.call_async(protected_cycle)
             elapsed = time.perf_counter() - start_cycle
             logger.info(
-                {"event": "meta_agent_cycle_end", "iterations": iteration_count, "elapsed_s": round(elapsed, 2)})
+                {
+                    "event": "meta_agent_cycle_end",
+                    "iterations": iteration_count,
+                    "elapsed_s": round(elapsed, 2),
+                }
+            )
 
             final_refinement = (shared.get("refinements") or [{}])[-1]
             final_answer = final_refinement.get("refinement", "Sem conclusão.")
@@ -199,11 +249,15 @@ async def run_meta_agent_cycle():
             break
         except Exception as e:
             consecutive_failures += 1
-            logger.critical(f"META-AGENT: Erro CRÍTICO ({consecutive_failures}/{_MAX_CONSECUTIVE_FAILURES}): {e}",
-                            exc_info=True)
+            logger.critical(
+                f"META-AGENT: Erro CRÍTICO ({consecutive_failures}/{_MAX_CONSECUTIVE_FAILURES}): {e}",
+                exc_info=True,
+            )
             if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
                 logger.critical("META-AGENT: Limite de falhas consecutivas atingido. ENCERRANDO.")
                 break
-            backoff = min(600, settings.META_AGENT_CYCLE_INTERVAL_SECONDS * (2 ** consecutive_failures))
+            backoff = min(
+                600, settings.META_AGENT_CYCLE_INTERVAL_SECONDS * (2**consecutive_failures)
+            )
             logger.warning(f"META-AGENT: Aguardando {backoff}s antes de retry...")
             await asyncio.sleep(backoff)

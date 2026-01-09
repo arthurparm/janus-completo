@@ -1,30 +1,31 @@
+import logging
 import platform
 import subprocess
-import os
-import logging
+
 from langchain.tools import tool
 
 logger = logging.getLogger(__name__)
+
 
 @tool
 def launch_app(app_name: str) -> str:
     """
     Inicia um aplicativo ou comando no sistema operacional hospedeiro.
-    
+
     Tenta identificar o SO e usar o comando nativo apropriado (start, open, gtk-launch).
-    
+
     Args:
         app_name: Nome do aplicativo ou executável (ex: "calc", "notepad", "chrome", "spotify").
                   Se for um caminho completo, tente usar aspas duplas se houver espaços.
-    
+
     Returns:
         Mensagem de sucesso ou erro.
     """
     system = platform.system()
     app_name = app_name.strip()
-    
+
     logger.info(f"Tentando iniciar aplicativo: {app_name} no sistema {system}")
-    
+
     try:
         if system == "Windows":
             # 'start' é um comando interno do shell cmd.exe
@@ -38,8 +39,8 @@ def launch_app(app_name: str) -> str:
             subprocess.Popen([app_name], start_new_session=True)
         else:
             return f"Erro: Sistema operacional '{system}' não suportado para lançamento de apps."
-            
+
         return f"Comando de lançamento enviado para '{app_name}'."
     except Exception as e:
         logger.error(f"Erro ao lançar app {app_name}: {e}", exc_info=True)
-        return f"Erro ao tentar iniciar '{app_name}': {str(e)}"
+        return f"Erro ao tentar iniciar '{app_name}': {e!s}"

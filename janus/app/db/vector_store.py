@@ -1,14 +1,13 @@
-import logging
 import asyncio
-from typing import Optional
+import logging
 
 import requests
 import urllib3
-from qdrant_client import QdrantClient, models, AsyncQdrantClient
+from qdrant_client import AsyncQdrantClient, QdrantClient, models
 from qdrant_client.http.models import PayloadSchemaType
 
 from app.config import settings
-from app.core.infrastructure.resilience import resilient, CircuitBreaker
+from app.core.infrastructure.resilience import CircuitBreaker, resilient
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,11 @@ RETRIABLE_QDRANT_ERRORS = (
 )
 
 # Clientes globais
-_qdrant_client: Optional[QdrantClient] = None
+_qdrant_client: QdrantClient | None = None
 _client_initialized = False
-_init_error: Optional[Exception] = None
+_init_error: Exception | None = None
 
-_async_qdrant_client: Optional[AsyncQdrantClient] = None
+_async_qdrant_client: AsyncQdrantClient | None = None
 
 # Constantes de validação
 _MIN_VECTOR_SIZE = 1
@@ -37,7 +36,7 @@ _MAX_VECTOR_SIZE = 10000
 _DEFAULT_VECTOR_SIZE = 1536
 
 
-def _lazy_init_client() -> Optional[QdrantClient]:
+def _lazy_init_client() -> QdrantClient | None:
     global _qdrant_client, _client_initialized, _init_error
     if _client_initialized:
         if _init_error:
@@ -81,7 +80,9 @@ def get_async_qdrant_client() -> AsyncQdrantClient:
 
 
 def _validate_vector_size(vector_size: int) -> int:
-    if not isinstance(vector_size, int) or not (_MIN_VECTOR_SIZE <= vector_size <= _MAX_VECTOR_SIZE):
+    if not isinstance(vector_size, int) or not (
+        _MIN_VECTOR_SIZE <= vector_size <= _MAX_VECTOR_SIZE
+    ):
         raise ValueError(f"vector_size deve estar entre {_MIN_VECTOR_SIZE} e {_MAX_VECTOR_SIZE}.")
     return vector_size
 
@@ -90,16 +91,20 @@ def _validate_collection_name(collection_name: str) -> str:
     if not collection_name or not collection_name.strip() or len(collection_name) > 255:
         raise ValueError("collection_name inválido.")
     import re
+
     # Substituir caracteres inválidos por underscore
-    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', collection_name)
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", collection_name)
     if sanitized != collection_name:
         logger.warning(f"Nome da coleção '{collection_name}' sanitizado para '{sanitized}'")
     return sanitized
 
 
 @resilient(
-    max_attempts=3, initial_backoff=1.0, max_backoff=5.0, circuit_breaker=_qdrant_ops_cb,
-    retry_on=RETRIABLE_QDRANT_ERRORS
+    max_attempts=3,
+    initial_backoff=1.0,
+    max_backoff=5.0,
+    circuit_breaker=_qdrant_ops_cb,
+    retry_on=RETRIABLE_QDRANT_ERRORS,
 )
 def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE) -> str:
     collection_name = _validate_collection_name(collection_name)
@@ -114,32 +119,54 @@ def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_V
         try:
             client.create_collection(
                 collection_name=collection_name,
-                vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                vectors_config=models.VectorParams(
+                    size=vector_size, distance=models.Distance.COSINE
+                ),
             )
             logger.info(f"Coleção '{collection_name}' criada.")
             # Criar índices de payload para metadados importantes
-            client.create_payload_index(collection_name=collection_name, field_name="metadata.type",
-                                        field_schema=PayloadSchemaType.KEYWORD)
-            client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
-                                        field_schema=PayloadSchemaType.INTEGER)
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.type",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.timestamp",
+                field_schema=PayloadSchemaType.INTEGER,
+            )
             try:
-                client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
-                                            field_schema=PayloadSchemaType.KEYWORD)
+                client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="metadata.origin",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
             except Exception as e:
                 logger.warning(f"Failed to create 'origin' index for {collection_name}: {e}")
             try:
-                client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
-                                            field_schema=PayloadSchemaType.KEYWORD)
+                client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="metadata.status",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
             except Exception as e:
                 logger.warning(f"Failed to create 'status' index for {collection_name}: {e}")
-            logger.info(f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp.")
+            logger.info(
+                f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp."
+            )
         except Exception as create_error:
-            logger.error(f"Falha ao criar coleção '{collection_name}': {create_error}", exc_info=True)
-            raise ConnectionError(f"Não foi possível criar a coleção: {create_error}") from create_error
+            logger.error(
+                f"Falha ao criar coleção '{collection_name}': {create_error}", exc_info=True
+            )
+            raise ConnectionError(
+                f"Não foi possível criar a coleção: {create_error}"
+            ) from create_error
     return collection_name
 
 
-async def aget_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE) -> str:
+async def aget_or_create_collection(
+    collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE
+) -> str:
     """Versão assíncrona para obter ou criar uma coleção no Qdrant."""
     collection_name = _validate_collection_name(collection_name)
     vector_size = _validate_vector_size(vector_size)
@@ -153,35 +180,57 @@ async def aget_or_create_collection(collection_name: str, vector_size: int = _DE
         try:
             await async_client.create_collection(
                 collection_name=collection_name,
-                vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                vectors_config=models.VectorParams(
+                    size=vector_size, distance=models.Distance.COSINE
+                ),
             )
             logger.info(f"Coleção '{collection_name}' criada via async.")
             # Criar índices de payload para metadados importantes
-            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.type",
-                                                    field_schema=PayloadSchemaType.KEYWORD)
-            await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.timestamp",
-                                                    field_schema=PayloadSchemaType.INTEGER)
+            await async_client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.type",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+            await async_client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.timestamp",
+                field_schema=PayloadSchemaType.INTEGER,
+            )
             try:
-                await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.origin",
-                                                        field_schema=PayloadSchemaType.KEYWORD)
+                await async_client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="metadata.origin",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
             except Exception as e:
                 logger.warning(f"Failed to create async 'origin' index for {collection_name}: {e}")
             try:
-                await async_client.create_payload_index(collection_name=collection_name, field_name="metadata.status",
-                                                        field_schema=PayloadSchemaType.KEYWORD)
+                await async_client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="metadata.status",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
             except Exception as e:
                 logger.warning(f"Failed to create async 'status' index for {collection_name}: {e}")
             logger.info(
-                f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async.")
+                f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async."
+            )
         except Exception as create_error:
-            logger.error(f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True)
-            raise ConnectionError(f"Não foi possível criar a coleção async: {create_error}") from create_error
+            logger.error(
+                f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
+            )
+            raise ConnectionError(
+                f"Não foi possível criar a coleção async: {create_error}"
+            ) from create_error
     return collection_name
 
 
 @resilient(
-    max_attempts=5, initial_backoff=2.0, max_backoff=10.0, circuit_breaker=_qdrant_init_cb,
-    retry_on=RETRIABLE_QDRANT_ERRORS
+    max_attempts=5,
+    initial_backoff=2.0,
+    max_backoff=10.0,
+    circuit_breaker=_qdrant_init_cb,
+    retry_on=RETRIABLE_QDRANT_ERRORS,
 )
 def check_qdrant_readiness() -> bool:
     try:

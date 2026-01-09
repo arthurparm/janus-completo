@@ -1,9 +1,10 @@
-import pytest
 from typing import Any, Dict, List, Optional
 
-from app.services.memory_service import MemoryService
+import pytest
+
 from app.core.protocols import MemoryRepositoryProtocol
 from app.models.schemas import Experience
+from app.services.memory_service import MemoryService
 
 
 class FakeMemoryRepository(MemoryRepositoryProtocol):

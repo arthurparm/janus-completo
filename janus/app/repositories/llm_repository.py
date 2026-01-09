@@ -1,35 +1,45 @@
-import structlog
 import json
-from typing import Dict, Any, List, Optional
+from contextlib import nullcontext
+from typing import Any
+
+import structlog
+
 from app.config import settings
-from app.core.llm.llm_manager import _provider_circuit_breakers  # type: ignore
-from app.core.llm.llm_manager import _llm_pool  # type: ignore
-from app.core.llm.llm_manager import warm_llm_pool  # type: ignore
-from app.core.llm.llm_manager import _validate_openai_key, _validate_gemini_key  # type: ignore
-from app.core.llm.response_cache import get as rc_get, put as rc_put, entries as rc_entries, invalidate as rc_invalidate
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.llm.llm_manager import _validate_gemini_key, _validate_openai_key, warm_llm_pool
+from app.core.llm.response_cache import entries as rc_entries
+from app.core.llm.response_cache import get as rc_get
+from app.core.llm.response_cache import invalidate as rc_invalidate
+from app.core.llm.response_cache import put as rc_put
+
 try:
     from opentelemetry import trace  # type: ignore
+
     _OTEL = True
     _tracer = trace.get_tracer(__name__)
 except Exception:
     _OTEL = False
-    from contextlib import nullcontext
     _tracer = None
 
 from app.core.llm import (
-    get_llm_client,
-    ModelRole,
+    LLMClient,
     ModelPriority,
+    ModelRole,
+    _llm_pool,
+    _provider_circuit_breakers,
+    get_llm,
+    get_llm_client,
     invalidate_cache,
-    _provider_circuit_breakers
 )
 
 logger = structlog.get_logger(__name__)
 
+
 class LLMRepositoryError(Exception):
     """Base exception for LLM repository errors."""
+
     pass
+
 
 class LLMRepository:
     """
@@ -38,17 +48,17 @@ class LLMRepository:
     """
 
     def invoke_llm(
-            self,
-            prompt: str,
-            role: ModelRole,
-            priority: ModelPriority,
-            timeout_seconds: Optional[int],
-            user_id: Optional[str] = None,
-            project_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        self,
+        prompt: str,
+        role: ModelRole,
+        priority: ModelPriority,
+        timeout_seconds: int | None,
+        user_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
         logger.debug("Invocando LLM via repositório", role=role.value, priority=priority.value)
         client = None
-        span_cm = (_tracer.start_as_current_span("llm.invoke") if _OTEL else nullcontext())
+        span_cm = _tracer.start_as_current_span("llm.invoke") if _OTEL else nullcontext()
         try:
             with span_cm as span:
                 if _OTEL and span is not None:
@@ -88,28 +98,45 @@ class LLMRepository:
             try:
                 if user_id and getattr(settings, "LLM_AB_EXPERIMENT_ID", None):
                     from app.repositories.ab_experiment_repository import ABExperimentRepository
+
                     abr = ABExperimentRepository()
-                    exp_id = int(getattr(settings, "LLM_AB_EXPERIMENT_ID"))
+                    exp_id = int(settings.LLM_AB_EXPERIMENT_ID)
                     asg = abr.get_assignment(exp_id, str(user_id))
                     if not asg:
                         asg = abr.assign_user(exp_id, str(user_id))
                     arm_id = asg.arm_id
                     # Busca spec do braço
                     from app.models.ab_experiment_models import ExperimentArm
+
                     s = abr._get_session()
                     try:
                         arm = s.query(ExperimentArm).filter(ExperimentArm.id == arm_id).first()
                         if arm and arm.model_spec and ":" in arm.model_spec:
                             provider, model = arm.model_spec.split(":", 1)
-                            llm = get_llm(role=role, priority=priority, cache_key=f"ab_{provider}_{model}_{role.value}", config={"provider": provider, "model": model})
-                            client = LLMClient(llm, provider, model, role, f"ab_{provider}_{model}_{role.value}", user_id=user_id, project_id=project_id)
+                            llm = get_llm(
+                                role=role,
+                                priority=priority,
+                                cache_key=f"ab_{provider}_{model}_{role.value}",
+                                config={"provider": provider, "model": model},
+                            )
+                            client = LLMClient(
+                                llm,
+                                provider,
+                                model,
+                                role,
+                                f"ab_{provider}_{model}_{role.value}",
+                                user_id=user_id,
+                                project_id=project_id,
+                            )
                     finally:
                         if not abr._session:
                             s.close()
             except Exception:
                 client = None
             if client is None:
-                client = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id)
+                client = get_llm_client(
+                    role=role, priority=priority, user_id=user_id, project_id=project_id
+                )
             if _OTEL and span is not None:
                 try:
                     span.set_attribute("llm.cache_hit", False)
@@ -118,6 +145,7 @@ class LLMRepository:
                 except Exception:
                     pass
             import time as _t
+
             _start = _t.time()
             enriched = client.send_enriched(prompt, timeout_s=timeout_seconds)
 
@@ -138,6 +166,7 @@ class LLMRepository:
                 pass
             try:
                 from app.repositories.observability_repository import record_audit_event_direct
+
                 detail = {
                     "provider": client.provider,
                     "model": client.model,
@@ -146,38 +175,55 @@ class LLMRepository:
                     "output_tokens": enriched.get("output_tokens"),
                     "cost_usd": enriched.get("cost_usd"),
                 }
-                record_audit_event_direct({
-                    "user_id": int(user_id) if user_id is not None else None,
-                    "endpoint": "llm",
-                    "action": "invoke",
-                    "tool": client.provider,
-                    "status": "ok",
-                    "latency_ms": int((_t.time() - _start) * 1000),
-                    "trace_id": TRACE_ID.get(),
-                    "details_json": json.dumps(detail),
-                })
+                record_audit_event_direct(
+                    {
+                        "user_id": int(user_id) if user_id is not None else None,
+                        "endpoint": "llm",
+                        "action": "invoke",
+                        "tool": client.provider,
+                        "status": "ok",
+                        "latency_ms": int((_t.time() - _start) * 1000),
+                        "trace_id": TRACE_ID.get(),
+                        "details_json": json.dumps(detail),
+                    }
+                )
             except Exception:
                 pass
 
             return enriched
         except Exception as e:
-            logger.warning("Falha na invocação inicial; tentando failover por provedor.", exc_info=True)
+            logger.warning(
+                "Falha na invocação inicial; tentando failover por provedor.", exc_info=True
+            )
             # Failover: tenta outro provedor excluindo o atual
             try:
                 failed_provider = getattr(client, "provider", "unknown") if client else None
                 exclude = [failed_provider] if failed_provider else None
-                client_fb = get_llm_client(role=role, priority=priority, user_id=user_id, project_id=project_id,
-                                           exclude_providers=exclude)
+                client_fb = get_llm_client(
+                    role=role,
+                    priority=priority,
+                    user_id=user_id,
+                    project_id=project_id,
+                    exclude_providers=exclude,
+                )
                 # Se não houver mudança de provedor, repropaga
-                if client and getattr(client_fb, "provider", None) == getattr(client, "provider", None):
+                if client and getattr(client_fb, "provider", None) == getattr(
+                    client, "provider", None
+                ):
                     raise e
                 enriched_fb = client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
                 if _OTEL and _tracer is not None:
                     try:
                         with _tracer.start_as_current_span("llm.invoke.failover") as span_fb:
-                            span_fb.set_attribute("llm.failed_provider", failed_provider or "unknown")
-                            span_fb.set_attribute("llm.provider", getattr(client_fb, "provider", "unknown"))
-                            span_fb.set_attribute("llm.model", getattr(client_fb, "model", "unknown"))
+                            span_fb.set_attribute(
+                                "llm.failed_provider", failed_provider or "unknown"
+                            )
+                            span_fb.set_attribute(
+                                "llm.provider", getattr(client_fb, "provider", "unknown")
+                            )
+                            span_fb.set_attribute(
+                                "llm.model", getattr(client_fb, "model", "unknown")
+                            )
                             sid = user_id or USER_ID.get()
                             tid = TRACE_ID.get()
                             if sid and sid != "-":
@@ -202,10 +248,12 @@ class LLMRepository:
                     pass
                 return enriched_fb
             except Exception as e2:
-                logger.error("Erro no repositório ao invocar LLM (failover também falhou)", exc_info=True)
+                logger.error(
+                    "Erro no repositório ao invocar LLM (failover também falhou)", exc_info=True
+                )
                 raise LLMRepositoryError(f"Falha ao invocar LLM: {e2}") from e2
 
-    def get_cache_entries(self) -> List[Dict[str, Any]]:
+    def get_cache_entries(self) -> list[dict[str, Any]]:
         logger.debug("Buscando entradas do pool de LLMs no repositório.")
         entries = []
         for key, items in _llm_pool.items():
@@ -213,20 +261,24 @@ class LLMRepository:
                 provider, model = key.split(":", 1)
             except Exception:
                 provider, model = "unknown", key
-            entries.append({
-                "pool_key": key,
-                "provider": provider,
-                "model": model,
-                "size": len(items),
-            })
-            for it in items:
-                entries.append({
+            entries.append(
+                {
                     "pool_key": key,
-                    "provider": it.provider,
-                    "model": it.model,
-                    "consecutive_failures": it.consecutive_failures,
-                    "created_at": it.created_at.isoformat(),
-                })
+                    "provider": provider,
+                    "model": model,
+                    "size": len(items),
+                }
+            )
+            for it in items:
+                entries.append(
+                    {
+                        "pool_key": key,
+                        "provider": it.provider,
+                        "model": it.model,
+                        "consecutive_failures": it.consecutive_failures,
+                        "created_at": it.created_at.isoformat(),
+                    }
+                )
         # Acrescenta entradas do cache de respostas
         try:
             entries.extend([{**e, "kind": "response"} for e in rc_entries()])
@@ -234,30 +286,38 @@ class LLMRepository:
             pass
         return entries
 
-    def invalidate_cache(self, provider: Optional[str] = None) -> int:
+    def invalidate_cache(self, provider: str | None = None) -> int:
         logger.debug("Invalidando pool de LLMs via repositório", provider=provider)
         invalidate_cache(provider=provider)
         return sum(len(v) for v in _llm_pool.values())
 
-    def warm_pool(self, specs: Optional[List[str]] = None) -> Dict[str, int]:
+    def warm_pool(self, specs: list[str] | None = None) -> dict[str, int]:
         logger.debug("Pré-aquecendo pool de LLMs via repositório.")
         return warm_llm_pool(specs or getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or [])
 
-    def invalidate_response_cache(self, prompt: Optional[str] = None, role: Optional[str] = None,
-                                  priority: Optional[str] = None) -> int:
-        logger.debug("Invalidando cache de respostas via repositório", prompt=bool(prompt), role=role, priority=priority)
+    def invalidate_response_cache(
+        self, prompt: str | None = None, role: str | None = None, priority: str | None = None
+    ) -> int:
+        logger.debug(
+            "Invalidando cache de respostas via repositório",
+            prompt=bool(prompt),
+            role=role,
+            priority=priority,
+        )
         return rc_invalidate(prompt=prompt, role=role, priority=priority)
 
-    def get_circuit_breakers(self) -> List[Dict[str, Any]]:
+    def get_circuit_breakers(self) -> list[dict[str, Any]]:
         logger.debug("Buscando status dos circuit breakers no repositório.")
         statuses = []
         for provider, cb in _provider_circuit_breakers.items():
-            statuses.append({
-                "provider": provider,
-                "state": cb.state.value,
-                "failure_count": cb.failure_count,
-                "last_failure_time": cb.last_failure_time
-            })
+            statuses.append(
+                {
+                    "provider": provider,
+                    "state": cb.state.value,
+                    "failure_count": cb.failure_count,
+                    "last_failure_time": cb.last_failure_time,
+                }
+            )
         return statuses
 
     def reset_circuit_breaker(self, provider: str):
@@ -267,13 +327,13 @@ class LLMRepository:
         cb = _provider_circuit_breakers[provider]
         cb.reset()
 
-    def list_providers(self) -> List[Dict[str, Any]]:
+    def list_providers(self) -> list[dict[str, Any]]:
         """Lista provedores configurados com status de habilitação e modelos padrão."""
         logger.debug("Listando provedores de LLMs via repositório.")
 
         # Recupera chaves (podem ser SecretStr) e valida
-        openai_key = getattr(settings.OPENAI_API_KEY, 'get_secret_value', lambda: None)()
-        gemini_key = getattr(settings.GEMINI_API_KEY, 'get_secret_value', lambda: None)()
+        openai_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+        gemini_key = getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
 
         providers = [
             {

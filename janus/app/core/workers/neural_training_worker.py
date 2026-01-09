@@ -3,14 +3,15 @@ Async Neural Training Worker
 
 Consumes training tasks from RabbitMQ and triggers LearningRepository training process.
 """
+
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, QueueName
+from app.models.schemas import QueueName, TaskMessage
 from app.repositories.learning_repository import LearningRepository
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,7 @@ async def process_neural_training_task(task: TaskMessage) -> None:
         payload = task.payload or {}
         dataset_version: str | None = payload.get("dataset_version")
         model_name: str | None = payload.get("model_name")
-        training_params: Dict[str, Any] | None = payload.get("training_params") or {}
-        user_id: str | None = payload.get("user_id")
+        training_params: dict[str, Any] | None = payload.get("training_params") or {}
 
         repo = LearningRepository()
         summary = await repo.run_training_process(
@@ -49,12 +49,12 @@ async def process_neural_training_task(task: TaskMessage) -> None:
 async def publish_neural_training_task(
     dataset_version: str | None = None,
     model_name: str | None = None,
-    training_params: Dict[str, Any] | None = None,
+    training_params: dict[str, Any] | None = None,
     user_id: str | None = None,
 ) -> str:
     """Publish a neural training task to the broker."""
     task_id = str(uuid.uuid4())
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "dataset_version": dataset_version,
         "model_name": model_name,
         "training_params": training_params or {},

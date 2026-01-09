@@ -3,21 +3,21 @@ Repositório para gerenciar configurações dinâmicas de agentes.
 Permite que o Meta-Agent otimize configurações baseado em performance.
 """
 
-from typing import List, Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
+from sqlalchemy.orm import Session
 
-from app.models.config_models import AgentConfiguration, PriorityLevel
 from app.db.mysql_config import mysql_db
+from app.models.config_models import AgentConfiguration, PriorityLevel
 
 
 class AgentConfigRepository:
     """Repositório para operações CRUD em configurações de agentes."""
 
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -26,33 +26,39 @@ class AgentConfigRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def get_active_config(self, agent_name: str, agent_role: str) -> Optional[AgentConfiguration]:
+    def get_active_config(self, agent_name: str, agent_role: str) -> AgentConfiguration | None:
         """Obtém a configuração ativa para um agente específico."""
         session = self._get_session()
         try:
-            return session.query(AgentConfiguration).filter(
-                and_(
-                    AgentConfiguration.agent_name == agent_name,
-                    AgentConfiguration.agent_role == agent_role,
-                    AgentConfiguration.is_active == True
+            return (
+                session.query(AgentConfiguration)
+                .filter(
+                    and_(
+                        AgentConfiguration.agent_name == agent_name,
+                        AgentConfiguration.agent_role == agent_role,
+                        AgentConfiguration.is_active,
+                    )
                 )
-            ).first()
+                .first()
+            )
         finally:
             if not self._session:
                 session.close()
 
-    def get_config_by_id(self, config_id: int) -> Optional[AgentConfiguration]:
+    def get_config_by_id(self, config_id: int) -> AgentConfiguration | None:
         """Obtém configuração por ID."""
         session = self._get_session()
         try:
-            return session.query(AgentConfiguration).filter(
-                AgentConfiguration.id == config_id
-            ).first()
+            return (
+                session.query(AgentConfiguration).filter(AgentConfiguration.id == config_id).first()
+            )
         finally:
             if not self._session:
                 session.close()
 
-    def get_configs_by_role(self, agent_role: str, active_only: bool = True) -> List[AgentConfiguration]:
+    def get_configs_by_role(
+        self, agent_role: str, active_only: bool = True
+    ) -> list[AgentConfiguration]:
         """Obtém todas as configurações para um papel específico."""
         session = self._get_session()
         try:
@@ -61,14 +67,16 @@ class AgentConfigRepository:
             )
 
             if active_only:
-                query = query.filter(AgentConfiguration.is_active == True)
+                query = query.filter(AgentConfiguration.is_active)
 
             return query.order_by(desc(AgentConfiguration.updated_at)).all()
         finally:
             if not self._session:
                 session.close()
 
-    def get_configs_by_provider(self, llm_provider: str, active_only: bool = True) -> List[AgentConfiguration]:
+    def get_configs_by_provider(
+        self, llm_provider: str, active_only: bool = True
+    ) -> list[AgentConfiguration]:
         """Obtém configurações por provedor LLM."""
         session = self._get_session()
         try:
@@ -77,7 +85,7 @@ class AgentConfigRepository:
             )
 
             if active_only:
-                query = query.filter(AgentConfiguration.is_active == True)
+                query = query.filter(AgentConfiguration.is_active)
 
             return query.order_by(desc(AgentConfiguration.updated_at)).all()
         finally:
@@ -85,21 +93,21 @@ class AgentConfigRepository:
                 session.close()
 
     def create_config(
-            self,
-            agent_name: str,
-            agent_role: str,
-            llm_provider: str,
-            llm_model: str,
-            prompt_id: Optional[int] = None,
-            max_retries: int = 3,
-            timeout_seconds: int = 60,
-            temperature: Decimal = Decimal("0.7"),
-            max_tokens: int = 4096,
-            priority_level: PriorityLevel = PriorityLevel.MEDIUM,
-            cost_budget_usd: Decimal = Decimal("0.05"),
-            performance_threshold: Decimal = Decimal("0.8"),
-            created_by: str = "meta-agent",
-            activate: bool = False
+        self,
+        agent_name: str,
+        agent_role: str,
+        llm_provider: str,
+        llm_model: str,
+        prompt_id: int | None = None,
+        max_retries: int = 3,
+        timeout_seconds: int = 60,
+        temperature: Decimal = Decimal("0.7"),
+        max_tokens: int = 4096,
+        priority_level: PriorityLevel = PriorityLevel.MEDIUM,
+        cost_budget_usd: Decimal = Decimal("0.05"),
+        performance_threshold: Decimal = Decimal("0.8"),
+        created_by: str = "meta-agent",
+        activate: bool = False,
     ) -> AgentConfiguration:
         """Cria uma nova configuração de agente."""
         session = self._get_session()
@@ -122,7 +130,7 @@ class AgentConfigRepository:
                 priority_level=priority_level,
                 cost_budget_usd=cost_budget_usd,
                 performance_threshold=performance_threshold,
-                created_by=created_by
+                created_by=created_by,
             )
 
             session.add(new_config)
@@ -134,17 +142,14 @@ class AgentConfigRepository:
                 session.close()
 
     def update_config(
-            self,
-            config_id: int,
-            updates: Dict[str, Any],
-            updated_by: str = "meta-agent"
-    ) -> Optional[AgentConfiguration]:
+        self, config_id: int, updates: dict[str, Any], updated_by: str = "meta-agent"
+    ) -> AgentConfiguration | None:
         """Atualiza uma configuração existente."""
         session = self._get_session()
         try:
-            config = session.query(AgentConfiguration).filter(
-                AgentConfiguration.id == config_id
-            ).first()
+            config = (
+                session.query(AgentConfiguration).filter(AgentConfiguration.id == config_id).first()
+            )
 
             if not config:
                 return None
@@ -166,9 +171,9 @@ class AgentConfigRepository:
         """Ativa uma configuração específica."""
         session = self._get_session()
         try:
-            config = session.query(AgentConfiguration).filter(
-                AgentConfiguration.id == config_id
-            ).first()
+            config = (
+                session.query(AgentConfiguration).filter(AgentConfiguration.id == config_id).first()
+            )
 
             if not config:
                 return False
@@ -187,63 +192,83 @@ class AgentConfigRepository:
 
     def _deactivate_config(self, session: Session, agent_name: str, agent_role: str):
         """Desativa configuração ativa atual."""
-        current_active = session.query(AgentConfiguration).filter(
-            and_(
-                AgentConfiguration.agent_name == agent_name,
-                AgentConfiguration.agent_role == agent_role,
-                AgentConfiguration.is_active == True
+        current_active = (
+            session.query(AgentConfiguration)
+            .filter(
+                and_(
+                    AgentConfiguration.agent_name == agent_name,
+                    AgentConfiguration.agent_role == agent_role,
+                    AgentConfiguration.is_active,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if current_active:
             current_active.is_active = False
             current_active.updated_at = datetime.utcnow()
 
-    def get_low_performance_configs(self, threshold: float = 0.7) -> List[AgentConfiguration]:
+    def get_low_performance_configs(self, threshold: float = 0.7) -> list[AgentConfiguration]:
         """Obtém configurações com performance abaixo do limiar."""
         session = self._get_session()
         try:
-            return session.query(AgentConfiguration).filter(
-                and_(
-                    AgentConfiguration.is_active == True,
-                    AgentConfiguration.performance_threshold < threshold
+            return (
+                session.query(AgentConfiguration)
+                .filter(
+                    and_(
+                        AgentConfiguration.is_active,
+                        AgentConfiguration.performance_threshold < threshold,
+                    )
                 )
-            ).all()
+                .all()
+            )
         finally:
             if not self._session:
                 session.close()
 
-    def get_high_cost_configs(self, cost_limit: Decimal = Decimal("0.10")) -> List[AgentConfiguration]:
+    def get_high_cost_configs(
+        self, cost_limit: Decimal = Decimal("0.10")
+    ) -> list[AgentConfiguration]:
         """Obtém configurações com custo acima do limite."""
         session = self._get_session()
         try:
-            return session.query(AgentConfiguration).filter(
-                and_(
-                    AgentConfiguration.is_active == True,
-                    AgentConfiguration.cost_budget_usd > cost_limit
+            return (
+                session.query(AgentConfiguration)
+                .filter(
+                    and_(
+                        AgentConfiguration.is_active,
+                        AgentConfiguration.cost_budget_usd > cost_limit,
+                    )
                 )
-            ).all()
+                .all()
+            )
         finally:
             if not self._session:
                 session.close()
 
-    def get_config_stats(self) -> Dict[str, Any]:
+    def get_config_stats(self) -> dict[str, Any]:
         """Obtém estatísticas das configurações."""
         session = self._get_session()
         try:
             total_configs = session.query(AgentConfiguration).count()
-            active_configs = session.query(AgentConfiguration).filter(
-                AgentConfiguration.is_active == True
-            ).count()
+            active_configs = (
+                session.query(AgentConfiguration)
+                .filter(AgentConfiguration.is_active)
+                .count()
+            )
 
             providers = session.query(AgentConfiguration.llm_provider).distinct().all()
             roles = session.query(AgentConfiguration.agent_role).distinct().all()
 
-            avg_cost = session.query(AgentConfiguration.cost_budget_usd).filter(
-                AgentConfiguration.is_active == True
-            ).all()
+            avg_cost = (
+                session.query(AgentConfiguration.cost_budget_usd)
+                .filter(AgentConfiguration.is_active)
+                .all()
+            )
 
-            avg_cost_value = sum(float(c.cost_budget_usd) for c in avg_cost) / len(avg_cost) if avg_cost else 0
+            avg_cost_value = (
+                sum(float(c.cost_budget_usd) for c in avg_cost) / len(avg_cost) if avg_cost else 0
+            )
 
             return {
                 "total_configs": total_configs,
@@ -251,7 +276,7 @@ class AgentConfigRepository:
                 "inactive_configs": total_configs - active_configs,
                 "providers": [p[0] for p in providers],
                 "roles": [r[0] for r in roles],
-                "average_cost_usd": round(avg_cost_value, 4)
+                "average_cost_usd": round(avg_cost_value, 4),
             }
         finally:
             if not self._session:

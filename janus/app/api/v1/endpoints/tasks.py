@@ -1,30 +1,31 @@
-import structlog
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, status, Depends, Request
-from fastapi.responses import JSONResponse, Response
 import msgpack
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from app.services.task_service import TaskService, get_task_service
 from app.models.schemas import QueueName
+from app.services.task_service import TaskService, get_task_service
 
 router = APIRouter(tags=["Tasks"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---
 
+
 class ConsolidationTaskRequest(BaseModel):
     mode: str = Field("batch")
-    limit: Optional[int] = Field(10)
-    experience_id: Optional[str] = None
-    experience_content: Optional[str] = None
-    metadata: Optional[dict] = None
+    limit: int | None = Field(10)
+    experience_id: str | None = None
+    experience_content: str | None = None
+    metadata: dict | None = None
+
 
 class TaskResponse(BaseModel):
     task_id: str
     message: str
     queue: str
+
 
 class QueueInfoResponse(BaseModel):
     name: str
@@ -55,13 +56,17 @@ class ReconcilePolicyResponse(BaseModel):
     message: str
     details: dict
 
+
 # --- Endpoints ---
 
-@router.post("/consolidation", response_model=TaskResponse, summary="Publica tarefa de consolidação")
+
+@router.post(
+    "/consolidation", response_model=TaskResponse, summary="Publica tarefa de consolidação"
+)
 async def create_consolidation_task(
-        request: ConsolidationTaskRequest,
-        service: TaskService = Depends(get_task_service),
-        http_request: Request = None,
+    request: ConsolidationTaskRequest,
+    service: TaskService = Depends(get_task_service),
+    http_request: Request = None,
 ):
     """Delega a publicação de uma tarefa de consolidação para o TaskService."""
     # TaskServiceError é tratado pelo exception handler central -> 500
@@ -70,7 +75,7 @@ async def create_consolidation_task(
         limit=request.limit,
         experience_id=request.experience_id,
         experience_content=request.experience_content,
-        metadata=request.metadata
+        metadata=request.metadata,
     )
     data = {
         "task_id": task_id,
@@ -80,7 +85,11 @@ async def create_consolidation_task(
     return _negotiate_response(http_request, data)
 
 
-@router.get("/queue/{queue_name}", response_model=QueueInfoResponse, summary="Obtém informações sobre uma fila")
+@router.get(
+    "/queue/{queue_name}",
+    response_model=QueueInfoResponse,
+    summary="Obtém informações sobre uma fila",
+)
 async def get_queue_info(queue_name: str, service: TaskService = Depends(get_task_service)):
     """Delega a busca de informações da fila para o TaskService."""
     # TaskServiceError (se a fila não for encontrada) é tratado pelo handler -> 404
@@ -89,19 +98,25 @@ async def get_queue_info(queue_name: str, service: TaskService = Depends(get_tas
 
 
 @router.get("/health/rabbitmq", summary="Verifica saúde do RabbitMQ")
-async def check_rabbitmq_health(service: TaskService = Depends(get_task_service), request: Request = None):
+async def check_rabbitmq_health(
+    service: TaskService = Depends(get_task_service), request: Request = None
+):
     """Delega a verificação de saúde do broker para o TaskService."""
     if await service.check_broker_health():
-        return _negotiate_response(request, {"status": "healthy", "message": "Conexão com RabbitMQ está operacional"})
+        return _negotiate_response(
+            request, {"status": "healthy", "message": "Conexão com RabbitMQ está operacional"}
+        )
 
     raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="RabbitMQ não está acessível"
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="RabbitMQ não está acessível"
     )
 
 
-@router.get("/queue/{queue_name}/policy", response_model=QueuePolicyResponse,
-            summary="Obtém política/argumentos da fila")
+@router.get(
+    "/queue/{queue_name}/policy",
+    response_model=QueuePolicyResponse,
+    summary="Obtém política/argumentos da fila",
+)
 async def get_queue_policy(queue_name: str, service: TaskService = Depends(get_task_service)):
     """Retorna a política e argumentos atuais da fila via Management API."""
     policy = await service.get_queue_policy(queue_name)
@@ -111,7 +126,7 @@ async def get_queue_policy(queue_name: str, service: TaskService = Depends(get_t
 @router.get(
     "/queue/{queue_name}/policy/validate",
     response_model=QueuePolicyValidationResponse,
-    summary="Valida argumentos da fila contra configuração esperada"
+    summary="Valida argumentos da fila contra configuração esperada",
 )
 async def validate_queue_policy(queue_name: str, service: TaskService = Depends(get_task_service)):
     """Valida a política da fila e indica divergências (TTL, max-length, etc.)."""
@@ -122,12 +137,12 @@ async def validate_queue_policy(queue_name: str, service: TaskService = Depends(
 @router.post(
     "/queue/{queue_name}/policy/reconcile",
     response_model=ReconcilePolicyResponse,
-    summary="Reconcilia política da fila (deleta e recria se divergente)"
+    summary="Reconcilia política da fila (deleta e recria se divergente)",
 )
 async def reconcile_queue_policy(
-        queue_name: str,
-        request: ReconcilePolicyRequest,
-        service: TaskService = Depends(get_task_service)
+    queue_name: str,
+    request: ReconcilePolicyRequest,
+    service: TaskService = Depends(get_task_service),
 ):
     """
     Executa reconciliação da política da fila. Se houver divergências e `force_delete` estiver habilitado,
@@ -136,8 +151,12 @@ async def reconcile_queue_policy(
     """
     result = await service.reconcile_queue_policy(queue_name, force_delete=request.force_delete)
     return ReconcilePolicyResponse(**result)
+
+
 def _negotiate_response(request: Request, data: dict) -> Response:
     accept = (request.headers.get("accept") or "").lower()
     if "application/msgpack" in accept:
-        return Response(content=msgpack.packb(data, use_bin_type=True), media_type="application/msgpack")
+        return Response(
+            content=msgpack.packb(data, use_bin_type=True), media_type="application/msgpack"
+        )
     return JSONResponse(content=data)

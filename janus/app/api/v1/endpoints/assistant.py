@@ -1,11 +1,11 @@
-import structlog
-from typing import Optional, List, Dict, Any
+from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.services.assistant_service import AssistantService, get_assistant_service
 from app.core.autonomy.policy_engine import RiskProfile
+from app.services.assistant_service import AssistantService, get_assistant_service
 
 router = APIRouter(tags=["Assistant"])
 logger = structlog.get_logger(__name__)
@@ -13,26 +13,35 @@ logger = structlog.get_logger(__name__)
 
 class AssistantExecuteRequest(BaseModel):
     prompt: str = Field(..., description="Solicitação do usuário (pedido livre)")
-    risk_profile: Optional[str] = Field(RiskProfile.BALANCED, description="Perfil de risco: conservative, balanced, aggressive")
-    allowlist: Optional[List[str]] = Field(default=None, description="Ferramentas explicitamente permitidas")
-    blocklist: Optional[List[str]] = Field(default=None, description="Ferramentas a bloquear")
-    max_steps: Optional[int] = Field(default=8, ge=1, le=20, description="Máximo de passos planejados")
-    timeout_seconds: Optional[int] = Field(default=30, ge=5, le=120, description="Timeout para planejamento")
+    risk_profile: str | None = Field(
+        RiskProfile.BALANCED, description="Perfil de risco: conservative, balanced, aggressive"
+    )
+    allowlist: list[str] | None = Field(
+        default=None, description="Ferramentas explicitamente permitidas"
+    )
+    blocklist: list[str] | None = Field(default=None, description="Ferramentas a bloquear")
+    max_steps: int | None = Field(default=8, ge=1, le=20, description="Máximo de passos planejados")
+    timeout_seconds: int | None = Field(
+        default=30, ge=5, le=120, description="Timeout para planejamento"
+    )
 
 
 class AssistantExecutionResult(BaseModel):
     request: str
-    planned_steps: List[Dict[str, Any]]
-    transparent: List[Dict[str, Any]]
-    executions: List[Dict[str, Any]]
+    planned_steps: list[dict[str, Any]]
+    transparent: list[dict[str, Any]]
+    executions: list[dict[str, Any]]
     consolidated_output: str
-    telemetry: Dict[str, Any]
+    telemetry: dict[str, Any]
 
 
-@router.post("/assistant/execute", response_model=AssistantExecutionResult, summary="Executa pedido com seleção automática de ferramentas")
+@router.post(
+    "/assistant/execute",
+    response_model=AssistantExecutionResult,
+    summary="Executa pedido com seleção automática de ferramentas",
+)
 async def assistant_execute(
-    body: AssistantExecuteRequest,
-    assistant: AssistantService = Depends(get_assistant_service)
+    body: AssistantExecuteRequest, assistant: AssistantService = Depends(get_assistant_service)
 ):
     try:
         result = await assistant.execute_request(

@@ -1,8 +1,7 @@
-import sys
 import json
+import sys
 import time
-from urllib import request, error
-
+from urllib import error, request
 
 BASE_URL = "http://localhost:8000"
 
@@ -95,100 +94,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-from pathlib import Path
-import asyncio
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "janus"))
-
-from app.repositories.knowledge_repository import KnowledgeRepository
-from app.models.schemas import GraphRelationship
-
-
-class _Result:
-    async def single(self):
-        return None
-
-
-class _Tx:
-    def __init__(self, sink):
-        self.sink = sink
-
-    async def run(self, query, **kwargs):
-        self.sink.append(query)
-        return _Result()
-
-    async def commit(self):
-        pass
-
-
-class _Session:
-    def __init__(self, sink):
-        self.sink = sink
-
-    async def begin_transaction(self):
-        return _Tx(self.sink)
-
-    async def close(self):
-        pass
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        await self.close()
-
-
-class FakeGraphDB:
-    def __init__(self, responses=None):
-        self.responses = responses or {}
-        self.sink = []
-
-    async def query(self, cypher_query: str, params: dict = None, operation: str | None = None):
-        return self.responses.get(operation or "", [])
-
-    async def execute(self, cypher_query: str, params: dict = None, operation: str | None = None):
-        self.sink.append(cypher_query)
-
-    async def get_session(self):
-        return _Session(self.sink)
-
-    async def register_relationship_type(self, tx_or_session, rel_type: str):
-        self.sink.append(f"REGISTER {rel_type}")
-
-
-async def main():
-    try:
-        responses = {
-            "repo_dedupe_concepts_scan": [{"name": "ConceptX", "cs": [1, 2]}],
-            "repo_dedupe_functions_scan": [{"name": "fn", "fp": "/path", "fs": [1, 2]}],
-            "repo_dedupe_classes_scan": [{"name": "Cls", "fp": "/path", "cs": [3, 4]}],
-            "repo_dedupe_files_scan": [{"p": "/path", "fs": [1, 2]}],
-        }
-        db = FakeGraphDB(responses)
-        repo = KnowledgeRepository(db)
-
-        rc = await repo.dedupe_concepts()
-        rfc = await repo.dedupe_functions_and_classes()
-        rf = await repo.dedupe_files()
-        await repo.bulk_merge_calls([
-            {"caller_name": "a", "callee_name": "b", "file_path": "/p"},
-        ])
-
-        q = "\n".join(db.sink)
-        assert f"`{GraphRelationship.RELATES_TO.value}`" in q
-        assert f"`{GraphRelationship.CALLS.value}`" in q
-        assert f"`{GraphRelationship.IMPLEMENTS.value}`" in q
-
-        print({
-            "concepts": rc,
-            "fn_cls": rfc,
-            "files": rf,
-        })
-        return 0
-    except Exception as e:
-        print("SMOKE_TEST_ERROR", str(e))
-        return 1
-
-
-if __name__ == "__main__":
-    exit(asyncio.run(main()))

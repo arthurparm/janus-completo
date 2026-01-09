@@ -4,22 +4,39 @@ from fastapi.responses import JSONResponse
 
 # Importa as exceções customizadas de cada serviço
 from app.services.agent_service import AgentServiceError, AgentTimeoutError
-from app.services.collaboration_service import CollaborationServiceError, AgentNotFoundError, TaskNotFoundError
+from app.services.collaboration_service import (
+    AgentNotFoundError,
+    CollaborationServiceError,
+    TaskNotFoundError,
+)
 from app.services.context_service import ContextServiceError
 from app.services.knowledge_service import KnowledgeServiceError
-from app.services.learning_service import LearningServiceError, ModelNotFoundError, TrainingFailedError
-from app.services.llm_service import LLMServiceError, LLMTimeoutError, LLMInvocationError
+from app.services.learning_service import (
+    LearningServiceError,
+    ModelNotFoundError,
+    TrainingFailedError,
+)
+from app.services.llm_service import LLMServiceError, LLMTimeoutError
 from app.services.memory_service import MemoryServiceError
+
 try:
     from app.services.meta_agent_service import MetaAgentServiceError
 except Exception:
+
     class MetaAgentServiceError(Exception):  # type: ignore
         pass
-from app.services.observability_service import ObservabilityServiceError, MessageNotFoundError
+
+
+from app.services.observability_service import MessageNotFoundError, ObservabilityServiceError
 from app.services.optimization_service import OptimizationServiceError
-from app.services.sandbox_service import SandboxError, InvalidInputError
+from app.services.sandbox_service import InvalidInputError, SandboxError
 from app.services.task_service import TaskServiceError
-from app.services.tool_service import ToolServiceError, ToolNotFoundError, ProtectedToolError, ToolCreationError
+from app.services.tool_service import (
+    ProtectedToolError,
+    ToolCreationError,
+    ToolNotFoundError,
+    ToolServiceError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -51,6 +68,7 @@ TIMEOUT_EXCEPTIONS = (
 
 
 # --- Handlers Genéricos ---
+
 
 async def http_404_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.warning("Recurso não encontrado", exc_info=exc, url=request.url.path)
@@ -86,6 +104,7 @@ async def generic_service_exception_handler(request: Request, exc: Exception) ->
 
 # --- Função para registrar todos os handlers ---
 
+
 def add_exception_handlers(app):
     """Adiciona todos os manipuladores de exceção customizados à aplicação FastAPI."""
     logger.info("Registrando manipuladores de exceção customizados.")
@@ -101,10 +120,19 @@ def add_exception_handlers(app):
 
     # Handler genérico para todas as outras exceções de serviço
     all_service_exceptions = (
-        AgentServiceError, CollaborationServiceError, ContextServiceError,
-        KnowledgeServiceError, LearningServiceError, LLMServiceError,
-        MemoryServiceError, MetaAgentServiceError, ObservabilityServiceError,
-        OptimizationServiceError, SandboxError, TaskServiceError, ToolServiceError
+        AgentServiceError,
+        CollaborationServiceError,
+        ContextServiceError,
+        KnowledgeServiceError,
+        LearningServiceError,
+        LLMServiceError,
+        MemoryServiceError,
+        MetaAgentServiceError,
+        ObservabilityServiceError,
+        OptimizationServiceError,
+        SandboxError,
+        TaskServiceError,
+        ToolServiceError,
     )
     for exc_type in all_service_exceptions:
         if exc_type not in exception_map:
@@ -112,4 +140,3 @@ def add_exception_handlers(app):
 
     # Catch-all for any other unhandled exception (e.g., standard Python exceptions)
     app.add_exception_handler(Exception, generic_service_exception_handler)
-

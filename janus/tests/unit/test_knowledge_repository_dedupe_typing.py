@@ -1,8 +1,7 @@
-import asyncio
 import pytest
 
-from app.repositories.knowledge_repository import KnowledgeRepository, record_audit_event_direct
 from app.models.schemas import GraphRelationship
+from app.repositories.knowledge_repository import KnowledgeRepository
 
 
 class FakeResult:

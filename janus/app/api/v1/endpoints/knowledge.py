@@ -1,13 +1,15 @@
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.models.knowledge import CodeEntity
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 
 router = APIRouter(tags=["Knowledge"])
+logger = structlog.get_logger(__name__)
 
 
 class IndexResponse(BaseModel):
@@ -33,7 +35,7 @@ class RelatedConceptItem(BaseModel):
 
 
 class RelatedConceptsResponse(BaseModel):
-    results: List[RelatedConceptItem]
+    results: list[RelatedConceptItem]
 
 
 class EntityRelationshipsItem(BaseModel):
@@ -44,7 +46,7 @@ class EntityRelationshipsItem(BaseModel):
 
 
 class EntityRelationshipsResponse(BaseModel):
-    results: List[EntityRelationshipsItem]
+    results: list[EntityRelationshipsItem]
 
 
 class ClearGraphResponse(BaseModel):
@@ -55,9 +57,10 @@ class ClearGraphResponse(BaseModel):
 
 # --- Sprint 8 DTOs ---
 
+
 class KnowledgeQueryRequest(BaseModel):
     query: str
-    limit: Optional[int] = 10  # Usado pelo pipeline Graph RAG para limitar contexto
+    limit: int | None = 10  # Usado pelo pipeline Graph RAG para limitar contexto
 
 
 class KnowledgeHealthResponse(BaseModel):
@@ -73,16 +76,18 @@ class ConsolidationRequest(BaseModel):
     mode: str = "batch"  # "batch" ou "single"
     limit: int = 10
     min_score: float = 0.0
-    experience_id: Optional[str] = None
-    experience_content: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    experience_id: str | None = None
+    experience_content: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ConsolidationResponse(BaseModel):
     message: str
-    stats: Dict[str, Any]
+    stats: dict[str, Any]
+
 
 # --- Endpoints ---
+
 
 @router.post("/index", response_model=IndexResponse, summary="Inicia a indexação da base de código")
 async def trigger_indexing(service: KnowledgeService = Depends(get_knowledge_service)):
@@ -93,27 +98,42 @@ async def trigger_indexing(service: KnowledgeService = Depends(get_knowledge_ser
 async def get_knowledge_stats(service: KnowledgeService = Depends(get_knowledge_service)):
     return await service.get_stats()
 
-@router.get("/entities", response_model=List[CodeEntity], summary="Lista entidades de código")
+
+@router.get("/entities", response_model=list[CodeEntity], summary="Lista entidades de código")
 async def get_code_entities(
-        file_path: Optional[str] = Query(None, description="Filtra por caminho de arquivo."),
-        service: KnowledgeService = Depends(get_knowledge_service)
+    file_path: str | None = Query(None, description="Filtra por caminho de arquivo."),
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
     return await service.get_code_entities(file_path)
 
 
-@router.get("/entity/{entity_name}/relationships", response_model=EntityRelationshipsResponse, summary="Navega relacionamentos de uma entidade")
+@router.get(
+    "/entity/{entity_name}/relationships",
+    response_model=EntityRelationshipsResponse,
+    summary="Navega relacionamentos de uma entidade",
+)
 async def get_entity_relationships(
-        entity_name: str,
-        rel_type: Optional[str] = Query(None, description="Filtra pelo tipo de relacionamento"),
-        direction: str = Query("both", regex=r"^(out|in|both)$", description="Direção do relacionamento (out/in/both)"),
-        max_depth: int = Query(1, ge=1, le=5, description="Profundidade máxima de navegação"),
-        limit: int = Query(20, ge=1, le=100, description="Limite de resultados"),
-        skip: int = Query(0, ge=0, description="Offset para paginação"),
-        service: KnowledgeService = Depends(get_knowledge_service)
+    entity_name: str,
+    rel_type: str | None = Query(None, description="Filtra pelo tipo de relacionamento"),
+    direction: str = Query(
+        "both", regex=r"^(out|in|both)$", description="Direção do relacionamento (out/in/both)"
+    ),
+    max_depth: int = Query(1, ge=1, le=5, description="Profundidade máxima de navegação"),
+    limit: int = Query(20, ge=1, le=100, description="Limite de resultados"),
+    skip: int = Query(0, ge=0, description="Offset para paginação"),
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
-    rows = await service.get_entity_relationships(entity_name=entity_name, rel_type=rel_type, direction=direction, max_depth=max_depth, limit=limit, skip=skip)
+    rows = await service.get_entity_relationships(
+        entity_name=entity_name,
+        rel_type=rel_type,
+        direction=direction,
+        max_depth=max_depth,
+        limit=limit,
+        skip=skip,
+    )
     items = [EntityRelationshipsItem(**row) for row in rows]
     return EntityRelationshipsResponse(results=items)
+
 
 @router.delete("/clear", response_model=ClearGraphResponse, summary="Limpa todo o grafo")
 async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledge_service)):
@@ -121,35 +141,55 @@ async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledg
     return {
         "status": "success",
         "message": "Grafo de conhecimento limpo com sucesso",
-        "remaining_nodes": remaining_nodes
+        "remaining_nodes": remaining_nodes,
     }
 
 
 # --- Sprint 8 Endpoints ---
 
-@router.post("/query", response_model=KnowledgeQueryResponse, summary="Consulta o grafo de conhecimento (Graph RAG)")
-async def query_knowledge(request: KnowledgeQueryRequest, service: KnowledgeService = Depends(get_knowledge_service)):
+
+@router.post(
+    "/query",
+    response_model=KnowledgeQueryResponse,
+    summary="Consulta o grafo de conhecimento (Graph RAG)",
+)
+async def query_knowledge(
+    request: KnowledgeQueryRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
     answer = await service.semantic_query(request.query, limit=request.limit)
     return KnowledgeQueryResponse(answer=answer)
 
 
-@router.post("/concepts/related", response_model=RelatedConceptsResponse, summary="Busca conceitos relacionados")
-async def related_concepts(request: RelatedConceptsRequest, service: KnowledgeService = Depends(get_knowledge_service)):
-    results = await service.find_related_concepts(concept=request.concept, max_depth=request.max_depth, limit=request.limit, skip=request.skip)
+@router.post(
+    "/concepts/related",
+    response_model=RelatedConceptsResponse,
+    summary="Busca conceitos relacionados",
+)
+async def related_concepts(
+    request: RelatedConceptsRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
+    results = await service.find_related_concepts(
+        concept=request.concept, max_depth=request.max_depth, limit=request.limit, skip=request.skip
+    )
     items = [RelatedConceptItem(**row) for row in results]
     return RelatedConceptsResponse(results=items)
 
 
 class NodeTypesResponse(BaseModel):
-    types: List[str]
+    types: list[str]
 
-@router.get("/node-types", response_model=NodeTypesResponse, summary="Lista tipos de nós presentes no grafo")
+
+@router.get(
+    "/node-types", response_model=NodeTypesResponse, summary="Lista tipos de nós presentes no grafo"
+)
 async def get_node_types(service: KnowledgeService = Depends(get_knowledge_service)):
     types = await service.get_node_types()
     return NodeTypesResponse(types=types)
 
 
-@router.get("/health", response_model=KnowledgeHealthResponse, summary="Health check da memória semântica")
+@router.get(
+    "/health", response_model=KnowledgeHealthResponse, summary="Health check da memória semântica"
+)
 async def knowledge_health(service: KnowledgeService = Depends(get_knowledge_service)):
     health = await service.get_health_status()
     return KnowledgeHealthResponse(**health)
@@ -163,11 +203,12 @@ async def reset_circuit_breaker():
     """
     try:
         from app.core.memory.memory_core import reset_memory_circuit_breaker
+
         await reset_memory_circuit_breaker()
         return {"message": "Circuit breaker resetado com sucesso"}
     except Exception as e:
         logger.error("Erro ao resetar circuit breaker", exc_info=e)
-        raise HTTPException(status_code=500, detail=f"Erro ao resetar circuit breaker: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao resetar circuit breaker: {e!s}")
 
 
 @router.get("/health/detailed", summary="Status detalhado do sistema de memória")
@@ -178,39 +219,46 @@ async def detailed_health_check(service: KnowledgeService = Depends(get_knowledg
     try:
         # Get basic health from knowledge service
         basic_health = await service.get_health_status()
-        
+
         # Get detailed circuit breaker status
         from app.core.memory.memory_core import get_memory_db
+
         memory_db = await get_memory_db()
         detailed_status = memory_db.get_circuit_breaker_status()
-        
+
         # Get monitoring service status if available
         from app.core.memory.qdrant_monitoring import get_qdrant_monitoring_service
+
         monitoring_service = get_qdrant_monitoring_service()
-        monitoring_status = monitoring_service.get_detailed_metrics() if monitoring_service else None
-        
+        monitoring_status = (
+            monitoring_service.get_detailed_metrics() if monitoring_service else None
+        )
+
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "overall_status": "healthy" if detailed_status["system_health"]["is_healthy"] else "degraded",
+            "overall_status": "healthy"
+            if detailed_status["system_health"]["is_healthy"]
+            else "degraded",
             "basic_health": basic_health,
             "detailed_status": detailed_status,
             "monitoring": monitoring_status,
-            "recommendations": detailed_status.get("recommendations", [])
+            "recommendations": detailed_status.get("recommendations", []),
         }
-        
+
     except Exception as e:
         logger.error("Erro ao obter status detalhado", exc_info=e)
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Erro ao obter status detalhado: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erro ao obter status detalhado: {e!s}")
 
 
-@router.post("/consolidate", response_model=ConsolidationResponse,
-             summary="Dispara consolidação de conhecimento via fila")
+@router.post(
+    "/consolidate",
+    response_model=ConsolidationResponse,
+    summary="Dispara consolidação de conhecimento via fila",
+)
 async def publish_consolidation(request: ConsolidationRequest):
     # Publica tarefa para o worker de consolidação consumir
     from app.core.workers.async_consolidation_worker import publish_consolidation_task
+
     payload = request.model_dump()
     result = await publish_consolidation_task(payload)
     return ConsolidationResponse(message="Tarefa de consolidação publicada.", stats=result)
@@ -221,22 +269,38 @@ class DocConsolidationRequest(BaseModel):
     doc_id: str
     limit: int = 50
 
-@router.post("/consolidate/document", response_model=ConsolidationResponse,
-             summary="Consolida conhecimento a partir de um documento (doc_id) do usuário")
-async def consolidate_document(request: DocConsolidationRequest, service: KnowledgeService = Depends(get_knowledge_service)):
-    stats = await service.consolidate_document(user_id=request.user_id, doc_id=request.doc_id, limit=request.limit)
+
+@router.post(
+    "/consolidate/document",
+    response_model=ConsolidationResponse,
+    summary="Consolida conhecimento a partir de um documento (doc_id) do usuário",
+)
+async def consolidate_document(
+    request: DocConsolidationRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
+    stats = await service.consolidate_document(
+        user_id=request.user_id, doc_id=request.doc_id, limit=request.limit
+    )
     return ConsolidationResponse(message="Consolidação de documento concluída.", stats=stats)
 
 
 class RegisterRelTypeRequest(BaseModel):
     name: str
 
+
 class RegisterRelTypeResponse(BaseModel):
     status: str
     name: str
 
-@router.post("/relationship-types/register", response_model=RegisterRelTypeResponse, summary="Registra um tipo canônico de relacionamento")
-async def register_relationship_type(request: RegisterRelTypeRequest, service: KnowledgeService = Depends(get_knowledge_service)):
+
+@router.post(
+    "/relationship-types/register",
+    response_model=RegisterRelTypeResponse,
+    summary="Registra um tipo canônico de relacionamento",
+)
+async def register_relationship_type(
+    request: RegisterRelTypeRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
     res = await service.register_relationship_type(request.name)
     return RegisterRelTypeResponse(**res)
 
@@ -249,11 +313,19 @@ class QuarantineItem(BaseModel):
     experience_id: str | None
     timestamp: str | None
 
-class QuarantineListResponse(BaseModel):
-    items: List[QuarantineItem]
 
-@router.get("/quarantine", response_model=QuarantineListResponse, summary="Lista itens em quarentena no grafo")
-async def list_quarantine(limit: int = 50, service: KnowledgeService = Depends(get_knowledge_service)):
+class QuarantineListResponse(BaseModel):
+    items: list[QuarantineItem]
+
+
+@router.get(
+    "/quarantine",
+    response_model=QuarantineListResponse,
+    summary="Lista itens em quarentena no grafo",
+)
+async def list_quarantine(
+    limit: int = 50, service: KnowledgeService = Depends(get_knowledge_service)
+):
     rows = await service.list_quarantine_items(limit=limit)
     items = [QuarantineItem(**row) for row in rows]
     return QuarantineListResponse(items=items)
@@ -265,43 +337,70 @@ class PromoteQuarantineRequest(BaseModel):
     type: str
     source_experience: str
 
+
 class PromoteQuarantineResponse(BaseModel):
     status: str
     from_name: str
     to_name: str
     type: str
 
-@router.post("/quarantine/promote", response_model=PromoteQuarantineResponse, summary="Promove um item de quarentena a relacionamento no grafo")
-async def promote_quarantine(request: PromoteQuarantineRequest, service: KnowledgeService = Depends(get_knowledge_service)):
-    res = await service.promote_quarantine_relationship(from_name=request.from_name, to_name=request.to_name, rel_type=request.type, source_experience=request.source_experience)
-    return PromoteQuarantineResponse(status=res.get("status"), from_name=request.from_name, to_name=request.to_name, type=request.type)
+
+@router.post(
+    "/quarantine/promote",
+    response_model=PromoteQuarantineResponse,
+    summary="Promove um item de quarentena a relacionamento no grafo",
+)
+async def promote_quarantine(
+    request: PromoteQuarantineRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
+    res = await service.promote_quarantine_relationship(
+        from_name=request.from_name,
+        to_name=request.to_name,
+        rel_type=request.type,
+        source_experience=request.source_experience,
+    )
+    return PromoteQuarantineResponse(
+        status=res.get("status"),
+        from_name=request.from_name,
+        to_name=request.to_name,
+        type=request.type,
+    )
 
 
-@router.get("/functions/calling", response_model=List[CodeEntity],
-            summary="Lista funções que chamam a função informada")
+@router.get(
+    "/functions/calling",
+    response_model=list[CodeEntity],
+    summary="Lista funções que chamam a função informada",
+)
 async def functions_calling(
-        name: str = Query(..., description="Nome da função alvo"),
-        service: KnowledgeService = Depends(get_knowledge_service)
+    name: str = Query(..., description="Nome da função alvo"),
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
     rows = await service.get_functions_calling(function_name=name)
     return [CodeEntity(**row) for row in rows]
 
 
-@router.get("/files/importing", response_model=List[CodeEntity],
-            summary="Lista arquivos que importam o módulo/arquivo informado")
+@router.get(
+    "/files/importing",
+    response_model=list[CodeEntity],
+    summary="Lista arquivos que importam o módulo/arquivo informado",
+)
 async def files_importing(
-        module: str = Query(..., description="Nome do módulo ou caminho do arquivo"),
-        service: KnowledgeService = Depends(get_knowledge_service)
+    module: str = Query(..., description="Nome do módulo ou caminho do arquivo"),
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
     rows = await service.get_files_importing(module=module)
     return [CodeEntity(**row) for row in rows]
 
 
-@router.get("/classes/implementations", response_model=List[CodeEntity],
-            summary="Lista classes que implementam o protocolo/interface informado")
+@router.get(
+    "/classes/implementations",
+    response_model=list[CodeEntity],
+    summary="Lista classes que implementam o protocolo/interface informado",
+)
 async def classes_implementations(
-        protocol: str = Query(..., description="Nome do protocolo/interface"),
-        service: KnowledgeService = Depends(get_knowledge_service)
+    protocol: str = Query(..., description="Nome do protocolo/interface"),
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
     rows = await service.get_classes_implementing(protocol=protocol)
     return [CodeEntity(**row) for row in rows]

@@ -4,17 +4,18 @@ Code Agent Worker
 Consome a fila JANUS.tasks.agent.coder, gera código com LLM e decide
 próximo agente (Professor ou Sandbox) com base em heurísticas de complexidade.
 """
+
 import logging
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, TaskState, QueueName
-from app.services.collaboration_service import CollaborationService
+from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
-from app.services.llm_service import LLMService
 from app.repositories.llm_repository import LLMRepository
-from app.core.llm import ModelRole, ModelPriority
+from app.services.collaboration_service import CollaborationService
+from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,12 @@ def _build_coding_prompt(state: TaskState) -> str:
 
 def _estimate_complexity(code: str) -> int:
     lines = code.count("\n") + 1
-    imports = sum(1 for l in code.splitlines() if l.strip().startswith("import") or l.strip().startswith("from "))
-    functions = sum(1 for l in code.splitlines() if l.strip().startswith("def "))
+    imports = sum(
+        1
+        for line in code.splitlines()
+        if line.strip().startswith("import") or line.strip().startswith("from ")
+    )
+    functions = sum(1 for line in code.splitlines() if line.strip().startswith("def "))
     score = min(10, (lines // 80) + imports + (functions // 3))
     return score
 
@@ -64,12 +69,14 @@ async def process_code_task(task: TaskMessage) -> None:
         code = result.get("response", "")
         lines_count = code.count("\n") + 1
         state.data_payload["script_code"] = code
-        state.history.append({
-            "agent_role": "coder",
-            "action": "code_generated",
-            "notes": f"lines={lines_count}",
-            "timestamp": datetime.utcnow().timestamp(),
-        })
+        state.history.append(
+            {
+                "agent_role": "coder",
+                "action": "code_generated",
+                "notes": f"lines={lines_count}",
+                "timestamp": datetime.utcnow().timestamp(),
+            }
+        )
 
         complexity = _estimate_complexity(code)
         if complexity > 7:
@@ -81,7 +88,11 @@ async def process_code_task(task: TaskMessage) -> None:
         await service.pass_task(state)
         logger.info(
             "CodeAgent produziu código e encaminhou",
-            extra={"task_id": state.task_id, "next": state.next_agent_role, "complexity": complexity}
+            extra={
+                "task_id": state.task_id,
+                "next": state.next_agent_role,
+                "complexity": complexity,
+            },
         )
     except Exception as e:
         logger.error(f"CodeAgent falhou: {e}", exc_info=True)

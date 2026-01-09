@@ -1,38 +1,45 @@
 import asyncio
 import json
+from typing import Any
+
 import structlog
-from typing import Optional, Dict, Any, List
 
 from app.config import settings
-from app.core.autonomy.goal_manager import GoalManager, GoalStatus, Goal
-from app.core.autonomy.policy_engine import PolicyEngine, PolicyConfig
+from app.core.autonomy.goal_manager import Goal, GoalManager, GoalStatus
 from app.core.autonomy.planner import build_plan_for_goal
-from app.repositories.memory_repository import MemoryRepository
-from app.services.memory_service import MemoryService
+from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
 from app.core.memory.memory_core import get_memory_db
-from app.repositories.llm_repository import LLMRepository
-from app.services.llm_service import LLMService
-from app.repositories.optimization_repository import OptimizationRepository
-from app.services.optimization_service import OptimizationService
-from app.repositories.collaboration_repository import CollaborationRepository
-from app.services.collaboration_service import CollaborationService
 from app.models.schemas import TaskState, TaskStateEvent
+from app.repositories.collaboration_repository import CollaborationRepository
+from app.repositories.llm_repository import LLMRepository
+from app.repositories.memory_repository import MemoryRepository
+from app.repositories.optimization_repository import OptimizationRepository
+from app.services.collaboration_service import CollaborationService
+from app.services.llm_service import LLMService
+from app.services.memory_service import MemoryService
+from app.services.optimization_service import OptimizationService
 
 logger = structlog.get_logger(__name__)
 
 # Instâncias locais (lazy init)
-_memory_service: Optional[MemoryService] = None
-_goal_manager: Optional[GoalManager] = None
-_llm_service: Optional[LLMService] = None
-_optimization_service: Optional[OptimizationService] = None
-_collab_service: Optional[CollaborationService] = None
-_policy: Optional[PolicyEngine] = None
+_memory_service: MemoryService | None = None
+_goal_manager: GoalManager | None = None
+_llm_service: LLMService | None = None
+_optimization_service: OptimizationService | None = None
+_collab_service: CollaborationService | None = None
+_policy: PolicyEngine | None = None
 
 _DEFAULT_INTERVAL: int = 300  # 5 minutos por padrão
 
 
 async def _ensure_services_initialized() -> None:
-    global _memory_service, _goal_manager, _llm_service, _optimization_service, _collab_service, _policy
+    global \
+        _memory_service, \
+        _goal_manager, \
+        _llm_service, \
+        _optimization_service, \
+        _collab_service, \
+        _policy
     if _memory_service is None:
         db = await get_memory_db()
         mem_repo = MemoryRepository(db)
@@ -49,7 +56,7 @@ async def _ensure_services_initialized() -> None:
         _policy = PolicyEngine(PolicyConfig())
 
 
-def _select_step_for_auto_enqueue(plan: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _select_step_for_auto_enqueue(plan: list[dict[str, Any]]) -> dict[str, Any] | None:
     """
     Seleciona o melhor passo do plano para auto-enfileirar como uma intenção.
     Heurística:
@@ -71,7 +78,7 @@ def _select_step_for_auto_enqueue(plan: List[Dict[str, Any]]) -> Optional[Dict[s
     return plan[-1]
 
 
-def _to_original_goal_text(goal: Goal, step: Dict[str, Any]) -> str:
+def _to_original_goal_text(goal: Goal, step: dict[str, Any]) -> str:
     tool = str(step.get("tool", "")).strip()
     args = step.get("args", {}) or {}
     # Formata intenções legíveis
@@ -90,19 +97,24 @@ def _to_original_goal_text(goal: Goal, step: Dict[str, Any]) -> str:
     return f"Executar '{tool}' com argumentos {cleaned}"
 
 
-async def _autonomy_heartbeat_loop(interval_seconds: Optional[int] = None) -> None:
+async def _autonomy_heartbeat_loop(interval_seconds: int | None = None) -> None:
     await _ensure_services_initialized()
-    interval = int(interval_seconds or getattr(settings, "AUTONOMY_HEARTBEAT_INTERVAL_SECONDS", _DEFAULT_INTERVAL))
+    interval = int(
+        interval_seconds
+        or getattr(settings, "AUTONOMY_HEARTBEAT_INTERVAL_SECONDS", _DEFAULT_INTERVAL)
+    )
     logger.info("[AutonomyWorker] Iniciado", interval_seconds=interval)
 
     while True:
         try:
             # 1) Perceber: métricas de saúde (ajuda o planner)
-            metrics = await _optimization_service.get_system_health() if _optimization_service else {}
+            metrics = (
+                await _optimization_service.get_system_health() if _optimization_service else {}
+            )
             logger.info("[AutonomyWorker] Perceber: métricas", **(metrics or {}))
 
             # 2) Consultar desejos/metas pendentes
-            current_goal: Optional[Goal] = None
+            current_goal: Goal | None = None
             try:
                 current_goal = _goal_manager.get_next_goal() if _goal_manager else None
             except Exception as e:
@@ -110,7 +122,10 @@ async def _autonomy_heartbeat_loop(interval_seconds: Optional[int] = None) -> No
                 current_goal = None
 
             if not current_goal:
-                logger.info("[AutonomyWorker] Nenhum objetivo proativo pendente. Dormindo…", sleep_seconds=interval)
+                logger.info(
+                    "[AutonomyWorker] Nenhum objetivo proativo pendente. Dormindo…",
+                    sleep_seconds=interval,
+                )
                 await asyncio.sleep(interval)
                 continue
 
@@ -121,7 +136,7 @@ async def _autonomy_heartbeat_loop(interval_seconds: Optional[int] = None) -> No
                 pass
 
             # 3) Planejar próximo passo via ORCHESTRATOR (Planner)
-            plan: List[Dict[str, Any]] = []
+            plan: list[dict[str, Any]] = []
             try:
                 plan = await build_plan_for_goal(
                     goal=current_goal,
@@ -198,7 +213,7 @@ async def _autonomy_heartbeat_loop(interval_seconds: Optional[int] = None) -> No
             await asyncio.sleep(interval)
 
 
-async def start_autonomy_worker(interval_seconds: Optional[int] = None) -> asyncio.Task:
+async def start_autonomy_worker(interval_seconds: int | None = None) -> asyncio.Task:
     """
     Inicia o AutonomyWorker em background com batimento cardíaco.
     Retorna a asyncio.Task do loop contínuo.

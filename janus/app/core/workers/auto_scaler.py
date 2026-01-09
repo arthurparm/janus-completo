@@ -4,17 +4,19 @@ Queue Auto-Scaler
 Monitora backlog das filas e ajusta dinamicamente o número de consumidores
 por fila (scale up/down), usando o MessageBroker start_consumer.
 """
+
 import asyncio
 import logging
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
+from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
-from app.models.schemas import QueueName
 from app.core.workers.agent_tasks_worker import process_agent_task
-from app.core.workers.neural_training_worker import process_neural_training_task
 from app.core.workers.async_consolidation_worker import process_consolidation_task
 from app.core.workers.meta_agent_worker import process_meta_agent_cycle
-from app.config import settings
+from app.core.workers.neural_training_worker import process_neural_training_task
+from app.models.schemas import QueueName
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ class _QueueRule:
 
 
 # Regras por fila (com defaults, podem ser sobrescritas por settings.QUEUE_AUTOSCALER_CONFIG)
-_DEF_RULES: Dict[str, _QueueRule] = {
+_DEF_RULES: dict[str, _QueueRule] = {
     QueueName.AGENT_TASKS.value: _QueueRule(
         queue_name=QueueName.AGENT_TASKS.value,
         callback=process_agent_task,
@@ -82,7 +84,7 @@ _DEF_RULES: Dict[str, _QueueRule] = {
 }
 
 
-_active_consumers: Dict[str, List[asyncio.Task]] = {}
+_active_consumers: dict[str, list[asyncio.Task]] = {}
 
 
 def _apply_settings_overrides() -> None:
@@ -93,11 +95,22 @@ def _apply_settings_overrides() -> None:
             if not rule:
                 continue
             # Operadores seguros para overrides parciais
-            rule.min_consumers = int(overrides.get("min_consumers", rule.min_consumers) or rule.min_consumers)
-            rule.max_consumers = int(overrides.get("max_consumers", rule.max_consumers) or rule.max_consumers)
-            rule.prefetch_per_consumer = int(overrides.get("prefetch", rule.prefetch_per_consumer) or rule.prefetch_per_consumer)
-            rule.scale_up_backlog = int(overrides.get("scale_up_backlog", rule.scale_up_backlog) or rule.scale_up_backlog)
-            rule.scale_down_backlog = int(overrides.get("scale_down_backlog", rule.scale_down_backlog) or rule.scale_down_backlog)
+            rule.min_consumers = int(
+                overrides.get("min_consumers", rule.min_consumers) or rule.min_consumers
+            )
+            rule.max_consumers = int(
+                overrides.get("max_consumers", rule.max_consumers) or rule.max_consumers
+            )
+            rule.prefetch_per_consumer = int(
+                overrides.get("prefetch", rule.prefetch_per_consumer) or rule.prefetch_per_consumer
+            )
+            rule.scale_up_backlog = int(
+                overrides.get("scale_up_backlog", rule.scale_up_backlog) or rule.scale_up_backlog
+            )
+            rule.scale_down_backlog = int(
+                overrides.get("scale_down_backlog", rule.scale_down_backlog)
+                or rule.scale_down_backlog
+            )
             rule.enabled = bool(overrides.get("enabled", rule.enabled))
     except Exception:
         # Ignora erros de configuração dinâmica
@@ -129,9 +142,7 @@ async def _ensure_consumers(queue_name: str, target_ours: int, rule: _QueueRule)
         for _ in range(to_stop):
             t = lst.pop()
             t.cancel()
-        logger.info(
-            f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'."
-        )
+        logger.info(f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'.")
 
 
 async def _scale_once() -> None:
@@ -167,9 +178,11 @@ async def _scale_once() -> None:
             logger.error(f"Auto-Scaler: erro ao escalar fila '{qname}': {e}", exc_info=True)
 
 
-async def start_auto_scaler(poll_interval_seconds: Optional[int] = None) -> asyncio.Task:
+async def start_auto_scaler(poll_interval_seconds: int | None = None) -> asyncio.Task:
     """Inicia o auto-escalador em background."""
-    interval = int(poll_interval_seconds or getattr(settings, "QUEUE_AUTOSCALER_POLL_INTERVAL", 10) or 10)
+    interval = int(
+        poll_interval_seconds or getattr(settings, "QUEUE_AUTOSCALER_POLL_INTERVAL", 10) or 10
+    )
 
     async def _loop():
         logger.info(f"Iniciando Auto-Scaler de filas (intervalo={interval}s)...")

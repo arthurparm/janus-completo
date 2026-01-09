@@ -4,11 +4,13 @@ Poison Pill Handler para gestão robusta de mensagens/tarefas problemáticas (Sp
 Implementa detecção e isolamento de "poison pills" - mensagens que causam
 falhas repetidas e podem travar o sistema.
 """
+
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any, Callable
+from typing import Any
 
 from prometheus_client import Counter, Gauge
 
@@ -16,27 +18,22 @@ logger = logging.getLogger(__name__)
 
 # --- Métricas ---
 POISON_PILL_DETECTED = Counter(
-    "poison_pill_detected_total",
-    "Total de poison pills detectadas",
-    ["queue", "reason"]
+    "poison_pill_detected_total", "Total de poison pills detectadas", ["queue", "reason"]
 )
 
 POISON_PILL_QUARANTINED = Counter(
-    "poison_pill_quarantined_total",
-    "Total de poison pills colocadas em quarentena",
-    ["queue"]
+    "poison_pill_quarantined_total", "Total de poison pills colocadas em quarentena", ["queue"]
 )
 
 POISON_PILL_IN_QUARANTINE = Gauge(
-    "poison_pill_in_quarantine",
-    "Número de poison pills atualmente em quarentena",
-    ["queue"]
+    "poison_pill_in_quarantine", "Número de poison pills atualmente em quarentena", ["queue"]
 )
 
 
 @dataclass
 class FailureRecord:
     """Registro de falha de uma mensagem/tarefa."""
+
     message_id: str
     queue: str
     failure_count: int = 0
@@ -56,13 +53,14 @@ class FailureRecord:
 @dataclass
 class QuarantinedMessage:
     """Mensagem em quarentena."""
+
     message_id: str
     queue: str
     content: Any
     reason: str
     failure_record: FailureRecord
     quarantined_at: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class PoisonPillHandler:
@@ -77,11 +75,11 @@ class PoisonPillHandler:
     """
 
     def __init__(
-            self,
-            failure_threshold: int = 3,
-            consecutive_failure_threshold: int = 5,
-            quarantine_duration_hours: int = 24,
-            enable_auto_retry: bool = False
+        self,
+        failure_threshold: int = 3,
+        consecutive_failure_threshold: int = 5,
+        quarantine_duration_hours: int = 24,
+        enable_auto_retry: bool = False,
     ):
         """
         Inicializa o PoisonPillHandler.
@@ -98,17 +96,15 @@ class PoisonPillHandler:
         self.enable_auto_retry = enable_auto_retry
 
         # Rastreamento de falhas
-        self.failure_records: Dict[str, FailureRecord] = {}
+        self.failure_records: dict[str, FailureRecord] = {}
 
         # Quarentena
-        self.quarantined: Dict[str, QuarantinedMessage] = {}
+        self.quarantined: dict[str, QuarantinedMessage] = {}
 
         # Contadores por fila
-        self.queue_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {
-            "total_failures": 0,
-            "total_quarantined": 0,
-            "consecutive_failures": 0
-        })
+        self.queue_stats: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"total_failures": 0, "total_quarantined": 0, "consecutive_failures": 0}
+        )
 
         logger.info(
             f"PoisonPillHandler inicializado: "
@@ -117,11 +113,7 @@ class PoisonPillHandler:
         )
 
     def record_failure(
-            self,
-            message_id: str,
-            queue: str,
-            error: Exception,
-            content: Optional[Any] = None
+        self, message_id: str, queue: str, error: Exception, content: Any | None = None
     ) -> bool:
         """
         Registra uma falha de processamento.
@@ -140,10 +132,7 @@ class PoisonPillHandler:
 
         # Criar ou atualizar registro
         if message_id not in self.failure_records:
-            self.failure_records[message_id] = FailureRecord(
-                message_id=message_id,
-                queue=queue
-            )
+            self.failure_records[message_id] = FailureRecord(message_id=message_id, queue=queue)
 
         record = self.failure_records[message_id]
         record.add_failure(error_type, error_message)
@@ -161,7 +150,9 @@ class PoisonPillHandler:
         is_poison = self._check_poison_pill(record)
 
         if is_poison:
-            self._quarantine_message(record, content, f"Threshold atingido: {record.failure_count} falhas")
+            self._quarantine_message(
+                record, content, f"Threshold atingido: {record.failure_count} falhas"
+            )
             POISON_PILL_DETECTED.labels(queue=queue, reason="failure_threshold").inc()
 
         return is_poison
@@ -207,12 +198,7 @@ class PoisonPillHandler:
 
         return False
 
-    def _quarantine_message(
-            self,
-            record: FailureRecord,
-            content: Optional[Any],
-            reason: str
-    ):
+    def _quarantine_message(self, record: FailureRecord, content: Any | None, reason: str):
         """
         Coloca uma mensagem em quarentena.
         """
@@ -221,7 +207,7 @@ class PoisonPillHandler:
             queue=record.queue,
             content=content,
             reason=reason,
-            failure_record=record
+            failure_record=record,
         )
 
         self.quarantined[record.message_id] = quarantined_msg
@@ -239,7 +225,7 @@ class PoisonPillHandler:
         """Verifica se uma mensagem está em quarentena."""
         return message_id in self.quarantined
 
-    def get_quarantined_messages(self, queue: Optional[str] = None) -> list[QuarantinedMessage]:
+    def get_quarantined_messages(self, queue: str | None = None) -> list[QuarantinedMessage]:
         """
         Retorna mensagens em quarentena.
 
@@ -254,10 +240,8 @@ class PoisonPillHandler:
         return messages
 
     def release_from_quarantine(
-            self,
-            message_id: str,
-            allow_retry: bool = False
-    ) -> Optional[QuarantinedMessage]:
+        self, message_id: str, allow_retry: bool = False
+    ) -> QuarantinedMessage | None:
         """
         Remove uma mensagem da quarentena.
 
@@ -310,7 +294,7 @@ class PoisonPillHandler:
 
         return len(expired_ids)
 
-    def get_failure_stats(self, queue: Optional[str] = None) -> Dict[str, Any]:
+    def get_failure_stats(self, queue: str | None = None) -> dict[str, Any]:
         """
         Retorna estatísticas de falhas.
 
@@ -321,17 +305,19 @@ class PoisonPillHandler:
             return {
                 "queue": queue,
                 **self.queue_stats[queue],
-                "quarantined_count": len([m for m in self.quarantined.values() if m.queue == queue])
+                "quarantined_count": len(
+                    [m for m in self.quarantined.values() if m.queue == queue]
+                ),
             }
 
         return {
             "total_tracked_messages": len(self.failure_records),
             "total_quarantined": len(self.quarantined),
             "by_queue": dict(self.queue_stats),
-            "quarantine_duration_hours": self.quarantine_duration.total_seconds() / 3600
+            "quarantine_duration_hours": self.quarantine_duration.total_seconds() / 3600,
         }
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         """
         Retorna o status de saúde do sistema de poison pill handling.
         """
@@ -352,12 +338,12 @@ class PoisonPillHandler:
             "total_tracked_failures": total_tracked,
             "queues_affected": len(self.queue_stats),
             "failure_threshold": self.failure_threshold,
-            "consecutive_threshold": self.consecutive_failure_threshold
+            "consecutive_threshold": self.consecutive_failure_threshold,
         }
 
 
 # --- Instância Global ---
-_poison_pill_handler: Optional[PoisonPillHandler] = None
+_poison_pill_handler: PoisonPillHandler | None = None
 
 
 def get_poison_pill_handler() -> PoisonPillHandler:
@@ -370,10 +356,8 @@ def get_poison_pill_handler() -> PoisonPillHandler:
 
 # --- Decorador para Proteção Automática ---
 
-def protect_against_poison_pills(
-        queue_name: str,
-        extract_message_id: Callable[[Any], str]
-):
+
+def protect_against_poison_pills(queue_name: str, extract_message_id: Callable[[Any], str]):
     """
     Decorador para proteger funções de processamento contra poison pills.
 
@@ -403,10 +387,7 @@ def protect_against_poison_pills(
 
             # Verificar se está em quarentena
             if handler.is_quarantined(message_id):
-                logger.warning(
-                    f"Mensagem {message_id} está em QUARENTENA, "
-                    f"pulando processamento"
-                )
+                logger.warning(f"Mensagem {message_id} está em QUARENTENA, pulando processamento")
                 return None
 
             # Tentar processar

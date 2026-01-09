@@ -1,4 +1,3 @@
-import pytest
 
 def test_invalid_json_payload(api_client):
     """Verify 422 Unprocessable Entity on missing required fields."""

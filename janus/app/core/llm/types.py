@@ -1,19 +1,21 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
+
 
 class ModelRole(Enum):
     ORCHESTRATOR = "orchestrator"
     CODE_GENERATOR = "code_generator"
     KNOWLEDGE_CURATOR = "knowledge_curator"
 
+
 class ModelPriority(Enum):
     LOCAL_ONLY = "local_only"
     FAST_AND_CHEAP = "fast_and_cheap"
     HIGH_QUALITY = "high_quality"
+
 
 @dataclass
 class CachedLLM:
@@ -23,10 +25,12 @@ class CachedLLM:
     model: str
     consecutive_failures: int = 0
 
+
 @dataclass
 class ProviderPricing:
     input_per_1k_usd: float
     output_per_1k_usd: float
+
 
 @dataclass
 class ProviderStats:
@@ -46,6 +50,7 @@ class ProviderStats:
         if self.total_requests <= 0:
             return 0.0
         return self.total_latency_seconds / max(1, self.total_requests)
+
 
 @dataclass
 class ModelStats:

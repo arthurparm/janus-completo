@@ -1,14 +1,15 @@
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
+from fastapi import Request
 
-from app.services.llm_service import LLMService
 from app.core.autonomy.goal_manager import Goal
-from app.core.autonomy.policy_engine import PolicyEngine, PolicyConfig, RiskProfile, PolicyDecision
 from app.core.autonomy.planner import build_plan_for_goal
+from app.core.autonomy.policy_engine import PolicyConfig, PolicyDecision, PolicyEngine, RiskProfile
 from app.core.tools.action_module import action_registry
+from app.services.llm_service import LLMService
 
 logger = structlog.get_logger(__name__)
 
@@ -16,12 +17,12 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class AssistantExecutionStep:
     tool: str
-    args: Dict[str, Any]
+    args: dict[str, Any]
     started_at: float
     ended_at: float
     success: bool
-    output: Optional[str] = None
-    error: Optional[str] = None
+    output: str | None = None
+    error: str | None = None
 
 
 class AssistantService:
@@ -38,12 +39,12 @@ class AssistantService:
         self,
         user_request: str,
         risk_profile: str = RiskProfile.BALANCED,
-        allowlist: Optional[List[str]] = None,
-        blocklist: Optional[List[str]] = None,
+        allowlist: list[str] | None = None,
+        blocklist: list[str] | None = None,
         max_steps: int = 8,
         timeout_seconds: int = 30,
-        metrics: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        metrics: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Executa uma solicitação do usuário de ponta a ponta, sem exigir escolha manual de ferramentas.
         """
@@ -72,8 +73,8 @@ class AssistantService:
         )
 
         # 4) Executar passos conforme política
-        results: List[AssistantExecutionStep] = []
-        transparent_steps: List[Dict[str, Any]] = []
+        results: list[AssistantExecutionStep] = []
+        transparent_steps: list[dict[str, Any]] = []
 
         for step in plan:
             if not policy.can_continue_cycle():
@@ -83,13 +84,15 @@ class AssistantService:
 
             # Validação de política
             decision: PolicyDecision = policy.validate_tool_call(tool_name, args)
-            transparent_steps.append({
-                "tool": tool_name,
-                "args": args,
-                "allowed": decision.allowed,
-                "require_confirmation": decision.require_confirmation,
-                "reason": decision.reason,
-            })
+            transparent_steps.append(
+                {
+                    "tool": tool_name,
+                    "args": args,
+                    "allowed": decision.allowed,
+                    "require_confirmation": decision.require_confirmation,
+                    "reason": decision.reason,
+                }
+            )
 
             if not decision.allowed:
                 continue
@@ -101,8 +104,8 @@ class AssistantService:
             # Execução e telemetria
             started = time.time()
             success = True
-            out: Optional[str] = None
-            err: Optional[str] = None
+            out: str | None = None
+            err: str | None = None
             try:
                 # BaseTool pode suportar .invoke ou .run; preferimos .invoke no estilo LangChain
                 # Alguns wrappers esperam dict: {"input": ...}. Usamos kwargs diretos.
@@ -160,11 +163,11 @@ class AssistantService:
             "telemetry": stats,
         }
 
-    def _consolidate_results(self, steps: List[AssistantExecutionStep]) -> str:
+    def _consolidate_results(self, steps: list[AssistantExecutionStep]) -> str:
         """Cria uma saída human-readable consolidada a partir dos resultados das ferramentas."""
         if not steps:
             return "Nenhuma ação executada."
-        lines: List[str] = []
+        lines: list[str] = []
         for s in steps:
             status = "ok" if s.success else f"erro: {s.error}"
             snippet = (s.output or "").strip()
@@ -173,9 +176,6 @@ class AssistantService:
             lines.append(f"[{s.tool}] → {status}\n{snippet}")
         return "\n\n".join(lines)
 
-
-# Padrão de Injeção de Dependência: Getter
-from fastapi import Request
 
 def get_assistant_service(request: Request) -> AssistantService:
     return request.app.state.assistant_service

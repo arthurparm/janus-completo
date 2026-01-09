@@ -1,7 +1,6 @@
-
-import sys
-import os
 import logging
+import os
+import sys
 
 # Setup path to import app
 # In Docker, this file is at /app/app/manual_quota_update.py
@@ -14,19 +13,18 @@ logger = logging.getLogger("manual_quota_update")
 
 try:
     from app.core.llm.gemini_quota import GeminiQuotaFetcher
-    from app.core.llm.rate_limiter import get_rate_limiter
-    
+
     logger.info("Starting manual Gemini quota update...")
-    
+
     # Initialize fetcher
     # Note: It will use GOOGLE_APPLICATION_CREDENTIALS env var or default path
     fetcher = GeminiQuotaFetcher()
-    
+
     # Fetch
     fetcher.fetch_and_update_limits()
-    
+
     logger.info("Manual update finished.")
-    
+
 except Exception as e:
     logger.error(f"Failed: {e}", exc_info=True)
     sys.exit(1)

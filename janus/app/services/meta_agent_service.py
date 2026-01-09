@@ -1,13 +1,16 @@
+from typing import Any
+
 import structlog
-from typing import Dict, Any, Optional
 
 try:
-    from app.core.agents import get_meta_agent, MetaAgent
+    from app.core.agents import MetaAgent, get_meta_agent
 except Exception:
+
     def get_meta_agent():  # type: ignore
         class _Stub:
             async def run_analysis_cycle(self):
                 return None
+
             def __init__(self):
                 self.last_report = None
                 self._heartbeat_task = None
@@ -15,32 +18,44 @@ except Exception:
                 self.agent_id = "stub"
                 self.executor = None
                 self.tools = []
+
             async def start_heartbeat(self, interval_minutes: int):
                 return None
+
             def stop_heartbeat(self):
                 return None
+
         return _Stub()
+
     class MetaAgent:  # type: ignore
         pass
+
+
 try:
     from app.core.agents.meta_agent import StateReport
 except Exception:
+
     class StateReport:  # type: ignore
         def __init__(self):
             from datetime import datetime
+
             self.timestamp = datetime.now()
+
 
 logger = structlog.get_logger(__name__)
 
 
 # --- Custom Service-Layer Exceptions ---
 
+
 class MetaAgentServiceError(Exception):
     """Base exception for meta-agent service errors."""
+
     pass
 
 
 # --- Meta-Agent Service ---
+
 
 class MetaAgentService:
     """
@@ -61,12 +76,14 @@ class MetaAgentService:
             logger.error("Erro no serviço ao executar ciclo de análise do meta-agente", exc_info=e)
             raise MetaAgentServiceError("Falha ao executar o ciclo de análise.") from e
 
-    def get_latest_report(self) -> Optional[StateReport]:
+    def get_latest_report(self) -> StateReport | None:
         logger.info("Buscando último relatório do meta-agente via serviço.")
         return self._get_agent().last_report
 
     async def start_heartbeat(self, interval_minutes: int) -> bool:
-        logger.info("Iniciando heartbeat do meta-agente via serviço", interval_minutes=interval_minutes)
+        logger.info(
+            "Iniciando heartbeat do meta-agente via serviço", interval_minutes=interval_minutes
+        )
         agent = self._get_agent()
         if agent._heartbeat_task and not agent._heartbeat_task.done():
             logger.warning("Tentativa de iniciar um heartbeat já ativo.")
@@ -79,17 +96,17 @@ class MetaAgentService:
         logger.info("Parando heartbeat do meta-agente via serviço.")
         self._get_agent().stop_heartbeat()
 
-    def get_heartbeat_status(self) -> Dict[str, Any]:
+    def get_heartbeat_status(self) -> dict[str, Any]:
         logger.info("Buscando status do heartbeat do meta-agente.")
         agent = self._get_agent()
         is_active = agent._heartbeat_task is not None and not agent._heartbeat_task.done()
         return {
             "heartbeat_active": is_active,
             "total_cycles_executed": agent.cycle_count,
-            "last_analysis": agent.last_report.timestamp.isoformat() if agent.last_report else None
+            "last_analysis": agent.last_report.timestamp.isoformat() if agent.last_report else None,
         }
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         logger.info("Buscando status de saúde do meta-agente.")
         agent = self._get_agent()
         return {
@@ -97,7 +114,7 @@ class MetaAgentService:
             "agent_id": agent.agent_id,
             "executor_initialized": agent.executor is not None,
             "tools_count": len(agent.tools),
-            "cycles_executed": agent.cycle_count
+            "cycles_executed": agent.cycle_count,
         }
 
 

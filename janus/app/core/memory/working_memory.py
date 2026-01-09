@@ -1,8 +1,6 @@
-import time
 import logging
 from collections import OrderedDict
-from typing import List, Dict, Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import settings
 from app.models.schemas import Experience
@@ -16,18 +14,24 @@ class WorkingMemory:
     Armazena experiências leves para acesso rápido durante uma sessão de raciocínio.
     """
 
-    def __init__(self, ttl_seconds: Optional[int] = None, max_items: Optional[int] = None):
-        self.ttl_seconds = int(ttl_seconds if ttl_seconds is not None else getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600))
-        self.max_items = int(max_items if max_items is not None else getattr(settings, "MEMORY_SHORT_MAX_ITEMS", 512))
+    def __init__(self, ttl_seconds: int | None = None, max_items: int | None = None):
+        self.ttl_seconds = int(
+            ttl_seconds
+            if ttl_seconds is not None
+            else getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600)
+        )
+        self.max_items = int(
+            max_items if max_items is not None else getattr(settings, "MEMORY_SHORT_MAX_ITEMS", 512)
+        )
         self._store: OrderedDict[str, Experience] = OrderedDict()
 
     def _now_ms(self) -> int:
-        return int(datetime.now(timezone.utc).timestamp() * 1000)
+        return int(datetime.now(UTC).timestamp() * 1000)
 
     def _expired(self, exp: Experience) -> bool:
         try:
             dt = datetime.fromisoformat(exp.timestamp)
-            age = int(datetime.now(timezone.utc).timestamp() - dt.timestamp())
+            age = int(datetime.now(UTC).timestamp() - dt.timestamp())
             return age > self.ttl_seconds
         except Exception:
             return False
@@ -46,7 +50,7 @@ class WorkingMemory:
         while len(self._store) > self.max_items:
             self._store.popitem(last=False)
 
-    def add(self, type: str, content: str, metadata: Optional[Dict] = None) -> Experience:
+    def add(self, type: str, content: str, metadata: dict | None = None) -> Experience:
         """Adiciona uma experiência efêmera à memória de trabalho."""
         self._purge_expired()
         meta = dict(metadata or {})
@@ -58,17 +62,19 @@ class WorkingMemory:
         self._trim_capacity()
         return exp
 
-    def get_recent(self, limit: int = 5) -> List[Dict[str, any]]:
+    def get_recent(self, limit: int = 5) -> list[dict[str, any]]:
         """Retorna as entradas mais recentes."""
         self._purge_expired()
         items = list(self._store.values())[-limit:][::-1]
-        return [{"id": e.id, "content": e.content, "metadata": e.metadata, "score": 1.0} for e in items]
+        return [
+            {"id": e.id, "content": e.content, "metadata": e.metadata, "score": 1.0} for e in items
+        ]
 
-    def recall(self, query: str, limit: int = 5) -> List[Dict[str, any]]:
+    def recall(self, query: str, limit: int = 5) -> list[dict[str, any]]:
         """Busca ingênua por substring no conteúdo da memória de trabalho."""
         self._purge_expired()
         q = (query or "").strip().lower()
-        scored: List[tuple] = []
+        scored: list[tuple] = []
         for e in self._store.values():
             text = e.content.lower()
             if not q:
@@ -81,12 +87,15 @@ class WorkingMemory:
                 score = 0.2 + 0.1 * overlap
             scored.append((score, e))
         scored.sort(key=lambda x: x[0], reverse=True)
-        top = [e for _, e in scored[:limit]]
-        return [{"id": e.id, "content": e.content, "metadata": e.metadata, "score": float(s)} for s, e in scored[:limit]]
+        [e for _, e in scored[:limit]]
+        return [
+            {"id": e.id, "content": e.content, "metadata": e.metadata, "score": float(s)}
+            for s, e in scored[:limit]
+        ]
 
 
 # --- Singleton simples ---
-_working_mem_instance: Optional[WorkingMemory] = None
+_working_mem_instance: WorkingMemory | None = None
 
 
 def get_working_memory() -> WorkingMemory:

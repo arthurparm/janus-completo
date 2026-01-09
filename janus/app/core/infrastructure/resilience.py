@@ -1,8 +1,9 @@
 import asyncio
 import random
 import time
+from collections.abc import Callable, Coroutine
 from enum import Enum
-from typing import Callable, Any, Tuple, Type, Optional, Coroutine
+from typing import Any
 
 import structlog
 
@@ -13,7 +14,6 @@ try:
     _PROM_ENABLED = True
 except Exception:  # pragma: no cover - fallback if not installed
     _PROM_ENABLED = False
-
 
     class _NoopMetric:
         def labels(self, *_, **__):
@@ -27,7 +27,6 @@ except Exception:  # pragma: no cover - fallback if not installed
 
         def observe(self, *_args, **_kwargs):
             return None
-
 
     Counter = Gauge = Histogram = _NoopMetric  # type: ignore
 
@@ -70,6 +69,7 @@ class CircuitBreakerState(Enum):
 
 class CircuitOpenError(ConnectionError):
     """Lançada quando o Circuit Breaker está ABERTO e bloqueia a chamada."""
+
     pass
 
 
@@ -100,8 +100,8 @@ class CircuitBreaker:
         self.recovery_timeout = recovery_timeout
         self.state = CircuitBreakerState.CLOSED
         self.failure_count = 0
-        self.last_failure_time: Optional[float] = None
-        self._open_since: Optional[float] = None
+        self.last_failure_time: float | None = None
+        self._open_since: float | None = None
         self._last_operation = "unknown"
 
         logger.info(
@@ -120,9 +120,13 @@ class CircuitBreaker:
         result = self.state == CircuitBreakerState.OPEN
         if result:
             import traceback
+
             logger.warning(
-                f"[CircuitBreaker] is_open=True! state={self.state.value}, failures={self.failure_count}, last_failure={self.last_failure_time}")
-            logger.warning(f"[CircuitBreaker] Call stack:\n{''.join(traceback.format_stack()[-5:])}")
+                f"[CircuitBreaker] is_open=True! state={self.state.value}, failures={self.failure_count}, last_failure={self.last_failure_time}"
+            )
+            logger.warning(
+                f"[CircuitBreaker] Call stack:\n{''.join(traceback.format_stack()[-5:])}"
+            )
         return result
 
     def __call__(self, func: Callable) -> Callable:
@@ -148,7 +152,7 @@ class CircuitBreaker:
 
             if self.state == CircuitBreakerState.OPEN:
                 if self.last_failure_time is not None and (
-                        time.time() - self.last_failure_time > self.recovery_timeout
+                    time.time() - self.last_failure_time > self.recovery_timeout
                 ):
                     self.state = CircuitBreakerState.HALF_OPEN
                     self._set_state_gauges(operation)
@@ -164,13 +168,15 @@ class CircuitBreaker:
                 result = func(*args, **kwargs)
                 self._on_success(operation)
                 return result
-            except Exception as e:
+            except Exception:
                 self._on_failure(operation)
                 raise
 
         return wrapper
 
-    async def call_async(self, coro_func: Callable[..., Coroutine], operation: Optional[str] = None) -> Any:
+    async def call_async(
+        self, coro_func: Callable[..., Coroutine], operation: str | None = None
+    ) -> Any:
         """
         Executa uma função assíncrona protegida pelo circuit breaker com logging detalhado.
 
@@ -192,7 +198,7 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.OPEN and self._open_since:
             open_duration = time.time() - self._open_since
             _OPEN_TIME_GAUGE.labels(operation=operation).set(max(0.0, open_duration))
-            
+
             # Log detailed circuit breaker state when attempting call
             logger.warning(
                 "circuit_breaker_call_attempt_while_open",
@@ -203,12 +209,14 @@ class CircuitBreaker:
                 failure_count=self.failure_count,
                 failure_threshold=self.failure_threshold,
                 last_failure_time=self.last_failure_time,
-                time_since_last_failure=time.time() - self.last_failure_time if self.last_failure_time else None
+                time_since_last_failure=time.time() - self.last_failure_time
+                if self.last_failure_time
+                else None,
             )
 
         if self.state == CircuitBreakerState.OPEN:
             if self.last_failure_time is not None and (
-                    time.time() - self.last_failure_time > self.recovery_timeout
+                time.time() - self.last_failure_time > self.recovery_timeout
             ):
                 old_state = self.state
                 self.state = CircuitBreakerState.HALF_OPEN
@@ -219,13 +227,17 @@ class CircuitBreaker:
                     state_transition=f"{old_state.value} -> {self.state.value}",
                     open_duration=time.time() - self._open_since if self._open_since else 0,
                     recovery_timeout=self.recovery_timeout,
-                    failure_count=self.failure_count
+                    failure_count=self.failure_count,
                 )
             else:
                 self._set_state_gauges(operation)
                 rejection_time = time.time() - start_time
-                recovery_remaining = max(0, self.recovery_timeout - (time.time() - self.last_failure_time)) if self.last_failure_time else self.recovery_timeout
-                
+                recovery_remaining = (
+                    max(0, self.recovery_timeout - (time.time() - self.last_failure_time))
+                    if self.last_failure_time
+                    else self.recovery_timeout
+                )
+
                 logger.error(
                     "circuit_breaker_rejected_call",
                     operation=operation,
@@ -233,9 +245,9 @@ class CircuitBreaker:
                     rejection_time_seconds=rejection_time,
                     recovery_timeout_remaining=recovery_remaining,
                     failure_count=self.failure_count,
-                    failure_threshold=self.failure_threshold
+                    failure_threshold=self.failure_threshold,
                 )
-                
+
                 raise CircuitOpenError(
                     f"Circuit Breaker está ABERTO para '{operation}'. "
                     f"Falhas: {self.failure_count}/{self.failure_threshold}. "
@@ -246,21 +258,21 @@ class CircuitBreaker:
             result = await coro_func()
             execution_time = time.time() - start_time
             self._on_success(operation)
-            
+
             # Log successful execution with timing
             logger.info(
                 "circuit_breaker_call_success",
                 operation=operation,
                 state=self.state.value,
                 execution_time_seconds=execution_time,
-                failure_count=self.failure_count
+                failure_count=self.failure_count,
             )
-            
+
             return result
         except Exception as e:
             execution_time = time.time() - start_time
             self._on_failure(operation)
-            
+
             # Log failure with detailed context
             logger.error(
                 "circuit_breaker_call_failed",
@@ -270,15 +282,19 @@ class CircuitBreaker:
                 exception_type=type(e).__name__,
                 exception_message=str(e),
                 failure_count=self.failure_count,
-                failure_threshold=self.failure_threshold
+                failure_threshold=self.failure_threshold,
             )
-            
+
             raise
 
     def _set_state_gauges(self, operation: str) -> None:
         """Atualiza métricas Prometheus com estado atual."""
         # set 1 for current state and 0 for others
-        for state in (CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN):
+        for state in (
+            CircuitBreakerState.CLOSED,
+            CircuitBreakerState.OPEN,
+            CircuitBreakerState.HALF_OPEN,
+        ):
             _CIRCUIT_STATE_GAUGE.labels(operation=operation, state=state.value).set(
                 1.0 if self.state == state else 0.0
             )
@@ -323,14 +339,16 @@ class CircuitBreaker:
                 recovery_timeout=self.recovery_timeout,
                 state_transition=f"{old_state.value} -> {self.state.value}",
                 open_since=self._open_since,
-                last_failure_time=self.last_failure_time
+                last_failure_time=self.last_failure_time,
             )
             import traceback
+
             logger.warning(
                 f"[CircuitBreaker] State changed to OPEN from HALF_OPEN after failed test. "
                 f"Failures: {self.failure_count}/{self.failure_threshold}, "
                 f"Recovery timeout: {self.recovery_timeout}s. "
-                f"Stack:\n{''.join(traceback.format_stack()[-8:])}")
+                f"Stack:\n{''.join(traceback.format_stack()[-8:])}"
+            )
         elif self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
             self._open_since = time.time()
@@ -342,15 +360,17 @@ class CircuitBreaker:
                 recovery_timeout=self.recovery_timeout,
                 state_transition=f"{old_state.value} -> {self.state.value}",
                 open_since=self._open_since,
-                last_failure_time=self.last_failure_time
+                last_failure_time=self.last_failure_time,
             )
             import traceback
+
             logger.warning(
                 f"[CircuitBreaker] CRITICAL: Circuit breaker OPENED due to threshold reached. "
                 f"Failures: {self.failure_count}/{self.failure_threshold}, "
                 f"Recovery timeout: {self.recovery_timeout}s. "
                 f"All calls to '{operation}' will be blocked for {self.recovery_timeout} seconds. "
-                f"Stack:\n{''.join(traceback.format_stack()[-8:])}")
+                f"Stack:\n{''.join(traceback.format_stack()[-8:])}"
+            )
 
         self._set_state_gauges(operation)
 
@@ -371,7 +391,9 @@ class CircuitBreaker:
 
         logger.info("circuit_breaker_reset", operation=self._last_operation)
 
-    def update_params(self, failure_threshold: Optional[int] = None, recovery_timeout: Optional[int] = None) -> None:
+    def update_params(
+        self, failure_threshold: int | None = None, recovery_timeout: int | None = None
+    ) -> None:
         if failure_threshold is not None:
             try:
                 ft = int(failure_threshold)
@@ -392,12 +414,12 @@ class CircuitBreaker:
 
 
 def resilient(
-        max_attempts: int = 3,
-        initial_backoff: float = 1.0,
-        max_backoff: float = 10.0,
-        circuit_breaker: Optional[CircuitBreaker] = None,
-        retry_on: Tuple[Type[BaseException], ...] = (Exception,),
-        operation_name: Optional[str] = None,
+    max_attempts: int = 3,
+    initial_backoff: float = 1.0,
+    max_backoff: float = 10.0,
+    circuit_breaker: CircuitBreaker | None = None,
+    retry_on: tuple[type[BaseException], ...] = (Exception,),
+    operation_name: str | None = None,
 ) -> Callable:
     """
     Decorador que aplica retry com exponential backoff + jitter e, opcionalmente, Circuit Breaker.
@@ -432,17 +454,21 @@ def resilient(
 
         # Detecta se é uma função assíncrona
         if asyncio.iscoroutinefunction(func):
+
             async def async_wrapper(*args, **kwargs):
                 last_exception = None
 
                 # Aplica circuit breaker se fornecido
                 if circuit_breaker:
+
                     async def protected_call():
                         return await func(*args, **kwargs)
 
-                    call = lambda: circuit_breaker.call_async(protected_call)
+                    def call():
+                        return circuit_breaker.call_async(protected_call)
                 else:
-                    call = lambda: func(*args, **kwargs)
+                    def call():
+                        return func(*args, **kwargs)
 
                 for attempt in range(max_attempts):
                     start = time.perf_counter()
@@ -499,10 +525,12 @@ def resilient(
                             if attempt + 1 >= max_attempts:
                                 break
 
-                            backoff = min(max_backoff, initial_backoff * (2 ** attempt))
+                            backoff = min(max_backoff, initial_backoff * (2**attempt))
                             sleep_time = random.uniform(0, backoff)  # full jitter
 
-                            _RETRIES_COUNTER.labels(operation=operation, exception_type=exc_type).inc()
+                            _RETRIES_COUNTER.labels(
+                                operation=operation, exception_type=exc_type
+                            ).inc()
 
                             logger.warning(
                                 "resilient_attempt_retry",
@@ -606,10 +634,12 @@ def resilient(
                             if attempt + 1 >= max_attempts:
                                 break
 
-                            backoff = min(max_backoff, initial_backoff * (2 ** attempt))
+                            backoff = min(max_backoff, initial_backoff * (2**attempt))
                             sleep_time = random.uniform(0, backoff)  # full jitter
 
-                            _RETRIES_COUNTER.labels(operation=operation, exception_type=exc_type).inc()
+                            _RETRIES_COUNTER.labels(
+                                operation=operation, exception_type=exc_type
+                            ).inc()
 
                             logger.warning(
                                 "resilient_attempt_retry",

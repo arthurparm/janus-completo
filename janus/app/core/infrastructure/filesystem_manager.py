@@ -3,7 +3,6 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 from prometheus_client import Counter
 
@@ -17,7 +16,9 @@ WORKSPACE_DIR = (APP_DIR / "workspace").resolve()
 # Policies / guardrails
 ALLOWED_WRITE_ROOTS = [WORKSPACE_DIR]
 BLOCKED_EXTENSIONS = {".sh", ".py", ".env", ".exe", ".bat", ".ps1"}
-ALLOWED_EXTENSIONS: set[str] = set()  # whitelist opcional; vazio => permitir todas (exceto bloqueadas)
+ALLOWED_EXTENSIONS: set[str] = (
+    set()
+)  # whitelist opcional; vazio => permitir todas (exceto bloqueadas)
 MAX_CONTENT_SIZE = 1_000_000  # 1MB
 MAX_LINE_COUNT = 10000  # Limite de linhas por arquivo
 
@@ -27,7 +28,7 @@ _FS_BYTES = Counter("fs_bytes_total", "Bytes escritos/lidos", ["op"])
 
 # Circuit breaker state (very simple)
 _CB_FAILURES = 0
-_CB_OPEN_UNTIL: Optional[float] = None
+_CB_OPEN_UNTIL: float | None = None
 _CB_THRESHOLD = 3
 _CB_COOLDOWN_SEC = 30.0
 _CB_LOCK = threading.Lock()
@@ -54,12 +55,14 @@ def _is_path_allowed_for_write(resolved_path: Path) -> bool:
         return False
 
 
-def _check_circuit() -> Optional[str]:
+def _check_circuit() -> str | None:
     global _CB_OPEN_UNTIL
     with _CB_LOCK:
         open_until = _CB_OPEN_UNTIL
     if open_until and time.time() < open_until:
-        return f"Circuit breaker aberto até {open_until}. Ação de escrita temporariamente bloqueada."
+        return (
+            f"Circuit breaker aberto até {open_until}. Ação de escrita temporariamente bloqueada."
+        )
     return None
 
 
@@ -87,25 +90,26 @@ def read_file(file_path: str) -> str:
     Inclui retry automático para lidar com falhas temporárias.
     """
     try:
-        absolute_path = (APP_DIR / file_path.lstrip('/')).resolve()
+        absolute_path = (APP_DIR / file_path.lstrip("/")).resolve()
 
         if not _is_path_safe_for_read(absolute_path):
             raise PermissionError(
-                f"Acesso de leitura negado: O caminho '{file_path}' está fora da área segura da aplicação (/app).")
+                f"Acesso de leitura negado: O caminho '{file_path}' está fora da área segura da aplicação (/app)."
+            )
 
         logger.info(f"Lendo ficheiro de forma segura: {absolute_path}")
 
         # Retry aprimorado: até 3 tentativas para leitura
         max_attempts = 3
         attempt = 0
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
 
         while attempt < max_attempts:
             try:
-                with open(absolute_path, 'r', encoding='utf-8', newline='') as f:
+                with open(absolute_path, encoding="utf-8", newline="") as f:
                     data = f.read()
                 _FS_OPS.labels("read", "success", absolute_path.suffix.lower()).inc()
-                _FS_BYTES.labels("read").inc(len(data.encode('utf-8')))
+                _FS_BYTES.labels("read").inc(len(data.encode("utf-8")))
 
                 if attempt > 0:
                     logger.info(f"Leitura bem-sucedida após {attempt} tentativa(s)")
@@ -123,7 +127,8 @@ def read_file(file_path: str) -> str:
                 if attempt < max_attempts:
                     backoff = 0.02 * (2 ** (attempt - 1))  # 20ms, 40ms, 80ms
                     logger.warning(
-                        f"Tentativa de leitura {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}")
+                        f"Tentativa de leitura {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
+                    )
                     time.sleep(backoff)
 
         # Se chegou aqui, falhou
@@ -159,14 +164,15 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
 
     try:
         # Resolve o caminho sempre a partir do workspace.
-        relative = file_path.lstrip('/')
-        if '..' in Path(relative).parts:
+        relative = file_path.lstrip("/")
+        if ".." in Path(relative).parts:
             raise ValueError("path traversal não permitido ('..' encontrado)")
         absolute_path = (WORKSPACE_DIR / relative).resolve()
 
         if not _is_path_allowed_for_write(absolute_path):
             raise PermissionError(
-                f"Acesso de escrita negado: Apenas é permitido escrever no diretório '{WORKSPACE_DIR}'.")
+                f"Acesso de escrita negado: Apenas é permitido escrever no diretório '{WORKSPACE_DIR}'."
+            )
 
         ext = absolute_path.suffix.lower()
         if ext in BLOCKED_EXTENSIONS:
@@ -175,20 +181,22 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
             raise PermissionError(f"Extensão não permitida para escrita (whitelist ativa): {ext}")
 
         if not isinstance(content, str) or len(content) == 0:
-            raise ValueError("'content' é obrigatório e não pode ser vazio. Se binário, use base64.")
+            raise ValueError(
+                "'content' é obrigatório e não pode ser vazio. Se binário, use base64."
+            )
 
         # Normaliza finais de linha para LF e aplica limites
         normalized = content.replace("\r\n", "\n").replace("\r", "\n")
         if normalized.count("\n") + 1 > MAX_LINE_COUNT:
             raise ValueError(f"Arquivo excede o limite de {MAX_LINE_COUNT} linhas")
-        if len(normalized.encode('utf-8')) > MAX_CONTENT_SIZE:
+        if len(normalized.encode("utf-8")) > MAX_CONTENT_SIZE:
             raise ValueError(f"'content' excede o limite de {MAX_CONTENT_SIZE} bytes")
 
         if absolute_path.exists() and not overwrite:
             raise FileExistsError("Ficheiro já existe. Defina overwrite=true para substituir.")
 
         if settings.DRY_RUN:
-            bytes_len = len(normalized.encode('utf-8'))
+            bytes_len = len(normalized.encode("utf-8"))
             logger.debug(
                 {
                     "event": "write_file_dry_run",
@@ -209,15 +217,15 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
         # Retry aprimorado: até 3 tentativas com backoff exponencial
         max_attempts = 3
         attempt = 0
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
 
         while attempt < max_attempts:
             try:
-                with open(absolute_path, 'w', encoding='utf-8', newline='\n') as f:
+                with open(absolute_path, "w", encoding="utf-8", newline="\n") as f:
                     f.write(normalized)
                 _record_success()
                 elapsed = (time.time() - start) * 1000
-                bytes_len = len(normalized.encode('utf-8'))
+                bytes_len = len(normalized.encode("utf-8"))
                 _FS_OPS.labels("write", "success", ext).inc()
                 _FS_BYTES.labels("write").inc(bytes_len)
 
@@ -227,7 +235,7 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
                     "path": str(absolute_path),
                     "bytes": bytes_len,
                     "overwrite": overwrite,
-                    "latency_ms": round(elapsed, 1)
+                    "latency_ms": round(elapsed, 1),
                 }
                 if attempt > 0:
                     log_data["retries"] = attempt
@@ -243,7 +251,9 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
                 if attempt < max_attempts:
                     # Backoff exponencial: 50ms, 200ms, 800ms
                     backoff = 0.05 * (4 ** (attempt - 1))
-                    logger.warning(f"Tentativa {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}")
+                    logger.warning(
+                        f"Tentativa {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
+                    )
                     time.sleep(backoff)
 
         # Se chegou aqui, falhou todas as tentativas
@@ -254,24 +264,27 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
     except Exception as e:
         _record_failure()
         elapsed = (time.time() - start) * 1000
-        logger.error({
-            "event": "write_file_error",
-            "path": file_path,
-            "error": str(e),
-            "latency_ms": round(elapsed, 1)
-        })
+        logger.error(
+            {
+                "event": "write_file_error",
+                "path": file_path,
+                "error": str(e),
+                "latency_ms": round(elapsed, 1),
+            }
+        )
         return f"Erro ao escrever no ficheiro '{file_path}': {e}"
 
 
 def list_directory(path: str = ".") -> str:
     """Lista o conteúdo de um diretório. A listagem é ESTRITAMENTE restrita ao /app/workspace."""
     try:
-        absolute_path = (APP_DIR / path.lstrip('/')).resolve()
+        absolute_path = (APP_DIR / path.lstrip("/")).resolve()
 
         if not str(absolute_path).startswith(str(WORKSPACE_DIR)):
             _FS_OPS.labels("list", "denied", "").inc()
             raise PermissionError(
-                f"Acesso de listagem negado: Apenas é permitido listar o diretório '{WORKSPACE_DIR}'.")
+                f"Acesso de listagem negado: Apenas é permitido listar o diretório '{WORKSPACE_DIR}'."
+            )
 
         logger.info(f"Listando diretório de forma segura: {absolute_path}")
         if not absolute_path.is_dir():

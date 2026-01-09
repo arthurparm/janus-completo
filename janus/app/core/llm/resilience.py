@@ -1,12 +1,12 @@
-from datetime import datetime
-from typing import Dict, List, Optional
 import logging
+from datetime import datetime
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from prometheus_client import Gauge, Counter
+from prometheus_client import Counter, Gauge
 
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker
+
 from .types import CachedLLM
 
 logger = logging.getLogger(__name__)
@@ -38,11 +38,11 @@ LLM_POOL_WARMS = Counter(
     ["provider", "model"],
 )
 
-_llm_pool: Dict[str, List[CachedLLM]] = {}
+_llm_pool: dict[str, list[CachedLLM]] = {}
 _MAX_CACHE_FAILURES = 3
 
 # Circuit Breakers por provedor para isolar falhas
-_provider_circuit_breakers: Dict[str, CircuitBreaker] = {
+_provider_circuit_breakers: dict[str, CircuitBreaker] = {
     provider: CircuitBreaker(
         failure_threshold=settings.LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
         recovery_timeout=settings.LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
@@ -55,7 +55,7 @@ def _pool_key(provider: str, model: str) -> str:
     return f"{provider}:{model}"
 
 
-def _get_from_pool(provider: str, model: str) -> Optional[BaseChatModel]:
+def _get_from_pool(provider: str, model: str) -> BaseChatModel | None:
     key = _pool_key(provider, model)
     pool = _llm_pool.get(key, [])
     if not pool:
@@ -65,7 +65,10 @@ def _get_from_pool(provider: str, model: str) -> Optional[BaseChatModel]:
             pass
         return None
     now = datetime.now()
-    ttl = int(getattr(settings, "LLM_POOL_TTL_SECONDS", getattr(settings, "LLM_CACHE_TTL_SECONDS", 3600)) or 3600)
+    ttl = int(
+        getattr(settings, "LLM_POOL_TTL_SECONDS", getattr(settings, "LLM_CACHE_TTL_SECONDS", 3600))
+        or 3600
+    )
     valid = []
     evicted = 0
     for item in pool:
@@ -100,7 +103,9 @@ def _add_to_pool(provider: str, model: str, llm: BaseChatModel):
     pool = _llm_pool.get(key) or []
     max_size = int(getattr(settings, "LLM_POOL_MAX_SIZE", 4) or 4)
     if len(pool) < max_size:
-        pool.append(CachedLLM(instance=llm, created_at=datetime.now(), provider=provider, model=model))
+        pool.append(
+            CachedLLM(instance=llm, created_at=datetime.now(), provider=provider, model=model)
+        )
         _llm_pool[key] = pool
     else:
         _llm_pool[key] = pool
@@ -110,7 +115,7 @@ def _add_to_pool(provider: str, model: str, llm: BaseChatModel):
         pass
 
 
-def invalidate_cache(provider: Optional[str] = None):
+def invalidate_cache(provider: str | None = None):
     if provider:
         keys_to_remove = [k for k in list(_llm_pool.keys()) if k.startswith(f"{provider}:")]
         for key in keys_to_remove:

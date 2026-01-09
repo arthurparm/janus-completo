@@ -4,9 +4,17 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID, SESSION_ID, CONVERSATION_ID, PROJECT_ID
+from app.core.infrastructure.logging_config import (
+    CONVERSATION_ID,
+    PROJECT_ID,
+    SESSION_ID,
+    TRACE_ID,
+    USER_ID,
+)
+
 try:
     from opentelemetry import trace  # type: ignore
+
     _OTEL = True
 except Exception:
     _OTEL = False
@@ -19,7 +27,9 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
             actor = getattr(request.state, "actor_user_id", None)
         except Exception:
             actor = None
-        user_id = (str(actor) if actor is not None else None) or request.headers.get("X-User-Id") or None
+        user_id = (
+            (str(actor) if actor is not None else None) or request.headers.get("X-User-Id") or None
+        )
         session_id = request.headers.get("X-Session-Id") or None
         conversation_id = request.headers.get("X-Conversation-Id") or None
         project_id = request.headers.get("X-Project-Id") or None

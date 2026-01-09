@@ -1,4 +1,3 @@
-import pytest
 
 from app.core.workers.knowledge_consolidator_worker import KnowledgeConsolidator
 

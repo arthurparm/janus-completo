@@ -2,7 +2,7 @@ import logging
 import re
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -11,7 +11,7 @@ from prometheus_client import Counter, Histogram
 
 from app.config import settings
 from app.core.infrastructure.prompt_loader import get_prompt
-from app.core.llm.llm_manager import get_llm, ModelRole
+from app.core.llm.llm_manager import ModelRole, get_llm
 from app.core.memory.memory_core import get_memory_db
 
 logger = logging.getLogger(__name__)
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 _RAG_STAGE_LAT = Histogram(
     "rag_stage_latency_seconds", "Latência por estágio do Graph RAG", ["stage", "outcome"]
 )
-_RAG_EVENTS = Counter(
-    "rag_events_total", "Eventos por estágio do Graph RAG", ["stage", "outcome"]
-)
+_RAG_EVENTS = Counter("rag_events_total", "Eventos por estágio do Graph RAG", ["stage", "outcome"])
 _RAG_CACHE = Counter(
-    "rag_cache_total", "Cache hits/misses do contexto", ["outcome"]  # hit/miss
+    "rag_cache_total",
+    "Cache hits/misses do contexto",
+    ["outcome"],  # hit/miss
 )
 
 try:
@@ -53,7 +53,7 @@ class _ContextCache:
         self.ttl_seconds = ttl_seconds
         self._store: OrderedDict[str, tuple[float, Any]] = OrderedDict()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         now = time.time()
         value = self._store.get(key)
         if not value:
@@ -79,7 +79,7 @@ _CONTEXT_CACHE = _ContextCache()
 
 
 class VectorRetriever:
-    async def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    async def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
         t0 = time.perf_counter()
         try:
             memory_db = await get_memory_db()
@@ -96,35 +96,37 @@ class VectorRetriever:
 
 
 class GraphRetriever:
-    def __init__(self, async_graph_db: Any, schema_provider: Optional[Neo4jGraph] = None):
+    def __init__(self, async_graph_db: Any, schema_provider: Neo4jGraph | None = None):
         self.async_graph_db = async_graph_db
         self.schema_provider = schema_provider
 
-    async def retrieve_with_llm(self, question: str) -> List[Dict[str, Any]]:
+    async def retrieve_with_llm(self, question: str) -> list[dict[str, Any]]:
         # Checagem de disponibilidade do banco
         if self.async_graph_db is None or self.async_graph_db._driver is None:
-             raise ConnectionError("Graph RAG Core não está disponível (Async DB desconectado).")
-             
+            raise ConnectionError("Graph RAG Core não está disponível (Async DB desconectado).")
+
         llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
         cypher_chain = cypher_prompt | llm | StrOutputParser()
         t0 = time.perf_counter()
-        
+
         try:
             full_schema = _get_full_schema_text(self.schema_provider)
             # Invoke é síncrono ou async? LangChain invoke é sync, ainvoke é async.
             # Vamos usar ainvoke para não bloquear se possível, mas aqui o gargalo era o DB.
             # O prompt+LLM pode ser demorado.
-            llm_response_cypher = await cypher_chain.ainvoke({"schema": full_schema, "question": question})
+            llm_response_cypher = await cypher_chain.ainvoke(
+                {"schema": full_schema, "question": question}
+            )
             cypher_query = _extract_cypher(llm_response_cypher)
-            
+
             if not cypher_query or cypher_query.startswith("//"):
                 _RAG_EVENTS.labels("generate_cypher", "empty").inc()
                 _RAG_STAGE_LAT.labels("generate_cypher", "empty").observe(time.perf_counter() - t0)
                 return []
-                
+
             _RAG_EVENTS.labels("generate_cypher", "success").inc()
             _RAG_STAGE_LAT.labels("generate_cypher", "success").observe(time.perf_counter() - t0)
-            
+
         except Exception as e:
             _RAG_EVENTS.labels("generate_cypher", "error").inc()
             _RAG_STAGE_LAT.labels("generate_cypher", "error").observe(time.perf_counter() - t0)
@@ -135,7 +137,7 @@ class GraphRetriever:
         try:
             # Execução assíncrona usando o pool da aplicação
             result = await self.async_graph_db.query(cypher_query)
-            
+
             _RAG_EVENTS.labels("graph_query", "success").inc()
             _RAG_STAGE_LAT.labels("graph_query", "success").observe(time.perf_counter() - t1)
             return result or []
@@ -146,12 +148,17 @@ class GraphRetriever:
             return []
 
 
-def _get_full_schema_text(schema_provider: Optional[Neo4jGraph] = None) -> str:
+def _get_full_schema_text(schema_provider: Neo4jGraph | None = None) -> str:
     # Use o provider passado ou o global se não fornecido
     provider = schema_provider or graph
-    if provider is None: return ""
+    if provider is None:
+        return ""
     try:
-        schema_val = provider.get_schema if callable(getattr(provider, "get_schema", None)) else getattr(provider, "schema", "")
+        schema_val = (
+            provider.get_schema
+            if callable(getattr(provider, "get_schema", None))
+            else getattr(provider, "schema", "")
+        )
         return f"{schema_val}\n(:Function)-[:CALLS]->(:Function)"
     except Exception as e:
         logger.warning(f"Graph RAG Core: Não foi possível obter o schema do grafo: {e}")
@@ -177,7 +184,7 @@ def _extract_cypher(text: str) -> str:
     return ""
 
 
-def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]], limit: int):
+def _rerank(graph_ctx: list[dict[str, Any]], vector_ctx: list[dict[str, Any]], limit: int):
     t0 = time.perf_counter()
     try:
         try:
@@ -185,8 +192,8 @@ def _rerank(graph_ctx: List[Dict[str, Any]], vector_ctx: List[Dict[str, Any]], l
         except Exception:
             pass
         try:
-            graph_ctx = graph_ctx[:max(1, limit)]
-            vector_ctx = vector_ctx[:max(1, limit)]
+            graph_ctx = graph_ctx[: max(1, limit)]
+            vector_ctx = vector_ctx[: max(1, limit)]
         except Exception:
             pass
         _RAG_EVENTS.labels("rerank", "success").inc()
@@ -205,8 +212,9 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     """
     # Importar aqui para evitar import circular
     from app.db.graph import get_graph_db
+
     async_db = await get_graph_db()
-    
+
     if async_db is None:
         raise ConnectionError("Graph RAG Core não está disponível (DB não inicializado).")
 
@@ -216,21 +224,23 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
 
     qkey = question.strip().lower()
     context = _CONTEXT_CACHE.get(qkey)
-    graph_ctx: List[Dict[str, Any]] = []
-    vector_ctx: List[Dict[str, Any]] = []
+    graph_ctx: list[dict[str, Any]] = []
+    vector_ctx: list[dict[str, Any]] = []
     if context is None:
         # Retrieve from graph via LLM-generated Cypher (Async!)
         # Passamos 'graph' (global sync) apenas para schema introspection
         graph_ret = GraphRetriever(async_graph_db=async_db, schema_provider=graph)
         graph_ctx = await graph_ret.retrieve_with_llm(question)
-        
+
         # Optional: additional vector retrieval from episodic memory
         vector_ret = VectorRetriever()
         vector_ctx = await vector_ret.retrieve(question, k=max(1, min(5, limit)))
         # Simple fusion: keep both; store compact context in cache
         fused_ctx = {
-            "graph": graph_ctx[:max(1, limit)],
-            "vector": [{"id": v.get("id"), "content": v.get("content", "")} for v in vector_ctx][:max(1, limit)],
+            "graph": graph_ctx[: max(1, limit)],
+            "vector": [{"id": v.get("id"), "content": v.get("content", "")} for v in vector_ctx][
+                : max(1, limit)
+            ],
         }
         _CONTEXT_CACHE.put(qkey, fused_ctx)
     else:
@@ -246,10 +256,14 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     # Prepare context text
     vector_texts = []
     try:
-        vector_texts = [str(v.get("content", "")) for v in vector_ctx][:max(1, min(5, limit))]
+        vector_texts = [str(v.get("content", "")) for v in vector_ctx][: max(1, min(5, limit))]
     except Exception:
         vector_texts = []
-    context_text = f"Graph: {graph_ctx[:max(1, limit)]}\nVector: {vector_texts}" if vector_texts else f"Graph: {graph_ctx[:max(1, limit)]}"
+    context_text = (
+        f"Graph: {graph_ctx[: max(1, limit)]}\nVector: {vector_texts}"
+        if vector_texts
+        else f"Graph: {graph_ctx[: max(1, limit)]}"
+    )
 
     t_synth = time.perf_counter()
     try:

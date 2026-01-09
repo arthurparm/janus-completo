@@ -1,16 +1,16 @@
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel, Field
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from app.services.learning_service import (
+    ExperimentNotFoundError,
     LearningService,
-    get_learning_service,
     LearningServiceError,
     ModelNotFoundError,
     TrainingFailedError,
-    ExperimentNotFoundError
+    get_learning_service,
 )
 
 router = APIRouter(tags=["Learning"])
@@ -19,11 +19,15 @@ logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---
 
+
 class HarvestRequest(BaseModel):
     limit: int = Field(100, ge=1, le=1000)
-    query: Optional[str] = Field(None, description="Consulta para filtrar experiências")
-    min_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar")
-    user_id: Optional[str] = Field(None, description="Filtrar por usuário (origin)")
+    query: str | None = Field(None, description="Consulta para filtrar experiências")
+    min_score: float | None = Field(
+        None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar"
+    )
+    user_id: str | None = Field(None, description="Filtrar por usuário (origin)")
+
 
 class TrainingConfig(BaseModel):
     epochs: int = Field(3, ge=1, le=100)
@@ -32,18 +36,23 @@ class TrainingConfig(BaseModel):
     validation_split: float = Field(0.2, ge=0.0, le=0.9)
     early_stopping: bool = True
     save_checkpoints: bool = True
-    max_examples: Optional[int] = Field(None, ge=1, description="Limite máximo de exemplos para treino")
+    max_examples: int | None = Field(
+        None, ge=1, description="Limite máximo de exemplos para treino"
+    )
+
 
 class TrainRequest(BaseModel):
     model_type: str = Field("CLASSIFIER")
-    model_name: Optional[str] = Field(None, description="Nome do modelo a ser treinado")
+    model_name: str | None = Field(None, description="Nome do modelo a ser treinado")
     training_config: TrainingConfig = Field(default_factory=TrainingConfig)
-    user_id: Optional[str] = Field(None)
+    user_id: str | None = Field(None)
+
 
 class LearningResponse(BaseModel):
     message: str
     summary: str
-    model_id: Optional[str] = None
+    model_id: str | None = None
+
 
 class TrainingAckResponse(BaseModel):
     message: str
@@ -51,14 +60,16 @@ class TrainingAckResponse(BaseModel):
     task_id: str
     status: str
     queued_at: str
-    dataset_version: Optional[str] = None
-    dataset_num_examples: Optional[int] = None
-    model_name: Optional[str] = None
+    dataset_version: str | None = None
+    dataset_num_examples: int | None = None
+    model_name: str | None = None
+
 
 class TrainingStatusResponse(BaseModel):
     is_training: bool
-    current_model: Optional[str] = None
+    current_model: str | None = None
     progress: float = 0.0
+
 
 class ModelInfo(BaseModel):
     model_id: str
@@ -66,12 +77,13 @@ class ModelInfo(BaseModel):
     status: str
     created_at: str
     training_examples: int
-    accuracy: Optional[float] = None
-    loss: Optional[float] = None
+    accuracy: float | None = None
+    loss: float | None = None
+
 
 class ModelListResponse(BaseModel):
     total: int
-    models: List[ModelInfo]
+    models: list[ModelInfo]
 
 
 class EvaluateRequest(BaseModel):
@@ -82,62 +94,71 @@ class EvaluateRequest(BaseModel):
 class EvaluationResponse(BaseModel):
     model_id: str
     examples_evaluated: int
-    metrics: Dict[str, Any]
+    metrics: dict[str, Any]
 
 
 class DatasetVersionResponse(BaseModel):
-    version: Optional[str]
+    version: str | None
     num_examples: int
-    hash: Optional[str]
-    last_modified: Optional[str]
+    hash: str | None
+    last_modified: str | None
 
 
 class ExperimentInfo(BaseModel):
     experiment_id: str
     status: str
-    dataset_version: Optional[str] = None
-    num_examples: Optional[int] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    summary: Optional[str] = None
-    error: Optional[str] = None
-    duration_seconds: Optional[float] = None
+    dataset_version: str | None = None
+    num_examples: int | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    summary: str | None = None
+    error: str | None = None
+    duration_seconds: float | None = None
 
 
 class ExperimentListResponse(BaseModel):
     total: int
-    experiments: List[ExperimentInfo]
+    experiments: list[ExperimentInfo]
 
 
 # --- Endpoints ---
 
-@router.post("/harvest", response_model=LearningResponse, summary="Inicia a coleta de dados para treino")
-async def trigger_harvesting(request: HarvestRequest,
-                             learning_service: LearningService = Depends(get_learning_service)):
+
+@router.post(
+    "/harvest", response_model=LearningResponse, summary="Inicia a coleta de dados para treino"
+)
+async def trigger_harvesting(
+    request: HarvestRequest, learning_service: LearningService = Depends(get_learning_service)
+):
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
-        result = await learning_service.trigger_harvesting(limit=request.limit, query=request.query,
-                                                           min_score=request.min_score, origin=request.user_id)
+        result = await learning_service.trigger_harvesting(
+            limit=request.limit,
+            query=request.query,
+            min_score=request.min_score,
+            origin=request.user_id,
+        )
         return result
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao coletar dados", exc_info=e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/train", response_model=TrainingAckResponse, summary="Agenda o treino de um novo modelo")
-async def trigger_training(request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)):
+@router.post(
+    "/train", response_model=TrainingAckResponse, summary="Agenda o treino de um novo modelo"
+)
+async def trigger_training(
+    request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)
+):
     """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
         # Injeta data_source na config se fornecido
         config_dict = request.training_config.dict()
         if request.data_source:
             config_dict["data_source"] = request.data_source
-            
+
         result = await learning_service.trigger_training(
-            request.model_type, 
-            config_dict, 
-            model_name=request.model_name, 
-            user_id=request.user_id
+            request.model_type, config_dict, model_name=request.model_name, user_id=request.user_id
         )
         return result
     except TrainingFailedError as e:
@@ -148,7 +169,11 @@ async def trigger_training(request: TrainRequest, learning_service: LearningServ
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/training/status", response_model=TrainingStatusResponse, summary="Obtém status do treinamento atual")
+@router.get(
+    "/training/status",
+    response_model=TrainingStatusResponse,
+    summary="Obtém status do treinamento atual",
+)
 async def get_training_status(learning_service: LearningService = Depends(get_learning_service)):
     """Busca o status de qualquer sessão de treinamento ativa via LearningService."""
     session = learning_service.get_training_status()
@@ -165,7 +190,9 @@ async def list_models(learning_service: LearningService = Depends(get_learning_s
 
 
 @router.get("/models/{model_id}", response_model=ModelInfo, summary="Obtém detalhes de um modelo")
-async def get_model_details(model_id: str, learning_service: LearningService = Depends(get_learning_service)):
+async def get_model_details(
+    model_id: str, learning_service: LearningService = Depends(get_learning_service)
+):
     """Delega a busca de detalhes de um modelo para o LearningService."""
     try:
         return learning_service.get_model_details(model_id)
@@ -180,7 +207,9 @@ async def get_learning_stats(learning_service: LearningService = Depends(get_lea
 
 
 @router.get("/dataset/preview", summary="Pré-visualiza exemplos do dataset de treino")
-async def preview_dataset(limit: int = 20, learning_service: LearningService = Depends(get_learning_service)):
+async def preview_dataset(
+    limit: int = 20, learning_service: LearningService = Depends(get_learning_service)
+):
     """Retorna os primeiros N exemplos do dataset de treino (JSONL)."""
     try:
         return await learning_service.preview_dataset(limit=limit)
@@ -189,8 +218,12 @@ async def preview_dataset(limit: int = 20, learning_service: LearningService = D
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/evaluate", response_model=EvaluationResponse, summary="Avalia a performance de um modelo")
-async def evaluate_model(request: EvaluateRequest, learning_service: LearningService = Depends(get_learning_service)):
+@router.post(
+    "/evaluate", response_model=EvaluationResponse, summary="Avalia a performance de um modelo"
+)
+async def evaluate_model(
+    request: EvaluateRequest, learning_service: LearningService = Depends(get_learning_service)
+):
     """Delega a avaliação de um modelo para o LearningService."""
     try:
         result = learning_service.evaluate_model(request.model_id, request.test_data_limit)
@@ -202,22 +235,35 @@ async def evaluate_model(request: EvaluateRequest, learning_service: LearningSer
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/dataset/version", response_model=DatasetVersionResponse,
-            summary="Obtém a versão atual do dataset de treino")
+@router.get(
+    "/dataset/version",
+    response_model=DatasetVersionResponse,
+    summary="Obtém a versão atual do dataset de treino",
+)
 async def get_dataset_version(learning_service: LearningService = Depends(get_learning_service)):
     """Retorna metadados de versão do dataset de treino."""
     return learning_service.get_dataset_version_info()
 
 
-@router.get("/experiments", response_model=ExperimentListResponse, summary="Lista experimentos de treinamento")
+@router.get(
+    "/experiments",
+    response_model=ExperimentListResponse,
+    summary="Lista experimentos de treinamento",
+)
 async def list_experiments(learning_service: LearningService = Depends(get_learning_service)):
     """Lista os experimentos rastreados pelo repositório de aprendizado."""
     exps = learning_service.list_experiments()
     return ExperimentListResponse(total=len(exps), experiments=exps)
 
 
-@router.get("/experiments/{experiment_id}", response_model=ExperimentInfo, summary="Obtém detalhes de um experimento")
-async def get_experiment_details(experiment_id: str, learning_service: LearningService = Depends(get_learning_service)):
+@router.get(
+    "/experiments/{experiment_id}",
+    response_model=ExperimentInfo,
+    summary="Obtém detalhes de um experimento",
+)
+async def get_experiment_details(
+    experiment_id: str, learning_service: LearningService = Depends(get_learning_service)
+):
     """Detalhes de um experimento específico."""
     try:
         return learning_service.get_experiment_details(experiment_id)

@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Index
+from sqlalchemy import Column, DateTime, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class Consent(Base):
     __tablename__ = "user_consents"
@@ -12,6 +14,4 @@ class Consent(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     revoked_at = Column(DateTime, nullable=True)
-    __table_args__ = (
-        Index("idx_userconsent_user_scope", "user_id", "scope"),
-    )
+    __table_args__ = (Index("idx_userconsent_user_scope", "user_id", "scope"),)

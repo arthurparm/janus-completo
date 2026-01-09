@@ -1,19 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from datetime import datetime, timezone
-from typing import List, Optional, Any, Dict
+from datetime import UTC, datetime
+from typing import Any
+
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+
+from app.services.knowledge_service import KnowledgeService, get_knowledge_service
+from app.services.llm_service import LLMService, get_llm_service
+from app.services.observability_service import ObservabilityService, get_observability_service
+from app.services.optimization_service import OptimizationService, get_optimization_service
 
 # Importar serviços existentes da camada de domínio
 from app.services.system_status_service import system_status_service
-from app.services.observability_service import ObservabilityService, get_observability_service
-from app.services.knowledge_service import KnowledgeService, get_knowledge_service
-from app.services.llm_service import LLMService, get_llm_service
-from app.services.optimization_service import OptimizationService, get_optimization_service
-
-from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
 
 # Modelos de resposta alinhados com o frontend (front/src/app/services/janus-api.service.ts)
 class SystemStatus(BaseModel):
@@ -21,18 +23,20 @@ class SystemStatus(BaseModel):
     version: str
     environment: str
     status: str
-    timestamp: Optional[str] = None
-    uptime_seconds: Optional[float] = None
-    system: Optional[Dict[str, Any]] = None
-    process: Optional[Dict[str, Any]] = None
-    performance: Optional[Dict[str, Any]] = None
-    config: Optional[Dict[str, Any]] = None
+    timestamp: str | None = None
+    uptime_seconds: float | None = None
+    system: dict[str, Any] | None = None
+    process: dict[str, Any] | None = None
+    performance: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
+
 
 class ServiceHealthItem(BaseModel):
     key: str
     name: str
     status: str
-    metric_text: Optional[str] = None
+    metric_text: str | None = None
+
 
 class WorkerStatusResponse(BaseModel):
     id: str
@@ -40,10 +44,11 @@ class WorkerStatusResponse(BaseModel):
     last_heartbeat: datetime
     tasks_processed: int
 
+
 class SystemOverviewResponse(BaseModel):
     system_status: SystemStatus
-    services_status: List[ServiceHealthItem]
-    workers_status: List[WorkerStatusResponse]
+    services_status: list[ServiceHealthItem]
+    workers_status: list[WorkerStatusResponse]
 
 
 @router.get("/overview", response_model=SystemOverviewResponse, summary="System overview")
@@ -76,7 +81,9 @@ async def get_system_overview(
 
         mem_mb: float = 0.0
         try:
-            analysis = await optimization.analyze_system(analysis_type="performance", detailed=False)
+            analysis = await optimization.analyze_system(
+                analysis_type="performance", detailed=False
+            )
             mem_mb = float(analysis.get("metrics_snapshot", {}).get("memory_usage_mb", 0.0))
         except Exception:
             try:
@@ -96,7 +103,7 @@ async def get_system_overview(
         except Exception:
             memory_status = "ok"
 
-        services_status: List[ServiceHealthItem] = [
+        services_status: list[ServiceHealthItem] = [
             ServiceHealthItem(
                 key="agent",
                 name="Agent Service",
@@ -125,8 +132,8 @@ async def get_system_overview(
 
         # 3) Status dos workers (transforma saída do orchestrator em shape esperado pelo frontend)
         current = getattr(request.app.state, "orchestrator_workers", []) or []
-        now = datetime.now(timezone.utc)
-        workers_status: List[WorkerStatusResponse] = []
+        now = datetime.now(UTC)
+        workers_status: list[WorkerStatusResponse] = []
         for w in current:
             name = w.get("name") or "worker"
             task = w.get("task")
@@ -141,12 +148,14 @@ async def get_system_overview(
                 status_str = "running" if running else ("error" if exc else "stopped")
             except Exception:
                 status_str = "unknown"
-            workers_status.append(WorkerStatusResponse(
-                id=name,
-                status=status_str,
-                last_heartbeat=now,
-                tasks_processed=0,
-            ))
+            workers_status.append(
+                WorkerStatusResponse(
+                    id=name,
+                    status=status_str,
+                    last_heartbeat=now,
+                    tasks_processed=0,
+                )
+            )
 
         return SystemOverviewResponse(
             system_status=sys_status,
@@ -157,5 +166,5 @@ async def get_system_overview(
         logger.error("Falha ao obter visão geral do sistema", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Não foi possível obter a visão geral do sistema: {str(e)}"
+            detail=f"Não foi possível obter a visão geral do sistema: {e!s}",
         )

@@ -8,7 +8,7 @@ Garante consistência em nós (entidades) e relações, evitando poluição sem�
 import logging
 import re
 from enum import Enum
-from typing import Dict, Optional, Set
+
 from app.core.memory.semantic_relation_matcher import match_relation_type as match_semantic_relation
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,6 @@ class RelationType(str, Enum):
     SIMILAR_TO = "SIMILAR_TO"
 
 
-
 class EntityType(str, Enum):
     """Tipos de entidades padronizados."""
 
@@ -83,7 +82,7 @@ class EntityType(str, Enum):
 
 
 # Thesaurus: mapeamento de sinônimos para conceitos canônicos
-ENTITY_SYNONYMS: Dict[str, str] = {
+ENTITY_SYNONYMS: dict[str, str] = {
     # Erros
     "erro": "error",
     "erros": "error",
@@ -97,7 +96,6 @@ ENTITY_SYNONYMS: Dict[str, str] = {
     "problemas": "error",
     "issue": "error",
     "issues": "error",
-
     # Soluções
     "solução": "solution",
     "soluções": "solution",
@@ -106,30 +104,25 @@ ENTITY_SYNONYMS: Dict[str, str] = {
     "correção": "solution",
     "correções": "solution",
     "resolução": "solution",
-
     # Agentes
     "agente": "agent",
     "agentes": "agent",
     "assistente": "agent",
     "assistentes": "agent",
-
     # Ferramentas
     "ferramenta": "tool",
     "ferramentas": "tool",
     "utilitário": "tool",
     "utilitários": "tool",
-
     # APIs
     "api": "api",
     "apis": "api",
     "endpoint": "endpoint",
     "endpoints": "endpoint",
-
     # Teste
     "teste": "test",
     "testes": "test",
     "testing": "test",
-
     # Performance
     "performance": "performance",
     "desempenho": "performance",
@@ -139,7 +132,7 @@ ENTITY_SYNONYMS: Dict[str, str] = {
 }
 
 # Mapeamento de tipos de relação alternativos para canônicos
-RELATION_SYNONYMS: Dict[str, RelationType] = {
+RELATION_SYNONYMS: dict[str, RelationType] = {
     "contem": RelationType.CONTAINS,
     "contém": RelationType.CONTAINS,
     "contains_value": RelationType.CONTAINS,
@@ -152,14 +145,12 @@ RELATION_SYNONYMS: Dict[str, RelationType] = {
     "has_result": RelationType.HAS_PROPERTY,
     "has_position": RelationType.HAS_PROPERTY,
     "optimized_for": RelationType.HAS_PROPERTY,
-
     "usa": RelationType.USES,
     "utiliza": RelationType.USES,
     "use": RelationType.USES,
     "uses": RelationType.USES,
     "accesses": RelationType.USES,
     "retrieves": RelationType.USES,
-
     "relacionado_a": RelationType.RELATES_TO,
     "relaciona_com": RelationType.RELATES_TO,
     "related": RelationType.RELATES_TO,
@@ -187,7 +178,6 @@ RELATION_SYNONYMS: Dict[str, RelationType] = {
     "calculated_from": RelationType.RELATES_TO,
     "calculated_using": RelationType.RELATES_TO,
     "achieves": RelationType.RELATES_TO,
-
     "causa": RelationType.CAUSES,
     "provoca": RelationType.CAUSES,
     "gera": RelationType.CAUSES,
@@ -196,58 +186,44 @@ RELATION_SYNONYMS: Dict[str, RelationType] = {
     "generates": RelationType.CAUSES,
     "generated": RelationType.CAUSES,
     "initiates": RelationType.CAUSES,
-
     "result_of": RelationType.CAUSED_BY,
     "initiated": RelationType.CAUSED_BY,
-
     "resolve": RelationType.SOLVES,
     "soluciona": RelationType.SOLVES,
     "corrige": RelationType.SOLVES,
-
     "menciona": RelationType.MENTIONS,
     "cita": RelationType.MENTIONS,
-
     "seguido_por": RelationType.FOLLOWED_BY,
     "seguido_de": RelationType.FOLLOWED_BY,
-
     "depende_de": RelationType.DEPENDS_ON,
     "requer": RelationType.DEPENDS_ON,
     "requires": RelationType.DEPENDS_ON,
-
     "implementa": RelationType.IMPLEMENTS,
     "implements": RelationType.IMPLEMENTS,
-
     "chama": RelationType.CALLS,
     "invoca": RelationType.CALLS,
     "is": RelationType.IS_A,
     "part_of": RelationType.PART_OF,
-    
     # New relationship types
     "creates": RelationType.CREATES,
     "cria": RelationType.CREATES,
     "produces": RelationType.CREATES,
     "builds": RelationType.CREATES,
-    
     "returns": RelationType.RETURNS,
     "retorna": RelationType.RETURNS,
     "outputs": RelationType.RETURNS,
-    
     "includes": RelationType.INCLUDES,
     "inclui": RelationType.INCLUDES,
     "incorporates": RelationType.INCLUDES,
-    
     "caches": RelationType.CACHES,
     "armazena_cache": RelationType.CACHES,
     "stores": RelationType.CACHES,
-    
     "applied_to": RelationType.APPLIED_TO,
     "aplicado_a": RelationType.APPLIED_TO,
     "applies_to": RelationType.APPLIED_TO,
-    
     "interacts_with": RelationType.INTERACTS_WITH,
     "interage_com": RelationType.INTERACTS_WITH,
     "communicates_with": RelationType.INTERACTS_WITH,
-    
     "has_model": RelationType.HAS_MODEL,
     "tem_modelo": RelationType.HAS_MODEL,
     "uses_model": RelationType.HAS_MODEL,
@@ -266,8 +242,8 @@ class GraphGuardian:
     """
 
     def __init__(self):
-        self._lemma_cache: Dict[str, str] = {}
-        self._validated_entities: Set[str] = set()
+        self._lemma_cache: dict[str, str] = {}
+        self._validated_entities: set[str] = set()
 
     def normalize_entity_name(self, name: str) -> str:
         """
@@ -296,10 +272,10 @@ class GraphGuardian:
         normalized = name.strip().lower()
 
         # 2. Remove caracteres especiais excessivos, mantém underscores e hífens
-        normalized = re.sub(r'[^\w\s\-]', '', normalized)
+        normalized = re.sub(r"[^\w\s\-]", "", normalized)
 
         # 3. Normaliza múltiplos espaços para um único
-        normalized = re.sub(r'\s+', ' ', normalized)
+        normalized = re.sub(r"\s+", " ", normalized)
 
         # 4. Lematização simplificada (apenas para português e inglês básico)
         normalized = self._simple_lemmatize(normalized)
@@ -319,15 +295,15 @@ class GraphGuardian:
         Remove plurais básicos em português e inglês.
         """
         # Plural em português: remove 's' final se não for 'ss'
-        if word.endswith('s') and not word.endswith('ss') and len(word) > 3:
+        if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
             return word[:-1]
 
         # Plural em inglês: ies -> y
-        if word.endswith('ies') and len(word) > 4:
-            return word[:-3] + 'y'
+        if word.endswith("ies") and len(word) > 4:
+            return word[:-3] + "y"
 
         # Plural em inglês: es -> e (quando não é ação)
-        if word.endswith('es') and len(word) > 3 and not word.endswith('ses'):
+        if word.endswith("es") and len(word) > 3 and not word.endswith("ses"):
             return word[:-1]
 
         return word
@@ -354,28 +330,28 @@ class GraphGuardian:
                 return entity_type
 
         # Heurísticas para tipos comuns
-        if any(x in normalized for x in ['ERR', 'FALHA', 'PROBLEM']):
+        if any(x in normalized for x in ["ERR", "FALHA", "PROBLEM"]):
             return EntityType.ERROR
-        elif any(x in normalized for x in ['SOLU', 'FIX', 'CORREC']):
+        elif any(x in normalized for x in ["SOLU", "FIX", "CORREC"]):
             return EntityType.SOLUTION
-        elif any(x in normalized for x in ['TECH', 'TECNOLOG']):
+        elif any(x in normalized for x in ["TECH", "TECNOLOG"]):
             return EntityType.TECHNOLOGY
-        elif any(x in normalized for x in ['TOOL', 'FERRAMENTA', 'UTIL']):
+        elif any(x in normalized for x in ["TOOL", "FERRAMENTA", "UTIL"]):
             return EntityType.TOOL
-        elif any(x in normalized for x in ['FUNCTION', 'FUNC', 'METHOD']):
+        elif any(x in normalized for x in ["FUNCTION", "FUNC", "METHOD"]):
             return EntityType.FUNCTION
-        elif any(x in normalized for x in ['CLASS', 'CLASSE']):
+        elif any(x in normalized for x in ["CLASS", "CLASSE"]):
             return EntityType.CLASS
-        elif any(x in normalized for x in ['FILE', 'ARQUIVO']):
+        elif any(x in normalized for x in ["FILE", "ARQUIVO"]):
             return EntityType.FILE
-        elif any(x in normalized for x in ['PERSON', 'PESSOA', 'USER', 'USUARIO']):
+        elif any(x in normalized for x in ["PERSON", "PESSOA", "USER", "USUARIO"]):
             return EntityType.PERSON
 
         # Default: Concept (mais genérico)
         logger.debug(f"Tipo '{type_str}' não reconhecido. Usando CONCEPT como padrão.")
         return EntityType.CONCEPT
 
-    def normalize_relation_type(self, type_str: str) -> Optional[RelationType]:
+    def normalize_relation_type(self, type_str: str) -> RelationType | None:
         """
         Normaliza e valida tipo de relação.
 
@@ -390,21 +366,20 @@ class GraphGuardian:
 
         # Tenta match semântico (cobre enum, sinônimos e fuzzy logic)
         matched_enum, score = match_semantic_relation(type_str)
-        
+
         # Convert to local Enum by value
         try:
             return RelationType(matched_enum.value)
         except ValueError:
             # Se o valor retornado pelo matcher não existir no enum local, fallback
-            logger.warning(f"Relation type mismatch: {matched_enum.value} not in GraphGuardian.RelationType. Fallback to RELATES_TO.")
+            logger.warning(
+                f"Relation type mismatch: {matched_enum.value} not in GraphGuardian.RelationType. Fallback to RELATES_TO."
+            )
             return RelationType.RELATES_TO
 
     def validate_and_normalize_entity(
-            self,
-            name: str,
-            entity_type: str,
-            properties: Optional[Dict] = None
-    ) -> Dict[str, any]:
+        self, name: str, entity_type: str, properties: dict | None = None
+    ) -> dict[str, any]:
         """
         Valida e normaliza uma entidade completa.
 
@@ -430,12 +405,8 @@ class GraphGuardian:
         }
 
     def validate_and_normalize_relationship(
-            self,
-            from_entity: str,
-            to_entity: str,
-            rel_type: str,
-            properties: Optional[Dict] = None
-    ) -> Optional[Dict[str, any]]:
+        self, from_entity: str, to_entity: str, rel_type: str, properties: dict | None = None
+    ) -> dict[str, any] | None:
         """
         Valida e normaliza um relacionamento completo.
 
@@ -460,9 +431,7 @@ class GraphGuardian:
             return None
 
         if not validated_rel_type:
-            logger.warning(
-                f"Relacionamento ignorado: tipo de relação inválido '{rel_type}'"
-            )
+            logger.warning(f"Relacionamento ignorado: tipo de relação inválido '{rel_type}'")
             return None
 
         return {

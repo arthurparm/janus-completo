@@ -6,16 +6,17 @@ Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
 
 import logging
-import msgpack
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
+
+import msgpack
 
 # Use broker getter to avoid None reference
 from app.core.infrastructure.message_broker import get_broker
-from app.models.schemas import TaskMessage, QueueName
-from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
+from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+from app.models.schemas import QueueName, TaskMessage
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +46,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             limit = payload.get("limit", 10)
             min_score = payload.get("min_score", 0.0)
 
-            stats = await knowledge_consolidator.consolidate_batch(
-                limit=limit,
-                min_score=min_score
-            )
+            stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
 
             logger.info(
                 f"✓ Consolidação em lote concluída: {stats['successful']}/{stats['total_processed']} "
@@ -63,12 +61,14 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             metadata = payload.get("metadata", {})
 
             if not experience_id or not experience_content:
-                raise ValueError("experience_id e experience_content são obrigatórios para modo 'single'")
+                raise ValueError(
+                    "experience_id e experience_content são obrigatórios para modo 'single'"
+                )
 
             result = await knowledge_consolidator.consolidate_experience(
                 experience_id=experience_id,
                 experience_content=experience_content,
-                metadata=metadata
+                metadata=metadata,
             )
 
             logger.info(
@@ -79,21 +79,21 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             # --- Notificação de Evento para o Chat HUD ---
             try:
                 # Se algo foi criado, avisa o frontend
-                if result['entities_created'] > 0 or result['relationships_created'] > 0:
+                if result["entities_created"] > 0 or result["relationships_created"] > 0:
                     conversation_id = metadata.get("conversation_id")
                     if conversation_id:
                         broker = await get_broker()
-                        
+
                         # Extrai nomes das entidades para mostrar no HUD
                         # O result nao retorna os nomes, entao vamos fazer uma estimativa ou
                         # modificar o consolidator para retornar nomes.
                         # Por simplicidade, vamos mandar uma mensagem generica por enquanto
                         # ou tentar pegar do conteudo se for curto.
-                        
+
                         # Melhor: Vamos assumir que foi "Memória consolidada com sucesso"
                         # Idealmente o consolidator retornaria os nomes das entidades.
                         # Mas vamos mandar o evento.
-                        
+
                         event_payload = {
                             "event_type": "memory_consolidated",
                             "agent_role": "knowledge_curator",
@@ -101,19 +101,19 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                             "timestamp": datetime.utcnow().timestamp(),
                             "task_id": task.task_id,
                             "metadata": {
-                                "entities_count": result['entities_created'],
-                                "relationships_count": result['relationships_created']
-                            }
+                                "entities_count": result["entities_created"],
+                                "relationships_count": result["relationships_created"],
+                            },
                         }
-                        
+
                         # Routing key para a conversa específica
                         routing_key = f"janus.event.conversation.{conversation_id}.memory"
-                        
+
                         await broker.publish(
                             exchange_name="janus.events",
                             routing_key=routing_key,
                             message=msgpack.packb(event_payload, use_bin_type=True),
-                            use_msgpack=False # Já empacotamos manualmente
+                            use_msgpack=False,  # Já empacotamos manualmente
                         )
                         logger.debug(f"Evento de memória publicado para {conversation_id}")
             except Exception as evt_err:
@@ -123,14 +123,13 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             raise ValueError(f"Modo de consolidação desconhecido: {consolidation_mode}")
 
     except Exception as e:
-        logger.error(
-            f"Erro ao processar tarefa de consolidação {task.task_id}: {e}",
-            exc_info=True
-        )
+        logger.error(f"Erro ao processar tarefa de consolidação {task.task_id}: {e}", exc_info=True)
         raise
 
 
-async def publish_consolidation_task(payload: Dict[str, Any], correlation_id: str | None = None) -> Dict[str, Any]:
+async def publish_consolidation_task(
+    payload: dict[str, Any], correlation_id: str | None = None
+) -> dict[str, Any]:
     """Publica uma tarefa de consolidação na fila apropriada."""
     broker = await get_broker()
     # Alinha com o esquema de TaskMessage (timestamp obrigatório) e serializa
@@ -141,7 +140,9 @@ async def publish_consolidation_task(payload: Dict[str, Any], correlation_id: st
         timestamp=datetime.utcnow().timestamp(),
     )
     serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
-    await broker.publish(queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=serialized, use_msgpack=True)
+    await broker.publish(
+        queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value, message=serialized, use_msgpack=True
+    )
     return {"status": "ok", "task_id": task_message.task_id}
 
 
@@ -163,7 +164,7 @@ async def start_consolidation_worker():
     consumer_task = broker.start_consumer(
         queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
         callback=process_consolidation_task,
-        prefetch_count=2
+        prefetch_count=2,
     )
 
     logger.info("✓ Worker de consolidação de conhecimento iniciado.")

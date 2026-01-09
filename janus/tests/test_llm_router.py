@@ -1,9 +1,12 @@
 
-import pytest
 from unittest.mock import MagicMock, patch
-from app.core.llm.router import get_llm
-from app.core.llm.types import ModelRole, ModelPriority, ProviderPricing
+
+import pytest
+
 from app.core.llm.pricing import _provider_budgets_usd, _provider_spend_usd
+from app.core.llm.router import get_llm
+from app.core.llm.types import ModelPriority, ModelRole, ProviderPricing
+
 
 @pytest.fixture
 def mock_settings():
@@ -46,11 +49,11 @@ def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_
     with patch("app.core.llm.router._validate_openai_key", return_value=True), \
          patch("app.core.llm.router._validate_gemini_key", return_value=True), \
          patch("app.core.llm.router._circuit_closed", return_value=True):
-        
+
         # Mock candidates and pricing
         # We need to mock how router gets candidates. It iterates cloud_catalog.
         # We also need to mock _get_model_pricing
-        
+
         with patch("app.core.llm.router._get_model_pricing") as mock_get_pricing:
             # OpenAI expensive
             # Gemini cheap
@@ -58,25 +61,25 @@ def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_
                 if provider == "openai":
                     return ProviderPricing(10.0, 30.0) # $40 total
                 return ProviderPricing(1.0, 1.0) # $2 total
-            
+
             mock_get_pricing.side_effect = side_effect
-            
+
             # Mock ChatOpenAI and ChatGoogleGenerativeAI factories
             with patch("app.core.llm.router.ChatOpenAI") as MockOpenAI, \
                  patch("app.core.llm.router.ChatGoogleGenerativeAI") as MockGemini:
-                
+
                 MockOpenAI.return_value = MagicMock(name="openai_llm")
                 MockGemini.return_value = MagicMock(name="gemini_llm")
-                
+
                 # Mock settings for models
                 mock_settings.GEMINI_MODELS = ["gemini-pro"]
                 mock_settings.GEMINI_MODEL_NAME = "gemini-pro"
                 mock_settings.OPENAI_MODELS = ["gpt-4"]
                 mock_settings.OPENAI_MODEL_NAME = "gpt-4"
-                
+
                 # Execute
                 llm = get_llm(priority=ModelPriority.FAST_AND_CHEAP)
-                
+
                 # Should select Gemini because it's cheaper (score logic favors lower cost in balanced/strict mode)
                 # Ensure we didn't pick OpenAI
                 assert llm == MockGemini.return_value

@@ -5,15 +5,16 @@ Consome a fila JANUS.tasks.agent.sandbox e orquestra a execução de código
 em um contentor Docker extremamente restrito ("jaula"), capturando stdout/stderr
 sem rede, sem volumes e com limites de CPU/memória.
 """
+
+import base64
 import logging
 from datetime import datetime
-import base64
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, TaskState, QueueName
-from app.services.collaboration_service import CollaborationService
+from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
+from app.services.collaboration_service import CollaborationService
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,9 @@ def _run_in_docker(code: str) -> tuple[str, str]:
     Retorna (stdout, stderr). Em caso de falha estrutural, stderr conterá a causa.
     """
     try:
+        from docker.errors import APIError, ContainerError, ImageNotFound
+
         import docker
-        from docker.errors import ImageNotFound, ContainerError, APIError
 
         client = docker.from_env()
         image = "python:3.11-slim"
@@ -49,16 +51,20 @@ def _run_in_docker(code: str) -> tuple[str, str]:
             logs = client.containers.run(
                 image=image,
                 command=cmd,
-                remove=True,            # auto_remove=True
-                network_mode="none",    # sem rede (jaula estéril)
-                mem_limit="256m",       # limite de memória
-                nano_cpus=1_000_000_000, # ~1 CPU
+                remove=True,  # auto_remove=True
+                network_mode="none",  # sem rede (jaula estéril)
+                mem_limit="256m",  # limite de memória
+                nano_cpus=1_000_000_000,  # ~1 CPU
                 stderr=True,
                 stdout=True,
                 detach=False,
             )
             # Sucesso: logs combinados são stdout
-            stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            stdout = (
+                logs.decode("utf-8", errors="replace")
+                if isinstance(logs, (bytes, bytearray))
+                else str(logs)
+            )
             return stdout, ""
         except ImageNotFound:
             client.images.pull(image)
@@ -73,23 +79,31 @@ def _run_in_docker(code: str) -> tuple[str, str]:
                 stdout=True,
                 detach=False,
             )
-            stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            stdout = (
+                logs.decode("utf-8", errors="replace")
+                if isinstance(logs, (bytes, bytearray))
+                else str(logs)
+            )
             return stdout, ""
         except ContainerError as e:
             # Erro de execução dentro do container: tratar como stderr
             err = None
             try:
-                err = e.stderr.decode("utf-8", errors="replace") if getattr(e, "stderr", None) else str(e)
+                err = (
+                    e.stderr.decode("utf-8", errors="replace")
+                    if getattr(e, "stderr", None)
+                    else str(e)
+                )
             except Exception:
                 err = str(e)
             return "", err
         except APIError as e:
             return "", f"Docker API error: {e.explanation if hasattr(e, 'explanation') else str(e)}"
         except Exception as e:
-            return "", f"Docker run error: {str(e)}"
+            return "", f"Docker run error: {e!s}"
     except Exception as e:
         # docker SDK ausente ou ambiente sem permissão/acesso ao daemon
-        return "", f"Sandbox unavailable: {str(e)}"
+        return "", f"Sandbox unavailable: {e!s}"
 
 
 @protect_against_poison_pills(
@@ -106,12 +120,14 @@ async def process_sandbox_task(task: TaskMessage) -> None:
         if not code or not code.strip():
             state.data_payload["sandbox_output"] = ""
             state.data_payload["sandbox_error"] = "No code provided to sandbox."
-            state.history.append({
-                "agent_role": "sandbox",
-                "action": "sandbox_skipped",
-                "notes": "empty_code",
-                "timestamp": datetime.utcnow().timestamp(),
-            })
+            state.history.append(
+                {
+                    "agent_role": "sandbox",
+                    "action": "sandbox_skipped",
+                    "notes": "empty_code",
+                    "timestamp": datetime.utcnow().timestamp(),
+                }
+            )
             state.next_agent_role = "coder"
             service = CollaborationService(CollaborationRepository())
             await service.pass_task(state)
@@ -120,12 +136,14 @@ async def process_sandbox_task(task: TaskMessage) -> None:
         stdout, stderr = _run_in_docker(code)
         state.data_payload["sandbox_output"] = stdout
         state.data_payload["sandbox_error"] = stderr
-        state.history.append({
-            "agent_role": "sandbox",
-            "action": "code_executed",
-            "notes": f"ok={'no' if bool(stderr) else 'yes'}",
-            "timestamp": datetime.utcnow().timestamp(),
-        })
+        state.history.append(
+            {
+                "agent_role": "sandbox",
+                "action": "code_executed",
+                "notes": f"ok={'no' if bool(stderr) else 'yes'}",
+                "timestamp": datetime.utcnow().timestamp(),
+            }
+        )
 
         # Decisão: dor -> volta para coder; sucesso -> router
         if stderr:
@@ -137,7 +155,7 @@ async def process_sandbox_task(task: TaskMessage) -> None:
         await service.pass_task(state)
         logger.info(
             "SandboxAgent executou e encaminhou",
-            extra={"task_id": state.task_id, "next": state.next_agent_role}
+            extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
         logger.error(f"SandboxAgent falhou: {e}", exc_info=True)

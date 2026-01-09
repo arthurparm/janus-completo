@@ -1,13 +1,15 @@
 import structlog
-from typing import Optional
 
-from app.core.infrastructure.context_manager import context_manager, ContextInfo, WebSearchResult
+from app.core.infrastructure.context_manager import ContextInfo, WebSearchResult, context_manager
 
 logger = structlog.get_logger(__name__)
 
+
 class ContextRepositoryError(Exception):
     """Base exception for context repository errors."""
+
     pass
+
 
 class ContextRepository:
     """
@@ -29,36 +31,37 @@ class ContextRepository:
         logger.debug("Realizando busca na web no repositório", query=query)
         try:
             return context_manager.search_web(
-                query=query,
-                max_results=max_results,
-                search_depth=search_depth
+                query=query, max_results=max_results, search_depth=search_depth
             )
         except Exception as e:
             logger.error("Erro no repositório ao realizar busca na web", exc_info=e)
             raise ContextRepositoryError("Falha ao realizar a busca na web.") from e
 
-    def get_enriched_context(self, query: Optional[str], include_web_search: bool, max_web_results: int) -> dict:
+    def get_enriched_context(
+        self, query: str | None, include_web_search: bool, max_web_results: int
+    ) -> dict:
         """Busca o contexto enriquecido através do manager."""
-        logger.debug("Buscando contexto enriquecido no repositório", include_web_search=include_web_search)
+        logger.debug(
+            "Buscando contexto enriquecido no repositório", include_web_search=include_web_search
+        )
         try:
             return context_manager.get_enriched_context(
-                query=query,
-                include_web_search=include_web_search,
-                max_web_results=max_web_results
+                query=query, include_web_search=include_web_search, max_web_results=max_web_results
             )
         except Exception as e:
             logger.error("Erro no repositório ao buscar contexto enriquecido", exc_info=e)
             raise ContextRepositoryError("Falha ao buscar o contexto enriquecido.") from e
 
-    def format_context_for_prompt(self, include_datetime: bool, include_system: bool,
-                                  web_results: Optional[WebSearchResult]) -> str:
+    def format_context_for_prompt(
+        self, include_datetime: bool, include_system: bool, web_results: WebSearchResult | None
+    ) -> str:
         """Formata o contexto para prompt através do manager."""
         logger.debug("Formatando contexto para prompt no repositório.")
         try:
             return context_manager.format_context_for_prompt(
                 include_datetime=include_datetime,
                 include_system=include_system,
-                web_results=web_results
+                web_results=web_results,
             )
         except Exception as e:
             logger.error("Erro no repositório ao formatar contexto para prompt", exc_info=e)
@@ -73,7 +76,7 @@ class ContextRepository:
             logger.error("Erro no repositório ao obter status do cache web", exc_info=e)
             raise ContextRepositoryError("Falha ao obter status do cache web.") from e
 
-    def invalidate_web_cache(self, query: Optional[str]) -> dict:
+    def invalidate_web_cache(self, query: str | None) -> dict:
         """Invalida entradas do cache web (por query ou completo)."""
         logger.debug("Invalidando cache web no repositório.", query=query)
         try:

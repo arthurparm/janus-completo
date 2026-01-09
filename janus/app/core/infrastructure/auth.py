@@ -1,11 +1,13 @@
 import base64
-import hmac
 import hashlib
+import hmac
 import json
 import time
-from typing import Optional
+
 from fastapi import Request
+
 from app.config import settings
+
 
 def _sign(payload: dict) -> str:
     secret = (settings.AUTH_JWT_SECRET or "janus_dev_secret").encode("utf-8")
@@ -13,14 +15,20 @@ def _sign(payload: dict) -> str:
     sig = hmac.new(secret, data, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(sig).decode("ascii").rstrip("=")
 
-def create_token(user_id: int, expires_in: Optional[int] = None) -> str:
+
+def create_token(user_id: int, expires_in: int | None = None) -> str:
     exp = int(time.time()) + int(expires_in or settings.AUTH_JWT_EXPIRES_SECONDS)
     payload = {"user_id": int(user_id), "exp": exp}
     sig = _sign(payload)
-    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+    body = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        .decode("ascii")
+        .rstrip("=")
+    )
     return f"{body}.{sig}"
 
-def verify_token(token: str) -> Optional[int]:
+
+def verify_token(token: str) -> int | None:
     try:
         if "." not in token:
             return None
@@ -36,7 +44,8 @@ def verify_token(token: str) -> Optional[int]:
     except Exception:
         return None
 
-def get_actor_user_id(request: Request) -> Optional[int]:
+
+def get_actor_user_id(request: Request) -> int | None:
     auth = request.headers.get("Authorization") or ""
     if auth.lower().startswith("bearer "):
         token = auth.split(" ", 1)[1].strip()

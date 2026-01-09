@@ -4,6 +4,7 @@ Sistema de Colaboração Multi-Agente (Sprint 11).
 Implementa uma "Sociedade de Mentes" onde múltiplos agentes especializados
 trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 """
+
 import asyncio
 import json
 import logging
@@ -12,32 +13,32 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any
-
-from langchain_core.prompts import PromptTemplate
-from prometheus_client import Counter, Histogram, Gauge
-
-from app.core.llm.llm_manager import get_llm, ModelRole, ModelPriority
-from app.core.tools import get_all_tools
-from app.repositories.agent_config_repository import AgentConfigRepository
-from app.core.infrastructure.prompt_loader import get_prompt_advanced
-from app.core.tools.action_module import action_registry, PermissionLevel
-from app.core.tools.os_tools import register_os_tools
+from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.outputs import LLMResult
+from langchain_core.prompts import PromptTemplate
+from prometheus_client import Counter, Gauge, Histogram
+
+from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
+from app.core.tools import get_all_tools
+from app.core.tools.action_module import PermissionLevel, action_registry
+from app.core.tools.os_tools import register_os_tools
+from app.repositories.agent_config_repository import AgentConfigRepository
 
 logger = logging.getLogger(__name__)
 
+
 class AgentEventCallbackHandler(BaseCallbackHandler):
     """Callback handler para transmitir eventos do agente via callback assíncrono."""
-    
+
     def __init__(self, async_callback):
         self.async_callback = async_callback
-        
-    async def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
+
+    async def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: Any) -> Any:
         try:
-            await self.async_callback("tool_start", f"Starting tool {serialized.get('name')}: {input_str}")
+            await self.async_callback(
+                "tool_start", f"Starting tool {serialized.get('name')}: {input_str}"
+            )
         except Exception as e:
             logger.warning(f"Error in callback: {e}")
 
@@ -46,7 +47,7 @@ class AgentEventCallbackHandler(BaseCallbackHandler):
             await self.async_callback("tool_end", f"Tool output: {output[:200]}...")
         except Exception as e:
             logger.warning(f"Error in callback: {e}")
-            
+
     async def on_agent_action(self, action: Any, **kwargs: Any) -> Any:
         try:
             # action tem .tool e .tool_input
@@ -70,8 +71,8 @@ def _clean_json_output(text: str) -> str:
         return text
 
     # Remove markdown code blocks (```json ... ``` ou ``` ... ```)
-    text = re.sub(r'^```(?:json)?\s*\n', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\n```\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^```(?:json)?\s*\n", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n```\s*$", "", text, flags=re.MULTILINE)
     text = text.strip()
 
     return text
@@ -84,29 +85,31 @@ def _create_tool_wrapper(tool):
     O LangChain às vezes passa o JSON inteiro como string no primeiro parâmetro.
     Este wrapper detecta isso e faz o parse correto, suportando sync e async.
     """
-    from functools import wraps
-    from langchain.tools import BaseTool, StructuredTool
     import inspect
+    from functools import wraps
 
     logger.info(f"[WRAPPER INIT] Criando wrapper para {tool.name} - type={type(tool)}")
 
     # Detecta qual método usar
-    if hasattr(tool, 'func') and callable(tool.func):
+    if hasattr(tool, "func") and callable(tool.func):
         original_func = tool.func
         logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool.func")
-    elif hasattr(tool, '_run') and callable(tool._run):
+    elif hasattr(tool, "_run") and callable(tool._run):
         original_func = tool._run
         logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool._run")
     else:
-        logger.warning(f"[WRAPPER INIT] {tool.name} - Nenhum método encontrado, retornando original")
+        logger.warning(
+            f"[WRAPPER INIT] {tool.name} - Nenhum método encontrado, retornando original"
+        )
         return tool
 
     is_async = inspect.iscoroutinefunction(original_func)
 
     if is_async:
+
         @wraps(original_func)
         async def async_wrapper(*args, **kwargs):
-            tool_name = getattr(tool, 'name', 'unknown')
+            tool_name = getattr(tool, "name", "unknown")
             logger.debug(f"[WRAPPER ASYNC] {tool_name} - args={args}, kwargs={kwargs}")
 
             # Se recebeu apenas 1 argumento e ele parece ser um JSON string
@@ -119,18 +122,22 @@ def _create_tool_wrapper(tool):
                     cleaned = arg.strip()
 
                     # Remove markdown code fences (```json, ```, etc)
-                    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
-                    cleaned = re.sub(r'\s*```$', '', cleaned)
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                    cleaned = re.sub(r"\s*```$", "", cleaned)
                     cleaned = cleaned.strip()
 
                     # Remove quebras de linha e espaços extras dentro do JSON
                     # (mas preserva \n dentro de strings)
-                    if cleaned.startswith('{') and cleaned.endswith('}'):
-                        logger.debug(f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}")
+                    if cleaned.startswith("{") and cleaned.endswith("}"):
+                        logger.debug(
+                            f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}"
+                        )
                         parsed = json.loads(cleaned)
 
                         if isinstance(parsed, dict):
-                            logger.info(f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}")
+                            logger.info(
+                                f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
+                            )
                             # Chama a função com os parâmetros corretos
                             return await original_func(**parsed)
 
@@ -142,17 +149,18 @@ def _create_tool_wrapper(tool):
             return await original_func(*args, **kwargs)
 
         # Substitui AMBOS func e _run
-        if hasattr(tool, 'func'):
+        if hasattr(tool, "func"):
             tool.func = async_wrapper
             logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (async)")
-        if hasattr(tool, '_run'):
+        if hasattr(tool, "_run"):
             tool._run = async_wrapper
             logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (async)")
 
     else:
+
         @wraps(original_func)
         def sync_wrapper(*args, **kwargs):
-            tool_name = getattr(tool, 'name', 'unknown')
+            tool_name = getattr(tool, "name", "unknown")
             logger.debug(f"[WRAPPER SYNC] {tool_name} - args={args}, kwargs={kwargs}")
 
             # Se recebeu apenas 1 argumento e ele parece ser um JSON string
@@ -165,18 +173,22 @@ def _create_tool_wrapper(tool):
                     cleaned = arg.strip()
 
                     # Remove markdown code fences (```json, ```, etc)
-                    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
-                    cleaned = re.sub(r'\s*```$', '', cleaned)
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                    cleaned = re.sub(r"\s*```$", "", cleaned)
                     cleaned = cleaned.strip()
 
                     # Remove quebras de linha e espaços extras dentro do JSON
                     # (mas preserva \n dentro de strings)
-                    if cleaned.startswith('{') and cleaned.endswith('}'):
-                        logger.debug(f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}")
+                    if cleaned.startswith("{") and cleaned.endswith("}"):
+                        logger.debug(
+                            f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}"
+                        )
                         parsed = json.loads(cleaned)
 
                         if isinstance(parsed, dict):
-                            logger.info(f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}")
+                            logger.info(
+                                f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
+                            )
                             # Chama a função com os parâmetros corretos
                             return original_func(**parsed)
 
@@ -188,44 +200,40 @@ def _create_tool_wrapper(tool):
             return original_func(*args, **kwargs)
 
         # Substitui AMBOS func e _run
-        if hasattr(tool, 'func'):
+        if hasattr(tool, "func"):
             tool.func = sync_wrapper
             logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (sync)")
-        if hasattr(tool, '_run'):
+        if hasattr(tool, "_run"):
             tool._run = sync_wrapper
             logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (sync)")
 
     return tool
 
+
 # --- Métricas ---
 AGENT_TASKS_COUNTER = Counter(
-    "multi_agent_tasks_total",
-    "Total de tarefas executadas por agentes",
-    ["agent_role", "status"]
+    "multi_agent_tasks_total", "Total de tarefas executadas por agentes", ["agent_role", "status"]
 )
 
 AGENT_COLLABORATION_COUNTER = Counter(
     "multi_agent_collaborations_total",
     "Total de colaborações entre agentes",
-    ["initiator", "collaborator"]
+    ["initiator", "collaborator"],
 )
 
 AGENT_TASK_DURATION = Histogram(
-    "multi_agent_task_duration_seconds",
-    "Duração de execução de tarefas por agente",
-    ["agent_role"]
+    "multi_agent_task_duration_seconds", "Duração de execução de tarefas por agente", ["agent_role"]
 )
 
-ACTIVE_AGENTS_GAUGE = Gauge(
-    "multi_agent_active_agents",
-    "Número de agentes ativos no sistema"
-)
+ACTIVE_AGENTS_GAUGE = Gauge("multi_agent_active_agents", "Número de agentes ativos no sistema")
 
 
 # --- Enums ---
 
+
 class AgentRole(Enum):
     """Papéis especializados de agentes."""
+
     PROJECT_MANAGER = "project_manager"  # Coordenador geral
     RESEARCHER = "researcher"  # Pesquisa e análise
     CODER = "coder"  # Geração de código
@@ -237,6 +245,7 @@ class AgentRole(Enum):
 
 class TaskStatus(Enum):
     """Status de uma tarefa."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -246,6 +255,7 @@ class TaskStatus(Enum):
 
 class TaskPriority(Enum):
     """Prioridade de uma tarefa."""
+
     LOW = 1
     MEDIUM = 2
     HIGH = 3
@@ -254,23 +264,25 @@ class TaskPriority(Enum):
 
 # --- Modelos de Dados ---
 
+
 @dataclass
 class Task:
     """Representa uma tarefa no sistema multi-agente."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     description: str = ""
-    assigned_to: Optional[str] = None  # Agent ID
+    assigned_to: str | None = None  # Agent ID
     status: TaskStatus = TaskStatus.PENDING
     priority: TaskPriority = TaskPriority.MEDIUM
-    dependencies: List[str] = field(default_factory=list)  # Task IDs
-    result: Optional[str] = None
-    error: Optional[str] = None
+    dependencies: list[str] = field(default_factory=list)  # Task IDs
+    result: str | None = None
+    error: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "description": self.description,
@@ -290,20 +302,21 @@ class Task:
 @dataclass
 class SharedWorkspace:
     """Espaço de trabalho compartilhado entre agentes."""
-    artifacts: Dict[str, Any] = field(default_factory=dict)  # Arquivos, dados, resultados
-    messages: List[Dict[str, Any]] = field(default_factory=list)  # Mensagens entre agentes
-    tasks: Dict[str, Task] = field(default_factory=dict)  # Tarefas do projeto
+
+    artifacts: dict[str, Any] = field(default_factory=dict)  # Arquivos, dados, resultados
+    messages: list[dict[str, Any]] = field(default_factory=list)  # Mensagens entre agentes
+    tasks: dict[str, Task] = field(default_factory=dict)  # Tarefas do projeto
 
     def add_artifact(self, key: str, value: Any, author: str):
         """Adiciona um artefato ao workspace."""
         self.artifacts[key] = {
             "value": value,
             "author": author,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         logger.info(f"Artefato '{key}' adicionado ao workspace por {author}")
 
-    def get_artifact(self, key: str) -> Optional[Any]:
+    def get_artifact(self, key: str) -> Any | None:
         """Recupera um artefato do workspace."""
         artifact = self.artifacts.get(key)
         return artifact["value"] if artifact else None
@@ -315,13 +328,13 @@ class SharedWorkspace:
             "from": from_agent,
             "to": to_agent,
             "content": content,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         self.messages.append(message)
         AGENT_COLLABORATION_COUNTER.labels(initiator=from_agent, collaborator=to_agent).inc()
         logger.info(f"Mensagem enviada: {from_agent} → {to_agent}")
 
-    def get_messages_for(self, agent_id: str) -> List[Dict[str, Any]]:
+    def get_messages_for(self, agent_id: str) -> list[dict[str, Any]]:
         """Recupera mensagens destinadas a um agente."""
         return [msg for msg in self.messages if msg["to"] == agent_id]
 
@@ -330,24 +343,24 @@ class SharedWorkspace:
         self.tasks[task.id] = task
         logger.info(f"Tarefa '{task.id}' adicionada: {task.description}")
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         """Recupera uma tarefa pelo ID."""
         return self.tasks.get(task_id)
 
-    def get_tasks_by_status(self, status: TaskStatus) -> List[Task]:
+    def get_tasks_by_status(self, status: TaskStatus) -> list[Task]:
         """Recupera tarefas por status."""
         return [task for task in self.tasks.values() if task.status == status]
 
-    def get_tasks_by_agent(self, agent_id: str) -> List[Task]:
+    def get_tasks_by_agent(self, agent_id: str) -> list[Task]:
         """Recupera tarefas atribuídas a um agente."""
         return [task for task in self.tasks.values() if task.assigned_to == agent_id]
 
-    def get_ready_tasks(self) -> List[Task]:
+    def get_ready_tasks(self) -> list[Task]:
         """Retorna tarefas PENDING cujas dependências já estão COMPLETED.
 
         Tarefas com dependências inexistentes ou falhas não são consideradas prontas.
         """
-        ready: List[Task] = []
+        ready: list[Task] = []
         for task in self.tasks.values():
             if task.status != TaskStatus.PENDING:
                 continue
@@ -371,19 +384,15 @@ class SharedWorkspace:
 
 # --- Agente Especializado ---
 
+
 class SpecializedAgent:
     """Agente especializado com papel específico."""
 
-    def __init__(
-            self,
-            role: AgentRole,
-            workspace: SharedWorkspace,
-            agent_id: Optional[str] = None
-    ):
+    def __init__(self, role: AgentRole, workspace: SharedWorkspace, agent_id: str | None = None):
         self.role = role
         self.agent_id = agent_id or f"{role.value}_{uuid.uuid4().hex[:8]}"
         self.workspace = workspace
-        self.executor: Optional[Any] = None
+        self.executor: Any | None = None
         self.config_repo = AgentConfigRepository()
         self.config_repo = AgentConfigRepository()
         self.event_callback = None
@@ -442,7 +451,6 @@ REGRAS ABSOLUTAS:
 
 Question: {input}
 {agent_scratchpad}""",
-
             AgentRole.RESEARCHER: """Você é um Agente de Pesquisa especializado em análise e investigação.
 
 Suas responsabilidades:
@@ -462,7 +470,6 @@ Observation: [resultado]
 ...
 Final Answer: [resposta]
 {agent_scratchpad}""",
-
             AgentRole.CODER: """Você é um Agente Desenvolvedor especializado em escrever código de alta qualidade.
 
 Suas responsabilidades:
@@ -498,7 +505,6 @@ Action Input: {{"file_path": "app.py", "content": "def hello():\\n    print('Hel
 
 Question: {input}
 {agent_scratchpad}""",
-
             AgentRole.TESTER: """Você é um Agente de Testes especializado em validação e qualidade.
 
 Suas responsabilidades:
@@ -510,7 +516,6 @@ Suas responsabilidades:
 Ferramentas: {tools}
 Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
 {agent_scratchpad}""",
-
             AgentRole.DOCUMENTER: """Você é um Agente Documentador especializado em criar documentação clara.
 
 Suas responsabilidades:
@@ -522,7 +527,6 @@ Suas responsabilidades:
 Ferramentas: {tools}
 Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
 {agent_scratchpad}""",
-
             AgentRole.OPTIMIZER: """Você é um Agente Otimizador especializado em melhorar performance e qualidade.
 
 Suas responsabilidades:
@@ -534,7 +538,6 @@ Suas responsabilidades:
 Ferramentas: {tools}
 Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
 {agent_scratchpad}""",
-
             AgentRole.SYSADMIN: """Você é um Administrador de Sistema (SysAdmin) com acesso IRRESTRITO ao servidor.
 
 Suas responsabilidades:
@@ -557,17 +560,16 @@ Action Input: {{"parametro": "valor"}}
 ...
 Final Answer: [resposta]
 
-{agent_scratchpad}"""
+{agent_scratchpad}""",
         }
-
 
         return prompts.get(self.role, prompts[AgentRole.PROJECT_MANAGER])
 
     def _get_llm_config_for_role(self, config):
         """Obtém configuração do LLM para o papel do agente (do banco ou fallback)."""
         if config and config.llm_config:
-            llm_role_str = config.llm_config.get('role', 'ORCHESTRATOR')
-            llm_priority_str = config.llm_config.get('priority', 'HIGH_QUALITY')
+            llm_role_str = config.llm_config.get("role", "ORCHESTRATOR")
+            llm_priority_str = config.llm_config.get("priority", "HIGH_QUALITY")
 
             # Converter strings para enums
             try:
@@ -596,11 +598,12 @@ Final Answer: [resposta]
         config = None
         try:
             config = self.config_repo.get_active_config(
-                agent_name=self.agent_id,
-                agent_role=self.role.value
+                agent_name=self.agent_id, agent_role=self.role.value
             )
             if config:
-                logger.info(f"Configuração dinâmica carregada para {self.role.value} ({self.agent_id})")
+                logger.info(
+                    f"Configuração dinâmica carregada para {self.role.value} ({self.agent_id})"
+                )
         except Exception as e:
             logger.warning(f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
 
@@ -619,47 +622,31 @@ Final Answer: [resposta]
         # Tenta importar create_react_agent (novo) ou cria fallback
         # Tenta importar create_react_agent (novo) ou cria fallback
         try:
-            from langchain.agents import create_react_agent, AgentExecutor
+            from langchain.agents import AgentExecutor, create_react_agent
+
             agent = create_react_agent(llm, wrapped_tools, prompt)
             agent_executor = AgentExecutor(
-                agent=agent, 
-                tools=wrapped_tools, 
-                verbose=True, 
+                agent=agent,
+                tools=wrapped_tools,
+                verbose=True,
                 handle_parsing_errors=True,
                 max_iterations=15,
-                max_execution_time=180
+                max_execution_time=180,
             )
             self.executor = agent_executor
         except ImportError:
             # Fallback para versões antigas ou diferentes
-            from langchain.agents import initialize_agent, AgentType
+            from langchain.agents import AgentType, initialize_agent
+
             agent = initialize_agent(
-                wrapped_tools, 
-                llm, 
+                wrapped_tools,
+                llm,
                 agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=True
+                verbose=True,
             )
             self.executor = agent
 
-        # Mensagem de erro personalizada para parsing
-        parsing_error_message = """Erro no formato da sua resposta. Use EXATAMENTE este formato:
-
-Thought: [seu raciocínio]
-Action: [nome_da_ferramenta]
-Action Input: {{"parametro": "valor"}}
-
-IMPORTANTE: O Action Input deve ser JSON VÁLIDO em UMA LINHA.
-Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "overwrite": false}}
-"""
-
-        # Configurações do executor (do banco ou padrão)
-        max_iterations = 15
-        max_execution_time = 180
-        if config and config.execution_config:
-            max_iterations = config.execution_config.get('max_iterations', 15)
-            max_execution_time = config.execution_config.get('max_execution_time', 180)
-
-    async def execute_task(self, task: Task, max_retries: int = 2) -> Dict[str, Any]:
+    async def execute_task(self, task: Task, max_retries: int = 2) -> dict[str, Any]:
         """
         Executa uma tarefa atribuída ao agente com retry automático.
 
@@ -683,8 +670,10 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
-                    logger.warning(f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}")
-                    await asyncio.sleep(2 ** attempt)  # Backoff exponencial
+                    logger.warning(
+                        f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}"
+                    )
+                    await asyncio.sleep(2**attempt)  # Backoff exponencial
 
                 # Prepare callbacks
                 run_callbacks = []
@@ -693,12 +682,10 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
 
                 # Executar a tarefa
                 start_time = asyncio.get_event_loop().time()
-                
+
                 # Langchain invoke suporta callbacks em config
                 result = await asyncio.to_thread(
-                    self.executor.invoke,
-                    {"input": task.description},
-                    {"callbacks": run_callbacks}
+                    self.executor.invoke, {"input": task.description}, {"callbacks": run_callbacks}
                 )
                 duration = asyncio.get_event_loop().time() - start_time
 
@@ -726,10 +713,10 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
                     "status": "completed",
                     "result": task.result,
                     "duration_seconds": duration,
-                    "attempts": attempt + 1
+                    "attempts": attempt + 1,
                 }
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = f"Timeout ao executar tarefa: {e}"
                 logger.warning(f"Timeout na tentativa {attempt + 1} para tarefa {task.id}")
                 if attempt == max_retries:
@@ -739,14 +726,18 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
             except ValueError as e:
                 # Erros de validação (parsing, output vazio, etc)
                 last_error = f"Erro de validação: {e}"
-                logger.warning(f"Erro de validação na tentativa {attempt + 1} para tarefa {task.id}: {e}")
+                logger.warning(
+                    f"Erro de validação na tentativa {attempt + 1} para tarefa {task.id}: {e}"
+                )
                 if attempt == max_retries:
                     break
                 continue
 
             except Exception as e:
                 last_error = str(e)
-                logger.error(f"Erro na tentativa {attempt + 1} para tarefa {task.id}: {e}", exc_info=True)
+                logger.error(
+                    f"Erro na tentativa {attempt + 1} para tarefa {task.id}: {e}", exc_info=True
+                )
                 if attempt == max_retries:
                     break
                 continue
@@ -762,14 +753,14 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
             "task_id": task.id,
             "status": "failed",
             "error": last_error,
-            "attempts": max_retries + 1
+            "attempts": max_retries + 1,
         }
 
     def communicate(self, to_agent_id: str, message: str):
         """Envia uma mensagem para outro agente."""
         self.workspace.send_message(self.agent_id, to_agent_id, message)
 
-    def get_messages(self) -> List[Dict[str, Any]]:
+    def get_messages(self) -> list[dict[str, Any]]:
         """Recupera mensagens destinadas a este agente."""
         return self.workspace.get_messages_for(self.agent_id)
 
@@ -778,7 +769,7 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
         if self.role == AgentRole.SYSADMIN:
             # SysAdmin tem acesso a tudo, incluindo ferramentas perigosas
             return get_all_tools()
-        
+
         # Outros agentes recebem apenas ferramentas seguras/padrao
         # Filtra ferramentas DANGEROUS
         all_tools = get_all_tools()
@@ -808,25 +799,27 @@ Para write_file use: {{"file_path": "arquivo.py", "content": "codigo\\naqui", "o
 
 # --- Sistema Multi-Agente ---
 
+
 class MultiAgentSystem:
     """Sistema coordenado de múltiplos agentes."""
 
     def __init__(self):
         self.workspace = SharedWorkspace()
-        self.agents: Dict[str, SpecializedAgent] = {}
-        self.project_manager: Optional[SpecializedAgent] = None
-        
+        self.agents: dict[str, SpecializedAgent] = {}
+        self.project_manager: SpecializedAgent | None = None
+
         # Registra ferramentas de SO (SysAdmin)
         register_os_tools()
-        
+
         self._ensure_workspace_directory()
         logger.info("Sistema Multi-Agente inicializado")
 
     def _ensure_workspace_directory(self):
         """Garante que o diretório workspace existe."""
         from pathlib import Path
+
         from app.config import settings
-        
+
         workspace_path = Path(settings.WORKSPACE_ROOT)
         try:
             if not workspace_path.exists():
@@ -838,6 +831,7 @@ class MultiAgentSystem:
             logger.error(f"Erro ao criar diretório workspace em {workspace_path}: {e}")
             # Fallback para diretório temporário se não conseguir criar no local configurado
             import tempfile
+
             fallback_path = Path(tempfile.gettempdir()) / "janus_workspace"
             if not fallback_path.exists():
                 fallback_path.mkdir(parents=True, exist_ok=True)
@@ -853,12 +847,13 @@ class MultiAgentSystem:
         # Inicializa o Ator para este agente
         # Import local para evitar ciclo
         from app.core.agents.agent_actor import AgentActor
+
         actor = AgentActor(agent)
-        
+
         # Armazena o ator (em produção, idealmente gerenciado separadamente)
         # Hack para iniciar o consumidor em background na mesma loop
         asyncio.create_task(actor.start())
-        
+
         logger.info(f"Ator iniciado para agente {agent.agent_id} ({role.value})")
 
         if role == AgentRole.PROJECT_MANAGER and not self.project_manager:
@@ -870,50 +865,50 @@ class MultiAgentSystem:
         """Despacha uma tarefa para a fila do agente responsável."""
         from app.core.infrastructure.message_broker import get_broker
         from app.models.schemas import TaskMessage
-        
+
         if not task.assigned_to:
             raise ValueError("Tarefa sem agente atribuído")
-            
+
         agent = self.agents.get(task.assigned_to)
         if not agent:
             raise ValueError(f"Agente {task.assigned_to} não encontrado")
-            
+
         broker = await get_broker()
         queue_name = f"janus.agent.{agent.role.value}"
-        
+
         # Cria payload
         payload = {
             "description": task.description,
             "dependencies": task.dependencies,
-            "metadata": task.metadata
+            "metadata": task.metadata,
         }
-        
+
         msg = TaskMessage(
             task_id=task.id,
             task_type="agent_task",
             payload=payload,
-            timestamp=datetime.now().timestamp()
+            timestamp=datetime.now().timestamp(),
         )
-        
+
         await broker.publish(queue_name, msg.model_dump())
         logger.info(f"Tarefa {task.id} despachada para fila {queue_name}")
 
-    def get_agent(self, agent_id: str) -> Optional[SpecializedAgent]:
+    def get_agent(self, agent_id: str) -> SpecializedAgent | None:
         """Recupera um agente pelo ID."""
         return self.agents.get(agent_id)
 
-    def list_agents(self) -> List[Dict[str, Any]]:
+    def list_agents(self) -> list[dict[str, Any]]:
         """Lista todos os agentes ativos."""
         return [
             {
                 "agent_id": agent.agent_id,
                 "role": agent.role.value,
-                "tasks_assigned": len(self.workspace.get_tasks_by_agent(agent.agent_id))
+                "tasks_assigned": len(self.workspace.get_tasks_by_agent(agent.agent_id)),
             }
             for agent in self.agents.values()
         ]
 
-    async def execute_project(self, project_description: str) -> Dict[str, Any]:
+    async def execute_project(self, project_description: str) -> dict[str, Any]:
         """
         Executa um projeto completo usando coordenação multi-agente.
 
@@ -941,7 +936,7 @@ Retorne em formato estruturado."""
         pm_task = Task(
             description=decomposition_prompt,
             assigned_to=self.project_manager.agent_id,
-            priority=TaskPriority.CRITICAL
+            priority=TaskPriority.CRITICAL,
         )
         self.workspace.add_task(pm_task)
 
@@ -949,47 +944,15 @@ Retorne em formato estruturado."""
         # Em vez de await self.project_manager.execute_task(pm_task),
         # nós despachamos para a fila.
         await self.dispatch_task(pm_task)
-        
+
         # Para compatibilidade imediata com testes antigos que esperam retorno síncrono,
         # poderíamos esperar polling aqui. Mas como o objetivo é migrar para async,
         # retornamos status de "em andamento".
-        
+
         return {
             "project_status": "started",
             "pm_task_id": pm_task.id,
-            "message": "Projeto iniciado. Acompanhe via eventos ou polling."
-        }
-
-        # O código abaixo fica obsoleto na nova arquitetura e será removido/adaptado
-        # pm_result = await self.project_manager.execute_task(pm_task)
-
-        # 2. Criar agentes necessários e distribuir tarefas
-        # (Simplificado - em produção, parsear resultado do PM)
-        tasks_created = []
-        subtask = Task(
-            description=f"Executar parte do projeto: {project_description}",
-            priority=TaskPriority.HIGH
-        )
-        self.workspace.add_task(subtask)
-        tasks_created.append(subtask.id)
-
-        # 3. Atribuir e executar tarefas
-        results = []
-        for task_id in tasks_created:
-            task = self.workspace.get_task(task_id)
-            if task:
-                # Selecionar agente apropriado (simplificado)
-                agent = self.project_manager
-                result = await agent.execute_task(task)
-                results.append(result)
-
-        return {
-            "project_description": project_description,
-            "total_tasks": len(tasks_created),
-            "pm_analysis": pm_result,
-            "task_results": results,
-            "workspace_artifacts": list(self.workspace.artifacts.keys()),
-            "messages_exchanged": len(self.workspace.messages)
+            "message": "Projeto iniciado. Acompanhe via eventos ou polling.",
         }
 
     def update_agent_config(self, agent_id: str, config) -> bool:
@@ -1006,7 +969,7 @@ Retorne em formato estruturado."""
             logger.error(f"Erro ao atualizar configuração do agente {agent_id}: {e}")
             return False
 
-    def get_workspace_status(self) -> Dict[str, Any]:
+    def get_workspace_status(self) -> dict[str, Any]:
         """Retorna status do workspace compartilhado."""
         return {
             "total_artifacts": len(self.workspace.artifacts),
@@ -1015,14 +978,12 @@ Retorne em formato estruturado."""
             "tasks_by_status": {
                 status.value: len(self.workspace.get_tasks_by_status(status))
                 for status in TaskStatus
-            }
+            },
         }
 
     async def execute_tasks_parallel(
-            self,
-            task_ids: Optional[List[str]] = None,
-            concurrency: int = 4
-    ) -> Dict[str, Any]:
+        self, task_ids: list[str] | None = None, concurrency: int = 4
+    ) -> dict[str, Any]:
         """Executa múltiplas tarefas em paralelo respeitando dependências.
 
         - Seleciona tarefas por `task_ids` ou todas PENDING no workspace
@@ -1030,17 +991,18 @@ Retorne em formato estruturado."""
         - Agenda novas tarefas assim que suas dependências forem concluídas
         - Marca tarefas impossíveis de resolver como BLOCKED
         """
-        if concurrency < 1:
-            concurrency = 1
+        concurrency = max(concurrency, 1)
 
         # Seleção inicial de tarefas alvo
         if task_ids:
             target_tasks = [t for tid, t in self.workspace.tasks.items() if tid in task_ids]
         else:
-            target_tasks = [t for t in self.workspace.tasks.values() if t.status == TaskStatus.PENDING]
+            target_tasks = [
+                t for t in self.workspace.tasks.values() if t.status == TaskStatus.PENDING
+            ]
 
         # Mapa rápido
-        task_map: Dict[str, Task] = {t.id: t for t in target_tasks}
+        task_map: dict[str, Task] = {t.id: t for t in target_tasks}
         if not task_map:
             return {
                 "scheduled": 0,
@@ -1051,14 +1013,14 @@ Retorne em formato estruturado."""
             }
 
         # Dependentes e contagem de dependências não satisfeitas
-        dependents: Dict[str, List[str]] = {tid: [] for tid in task_map}
-        remaining_deps: Dict[str, int] = {}
-        invalid_dependency: Dict[str, bool] = {tid: False for tid in task_map}
+        dependents: dict[str, list[str]] = {tid: [] for tid in task_map}
+        remaining_deps: dict[str, int] = {}
+        invalid_dependency: dict[str, bool] = {tid: False for tid in task_map}
 
         for t in target_tasks:
             deps = [d for d in (t.dependencies or []) if d in self.workspace.tasks]
             # Se há dependência inexistente, marca como inválida
-            for d in (t.dependencies or []):
+            for d in t.dependencies or []:
                 if d not in self.workspace.tasks:
                     invalid_dependency[t.id] = True
             remaining = 0
@@ -1073,17 +1035,20 @@ Retorne em formato estruturado."""
 
         # Fila de prontas
         from collections import deque
-        ready_queue = deque([t for t in target_tasks if remaining_deps[t.id] == 0 and not invalid_dependency[t.id]])
+
+        ready_queue = deque(
+            [t for t in target_tasks if remaining_deps[t.id] == 0 and not invalid_dependency[t.id]]
+        )
 
         # Controle de paralelismo
         sem = asyncio.Semaphore(concurrency)
         running: set = set()
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         async def _run_single(task: Task):
             async with sem:
                 # Seleção simples de agente: usa assigned_to se disponível, senão PM
-                agent: Optional[SpecializedAgent] = None
+                agent: SpecializedAgent | None = None
                 if task.assigned_to:
                     agent = self.get_agent(task.assigned_to)
                 if agent is None:
@@ -1126,17 +1091,22 @@ Retorne em formato estruturado."""
                         for dep in dependents.get(tid, []):
                             remaining_deps[dep] = max(0, remaining_deps[dep] - 1)
                             dep_task = task_map.get(dep)
-                            if dep_task and remaining_deps[dep] == 0 and not invalid_dependency.get(dep, False):
+                            if (
+                                dep_task
+                                and remaining_deps[dep] == 0
+                                and not invalid_dependency.get(dep, False)
+                            ):
                                 if dep_task.status == TaskStatus.PENDING:
                                     ready_queue.append(dep_task)
 
         # Determina bloqueadas e falhas
         completed = sum(1 for r in results.values() if r.get("status") == "completed")
         failed = sum(1 for r in results.values() if r.get("status") == "failed")
-        blocked: List[str] = []
+        blocked: list[str] = []
         for tid, t in task_map.items():
             if t.status == TaskStatus.PENDING and (
-                    remaining_deps.get(tid, 0) > 0 or invalid_dependency.get(tid, False)):
+                remaining_deps.get(tid, 0) > 0 or invalid_dependency.get(tid, False)
+            ):
                 t.status = TaskStatus.BLOCKED
                 blocked.append(tid)
 
@@ -1158,7 +1128,7 @@ Retorne em formato estruturado."""
 
 
 # --- Instância Global ---
-_multi_agent_system: Optional[MultiAgentSystem] = None
+_multi_agent_system: MultiAgentSystem | None = None
 
 
 def get_multi_agent_system() -> MultiAgentSystem:

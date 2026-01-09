@@ -1,4 +1,3 @@
-import pytest
 
 from app.core.workers.router_worker import _contains_knowledge_payload
 from app.models.schemas import TaskState

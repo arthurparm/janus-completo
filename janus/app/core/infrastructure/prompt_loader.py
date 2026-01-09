@@ -1,3 +1,13 @@
+import logging
+import string
+import time
+from collections import OrderedDict
+from typing import Any, Callable
+
+from prometheus_client import Counter
+
+from app.repositories.prompt_repository import PromptRepository
+
 CYPHER_GENERATION_TEMPLATE = """
 Você é um assistente de IA especialista em Cypher e modelagem de grafos. Sua tarefa é gerar uma consulta Cypher precisa e eficiente para responder a uma pergunta, baseando-se ESTRITAMENTE em um schema de banco de dados fornecido.
 
@@ -208,15 +218,6 @@ Lições Aprendidas Recentes:
 
 Forneça uma análise concisa e, se aplicável, sugira uma hipótese para a causa raiz."""
 
-import string
-import time
-from collections import OrderedDict
-from typing import Dict, Optional, Tuple, Any, Callable
-import logging
-
-from prometheus_client import Counter
-from app.repositories.prompt_repository import PromptRepository
-
 PROMPTS = {
     "cypher_generation": CYPHER_GENERATION_TEMPLATE,
     "qa_synthesis": QA_SYNTHESIS_TEMPLATE,
@@ -228,25 +229,35 @@ PROMPTS = {
 }
 
 PROMPT_CACHE_HITS = Counter(
-    "prompt_cache_hits_total", "Total de hits no cache de prompts", ["namespace", "name", "version", "lang", "model"]
+    "prompt_cache_hits_total",
+    "Total de hits no cache de prompts",
+    ["namespace", "name", "version", "lang", "model"],
 )
 PROMPT_CACHE_MISSES = Counter(
-    "prompt_cache_misses_total", "Total de misses no cache de prompts",
-    ["namespace", "name", "version", "lang", "model"]
+    "prompt_cache_misses_total",
+    "Total de misses no cache de prompts",
+    ["namespace", "name", "version", "lang", "model"],
 )
 
 
 class PromptLoader:
-    def __init__(self, max_size: int = 128, ttl_seconds: int = 300, hot_reload: bool = False,
-                 use_database: bool = True):
+    def __init__(
+        self,
+        max_size: int = 128,
+        ttl_seconds: int = 300,
+        hot_reload: bool = False,
+        use_database: bool = True,
+    ):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.hot_reload = hot_reload
         self.use_database = use_database
-        self._store: Dict[str, str] = PROMPTS  # origem default em memória (fallback)
-        self._external_provider: Optional[Callable[[str], Optional[str]]] = None  # gancho p/ fonte externa
-        self._cache: "OrderedDict[Tuple[str, str, str, str, str], Tuple[float, str]]" = OrderedDict()
-        self._prompt_repo: Optional[PromptRepository] = None
+        self._store: dict[str, str] = PROMPTS  # origem default em memória (fallback)
+        self._external_provider: Callable[[str], str | None] | None = (
+            None  # gancho p/ fonte externa
+        )
+        self._cache: OrderedDict[tuple[str, str, str, str, str], tuple[float, str]] = OrderedDict()
+        self._prompt_repo: PromptRepository | None = None
         self._logger = logging.getLogger(__name__)
 
         # Inicializar repositório se usar banco de dados
@@ -255,11 +266,19 @@ class PromptLoader:
                 self._prompt_repo = PromptRepository()
                 self._logger.info("PromptLoader inicializado com suporte a banco de dados MySQL")
             except Exception as e:
-                self._logger.warning(f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória.")
+                self._logger.warning(
+                    f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
+                )
                 self.use_database = False
 
-    def _make_key(self, name: str, namespace: Optional[str], version: Optional[str], lang: Optional[str],
-                  model: Optional[str]) -> Tuple[str, str, str, str, str]:
+    def _make_key(
+        self,
+        name: str,
+        namespace: str | None,
+        version: str | None,
+        lang: str | None,
+        model: str | None,
+    ) -> tuple[str, str, str, str, str]:
         return (
             namespace or "default",
             name,
@@ -268,7 +287,7 @@ class PromptLoader:
             (model or "any").lower(),
         )
 
-    def _validate_placeholders(self, template: str, variables: Optional[Dict[str, Any]]):
+    def _validate_placeholders(self, template: str, variables: dict[str, Any] | None):
         if variables is None:
             return
         fmt = string.Formatter()
@@ -277,7 +296,7 @@ class PromptLoader:
         if missing:
             raise ValueError(f"Variáveis ausentes para placeholders: {missing}")
 
-    def invalidate(self, predicate: Optional[Any] = None) -> None:
+    def invalidate(self, predicate: Any | None = None) -> None:
         if predicate is None:
             self._cache.clear()
         else:
@@ -285,12 +304,12 @@ class PromptLoader:
                 if predicate(k):
                     self._cache.pop(k, None)
 
-    def set_external_provider(self, provider: Callable[[str], Optional[str]]) -> None:
+    def set_external_provider(self, provider: Callable[[str], str | None]) -> None:
         """Define um provedor externo (ex.: FS/DB) e invalida o cache."""
         self._external_provider = provider
         self.invalidate()
 
-    def _get_prompt_from_database(self, name: str, version: Optional[str] = None) -> Optional[str]:
+    def _get_prompt_from_database(self, name: str, version: str | None = None) -> str | None:
         """Busca prompt do banco de dados MySQL."""
         if not self.use_database or not self._prompt_repo:
             return None
@@ -311,9 +330,17 @@ class PromptLoader:
 
         return None
 
-    def get(self, name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
-            lang: Optional[str] = None, model: Optional[str] = None, variables: Optional[Dict[str, Any]] = None,
-            hot_reload: Optional[bool] = None) -> str:
+    def get(
+        self,
+        name: str,
+        *,
+        namespace: str | None = None,
+        version: str | None = None,
+        lang: str | None = None,
+        model: str | None = None,
+        variables: dict[str, Any] | None = None,
+        hot_reload: bool | None = None,
+    ) -> str:
         key = self._make_key(name, namespace, version, lang, model)
         now = time.time()
         use_hot = self.hot_reload if hot_reload is None else hot_reload
@@ -333,7 +360,7 @@ class PromptLoader:
 
         # miss (ou hot reload): busca em ordem de prioridade
         PROMPT_CACHE_MISSES.labels(*key).inc()
-        template: Optional[str] = None
+        template: str | None = None
 
         # 1. Tentar banco de dados primeiro (se habilitado)
         if self.use_database:
@@ -359,7 +386,8 @@ class PromptLoader:
                 self._logger.debug(f"Prompt '{name}' carregado do fallback em memória")
             except KeyError:
                 raise KeyError(
-                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, ou memória).")
+                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, ou memória)."
+                )
 
         self._validate_placeholders(template, variables)
 
@@ -383,12 +411,25 @@ def get_prompt(prompt_name: str) -> str:
     return prompt_loader.get(prompt_name)
 
 
-def get_prompt_advanced(prompt_name: str, *, namespace: Optional[str] = None, version: Optional[str] = None,
-                        lang: Optional[str] = None, model: Optional[str] = None,
-                        variables: Optional[Dict[str, Any]] = None,
-                        hot_reload: Optional[bool] = None) -> str:
-    return prompt_loader.get(prompt_name, namespace=namespace, version=version, lang=lang, model=model,
-                             variables=variables, hot_reload=hot_reload)
+def get_prompt_advanced(
+    prompt_name: str,
+    *,
+    namespace: str | None = None,
+    version: str | None = None,
+    lang: str | None = None,
+    model: str | None = None,
+    variables: dict[str, Any] | None = None,
+    hot_reload: bool | None = None,
+) -> str:
+    return prompt_loader.get(
+        prompt_name,
+        namespace=namespace,
+        version=version,
+        lang=lang,
+        model=model,
+        variables=variables,
+        hot_reload=hot_reload,
+    )
 
 
 def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent") -> bool:
@@ -397,7 +438,9 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
     Usado pelo Meta-Agent para otimização dinâmica.
     """
     if not prompt_loader.use_database or not prompt_loader._prompt_repo:
-        logging.warning(f"Tentativa de atualizar prompt '{prompt_name}' sem banco de dados habilitado")
+        logging.warning(
+            f"Tentativa de atualizar prompt '{prompt_name}' sem banco de dados habilitado"
+        )
         return False
 
     try:
@@ -406,20 +449,22 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
             prompt_name=prompt_name,
             prompt_text=new_text,
             created_by=created_by,
-            activate=True  # Ativar automaticamente a nova versão
+            activate=True,  # Ativar automaticamente a nova versão
         )
 
         # Invalidar cache para forçar reload
         prompt_loader.invalidate(lambda k: k[1] == prompt_name)
 
-        logging.info(f"Prompt '{prompt_name}' atualizado com sucesso. Nova versão: {new_prompt.version}")
+        logging.info(
+            f"Prompt '{prompt_name}' atualizado com sucesso. Nova versão: {new_prompt.version}"
+        )
         return True
     except Exception as e:
         logging.error(f"Erro ao atualizar prompt '{prompt_name}': {e}")
         return False
 
 
-def get_prompt_stats() -> Dict[str, Any]:
+def get_prompt_stats() -> dict[str, Any]:
     """
     Obtém estatísticas dos prompts para análise do Meta-Agent.
     """

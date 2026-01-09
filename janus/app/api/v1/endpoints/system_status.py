@@ -1,17 +1,16 @@
-from fastapi import APIRouter
-from fastapi import Request, HTTPException, Depends
-from pydantic import BaseModel
-from typing import Any, Dict, Optional, List
-import structlog
+from typing import Any
 
-from app.services.system_status_service import system_status_service
-from fastapi import Depends
-from app.services.observability_service import ObservabilityService, get_observability_service
-from app.services.knowledge_service import KnowledgeService, get_knowledge_service
-from app.services.llm_service import LLMService, get_llm_service
-from app.services.optimization_service import OptimizationService, get_optimization_service
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+
 from app.db.mysql_config import init_mysql_database
 from app.services.db_migration_service import db_migration_service
+from app.services.knowledge_service import KnowledgeService, get_knowledge_service
+from app.services.llm_service import LLMService, get_llm_service
+from app.services.observability_service import ObservabilityService, get_observability_service
+from app.services.optimization_service import OptimizationService, get_optimization_service
+from app.services.system_status_service import system_status_service
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -19,26 +18,30 @@ logger = structlog.get_logger(__name__)
 
 # --- Pydantic Model (DTO) ---
 
+
 class StatusResponse(BaseModel):
     app_name: str
     version: str
     environment: str
     status: str
-    timestamp: Optional[str] = None
-    uptime_seconds: Optional[float] = None
-    system: Optional[Dict[str, Any]] = None
-    process: Optional[Dict[str, Any]] = None
-    performance: Optional[Dict[str, Any]] = None
-    config: Optional[Dict[str, Any]] = None
+    timestamp: str | None = None
+    uptime_seconds: float | None = None
+    system: dict[str, Any] | None = None
+    process: dict[str, Any] | None = None
+    performance: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
+
 
 class ServiceHealthItem(BaseModel):
     key: str
     name: str
     status: str
-    metric_text: Optional[str] = None
+    metric_text: str | None = None
+
 
 class ServiceHealthResponse(BaseModel):
-    services: List[ServiceHealthItem]
+    services: list[ServiceHealthItem]
+
 
 class UserStatusResponse(BaseModel):
     user_id: str
@@ -51,11 +54,12 @@ class UserStatusResponse(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get(
     "/status",
     response_model=StatusResponse,
     summary="Verifica o estado da aplicação",
-    tags=["System"]
+    tags=["System"],
 )
 async def get_system_status():
     """Delega a obtenção do status da aplicação para o SystemStatusService."""
@@ -63,11 +67,12 @@ async def get_system_status():
     status_data = system_status_service.get_system_status()
     return StatusResponse(**status_data)
 
+
 @router.get(
     "/health/services",
     response_model=ServiceHealthResponse,
     summary="Saúde dos microsserviços",
-    tags=["System"]
+    tags=["System"],
 )
 async def get_services_health(
     observability: ObservabilityService = Depends(get_observability_service),
@@ -145,17 +150,23 @@ async def get_services_health(
 
     return ServiceHealthResponse(services=services)
 
+
 @router.get(
     "/status/user",
     response_model=UserStatusResponse,
     summary="Resumo de status por usuário (ator ou admin)",
-    tags=["System"]
+    tags=["System"],
 )
-async def get_user_status(request: Request, user_id: Optional[str] = None, observability: ObservabilityService = Depends(get_observability_service)):
+async def get_user_status(
+    request: Request,
+    user_id: str | None = None,
+    observability: ObservabilityService = Depends(get_observability_service),
+):
     actor = getattr(request.state, "actor_user_id", None)
     if actor is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     from app.repositories.user_repository import UserRepository
+
     repo = UserRepository()
     is_admin = False
     try:
@@ -168,10 +179,9 @@ async def get_user_status(request: Request, user_id: Optional[str] = None, obser
     m = observability.get_user_metrics(target_uid)
     return UserStatusResponse(**m)
 
+
 @router.post(
-    "/init/mysql",
-    summary="Inicializa tabelas MySQL (cria se não existirem)",
-    tags=["System"]
+    "/init/mysql", summary="Inicializa tabelas MySQL (cria se não existirem)", tags=["System"]
 )
 async def init_mysql():
     try:
@@ -181,18 +191,18 @@ async def init_mysql():
         logger.error("Falha ao inicializar MySQL", exc_info=e)
         return {"status": "error", "detail": str(e)}
 
+
 @router.get(
     "/db/validate",
     summary="Valida schema MySQL (users/sessions/messages/profiles)",
-    tags=["System"]
+    tags=["System"],
 )
 async def validate_db_schema():
     return db_migration_service.validate_schema()
 
+
 @router.post(
-    "/db/migrate",
-    summary="Migra schema MySQL (cria índices/constraints ausentes)",
-    tags=["System"]
+    "/db/migrate", summary="Migra schema MySQL (cria índices/constraints ausentes)", tags=["System"]
 )
 async def migrate_db_schema():
     return db_migration_service.migrate_schema()

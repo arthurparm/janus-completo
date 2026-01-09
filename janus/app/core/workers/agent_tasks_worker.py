@@ -3,29 +3,30 @@ Async Agent Tasks Worker
 
 Consumes agent task messages from RabbitMQ and runs the agent asynchronously.
 """
+
+import asyncio
 import logging
-import msgpack
 import uuid
 from datetime import datetime
-from typing import Any, Dict
-import asyncio
+from typing import Any
 
+import msgpack
 from starlette.requests import Request
 
-from app.core.infrastructure.message_broker import get_broker
-from app.core.infrastructure.enums import AgentType
-from app.core.agents.agent_manager import AgentManager
-from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
-from app.models.schemas import TaskMessage, QueueName
-from app.core.infrastructure.resilience import CircuitBreaker
 from app.config import settings
+from app.core.agents.agent_manager import AgentManager
+from app.core.infrastructure.enums import AgentType
+from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.resilience import CircuitBreaker
+from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
+from app.models.schemas import QueueName, TaskMessage
 
 logger = logging.getLogger(__name__)
 
 
 # Bulkheads e Circuitos por agente
-_agent_bulkheads: Dict[AgentType, asyncio.Semaphore] = {}
-_agent_circuits: Dict[AgentType, CircuitBreaker] = {}
+_agent_bulkheads: dict[AgentType, asyncio.Semaphore] = {}
+_agent_circuits: dict[AgentType, CircuitBreaker] = {}
 
 
 def _get_bulkhead(agent_type: AgentType) -> asyncio.Semaphore:
@@ -44,8 +45,13 @@ def _get_circuit(agent_type: AgentType) -> CircuitBreaker:
     default_recovery = int(getattr(settings, "AGENT_CIRCUIT_RECOVERY_TIMEOUT", 30) or 30)
     cfg_map = getattr(settings, "AGENT_CIRCUIT_CONFIG", {}) or {}
     if isinstance(cfg_map, dict) and agent_type.value in cfg_map:
-        th = int(cfg_map[agent_type.value].get("failure_threshold", default_threshold) or default_threshold)
-        rt = int(cfg_map[agent_type.value].get("recovery_timeout", default_recovery) or default_recovery)
+        th = int(
+            cfg_map[agent_type.value].get("failure_threshold", default_threshold)
+            or default_threshold
+        )
+        rt = int(
+            cfg_map[agent_type.value].get("recovery_timeout", default_recovery) or default_recovery
+        )
     else:
         th = default_threshold
         rt = default_recovery
@@ -116,7 +122,7 @@ async def process_agent_task(task: TaskMessage) -> None:
 async def publish_agent_task(question: str, agent_type: AgentType | str) -> str:
     """Publish an agent task message to the broker."""
     task_id = str(uuid.uuid4())
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "question": question,
         "agent_type": agent_type if isinstance(agent_type, str) else agent_type.value,
     }
@@ -129,7 +135,9 @@ async def publish_agent_task(question: str, agent_type: AgentType | str) -> str:
 
     serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
     broker = await get_broker()
-    await broker.publish(queue_name=QueueName.AGENT_TASKS.value, message=serialized, use_msgpack=True)
+    await broker.publish(
+        queue_name=QueueName.AGENT_TASKS.value, message=serialized, use_msgpack=True
+    )
 
     logger.info(f"Published agent task: task_id={task_id}, type={payload['agent_type']}")
     return task_id

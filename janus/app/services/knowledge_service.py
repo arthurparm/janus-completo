@@ -1,11 +1,12 @@
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 import structlog
 from fastapi import Request
 
+from app.core.memory.graph_rag_core import query_knowledge_graph
+from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.code_analysis_service import code_analysis_service
-from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
-from app.core.memory.graph_rag_core import query_knowledge_graph
 
 logger = structlog.get_logger(__name__)
 
@@ -14,8 +15,10 @@ CODEBASE_DIR = "/app"
 
 # --- Custom Service-Layer Exceptions ---
 
+
 class KnowledgeServiceError(Exception):
     """Base exception for knowledge service errors."""
+
     pass
 
 
@@ -24,10 +27,11 @@ class KnowledgeService:
     Camada de serviço para o Grafo de Conhecimento.
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
+
     def __init__(self, repo: KnowledgeRepository):
         self._repo = repo
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         stats = await self._repo.get_node_and_relationship_stats()
         return {
             "total_nodes": sum(i.get("count", 0) for i in stats["nodes"]),
@@ -36,33 +40,48 @@ class KnowledgeService:
             "relationship_types": stats["relationships"],
         }
 
-    async def get_code_entities(self, file_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_code_entities(self, file_path: str | None = None) -> list[dict[str, Any]]:
         return await self._repo.find_code_entities(file_path)
 
-    async def get_entity_details(self, entity_name: str) -> Optional[Dict[str, Any]]:
+    async def get_entity_details(self, entity_name: str) -> dict[str, Any] | None:
         details = await self._repo.find_entity_details(entity_name)
         if not details:
             return None
         return details
 
-    async def get_entity_relationships(self, entity_name: str, rel_type: Optional[str] = None, direction: str = "both", max_depth: int = 1, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
-        return await self._repo.find_entity_relationships(entity_name=entity_name, rel_type=rel_type, direction=direction, max_depth=max_depth, limit=limit, skip=skip)
+    async def get_entity_relationships(
+        self,
+        entity_name: str,
+        rel_type: str | None = None,
+        direction: str = "both",
+        max_depth: int = 1,
+        limit: int = 20,
+        skip: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await self._repo.find_entity_relationships(
+            entity_name=entity_name,
+            rel_type=rel_type,
+            direction=direction,
+            max_depth=max_depth,
+            limit=limit,
+            skip=skip,
+        )
 
-    async def get_functions_calling(self, function_name: str) -> List[Dict[str, Any]]:
+    async def get_functions_calling(self, function_name: str) -> list[dict[str, Any]]:
         return await self._repo.find_functions_calling(function_name=function_name)
 
-    async def get_files_importing(self, module: str) -> List[Dict[str, Any]]:
+    async def get_files_importing(self, module: str) -> list[dict[str, Any]]:
         return await self._repo.find_files_importing(module=module)
 
-    async def get_classes_implementing(self, protocol: str) -> List[Dict[str, Any]]:
+    async def get_classes_implementing(self, protocol: str) -> list[dict[str, Any]]:
         return await self._repo.find_classes_implementing(protocol=protocol)
 
-    async def trigger_consolidation(self, limit: int, min_score: float = 0.0) -> Dict[str, Any]:
+    async def trigger_consolidation(self, limit: int, min_score: float = 0.0) -> dict[str, Any]:
         # Utiliza consolidação em lote para alinhar com Sprint 8
         stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
         return stats
 
-    async def index_codebase(self) -> Dict[str, Any]:
+    async def index_codebase(self) -> dict[str, Any]:
         logger.info(f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
         await self._repo.clear_code_entities()
 
@@ -75,7 +94,12 @@ class KnowledgeService:
                 await self._repo.save_code_structure(parser)
                 for call in parser.calls:
                     all_calls.append(
-                        {"caller_name": call['caller'], "callee_name": call['callee'], "file_path": file_path})
+                        {
+                            "caller_name": call["caller"],
+                            "callee_name": call["callee"],
+                            "file_path": file_path,
+                        }
+                    )
                 total_files += 1
                 total_funcs += len(parser.functions)
                 total_classes += len(parser.classes)
@@ -93,25 +117,36 @@ class KnowledgeService:
     async def semantic_query(self, question: str, limit: int = 10) -> str:
         return await query_knowledge_graph(question, limit=limit)
 
-    async def consolidate_document(self, user_id: str, doc_id: str, limit: int = 50) -> Dict[str, Any]:
-        return await knowledge_consolidator.consolidate_document(user_id=user_id, doc_id=doc_id, limit=limit)
+    async def consolidate_document(
+        self, user_id: str, doc_id: str, limit: int = 50
+    ) -> dict[str, Any]:
+        return await knowledge_consolidator.consolidate_document(
+            user_id=user_id, doc_id=doc_id, limit=limit
+        )
 
-    async def find_related_concepts(self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0) -> List[Dict[str, Any]]:
-        return await self._repo.find_related_concepts(concept=concept, max_depth=max_depth, limit=limit, skip=skip)
+    async def find_related_concepts(
+        self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0
+    ) -> list[dict[str, Any]]:
+        return await self._repo.find_related_concepts(
+            concept=concept, max_depth=max_depth, limit=limit, skip=skip
+        )
 
-    async def get_node_types(self) -> List[str]:
+    async def get_node_types(self) -> list[str]:
         return await self._repo.get_node_types()
 
-    async def get_health_status(self) -> Dict[str, Any]:
+    async def get_health_status(self) -> dict[str, Any]:
         try:
             stats = await self._repo.get_node_and_relationship_stats()
             total_nodes = sum(i.get("count", 0) for i in stats["nodes"]) if stats else 0
-            total_relationships = sum(i.get("count", 0) for i in stats["relationships"]) if stats else 0
-            
+            total_relationships = (
+                sum(i.get("count", 0) for i in stats["relationships"]) if stats else 0
+            )
+
             # Check memory/Qdrant health
             from app.core.memory.memory_core import check_memory_health
+
             qdrant_healthy = await check_memory_health()
-            
+
             # Determine overall status
             if qdrant_healthy and total_nodes > 0:
                 status = "ok"
@@ -119,7 +154,7 @@ class KnowledgeService:
                 status = "partial"
             else:
                 status = "degraded"
-                
+
             return {
                 "status": status,
                 "neo4j_connected": total_nodes > 0,
@@ -141,15 +176,17 @@ class KnowledgeService:
 
     # --- Governança / HITL ---
 
-    async def register_relationship_type(self, name: str) -> Dict[str, Any]:
+    async def register_relationship_type(self, name: str) -> dict[str, Any]:
         from app.db.graph import get_graph_db
+
         db = await get_graph_db()
         async with await db.get_session() as session:
             await db.register_relationship_type(session, name)
         return {"status": "registered", "name": name}
 
-    async def list_quarantine_items(self, limit: int = 50) -> List[Dict[str, Any]]:
+    async def list_quarantine_items(self, limit: int = 50) -> list[dict[str, Any]]:
         from app.db.graph import get_graph_db
+
         db = await get_graph_db()
         rows = await db.query(
             """
@@ -159,12 +196,15 @@ class KnowledgeService:
             LIMIT $limit
             """,
             params={"limit": int(limit)},
-            operation="list_quarantine"
+            operation="list_quarantine",
         )
         return rows or []
 
-    async def promote_quarantine_relationship(self, from_name: str, to_name: str, rel_type: str, source_experience: str) -> Dict[str, Any]:
+    async def promote_quarantine_relationship(
+        self, from_name: str, to_name: str, rel_type: str, source_experience: str
+    ) -> dict[str, Any]:
         from app.db.graph import get_graph_db
+
         db = await get_graph_db()
         async with await db.get_session() as session:
             tx = await session.begin_transaction()
@@ -195,6 +235,7 @@ class KnowledgeService:
                 return {"status": "promoted", "from": from_name, "to": to_name, "type": rel_type}
             finally:
                 await tx.close()
+
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_knowledge_service(request: Request) -> KnowledgeService:

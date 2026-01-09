@@ -1,10 +1,9 @@
-import asyncio
 import time
+
 import pytest
 
 from app.db.graph import get_graph_db
 from app.repositories.knowledge_repository import KnowledgeRepository
-from app.models.schemas import GraphRelationship
 
 
 async def _create_min_graph(db):
@@ -27,7 +26,7 @@ async def test_dedupe_concepts_integration():
     await _create_min_graph(db)
     repo = KnowledgeRepository(db)
     t0 = time.time()
-    res = await repo.dedupe_concepts()
+    await repo.dedupe_concepts()
     elapsed = time.time() - t0
     assert elapsed < 0.5
     if elapsed > 0.3:
@@ -59,13 +58,13 @@ async def test_dedupe_files_functions_classes_integration():
         await tx.commit()
     repo = KnowledgeRepository(db)
     t0 = time.time()
-    res_fc = await repo.dedupe_functions_and_classes()
+    await repo.dedupe_functions_and_classes()
     elapsed_fc = time.time() - t0
     assert elapsed_fc < 0.5
     if elapsed_fc > 0.3:
         pytest.warns(UserWarning)
     t1 = time.time()
-    res_f = await repo.dedupe_files()
+    await repo.dedupe_files()
     elapsed_f = time.time() - t1
     assert elapsed_f < 0.5
     files = await db.query("MATCH (f:File) RETURN count(f) as cnt")

@@ -1,11 +1,14 @@
-from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
+from typing import Any
+
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
+
 from app.db.mysql_config import mysql_db
-from app.models.user_models import User, Role, UserRole, Profile, Consent, OAuthToken
+from app.models.user_models import Consent, OAuthToken, Profile, Role, User, UserRole
+
 
 class UserRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -13,7 +16,7 @@ class UserRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def get_user(self, user_id: int) -> Optional[User]:
+    def get_user(self, user_id: int) -> User | None:
         s = self._get_session()
         try:
             return s.query(User).filter(User.id == user_id).first()
@@ -21,7 +24,7 @@ class UserRepository:
             if not self._session:
                 s.close()
 
-    def get_by_email(self, email: str) -> Optional[User]:
+    def get_by_email(self, email: str) -> User | None:
         s = self._get_session()
         try:
             return s.query(User).filter(User.email == email).first()
@@ -29,7 +32,7 @@ class UserRepository:
             if not self._session:
                 s.close()
 
-    def create_user(self, email: Optional[str], display_name: Optional[str]) -> User:
+    def create_user(self, email: str | None, display_name: str | None) -> User:
         s = self._get_session()
         try:
             u = User(email=email, display_name=display_name)
@@ -61,8 +64,10 @@ class UserRepository:
     def is_admin(self, user_id: int) -> bool:
         s = self._get_session()
         try:
-            q = s.query(UserRole).join(Role, UserRole.role_id == Role.id).filter(
-                and_(UserRole.user_id == user_id, Role.name == "ADMIN")
+            q = (
+                s.query(UserRole)
+                .join(Role, UserRole.role_id == Role.id)
+                .filter(and_(UserRole.user_id == user_id, Role.name == "ADMIN"))
             )
             return q.first() is not None
         finally:
@@ -72,16 +77,19 @@ class UserRepository:
     def has_role(self, user_id: int, role_name: str) -> bool:
         s = self._get_session()
         try:
-            q = s.query(UserRole).join(Role, UserRole.role_id == Role.id).filter(
-                and_(UserRole.user_id == user_id, Role.name == role_name)
+            q = (
+                s.query(UserRole)
+                .join(Role, UserRole.role_id == Role.id)
+                .filter(and_(UserRole.user_id == user_id, Role.name == role_name))
             )
             return q.first() is not None
         finally:
             if not self._session:
                 s.close()
 
+
 class ProfileRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -89,7 +97,7 @@ class ProfileRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def get_by_user(self, user_id: int) -> Optional[Profile]:
+    def get_by_user(self, user_id: int) -> Profile | None:
         s = self._get_session()
         try:
             return s.query(Profile).filter(Profile.user_id == user_id).first()
@@ -97,12 +105,19 @@ class ProfileRepository:
             if not self._session:
                 s.close()
 
-    def upsert(self, user_id: int, timezone: Optional[str], language: Optional[str], style_prefs: Optional[str]) -> Profile:
+    def upsert(
+        self, user_id: int, timezone: str | None, language: str | None, style_prefs: str | None
+    ) -> Profile:
         s = self._get_session()
         try:
             p = s.query(Profile).filter(Profile.user_id == user_id).first()
             if p is None:
-                p = Profile(user_id=user_id, timezone=timezone, language=language or "pt-BR", style_prefs=style_prefs)
+                p = Profile(
+                    user_id=user_id,
+                    timezone=timezone,
+                    language=language or "pt-BR",
+                    style_prefs=style_prefs,
+                )
                 s.add(p)
             else:
                 if timezone is not None:
@@ -120,7 +135,7 @@ class ProfileRepository:
 
 
 class ConsentRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -128,7 +143,9 @@ class ConsentRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def add_consent(self, user_id: int, scope: str, granted: bool = True, expires_at: Optional[Any] = None) -> Consent:
+    def add_consent(
+        self, user_id: int, scope: str, granted: bool = True, expires_at: Any | None = None
+    ) -> Consent:
         s = self._get_session()
         try:
             c = s.query(Consent).filter(Consent.user_id == user_id, Consent.scope == scope).first()
@@ -175,6 +192,7 @@ class ConsentRepository:
             if c.expires_at is not None:
                 try:
                     from datetime import datetime
+
                     return c.expires_at > datetime.utcnow()
                 except Exception:
                     return False
@@ -185,7 +203,7 @@ class ConsentRepository:
 
 
 class OAuthTokenRepository:
-    def __init__(self, session: Optional[Session] = None):
+    def __init__(self, session: Session | None = None):
         self._session = session
 
     def _get_session(self) -> Session:
@@ -193,16 +211,35 @@ class OAuthTokenRepository:
             return self._session
         return mysql_db.get_session_direct()
 
-    def upsert(self, user_id: int, provider: str, access_token: str, refresh_token: Optional[str], expires_at: Optional[Any]) -> OAuthToken:
+    def upsert(
+        self,
+        user_id: int,
+        provider: str,
+        access_token: str,
+        refresh_token: str | None,
+        expires_at: Any | None,
+    ) -> OAuthToken:
         s = self._get_session()
         try:
-            tok = s.query(OAuthToken).filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider).first()
+            tok = (
+                s.query(OAuthToken)
+                .filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
+                .first()
+            )
             if tok is None:
-                tok = OAuthToken(user_id=user_id, provider=provider, access_token=access_token, refresh_token=refresh_token, expires_at=expires_at)
+                tok = OAuthToken(
+                    user_id=user_id,
+                    provider=provider,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_at=expires_at,
+                )
                 s.add(tok)
             else:
                 tok.access_token = access_token
-                tok.refresh_token = refresh_token if refresh_token is not None else tok.refresh_token
+                tok.refresh_token = (
+                    refresh_token if refresh_token is not None else tok.refresh_token
+                )
                 tok.expires_at = expires_at
             s.commit()
             s.refresh(tok)
@@ -211,10 +248,14 @@ class OAuthTokenRepository:
             if not self._session:
                 s.close()
 
-    def get(self, user_id: int, provider: str) -> Optional[OAuthToken]:
+    def get(self, user_id: int, provider: str) -> OAuthToken | None:
         s = self._get_session()
         try:
-            return s.query(OAuthToken).filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider).first()
+            return (
+                s.query(OAuthToken)
+                .filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
+                .first()
+            )
         finally:
             if not self._session:
                 s.close()

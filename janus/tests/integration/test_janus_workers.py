@@ -6,10 +6,8 @@ Comprehensive tests for all worker components.
 """
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
 
+import pytest
 
 # ============================================================================
 # TEST 1: KnowledgeConsolidatorWorker
@@ -17,7 +15,7 @@ from datetime import datetime
 
 class TestKnowledgeConsolidatorWorker:
     """Tests for KnowledgeConsolidatorWorker."""
-    
+
     def test_knowledge_consolidator_worker_import(self):
         """Test KnowledgeConsolidatorWorker can be imported."""
         try:
@@ -34,7 +32,7 @@ class TestKnowledgeConsolidatorWorker:
 
 class TestGoogleProductivityWorker:
     """Tests for GoogleProductivityWorker."""
-    
+
     def test_google_productivity_worker_import(self):
         """Test GoogleProductivityWorker can be imported."""
         try:
@@ -51,7 +49,7 @@ class TestGoogleProductivityWorker:
 
 class TestNeuralTrainingSystem:
     """Tests for NeuralTrainingSystem."""
-    
+
     def test_neural_training_system_import(self):
         """Test NeuralTrainingSystem can be imported."""
         try:
@@ -68,7 +66,7 @@ class TestNeuralTrainingSystem:
 
 class TestDataHarvester:
     """Tests for DataHarvester."""
-    
+
     def test_data_harvester_import(self):
         """Test DataHarvester can be imported."""
         try:
@@ -85,7 +83,7 @@ class TestDataHarvester:
 
 class TestAutoScaler:
     """Tests for AutoScaler."""
-    
+
     def test_auto_scaler_import(self):
         """Test AutoScaler can be imported."""
         try:
@@ -102,7 +100,7 @@ class TestAutoScaler:
 
 class TestAutonomyWorker:
     """Tests for AutonomyWorker."""
-    
+
     def test_autonomy_worker_import(self):
         """Test AutonomyWorker can be imported."""
         try:
@@ -119,7 +117,7 @@ class TestAutonomyWorker:
 
 class TestKnowledgeConsolidator:
     """Tests for KnowledgeConsolidator."""
-    
+
     def test_knowledge_consolidator_import(self):
         """Test KnowledgeConsolidator can be imported."""
         try:
@@ -136,7 +134,7 @@ class TestKnowledgeConsolidator:
 
 class TestMetaAgentWorker:
     """Tests for MetaAgentWorker."""
-    
+
     def test_meta_agent_worker_import(self):
         """Test MetaAgentWorker can be imported."""
         try:
@@ -153,7 +151,7 @@ class TestMetaAgentWorker:
 
 class TestSandboxAgentWorker:
     """Tests for SandboxAgentWorker."""
-    
+
     def test_sandbox_agent_worker_import(self):
         """Test SandboxAgentWorker can be imported."""
         try:
@@ -170,7 +168,7 @@ class TestSandboxAgentWorker:
 
 class TestRouterWorker:
     """Tests for RouterWorker."""
-    
+
     def test_router_worker_import(self):
         """Test RouterWorker can be imported."""
         try:
@@ -187,7 +185,7 @@ class TestRouterWorker:
 
 class TestReflexionWorker:
     """Tests for ReflexionWorker."""
-    
+
     def test_reflexion_worker_import(self):
         """Test ReflexionWorker can be imported."""
         try:
@@ -204,7 +202,7 @@ class TestReflexionWorker:
 
 class TestAgentTasksWorker:
     """Tests for AgentTasksWorker."""
-    
+
     def test_agent_tasks_worker_import(self):
         """Test AgentTasksWorker can be imported."""
         try:
@@ -221,7 +219,7 @@ class TestAgentTasksWorker:
 
 class TestAsyncConsolidationWorker:
     """Tests for AsyncConsolidationWorker."""
-    
+
     def test_async_consolidation_worker_import(self):
         """Test async consolidation worker functions."""
         try:
@@ -238,7 +236,7 @@ class TestAsyncConsolidationWorker:
 
 class TestProfessorAgentWorker:
     """Tests for ProfessorAgentWorker."""
-    
+
     def test_professor_agent_worker_import(self):
         """Test ProfessorAgentWorker can be imported."""
         try:
@@ -255,7 +253,7 @@ class TestProfessorAgentWorker:
 
 class TestCodeAgentWorker:
     """Tests for CodeAgentWorker."""
-    
+
     def test_code_agent_worker_import(self):
         """Test CodeAgentWorker can be imported."""
         try:
@@ -272,7 +270,7 @@ class TestCodeAgentWorker:
 
 class TestLifeCycleWorker:
     """Tests for LifeCycleWorker."""
-    
+
     def test_life_cycle_worker_import(self):
         """Test LifeCycleWorker can be imported."""
         try:
@@ -289,7 +287,7 @@ class TestLifeCycleWorker:
 
 class TestOrchestrator:
     """Tests for Orchestrator."""
-    
+
     def test_orchestrator_import(self):
         """Test Orchestrator can be imported."""
         try:
@@ -306,7 +304,7 @@ class TestOrchestrator:
 
 class TestNeuralTrainingWorker:
     """Tests for NeuralTrainingWorker."""
-    
+
     def test_neural_training_worker_import(self):
         """Test NeuralTrainingWorker can be imported."""
         try:
@@ -323,7 +321,7 @@ class TestNeuralTrainingWorker:
 
 class TestGoalManager:
     """Tests for GoalManager."""
-    
+
     def test_goal_manager_import(self):
         """Test GoalManager can be imported."""
         try:
@@ -332,17 +330,17 @@ class TestGoalManager:
             print("✓ GoalManager import available")
         except Exception as e:
             print(f"⚠ GoalManager import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_goal_manager_initialization(self):
         """Test GoalManager initialization."""
         try:
             from app.core.autonomy.goal_manager import GoalManager
-            
+
             manager = GoalManager()
-            
+
             assert manager is not None
-            
+
             print("✓ GoalManager initialization working")
         except Exception as e:
             print(f"⚠ GoalManager init: {e}")
@@ -350,7 +348,7 @@ class TestGoalManager:
 
 class TestPlanner:
     """Tests for Planner."""
-    
+
     def test_planner_import(self):
         """Test Planner can be imported."""
         try:
@@ -363,7 +361,7 @@ class TestPlanner:
 
 class TestPolicyEngine:
     """Tests for PolicyEngine."""
-    
+
     def test_policy_engine_import(self):
         """Test PolicyEngine can be imported."""
         try:
@@ -372,17 +370,17 @@ class TestPolicyEngine:
             print("✓ PolicyEngine import available")
         except Exception as e:
             print(f"⚠ PolicyEngine import: {e}")
-    
+
     @pytest.mark.asyncio
     async def test_policy_engine_initialization(self):
         """Test PolicyEngine initialization."""
         try:
             from app.core.autonomy.policy_engine import PolicyEngine
-            
+
             engine = PolicyEngine()
-            
+
             assert engine is not None
-            
+
             print("✓ PolicyEngine initialization working")
         except Exception as e:
             print(f"⚠ PolicyEngine init: {e}")
@@ -397,13 +395,13 @@ async def run_all_tests():
     print("=" * 60)
     print("JANUS WORKERS TEST SUITE")
     print("=" * 60)
-    
+
     results = {
         "passed": 0,
         "failed": 0,
         "skipped": 0
     }
-    
+
     test_classes = [
         TestKnowledgeConsolidatorWorker(),
         TestGoogleProductivityWorker(),
@@ -427,10 +425,10 @@ async def run_all_tests():
         TestPlanner(),
         TestPolicyEngine(),
     ]
-    
+
     for test_class in test_classes:
         print(f"\n--- {test_class.__class__.__name__} ---")
-        
+
         for method_name in dir(test_class):
             if method_name.startswith("test_"):
                 method = getattr(test_class, method_name)
@@ -443,11 +441,11 @@ async def run_all_tests():
                 except Exception as e:
                     print(f"✗ {method_name}: {e}")
                     results["failed"] += 1
-    
+
     print("\n" + "=" * 60)
     print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
     print("=" * 60)
-    
+
     return results["failed"] == 0
 
 if __name__ == "__main__":

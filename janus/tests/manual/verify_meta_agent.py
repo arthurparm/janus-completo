@@ -1,16 +1,14 @@
 
 import asyncio
-import sys
 import logging
+import sys
+from unittest.mock import MagicMock
 
 # Add app to path
 sys.path.append("/app")
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
-
-from unittest.mock import MagicMock
-import sys
 
 # Mock get_llm BEFORE importing meta_agent to avoid initialization error
 sys.modules['app.core.llm.llm_manager'] = MagicMock()
@@ -19,7 +17,8 @@ mock_llm_manager.get_llm.return_value = MagicMock()
 mock_llm_manager.ModelRole = MagicMock()
 mock_llm_manager.ModelPriority = MagicMock()
 
-from app.core.agents.meta_agent import MetaAgent, get_meta_agent
+from app.core.agents.meta_agent import MetaAgent, get_meta_agent  # noqa: E402
+
 
 async def verify_meta_agent():
     print("--- Verifying MetaAgent Refactor ---")
@@ -37,7 +36,7 @@ async def verify_meta_agent():
 
     # Test tools execution
     print("Testing tools execution...")
-    
+
     # Test get_resource_usage
     print("- Testing get_resource_usage...")
     try:
@@ -52,12 +51,14 @@ async def verify_meta_agent():
     # Test analyze_performance_trends (mocking data)
     print("- Testing analyze_performance_trends...")
     try:
+        from collections import deque
+
         from app.core.agents.meta_agent import analyze_performance_trends
+
         # Inject mock data into health monitor for testing
         from app.core.monitoring.health_monitor import _latency_windows
-        from collections import deque
         _latency_windows["llm"] = deque([0.1, 0.2, 0.5, 0.1, 0.15])
-        
+
         result = analyze_performance_trends.invoke({"metric_name": "llm_latency"})
         print(f"  Result: {result}")
         assert "average" in result

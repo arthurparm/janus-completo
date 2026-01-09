@@ -1,9 +1,13 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services.collaboration_service import CollaborationService, get_collaboration_service, AgentNotFoundError
+from app.services.collaboration_service import (
+    AgentNotFoundError,
+    CollaborationService,
+    get_collaboration_service,
+)
 
 router = APIRouter(prefix="/collaboration", tags=["Collaboration - Workspace"])
 
@@ -11,13 +15,17 @@ router = APIRouter(prefix="/collaboration", tags=["Collaboration - Workspace"])
 class AddArtifactRequest(BaseModel):
     key: str = Field(..., description="Identificador único do artefato")
     value: Any = Field(..., description="Conteúdo do artefato")
-    author: Optional[str] = Field(None, description="ID do agente autor")
+    author: str | None = Field(None, description="ID do agente autor")
 
 
 @router.post("/workspace/artifacts/add")
-def add_artifact(payload: AddArtifactRequest, service: CollaborationService = Depends(get_collaboration_service)):
+def add_artifact(
+    payload: AddArtifactRequest, service: CollaborationService = Depends(get_collaboration_service)
+):
     try:
-        result = service.add_artifact(key=payload.key, value=payload.value, author=payload.author or "")
+        result = service.add_artifact(
+            key=payload.key, value=payload.value, author=payload.author or ""
+        )
         return {"message": "Artifact added", "data": result}
     except AgentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -38,7 +46,9 @@ class SendMessageRequest(BaseModel):
 
 
 @router.post("/workspace/messages/send")
-def send_message(payload: SendMessageRequest, service: CollaborationService = Depends(get_collaboration_service)):
+def send_message(
+    payload: SendMessageRequest, service: CollaborationService = Depends(get_collaboration_service)
+):
     try:
         msg = service.send_message(payload.from_agent, payload.to_agent, payload.content)
         return {"message": "Message sent", "data": msg}
@@ -47,7 +57,9 @@ def send_message(payload: SendMessageRequest, service: CollaborationService = De
 
 
 @router.get("/workspace/messages/{agent_id}")
-def get_messages_for(agent_id: str, service: CollaborationService = Depends(get_collaboration_service)):
+def get_messages_for(
+    agent_id: str, service: CollaborationService = Depends(get_collaboration_service)
+):
     try:
         msgs = service.get_messages_for(agent_id)
         return {"agent_id": agent_id, "messages": msgs}

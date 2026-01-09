@@ -1,26 +1,23 @@
 import structlog
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.services.reflexion_service import (
-    ReflexionService,
-    get_reflexion_service
-)
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.meta_agent_service import MetaAgentService, get_meta_agent_service
+from app.services.reflexion_service import ReflexionService, get_reflexion_service
 
 router = APIRouter(tags=["Reflexion"])
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---
 
+
 class ReflexionRequest(BaseModel):
     task: str = Field(..., min_length=1)
-    max_iterations: Optional[int] = Field(None, ge=1, le=10)
-    max_time_seconds: Optional[int] = Field(None, ge=30, le=600)
-    success_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    max_iterations: int | None = Field(None, ge=1, le=10)
+    max_time_seconds: int | None = Field(None, ge=30, le=600)
+    success_threshold: float | None = Field(None, ge=0.0, le=1.0)
+
 
 class ReflexionResponse(BaseModel):
     success: bool
@@ -31,22 +28,27 @@ class ReflexionResponse(BaseModel):
     elapsed_seconds: float
     steps: list[dict]
 
+
 class LessonItem(BaseModel):
     id: str
     content: str
     metadata: dict
-    score: Optional[float] = None
+    score: float | None = None
+
 
 class PostSprintSummaryResponse(BaseModel):
     lessons: list[LessonItem]
-    meta_report: Optional[dict] = None
+    meta_report: dict | None = None
+
 
 # --- Endpoints ---
 
-@router.post("/execute", response_model=ReflexionResponse, summary="Executa tarefa com o ciclo Reflexion")
+
+@router.post(
+    "/execute", response_model=ReflexionResponse, summary="Executa tarefa com o ciclo Reflexion"
+)
 async def execute_with_reflexion(
-        request: ReflexionRequest,
-        service: ReflexionService = Depends(get_reflexion_service)
+    request: ReflexionRequest, service: ReflexionService = Depends(get_reflexion_service)
 ):
     """
     Delega a execução de uma tarefa com o ciclo de auto-otimização para o ReflexionService.
@@ -60,6 +62,7 @@ async def execute_with_reflexion(
     result = await service.run_reflexion_cycle(request.task, config_overrides)
     return ReflexionResponse(**result)
 
+
 @router.get("/config", summary="Obtém configuração padrão do Reflexion")
 async def get_reflexion_config(service: ReflexionService = Depends(get_reflexion_service)):
     """Retorna a configuração padrão do sistema Reflexion, via serviço."""
@@ -67,14 +70,16 @@ async def get_reflexion_config(service: ReflexionService = Depends(get_reflexion
     return {
         "max_iterations": config.max_iterations,
         "max_time_seconds": config.max_time_seconds,
-        "success_threshold": config.success_threshold
+        "success_threshold": config.success_threshold,
     }
+
 
 @router.post("/reset-circuit-breaker", summary="Reseta o circuit breaker dos agentes")
 async def reset_circuit_breaker(service: ReflexionService = Depends(get_reflexion_service)):
     """Delega o reset dos circuit breakers para o ReflexionService."""
     service.reset_agent_breakers()
     return {"status": "success", "message": "Circuit breakers dos agentes resetados."}
+
 
 @router.get("/health", summary="Verifica saúde do módulo Reflexion")
 async def reflexion_health(service: ReflexionService = Depends(get_reflexion_service)):
@@ -88,16 +93,25 @@ async def reflexion_health(service: ReflexionService = Depends(get_reflexion_ser
         logger.error("Falha no health check do serviço de Reflexion", exc_info=e)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
-@router.get("/summary/post_sprint", response_model=PostSprintSummaryResponse, summary="Resumo pós-sprint: lições e estado do sistema")
+
+@router.get(
+    "/summary/post_sprint",
+    response_model=PostSprintSummaryResponse,
+    summary="Resumo pós-sprint: lições e estado do sistema",
+)
 async def get_post_sprint_summary(
-        limit: int = Query(10, ge=1, le=100, description="Limite de lições recentes"),
-        timeframe_seconds: Optional[int] = Query(None, description="Janela de tempo em segundos para lições"),
-        min_score: Optional[float] = Query(None, ge=0.0, description="Score mínimo das lições"),
-        memory: MemoryService = Depends(get_memory_service),
-        meta: MetaAgentService = Depends(get_meta_agent_service),
+    limit: int = Query(10, ge=1, le=100, description="Limite de lições recentes"),
+    timeframe_seconds: int | None = Query(
+        None, description="Janela de tempo em segundos para lições"
+    ),
+    min_score: float | None = Query(None, ge=0.0, description="Score mínimo das lições"),
+    memory: MemoryService = Depends(get_memory_service),
+    meta: MetaAgentService = Depends(get_meta_agent_service),
 ):
     """Retorna um resumo pós-sprint com lições aprendidas recentes e o último relatório do Meta-Agente."""
-    lessons_raw = await memory.recall_recent_lessons(limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score)
+    lessons_raw = await memory.recall_recent_lessons(
+        limit=limit, timeframe_seconds=timeframe_seconds, min_score=min_score
+    )
     lessons = [
         LessonItem(
             id=str(item.get("id")),

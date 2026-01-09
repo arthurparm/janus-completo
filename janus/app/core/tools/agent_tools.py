@@ -1,35 +1,27 @@
 import json
 import logging
+import subprocess
+import urllib.error
+import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
-from typing import List, Optional
 
-from langchain.tools import tool, BaseTool
+from langchain.tools import BaseTool, tool
 from pydantic import BaseModel, Field, validator
 
+from app.config import settings
 from app.core.infrastructure import filesystem_manager
-from app.core.tools.action_module import (
-    action_registry,
-    ToolCategory,
-    PermissionLevel
-)
 from app.core.infrastructure.context_manager import context_manager
 from app.core.infrastructure.enums import AgentType
-from app.core.tools.faulty_tools import get_faulty_tools
-from app.core.memory.memory_core import get_memory_db
 from app.core.infrastructure.python_sandbox import python_sandbox
-from app.db.graph import graph_db
+from app.core.memory.memory_core import get_memory_db
 from app.core.memory.working_memory import get_working_memory
-import urllib.request
-import urllib.error
-from html.parser import HTMLParser
-import subprocess
-import os
+from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
+from app.core.tools.faulty_tools import get_faulty_tools
+from app.core.tools.launcher_tools import launch_app
+from app.db.graph import graph_db
 
 logger = logging.getLogger(__name__)
-
-# Importar configurações para workspace root
-from app.core.tools.launcher_tools import launch_app
-from app.config import settings
 
 # Usar WORKSPACE_ROOT das configurações com fallback para compatibilidade
 WORKSPACE_ROOT = Path(settings.WORKSPACE_ROOT).resolve()
@@ -91,9 +83,10 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
 
 class ReadFileInput(BaseModel):
     """Input schema for read_file that accepts both 'file_path' and 'path'."""
-    file_path: Optional[str] = Field(default=None, description="Caminho do arquivo a ser lido")
-    path: Optional[str] = Field(default=None, description="Alias para file_path")
-    
+
+    file_path: str | None = Field(default=None, description="Caminho do arquivo a ser lido")
+    path: str | None = Field(default=None, description="Alias para file_path")
+
     @property
     def resolved_path(self) -> str:
         """Get the actual path, preferring file_path over path."""
@@ -101,7 +94,7 @@ class ReadFileInput(BaseModel):
 
 
 @tool(args_schema=ReadFileInput)
-def read_file(file_path: Optional[str] = None, path: Optional[str] = None) -> str:
+def read_file(file_path: str | None = None, path: str | None = None) -> str:
     """
     Lê o conteúdo completo de um arquivo do sistema de arquivos.
 
@@ -124,10 +117,11 @@ def read_file(file_path: Optional[str] = None, path: Optional[str] = None) -> st
     return filesystem_manager.read_file(actual_path)
 
 
-
 class ListDirectoryInput(BaseModel):
-    path: str = Field(default="/app/workspace",
-                      description="Caminho do diretório a ser listado, relativo ao workspace (/app/workspace).")
+    path: str = Field(
+        default="/app/workspace",
+        description="Caminho do diretório a ser listado, relativo ao workspace (/app/workspace).",
+    )
 
     @validator("path")
     def validate_path_is_safe(cls, v: str) -> str:
@@ -144,7 +138,9 @@ class ListDirectoryInput(BaseModel):
             absolute_path.relative_to(WORKSPACE_ROOT)
             return str(absolute_path)
         except ValueError:
-            raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido (/app/workspace).")
+            raise ValueError(
+                f"Acesso negado. O caminho '{v}' está fora do diretório permitido (/app/workspace)."
+            )
 
 
 @tool(args_schema=ListDirectoryInput)
@@ -166,7 +162,7 @@ def list_directory(path: str = "/app/workspace") -> str:
     Exemplo de uso:
         list_directory(path="/app/workspace")
     """
-    logger.info(f"[LIST_DIRECTORY] Chamada recebida - path={repr(path)}, type={type(path)}")
+    logger.info(f"[LIST_DIRECTORY] Chamada recebida - path={path!r}, type={type(path)}")
 
     try:
         # Garante que o path é seguro
@@ -232,8 +228,12 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
     """
     try:
         memory_db = await get_memory_db()
-        experiences = await memory_db.arecall(query="falha erro error exception", limit=last_n_experiences)
-        failures = [exp for exp in experiences if exp.get("metadata", {}).get("type") == "action_failure"]
+        experiences = await memory_db.arecall(
+            query="falha erro error exception", limit=last_n_experiences
+        )
+        failures = [
+            exp for exp in experiences if exp.get("metadata", {}).get("type") == "action_failure"
+        ]
         if not failures:
             return f"Análise concluída. Nenhuma falha significativa encontrada nas últimas {last_n_experiences} experiências."
 
@@ -246,7 +246,9 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
                 failures_by_tool[tool_used] = []
             failures_by_tool[tool_used].append(fail)
 
-        for tool, tool_failures in sorted(failures_by_tool.items(), key=lambda x: len(x[1]), reverse=True):
+        for tool, tool_failures in sorted(
+            failures_by_tool.items(), key=lambda x: len(x[1]), reverse=True
+        ):
             summary += f"\n🔴 Ferramenta '{tool}' - {len(tool_failures)} falha(s):\n"
             for fail in tool_failures[:3]:
                 error = fail.get("content", "Erro desconhecido")[:150]
@@ -262,6 +264,7 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
 
 
 # --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
+
 
 @tool
 async def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> str:
@@ -324,14 +327,17 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
     """
     try:
         # Consulta Neo4j para encontrar conceitos relacionados
-        query = """
+        query = (
+            """
         MATCH path = (c:Concept {name: $concept})-[*1..%d]-(related)
         RETURN related.name as concept,
                type(last(relationships(path))) as relationship,
                length(path) as distance
         ORDER BY distance
         LIMIT 10
-        """ % max_depth
+        """
+            % max_depth
+        )
 
         results = graph_db.query(query, {"concept": concept})
 
@@ -401,6 +407,7 @@ async def get_entity_details(entity_name: str, **kwargs) -> str:
 
 # --- Sprint 3: Ferramentas de Contexto Ambiental ---
 
+
 @tool
 def get_current_datetime(**kwargs) -> str:
     """
@@ -435,10 +442,9 @@ def get_system_info(**kwargs) -> str:
     """
     # kwargs absorbs extra args like 'config' passed by LangChain
     ctx = context_manager.get_current_context()
-    return json.dumps({
-        "system": ctx.system_info,
-        "environment": ctx.environment
-    }, indent=2, ensure_ascii=False)
+    return json.dumps(
+        {"system": ctx.system_info, "environment": ctx.environment}, indent=2, ensure_ascii=False
+    )
 
 
 @tool
@@ -481,34 +487,33 @@ def get_enriched_context(query: str = "", include_web: bool = False) -> str:
         JSON com contexto completo (datetime, system, environment, web results se solicitado)
     """
     ctx = context_manager.get_enriched_context(
-        query=query if query else None,
-        include_web_search=include_web,
-        max_web_results=3
+        query=query if query else None, include_web_search=include_web, max_web_results=3
     )
     return json.dumps(ctx, indent=2, ensure_ascii=False)
 
 
 # --- Sprint 4: Sandbox Python Seguro ---
 
+
 @tool
 def execute_python_code(code: str) -> str:
     """
-    Executa código Python de forma segura em um sandbox isolado.
+        Executa código Python de forma segura em um sandbox isolado.
 
-    O sandbox tem as seguintes restrições:
-    - Sem acesso ao filesystem
-    - Sem acesso à network
-    - Imports limitados (math, random, datetime, json, re, collections, itertools, functools, statistics)
-    - Timeout de 5 segundos
-    - Output limitado a 10000 caracteres
+        O sandbox tem as seguintes restrições:
+        - Sem acesso ao filesystem
+        - Sem acesso à network
+        - Imports limitados (math, random, datetime, json, re, collections, itertools, functools, statistics)
+        - Timeout de 5 segundos
+        - Output limitado a 10000 caracteres
 
-    Útil para: cálculos, processamento de dados, testes de lógica.
+        Útil para: cálculos, processamento de dados, testes de lógica.
 
-    Exemplo de uso:
-    code = '''
-result = sum([1, 2, 3, 4, 5])
-print(f"A soma é: {result}")
-'''
+        Exemplo de uso:
+        code = '''
+    result = sum([1, 2, 3, 4, 5])
+    print(f"A soma é: {result}")
+    '''
     """
     try:
         result = python_sandbox.execute(code)
@@ -518,24 +523,24 @@ print(f"A soma é: {result}")
                 "success": True,
                 "output": result.output,
                 "execution_time": result.execution_time,
-                "variables": {k: str(v) for k, v in (result.variables or {}).items()}
+                "variables": {k: str(v) for k, v in (result.variables or {}).items()},
             }
         else:
             response = {
                 "success": False,
                 "error": result.error,
                 "output": result.output,
-                "execution_time": result.execution_time
+                "execution_time": result.execution_time,
             }
 
         return json.dumps(response, indent=2, ensure_ascii=False)
 
     except Exception as e:
-        return json.dumps({
-            "success": False,
-            "error": f"Erro inesperado: {str(e)}",
-            "output": ""
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": f"Erro inesperado: {e!s}", "output": ""},
+            indent=2,
+            ensure_ascii=False,
+        )
 
 
 @tool
@@ -559,19 +564,19 @@ def execute_python_expression(expression: str) -> str:
             return f"Erro: {result.error}"
 
     except Exception as e:
-        return f"Erro inesperado: {str(e)}"
+        return f"Erro inesperado: {e!s}"
 
 
 @tool
 def execute_shell(command: str) -> str:
     """
     Executa um comando de shell no sistema operacional.
-    
+
     ATENÇÃO: Uso restrito. Apenas comandos seguros são permitidos por padrão.
-    
+
     Args:
         command: O comando a ser executado (ex: "echo hello", "dir", "ls -la")
-        
+
     Returns:
         A saída padrão (stdout) e erro (stderr) combinados.
     """
@@ -579,17 +584,11 @@ def execute_shell(command: str) -> str:
     blocked = ["rm", "del", "format", "mv", "shutdown", "reboot"]
     if any(cmd in command.split() for cmd in blocked):
         return "Erro: Comando bloqueado por segurança."
-        
+
     try:
         logger.info(f"Executando shell command: {command}")
         # Timeout de 30s
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            capture_output=True, 
-            text=True, 
-            timeout=30
-        )
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
         output = result.stdout
         if result.stderr:
             output += f"\nSTDERR: {result.stderr}"
@@ -616,6 +615,7 @@ class MLStripper(HTMLParser):
     def get_data(self):
         return "".join(self.text)
 
+
 def strip_tags(html):
     try:
         s = MLStripper()
@@ -629,7 +629,7 @@ def strip_tags(html):
 def browse_url(url: str) -> str:
     """
     Navega em uma URL via HTTP (simulando um browser) e retorna o conteúdo textual principal.
-    
+
     Simula um User-Agent de navegador real para evitar bloqueios.
     Útil para ler artigos, documentações, notícias e qualquer página pública.
 
@@ -643,26 +643,28 @@ def browse_url(url: str) -> str:
         return "Erro: A URL deve começar com http:// ou https://"
 
     logger.info(f"Browsing URL: {url}")
-    
+
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as response:
-            charset = response.headers.get_content_charset() or 'utf-8'
-            html_content = response.read().decode(charset, errors='replace')
-            
+            charset = response.headers.get_content_charset() or "utf-8"
+            html_content = response.read().decode(charset, errors="replace")
+
             # Extrair texto limpo
             text_content = strip_tags(html_content)
-            
+
             # Limpeza básica de white-space
-            text_content = "\n".join([line.strip() for line in text_content.splitlines() if line.strip()])
-            
+            text_content = "\n".join(
+                [line.strip() for line in text_content.splitlines() if line.strip()]
+            )
+
             # Limitar tamanho para não estourar contexto
-            return text_content[:20000] # Retorna os primeiros 20k caracteres
-            
+            return text_content[:20000]  # Retorna os primeiros 20k caracteres
+
     except urllib.error.HTTPError as e:
         return f"Erro HTTP {e.code}: {e.reason}"
     except urllib.error.URLError as e:
@@ -673,6 +675,7 @@ def browse_url(url: str) -> str:
 
 
 # --- Fábrica de Ferramentas ---
+
 
 @tool
 def recall_working_memory(query: str, limit: int = 5) -> str:
@@ -687,7 +690,8 @@ def recall_working_memory(query: str, limit: int = 5) -> str:
         logger.error(f"Error recalling working memory: {e}", exc_info=True)
         return f"Erro ao buscar na working memory: {e}"
 
-unified_tools: List[BaseTool] = [
+
+unified_tools: list[BaseTool] = [
     write_file,
     read_file,
     list_directory,
@@ -704,22 +708,22 @@ unified_tools: List[BaseTool] = [
     execute_python_expression,
     execute_shell,
     launch_app,
-    browse_url
+    browse_url,
 ]
 
-meta_agent_tools: List[BaseTool] = [
+meta_agent_tools: list[BaseTool] = [
     analyze_memory_for_failures,
     recall_experiences,
     recall_working_memory,
     query_knowledge_graph,  # Sprint 8: Meta-agente pode consultar conhecimento consolidado
-    get_current_datetime
+    get_current_datetime,
 ]
 
 # Sprint 5: Ferramentas para Agente Reflexion (inclui ferramentas defeituosas para treinamento)
-reflexion_tools: List[BaseTool] = unified_tools + get_faulty_tools()
+reflexion_tools: list[BaseTool] = unified_tools + get_faulty_tools()
 
 
-def get_tools_for_agent(agent_type: AgentType) -> List[BaseTool]:
+def get_tools_for_agent(agent_type: AgentType) -> list[BaseTool]:
     """Retorna a lista de ferramentas apropriada para o tipo de agente."""
     if agent_type == AgentType.META_AGENT:
         return meta_agent_tools
@@ -729,6 +733,7 @@ def get_tools_for_agent(agent_type: AgentType) -> List[BaseTool]:
 
 
 # ==================== SPRINT 6: REGISTRO NO ACTION MODULE ====================
+
 
 def _register_all_tools_in_action_module():
     """
@@ -740,17 +745,13 @@ def _register_all_tools_in_action_module():
         write_file,
         category=ToolCategory.FILESYSTEM,
         permission_level=PermissionLevel.WRITE,
-        rate_limit_per_minute=30
+        rate_limit_per_minute=30,
     )
     action_registry.register(
-        read_file,
-        category=ToolCategory.FILESYSTEM,
-        permission_level=PermissionLevel.READ_ONLY
+        read_file, category=ToolCategory.FILESYSTEM, permission_level=PermissionLevel.READ_ONLY
     )
     action_registry.register(
-        list_directory,
-        category=ToolCategory.FILESYSTEM,
-        permission_level=PermissionLevel.READ_ONLY
+        list_directory, category=ToolCategory.FILESYSTEM, permission_level=PermissionLevel.READ_ONLY
     )
 
     # Ferramentas de memória
@@ -758,19 +759,19 @@ def _register_all_tools_in_action_module():
         recall_experiences,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "episodic"]
+        tags=["memory", "episodic"],
     )
     action_registry.register(
         recall_working_memory,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "working", "short_term"]
+        tags=["memory", "working", "short_term"],
     )
     action_registry.register(
         analyze_memory_for_failures,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "analysis", "meta"]
+        tags=["memory", "analysis", "meta"],
     )
 
     # Ferramentas de memória semântica (Sprint 8)
@@ -778,19 +779,19 @@ def _register_all_tools_in_action_module():
         query_knowledge_graph,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "semantic", "knowledge", "graph"]
+        tags=["memory", "semantic", "knowledge", "graph"],
     )
     action_registry.register(
         find_related_concepts,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "semantic", "concepts", "relationships"]
+        tags=["memory", "semantic", "concepts", "relationships"],
     )
     action_registry.register(
         get_entity_details,
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["memory", "semantic", "entities"]
+        tags=["memory", "semantic", "entities"],
     )
 
     # Ferramentas de contexto ambiental (Sprint 3)
@@ -798,27 +799,27 @@ def _register_all_tools_in_action_module():
         get_current_datetime,
         category=ToolCategory.SYSTEM,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["context", "time"]
+        tags=["context", "time"],
     )
     action_registry.register(
         get_system_info,
         category=ToolCategory.SYSTEM,
         permission_level=PermissionLevel.READ_ONLY,
-        tags=["context", "system"]
+        tags=["context", "system"],
     )
     action_registry.register(
         search_web,
         category=ToolCategory.WEB,
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=20,
-        tags=["context", "search", "external"]
+        tags=["context", "search", "external"],
     )
     action_registry.register(
         get_enriched_context,
         category=ToolCategory.WEB,
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=10,
-        tags=["context", "enriched"]
+        tags=["context", "enriched"],
     )
 
     # Ferramentas de sandbox Python (Sprint 4)
@@ -827,14 +828,14 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.COMPUTATION,
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=30,
-        tags=["python", "sandbox", "computation"]
+        tags=["python", "sandbox", "computation"],
     )
     action_registry.register(
         execute_python_expression,
         category=ToolCategory.COMPUTATION,
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=60,
-        tags=["python", "sandbox", "computation"]
+        tags=["python", "sandbox", "computation"],
     )
 
     # Ferramenta de Shell (Novo)
@@ -843,7 +844,7 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.SYSTEM,
         permission_level=PermissionLevel.DANGEROUS,
         rate_limit_per_minute=10,
-        tags=["shell", "terminal", "system"]
+        tags=["shell", "terminal", "system"],
     )
 
     action_registry.register(
@@ -851,7 +852,7 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.SYSTEM,
         permission_level=PermissionLevel.SAFE,  # Launcher considered safe as it just opens apps
         rate_limit_per_minute=20,
-        tags=["system", "launcher", "app"]
+        tags=["system", "launcher", "app"],
     )
 
     action_registry.register(
@@ -859,7 +860,7 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.WEB,
         permission_level=PermissionLevel.SAFE,
         rate_limit_per_minute=10,
-        tags=["web", "browser", "http", "scrape"]
+        tags=["web", "browser", "http", "scrape"],
     )
 
     # Ferramentas defeituosas (Sprint 5) - apenas para Reflexion
@@ -868,7 +869,7 @@ def _register_all_tools_in_action_module():
             faulty_tool,
             category=ToolCategory.CUSTOM,
             permission_level=PermissionLevel.SAFE,
-            tags=["faulty", "training", "reflexion"]
+            tags=["faulty", "training", "reflexion"],
         )
 
 

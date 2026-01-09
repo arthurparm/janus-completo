@@ -20,39 +20,38 @@ Then in Docker, Janus calls http://host.docker.internal:5001
 import asyncio
 import base64
 import io
-import os
 import subprocess
 import sys
 from datetime import datetime
 from typing import Optional
 
+
 # Check dependencies and install if needed
 def check_dependencies():
     required = ['fastapi', 'uvicorn', 'pillow']
     missing = []
-    
+
     for pkg in required:
         try:
             __import__(pkg.replace('-', '_'))
         except ImportError:
             missing.append(pkg)
-    
+
     if missing:
         print(f"Installing missing packages: {missing}")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install'] + missing + ['--quiet'])
 
 check_dependencies()
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from PIL import ImageGrab, Image
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from PIL import Image, ImageGrab  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 # Optional: win32 for active window capture
 try:
-    import win32gui
-    import win32ui
-    import win32con
+    import win32con  # noqa: F401
+    import win32gui  # noqa: F401
     WIN32_AVAILABLE = True
 except ImportError:
     WIN32_AVAILABLE = False
@@ -131,7 +130,7 @@ async def health():
 async def capture_screenshot(request: ScreenshotRequest):
     """
     Capture screen and return as base64 JPEG.
-    
+
     Modes:
     - "active": Capture only the active window (requires pywin32)
     - "full": Capture entire screen
@@ -141,23 +140,22 @@ async def capture_screenshot(request: ScreenshotRequest):
             img = capture_active_window()
         else:
             img = ImageGrab.grab()
-        
+
         if img is None:
             return ScreenshotResponse(success=False, error="Failed to capture screen")
-        
-        original_size = img.size
-        
+
+
         # Resize if needed
         if img.width > request.max_width:
             ratio = request.max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((request.max_width, new_height), Image.Resampling.LANCZOS)
-        
+
         # Convert to base64
         buffer = io.BytesIO()
         img.save(buffer, format="JPEG", quality=request.quality)
         image_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        
+
         return ScreenshotResponse(
             success=True,
             image_b64=image_b64,
@@ -165,7 +163,7 @@ async def capture_screenshot(request: ScreenshotRequest):
             height=img.height,
             source=request.mode
         )
-        
+
     except Exception as e:
         return ScreenshotResponse(success=False, error=str(e))
 
@@ -174,21 +172,21 @@ def capture_active_window() -> Optional[Image.Image]:
     """Capture only the active window."""
     if not WIN32_AVAILABLE:
         return ImageGrab.grab()
-    
+
     try:
         hwnd = win32gui.GetForegroundWindow()
         if not hwnd:
             return ImageGrab.grab()
-        
+
         left, top, right, bottom = win32gui.GetWindowRect(hwnd)
         width = right - left
         height = bottom - top
-        
+
         if width <= 0 or height <= 0:
             return ImageGrab.grab()
-        
+
         return ImageGrab.grab(bbox=(left, top, right, bottom))
-        
+
     except Exception:
         return ImageGrab.grab()
 
@@ -200,11 +198,11 @@ async def send_notification(request: NotifyRequest):
         # PowerShell toast notification
         title = request.title.replace('"', '`"').replace("'", "`'")
         message = request.message.replace('"', '`"').replace("'", "`'")
-        
+
         ps_script = f'''
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
         [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        
+
         $template = @"
         <toast>
             <visual>
@@ -215,14 +213,14 @@ async def send_notification(request: NotifyRequest):
             </visual>
         </toast>
 "@
-        
+
         $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
         $xml.LoadXml($template)
         $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
         $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Janus AI")
         $notifier.Show($toast)
         '''
-        
+
         process = await asyncio.create_subprocess_exec(
             "powershell.exe",
             "-NoProfile", "-NonInteractive",
@@ -230,15 +228,15 @@ async def send_notification(request: NotifyRequest):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
+
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
-        
+
         return {
             "success": process.returncode == 0,
             "title": request.title,
             "message": request.message
         }
-        
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -251,14 +249,14 @@ async def speak_text(request: SpeakRequest):
     try:
         # PowerShell SAPI TTS
         text = request.text.replace('"', '`"').replace("'", "`'")
-        
+
         ps_script = f'''
         Add-Type -AssemblyName System.Speech
         $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
         $synth.Rate = {(request.rate - 150) // 25}
         $synth.Speak("{text}")
         '''
-        
+
         process = await asyncio.create_subprocess_exec(
             "powershell.exe",
             "-NoProfile", "-NonInteractive",
@@ -266,14 +264,14 @@ async def speak_text(request: SpeakRequest):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
+
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
-        
+
         return {
             "success": process.returncode == 0,
             "text": request.text
         }
-        
+
     except asyncio.TimeoutError:
         return {"success": False, "error": "Speech timeout"}
     except Exception as e:
@@ -285,7 +283,7 @@ async def get_active_window_title():
     """Get the title of the active window."""
     if not WIN32_AVAILABLE:
         return {"success": False, "error": "pywin32 not installed"}
-    
+
     try:
         hwnd = win32gui.GetForegroundWindow()
         title = win32gui.GetWindowText(hwnd)
@@ -317,15 +315,15 @@ async def get_monitors():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     print("=" * 50)
     print("🤖 Janus Windows Agent")
     print("=" * 50)
-    print(f"Starting on http://localhost:5001")
-    print(f"Docker access: http://host.docker.internal:5001")
+    print("Starting on http://localhost:5001")
+    print("Docker access: http://host.docker.internal:5001")
     print(f"Active window capture: {'✓' if WIN32_AVAILABLE else '✗ (install pywin32)'}")
     print("=" * 50)
     print("Press Ctrl+C to stop")
     print()
-    
+
     uvicorn.run(app, host="0.0.0.0", port=5001, log_level="info")

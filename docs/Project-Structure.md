@@ -1,4 +1,4 @@
-# Janus 1.0 — Organização do Projeto
+# Janus — Organização do Projeto (Atualizado)
 
 Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinhadas ao estado atual do repositório. Para a visão consolidada, veja `docs/Janus-Manual.md`.
 
@@ -8,19 +8,29 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinh
 / (raiz)
 ├─ README.md
 ├─ docker-compose.yml
-├─ front/                        # Aplicação Angular (UI)
-├─ Janus/                        # Backend (Python/FastAPI, workers, serviços)
-│  ├─ app/
-│  ├─ sql/
-│  ├─ tests/
-│  ├─ requirements.txt
-│  └─ pyproject.toml
-├─ docs/                         # Documentação em Markdown
-│  ├─ Architecture.md
-│  ├─ Usage.md
-│  ├─ Configuration.md
-│  ├─ Troubleshooting.md
-│  └─ Release-Notes-1.0.0.md
+├─ front/                         # Aplicação Angular (UI)
+├─ janus/                         # Backend (FastAPI, serviços, workers, core)
+│  ├─ app/                        # Código da aplicação
+│  │  ├─ api/                     # Endpoints REST (/api/v1)
+│  │  ├─ core/                    # LLM, memória, infra, tools, workers
+│  │  ├─ db/                      # Conectores (Neo4j/Qdrant/MySQL)
+│  │  ├─ services/                # Orquestração e regras de negócio
+│  │  ├─ models/                  # Modelos Pydantic/ORM
+│  │  ├─ repositories/            # Persistência e integrações
+│  │  ├─ config.py                # Configurações (Pydantic Settings)
+│  │  └─ main.py                  # FastAPI app / lifecycle
+│  ├─ tests/                      # Testes (unit/integration/e2e)
+│  ├─ docker/                     # Dockerfiles (base e Ollama)
+│  ├─ grafana/                    # Dashboards prontos
+│  ├─ observability/              # Compose e configs (otel/promtail)
+│  ├─ http/                       # Coleções de requisições (.http)
+│  └─ pyproject.toml              # Dependências e ferramentas (Poetry/uv)
+├─ docs/                          # Documentação Markdown (manual e guias)
+│  ├─ Janus-Manual.md
+│  ├─ Project-Structure.md
+│  ├─ qdrant_resilience_improvements.md
+│  └─ guides/
+│     └─ tailscale-security-comparison.md
 ├─ docker/                       # Imagens Docker base
 │  ├─ Dockerfile
 │  └─ ollama.Dockerfile
@@ -35,7 +45,7 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinh
 
 - Separação por domínio e responsabilidade:
   - `front/` contém exclusivamente o código de interface (Angular).
-  - `Janus/` concentra o backend e serviços core.
+  - `janus/` concentra o backend e serviços core.
   - `docs/` serve de fonte única de verdade para documentação.
   - `docker/` guarda Dockerfiles; `docker-compose.yml` permanece na raiz para orquestração.
   - `scripts/` mantém utilitários independentes do app (instalação, setup, manutenção).
@@ -48,16 +58,15 @@ Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinh
   - Manual consolidado em `docs/Janus-Manual.md`.
   - Referencie `docs/` na UI (página Documentação em `front/src/app/pages/documentacao`).
 
-## Estrutura Interna do Backend (`/Janus`)
+## Estrutura Interna do Backend (`/janus`)
 
 - `app/` — Código da aplicação:
   - `api/` (routers) em `janus/app/api/v1/endpoints/*`
   - `core/` (LLM, memória, resiliência, workers)
   - `services/` (orquestração e lógica de domínio)
   - `models/`, `repositories/`, `db/`
-- `sql/` — scripts e migrações
 - `tests/` — testes unitários e de integração
-- `requirements.txt`, `pyproject.toml` — dependências e metadados
+- `pyproject.toml` — dependências e metadados
 
 ## Estrutura Interna do Frontend (`/front`)
 

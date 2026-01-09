@@ -1,16 +1,16 @@
 import asyncio
-import json
+
 import structlog
 
 from app.config import settings
-from app.services.agent_service import AgentService
-from app.services.memory_service import MemoryService
+from app.core.llm import ModelPriority, ModelRole
 from app.repositories.knowledge_repository import KnowledgeRepository
+from app.services.agent_service import AgentService
 from app.services.llm_service import LLMService
-from app.core.llm import ModelRole, ModelPriority
-from app.models.schemas import Experience
+from app.services.memory_service import MemoryService
 
 logger = structlog.get_logger(__name__)
+
 
 class KnowledgeConsolidator:
     """
@@ -19,11 +19,11 @@ class KnowledgeConsolidator:
     """
 
     def __init__(
-            self,
-            agent_service: AgentService,
-            memory_service: MemoryService,
-            knowledge_repo: KnowledgeRepository,
-            llm_service: LLMService
+        self,
+        agent_service: AgentService,
+        memory_service: MemoryService,
+        knowledge_repo: KnowledgeRepository,
+        llm_service: LLMService,
     ):
         self._agent_service = agent_service
         self._memory_service = memory_service
@@ -68,7 +68,9 @@ class KnowledgeConsolidator:
     async def run_consolidation(self):
         # Coleta experiências recentes (MVP): usa busca ampla
         try:
-            unprocessed_experiences = await self._memory_service.recall_experiences(query="consolidate", limit=50)
+            unprocessed_experiences = await self._memory_service.recall_experiences(
+                query="consolidate", limit=50
+            )
         except Exception:
             unprocessed_experiences = []
         if not unprocessed_experiences:
@@ -87,18 +89,24 @@ class KnowledgeConsolidator:
                 meta = exp.get("metadata") or {}
                 conf = None
                 try:
-                    conf = float(meta.get("confidence")) if meta.get("confidence") is not None else None
+                    conf = (
+                        float(meta.get("confidence"))
+                        if meta.get("confidence") is not None
+                        else None
+                    )
                 except Exception:
                     conf = None
-                if conf is not None and conf < float(getattr(settings, "KNOWLEDGE_MIN_CONFIDENCE", 0.6)):
+                if conf is not None and conf < float(
+                    getattr(settings, "KNOWLEDGE_MIN_CONFIDENCE", 0.6)
+                ):
                     continue
                 concepts = self._extract_concepts(content)
                 if concepts:
                     await self._knowledge_repo.merge_experience_mentions(exp, concepts)
-                
+
                 # --- Evolution Step: Extract Wisdom (Lessons/Rules) ---
                 await self._extract_and_save_wisdom(content)
-                
+
             except Exception as e:
                 logger.debug("Falha ao consolidar experiência", exc_info=e)
 
@@ -117,25 +125,26 @@ class KnowledgeConsolidator:
             "to improve future performance. "
             "Ignore trivial chit-chat. Focus on actionable insights.\n\n"
             f"Content:\n{text}\n\n"
-            "Output format (JSON list of strings): [\"Lesson: Always confirm before delete\", \"Preference: User likes concise answers\"]"
+            'Output format (JSON list of strings): ["Lesson: Always confirm before delete", "Preference: User likes concise answers"]'
         )
-        
+
         try:
             response = await self._llm_service.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.KNOWLEDGE_CURATOR,
-                priority=ModelPriority.BACKGROUND_BATCH
+                priority=ModelPriority.BACKGROUND_BATCH,
             )
             content = response.get("response", "")
-            
+
             # Tenta parsear JSON
             import json
+
             start = content.find("[")
             end = content.rfind("]")
             if start != -1 and end != -1:
-                json_str = content[start:end+1]
+                json_str = content[start : end + 1]
                 lessons = json.loads(json_str)
-                
+
                 for lesson in lessons:
                     if isinstance(lesson, str) and len(lesson) > 10:
                         logger.info(f"Evolução: Nova lição aprendida: {lesson}")
@@ -143,7 +152,7 @@ class KnowledgeConsolidator:
                         await self._memory_service.add_experience(
                             type="lesson",
                             content=lesson,
-                            metadata={"source": "consolidation_worker", "confidence": 1.0}
+                            metadata={"source": "consolidation_worker", "confidence": 1.0},
                         )
         except Exception as e:
             logger.warning("Falha ao extrair sabedoria via LLM", exc_info=e)
@@ -151,9 +160,26 @@ class KnowledgeConsolidator:
     def _extract_concepts(self, text: str) -> list:
         # Extrai termos significativos (MVP): palavras alfanuméricas com tamanho >= 4
         import re
+
         tokens = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9_\.]{4,}", text or "")
         # Normaliza e remove stopwords simples
-        stop = {"para","como","quando","onde","porque","isso","dessa","nesta","with","that","this","from","into","have","been"}
+        stop = {
+            "para",
+            "como",
+            "quando",
+            "onde",
+            "porque",
+            "isso",
+            "dessa",
+            "nesta",
+            "with",
+            "that",
+            "this",
+            "from",
+            "into",
+            "have",
+            "been",
+        }
         canon = []
         for t in tokens:
             tt = t.strip().lower().strip("._")
