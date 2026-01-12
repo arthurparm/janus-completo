@@ -7,7 +7,9 @@ próximo agente (Professor ou Sandbox) com base em heurísticas de complexidade.
 
 import logging
 from datetime import datetime
+from typing import Any
 
+from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
@@ -22,17 +24,27 @@ logger = logging.getLogger(__name__)
 
 def _build_coding_prompt(state: TaskState) -> str:
     goal = state.original_goal
-    review_notes = state.data_payload.get("review_notes")
-    context = state.data_payload.get("context")
+    review_notes = state.data_payload.review_notes
+    context = state.data_payload.context
+    thinker_plan = state.data_payload.thinker_plan
     prompt = [
         f"Objetivo: {goal}",
-        "Escreva um script claro, com comentários essenciais e estrutura modular.",
-        "Retorne apenas o código final, sem explicações externas.",
+        f"PLANO DE ARQUITETURA (Siga Estritamente): {thinker_plan}" if thinker_plan else "",
+        "INSTRUÇÕES DE CODIFICAÇÃO:",
+        "1. ANÁLISE PRÉVIA (`<thinking>`): Antes de gerar código, analise o problema passo-a-passo dentro de tags <thinking>. Planeje a estrutura, imports e tratamento de erros.",
+        "2. PADRÕES DE CÓDIGO:",
+        "   - Use Type Hints (PEP 484) em TODAS as funções.",
+        "   - Siga PEP 8.",
+        "   - Inclua docstrings no estilo Google ou Sphinx.",
+        "   - Trate erros explicitamente (try/except) onde houver I/O ou risco de falha.",
+        "3. RETORNO:",
+        "   - Retorne o código final dentro de um bloco markdown ```python ou ```.",
+        "   - Garanta que o código seja executável e modular.",
     ]
     if context:
-        prompt.append(f"Contexto: {context}")
+        prompt.append(f"Contexto Técnico: {context}")
     if review_notes:
-        prompt.append(f"Correções solicitadas: {review_notes}")
+        prompt.append(f"CRÍTICA ANTERIOR (Corrija estes pontos): {review_notes}")
     return "\n".join(prompt)
 
 
@@ -59,44 +71,105 @@ async def process_code_task(task: TaskMessage) -> None:
         state.current_agent_role = "coder"
 
         llm_service = LLMService(LLMRepository())
-        prompt = _build_coding_prompt(state)
-        result = llm_service.invoke_llm(
-            prompt=prompt,
-            role=ModelRole.CODE_GENERATOR,
-            priority=ModelPriority.HIGH_QUALITY,
-            timeout_seconds=None,
-        )
-        code = result.get("response", "")
+
+        # Deep Self-Healing: Retry loop for compiler errors
+        max_iterations = settings.CODER_MAX_SELF_HEALING_ITERATIONS if settings.CODER_SELF_HEALING_ENABLED else 1
+        code = ""
+        compilation_error = None
+
+        for iteration in range(max_iterations):
+            # Build prompt (includes previous error if any)
+            prompt = _build_coding_prompt(state)
+            if compilation_error and iteration > 0:
+                prompt += f"\n\nERRO NA ITERAÇÃO ANTERIOR (corrija isso):\n{compilation_error}"
+
+            result = llm_service.invoke_llm(
+                prompt=prompt,
+                role=ModelRole.CODE_GENERATOR,
+                priority=ModelPriority.HIGH_QUALITY,
+                timeout_seconds=None,
+            )
+            code_response = result.get("response", "")
+
+            # Extract code from markdown block
+            import re
+            match = re.search(r"```python\n(.*?)```", code_response, re.DOTALL)
+            if not match:
+                match = re.search(r"```\n(.*?)```", code_response, re.DOTALL)
+
+            if match:
+                code = match.group(1)
+            else:
+                # Fallback: if no markdown block, assume raw code if appropriate (less likely with new prompt)
+                code = code_response
+
+            # Try to validate code syntax
+            if settings.CODER_SELF_HEALING_ENABLED:
+                validation_result = _validate_code_syntax(code)
+                if validation_result["valid"]:
+                    logger.info(
+                        f"Code validated on iteration {iteration + 1}/{max_iterations}",
+                        extra={"task_id": state.task_id},
+                    )
+                    break
+                else:
+                    compilation_error = validation_result["error"]
+                    logger.warning(
+                        f"Code validation failed on iteration {iteration + 1}, retrying...",
+                        extra={"task_id": state.task_id, "error": compilation_error[:200]},
+                    )
+            else:
+                break  # No self-healing, skip validation loop
+
         lines_count = code.count("\n") + 1
-        state.data_payload["script_code"] = code
+        state.data_payload.script_code = code
+        state.data_payload.self_healing_iterations = iteration + 1
         state.history.append(
             {
                 "agent_role": "coder",
                 "action": "code_generated",
-                "notes": f"lines={lines_count}",
+                "notes": f"lines={lines_count}, iterations={iteration + 1}",
                 "timestamp": datetime.utcnow().timestamp(),
             }
         )
 
-        complexity = _estimate_complexity(code)
-        if complexity > 7:
-            state.next_agent_role = "professor"
-        else:
-            state.next_agent_role = "sandbox"
+        # Red Team Intercept: Todo código deve ser auditado antes de revisão ou execução
+        state.next_agent_role = "red_team"
 
         service = CollaborationService(CollaborationRepository())
         await service.pass_task(state)
+        complexity = _estimate_complexity(code)
         logger.info(
             "CodeAgent produziu código e encaminhou",
             extra={
                 "task_id": state.task_id,
                 "next": state.next_agent_role,
                 "complexity": complexity,
+                "iterations": iteration + 1,
             },
         )
     except Exception as e:
         logger.error(f"CodeAgent falhou: {e}", exc_info=True)
         raise
+
+
+def _validate_code_syntax(code: str) -> dict[str, Any]:
+    """
+    Validate Python code syntax using compile().
+    
+    Returns:
+        Dict with 'valid' bool and 'error' string if invalid.
+    """
+    try:
+        compile(code, "<string>", "exec")
+        return {"valid": True, "error": None}
+    except SyntaxError as e:
+        return {
+            "valid": False,
+            "error": f"SyntaxError: {e.msg} at line {e.lineno}: {e.text}",
+        }
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
 
 
 async def start_code_agent_worker():
