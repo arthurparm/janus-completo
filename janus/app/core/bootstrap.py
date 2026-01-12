@@ -53,9 +53,17 @@ logger = structlog.get_logger(__name__)
 
 async def bootstrap_infrastructure():
     logger.info("Application startup: Initializing infrastructure...")
+
+    # Security: Validate production secrets before anything else
+    from app.core.security.secret_validator import validate_production_secrets
+    validate_production_secrets()
+
     try:
         try:
             init_mysql_database()
+            # Register Data Retention Listeners
+            from app.db.sync_events import register_cleanup_events
+            register_cleanup_events()
         except Exception:
             logger.warning("MySQL init falhou; prosseguindo sem criar tabelas automaticamente.")
         await asyncio.gather(initialize_graph_db(), initialize_memory_db(), initialize_broker())
