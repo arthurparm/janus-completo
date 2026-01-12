@@ -1,0 +1,24 @@
+/**
+ * =============================================================================
+ * JANUS DESIGN SYSTEM - Index
+ * =============================================================================
+ * 
+ * Entry point for the Janus Design System.
+ * Import this file to access all design tokens and mixins.
+ * 
+ * Usage in components:
+ *   @use '@shared/design-system' as ds;
+ *   
+ *   .my-component {
+ *     color: ds.$color-cyan;
+ *     @include ds.glass-panel;
+ *   }
+ * 
+ * =============================================================================
+ */
+
+// Forward all exports from the design system
+@forward 'design-system';
+
+// Also use it so this file can be imported directly
+@use 'design-system' as *;
