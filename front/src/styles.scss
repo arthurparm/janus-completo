@@ -272,6 +272,14 @@ pre {
   }
 }
 
+/* Confirm dialog (MatDialog container) */
+.confirm-dialog .mat-mdc-dialog-surface {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 12px;
+  padding: 0;
+}
+
 .glass-table {
   width: 100%;
   border-collapse: separate;
