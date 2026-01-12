@@ -55,10 +55,13 @@ from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 from app.services.observability_service import ObservabilityService
 from app.services.optimization_service import OptimizationService
+from app.services.prompt_builder_service import PromptBuilderService
+from app.services.rag_service import RAGService
 from app.services.reflexion_service import ReflexionService
 from app.services.sandbox_service import SandboxService
 from app.services.scheduler_service import get_scheduler, initialize_default_jobs
 from app.services.task_service import TaskService
+from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
 
 logger = structlog.get_logger(__name__)
@@ -112,6 +115,9 @@ class Kernel:
         self.llm_service: LLMService | None = None
         self.chat_service: ChatService | None = None
         self.assistant_service: AssistantService | None = None
+        self.prompt_service: PromptBuilderService | None = None
+        self.tool_executor: ToolExecutorService | None = None
+        self.rag_service: RAGService | None = None
 
         # Core
         self.goal_manager: GoalManager | None = None
@@ -299,8 +305,20 @@ class Kernel:
         )
 
         # Chat
+        # Core specialized services
+        self.prompt_service = PromptBuilderService()
+        self.tool_executor = ToolExecutorService()
+        self.rag_service = RAGService(self.chat_repo, self.llm_service, self.memory_service)
+
+        # Chat
         self.chat_service = ChatService(
-            self.chat_repo, self.llm_service, self.tool_service, self.memory_service
+            self.chat_repo,
+            self.llm_service,
+            self.tool_service,
+            self.memory_service,
+            prompt_service=self.prompt_service,
+            tool_executor_service=self.tool_executor,
+            rag_service=self.rag_service,
         )
 
     async def _start_background_processes(self):
