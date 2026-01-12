@@ -583,48 +583,60 @@ class KnowledgeConsolidator:
             "elapsed_seconds": 0.0,
         }
 
+        offset = None
+
         try:
-            logger.info(f"Buscando até {limit} experiências para consolidação...")
-            scroll_result = await self.qdrant_client.scroll(
-                collection_name=settings.QDRANT_COLLECTION_EPISODIC,
-                limit=limit,
-                with_payload=True,
-                with_vectors=False,
-            )
-            points = (
-                scroll_result[0]
-                if isinstance(scroll_result, tuple)
-                else getattr(scroll_result, "points", [])
-            )
-            logger.info(f"Encontradas {len(points)} experiências para consolidar.")
-            for point in points:
-                stats["total_processed"] += 1
-                try:
-                    exp_id = str(point.id)
-                    raw_content = point.payload.get("content", "")
+            while stats["total_processed"] < limit:
+                remaining = limit - stats["total_processed"]
+                logger.info(f"Buscando até {remaining} experiências para consolidação...")
+                scroll_result = await self.qdrant_client.scroll(
+                    collection_name=settings.QDRANT_COLLECTION_EPISODIC,
+                    limit=remaining,
+                    with_payload=True,
+                    with_vectors=False,
+                    offset=offset,
+                )
+                if isinstance(scroll_result, tuple):
+                    points = scroll_result[0]
+                    offset = scroll_result[1]
+                else:
+                    points = getattr(scroll_result, "points", [])
+                    offset = getattr(scroll_result, "next_page_offset", None)
+                if not points:
+                    break
+                logger.info(f"Encontradas {len(points)} experiências para consolidar.")
+                for point in points:
+                    if stats["total_processed"] >= limit:
+                        break
+                    stats["total_processed"] += 1
                     try:
-                        content = decrypt_text(raw_content, point.payload.get("metadata"))
+                        exp_id = str(point.id)
+                        raw_content = point.payload.get("content", "")
+                        try:
+                            content = decrypt_text(raw_content, point.payload.get("metadata"))
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to decrypt experience {exp_id}: {e}. Using raw content."
+                            )
+                            content = raw_content
+                        if not content or len(content.strip()) < 10:
+                            logger.debug(f"Ignorando experiência {exp_id} (conteúdo vazio).")
+                            continue
+                        already_consolidated = await self._check_if_consolidated(exp_id)
+                        if already_consolidated:
+                            logger.debug(f"Experiência {exp_id} já consolidada. Pulando.")
+                            continue
+                        metadata = {k: v for k, v in point.payload.items() if k != "content"}
+                        result = await self.consolidate_experience(exp_id, content, metadata)
+                        stats["successful"] += 1
+                        stats["total_entities"] += result.get("entities_created", 0)
+                        stats["total_relationships"] += result.get("relationships_created", 0)
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to decrypt experience {exp_id}: {e}. Using raw content."
-                        )
-                        content = raw_content
-                    if not content or len(content.strip()) < 10:
-                        logger.debug(f"Ignorando experiência {exp_id} (conteúdo vazio).")
+                        stats["failed"] += 1
+                        logger.error(f"Falha ao consolidar experiência {point.id}: {e}")
                         continue
-                    already_consolidated = await self._check_if_consolidated(exp_id)
-                    if already_consolidated:
-                        logger.debug(f"Experiência {exp_id} já consolidada. Pulando.")
-                        continue
-                    metadata = {k: v for k, v in point.payload.items() if k != "content"}
-                    result = await self.consolidate_experience(exp_id, content, metadata)
-                    stats["successful"] += 1
-                    stats["total_entities"] += result.get("entities_created", 0)
-                    stats["total_relationships"] += result.get("relationships_created", 0)
-                except Exception as e:
-                    stats["failed"] += 1
-                    logger.error(f"Falha ao consolidar experiência {point.id}: {e}")
-                    continue
+                if not offset:
+                    break
             stats["elapsed_seconds"] = time.perf_counter() - start_time
             logger.info(
                 f"Consolidação em lote concluída: {stats['successful']}/{stats['total_processed']} "
