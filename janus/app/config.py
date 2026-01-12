@@ -12,7 +12,7 @@ class AppSettings(BaseSettings):
 
     # App
     APP_NAME: str = "Janus"
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = "0.4.30"
     ENVIRONMENT: str = "development"
     # Identidade
     AGENT_IDENTITY_NAME: str = "Janus"
