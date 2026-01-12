@@ -406,6 +406,42 @@ class GraphDatabase:
                     pass
             raise
 
+    async def cleanup_synonym_properties(
+        self, label: str, canonical_mappings: dict[str, list[str]]
+    ) -> int:
+        if self._driver is None or self._offline:
+            return 0
+        total_updated = 0
+        async with self._driver.session() as session:
+            tx = await session.begin_transaction()
+            try:
+                for canonical, synonyms in canonical_mappings.items():
+                    if not synonyms:
+                        continue
+                    where_clauses = [f"n.{syn} IS NOT NULL" for syn in synonyms]
+                    set_clauses = [
+                        f"n.{canonical} = coalesce(n.{canonical}, n.{syn})" for syn in synonyms
+                    ]
+                    remove_clauses = [f"n.{syn}" for syn in synonyms]
+                    query = (
+                        f"MATCH (n:{label}) "
+                        f"WHERE {' OR '.join(where_clauses)} "
+                        f"SET {', '.join(set_clauses)} "
+                        f"REMOVE {', '.join(remove_clauses)} "
+                        f"RETURN count(n) AS count"
+                    )
+                    result = await tx.run(query)
+                    record = await result.single()
+                    if record and "count" in record:
+                        try:
+                            total_updated += int(record["count"])
+                        except Exception:
+                            pass
+                await tx.commit()
+            finally:
+                await tx.close()
+        return total_updated
+
     async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int:
         query = f"MERGE (n:{label} {{name: $name}}) RETURN id(n) as node_id"
         start = asyncio.get_event_loop().time()

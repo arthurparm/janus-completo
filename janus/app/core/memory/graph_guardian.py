@@ -229,6 +229,50 @@ RELATION_SYNONYMS: dict[str, RelationType] = {
     "uses_model": RelationType.HAS_MODEL,
 }
 
+ENTITY_PROPERTY_SYNONYMS: dict[str, dict[str, list[str]]] = {
+    EntityType.TOOL.value: {
+        "description": ["descricao", "descrição"],
+        "purpose": ["finalidade", "proposito", "propósito"],
+        "category": ["categoria", "categoria_solicitada"],
+        "permission_level": ["nivel_permissao", "nivel_permissao_solicitado"],
+    },
+    EntityType.CONCEPT.value: {
+        "description": ["descricao", "descrição"],
+        "purpose": ["finalidade"],
+        "category": ["categoria"],
+    },
+    EntityType.FUNCTION.value: {
+        "description": ["descricao", "descrição"],
+        "parameter": ["parametro"],
+        "output": ["retorno"],
+    },
+    EntityType.ERROR.value: {
+        "description": ["descricao", "descrição"],
+        "category": ["categoria"],
+        "context": ["contexto"],
+    },
+    EntityType.PATTERN.value: {
+        "description": ["descricao", "descrição"],
+        "purpose": ["proposito", "propósito"],
+        "category": ["categoria"],
+        "context": ["contexto"],
+    },
+    EntityType.SOLUTION.value: {
+        "description": ["descricao", "descrição"],
+        "category": ["categoria"],
+        "approach": ["abordagem"],
+    },
+    EntityType.TECHNOLOGY.value: {
+        "description": ["descricao", "descrição"],
+        "category": ["categoria"],
+        "context": ["contexto"],
+        "purpose": ["finalidade"],
+    },
+    EntityType.PERSON.value: {
+        "role": ["papel", "funcao", "função"],
+    },
+}
+
 
 class GraphGuardian:
     """
@@ -377,6 +421,22 @@ class GraphGuardian:
             )
             return RelationType.RELATES_TO
 
+    def _normalize_properties(self, entity_type: EntityType, properties: dict | None) -> dict:
+        props = dict(properties or {})
+        mapping = ENTITY_PROPERTY_SYNONYMS.get(entity_type.value)
+        if not mapping:
+            return props
+        for canonical, synonyms in mapping.items():
+            if canonical not in props:
+                for synonym in synonyms:
+                    if synonym in props and props[synonym] not in (None, ""):
+                        props[canonical] = props[synonym]
+                        break
+            for synonym in synonyms:
+                if synonym in props:
+                    props.pop(synonym, None)
+        return props
+
     def validate_and_normalize_entity(
         self, name: str, entity_type: str, properties: dict | None = None
     ) -> dict[str, any]:
@@ -394,13 +454,18 @@ class GraphGuardian:
         normalized_name = self.normalize_entity_name(name)
         validated_type = self.normalize_entity_type(entity_type)
 
+        if properties is None:
+            normalized_properties = {}
+        else:
+            normalized_properties = self._normalize_properties(validated_type, properties)
+
         if not normalized_name:
             raise ValueError(f"Nome de entidade inválido após normalização: '{name}'")
 
         return {
             "name": normalized_name,
             "type": validated_type.value,
-            "properties": properties or {},
+            "properties": normalized_properties,
             "original_name": name,  # Mantém original para debug
         }
 
