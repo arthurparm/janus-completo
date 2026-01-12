@@ -43,7 +43,7 @@ class LLMService:
     def __init__(self, repo: LLMRepository):
         self._repo = repo
 
-    def invoke_llm(
+    async def invoke_llm(
         self,
         prompt: str,
         role: ModelRole,
@@ -68,7 +68,7 @@ class LLMService:
                 )
                 prompt = f"{identity_header}\n\n{prompt}"
 
-            return self._repo.invoke_llm(
+            return await self._repo.invoke_llm(
                 prompt, role, priority, timeout_seconds, user_id=user_id, project_id=project_id
             )
         except TimeoutError as e:
@@ -143,7 +143,7 @@ class LLMService:
         return await check_llm_manager_health()
 
     # --- Provider selection and CB state ---
-    def select_provider(
+    async def select_provider(
         self,
         role: ModelRole,
         priority: ModelPriority,
@@ -151,7 +151,7 @@ class LLMService:
         project_id: str | None = None,
     ) -> dict[str, Any]:
         """Seleciona provider/modelo antecipadamente sem invocar o LLM."""
-        client = get_llm_client(
+        client = await get_llm_client(
             role=role, priority=priority, user_id=user_id, project_id=project_id
         )
         return {

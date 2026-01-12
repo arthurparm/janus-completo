@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.graph import GraphDatabase, get_graph_db
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.db.vector_store import get_qdrant_client
 from app.repositories.knowledge_repository import KnowledgeRepository
 
@@ -15,17 +15,17 @@ logger = structlog.get_logger(__name__)
 
 
 class DedupeService:
-    def __init__(self, mysql_session: Session | None = None, graph_db: GraphDatabase | None = None):
-        self._mysql_session = mysql_session
+    def __init__(self, db_session: Session | None = None, graph_db: GraphDatabase | None = None):
+        self._db_session = db_session
         self._graph_db = graph_db
 
     def _get_session(self) -> Session:
-        return self._mysql_session or mysql_db.get_session_direct()
+        return self._db_session or db.get_session_direct()
 
     async def _get_graph(self) -> GraphDatabase:
         return self._graph_db or get_graph_db()
 
-    def detect_mysql_duplicates(self) -> dict[str, Any]:
+    def detect_db_duplicates(self) -> dict[str, Any]:
         s = self._get_session()
         try:
             dup_users_email = s.execute(
@@ -49,10 +49,10 @@ class DedupeService:
                 "experiments_by_name_user": [dict(r) for r in dup_experiments],
             }
         finally:
-            if self._mysql_session is None:
+            if self._db_session is None:
                 s.close()
 
-    def fix_mysql_duplicates(self) -> dict[str, Any]:
+    def fix_db_duplicates(self) -> dict[str, Any]:
         s = self._get_session()
         report: dict[str, Any] = {"users": [], "experiments": []}
         try:
@@ -146,7 +146,7 @@ class DedupeService:
             s.commit()
             return report
         finally:
-            if self._mysql_session is None:
+            if self._db_session is None:
                 s.close()
 
     async def dedupe_graph(self) -> dict[str, Any]:
@@ -210,13 +210,13 @@ class DedupeService:
         return path
 
     async def run(self, dry_run: bool = True) -> dict[str, Any]:
-        report: dict[str, Any] = {"dry_run": dry_run, "mysql": {}, "neo4j": {}, "qdrant": {}}
+        report: dict[str, Any] = {"dry_run": dry_run, "db": {}, "neo4j": {}, "qdrant": {}}
         try:
-            report["mysql"]["detected"] = self.detect_mysql_duplicates()
+            report["db"]["detected"] = self.detect_db_duplicates()
             if not dry_run:
-                report["mysql"]["fixed"] = self.fix_mysql_duplicates()
+                report["db"]["fixed"] = self.fix_db_duplicates()
         except Exception:
-            logger.warning("Falha em dedupe MySQL", exc_info=True)
+            logger.warning("Falha em dedupe DB", exc_info=True)
         try:
             report["neo4j"]["fixed"] = await self.dedupe_graph()
         except Exception:

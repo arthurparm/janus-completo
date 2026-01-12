@@ -78,9 +78,9 @@ class CollaborationService:
     def __init__(self, repo: CollaborationRepository):
         self._repo = repo
 
-    def create_agent(self, role: AgentRole) -> dict[str, Any]:
+    async def create_agent(self, role: AgentRole) -> dict[str, Any]:
         logger.info("Orquestrando criação de agente via serviço", role=role.value)
-        agent = self._repo.create_agent(role)
+        agent = await self._repo.create_agent(role)
         return {"agent_id": agent.agent_id, "role": agent.role.value}
 
     def list_agents(self) -> list[dict[str, Any]]:

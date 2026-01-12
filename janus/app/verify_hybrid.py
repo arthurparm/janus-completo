@@ -20,7 +20,8 @@ async def test_deepseek():
             print("❌ DEEPSEEK_API_KEY não encontrada no .env")
             return
 
-        client = get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
+
+        client = await get_llm_client(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
         # Hack para forçar DeepSeek se o Router não o escolher por padrão
         client.provider = "deepseek"
         client.model = settings.DEEPSEEK_MODEL_NAME
@@ -49,7 +50,7 @@ async def test_deepseek():
 
         start = time.perf_counter()
         print("   Enviando prompt: 'Quanto é 25 * 4? Responda curto.'")
-        resp = await janus_client.asend("Quanto é 25 * 4? Responda curto.")
+        resp = await janus_client.send("Quanto é 25 * 4? Responda curto.")
         dur = time.perf_counter() - start
 
         print(f"✅ RESPOSTA: {resp}")
@@ -65,7 +66,7 @@ async def test_local_ollama():
         print(f"   Configuração carregada: LAYERS={settings.OLLAMA_GPU_LAYERS}, CTX={settings.OLLAMA_NUM_CTX}")
 
         # Usa o factory oficial que aplica as otimizações
-        client = get_llm_client(role=ModelRole.CODE_GENERATOR, priority=ModelPriority.LOCAL_ONLY)
+        client = await get_llm_client(role=ModelRole.CODE_GENERATOR, priority=ModelPriority.LOCAL_ONLY)
 
         # Verifica se pegou o modelo certo
         print(f"   Modelo Selecionado: {client.model} ({client.provider})")
@@ -74,7 +75,7 @@ async def test_local_ollama():
 
         start = time.perf_counter()
         print("   Gerando código...")
-        resp = await client.asend(prompt)
+        resp = await client.send(prompt)
         dur = time.perf_counter() - start
 
         # Estimativa grosseira de tokens

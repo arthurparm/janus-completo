@@ -49,14 +49,14 @@ async def generate_hypothetical_answer(question: str) -> str:
         return question  # Fall back to original question
 
     try:
-        llm = get_llm(
+        llm = await get_llm(
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
             cache_key="hyde",
         )
 
         prompt = HYDE_PROMPT.format(question=question)
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         hypothetical = response.content.strip()
 
         logger.debug(
@@ -94,7 +94,7 @@ async def rerank_chunks(
         top_k = settings.RAG_RERANK_TOP_K
 
     try:
-        llm = get_llm(
+        llm = await get_llm(
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
             cache_key="rerank",
@@ -107,7 +107,7 @@ async def rerank_chunks(
         ])
 
         prompt = RERANK_PROMPT.format(question=question, chunks=chunks_text)
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         ranking_str = response.content.strip()
 
         # Parse ranking indices
