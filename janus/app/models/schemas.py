@@ -9,6 +9,21 @@ from pydantic import BaseModel, Field
 # --- Schemas de Dados ---
 
 
+class ExperienceMetadata(BaseModel):
+    source_task_id: str | None = None
+    original_goal: str | None = None
+    origin: str | None = None
+    source_agent: str | None = None
+    status: str | None = None
+    ts_ms: int | None = None
+
+    class Config:
+        extra = "allow"
+
+    def get(self, key: str, default: Any | None = None) -> Any | None:
+        return getattr(self, key, default)
+
+
 class Experience(BaseModel):
     """
     Representa uma única experiência ou evento a ser memorizado.
@@ -18,7 +33,7 @@ class Experience(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     type: str
     content: str
-    metadata: dict = Field(default_factory=dict)
+    metadata: ExperienceMetadata = Field(default_factory=ExperienceMetadata)
 
 
 class ScoredExperience(Experience):
@@ -125,6 +140,9 @@ class QueueName(str, Enum):
     TASKS_AGENT_CODER = "janus.tasks.agent.coder"
     TASKS_AGENT_PROFESSOR = "janus.tasks.agent.professor"
     TASKS_AGENT_SANDBOX = "janus.tasks.agent.sandbox"
+    TASKS_AGENT_THINKER = "janus.tasks.agent.thinker"
+    TASKS_AGENT_RED_TEAM = "janus.tasks.agent.red_team"
+    TASKS_KNOWLEDGE_DISTILLATION = "janus.knowledge.distillation"
     PRODUCTIVITY_GOOGLE = "janus.productivity.google"
 
 
@@ -141,7 +159,6 @@ class TaskMessage(BaseModel):
     def to_msgpack(self) -> bytes:
         return msgpack.packb(self.model_dump(), use_bin_type=True)
 
-    @staticmethod
     def from_msgpack(data: bytes) -> "TaskMessage":
         obj = msgpack.unpackb(data, raw=False)
         return TaskMessage(**obj)
@@ -153,6 +170,7 @@ class TaskStateEvent(BaseModel):
     agent_role: str | None = None
     action: str
     notes: str | None = None
+    reasoning: str | None = None  # Chain of Thought / Reasoning Trace
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
 
 
@@ -182,6 +200,29 @@ class SystemOverviewResponse(BaseModel):
     workers_status: list[WorkerStatusResponse]
 
 
+class AgentPayload(BaseModel):
+    """Payload estruturado para TaskState."""
+
+    context: str | None = None
+    thinker_plan: str | None = None
+    script_code: str | None = None
+    self_healing_iterations: int | None = None
+    tool_output: str | None = None
+    sandbox_output: str | None = None
+    sandbox_error: str | None = None
+    review_notes: str | None = None
+    approved: bool | None = None
+    execution_result: str | None = None
+    security_audit: str | None = None
+    audit_passed: bool | None = None
+    security_feedback: str | None = None
+    code: str | None = None  # Legacy/Generic
+    response: str | None = None  # Legacy/Generic
+
+    class Config:
+        extra = "allow"
+
+
 class TaskState(BaseModel):
     """
     Objeto de colaboração rico compartilhado entre agentes.
@@ -194,12 +235,15 @@ class TaskState(BaseModel):
     original_goal: str
     current_agent_role: str | None = None
     next_agent_role: str | None = None
-    data_payload: dict[str, Any] = Field(default_factory=dict)
+    data_payload: AgentPayload = Field(default_factory=AgentPayload)
     history: list[TaskStateEvent] = Field(default_factory=list)
     status: str = Field(default="in_progress")
     retries: int = Field(default=0)
     meta: dict[str, Any] = Field(default_factory=dict)
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+    # Stateful Workers: Context Caching
+    context_cached: bool = Field(default=False)
+    static_context_hash: str | None = Field(default=None)
 
     def to_msgpack(self) -> bytes:
         return msgpack.packb(self.model_dump(), use_bin_type=True)
