@@ -1,9 +1,7 @@
 <div class="autonomy-container">
     <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs">
-        <!-- Tab 1: Control Tower (Existing Content) -->
-        <mat-tab label="Control Tower">
+        <mat-tab label="Painel de Autonomia">
             <div class="tab-content">
-                <!-- Header / Control Tower -->
                 <header class="control-tower">
                     <div class="status-indicator" [class.active]="status?.active">
                         <div class="pulse-ring"></div>
@@ -11,18 +9,25 @@
                     </div>
 
                     <div class="header-content">
-                        <h1>Autonomy Control Tower</h1>
+                        <h1>Autonomia do Janus</h1>
                         <div class="rt-status-bar" *ngIf="rtStatus">
                             <span class="state-badge" [class.thinking]="rtStatus.state === 'thinking'"
                                 [class.executing]="rtStatus.state === 'executing'">
-                                {{ rtStatus.state | uppercase }}
+                                {{ getRtStateLabel(rtStatus.state) }}
                             </span>
                             <span class="detail-text">{{ rtStatus.detail }}</span>
                         </div>
                         <p class="subtitle" *ngIf="!rtStatus">
-                            Status: <span [class.text-active]="status?.active">{{ status?.active ? 'OPERATIONAL' :
-                                'STANDBY' }}</span>
-                            <span *ngIf="status?.active"> • Cycle #{{ status?.cycle_count }}</span>
+                            Status:
+                            <span [class.text-active]="status?.active">
+                                {{ status?.active ? 'ATIVO' : 'EM ESPERA' }}
+                            </span>
+                            <span *ngIf="status?.active"> • Ciclo #{{ status?.cycle_count }}</span>
+                        </p>
+                        <p class="helper-text">
+                            Quando a autonomia está ativa, o Janus executa ciclos periódicos usando ferramentas
+                            aprovadas para monitorar o sistema, revisar metas e tomar ações dentro do perfil de risco
+                            definido abaixo.
                         </p>
                     </div>
 
@@ -30,37 +35,45 @@
                         <button mat-flat-button [color]="status?.active ? 'warn' : 'primary'" class="giant-toggle"
                             (click)="toggleAutonomy()" [disabled]="isLoading">
                             <mat-icon>{{ status?.active ? 'stop' : 'play_arrow' }}</mat-icon>
-                            {{ status?.active ? 'ABORT LOOP' : 'ENGAGE SYSTEM' }}
+                            {{ status?.active ? 'Parar autonomia' : 'Iniciar autonomia' }}
                         </button>
                     </div>
                 </header>
 
-                <!-- Configuration Deck -->
+                <section class="help-summary glass-panel">
+                    <h2>Como usar o modo autônomo</h2>
+                    <p>1. Escolha o perfil de risco adequado ao ambiente.</p>
+                    <p>2. Defina o intervalo entre ciclos de verificação.</p>
+                    <p>3. Ative a autonomia e acompanhe o registro de ações.</p>
+                    <p>4. Use a aba de metas estratégicas para orientar as decisões.</p>
+                </section>
+
                 <section class="config-deck" *ngIf="!status?.active">
                     <mat-card class="dark-card">
                         <mat-card-header>
                             <mat-icon mat-card-avatar>tune</mat-icon>
-                            <mat-card-title>Mission Parameters</mat-card-title>
+                            <mat-card-title>Parâmetros da autonomia</mat-card-title>
                         </mat-card-header>
                         <mat-card-content class="form-grid">
 
                             <mat-form-field appearance="outline">
-                                <mat-label>Risk Profile</mat-label>
+                                <mat-label>Perfil de risco</mat-label>
                                 <mat-select [(ngModel)]="selectedRisk">
                                     <mat-option value="conservative">
-                                        <span class="safe">🛡️ Conservative</span> (Read-only)
+                                        <span class="safe">🛡️ Conservador</span> (somente leitura, nenhuma ação
+                                        destrutiva)
                                     </mat-option>
                                     <mat-option value="balanced">
-                                        <span class="balanced">⚖️ Balanced</span> (Safe edits)
+                                        <span class="balanced">⚖️ Balanceado</span> (edições consideradas seguras)
                                     </mat-option>
                                     <mat-option value="aggressive">
-                                        <span class="danger">🔥 Aggressive</span> (Full access)
+                                        <span class="danger">🔥 Agressivo</span> (acesso amplo, exige confiança)
                                     </mat-option>
                                 </mat-select>
                             </mat-form-field>
 
                             <mat-form-field appearance="outline">
-                                <mat-label>Cycle Interval (seconds)</mat-label>
+                                <mat-label>Intervalo entre ciclos (segundos)</mat-label>
                                 <input matInput type="number" [(ngModel)]="cycleInterval" min="10" max="3600">
                             </mat-form-field>
 
@@ -68,28 +81,44 @@
                     </mat-card>
                 </section>
 
-                <!-- Live Feed -->
                 <section class="live-feed">
                     <div class="feed-header">
                         <mat-icon>terminal</mat-icon>
-                        <h2>Action Log</h2>
+                        <h2>Registro de ações</h2>
                     </div>
+                    <p class="helper-text">
+                        Aqui você acompanha as últimas ações executadas pelo modo autônomo. Cada linha mostra o horário,
+                        o nível do evento e a mensagem enviada pelo núcleo de autonomia.
+                    </p>
                     <div class="terminal-window">
-                        <div class="log-line" *ngFor="let log of logs$ | async">
-                            <span class="timestamp" style="color: #666; margin-right: 8px;">{{ log.timestamp |
-                                date:'HH:mm:ss' }}</span>
-                            <span class="level" [style.color]="log.level === 'error' ? '#ff5555' : '#50fa7b'"
-                                style="margin-right: 8px;">[{{ log.level | uppercase }}]</span>
-                            <span class="message">{{ log.message }}</span>
+                        <div class="log-line" *ngFor="let log of getDisplayLogs(logs$ | async)">
+                            <span class="timestamp">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+                            <span class="level" [class.level-error]="log.level === 'error'">[{{ log.level | uppercase }}]</span>
+                            <span class="message">
+                                <ng-container *ngIf="getToolNameFromLog(log.message) as tool; else plainMessage">
+                                    Executando ferramenta <span class="tool-name">{{ tool }}</span>
+                                </ng-container>
+                                <ng-template #plainMessage>{{ log.message }}</ng-template>
+                            </span>
+                            <span class="repeat-badge" *ngIf="log.count > 1">×{{ log.count }}</span>
                         </div>
                     </div>
                 </section>
             </div>
         </mat-tab>
 
-        <!-- Tab 2: Goal Manager -->
-        <mat-tab label="Strategic Goals">
+        <mat-tab label="Metas estratégicas">
             <div class="tab-content">
+                <p class="helper-text">
+                    Defina aqui objetivos de médio e longo prazo que o Janus deve perseguir.
+                    O modo de autonomia usa essas metas como referência para planejar ações,
+                    priorizar tarefas e decidir quais ferramentas acionar.
+                </p>
+                <p class="helper-text">
+                    Comece descrevendo o resultado desejado (por exemplo, “manter o ambiente estável
+                    durante o horário comercial”) e critérios claros de sucesso. O Janus usa essas
+                    informações para alinhar os ciclos de autonomia com o que realmente importa.
+                </p>
                 <app-goals></app-goals>
             </div>
         </mat-tab>
