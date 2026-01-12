@@ -75,6 +75,24 @@ export const routes: Routes = [
         }
       },
       {
+        path: 'agent-events',
+        loadComponent: () => import('./pages/agent-events/agent-events').then(m => m.AgentEventsComponent),
+        data: {
+          title: 'Agent Events',
+          description: 'Monitor de eventos do Parlamento Multi-Agente',
+          roles: ['admin', 'operator']
+        }
+      },
+      {
+        path: 'poison-pills',
+        loadComponent: () => import('./pages/poison-pills/poison-pills').then(m => m.PoisonPillsComponent),
+        data: {
+          title: 'Poison Pills',
+          description: 'Mensagens em quarentena e estatísticas por fila',
+          roles: ['admin', 'operator']
+        }
+      },
+      {
         path: 'hitl',
         loadComponent: () => import('./features/hitl/hitl/hitl').then(m => m.HitlComponent),
         data: {
