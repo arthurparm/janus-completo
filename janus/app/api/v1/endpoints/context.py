@@ -36,7 +36,7 @@ async def search_web(
     query: str = Query(..., description="Query de busca"),
     max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
     search_depth: str = Query(
-        "basic", regex="^(basic|advanced)$", description="Profundidade da busca"
+        "basic", pattern="^(basic|advanced)$", description="Profundidade da busca"
     ),
     service: ContextService = Depends(get_context_service),
 ):
