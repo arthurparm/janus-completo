@@ -36,6 +36,17 @@
 
         <div class="message-content">
           <div class="sender-name">{{ msg.role === 'user' ? 'Você' : 'Janus' }}</div>
+
+          <div class="thought-process" *ngIf="msg.reasoning">
+            <details>
+              <summary>
+                <span class="icon">🧠</span>
+                <span class="label">Processo de Raciocínio</span>
+              </summary>
+              <div class="thought-content" [innerHTML]="formatMessage(msg.reasoning)"></div>
+            </details>
+          </div>
+
           <div class="text" [innerHTML]="formatMessage(msg.text)"></div>
           <div class="meta">{{ (msg.timestamp || 0) * 1000 | date:'HH:mm' }}</div>
         </div>
