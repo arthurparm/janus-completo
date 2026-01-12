@@ -31,8 +31,8 @@ interface BudgetMetrics {
   selector: 'app-budget-panel',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './budget-panel.component.html',
-  styleUrl: './budget-panel.component.scss'
+  templateUrl: './budget-panel.html',
+  styleUrl: './budget-panel.scss'
 })
 export class BudgetPanelComponent implements OnInit, OnDestroy {
   private api = inject(JanusApiService);

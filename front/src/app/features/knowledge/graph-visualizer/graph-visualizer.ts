@@ -8,8 +8,8 @@ import cytoscape, { Core, NodeSingular } from 'cytoscape';
   selector: 'app-graph-visualizer',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './graph-visualizer.component.html',
-  styleUrl: './graph-visualizer.component.scss'
+  templateUrl: './graph-visualizer.html',
+  styleUrl: './graph-visualizer.scss'
 })
 export class GraphVisualizerComponent implements AfterViewInit, OnDestroy {
   @ViewChild('cytoscapeContainer', { static: false }) cytoscapeContainer!: ElementRef;
