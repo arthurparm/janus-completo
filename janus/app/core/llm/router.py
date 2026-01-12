@@ -13,6 +13,7 @@ from app.config import settings
 from .factory import (
     _get_openai_http_client,
     _health_check_ollama,
+    _validate_deepseek_key,
     _validate_gemini_key,
     _validate_openai_key,
 )
@@ -23,6 +24,7 @@ from .pricing import (
     _get_model_pricing,
     _model_penalty_factors,
     _model_stats,
+    is_total_budget_threshold_exceeded,
 )
 from .rate_limiter import get_rate_limiter
 from .resilience import _add_to_pool, _circuit_closed, _get_from_pool
@@ -203,6 +205,22 @@ def get_llm(
                             ).inc()
                             _add_to_pool("google_gemini", model, llm)
                             return llm
+                        elif provider == "deepseek":
+                            if not _validate_deepseek_key(
+                                getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
+                            ):
+                                raise RuntimeError("DEEPSEEK_API_KEY inválida ou ausente.")
+                            llm = ChatOpenAI(
+                                model=model,
+                                temperature=temperature,
+                                api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
+                                base_url=settings.DEEPSEEK_BASE_URL,
+                            )
+                            LLM_ROUTER_COUNTER.labels(
+                                role.value, priority.value, model, "deepseek"
+                            ).inc()
+                            _add_to_pool("deepseek", model, llm)
+                            return llm
                         else:
                             logger.warning(f"Provider override desconhecido: {provider}")
                     except Exception as e:
@@ -210,6 +228,16 @@ def get_llm(
                         # Continua para a seleção padrão
     except Exception:
         pass
+
+    # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spending exceeds threshold
+    # Except for HIGH_QUALITY priority (critical tasks that need cloud models)
+    if priority != ModelPriority.LOCAL_ONLY and priority != ModelPriority.HIGH_QUALITY:
+        if is_total_budget_threshold_exceeded():
+            logger.warning(
+                f"Budget guardrail activated! Forcing LOCAL_ONLY for role={role.value}, "
+                f"original_priority={priority.value}"
+            )
+            priority = ModelPriority.LOCAL_ONLY
 
     if not cache_key:
         cache_key = f"{role.value}_{priority.value}"
@@ -268,7 +296,24 @@ def get_llm(
             raise RuntimeError(f"Falha crítica ao carregar modelo local. Causa: {e}") from e
 
     # Provedores de Nuvem (catálogo com factories por modelo)
+    # DeepSeek é listado primeiro para ter prioridade em FAST_AND_CHEAP
     cloud_catalog = [
+        {
+            "name": "DeepSeek",
+            "provider_key": "deepseek",
+            "enabled": _validate_deepseek_key(
+                getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
+            ),
+            "initializer_factory": lambda model: ChatOpenAI(
+                model=model,
+                temperature=0,
+                api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
+                base_url=settings.DEEPSEEK_BASE_URL,
+            ),
+            "models": settings.DEEPSEEK_MODELS
+            if getattr(settings, "DEEPSEEK_MODELS", None)
+            else [settings.DEEPSEEK_MODEL_NAME],
+        },
         {
             "name": "Google Gemini",
             "provider_key": "google_gemini",
@@ -326,7 +371,17 @@ def get_llm(
                 continue
 
             # Lista de modelos elegíveis para este papel
-            model_list = list(role_candidates_map.get(provider_key, set())) or p["models"]
+            # Se LLM_CLOUD_MODEL_CANDIDATES define candidatos para este papel,
+            # usar APENAS os provedores/modelos especificados (não usar modelos padrão de outros provedores)
+            if role_candidates_map:
+                # Há candidatos específicos definidos - usar apenas provedores nele
+                if provider_key not in role_candidates_map:
+                    continue  # Pula provedores não listados nos candidatos
+                model_list = list(role_candidates_map[provider_key])
+            else:
+                # Sem candidatos específicos - usar todos os modelos do provedor
+                model_list = p["models"]
+
             for model_name in model_list:
                 # Verifica disponibilidade de rate limit antes de adicionar candidato
                 rate_limiter = get_rate_limiter()
@@ -524,3 +579,30 @@ def get_llm(
             exc_info=True,
         )
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e
+
+
+async def get_llm_async(
+    role: ModelRole = ModelRole.ORCHESTRATOR,
+    priority: ModelPriority = ModelPriority.LOCAL_ONLY,
+    cache_key: str = "",
+    exclude_providers: list[str] | None = None,
+    config: dict[str, Any] | None = None,
+) -> BaseChatModel:
+    """
+    Async wrapper for get_llm.
+    
+    Runs the sync get_llm in a thread pool to avoid blocking the event loop.
+    Use this in async contexts (FastAPI endpoints, async workers).
+    """
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: get_llm(
+            role=role,
+            priority=priority,
+            cache_key=cache_key,
+            exclude_providers=exclude_providers,
+            config=config,
+        )
+    )
