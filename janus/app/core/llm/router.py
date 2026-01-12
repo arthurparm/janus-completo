@@ -104,7 +104,7 @@ def _create_openai_model(model: str, temperature: float = 0) -> ChatOpenAI:
         )
 
 
-def get_llm(
+async def get_llm(
     role: ModelRole = ModelRole.ORCHESTRATOR,
     priority: ModelPriority = ModelPriority.LOCAL_ONLY,
     cache_key: str = "",
@@ -232,7 +232,7 @@ def get_llm(
     # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spending exceeds threshold
     # Except for HIGH_QUALITY priority (critical tasks that need cloud models)
     if priority != ModelPriority.LOCAL_ONLY and priority != ModelPriority.HIGH_QUALITY:
-        if is_total_budget_threshold_exceeded():
+        if await is_total_budget_threshold_exceeded():
             logger.warning(
                 f"Budget guardrail activated! Forcing LOCAL_ONLY for role={role.value}, "
                 f"original_priority={priority.value}"
@@ -366,7 +366,7 @@ def get_llm(
             if exclude_providers and provider_key in exclude_providers:
                 continue
             if not (
-                p["enabled"] and _circuit_closed(provider_key) and _budget_allows(provider_key)
+                p["enabled"] and _circuit_closed(provider_key) and await _budget_allows(provider_key)
             ):
                 continue
 
@@ -581,28 +581,5 @@ def get_llm(
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e
 
 
-async def get_llm_async(
-    role: ModelRole = ModelRole.ORCHESTRATOR,
-    priority: ModelPriority = ModelPriority.LOCAL_ONLY,
-    cache_key: str = "",
-    exclude_providers: list[str] | None = None,
-    config: dict[str, Any] | None = None,
-) -> BaseChatModel:
-    """
-    Async wrapper for get_llm.
-    
-    Runs the sync get_llm in a thread pool to avoid blocking the event loop.
-    Use this in async contexts (FastAPI endpoints, async workers).
-    """
-    import asyncio
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: get_llm(
-            role=role,
-            priority=priority,
-            cache_key=cache_key,
-            exclude_providers=exclude_providers,
-            config=config,
-        )
-    )
+
+

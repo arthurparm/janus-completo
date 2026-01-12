@@ -3,7 +3,7 @@ from typing import Any
 import structlog
 
 from app.core.agents.agent_manager import agent_circuit_breakers, get_agent_manager
-from app.core.optimization import ReflexionConfig, arun_with_reflexion
+from app.core.optimization import ReflexionConfig, ReflexionSession
 from app.core.tools import get_faulty_tools
 from app.services.memory_service import MemoryService
 
@@ -29,9 +29,10 @@ class ReflexionRepository:
         """Executa o ciclo de Reflexion através da infraestrutura core."""
         logger.debug("Executando ciclo de Reflexion via repositório", task=task)
         try:
-            return await arun_with_reflexion(
+            session = ReflexionSession(
                 task=task, memory_service=self._memory_service, evaluator=None, config=config
             )
+            return await session.arun()
         except Exception as e:
             logger.error("Erro no repositório ao executar ciclo de Reflexion", exc_info=e)
             raise ReflexionRepositoryError("Falha ao executar o ciclo de Reflexion.") from e
