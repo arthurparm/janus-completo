@@ -247,6 +247,7 @@ async def get_llm(
         ModelRole.ORCHESTRATOR: settings.OLLAMA_ORCHESTRATOR_MODEL,
         ModelRole.CODE_GENERATOR: settings.OLLAMA_CODER_MODEL,
         ModelRole.KNOWLEDGE_CURATOR: settings.OLLAMA_CURATOR_MODEL,
+        ModelRole.REASONER: settings.OLLAMA_CODER_MODEL, # Fallback local para reasoner
     }
     local_model_name = model_map.get(role, settings.OLLAMA_ORCHESTRATOR_MODEL)
 
@@ -304,11 +305,15 @@ async def get_llm(
             "enabled": _validate_deepseek_key(
                 getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
             ),
+            # DeepSeek R1 (reasoner) does not support temperature in some contexts or requires specific handling.
+            # However, standard ChatOpenAI params usually work but 'deepseek-reasoner' might ignore temp.
+            # We keep it standard but ensure base_url is correct.
             "initializer_factory": lambda model: ChatOpenAI(
                 model=model,
-                temperature=0,
+                temperature=0, # DeepSeek Reasoner generally ignores this or prefers 0/null
                 api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
                 base_url=settings.DEEPSEEK_BASE_URL,
+                max_tokens=8000 if "reasoner" in model else None, # R1 needs room for thinking
             ),
             "models": settings.DEEPSEEK_MODELS
             if getattr(settings, "DEEPSEEK_MODELS", None)

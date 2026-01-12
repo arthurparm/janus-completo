@@ -10,6 +10,7 @@ class ModelRole(Enum):
     CODE_GENERATOR = "code_generator"
     KNOWLEDGE_CURATOR = "knowledge_curator"
     SECURITY_AUDITOR = "security_auditor"
+    REASONER = "reasoner"
 
 
 class ModelPriority(Enum):

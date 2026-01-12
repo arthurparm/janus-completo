@@ -38,10 +38,10 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 - [ ] **LLM Streaming (UX/DX)**
   - *Motivo*: Chat síncrono parece "travado" para o usuário.
   - *Ação*: Endpoint SSE `/chat/stream` com renderização progressiva e `async def astream()`.
-- [ ] **Qdrant Optimization (Quantization)**
+- [x] **Qdrant Optimization (Quantization)**
   - *Gaps*: RAM usage alto (float32), HNSW defaults subótimos, Sem caching de embeddings.
   - *Ação*: Ativar Binary Quantization e Scalar Quantization (INT8).
-- [ ] **DeepSeek Reasoning Integration (R1)**
+- [x] **DeepSeek Reasoning Integration (R1)**
   - *Motivo*: Custo irrisório para inteligência superior em planejamento.
   - *Ação*: Novo node `ThinkerAgent` antes do `CoderAgent`.
 
