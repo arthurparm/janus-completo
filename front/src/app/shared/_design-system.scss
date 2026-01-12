@@ -1,0 +1,358 @@
+/**
+ * =============================================================================
+ * JANUS DESIGN SYSTEM - Magicpunk Theme
+ * =============================================================================
+ * 
+ * Este arquivo centraliza todos os design tokens do sistema Janus.
+ * Importar este arquivo PRIMEIRO em qualquer componente que precise dos tokens.
+ * 
+ * Uso: @use '@shared/design-system' as ds;
+ * Exemplo: color: ds.$color-cyan;
+ * 
+ * =============================================================================
+ */
+
+// =============================================================================
+// 1. COLOR TOKENS
+// =============================================================================
+
+// --- Core Palette ---
+$color-bg-deep: #050a14;
+$color-bg: #0A0F1A;
+$color-bg-panel: rgba(17, 24, 39, 0.75);
+$color-bg-glass: rgba(17, 24, 39, 0.7);
+
+// --- Accent Colors ---
+$color-cyan: #00d4ff;
+$color-cyan-dim: rgba(0, 212, 255, 0.1);
+$color-cyan-glow: rgba(0, 212, 255, 0.5);
+$color-cyan-hover: rgba(0, 212, 255, 0.2);
+
+$color-purple: #7c3aed;
+$color-purple-dim: rgba(124, 58, 237, 0.1);
+$color-purple-glow: rgba(124, 58, 237, 0.5);
+
+$color-pink: #ec4899;
+$color-pink-dim: rgba(236, 72, 153, 0.1);
+$color-pink-glow: rgba(236, 72, 153, 0.5);
+
+// --- Text Colors ---
+$color-fg: #e0f8ff;
+$color-fg-muted: #9ec8d6;
+$color-fg-dim: rgba(158, 200, 214, 0.5);
+
+// --- Status Colors ---
+$color-success: #00ff88;
+$color-success-dim: rgba(0, 255, 136, 0.1);
+$color-warning: #ffb800;
+$color-warning-dim: rgba(255, 184, 0, 0.1);
+$color-error: #ff3333;
+$color-error-dim: rgba(255, 51, 51, 0.1);
+
+// --- Borders & Grid ---
+$color-border-glass: rgba(0, 212, 255, 0.2);
+$color-border-subtle: rgba(255, 255, 255, 0.05);
+$color-grid-line: rgba(0, 212, 255, 0.05);
+
+// =============================================================================
+// 2. TYPOGRAPHY TOKENS
+// =============================================================================
+
+// --- Font Families ---
+$font-display: 'Orbitron', sans-serif;
+$font-body: 'Inter', system-ui, -apple-system, sans-serif;
+$font-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
+
+// --- Font Sizes ---
+$font-size-xs: 0.75rem; // 12px
+$font-size-sm: 0.875rem; // 14px
+$font-size-base: 1rem; // 16px
+$font-size-lg: 1.125rem; // 18px
+$font-size-xl: 1.25rem; // 20px
+$font-size-2xl: 1.5rem; // 24px
+$font-size-3xl: 1.875rem; // 30px
+$font-size-4xl: 2.25rem; // 36px
+
+// --- Font Weights ---
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+// --- Line Heights ---
+$line-height-tight: 1.25;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.6;
+
+// --- Letter Spacing ---
+$letter-spacing-tight: -0.025em;
+$letter-spacing-normal: 0;
+$letter-spacing-wide: 0.025em;
+$letter-spacing-wider: 0.05em;
+$letter-spacing-widest: 0.1em;
+
+// =============================================================================
+// 3. SPACING TOKENS
+// =============================================================================
+
+$spacing-0: 0;
+$spacing-1: 0.25rem; // 4px
+$spacing-2: 0.5rem; // 8px
+$spacing-3: 0.75rem; // 12px
+$spacing-4: 1rem; // 16px
+$spacing-5: 1.25rem; // 20px
+$spacing-6: 1.5rem; // 24px
+$spacing-8: 2rem; // 32px
+$spacing-10: 2.5rem; // 40px
+$spacing-12: 3rem; // 48px
+$spacing-16: 4rem; // 64px
+$spacing-20: 5rem; // 80px
+
+// =============================================================================
+// 4. BORDER & RADIUS TOKENS
+// =============================================================================
+
+$border-width-thin: 1px;
+$border-width-medium: 2px;
+$border-width-thick: 4px;
+
+$radius-none: 0;
+$radius-sm: 4px;
+$radius-md: 6px;
+$radius-lg: 8px;
+$radius-xl: 12px;
+$radius-2xl: 16px;
+$radius-full: 9999px;
+
+// =============================================================================
+// 5. SHADOW TOKENS
+// =============================================================================
+
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+$shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.2);
+$shadow-xl: 0 10px 40px rgba(0, 0, 0, 0.3);
+$shadow-cyan-glow: 0 0 10px rgba(0, 212, 255, 0.2);
+$shadow-cyan-glow-lg: 0 0 15px rgba(0, 212, 255, 0.3);
+$shadow-purple-glow: 0 0 10px rgba(124, 58, 237, 0.3);
+$shadow-pink-glow: 0 0 10px rgba(236, 72, 153, 0.3);
+
+// =============================================================================
+// 6. TRANSITION TOKENS
+// =============================================================================
+
+$transition-fast: 0.15s ease;
+$transition-normal: 0.2s ease;
+$transition-slow: 0.3s ease;
+$transition-slower: 0.5s ease-in-out;
+
+// =============================================================================
+// 7. Z-INDEX TOKENS
+// =============================================================================
+
+$z-index-dropdown: 100;
+$z-index-sticky: 200;
+$z-index-fixed: 300;
+$z-index-modal-backdrop: 400;
+$z-index-modal: 500;
+$z-index-popover: 600;
+$z-index-tooltip: 700;
+$z-index-notification: 800;
+$z-index-scanlines: 9999;
+
+// =============================================================================
+// 8. BACKDROP BLUR TOKENS
+// =============================================================================
+
+$blur-xs: 2px;
+$blur-sm: 4px;
+$blur-md: 8px;
+$blur-lg: 12px;
+$blur-xl: 16px;
+$blur-2xl: 24px;
+
+// =============================================================================
+// 9. MIXINS - Reusable Patterns
+// =============================================================================
+
+/// Glass panel effect (glassmorphism)
+@mixin glass-panel($bg: $color-bg-glass, $blur: $blur-lg) {
+    background: $bg;
+    backdrop-filter: blur($blur);
+    -webkit-backdrop-filter: blur($blur);
+    border: $border-width-thin solid $color-border-glass;
+    box-shadow: $shadow-lg;
+}
+
+/// Glow text effect
+@mixin glow-text($color: $color-cyan-glow) {
+    text-shadow: 0 0 10px $color;
+}
+
+/// Glow border on focus
+@mixin focus-glow($color: $color-cyan) {
+    outline: none;
+    border-color: $color;
+    box-shadow: $shadow-cyan-glow;
+}
+
+/// Status indicator dot
+@mixin status-dot($color: $color-success, $size: 8px) {
+    width: $size;
+    height: $size;
+    border-radius: $radius-full;
+    background: $color;
+    box-shadow: 0 0 6px $color;
+}
+
+/// Neon button hover effect
+@mixin neon-hover($color: $color-cyan) {
+    &:hover:not(:disabled) {
+        background: rgba($color, 0.2);
+        box-shadow: 0 0 15px rgba($color, 0.3);
+        border-color: $color;
+        color: white;
+    }
+}
+
+/// Skeleton loading animation
+@mixin skeleton-loading {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.03) 25%,
+            rgba(255, 255, 255, 0.08) 50%,
+            rgba(255, 255, 255, 0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/// Card hover lift effect
+@mixin card-hover-lift {
+    transition: transform $transition-normal, box-shadow $transition-normal;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: $shadow-xl;
+    }
+}
+
+// =============================================================================
+// 10. KEYFRAME ANIMATIONS
+// =============================================================================
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+// =============================================================================
+// 11. COMPONENT BASE CLASSES
+// =============================================================================
+
+/// Base glass button
+%glass-button-base {
+    background: $color-cyan-dim;
+    border: $border-width-thin solid rgba($color-cyan, 0.3);
+    color: $color-cyan;
+    padding: $spacing-2 $spacing-4;
+    border-radius: $radius-sm;
+    text-transform: uppercase;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    letter-spacing: $letter-spacing-wider;
+    cursor: pointer;
+    transition: all $transition-normal;
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+/// Base glass input
+%glass-input-base {
+    background: rgba($color-bg, 0.6);
+    border: $border-width-thin solid $color-border-glass;
+    color: $color-fg;
+    padding: $spacing-3 $spacing-4;
+    border-radius: $radius-md;
+    width: 100%;
+    font-family: $font-mono;
+    transition: all $transition-normal;
+
+    &:focus {
+        @include focus-glow;
+        background: rgba($color-bg, 0.8);
+    }
+
+    &::placeholder {
+        color: $color-fg-dim;
+    }
+}
+
+/// Base glass panel
+%glass-panel-base {
+    @include glass-panel;
+    border-radius: $radius-lg;
+}
+
+/// Base card
+%card-base {
+    @include glass-panel(rgba($color-bg-panel, 0.4), $blur-sm);
+    border-radius: $radius-xl;
+    padding: $spacing-6;
+    @include card-hover-lift;
+}
