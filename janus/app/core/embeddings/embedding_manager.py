@@ -2,7 +2,6 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from typing import Any
 
 import numpy as np
 
@@ -94,9 +93,9 @@ class _TTLCache:
 # Simple per-text cache to avoid re-embedding repeated inputs
 _cache = _TTLCache(max_items=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
 
-_local_model: Any | None = None
+_local_model: SentenceTransformer | None = None
 _local_model_failed: bool = False
-_openai_embedder: Any | None = None
+_openai_embedder: OpenAIEmbeddings | None = None
 
 
 def _load_local_model() -> SentenceTransformer:
