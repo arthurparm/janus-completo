@@ -116,7 +116,7 @@ async def get_entity_relationships(
     entity_name: str,
     rel_type: str | None = Query(None, description="Filtra pelo tipo de relacionamento"),
     direction: str = Query(
-        "both", regex=r"^(out|in|both)$", description="Direção do relacionamento (out/in/both)"
+        "both", pattern=r"^(out|in|both)$", description="Direção do relacionamento (out/in/both)"
     ),
     max_depth: int = Query(1, ge=1, le=5, description="Profundidade máxima de navegação"),
     limit: int = Query(20, ge=1, le=100, description="Limite de resultados"),
