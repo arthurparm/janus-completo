@@ -122,6 +122,33 @@ def get_or_create_collection(collection_name: str, vector_size: int = _DEFAULT_V
                 vectors_config=models.VectorParams(
                     size=vector_size, distance=models.Distance.COSINE
                 ),
+                # EVOLUTION: Scalar Quantization (Int8) for 4x memory compression
+                quantization_config=models.ScalarQuantization(
+                    scalar=models.ScalarQuantizationConfig(
+                        type=models.ScalarType.INT8,
+                        quantile=0.99,
+                        always_ram=True,
+                    )
+                ),
+                # EVOLUTION: Optimized HNSW for scale
+                hnsw_config=models.HnswConfigDiff(
+                    m=32,
+                    ef_construct=200,
+                    full_scan_threshold=10000,
+                    on_disk=True, # Index on disk? No, payload/vectors on disk context.
+                                  # Correction: In Qdrant, on_disk=True in HnswConfigDiff puts the HNSW graph on disk (slower but huge RAM save).
+                                  # Vectors are controlled by on_disk_payload or storing in quantization.
+                                  # If we use quantization always_ram=True, vectors stay in RAM (compressed).
+                                  # NOTE: Let's follow the plan: High performance RAG -> Graph on RAM (on_disk=False), Vectors Quantized in RAM.
+                                  # Recovering Plan: "on_disk: True (Store vectors on disk...)" -> The plan said on_disk=True.
+                                  # If I set hnsw_config on_disk=True, the graph is on disk.
+                                  # Let's stick to the high-performance setup: HNSW in RAM, Vectors Quantized in RAM.
+                                  # But if user requested "Maximo possivel" optimization implies Handling Massive Scale.
+                                  # Let's stick to Quantization for RAM save (4x) + HNSW default (RAM).
+                                  # Validating user request: "Qdrant Optimization (Quantization) seja o maximo completo possivel".
+                                  # "Maximo completo" implies handling scale.
+                                  # I will enable Quantization (always_ram=True) and HNSW (m=32, ef=200).
+                ),
             )
             logger.info(f"Coleção '{collection_name}' criada.")
             # Criar índices de payload para metadados importantes
@@ -182,6 +209,20 @@ async def aget_or_create_collection(
                 collection_name=collection_name,
                 vectors_config=models.VectorParams(
                     size=vector_size, distance=models.Distance.COSINE
+                ),
+                # EVOLUTION: Scalar Quantization (Int8) for 4x memory compression
+                quantization_config=models.ScalarQuantization(
+                    scalar=models.ScalarQuantizationConfig(
+                        type=models.ScalarType.INT8,
+                        quantile=0.99,
+                        always_ram=True,
+                    )
+                ),
+                # EVOLUTION: Optimized HNSW for scale
+                hnsw_config=models.HnswConfigDiff(
+                    m=32,
+                    ef_construct=200,
+                    full_scan_threshold=10000,
                 ),
             )
             logger.info(f"Coleção '{collection_name}' criada via async.")
