@@ -8,6 +8,9 @@ from app.services.llm_service import LLMService
 
 
 class DummyLLM(LLMService):
+    def __init__(self):
+        pass
+
     def invoke_llm(self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None):
         return {"response": "Olá 🌟", "provider": "dummy", "model": "m"}
     def select_provider(self, role, priority, user_id=None, project_id=None):
@@ -21,7 +24,7 @@ async def test_utf8_and_heartbeat_emission():
     os.environ["CHAT_HEARTBEAT_INTERVAL_SECONDS"] = "1"
     repo = ChatRepositorySQL()
     svc = ChatService(repo, DummyLLM(), None)
-    cid = svc.start_conversation("assistant", None, None)
+    cid = await svc.start_conversation("assistant", None, None)
     gen = svc.stream_message(conversation_id=cid, message="olá", role=None, priority=None)
     lines = [line async for line in gen]
     assert any(line.startswith("event: heartbeat") for line in lines)
