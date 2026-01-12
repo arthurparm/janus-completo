@@ -30,15 +30,24 @@
                 <span class="stat-label">Total Chamadas</span>
             </div>
             <div class="stat-item success">
-                <span class="stat-number">{{ stats.successful_calls }}</span>
+                <span class="stat-number">
+                    {{ stats.total_calls > 0 ? stats.successful_calls : '—' }}
+                </span>
                 <span class="stat-label">Sucesso</span>
             </div>
             <div class="stat-item">
-                <span class="stat-number">{{ (stats.success_rate * 100).toFixed(1) }}%</span>
-                <span class="stat-label">Taxa de Sucesso</span>
+                <span class="stat-number">
+                    {{ stats.total_calls > 0 ? (stats.success_rate * 100).toFixed(1) + '%' : '—' }}
+                </span>
+                <span class="stat-label">
+                    Taxa de Sucesso
+                    <ng-container *ngIf="stats.total_calls === 0">
+                        (sem chamadas registradas)
+                    </ng-container>
+                </span>
             </div>
             <div class="progress-bar-container">
-                <div class="progress-bar" [style.width.%]="stats.success_rate * 100"></div>
+                <div class="progress-bar" [style.width.%]="stats.total_calls > 0 ? stats.success_rate * 100 : 0"></div>
             </div>
         </div>
         }
