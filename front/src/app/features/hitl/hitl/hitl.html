@@ -47,7 +47,7 @@
   </div>
 
   <!-- Quarantine Table -->
-  <div class="glass-panel overflow-hidden mb-12">
+  <div class="glass-panel overflow-hidden mb-12 table-container">
     <table class="glass-table">
       <thead>
         <tr>
@@ -153,13 +153,13 @@
   </div>
 
   @if (modal.visible) {
-  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="glass-panel p-8 max-w-lg w-full relative">
+  <div class="modal-overlay">
+    <div class="modal-content glass-panel p-8">
       <h3 class="text-xl font-bold mb-4" [class.text-green-400]="modal.mode === 'promote'"
         [class.text-red-400]="modal.mode === 'reject'">
         {{modal.mode === 'promote' ? 'AUTHORIZE PROMOTION' : 'CONFIRM PURGE'}}
       </h3>
-      <div class="mb-4 text-sm font-mono text-muted border border-white/10 p-2 rounded">
+      <div class="mb-4 text-sm font-mono text-muted border border-white/10 p-2 rounded bg-black/30">
         TARGET: ITEM #{{modal.item?.node_id}}
       </div>
 
