@@ -92,12 +92,12 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 
 ### 🎨 Frontend & UX (Angular)
 
-- [ ] **State Management Moderno**: Migrar `janus-api.service.ts` para **Angular Signals**.
-- [ ] **Components Refactor**: Quebrar God Components (`conversations.ts` +800 lines).
-- [ ] **Graph Visualization**: Adicionar Cytoscape.js para visualizar o "cérebro" (Neo4j) na UI.
-- [ ] **Budget UI**: Painel para usuário ver consumo de quota/custo em tempo real.
-- [ ] **Accessibility (A11y)**: Landmarks ARIA, keyboard navigation, empty states, adicionar `<main>`.
-- [ ] **RxJS Anti-patterns**: Eliminar "subscribe inside subscribe".
+- [x] **State Management Moderno**: Migrar `janus-api.service.ts` para **Angular Signals**.
+- [x] **Components Refactor**: Quebrar God Components (`conversations.ts` +800 lines).
+- [x] **Graph Visualization**: Adicionar Cytoscape.js para visualizar o "cérebro" (Neo4j) na UI.
+- [x] **Budget UI**: Painel para usuário ver consumo de quota/custo em tempo real.
+- [x] **Accessibility (A11y)**: Landmarks ARIA, keyboard navigation, empty states, adicionar `<main>`.
+- [x] **RxJS Anti-patterns**: Eliminar "subscribe inside subscribe".
 - [ ] **Feedback de Erros Invisível**: Adicionar `<app-notification-banner>`.
 - [ ] **Feedback de Carregamento**: Padronizar Skeleton Loaders.
 - [ ] **Internacionalização**: Implementar `@ngx-translate`.
