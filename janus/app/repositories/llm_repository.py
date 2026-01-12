@@ -174,6 +174,7 @@ class LLMRepository:
                     "input_tokens": enriched.get("input_tokens"),
                     "output_tokens": enriched.get("output_tokens"),
                     "cost_usd": enriched.get("cost_usd"),
+                    "reasoning": enriched.get("reasoning"),
                 }
                 record_audit_event_direct(
                     {
