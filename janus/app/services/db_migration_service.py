@@ -2,14 +2,16 @@ from typing import Any
 
 import structlog
 
-from app.db.mysql_config import mysql_db
+
+from sqlalchemy import text
+from app.db import db
 
 logger = structlog.get_logger(__name__)
 
 
 class DBMigrationService:
     def _get_session(self):
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def _index_exists(self, s, table: str, index_name: str) -> bool:
         try:
