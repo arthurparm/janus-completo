@@ -1,0 +1,145 @@
+<div class="agent-events-container">
+    <!-- Header -->
+    <header class="page-header">
+        <div class="header-content">
+            <h1 class="page-title">
+                <mat-icon class="title-icon">hub</mat-icon>
+                Agent Events
+            </h1>
+            <p class="page-subtitle">Monitor de eventos em tempo real do Parlamento Multi-Agente</p>
+        </div>
+
+        <div class="connection-controls">
+            <mat-form-field appearance="outline" class="conversation-input">
+                <mat-label>Conversation ID</mat-label>
+                <input matInput [value]="conversationId()" (input)="conversationId.set($any($event.target).value)"
+                    placeholder="Digite o ID da conversa">
+            </mat-form-field>
+
+            @if (!isConnected()) {
+            <button mat-raised-button color="primary" [disabled]="!conversationId()" (click)="connect()">
+                <mat-icon>wifi</mat-icon>
+                Conectar
+            </button>
+            } @else {
+            <button mat-raised-button color="warn" (click)="disconnect()">
+                <mat-icon>wifi_off</mat-icon>
+                Desconectar
+            </button>
+            }
+
+            <div class="connection-status" [class]="connectionStatus()">
+                <span class="status-dot"></span>
+                @switch (connectionStatus()) {
+                @case ('connected') { <span>Conectado</span> }
+                @case ('connecting') { <span>Conectando...</span> }
+                @default { <span>Desconectado</span> }
+                }
+            </div>
+        </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <mat-icon>event</mat-icon>
+            <span class="stat-value">{{ events().length }}</span>
+            <span class="stat-label">Total de Eventos</span>
+        </div>
+
+        @for (agent of uniqueAgents(); track agent) {
+        <div class="stat-item agent-stat" [style.--agent-color]="getAgentColor(agent)">
+            <span class="agent-dot"></span>
+            <span class="stat-value">{{ eventCounts()[agent] || 0 }}</span>
+            <span class="stat-label">{{ agent }}</span>
+        </div>
+        }
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+        <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Filtrar por Agente</mat-label>
+            <mat-select [value]="filterAgent()" (selectionChange)="filterAgent.set($event.value)">
+                <mat-option value="">Todos</mat-option>
+                @for (agent of uniqueAgents(); track agent) {
+                <mat-option [value]="agent">{{ agent }}</mat-option>
+                }
+            </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Tipo de Evento</mat-label>
+            <mat-select [value]="filterEventType()" (selectionChange)="filterEventType.set($event.value)">
+                <mat-option value="">Todos</mat-option>
+                @for (type of uniqueEventTypes(); track type) {
+                <mat-option [value]="type">{{ type }}</mat-option>
+                }
+            </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="filter-field search-field">
+            <mat-label>Buscar</mat-label>
+            <input matInput [value]="searchQuery()" (input)="searchQuery.set($any($event.target).value)"
+                placeholder="Buscar em conteúdo ou task_id">
+            <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <button mat-stroked-button (click)="clearFilters()"
+            [disabled]="!filterAgent() && !filterEventType() && !searchQuery()">
+            <mat-icon>filter_alt_off</mat-icon>
+            Limpar Filtros
+        </button>
+
+        <button mat-stroked-button color="warn" (click)="clearEvents()" [disabled]="events().length === 0">
+            <mat-icon>delete_sweep</mat-icon>
+            Limpar Eventos
+        </button>
+    </div>
+
+    <!-- Events Timeline -->
+    <div class="events-timeline">
+        @if (filteredEvents().length === 0) {
+        <div class="empty-state">
+            <mat-icon>event_busy</mat-icon>
+            @if (events().length === 0) {
+            <p>Nenhum evento recebido ainda.</p>
+            <p class="hint">Conecte-se a uma conversa para começar a receber eventos.</p>
+            } @else {
+            <p>Nenhum evento corresponde aos filtros.</p>
+            }
+        </div>
+        } @else {
+        @for (event of filteredEvents(); track trackByEvent($index, event)) {
+        <div class="event-card" [class]="getEventTypeClass(event.event_type)" [style.--agent-color]="event.agentColor">
+            <div class="event-timeline-marker">
+                <div class="marker-dot"></div>
+                <div class="marker-line"></div>
+            </div>
+
+            <div class="event-content">
+                <div class="event-header">
+                    <div class="event-meta">
+                        <span class="event-time">{{ event.formattedTime }}</span>
+                        <mat-chip class="agent-chip" [style.--chip-color]="event.agentColor">
+                            {{ event.agent_role }}
+                        </mat-chip>
+                        <mat-chip class="type-chip">
+                            <mat-icon>{{ getEventTypeIcon(event.event_type) }}</mat-icon>
+                            {{ event.event_type }}
+                        </mat-chip>
+                    </div>
+                    <span class="event-task-id" [matTooltip]="'Task ID'">
+                        {{ event.task_id | slice:0:8 }}...
+                    </span>
+                </div>
+
+                <div class="event-body">
+                    <pre class="event-content-text">{{ event.content }}</pre>
+                </div>
+            </div>
+        </div>
+        }
+        }
+    </div>
+</div>

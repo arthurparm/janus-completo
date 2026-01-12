@@ -1,0 +1,393 @@
+// Agent Events Page - Magicpunk Theme
+
+.agent-events-container {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+// =============================================================================
+// Header
+// =============================================================================
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.header-content {
+    flex: 1;
+    min-width: 250px;
+}
+
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.75rem;
+    color: var(--cyan, #00d4ff);
+    margin: 0 0 0.5rem 0;
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+
+    .title-icon {
+        font-size: 2rem;
+        width: 2rem;
+        height: 2rem;
+    }
+}
+
+.page-subtitle {
+    color: var(--muted, #9ec8d6);
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.connection-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.conversation-input {
+    width: 280px;
+
+    ::ng-deep .mat-mdc-text-field-wrapper {
+        background: rgba(10, 15, 26, 0.6) !important;
+    }
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    background: rgba(17, 24, 39, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: all 0.3s;
+    }
+
+    &.connected {
+        border-color: rgba(0, 255, 136, 0.3);
+
+        .status-dot {
+            background: var(--success, #00ff88);
+            box-shadow: 0 0 8px var(--success, #00ff88);
+        }
+    }
+
+    &.connecting {
+        .status-dot {
+            background: var(--warning, #ffb800);
+            animation: pulse 1s infinite;
+        }
+    }
+
+    &.disconnected {
+        .status-dot {
+            background: var(--muted, #9ec8d6);
+        }
+    }
+}
+
+// =============================================================================
+// Stats Bar
+// =============================================================================
+
+.stats-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(17, 24, 39, 0.5);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    white-space: nowrap;
+
+    mat-icon {
+        color: var(--cyan, #00d4ff);
+        font-size: 1.25rem;
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
+    .stat-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--fg, #e0f8ff);
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: var(--muted, #9ec8d6);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    &.agent-stat {
+        .agent-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--agent-color, #00d4ff);
+            box-shadow: 0 0 6px var(--agent-color, #00d4ff);
+        }
+    }
+}
+
+// =============================================================================
+// Filters
+// =============================================================================
+
+.filters-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.filter-field {
+    min-width: 160px;
+
+    &.search-field {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    ::ng-deep .mat-mdc-text-field-wrapper {
+        background: rgba(10, 15, 26, 0.6) !important;
+    }
+}
+
+// =============================================================================
+// Events Timeline
+// =============================================================================
+
+.events-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    background: rgba(17, 24, 39, 0.3);
+    border: 1px dashed rgba(0, 212, 255, 0.2);
+    border-radius: 8px;
+    text-align: center;
+
+    mat-icon {
+        font-size: 3rem;
+        width: 3rem;
+        height: 3rem;
+        color: var(--muted, #9ec8d6);
+        margin-bottom: 1rem;
+    }
+
+    p {
+        margin: 0;
+        color: var(--fg, #e0f8ff);
+    }
+
+    .hint {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: var(--muted, #9ec8d6);
+    }
+}
+
+.event-card {
+    display: flex;
+    gap: 1rem;
+    position: relative;
+    padding: 0.75rem 0;
+
+    &:last-child .marker-line {
+        display: none;
+    }
+}
+
+.event-timeline-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 20px;
+    flex-shrink: 0;
+
+    .marker-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--agent-color, #00d4ff);
+        box-shadow: 0 0 8px var(--agent-color, #00d4ff);
+        z-index: 1;
+    }
+
+    .marker-line {
+        flex: 1;
+        width: 2px;
+        background: linear-gradient(to bottom, var(--agent-color, #00d4ff), transparent);
+        margin-top: 4px;
+        min-height: 20px;
+    }
+}
+
+.event-content {
+    flex: 1;
+    background: rgba(17, 24, 39, 0.5);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: var(--agent-color, rgba(0, 212, 255, 0.3));
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+}
+
+.event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.event-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.event-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted, #9ec8d6);
+}
+
+.agent-chip {
+    --mdc-chip-elevated-container-color: var(--chip-color, rgba(0, 212, 255, 0.15)) !important;
+    --mdc-chip-label-text-color: var(--chip-color, #00d4ff) !important;
+    font-size: 0.75rem !important;
+    height: 24px !important;
+    border: 1px solid var(--chip-color, rgba(0, 212, 255, 0.3)) !important;
+}
+
+.type-chip {
+    --mdc-chip-elevated-container-color: rgba(255, 255, 255, 0.05) !important;
+    --mdc-chip-label-text-color: var(--muted, #9ec8d6) !important;
+    font-size: 0.75rem !important;
+    height: 24px !important;
+
+    mat-icon {
+        font-size: 14px !important;
+        width: 14px !important;
+        height: 14px !important;
+        margin-right: 4px;
+    }
+}
+
+.event-task-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted, #9ec8d6);
+    opacity: 0.7;
+}
+
+.event-body {
+    padding: 1rem;
+}
+
+.event-content-text {
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--fg, #e0f8ff);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+// =============================================================================
+// Event Type Modifiers
+// =============================================================================
+
+.event-card {
+    &.event-error {
+        .marker-dot {
+            background: var(--error, #ff3333) !important;
+            box-shadow: 0 0 8px var(--error, #ff3333) !important;
+        }
+
+        .event-content {
+            border-color: rgba(255, 51, 51, 0.3);
+        }
+    }
+
+    &.event-complete {
+        .marker-dot {
+            background: var(--success, #00ff88) !important;
+            box-shadow: 0 0 8px var(--success, #00ff88) !important;
+        }
+    }
+
+    &.event-thinking {
+        .marker-dot {
+            animation: pulse 1.5s infinite;
+        }
+    }
+}
+
+// =============================================================================
+// Animations
+// =============================================================================
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(0.9);
+    }
+}
