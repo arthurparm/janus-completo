@@ -241,13 +241,60 @@ class LLMClient:
             # Use Sanitizer
             sanitized_text = self.sanitizer.sanitize(output_text)
 
-            # 2. Store in cache
+            # 2. Store in cache & Calc Cost
             try:
-                tokens_in_est = self._estimate_tokens(prompt)
-                tokens_out_est = self._estimate_tokens(sanitized_text)
-                cost = (tokens_in_est / 1000.0) * pricing.input_per_1k_usd + (
-                    tokens_out_est / 1000.0
-                ) * pricing.output_per_1k_usd
+                # Tenta extrair uso real da resposta (LangChain standard or provider specific)
+                input_tokens = 0
+                output_tokens = 0
+                cache_read_tokens = 0
+                usage_found = False
+
+                # 1. Tenta usage_metadata (LangChain 0.2+)
+                usage_meta = getattr(result, "usage_metadata", None)
+                if usage_meta:
+                    input_tokens = usage_meta.get("input_tokens", 0)
+                    output_tokens = usage_meta.get("output_tokens", 0)
+                    # Verifica detalhes de cache (DeepSeek/OpenAI pattern)
+                    # DeepSeek injects directly into openai response object, accessed via response_metadata
+                    usage_found = True
+
+                # 2. Se não achou ou quer detalhes extras (cache), olha response_metadata
+                resp_meta = getattr(result, "response_metadata", {})
+                if not usage_found and "token_usage" in resp_meta:
+                    tu = resp_meta["token_usage"]
+                    input_tokens = tu.get("prompt_tokens", 0)
+                    output_tokens = tu.get("completion_tokens", 0)
+                    usage_found = True
+
+                # Tenta extrair cache hits específico do DeepSeek/OpenAI
+                # DeepSeek: usage.prompt_tokens_details.cached_tokens
+                if hasattr(result, "response_metadata"):
+                    # Caminho típico OpenAI/DeepSeek: token_usage -> prompt_tokens_details -> cached_tokens
+                    tu = result.response_metadata.get("token_usage", {})
+                    ptd = tu.get("prompt_tokens_details")
+                    if isinstance(ptd, dict):
+                        cache_read_tokens = ptd.get("cached_tokens", 0)
+
+                # Fallback se não encontrou nada
+                if not usage_found:
+                    input_tokens = self._estimate_tokens(prompt)
+                    output_tokens = self._estimate_tokens(sanitized_text)
+                    cache_read_tokens = 0
+
+                # Cálculo de custo (com suporte a cache pricing)
+                # Nota: input_tokens geralmente inclui o cached. Pricing aplica ao "miss" e "hit" separadamente.
+                # DeepSeek logic: Total Input = Cache Miss + Cache Hit.
+                # Cost = (Input - Hit)*PriceIn + Hit*PriceCache + Output*PriceOut
+
+                # Garantir que não subtraímos mais do que o total (sanity check)
+                cache_read_tokens = min(cache_read_tokens, input_tokens)
+                non_cached_input = input_tokens - cache_read_tokens
+
+                cost = (
+                    (non_cached_input / 1000.0) * pricing.input_per_1k_usd
+                    + (cache_read_tokens / 1000.0) * pricing.cache_read_per_1k_usd
+                    + (output_tokens / 1000.0) * pricing.output_per_1k_usd
+                )
 
                 response_cache.put(
                     prompt=prompt,
@@ -256,10 +303,13 @@ class LLMClient:
                     response=sanitized_text,
                     provider=self.provider,
                     model=self.model,
-                    input_tokens=tokens_in_est,
-                    output_tokens=tokens_out_est,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                     cost_usd=cost,
                 )
+
+                tokens_in_est = input_tokens # Manter compatibilidade do nome var local se necessário
+                tokens_out_est = output_tokens
             except Exception as e:
                 logger.warning(f"Failed to cache LLM response: {e}")
 
@@ -351,12 +401,35 @@ class LLMClient:
     def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
         """Versão enriquecida que retorna metadados além da resposta."""
         text = self.send(prompt, timeout_s)
+
+        # Tenta recuperar o objeto result original do adapter ou cache se possivel
+        # Como send() retorna str, precisamos de uma forma de acessar o objeto completo se quisermos reasoning que não está no texto.
+        # PORÉM, LLMClient.send() atualmente engole o objeto result.
+        # Refatoração necessária: send() deve persistir metadados temporariamente ou send_enriched deve chamar logica interna.
+        # Para evitar reescrever tudo, vamos assumir que o reasoning pode vir no texto (Ollama) ou vamos alterar o send() levemente.
+        # Melhor abordagem: O send() já faz o invoke e pega o content.
+        # Vamos fazer um "hack" limpo: se o adapter tiver suporte a capturar o ultimo resultado, ou melhor:
+        # Vamos alterar o _invoke para retornar o objeto completo e o send() tratar.
+        # Mas send() tem decorators de resiliencia.
+
+        # SOLUÇÃO IMEDIATA: Parsing de <think> tags se presente no texto (comum em Ollama/DeepSeek destilado)
+        # Parsing de <think> tags se presente no texto (DeepSeek/Ollama)
+        import re
+        reasoning = None
+
+        # Padrão 1: <think> content </think>
+        match = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
+        if match:
+            reasoning = match.group(1).strip()
+
+
         return {
             "response": text,
             "provider": self.provider,
             "model": self.model,
             "role": self.role.value,
-            # Placeholder para usage, já que send() não retorna
+            "reasoning": reasoning,
+            # Placeholder para usage
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
 
