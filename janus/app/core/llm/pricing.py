@@ -121,41 +121,6 @@ _tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
 _tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
 
 
-def _today_str() -> str:
-
-# Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
-_model_penalty_factors: dict[str, dict[str, float]] = {
-    "openai": {},
-    "google_gemini": {},
-    "ollama": {},
-    "deepseek": {},
-}
-
-# EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
-_expected_k_ema_by_role: dict[str, float] = {}
-for _role_key, _k in getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).items():
-    try:
-        _expected_k_ema_by_role[_role_key] = float(_k)
-    except Exception:
-        _expected_k_ema_by_role[_role_key] = 2.0
-
-try:
-    for rk, val in _expected_k_ema_by_role.items():
-        LLM_EXPECTED_KTOKENS_GAUGE.labels(role=rk).set(val)
-except Exception:
-    pass
-
-
-# Orçamentos diários multitenant (USD)
-_tenant_user_daily_budget_usd: float = getattr(settings, "TENANT_USER_DAILY_BUDGET_USD", 0.0) or 0.0
-_tenant_project_daily_budget_usd: float = (
-    getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
-)
-
-# Rastreamento de gastos por usuário/projeto (reset diário)
-_tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
-_tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
-
 
 def _today_str() -> str:
     try:
@@ -200,7 +165,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
     cloud_providers = ["openai", "google_gemini", "deepseek"]
 
     total_budget = sum(_provider_budgets_usd.get(p, 0.0) for p in cloud_providers)
-    
+
     # Need to fetch latest spend for accuracy
     current_spends = {}
     tracker = get_redis_usage_tracker()

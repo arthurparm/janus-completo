@@ -1141,4 +1141,3 @@ def get_multi_agent_system() -> MultiAgentSystem:
     if _multi_agent_system is None:
         _multi_agent_system = MultiAgentSystem()
     return _multi_agent_system
-```

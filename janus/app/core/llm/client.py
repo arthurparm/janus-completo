@@ -15,74 +15,8 @@ from . import response_cache  # Import cache module
 
 # New Modules
 from .adapters import get_adapter
-from .factory import _get_executor, _health_check_ollama, _infer_model_name, _infer_provider
+from .factory import _health_check_ollama, _infer_model_name, _infer_provider
 from .pricing import _budget_remaining, _get_model_pricing, _tenant_budget_remaining, register_usage
-from .rate_limiter import get_rate_limiter
-from .resilience import _llm_pool, _pool_key, _provider_circuit_breakers
-from .router import get_llm
-from .sanitizer import ContentSanitizer
-from .types import ModelPriority, ModelRole
-
-logger = logging.getLogger(__name__)
-
-# Metrics
-LLM_REQUESTS = Counter(
-    "llm_requests_total",
-    "Total de requisições ao provedor LLM",
-    ["provider", "model", "role", "outcome", "exception_type"],
-)
-LLM_LATENCY = Histogram(
-    "llm_request_latency_seconds",
-    "Latência por requisição LLM",
-    ["provider", "model", "role", "outcome"],
-)
-LLM_TOKENS = Counter(
-    "llm_tokens_total",
-    "Tokens contabilizados (aprox.) por direção",
-    ["provider", "model", "role", "direction"],
-)
-
-
-class LLMClient:
-    """Cliente unificado para invocar LLMs com métricas, timeouts e resiliência.
-
-    Refatorado para usar Adaptadores e Sanitizadores independentes.
-    """
-
-    def __init__(
-        self,
-        base: BaseChatModel,
-        provider: str,
-        model: str,
-        role: ModelRole,
-        cache_key: str,
-        user_id: str | None = None,
-        project_id: str | None = None,
-        circuit_breaker: CircuitBreaker | None = None,
-        config: Any = None,
-    ):
-        self.base = base
-        self.provider = provider
-        self.model = model
-        self.role = role
-        self.cache_key = cache_key
-        self.user_id = user_id
-        self.project_id = project_id
-        self.settings = config if config is not None else settings
-        self.circuit_breaker = circuit_breaker
-
-        # Delegates
-        self.adapter = get_adapter(base, provider)
-        self.sanitizer = ContentSanitizer(self.settings)
-
-    def _estimate_tokens(self, text: str) -> int:
-        return max(1, len(text) // 4)
-
-    def _validate_prompt(self, prompt: str):
-        if not prompt or not prompt.strip():
-            raise ValueError("Prompt não pode ser vazio.")
-        if len(prompt) > self.settings.LLM_MAX_PROMPT_LENGTH:
-            raise ValueError(
 from .rate_limiter import get_rate_limiter
 from .resilience import _llm_pool, _pool_key, _provider_circuit_breakers
 from .router import get_llm
@@ -292,7 +226,7 @@ class LLMClient:
 
             import asyncio
             loop = asyncio.get_event_loop()
-            
+
             if timeout > 0:
                 # Run the sync decorated_invoke in a thread
                 result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
@@ -492,7 +426,7 @@ class LLMClient:
         # Vamos fazer um "hack" limpo: se o adapter tiver suporte a capturar o ultimo resultado, ou melhor:
         # Vamos alterar o _invoke para retornar o objeto completo e o send() tratar.
         # Mas send() tem decorators de resiliencia.
-        # 
+        #
         # SOLUÇÃO IMEDIATA: Parsing de <think> tags se presente no texto (comum em Ollama/DeepSeek destilado)
         # Parsing de <think> tags se presente no texto (DeepSeek/Ollama)
         import re

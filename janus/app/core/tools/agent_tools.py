@@ -10,7 +10,6 @@ from langchain.tools import BaseTool, tool
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
-from app.core.evolution import EvolutionManager
 from app.core.infrastructure import filesystem_manager
 from app.core.infrastructure.context_manager import context_manager
 from app.core.infrastructure.enums import AgentType
@@ -321,6 +320,7 @@ async def evolve_tool(capability_request: str | None = None) -> str:
         )
 
     try:
+        from app.core.evolution import EvolutionManager
         llm_service = LLMService(LLMRepository())
         tool_service = ToolService(ToolRepository())
         manager = EvolutionManager(llm_service, tool_service)
