@@ -24,18 +24,18 @@ def _infer_first_agent(original_goal: str) -> str:
     """Usa o Planner para sugerir o primeiro agente; fallback para 'coder'."""
     try:
         build_plan_for_goal(original_goal)
-        # Heurística simples: primeira ação geralmente é escrever código
-        return "coder"
+        # Heurística simples: primeira ação geralmente é planejar (Thinker)
+        return "thinker"
     except Exception:
-        return "coder"
+        return "thinker"
 
 
 def _contains_knowledge_payload(state: TaskState) -> bool:
     """Heurística: decide se o TaskState contém conhecimento a ser consolidado."""
-    payload = state.data_payload or {}
-    tool_text = (payload.get("tool_output") or "").strip()
-    sandbox_text = (payload.get("sandbox_output") or "").strip()
-    sandbox_err = (payload.get("sandbox_error") or "").strip()
+    payload = state.data_payload
+    tool_text = (payload.tool_output or "").strip()
+    sandbox_text = (payload.sandbox_output or "").strip()
+    sandbox_err = (payload.sandbox_error or "").strip()
     # Palavras-chave no objetivo original (pt/en)
     goal = (state.original_goal or "").lower()
     goal_kws = [
@@ -82,13 +82,15 @@ async def process_router_task(task: TaskMessage) -> None:
         # Nova lógica: se tarefa concluída com conhecimento, encaminhar ao consolidator
         status = (state.status or "").lower()
         success_like = status in ("success", "completed", "done")
+
+        # 1. Knowledge Consolidation (Memory)
         should_consolidate = success_like and _contains_knowledge_payload(state)
         if should_consolidate:
             # Publica tarefa de consolidação em paralelo sem alterar o fluxo principal
-            payload = state.data_payload or {}
+            payload = state.data_payload
             content = (
-                payload.get("tool_output")
-                or payload.get("sandbox_output")
+                payload.tool_output
+                or payload.sandbox_output
                 or state.original_goal
                 or ""
             ).strip()
@@ -126,6 +128,26 @@ async def process_router_task(task: TaskMessage) -> None:
                 message=msgpack.packb(side_msg, use_bin_type=True),
                 use_msgpack=True,
             )
+
+        # 2. Knowledge Distillation (Fine-Tuning Dataset)
+        # Se houve sucesso, enviamos para o DistillationWorker avaliar a qualidade do raciocínio
+        if success_like:
+            distill_msg = TaskMessage(
+                task_id=state.task_id,
+                task_type="knowledge_distillation",
+                payload={"task_state": state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump()
+
+            # Reusando o broker (Singleton)
+            broker = await get_broker()
+            await broker.publish(
+                queue_name=QueueName.TASKS_KNOWLEDGE_DISTILLATION.value,
+                message=msgpack.packb(distill_msg, use_bin_type=True),
+                use_msgpack=True,
+            )
+
+        if should_consolidate:
             route_note = f"next={state.next_agent_role} (memory side-published)"
         else:
             route_note = f"next={state.next_agent_role}"
