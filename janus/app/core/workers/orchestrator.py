@@ -22,6 +22,7 @@ async def start_all_workers():
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.workers.autonomy_worker import start_autonomy_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
+    from app.core.workers.distillation_worker import start_distillation_worker
     from app.core.workers.google_productivity_worker import start_google_productivity_consumer
     from app.core.workers.meta_agent_worker import (
         start_failure_event_consumer,
@@ -29,9 +30,11 @@ async def start_all_workers():
     )
     from app.core.workers.neural_training_worker import start_neural_training_worker
     from app.core.workers.professor_agent_worker import start_professor_agent_worker
+    from app.core.workers.red_team_agent_worker import start_red_team_agent_worker
     from app.core.workers.reflexion_worker import start_reflexion_worker
     from app.core.workers.router_worker import start_router_worker
     from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
+    from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
 
     logger.info("Iniciando orquestrador de workers...")
 
@@ -76,11 +79,20 @@ async def start_all_workers():
     code_agent_task = await start_code_agent_worker()
     workers.append(code_agent_task)
 
+    red_team_task = await start_red_team_agent_worker()
+    workers.append(red_team_task)
+
     professor_agent_task = await start_professor_agent_worker()
     workers.append(professor_agent_task)
 
     sandbox_agent_task = await start_sandbox_agent_worker()
     workers.append(sandbox_agent_task)
+
+    thinker_agent_task = await start_thinker_agent_worker()
+    workers.append(thinker_agent_task)
+
+    distillation_task = await start_distillation_worker()
+    workers.append(distillation_task)
 
     # AutonomyWorker (batimento cardíaco de intenção)
     autonomy_task = await start_autonomy_worker()
