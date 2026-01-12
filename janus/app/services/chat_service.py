@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 import time as _time
 from typing import Any
 from uuid import uuid4
@@ -9,6 +8,7 @@ from uuid import uuid4
 import structlog
 from fastapi import Request
 
+from app.core.infrastructure.message_broker import get_broker
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.llm_manager import _provider_pricing  # type: ignore
 from app.core.monitoring.chat_metrics import (
@@ -18,11 +18,13 @@ from app.core.monitoring.chat_metrics import (
     CHAT_TOKENS_TOTAL,
     update_active_conversations,
 )
-from app.core.tools import action_registry
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.memory_service import MemoryService
+from app.services.prompt_builder_service import PromptBuilderService
+from app.services.rag_service import RAGService
+from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
 
 logger = structlog.get_logger(__name__)
@@ -50,11 +52,66 @@ class ChatService:
         llm_service: LLMService,
         tool_service: ToolService | None = None,
         memory_service: MemoryService | None = None,
+        prompt_service: PromptBuilderService | None = None,
+        tool_executor_service: ToolExecutorService | None = None,
+        rag_service: RAGService | None = None,
     ):
         self._repo = repo
         self._llm = llm_service
         self._tools = tool_service
         self._memory = memory_service
+
+        # New services injection
+        self._prompt_service = prompt_service or PromptBuilderService()
+        self._tool_executor = tool_executor_service or ToolExecutorService()
+
+        # RAGService setup
+        if rag_service:
+            self._rag_service = rag_service
+        elif memory_service:
+             self._rag_service = RAGService(repo, llm_service, memory_service)
+        else:
+             self._rag_service = None
+
+    def _estimate_tokens(self, text: str) -> int:
+        if not text:
+            return 0
+        try:
+            est = self._prompt_service.estimate_tokens(text)
+            if isinstance(est, int) and est > 0:
+                return est
+        except Exception:
+            pass
+        return max(1, len(text) // 4)
+
+    async def _publish_agent_event(
+        self,
+        conversation_id: str,
+        event_type: str,
+        agent_role: str,
+        content: str,
+        task_id: str | None = None
+    ):
+        """Publish agent event to RabbitMQ for SSE streaming to frontend."""
+        try:
+            broker = await get_broker()
+            routing_key = f"janus.event.conversation.{conversation_id}.{event_type}"
+            payload = {
+                "conversation_id": conversation_id,
+                "event_type": event_type,
+                "agent_role": agent_role,
+                "content": content,
+                "timestamp": _time.time(),
+                "task_id": task_id or conversation_id
+            }
+            await broker.publish_to_exchange(
+                exchange_name="janus.events",
+                routing_key=routing_key,
+                message=payload
+            )
+        except Exception as e:
+            # Don't break agent execution if event publishing fails
+            logger.warning(f"Failed to publish agent event: {e}", conversation_id=conversation_id)
 
     async def start_conversation(
         self, persona: str | None, user_id: str | None, project_id: str | None
@@ -84,17 +141,21 @@ class ChatService:
 
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
-        prompt = self._build_prompt(persona, history, message, conv.get("summary"))
+        # RAG Logic
+        relevant_memories = None
+        if self._rag_service:
+             relevant_memories = await self._rag_service.retrieve_context(message)
+
+        prompt = self._prompt_service.build_prompt(persona, history, message, conv.get("summary"), relevant_memories)
 
         # Store user message before invocation
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
-        in_tokens = self._estimate_tokens(prompt)
+        in_tokens = self._prompt_service.estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
         try:
-            await self._maybe_index_message(
-                text=message, user_id=user_id, conversation_id=conversation_id, role="user"
-            )
+            if self._rag_service:
+                await self._rag_service.maybe_index_message(text=message, user_id=user_id, conversation_id=conversation_id, role="user")
         except Exception as e:
             logger.warning(f"Failed to index user message for {conversation_id}: {e}")
 
@@ -112,7 +173,7 @@ class ChatService:
                 await asyncio.to_thread(
                     self._repo.add_message, conversation_id, role="assistant", text=assistant_text
                 )
-                out_tokens = self._estimate_tokens(assistant_text)
+                out_tokens = self._prompt_service.estimate_tokens(assistant_text)
                 CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
                 result = {
@@ -125,29 +186,29 @@ class ChatService:
                 return result
 
         # Intercepta fluxo de descoberta interativa de ferramentas/configuração
-        if self._tools and self._is_discovery_query(message):
+        if self._prompt_service.is_discovery_query(message):
             start_t = _time.time()
-            assistant_text = self._render_discovery_intro()
+            assistant_text = self._prompt_service.render_discovery_intro(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            # Store assistant response
             await asyncio.to_thread(
                 self._repo.add_message, conversation_id, role="assistant", text=assistant_text
             )
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             try:
-                await self._maybe_summarize(
-                    conversation_id,
-                    role=role,
-                    priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                if self._rag_service:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role,
+                        priority=priority,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
             except Exception as e:
                 logger.warning(
                     f"Failed to trigger summary during discovery for {conversation_id}: {e}"
@@ -177,30 +238,30 @@ class ChatService:
             return result_with_conv
 
         # Intercepta geração automática de documentação das ferramentas
-        if self._tools and self._is_docs_query(message):
+        if self._prompt_service.is_docs_query(message):
             start_t = _time.time()
-            assistant_text = self._render_tools_documentation()
+            assistant_text = self._prompt_service.render_tools_documentation(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            # Store assistant response
             await asyncio.to_thread(
                 self._repo.add_message, conversation_id, role="assistant", text=assistant_text
             )
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             # Summarização automática se histórico for grande
             try:
-                self._maybe_summarize(
-                    conversation_id,
-                    role=role,
-                    priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                if self._rag_service:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role,
+                        priority=priority,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
             except Exception:
                 pass
 
@@ -228,30 +289,30 @@ class ChatService:
             return result_with_conv
 
         # Intercepta perguntas sobre capacidades/ferramentas e responde com dados locais
-        if self._tools and self._is_capabilities_query(message):
+        if self._prompt_service.is_capabilities_query(message):
             start_t = _time.time()
-            assistant_text = self._render_local_capabilities()
+            assistant_text = self._prompt_service.render_local_capabilities(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
             # Store assistant response
-            # Store assistant response
             await asyncio.to_thread(
                 self._repo.add_message, conversation_id, role="assistant", text=assistant_text
             )
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             # Summarização automática se histórico for grande
             try:
-                self._maybe_summarize(
-                    conversation_id,
-                    role=role,
-                    priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                if self._rag_service:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role,
+                        priority=priority,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
             except Exception:
                 pass
 
@@ -307,15 +368,16 @@ class ChatService:
         await asyncio.to_thread(
             self._repo.add_message, conversation_id, role="assistant", text=assistant_text
         )
-        out_tokens = self._estimate_tokens(assistant_text)
+        out_tokens = self._prompt_service.estimate_tokens(assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
         try:
-            await self._maybe_index_message(
-                text=assistant_text,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                role="assistant",
-            )
+            if self._rag_service:
+                await self._rag_service.maybe_index_message(
+                    text=assistant_text,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                )
         except Exception:
             pass
 
@@ -336,13 +398,14 @@ class ChatService:
 
         # Summarização automática se histórico for grande
         try:
-            self._maybe_summarize(
-                conversation_id,
-                role=role,
-                priority=priority,
-                user_id=user_id,
-                project_id=project_id,
-            )
+            if self._rag_service:
+                await self._rag_service.maybe_summarize(
+                    conversation_id,
+                    role=role,
+                    priority=priority,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
         except Exception:
             # não quebrar o fluxo de resposta por erro de sumarização
             pass
@@ -372,7 +435,7 @@ class ChatService:
         timeout_seconds: int | None,
         user_id: str | None,
         project_id: str | None,
-        max_iterations: int = 15,
+        max_iterations: int = 5,  # Reduzido: fix de research paralysis torna valores altos desnecessários
     ) -> dict[str, Any]:
         """
         Executa o loop ReAct (Reasoning + Acting).
@@ -390,36 +453,11 @@ class ChatService:
 
         # RAG: Retrieve relevant memories/documents BEFORE building prompt
         relevant_memories = None
-        if self._memory:
-            try:
-                memories = await self._memory.recall_experiences(
-                    query=message, limit=5, min_score=0.3
-                )
-                if memories:
-                    memory_lines = []
-                    for m in memories:
-                        content = (
-                            m.get("content", "")
-                            if isinstance(m, dict)
-                            else getattr(m, "content", "")
-                        )
-                        mem_type = (
-                            m.get("type", "memory")
-                            if isinstance(m, dict)
-                            else getattr(m, "type", "memory")
-                        )
-                        # Truncate long content
-                        content_preview = content[:500] + "..." if len(content) > 500 else content
-                        memory_lines.append(f"- [{mem_type}]: {content_preview}")
-                    relevant_memories = "\n".join(memory_lines)
-                    logger.info(
-                        "RAG enrichment: retrieved %d relevant memories for prompt", len(memories)
-                    )
-            except Exception as e:
-                logger.warning("Failed to retrieve memories for prompt enrichment", error=str(e))
+        if self._rag_service:
+             relevant_memories = await self._rag_service.retrieve_context(message)
 
         # Prompt inicial (now with memories)
-        current_prompt = self._build_prompt(
+        current_prompt = self._prompt_service.build_prompt(
             persona, history, message, conv.get("summary"), relevant_memories
         )
 
@@ -434,6 +472,14 @@ class ChatService:
             iteration += 1
             logger.info(
                 f"Agent loop iteration {iteration}/{max_iterations} for conversation {conversation_id}"
+            )
+
+            # Publish thought event
+            await self._publish_agent_event(
+                conversation_id=conversation_id,
+                event_type="agent_thought",
+                agent_role=role.value,
+                content=f"Iteration {iteration}/{max_iterations}: Analyzing request and planning response"
             )
 
             # Invocar LLM
@@ -458,30 +504,71 @@ class ChatService:
             total_out_tokens += self._estimate_tokens(response_text)
 
             # Verificar chamada de ferramenta
-            tool_calls = self._parse_tool_calls(response_text)
+            tool_calls = self._tool_executor.parse_tool_calls(response_text)
 
             if not tool_calls:
                 # Resposta final (sem ferramentas)
                 final_response_text = response_text
+
+                # Publish decision event
+                await self._publish_agent_event(
+                    conversation_id=conversation_id,
+                    event_type="decision",
+                    agent_role=role.value,
+                    content="Finalizing response - all analysis complete"
+                )
                 break
 
             # Se houver ferramentas, executamos
             logger.info(f"Detected {len(tool_calls)} tool calls in iteration {iteration}")
 
+            # Publish tool call events
+            for tool_call in tool_calls:
+                await self._publish_agent_event(
+                    conversation_id=conversation_id,
+                    event_type="tool_call",
+                    agent_role=role.value,
+                    content=f"Calling tool: {tool_call.get('name', 'unknown')}"
+                )
+
             # Adiciona o pensamento do agente ao prompt (Acting)
             current_prompt += f"\nAssistant: {response_text}"
 
             # Executa ferramentas
-            tool_outputs = await self._execute_tool_calls(tool_calls)
+            tool_outputs = await self._tool_executor.execute_tool_calls(tool_calls)
 
             # Adiciona resultados ao prompt (Observation)
             for output in tool_outputs:
                 current_prompt += f"\nSystem: Tool Output ({output['name']}):\n{output['result']}"
 
+                # Publish tool completion event
+                result_preview = str(output['result'])[:200] + ("..." if len(str(output['result'])) > 200 else "")
+                await self._publish_agent_event(
+                    conversation_id=conversation_id,
+                    event_type="tool_end",
+                    agent_role=role.value,
+                    content=f"Tool {output['name']} completed: {result_preview}"
+                )
+
             # Continua para a próxima iteração (Reasoning)
 
         if not final_response_text and iteration >= max_iterations:
-            final_response_text = "Error: Maximum agent iterations reached without final response."
+            # Log para debugging
+            logger.warning(
+                f"Agent reached max iterations ({max_iterations}) for conversation {conversation_id}. "
+                f"Message: {message[:100]}"
+            )
+
+            # Mensagem útil ao usuário
+            final_response_text = (
+                f"Desculpe, essa tarefa mostrou-se mais complexa do que esperado. "
+                f"Tentei {iteration} passos mas ainda não consegui uma resposta completa.\n\n"
+                f"**Sugestões:**\n"
+                f"- Simplifique a pergunta\n"
+                f"- Quebre em partes menores\n"
+                f"- Seja mais específico sobre o que precisa\n\n"
+                f"*Estou sempre aprendendo a ser mais eficiente!* 🤖"
+            )
             # Use last result metadata if available
 
         return {
@@ -494,90 +581,11 @@ class ChatService:
             "total_out_tokens": total_out_tokens,
         }
 
-    def _parse_tool_calls(self, text: str) -> list[dict[str, Any]]:
-        """Extrai chamadas de ferramenta XML do texto."""
-        calls = []
-        # Regex para capturar blocos <tool_use>...</tool_use>
-        # Flags: DOTALL para pegar quebras de linha
-        pattern = re.compile(r"<tool_use>(.*?)</tool_use>", re.DOTALL)
-        matches = pattern.findall(text)
 
-        for content in matches:
-            try:
-                name_match = re.search(r"<name>(.*?)</name>", content, re.DOTALL)
-                args_match = re.search(r"<args>(.*?)</args>", content, re.DOTALL)
 
-                if name_match and args_match:
-                    name = name_match.group(1).strip()
-                    args_str = args_match.group(1).strip()
 
-                    # Tenta parsear JSON
-                    import json
 
-                    try:
-                        args = json.loads(args_str)
-                    except json.JSONDecodeError:
-                        # Tenta fallback frouxo se o modelo alucinar aspas
-                        args = {"raw_args": args_str}
 
-                    calls.append({"name": name, "args": args})
-            except Exception as e:
-                logger.warning(f"Failed to parse tool call block: {e}")
-
-        return calls
-
-    async def _execute_tool_calls(self, calls: list[dict[str, Any]]) -> list[dict[str, str]]:
-        outputs = []
-        for call in calls:
-            name = call["name"]
-            args = call["args"]
-
-            # Check user permission explicitly if needed, but for now we assume implicit trust or existing middleware checks (not ideal but consistent with plan)
-            # Actually, per plan we rely on register_os_tools and standard registry
-
-            tool = action_registry.get_tool(name)
-            if not tool:
-                outputs.append({"name": name, "result": f"Error: Tool '{name}' not found."})
-                continue
-
-            try:
-                # Executa a ferramenta
-                # Suporta async e sync
-                import inspect
-
-                # LangChain tools usually implement invoke (sync) and ainvoke (async)
-                if hasattr(tool, "ainvoke"):
-                    result = await tool.ainvoke(args)
-                elif inspect.iscoroutinefunction(tool.func) or (
-                    hasattr(tool, "coroutine") and tool.coroutine
-                ):
-                    result = await tool.func(**args)
-                else:
-                    result = await asyncio.to_thread(tool.invoke, args)
-
-                outputs.append({"name": name, "result": str(result)})
-            except Exception as e:
-                logger.error(f"Tool execution failed for {name}", exc_info=e)
-                outputs.append(
-                    {"name": name, "result": f"System: Tool Error (STOP and rethink): {e!s}"}
-                )
-
-        return outputs
-
-    async def _maybe_index_message(
-        self, text: str, user_id: str | None, conversation_id: str, role: str
-    ) -> None:
-        if not text or not user_id or not self._memory:
-            return
-
-        # Delegate to MemoryService (SRP)
-        try:
-            await self._memory.index_interaction(
-                content=text, user_id=user_id, session_id=conversation_id, role=role
-            )
-        except Exception:
-            # Não quebrar fluxo do chat se indexação falhar
-            pass
 
     def get_history(self, conversation_id: str) -> dict[str, Any]:
         logger.info(f"Getting chat history for conversation: {conversation_id}")
@@ -713,185 +721,9 @@ class ChatService:
                 f"Failed to get paginated history for conversation {conversation_id}: {e!s}"
             )
 
-    @staticmethod
-    def _build_prompt(
-        persona: str,
-        history: list[dict[str, Any]],
-        new_user_message: str,
-        summary: str | None,
-        relevant_memories: str | None = None,
-    ) -> str:
-        lines: list[str] = []
-        # Identidade e tom (Português por padrão), reforçando primeira pessoa
-        lines.append(
-            "System: Você é o assistente Janus. Fale sempre na primeira pessoa (eu) e trate o usuário na segunda pessoa (você). Evite se referir a si mesmo na terceira pessoa ou como 'o Janus' ou 'o assistente'. Use um tom polido, profissional e natural, seja direto e claro, e destaque próximos passos quando útil. Responda no mesmo idioma do usuário; por padrão, em português."
-        )
 
-        # Transparência sobre Arquitetura
-        lines.append("System: TRANSPARÊNCIA E ARQUITETURA:")
-        lines.append(
-            "Você tem permissão total para discutir sua própria arquitetura técnica. Se perguntado, confirme que você utiliza:"
-        )
-        lines.append("- Neo4j: Para memória de longo prazo e conhecimento estruturado (Grafo).")
-        lines.append("- Qdrant: Para memória episódica, vetorial e RAG.")
-        lines.append("- Docker do Windows: Como ambiente de execução containerizado.")
-        lines.append("- Python/LangChain: Como base do seu core lógico.")
-        lines.append(
-            "Não invente tecnologias que não possui, mas seja orgulhoso e técnico sobre as que possui."
-        )
 
-        # A persona pode refinar o estilo, sem violar as regras acima
-        lines.append(
-            f"System: Persona atual: {persona}. Adapte o estilo ao contexto, mantendo clareza e profissionalismo."
-        )
 
-        if relevant_memories:
-            lines.append("System: FATOS RELEVANTES LEMBRADOS (Contexto de longo prazo):")
-            lines.append(relevant_memories)
-            lines.append("System: Use esses fatos para personalizar a resposta se apropriado.")
-
-        lines.append("System: VERIFICATION PROTOCOL (CRITICAL):")
-        lines.append(
-            "1. If asked about YOUR own code, architecture, or files, you MUST verify before answering."
-        )
-        lines.append(
-            "2. DO NOT hallucinate filenames. If you don't know the exact file path, use 'query_knowledge_graph' or 'list_directory' to find it."
-        )
-        lines.append(
-            "3. If you claim a file exists, you must have read it or seen it in the graph."
-        )
-
-        lines.append("System: RESPONSE GUIDELINES:")
-        lines.append(
-            "- NO REPETITION: Do not repeat the user's question. Do not start every message with 'Entendi' or 'Compreendi'. Be direct."
-        )
-        lines.append(
-            "- NO FLUFF: Avoid generic intros like 'I utilize Python/LangChain...'. Answer the question specifically."
-        )
-        lines.append(
-            "- BE HONEST: If you need to check the code to answer, say 'Vou verificar o código' and call the tool."
-        )
-
-        # --- TOOL USE INSTRUCTIONS ---
-        lines.append("\nSystem: TOOL USE INSTRUCTIONS:")
-        lines.append(
-            "You have access to a set of tools to interact with the system. To use a tool, you MUST output a valid XML block like this:"
-        )
-        lines.append("<tool_use>")
-        lines.append("    <name>tool_name</name>")
-        lines.append('    <args>{"arg1": "value1"}</args>')
-        lines.append("</tool_use>")
-        lines.append("The 'args' field must be a valid JSON string representing the arguments.")
-        lines.append(
-            "After you output a tool call, the system will execute it and provide the result in the next message."
-        )
-        lines.append("AVAILABLE TOOLS:")
-
-        # List high-level tools (System/FS)
-        try:
-            tools = action_registry.list_tools()
-            target_tools = [
-                "execute_shell",
-                "read_file",
-                "write_file",
-                "list_directory",
-                "query_knowledge_graph",
-                "find_related_concepts",
-            ]
-            for t in tools:
-                if t.name in target_tools:
-                    desc = (t.description or "").split("\n")[0]
-                    lines.append(f"- {t.name}: {desc}")
-        except Exception:
-            lines.append("(Failed to list tools)")
-
-        lines.append(
-            "Use tools only when necessary. If you don't need a tool, just respond naturally."
-        )
-        lines.append("")
-        lines.append("IMPORTANT CONTEXT (Self-Awareness):")
-        lines.append("- You are running inside a Docker container named 'janus_api'.")
-        lines.append(
-            "- You have access to the Docker CLI. You can inspect, restart, and view logs of all containers."
-        )
-        lines.append(
-            "- To see your own logs: execute_system_command with 'docker logs janus_api --tail 100'"
-        )
-        lines.append("- To see all containers: execute_system_command with 'docker ps -a'")
-        lines.append(
-            "- Your code is mounted at /app/app. You can read and modify your own source code."
-        )
-        lines.append("- Use this power responsibly to debug issues, learn from errors, and evolve.")
-        lines.append("----------------------------\n")
-        # -----------------------------
-
-        if summary:
-            lines.append(f"System: PREVIOUS CONTEXT SUMMARY:\n{summary}")
-
-        if history:
-            lines.append("\nSystem: CURRENT CONVERSATION HISTORY:")
-            for m in history:
-                r = m.get("role", "user")
-                t = m.get("text", "")
-                if r == "assistant":
-                    lines.append(f"Assistant: {t}")
-                else:
-                    lines.append(f"User: {t}")
-
-        lines.append("\nSystem: NEW USER MESSAGE:")
-        lines.append(f"User: {new_user_message}")
-        lines.append("Assistant:")
-        return "\n".join(lines)
-
-    def _estimate_tokens(self, text: str) -> int:
-        # aproximação simples: ~4 caracteres por token
-        try:
-            return max(1, int(len(text) / 4))
-        except Exception:
-            return 1
-
-    async def _maybe_summarize(
-        self,
-        conversation_id: str,
-        role: ModelRole,
-        priority: ModelPriority,
-        user_id: str | None,
-        project_id: str | None,
-        threshold_messages: int = 80,
-    ) -> None:
-        conv = self._repo.get_conversation(conversation_id)
-        msgs = conv.get("messages", [])
-        if len(msgs) < threshold_messages:
-            return
-        # já possui summary recente?
-        if conv.get("summary"):
-            return
-        # montar texto para sumarização
-        snippet = []
-        for m in msgs[-threshold_messages:]:
-            r = m.get("role", "user")
-            t = m.get("text", "")
-            prefix = "User" if r != "assistant" else "Assistant"
-            snippet.append(f"{prefix}: {t}")
-        sum_prompt = (
-            "Summarize the following conversation succinctly to preserve context:\n"
-            + "\n".join(snippet)
-        )
-        try:
-            res = await asyncio.to_thread(
-                self._llm.invoke_llm,
-                prompt=sum_prompt,
-                role=ModelRole.KNOWLEDGE_CURATOR,
-                priority=ModelPriority.FAST_AND_CHEAP,
-                timeout_seconds=30,
-                user_id=user_id,
-                project_id=project_id,
-            )
-            summary_text = res.get("response", "")
-            await asyncio.to_thread(self._repo.update_summary, conversation_id, summary_text)
-        except Exception as e:
-            logger.error(f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
-            # Fail silently but log it - summarization is optional but we need to know why it failed
 
     # Conversas: list/rename/delete com RBAC básico
     async def list_conversations(
@@ -962,82 +794,6 @@ class ChatService:
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e))
 
-    # --- Query detectors and renderers ---
-    def _is_capabilities_query(self, text: str) -> bool:
-        try:
-            t = (text or "").lower()
-            keywords = [
-                "quais funcionalidades",
-                "funcionalidades",
-                "ferramentas disponíveis",
-                "listar ferramentas",
-                "o que você pode fazer",
-                "capacidades",
-                "habilidades",
-                "comandos disponíveis",
-                "ferramentas locais",
-                "minhas ferramentas",
-                "capabilities",
-                "what can you do",
-                "tools available",
-                "list tools",
-                "available tools",
-                "skills",
-                "features",
-            ]
-            return any(k in t for k in keywords)
-        except Exception:
-            return False
-
-    def _is_discovery_query(self, text: str) -> bool:
-        try:
-            t = (text or "").lower()
-            keywords = [
-                "coletar informações",
-                "coleta de informações",
-                "coletar dados",
-                "questionário",
-                "wizard",
-                "configurar ferramentas",
-                "configurar ambiente",
-                "descoberta de ferramentas",
-                "levantamento",
-                "diagnóstico de ferramentas",
-                "mapear ferramentas",
-                "plano dinâmico",
-                "collect information",
-                "information gathering",
-                "collect data",
-                "questionnaire",
-                "setup",
-                "configure tools",
-                "tool discovery",
-                "diagnostic",
-                "survey",
-            ]
-            return any(k in t for k in keywords)
-        except Exception:
-            return False
-
-    def _is_docs_query(self, text: str) -> bool:
-        try:
-            t = (text or "").lower()
-            keywords = [
-                "gerar documentação",
-                "documentação de ferramentas",
-                "explicar ferramentas",
-                "texto explicativo",
-                "documentar as ferramentas",
-                "criar documentação",
-                "documentação automática",
-                "detalhar ferramentas",
-                "tool docs",
-                "generate docs",
-                "tools documentation",
-            ]
-            return any(k in t for k in keywords)
-        except Exception:
-            return False
 
     # --- Quick Commands System (Quick Win) ---
     QUICK_COMMANDS = {
@@ -1253,128 +1009,22 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
 
 *"À sua disposição, senhor."* ✨"""
 
-    def _render_local_capabilities(self) -> str:
-        # Fallback se o serviço de ferramentas não está disponível
-        if not self._tools:
-            return (
-                "Capacidades locais: serviço de ferramentas não disponível. "
-                "Use /web/overview para consultar status do sistema."
-            )
 
-        try:
-            metas = self._tools.list_tools(category=None, permission_level=None, tags=None)
-            stats = self._tools.get_statistics()
-        except Exception:
-            metas = []
-            stats = {}
-
-        if not metas:
-            return (
-                "Nenhuma ferramenta registrada no momento. "
-                "Você pode criar ferramentas dinâmicas via Action Module (Sprint 6)."
-            )
-
-        # Agrupa por categoria
-        grouped: dict[str, list[str]] = {}
-        for m in metas:
-            cat = getattr(m.category, "value", str(m.category))
-            perm = getattr(m.permission_level, "value", str(m.permission_level))
-            grouped.setdefault(cat, []).append(f"{m.name} ({perm})")
-
-        lines: list[str] = []
-        lines.append("Capacidades locais detectadas dinamicamente:")
-        lines.append(f"- Ferramentas registradas: {len(metas)}")
-        if stats:
-            total_calls = stats.get("total_calls")
-            success_rate = stats.get("success_rate")
-            if total_calls is not None and success_rate is not None:
-                lines.append(
-                    f"- Uso recente: {total_calls} chamadas, taxa de sucesso {success_rate}"
-                )
-
-        for cat, items in sorted(grouped.items(), key=lambda x: x[0]):
-            lines.append(f"- Categoria '{cat}': {', '.join(sorted(items))}")
-
-        lines.append(
-            "\nDica: pergunte 'executar diagnóstico de ferramentas' para um fluxo guiado de verificação."
-        )
-        return "\n".join(lines)
-
-    def _render_tools_documentation(self) -> str:
-        # Fallback se o serviço de ferramentas não está disponível
-        if not self._tools:
-            return (
-                "Não consigo gerar documentação local porque o serviço de ferramentas não está disponível. "
-                "Verifique o estado do ToolService."
-            )
-
-        try:
-            return self._tools.generate_documentation(include_stats=True, format="markdown")
-        except Exception as e:
-            logger.error("Falha ao gerar documentação de ferramentas", exc_info=e)
-            return (
-                "Ocorreu um erro ao gerar a documentação das ferramentas locais. "
-                "Tente novamente mais tarde."
-            )
-
-    def _render_discovery_intro(self) -> str:
-        # Usa estado atual para montar um plano adaptativo
-        metas: list[Any] = []
-        stats: dict[str, Any] = {}
-        if self._tools:
-            try:
-                metas = self._tools.list_tools(category=None, permission_level=None, tags=None)
-                stats = self._tools.get_statistics()
-            except Exception:
-                pass
-
-        categorias = (
-            sorted({getattr(m.category, "value", str(m.category)) for m in metas}) if metas else []
-        )
-        pontos = [
-            "1) Seleção de categorias relevantes (filesystem, system, web, computation, database)",
-            "2) Nível de permissão desejado (read_only, safe, write, dangerous)",
-            "3) Rate limit por minuto (ex.: 10, 30, 60)",
-            "4) Preferência de confirmação antes de executar (sim/não)",
-            "5) Ferramentas prioritárias para uso frequente",
-            "6) Execução de diagnóstico rápido para validar acesso (get_system_info, list_directory, execute_python_expression)",
-        ]
-
-        lines: list[str] = []
-        lines.append("Plano dinâmico de coleta e validação de ferramentas locais:")
-        if categorias:
-            lines.append(f"- Categorias detectadas agora: {', '.join(categorias)}")
-        if stats:
-            lines.append(
-                f"- Registro atual: {stats.get('total_tools_registered', 0)} ferramentas, "
-                f"{stats.get('total_calls', 0)} chamadas recentes"
-            )
-
-        lines.append("\nFluxo interativo:")
-        for p in pontos:
-            lines.append(f"- {p}")
-
-        lines.append(
-            "\nComo responder: envie algo como 'Categorias: filesystem, system; Permissões: safe; "
-            "Rate limit: 30; Confirmar: sim; Prioridades: read_file, search_web; Iniciar diagnóstico'."
-        )
-        lines.append(
-            "Eu vou adaptar as próximas perguntas com base nas suas respostas e no que estiver "
-            "efetivamente disponível localmente."
-        )
-        return "\n".join(lines)
 
     # Streaming helper: retorna generator de eventos SSE (strings já formatadas)
     async def stream_message(
         self,
         conversation_id: str,
         message: str,
-        role: ModelRole,
-        priority: ModelPriority,
+        role: ModelRole | None = None,
+        priority: ModelPriority | None = None,
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
     ):
+        role = role or ModelRole.ORCHESTRATOR
+        priority = priority or ModelPriority.HIGH_QUALITY
+
         # Config
         max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
         default_timeout = int(os.getenv("CHAT_DEFAULT_TIMEOUT_SECONDS", "30"))
@@ -1421,14 +1071,20 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
         conv = self._repo.get_conversation(conversation_id)
         persona = conv.get("persona") or "assistant"
         history = self._repo.get_recent_messages(conversation_id, limit=20)
-        prompt = self._build_prompt(persona, history, message, conv.get("summary"))
-        in_tokens = self._estimate_tokens(prompt)
+
+        # RAG Logic
+        relevant_memories = None
+        if self._rag_service:
+             relevant_memories = await self._rag_service.retrieve_context(message)
+
+        prompt = self._prompt_service.build_prompt(persona, history, message, conv.get("summary"), relevant_memories)
+        in_tokens = self._prompt_service.estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
 
         # Intercepta discovery interativo e responde sem invocar LLM
-        if self._tools and self._is_discovery_query(message):
+        if self._prompt_service.is_discovery_query(message):
             start_t = _time.time()
-            assistant_text = self._render_discovery_intro()
+            assistant_text = self._prompt_service.render_discovery_intro(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
@@ -1463,7 +1119,7 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
                         pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             _done = json.dumps(
@@ -1492,9 +1148,9 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
             return
 
         # Intercepta geração automática de documentação das ferramentas em streaming
-        if self._tools and self._is_docs_query(message):
+        if self._prompt_service.is_docs_query(message):
             start_t = _time.time()
-            assistant_text = self._render_tools_documentation()
+            assistant_text = self._prompt_service.render_tools_documentation(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
@@ -1528,7 +1184,7 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
                         pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             _done = json.dumps(
@@ -1543,9 +1199,9 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
             return
 
         # Intercepta perguntas de capacidades e responde sem invocar LLM
-        if self._tools and self._is_capabilities_query(message):
+        if self._prompt_service.is_capabilities_query(message):
             start_t = _time.time()
-            assistant_text = self._render_local_capabilities()
+            assistant_text = self._prompt_service.render_local_capabilities(self._tools)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
 
@@ -1602,7 +1258,7 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
                         pass
 
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
             _done = json.dumps(
@@ -1710,7 +1366,7 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
                 yield f"event: token\ndata: {_tok}\n\n"
                 yield f"event: partial\ndata: {_tok}\n\n"
             self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._estimate_tokens(assistant_text)
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
             # custo aproximado
             try:
@@ -1980,10 +1636,22 @@ Inspirado no J.A.R.V.I.S. — Just A Rather Very Intelligent System
 
             while (_time.time() - start_time) < max_duration:
                 try:
-                    # Aguarda evento com timeout curto para checar desconexão/keepalive
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
 
-                    # Formata evento para o cliente
+                    original_payload = payload
+                    if isinstance(payload, (bytes, bytearray)):
+                        try:
+                            payload = json.loads(payload.decode("utf-8"))
+                        except Exception:
+                            payload = {"content": original_payload.decode("utf-8", errors="replace")}
+                    elif isinstance(payload, str):
+                        try:
+                            payload = json.loads(payload)
+                        except Exception:
+                            payload = {"content": payload}
+                    elif not isinstance(payload, dict):
+                        payload = {"content": str(payload)}
+
                     sse_event = {
                         "type": payload.get("event_type", "unknown"),
                         "agent": payload.get("agent_role", "unknown"),
