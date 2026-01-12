@@ -14,8 +14,7 @@ logger = structlog.get_logger(__name__)
 # Known insecure defaults that MUST be changed in production
 INSECURE_DEFAULTS = {
     "NEO4J_PASSWORD": "password",
-    "MYSQL_PASSWORD": "janus_pass",
-    "MYSQL_ROOT_PASSWORD": "janus_root",
+
     "RABBITMQ_PASSWORD": "janus_pass",
 }
 

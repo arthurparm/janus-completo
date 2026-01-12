@@ -4,6 +4,7 @@ from typing import Any
 from prometheus_client import Counter, Gauge
 
 from app.config import settings
+from app.core.infrastructure.redis_usage_tracker import get_redis_usage_tracker
 
 from .types import ModelStats, ProviderPricing, ProviderStats
 
@@ -79,7 +80,48 @@ _provider_budgets_usd: dict[str, float] = {
 }
 
 # Rastreamento de gastos acumulados
-_provider_spend_usd: dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0, "deepseek": 0.0}
+_provider_spend_usd: dict[str, float] = {
+    "openai": 0.0,
+    "google_gemini": 0.0,
+    "ollama": 0.0,
+    "deepseek": 0.0,
+}
+
+# Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
+_model_penalty_factors: dict[str, dict[str, float]] = {
+    "openai": {},
+    "google_gemini": {},
+    "ollama": {},
+    "deepseek": {},
+}
+
+# EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
+_expected_k_ema_by_role: dict[str, float] = {}
+for _role_key, _k in getattr(settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {}).items():
+    try:
+        _expected_k_ema_by_role[_role_key] = float(_k)
+    except Exception:
+        _expected_k_ema_by_role[_role_key] = 2.0
+
+try:
+    for rk, val in _expected_k_ema_by_role.items():
+        LLM_EXPECTED_KTOKENS_GAUGE.labels(role=rk).set(val)
+except Exception:
+    pass
+
+
+# Orçamentos diários multitenant (USD)
+_tenant_user_daily_budget_usd: float = getattr(settings, "TENANT_USER_DAILY_BUDGET_USD", 0.0) or 0.0
+_tenant_project_daily_budget_usd: float = (
+    getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
+)
+
+# Rastreamento de gastos por usuário/projeto (reset diário)
+_tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
+_tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
+
+
+def _today_str() -> str:
 
 # Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
 _model_penalty_factors: dict[str, dict[str, float]] = {
@@ -122,21 +164,33 @@ def _today_str() -> str:
         return datetime.now().strftime("%Y-%m-%d")
 
 
-def _budget_remaining(provider: str) -> float:
+async def _budget_remaining(provider: str) -> float:
     budget = _provider_budgets_usd.get(provider, 0.0)
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
     spend = _provider_spend_usd.get(provider, 0.0)
+    if tracker is not None:
+        try:
+            spend = await tracker.get_provider_spend(provider)
+            _provider_spend_usd[provider] = spend
+        except Exception:
+            spend = _provider_spend_usd.get(provider, 0.0)
     return max(0.0, budget - spend)
 
 
-def _budget_allows(provider: str) -> bool:
+async def _budget_allows(provider: str) -> bool:
     # Orçamento 0.0 implica sem custo/sem controle (ex.: Ollama)
     budget = _provider_budgets_usd.get(provider, 0.0)
     if budget <= 0.0:
         return True
-    return _budget_remaining(provider) > 0.0
+    rem = await _budget_remaining(provider)
+    return rem > 0.0
 
 
-def is_total_budget_threshold_exceeded() -> bool:
+async def is_total_budget_threshold_exceeded() -> bool:
     """
     Check if total cloud spending has exceeded the configured threshold.
     Returns True if spending >= BUDGET_THRESHOLD_PERCENT * total_budget.
@@ -146,7 +200,21 @@ def is_total_budget_threshold_exceeded() -> bool:
     cloud_providers = ["openai", "google_gemini", "deepseek"]
 
     total_budget = sum(_provider_budgets_usd.get(p, 0.0) for p in cloud_providers)
-    total_spend = sum(_provider_spend_usd.get(p, 0.0) for p in cloud_providers)
+    
+    # Need to fetch latest spend for accuracy
+    current_spends = {}
+    tracker = get_redis_usage_tracker()
+    if tracker:
+        for p in cloud_providers:
+            try:
+                current_spends[p] = await tracker.get_provider_spend(p)
+            except Exception:
+                current_spends[p] = _provider_spend_usd.get(p, 0.0)
+    else:
+         for p in cloud_providers:
+            current_spends[p] = _provider_spend_usd.get(p, 0.0)
+
+    total_spend = sum(current_spends.values())
 
     if total_budget <= 0.0:
         return False  # No budget = no guardrail
@@ -210,14 +278,28 @@ def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
         return ProviderPricing(0.0, 0.0)
 
 
-def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
+async def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
     if not id_:
         return float("inf")
     today = _today_str()
     if kind == "user":
         budget = _tenant_user_daily_budget_usd
         entry = _tenant_user_spend_usd.get(id_)
-        if not entry or entry.get("date") != today:
+        tracker = None
+        try:
+            tracker = get_redis_usage_tracker()
+        except Exception:
+            tracker = None
+        if tracker is not None:
+            try:
+                spent = await tracker.get_tenant_spend("user", id_, today)
+                entry = {"date": today, "usd": spent}
+                _tenant_user_spend_usd[id_] = entry
+            except Exception:
+                if not entry or entry.get("date") != today:
+                    _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
+                    entry = _tenant_user_spend_usd[id_]
+        elif not entry or entry.get("date") != today:
             _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
             entry = _tenant_user_spend_usd[id_]
         return (
@@ -228,7 +310,21 @@ def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
     else:  # project
         budget = _tenant_project_daily_budget_usd
         entry = _tenant_project_spend_usd.get(id_)
-        if not entry or entry.get("date") != today:
+        tracker = None
+        try:
+            tracker = get_redis_usage_tracker()
+        except Exception:
+            tracker = None
+        if tracker is not None:
+            try:
+                spent = await tracker.get_tenant_spend("project", id_, today)
+                entry = {"date": today, "usd": spent}
+                _tenant_project_spend_usd[id_] = entry
+            except Exception:
+                if not entry or entry.get("date") != today:
+                    _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
+                    entry = _tenant_project_spend_usd[id_]
+        elif not entry or entry.get("date") != today:
             _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
             entry = _tenant_project_spend_usd[id_]
         return (
@@ -238,16 +334,32 @@ def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
         )
 
 
-def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
+async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
     if not id_:
         return
     today = _today_str()
     cost_usd = max(0.0, float(cost_usd))
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
     if kind == "user":
         entry = _tenant_user_spend_usd.get(id_)
         if not entry or entry.get("date") != today:
             _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
-        _tenant_user_spend_usd[id_]["usd"] = (_tenant_user_spend_usd[id_]["usd"] or 0.0) + cost_usd
+        if tracker is not None:
+            try:
+                total = await tracker.increment_tenant_spend("user", id_, cost_usd, today)
+                _tenant_user_spend_usd[id_]["usd"] = total
+            except Exception:
+                _tenant_user_spend_usd[id_]["usd"] = (
+                    _tenant_user_spend_usd[id_]["usd"] or 0.0
+                ) + cost_usd
+        else:
+            _tenant_user_spend_usd[id_]["usd"] = (
+                _tenant_user_spend_usd[id_]["usd"] or 0.0
+            ) + cost_usd
         try:
             LLM_TENANT_SPEND_USD.labels(kind="user", id=id_).inc(cost_usd)
         except Exception:
@@ -256,10 +368,50 @@ def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
         entry = _tenant_project_spend_usd.get(id_)
         if not entry or entry.get("date") != today:
             _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
-        _tenant_project_spend_usd[id_]["usd"] = (
-            _tenant_project_spend_usd[id_]["usd"] or 0.0
-        ) + cost_usd
+        if tracker is not None:
+            try:
+                total = await tracker.increment_tenant_spend("project", id_, cost_usd, today)
+                _tenant_project_spend_usd[id_]["usd"] = total
+            except Exception:
+                _tenant_project_spend_usd[id_]["usd"] = (
+                    _tenant_project_spend_usd[id_]["usd"] or 0.0
+                ) + cost_usd
+        else:
+            _tenant_project_spend_usd[id_]["usd"] = (
+                _tenant_project_spend_usd[id_]["usd"] or 0.0
+            ) + cost_usd
         try:
             LLM_TENANT_SPEND_USD.labels(kind="project", id=id_).inc(cost_usd)
         except Exception:
             pass
+
+
+async def register_usage(provider: str, user_id: str | None, project_id: str | None, cost_usd: float):
+    cost = max(0.0, float(cost_usd))
+    if cost == 0.0:
+        return
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
+    total_spend = _provider_spend_usd.get(provider, 0.0)
+    if tracker is not None:
+        try:
+            total_spend = await tracker.increment_provider_spend(provider, cost)
+        except Exception:
+            total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
+    else:
+        total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
+    _provider_spend_usd[provider] = total_spend
+    try:
+        LLM_PROVIDER_SPEND_USD.labels(provider=provider, category="total").inc(cost)
+        budget = _provider_budgets_usd.get(provider, 0.0)
+        remaining = max(0.0, budget - total_spend)
+        LLM_PROVIDER_BUDGET_REMAINING.labels(provider=provider).set(remaining)
+    except Exception:
+        pass
+    if user_id:
+        await _register_tenant_spend("user", user_id, cost)
+    if project_id:
+        await _register_tenant_spend("project", project_id, cost)

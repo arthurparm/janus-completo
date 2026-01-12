@@ -645,6 +645,8 @@ Final Answer: [resposta]
                 verbose=True,
             )
             self.executor = agent
+            
+        logger.info(f"Agente '{self.agent_id}' inicializado com sucesso.")
 
     async def execute_task(self, task: Task, max_retries: int = 2) -> dict[str, Any]:
         """
@@ -781,11 +783,11 @@ Final Answer: [resposta]
             safe_tools.append(tool)
         return safe_tools
 
-    def update_config(self, config):
+    async def update_config(self, config):
         """Atualiza a configuração do agente dinamicamente."""
         try:
             logger.info(f"Atualizando configuração do agente {self.agent_id}")
-            self._initialize_agent()
+            await self.initialize()
             logger.info(f"Configuração do agente {self.agent_id} atualizada com sucesso")
         except Exception as e:
             logger.error(f"Erro ao atualizar configuração do agente {self.agent_id}: {e}")
@@ -839,9 +841,11 @@ class MultiAgentSystem:
             # Atualiza o settings para refletir o novo caminho
             settings.WORKSPACE_ROOT = str(fallback_path)
 
-    def create_agent(self, role: AgentRole) -> SpecializedAgent:
-        """Cria um novo agente especializado e seu ator correspondente."""
+    async def create_agent(self, role: AgentRole) -> SpecializedAgent:
+        """Cria um novo agente especializado e seu ator correspondente (ASYNC)."""
         agent = SpecializedAgent(role, self.workspace)
+        await agent.initialize()
+        
         self.agents[agent.agent_id] = agent
 
         # Inicializa o Ator para este agente
@@ -897,7 +901,7 @@ class MultiAgentSystem:
         """Recupera um agente pelo ID."""
         return self.agents.get(agent_id)
 
-    def list_agents(self) -> list[dict[str, Any]]:
+    def list_agents() -> list[dict[str, Any]]:
         """Lista todos os agentes ativos."""
         return [
             {
@@ -916,7 +920,7 @@ class MultiAgentSystem:
         atribui aos agentes especializados e coordena a execução.
         """
         if not self.project_manager:
-            self.project_manager = self.create_agent(AgentRole.PROJECT_MANAGER)
+            self.project_manager = await self.create_agent(AgentRole.PROJECT_MANAGER)
 
         logger.info(f"Iniciando projeto: {project_description}")
 
@@ -955,7 +959,7 @@ Retorne em formato estruturado."""
             "message": "Projeto iniciado. Acompanhe via eventos ou polling.",
         }
 
-    def update_agent_config(self, agent_id: str, config) -> bool:
+    async def update_agent_config(self, agent_id: str, config) -> bool:
         """Atualiza a configuração de um agente específico."""
         agent = self.get_agent(agent_id)
         if not agent:
@@ -963,7 +967,7 @@ Retorne em formato estruturado."""
             return False
 
         try:
-            agent.update_config(config)
+            await agent.update_config(config)
             return True
         except Exception as e:
             logger.error(f"Erro ao atualizar configuração do agente {agent_id}: {e}")
@@ -1053,7 +1057,7 @@ Retorne em formato estruturado."""
                     agent = self.get_agent(task.assigned_to)
                 if agent is None:
                     if not self.project_manager:
-                        self.project_manager = self.create_agent(AgentRole.PROJECT_MANAGER)
+                        self.project_manager = await self.create_agent(AgentRole.PROJECT_MANAGER)
                     agent = self.project_manager
                 try:
                     return await agent.execute_task(task)
@@ -1137,3 +1141,4 @@ def get_multi_agent_system() -> MultiAgentSystem:
     if _multi_agent_system is None:
         _multi_agent_system = MultiAgentSystem()
     return _multi_agent_system
+```

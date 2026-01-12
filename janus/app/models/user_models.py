@@ -10,7 +10,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.config_models import Base
 
@@ -41,7 +43,7 @@ class Profile(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     timezone = Column(String(50), nullable=True)
     language = Column(String(10), default="pt-BR")
-    style_prefs = Column(Text, nullable=True)
+    style_prefs = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(
         DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
@@ -119,7 +121,7 @@ class AuditEvent(Base):
     latency_ms = Column(Integer, nullable=True)
     trace_id = Column(String(64), nullable=True)
     justification = Column(Text, nullable=True)
-    details_json = Column(Text, nullable=True)
+    details_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     __table_args__ = (
         Index("idx_audit_user_ts", "user_id", "created_at"),

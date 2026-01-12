@@ -264,7 +264,7 @@ class PromptLoader:
         if self.use_database:
             try:
                 self._prompt_repo = PromptRepository()
-                self._logger.info("PromptLoader inicializado com suporte a banco de dados MySQL")
+                self._logger.info("PromptLoader inicializado com suporte a banco de dados Relacional")
             except Exception as e:
                 self._logger.warning(
                     f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
@@ -310,7 +310,7 @@ class PromptLoader:
         self.invalidate()
 
     def _get_prompt_from_database(self, name: str, version: str | None = None) -> str | None:
-        """Busca prompt do banco de dados MySQL."""
+        """Busca prompt do banco de dados Relacional."""
         if not self.use_database or not self._prompt_repo:
             return None
 

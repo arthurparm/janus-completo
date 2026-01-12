@@ -105,7 +105,7 @@ class GraphRetriever:
         if self.async_graph_db is None or self.async_graph_db._driver is None:
             raise ConnectionError("Graph RAG Core não está disponível (Async DB desconectado).")
 
-        llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
+        llm = await get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
         cypher_chain = cypher_prompt | llm | StrOutputParser()
         t0 = time.perf_counter()
 
@@ -219,7 +219,7 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
         raise ConnectionError("Graph RAG Core não está disponível (DB não inicializado).")
 
     # Modelo para curadoria/síntese
-    llm = get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
+    llm = await get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
     qa_chain = qa_prompt | llm | StrOutputParser()
 
     qkey = question.strip().lower()

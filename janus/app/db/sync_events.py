@@ -18,7 +18,7 @@ def register_cleanup_events():
         Triggered after a User row is deleted.
         """
         user_id = target.id
-        logger.info(f"User {user_id} deleted from MySQL. Triggering artifact cleanup.")
+        logger.info(f"User {user_id} deleted from DB. Triggering artifact cleanup.")
 
         # Dispatch cleanup
         # Note: This is a synchronous callback.

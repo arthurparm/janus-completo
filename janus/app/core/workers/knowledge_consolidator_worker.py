@@ -107,7 +107,7 @@ class KnowledgeConsolidator:
 
         try:
             # LLM para extração
-            self.llm = get_llm(
+            self.llm = await get_llm(
                 role=ModelRole.KNOWLEDGE_CURATOR, priority=ModelPriority.FAST_AND_CHEAP
             )
             logger.info(f"LLM inicializado para consolidação: {self.llm.__class__.__name__}")

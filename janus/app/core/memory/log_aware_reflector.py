@@ -81,7 +81,7 @@ ERROR_PATTERNS = {
     "llm_fail": re.compile(
         r"(llm|model|inference|generation|openai|gemini|ollama).?(failed|error)?", re.I
     ),
-    "db_fail": re.compile(r"(database|db|qdrant|neo4j|postgres|mysql|sql).?(error|failed)?", re.I),
+    "db_fail": re.compile(r"(database|db|qdrant|neo4j|postgres|sql).?(error|failed)?", re.I),
     "async_error": re.compile(r"(asyncio|coroutine|await|event.?loop|task|future)", re.I),
     "file_error": re.compile(r"(file.?not.?found|permission.?denied|ioerror|oserror|path)", re.I),
     "config_error": re.compile(r"(config|setting|env|environment|missing.?key)", re.I),

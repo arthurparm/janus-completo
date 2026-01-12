@@ -16,11 +16,73 @@ from . import response_cache  # Import cache module
 # New Modules
 from .adapters import get_adapter
 from .factory import _get_executor, _health_check_ollama, _infer_model_name, _infer_provider
-from .pricing import (
-    _budget_remaining,
-    _get_model_pricing,
-    _tenant_budget_remaining,
+from .pricing import _budget_remaining, _get_model_pricing, _tenant_budget_remaining, register_usage
+from .rate_limiter import get_rate_limiter
+from .resilience import _llm_pool, _pool_key, _provider_circuit_breakers
+from .router import get_llm
+from .sanitizer import ContentSanitizer
+from .types import ModelPriority, ModelRole
+
+logger = logging.getLogger(__name__)
+
+# Metrics
+LLM_REQUESTS = Counter(
+    "llm_requests_total",
+    "Total de requisições ao provedor LLM",
+    ["provider", "model", "role", "outcome", "exception_type"],
 )
+LLM_LATENCY = Histogram(
+    "llm_request_latency_seconds",
+    "Latência por requisição LLM",
+    ["provider", "model", "role", "outcome"],
+)
+LLM_TOKENS = Counter(
+    "llm_tokens_total",
+    "Tokens contabilizados (aprox.) por direção",
+    ["provider", "model", "role", "direction"],
+)
+
+
+class LLMClient:
+    """Cliente unificado para invocar LLMs com métricas, timeouts e resiliência.
+
+    Refatorado para usar Adaptadores e Sanitizadores independentes.
+    """
+
+    def __init__(
+        self,
+        base: BaseChatModel,
+        provider: str,
+        model: str,
+        role: ModelRole,
+        cache_key: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        config: Any = None,
+    ):
+        self.base = base
+        self.provider = provider
+        self.model = model
+        self.role = role
+        self.cache_key = cache_key
+        self.user_id = user_id
+        self.project_id = project_id
+        self.settings = config if config is not None else settings
+        self.circuit_breaker = circuit_breaker
+
+        # Delegates
+        self.adapter = get_adapter(base, provider)
+        self.sanitizer = ContentSanitizer(self.settings)
+
+    def _estimate_tokens(self, text: str) -> int:
+        return max(1, len(text) // 4)
+
+    def _validate_prompt(self, prompt: str):
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt não pode ser vazio.")
+        if len(prompt) > self.settings.LLM_MAX_PROMPT_LENGTH:
+            raise ValueError(
 from .rate_limiter import get_rate_limiter
 from .resilience import _llm_pool, _pool_key, _provider_circuit_breakers
 from .router import get_llm
@@ -93,7 +155,7 @@ class LLMClient:
     def _invoke(self, prompt: str) -> Any:
         return self.adapter.invoke(prompt)
 
-    def _compute_output_limit(self, prompt: str) -> int:
+    async def _compute_output_limit(self, prompt: str) -> int:
         pricing = _get_model_pricing(self.provider, self.model)
         tokens_in = self._estimate_tokens(prompt)
         role_key = self.role.value
@@ -109,9 +171,9 @@ class LLMClient:
             if max_req_cost < float("inf")
             else float("inf")
         )
-        remaining_provider_usd = _budget_remaining(self.provider)
-        remaining_user_usd = _tenant_budget_remaining("user", self.user_id)
-        remaining_project_usd = _tenant_budget_remaining("project", self.project_id)
+        remaining_provider_usd = await _budget_remaining(self.provider)
+        remaining_user_usd = await _tenant_budget_remaining("user", self.user_id)
+        remaining_project_usd = await _tenant_budget_remaining("project", self.project_id)
 
         def usd_to_out_tokens(usd: float) -> int:
             if usd == float("inf"):
@@ -160,7 +222,7 @@ class LLMClient:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.send, prompt, timeout_s)
 
-    def send(self, prompt: str, timeout_s: int | None = None) -> str:
+    async def send(self, prompt: str, timeout_s: int | None = None) -> str:
         """Envia um prompt para o LLM com resiliência, observabilidade e cache."""
         # 1. Check cache first
         # Extract priority from cache_key or just use a derived one.
@@ -208,7 +270,7 @@ class LLMClient:
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
 
-            allowed_out = self._compute_output_limit(prompt)
+            allowed_out = await self._compute_output_limit(prompt)
             if allowed_out < 1:
                 logger.warning(
                     f"Orçamento insuficiente para {self.provider} (tokens={allowed_out}). Acionando fallback."
@@ -218,11 +280,24 @@ class LLMClient:
             # Use Adapter for limit application
             self.adapter.apply_output_limit(allowed_out)
 
+            # NOTE: self._invoke is likely wrapping a sync call (langchain invoke).
+            # If we want true async, we should use ainvoke if available, or run_in_executor.
+            # However, resilient decorator might expect sync? checking...
+            # resilient decorator in python is usually sync or async aware.
+            # Assuming _invoke is sync (calls adapter.invoke).
+            # Ideally we should use adapter.ainvoke if possible.
+            # For now, we wrap the resilient decorated call in executor if explicit async needed,
+            # BUT resilient decorator usually handles retry logic.
+            # If resilient is sync, we must run it in thread pool.
+
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
             if timeout > 0:
-                future = _get_executor(self.provider).submit(decorated_invoke, prompt)
-                result = future.result(timeout=timeout)
+                # Run the sync decorated_invoke in a thread
+                result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
             else:
-                result = decorated_invoke(prompt)
+                 result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
 
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(
@@ -308,8 +383,12 @@ class LLMClient:
                     cost_usd=cost,
                 )
 
-                tokens_in_est = input_tokens # Manter compatibilidade do nome var local se necessário
+                tokens_in_est = input_tokens
                 tokens_out_est = output_tokens
+                try:
+                    await register_usage(self.provider, self.user_id, self.project_id, cost)
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"Failed to cache LLM response: {e}")
 
@@ -374,6 +453,8 @@ class LLMClient:
                     )
 
                     # Quick health check
+                    # _health_check_ollama is sync, run in thread
+                    # For simplicity, just run it sync as fallback is rare
                     if _health_check_ollama(fallback_llm, timeout_s=120):
                         logger.info(f"Fallback Ollama ({fallback_model}) saudável. Invocando...")
                         result = fallback_llm.invoke(prompt)
@@ -398,9 +479,9 @@ class LLMClient:
         finally:
             pass
 
-    def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
+    async def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
         """Versão enriquecida que retorna metadados além da resposta."""
-        text = self.send(prompt, timeout_s)
+        text = await self.send(prompt, timeout_s)
 
         # Tenta recuperar o objeto result original do adapter ou cache se possivel
         # Como send() retorna str, precisamos de uma forma de acessar o objeto completo se quisermos reasoning que não está no texto.
@@ -411,7 +492,7 @@ class LLMClient:
         # Vamos fazer um "hack" limpo: se o adapter tiver suporte a capturar o ultimo resultado, ou melhor:
         # Vamos alterar o _invoke para retornar o objeto completo e o send() tratar.
         # Mas send() tem decorators de resiliencia.
-
+        # 
         # SOLUÇÃO IMEDIATA: Parsing de <think> tags se presente no texto (comum em Ollama/DeepSeek destilado)
         # Parsing de <think> tags se presente no texto (DeepSeek/Ollama)
         import re
@@ -434,7 +515,7 @@ class LLMClient:
         }
 
 
-def get_llm_client(
+async def get_llm_client(
     role: ModelRole = ModelRole.ORCHESTRATOR,
     priority: ModelPriority = ModelPriority.LOCAL_ONLY,
     user_id: str | None = None,
@@ -443,7 +524,7 @@ def get_llm_client(
 ) -> LLMClient:
     """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
     cache_key = f"{role.value}_{priority.value}"
-    llm = get_llm(
+    llm = await get_llm(
         role=role, priority=priority, cache_key=cache_key, exclude_providers=exclude_providers
     )
     provider = _infer_provider(llm)

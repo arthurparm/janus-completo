@@ -25,7 +25,7 @@ from app.core.workers.neural_training_worker import start_neural_training_worker
 from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
 
 # from app.core.infrastructure.auth import get_actor_user_id
-from app.db.mysql_config import init_mysql_database
+from app.db import db
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.repositories.collaboration_repository import CollaborationRepository
@@ -144,9 +144,9 @@ class Kernel:
         # 1. Infrastructure
         try:
             try:
-                init_mysql_database()
+                db.create_tables()
             except Exception:
-                logger.warning("MySQL init failed; proceeding without auto-create tables.")
+                logger.warning("DB init failed; proceeding without auto-create tables.")
 
             await asyncio.gather(initialize_graph_db(), initialize_memory_db(), initialize_broker())
 
@@ -241,10 +241,10 @@ class Kernel:
             from app.core.agents.multi_agent_system import AgentRole, get_multi_agent_system
 
             mas = get_multi_agent_system()
-            mas.create_agent(AgentRole.PROJECT_MANAGER)
-            mas.create_agent(AgentRole.CODER)
-            mas.create_agent(AgentRole.RESEARCHER)
-            mas.create_agent(AgentRole.SYSADMIN)
+            await mas.create_agent(AgentRole.PROJECT_MANAGER)
+            await mas.create_agent(AgentRole.CODER)
+            await mas.create_agent(AgentRole.RESEARCHER)
+            await mas.create_agent(AgentRole.SYSADMIN)
             logger.info("Multi-Agent System actors initialized.")
         except Exception as e:
             logger.warning(f"Failed to initialize Multi-Agent System actors: {e}")

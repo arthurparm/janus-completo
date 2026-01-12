@@ -54,7 +54,7 @@ class AgentManager:
         # Nota: MultiAgentSystem.create_agent cria uma nova instância.
         # Para eficiência, poderíamos cachear, mas por enquanto vamos criar sob demanda
         # para garantir isolamento de contexto por request se necessário.
-        agent = self._system.create_agent(role)
+        agent = await self._system.create_agent(role)
 
         task = Task(
             description=question,
@@ -82,9 +82,9 @@ class AgentManager:
                 "error": str(e),
             }
 
-    def create_specialized_agent(self, role: AgentRole) -> dict[str, Any]:
+    async def create_specialized_agent(self, role: AgentRole) -> dict[str, Any]:
         """Cria um agente especializado delegando ao MultiAgentSystem (config dinâmicas)."""
-        agent = self._system.create_agent(role)
+        agent = await self._system.create_agent(role)
         return {"agent_id": agent.agent_id, "role": agent.role.value}
 
     def update_agent_config(self, agent_id: str, config: dict[str, Any]) -> bool:
