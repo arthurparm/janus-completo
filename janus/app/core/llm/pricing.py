@@ -39,12 +39,14 @@ _provider_stats: dict[str, ProviderStats] = {
     "openai": ProviderStats(),
     "google_gemini": ProviderStats(),
     "ollama": ProviderStats(),
+    "deepseek": ProviderStats(),
 }
 
 _model_stats: dict[str, dict[str, ModelStats]] = {
     "openai": {},
     "google_gemini": {},
     "ollama": {},
+    "deepseek": {},
 }
 
 # Pricing por provedor (valores padrão via settings; Ollama ~ 0)
@@ -61,6 +63,11 @@ _provider_pricing: dict[str, ProviderPricing] = {
         input_per_1k_usd=settings.OLLAMA_COST_PER_1K_INPUT_USD,
         output_per_1k_usd=settings.OLLAMA_COST_PER_1K_OUTPUT_USD,
     ),
+    "deepseek": ProviderPricing(
+        input_per_1k_usd=settings.DEEPSEEK_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD,
+        cache_read_per_1k_usd=settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD,
+    ),
 }
 
 # Orçamentos mensais por provedor
@@ -68,16 +75,18 @@ _provider_budgets_usd: dict[str, float] = {
     "openai": settings.OPENAI_MONTHLY_BUDGET_USD,
     "google_gemini": settings.GEMINI_MONTHLY_BUDGET_USD,
     "ollama": settings.OLLAMA_MONTHLY_BUDGET_USD,
+    "deepseek": settings.DEEPSEEK_MONTHLY_BUDGET_USD,
 }
 
 # Rastreamento de gastos acumulados
-_provider_spend_usd: dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}
+_provider_spend_usd: dict[str, float] = {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0, "deepseek": 0.0}
 
 # Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
 _model_penalty_factors: dict[str, dict[str, float]] = {
     "openai": {},
     "google_gemini": {},
     "ollama": {},
+    "deepseek": {},
 }
 
 # EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
@@ -127,6 +136,35 @@ def _budget_allows(provider: str) -> bool:
     return _budget_remaining(provider) > 0.0
 
 
+def is_total_budget_threshold_exceeded() -> bool:
+    """
+    Check if total cloud spending has exceeded the configured threshold.
+    Returns True if spending >= BUDGET_THRESHOLD_PERCENT * total_budget.
+    Used for Dynamic Budget Guardrails.
+    """
+    # Only consider cloud providers with positive budgets
+    cloud_providers = ["openai", "google_gemini", "deepseek"]
+
+    total_budget = sum(_provider_budgets_usd.get(p, 0.0) for p in cloud_providers)
+    total_spend = sum(_provider_spend_usd.get(p, 0.0) for p in cloud_providers)
+
+    if total_budget <= 0.0:
+        return False  # No budget = no guardrail
+
+    threshold = getattr(settings, "BUDGET_THRESHOLD_PERCENT", 0.90)
+    exceeded = total_spend >= (threshold * total_budget)
+
+    if exceeded:
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.warning(
+            f"Budget threshold exceeded! Spend: ${total_spend:.2f} >= "
+            f"{threshold * 100:.0f}% of ${total_budget:.2f}"
+        )
+
+    return exceeded
+
+
 def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
     try:
         if provider == "openai":
@@ -148,6 +186,21 @@ def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
                 )
             return ProviderPricing(
                 settings.GEMINI_COST_PER_1K_INPUT_USD, settings.GEMINI_COST_PER_1K_OUTPUT_USD
+            )
+        if provider == "deepseek":
+            mp = settings.DEEPSEEK_MODEL_PRICING.get(model_name)
+            if mp:
+                return ProviderPricing(
+                    mp.get("input_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_INPUT_USD),
+                    mp.get("output_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD),
+                    mp.get(
+                        "cache_read_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD
+                    ),
+                )
+            return ProviderPricing(
+                settings.DEEPSEEK_COST_PER_1K_INPUT_USD,
+                settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD,
+                settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD,
             )
         # ollama
         return ProviderPricing(
