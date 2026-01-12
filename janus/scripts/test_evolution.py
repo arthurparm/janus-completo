@@ -20,7 +20,7 @@ async def test_evolution():
 
     manager = EvolutionManager(llm_service, tool_service)
 
-    request = "Listar filas do RabbitMQ retornando nome e total de mensagens"
+    request = "Criar uma ferramenta para buscar informações de CEP brasileiro (via CEP)"
     print(f">>> Requesting Evolution: {request}")
 
     try:
