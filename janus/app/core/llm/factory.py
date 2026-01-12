@@ -98,6 +98,13 @@ def _validate_openai_key(key: str | None) -> bool:
     return True
 
 
+def _validate_deepseek_key(key: str | None) -> bool:
+    if not key or len(key) < 10:
+        logger.warning("DEEPSEEK_API_KEY parece inválido.")
+        return False
+    return True
+
+
 def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
@@ -178,6 +185,20 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     ),
                 )
                 _add_to_pool("google_gemini", model, llm)
+            elif provider == "deepseek":
+                if not _validate_deepseek_key(
+                    getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
+                ):
+                    continue
+                # Reuse OpenAI client structure but with DeepSeek params
+                llm = ChatOpenAI(
+                    model=model,
+                    temperature=0,
+                    api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
+                    base_url=settings.DEEPSEEK_BASE_URL,
+                    # Não usamos o http_client compartilhado da OpenAI para evitar conflito de rate limit
+                )
+                _add_to_pool("deepseek", model, llm)
             else:
                 continue
             key = _pool_key(provider, model)
@@ -195,6 +216,10 @@ def _infer_provider(llm: BaseChatModel) -> str:
     if isinstance(llm, ChatOllama):
         return "ollama"
     if isinstance(llm, ChatOpenAI):
+        # Diferencia DeepSeek de OpenAI pela URL base
+        base_url = str(getattr(llm, "openai_api_base", "") or getattr(llm, "base_url", ""))
+        if "deepseek" in base_url.lower():
+            return "deepseek"
         return "openai"
     if isinstance(llm, ChatGoogleGenerativeAI):
         return "google_gemini"
