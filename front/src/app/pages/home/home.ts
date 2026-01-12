@@ -179,7 +179,7 @@ export class HomeComponent implements OnInit, OnDestroy, AfterViewInit {
     },
     {
       label: 'Throughput',
-      value: this.currentWorkersPerformance().throughput,
+      value: Number(this.currentWorkersPerformance().throughput).toFixed(2),
       unit: 't/min',
       trend: 'up',
       trendValue: '+12%',
