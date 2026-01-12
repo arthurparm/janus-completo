@@ -341,9 +341,11 @@ def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: Any = 
             "error_types": error_types,
             "affected_components": affected_components,
             "most_common_error": max(error_types, key=error_types.get) if error_types else None,
-            "most_affected_component": max(affected_components, key=affected_components.get)
-            if affected_components
-            else None,
+            "most_affected_component": (
+                max(affected_components, key=affected_components.get)
+                if affected_components
+                else None
+            ),
             "sample_failures": [
                 {"content": r.get("content", "")[:200], "metadata": r.get("metadata", {})}
                 for r in results[:5]
@@ -469,9 +471,7 @@ def analyze_performance_trends(metric_name: str, hours: int = 24) -> str:
         p95 = (
             statistics.quantiles(data_points, n=20)[-1]
             if len(data_points) >= 20
-            else max(data_points)
-            if data_points
-            else 0
+            else max(data_points) if data_points else 0
         )
 
         # Simples detecção de tendência (comparar primeira e segunda metade)
@@ -551,27 +551,6 @@ def get_resource_usage() -> str:
         logger.error(f"Erro ao obter recursos: {e}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})
 
-
-# --- Prompt do Meta-Agente ---
-
-      "title": "Título da recomendação",
-      "description": "O que fazer",
-      "rationale": "Por que fazer",
-      "priority": 1-5,
-      "suggested_agent": "sysadmin|coder|researcher|optimizer"
-    }}
-  ],
-  "summary": "Resumo executivo da análise"
-}}
-
-IMPORTANTE:
-- Se não houver problemas, indique "healthy" com score alto
-- Sempre forneça evidências concretas (métricas, logs)
-- Priorize problemas que afetam múltiplos componentes
-- Seja proativo: identifique problemas potenciais antes que se tornem críticos
-
-Question: {input}
-{agent_scratchpad}"""
 
 # Helper for robust invoking
 class MetaAgentRetryStrategy:
