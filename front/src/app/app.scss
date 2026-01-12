@@ -1,28 +1,64 @@
-// Marquee Animation for Offline Banner
-.marquee-container {
+/* Existing styles preserved */
+
+/* Skip Link for Keyboard Navigation */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #4a90e2;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 0 0 4px 0;
+    z-index: 100000;
+    font-weight: bold;
+}
+
+.skip-link:focus {
+    top: 0;
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+/* Focus Visible for Keyboard Navigation */
+*:focus-visible {
+    outline: 2px solid #4a90e2;
+    outline-offset: 2px;
+}
+
+/* Remove default outline for mouse users */
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Screen Reader Only Content */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
     overflow: hidden;
+    clip: rect(0, 0, 0, 0);
     white-space: nowrap;
-    position: relative;
+    border-width: 0;
+}
 
-    .marquee-content {
-        display: inline-block;
-        padding-left: 100%;
-        animation: marquee 40s linear infinite;
-        font-family: 'JetBrains Mono', monospace;
-        letter-spacing: 1px;
-    }
-
-    &:hover .marquee-content {
-        animation-play-state: paused;
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    * {
+        border-color: currentColor !important;
     }
 }
 
-@keyframes marquee {
-    0% {
-        transform: translate3d(0, 0, 0);
-    }
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
 
-    100% {
-        transform: translate3d(-100%, 0, 0);
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
