@@ -7,9 +7,10 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from langchain.tools import BaseTool, tool
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
+from app.core.evolution import EvolutionManager
 from app.core.infrastructure import filesystem_manager
 from app.core.infrastructure.context_manager import context_manager
 from app.core.infrastructure.enums import AgentType
@@ -20,6 +21,10 @@ from app.core.tools.action_module import PermissionLevel, ToolCategory, action_r
 from app.core.tools.faulty_tools import get_faulty_tools
 from app.core.tools.launcher_tools import launch_app
 from app.db.graph import graph_db
+from app.repositories.llm_repository import LLMRepository
+from app.repositories.tool_repository import ToolRepository
+from app.services.llm_service import LLMService
+from app.services.tool_service import ToolService
 
 logger = logging.getLogger(__name__)
 
@@ -30,39 +35,62 @@ MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
 
 class WriteFileInput(BaseModel):
-    file_path: str = Field(description="O caminho do arquivo, relativo ao workspace.")
+    file_path: str | None = Field(
+        default=None, description="O caminho do arquivo, relativo ao workspace."
+    )
+    path: str | None = Field(
+        default=None, description="Alias para file_path (aceito para compatibilidade)."
+    )
     content: str = Field(description="O conteúdo a ser escrito no arquivo.")
     overwrite: bool = Field(default=False, description="Se deve sobrescrever o arquivo.")
 
-    @validator("file_path")
-    def validate_path_is_safe(cls, v: str) -> str:
-        absolute_path = (WORKSPACE_ROOT / v).resolve()
+    @field_validator("file_path")
+    def validate_path_is_safe(cls, v: str | None, info) -> str:
+        effective = v or info.data.get("path")
+        if not effective:
+            raise ValueError("Você deve fornecer 'file_path' ou 'path'.")
+        absolute_path = (WORKSPACE_ROOT / effective).resolve()
         try:
             absolute_path.relative_to(WORKSPACE_ROOT)
-            return v
+            return effective
         except ValueError:
-            raise ValueError(f"Acesso negado. O caminho '{v}' está fora do diretório permitido.")
+            raise ValueError(
+                f"Acesso negado. O caminho '{effective}' está fora do diretório permitido."
+            )
 
 
 @tool  # Removido args_schema temporariamente para permitir que o wrapper funcione
-def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
+def write_file(
+    file_path: str | None = None, content: str = "", overwrite: bool = False, path: str | None = None
+) -> str:
     """
-    Escreve conteúdo em um arquivo dentro do workspace seguro (/app/workspace).
+    Writes content to a file within the secure workspace (/app/workspace).
 
-    IMPORTANTE: Você DEVE fornecer os três parâmetros:
-    - file_path: Caminho relativo ao workspace (ex: 'main.py', 'src/app.py', 'requirements.txt')
-    - content: Conteúdo COMPLETO do arquivo a ser escrito (STRING obrigatória)
-    - overwrite: Se True, sobrescreve arquivo existente. Se False e arquivo existe, retorna erro.
+    ⚠️ USE CASE: Creating STANDALONE SCRIPTS for users to run manually.
+    ⚠️ NOT FOR: Creating SYSTEM TOOLS (use auto-evolution for that)
+    
+    CRITICAL: If user requested a "tool" or "ferramenta", DO NOT use this function.
+    Instead, ask for clarification: SYSTEM TOOL (auto-evolution) vs STANDALONE SCRIPT (write_file)?
+
+    REQUIRED PARAMETERS:
+    - file_path: Relative path within workspace (e.g., 'main.py', 'src/app.py', 'requirements.txt')
+    - content: COMPLETE file content to write (STRING, mandatory)
+    - overwrite: If True, overwrites existing file. If False and file exists, returns error.
 
     Returns:
-        Mensagem de sucesso ou erro
+        Success or error message
 
-    Exemplo de uso correto:
+    Correct usage examples:
         write_file(file_path="requirements.txt", content="flask==2.0.0\\nrequests==2.28.0\\nfastapi==0.104.0", overwrite=False)
         write_file(file_path="main.py", content="from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route('/')\\ndef home():\\n    return 'Hello World'", overwrite=False)
     """
     try:
-        target_path = (WORKSPACE_ROOT / file_path).resolve()
+        actual_path = file_path or path
+        if not actual_path:
+            return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path' ou 'path'."
+        if not isinstance(content, str) or len(content) == 0:
+            return "Erro: 'content' é obrigatório e não pode ser vazio."
+        target_path = (WORKSPACE_ROOT / actual_path).resolve()
         target_path.relative_to(WORKSPACE_ROOT)  # Re-valida para segurança
 
         if target_path.suffix not in ALLOWED_EXTENSIONS:
@@ -70,11 +98,11 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
         if len(content.encode("utf-8")) > MAX_FILE_SIZE:
             return f"Erro: Conteúdo excede o tamanho máximo de {MAX_FILE_SIZE} bytes."
         if target_path.exists() and not overwrite:
-            return f"Erro: O arquivo '{file_path}' já existe. Use overwrite=True."
+            return f"Erro: O arquivo '{actual_path}' já existe. Use overwrite=True."
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(content, encoding="utf-8")
-        return f"Arquivo '{file_path}' salvo com sucesso."
+        return f"Arquivo '{actual_path}' salvo com sucesso."
     except ValueError as e:
         return f"Erro de validação: {e}"
     except Exception as e:
@@ -123,7 +151,7 @@ class ListDirectoryInput(BaseModel):
         description="Caminho do diretório a ser listado, relativo ao workspace (/app/workspace).",
     )
 
-    @validator("path")
+    @field_validator("path")
     def validate_path_is_safe(cls, v: str) -> str:
         # Se o path for ".", converte para o workspace
         if v == ".":
@@ -261,6 +289,46 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
     except Exception as e:
         logger.error(f"Error analyzing memory for failures: {e}", exc_info=True)
         return f"Erro ao analisar memória para falhas: {e}"
+
+
+class EvolveToolInput(BaseModel):
+    """Input schema for evolve_tool."""
+    capability_request: str | None = Field(
+        default=None,
+        description="Descrição da capacidade desejada para a nova ferramenta.",
+    )
+
+
+@tool(args_schema=EvolveToolInput)
+async def evolve_tool(capability_request: str | None = None) -> str:
+    """
+    Inicia o fluxo de auto-evolução para criar uma nova ferramenta interna.
+
+    Args:
+        capability_request: Descrição da capacidade desejada para a nova ferramenta.
+
+    Returns:
+        JSON com sucesso/erro e metadados da ferramenta criada.
+    """
+    # Validação defensiva para evitar falhas de validação externas (ex: LangChain)
+    if not capability_request or not str(capability_request).strip():
+        return json.dumps(
+            {
+                "success": False,
+                "error": "capability_request é obrigatório e deve ser uma descrição em texto da capacidade desejada.",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        llm_service = LLMService(LLMRepository())
+        tool_service = ToolService(ToolRepository())
+        manager = EvolutionManager(llm_service, tool_service)
+        result = await manager.evolve_tool(str(capability_request))
+        return json.dumps({"success": True, "tool": result}, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Erro ao evoluir ferramenta: {e}", exc_info=True)
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 
 
 # --- Sprint 8: Ferramentas de Memória Semântica (Grafo de Conhecimento) ---
@@ -704,6 +772,7 @@ unified_tools: list[BaseTool] = [
     get_system_info,
     search_web,
     get_enriched_context,
+    evolve_tool,
     execute_python_code,
     execute_python_expression,
     execute_shell,
@@ -772,6 +841,14 @@ def _register_all_tools_in_action_module():
         category=ToolCategory.DATABASE,
         permission_level=PermissionLevel.READ_ONLY,
         tags=["memory", "analysis", "meta"],
+    )
+
+    action_registry.register(
+        evolve_tool,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.SAFE,
+        rate_limit_per_minute=5,
+        tags=["evolution", "dynamic_tool"],
     )
 
     # Ferramentas de memória semântica (Sprint 8)
