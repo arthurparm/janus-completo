@@ -14,7 +14,8 @@ from typing import Any
 
 from app.config import settings
 from app.core.agents.agent_manager import AgentType, agent_manager
-from app.core.llm.router import ModelPriority, ModelRole, get_llm_client
+from app.core.llm.client import get_llm_client
+from app.core.llm.router import ModelPriority, ModelRole
 from app.services.memory_service import MemoryService
 
 logger = logging.getLogger(__name__)
