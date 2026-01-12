@@ -131,6 +131,20 @@ export class AutonomyComponent implements OnInit, OnDestroy {
         });
     }
 
+    getRtStateLabel(state: string | null | undefined): string {
+        if (!state) return 'DESCONHECIDO';
+        switch (state) {
+            case 'thinking': {
+                return 'PENSANDO';
+            }
+            case 'executing': {
+                return 'EXECUTANDO';
+            }
+            default:
+                return state.toUpperCase();
+        }
+    }
+
     getRiskColor(): string {
         switch (this.status?.config?.['risk_profile'] || this.selectedRisk) {
             case 'conservative': return 'primary'; // Blue/Green
@@ -140,5 +154,44 @@ export class AutonomyComponent implements OnInit, OnDestroy {
         }
     }
 
-    /* addLog removed */
+    getToolNameFromLog(message: string | null | undefined): string | null {
+        if (!message) {
+            return null;
+        }
+        const prefix = 'Executando: ';
+        if (!message.startsWith(prefix)) {
+            return null;
+        }
+        return message.slice(prefix.length).trim();
+    }
+
+    getDisplayLogs(raw: any[] | null | undefined): { timestamp: number; level: string; message: string; count: number }[] {
+        if (!raw || !Array.isArray(raw)) {
+            return [];
+        }
+        const sorted = [...raw].sort((a, b) => {
+            const ta = typeof a.timestamp === 'number' ? a.timestamp : 0;
+            const tb = typeof b.timestamp === 'number' ? b.timestamp : 0;
+            return ta - tb;
+        });
+        const acc: { timestamp: number; level: string; message: string; count: number }[] = [];
+        for (const item of sorted) {
+            const timestamp = typeof item.timestamp === 'number' ? item.timestamp : 0;
+            const level = String(item.level || 'info');
+            const message = String(item.message || '');
+            const last = acc[acc.length - 1];
+            if (last && last.message === message && last.level === level) {
+                last.count += 1;
+                last.timestamp = timestamp || last.timestamp;
+            } else {
+                acc.push({
+                    timestamp,
+                    level,
+                    message,
+                    count: 1
+                });
+            }
+        }
+        return acc.reverse();
+    }
 }
