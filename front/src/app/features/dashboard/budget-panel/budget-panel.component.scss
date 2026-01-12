@@ -1,0 +1,183 @@
+.budget-panel {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    color: #eee;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+
+    h3 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+}
+
+button {
+    padding: 0.5rem 1rem;
+    background: #2a2a3e;
+    color: #4a90e2;
+    border: 1px solid #4a90e2;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        background: #4a90e2;
+        color: white;
+    }
+
+    &.active {
+        background: #4a90e2;
+        color: white;
+    }
+}
+
+.guardrail-alert {
+    background: #ff4444;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    text-align: center;
+    font-weight: bold;
+}
+
+.total-budget {
+    background: rgba(74, 144, 226, 0.1);
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.budget-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-bottom: 0.5rem;
+}
+
+.budget-amount {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.budget-progress-bar {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.budget-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a90e2, #357abd);
+    transition: width 0.3s ease;
+
+    &.warning {
+        background: linear-gradient(90deg, #f39c12, #e67e22);
+    }
+
+    &.danger {
+        background: linear-gradient(90deg, #e74c3c, #c0392b);
+    }
+}
+
+.budget-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.providers-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.provider-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    border-left: 4px solid #4a90e2;
+    transition: transform 0.2s;
+
+    &:hover {
+        transform: translateX(4px);
+    }
+
+    &.over-budget {
+        border-left-color: #e74c3c;
+        background: rgba(231, 76, 60, 0.1);
+    }
+}
+
+.provider-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+}
+
+.provider-name {
+    text-transform: capitalize;
+}
+
+.provider-percentage {
+    color: #4a90e2;
+}
+
+.provider-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.provider-bar-fill {
+    height: 100%;
+    background: #4a90e2;
+    transition: width 0.3s ease;
+
+    &.warning {
+        background: #f39c12;
+    }
+
+    &.danger {
+        background: #e74c3c;
+    }
+}
+
+.provider-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.remaining {
+    color: #2ecc71;
+}
+
+.last-updated {
+    text-align: center;
+    font-size: 0.8rem;
+    opacity: 0.6;
+    margin-top: 1rem;
+}
+
+.loading,
+.error-message {
+    padding: 2rem;
+    text-align: center;
+}
+
+.error-message {
+    color: #e74c3c;
+}

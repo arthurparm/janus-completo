@@ -1,0 +1,32 @@
+<div class="graph-container">
+    <div class="graph-header">
+        <h2>Knowledge Graph</h2>
+        <div class="graph-controls">
+            <button (click)="loadGraph()" [disabled]="loading()">
+                {{ loading() ? 'Loading...' : 'Reload' }}
+            </button>
+            <button (click)="resetZoom()">Reset View</button>
+            <select [(ngModel)]="selectedLayout" (change)="changeLayout()">
+                <option value="cose">Force-Directed</option>
+                <option value="circle">Circle</option>
+                <option value="grid">Grid</option>
+                <option value="breadthfirst">Hierarchical</option>
+            </select>
+        </div>
+    </div>
+
+    @if (error()) {
+    <div class="error-message">{{ error() }}</div>
+    }
+
+    <div #cytoscapeContainer class="cytoscape-canvas"></div>
+
+    @if (selectedNode()) {
+    <div class="node-info-panel">
+        <h3>{{ selectedNode()?.data('label') }}</h3>
+        <p><strong>Type:</strong> {{ selectedNode()?.data('type') }}</p>
+        <button (click)="expandNode(selectedNode()!)">Expand Neighbors</button>
+        <button (click)="closePanel()">Close</button>
+    </div>
+    }
+</div>

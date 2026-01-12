@@ -185,6 +185,23 @@ export const routes: Routes = [
         }
       },
       {
+        path: 'budget',
+        loadComponent: () => import('./features/dashboard/budget-panel/budget-panel.component').then(m => m.BudgetPanelComponent),
+        data: {
+          title: 'Budget & Usage',
+          description: 'Monitoring de custos e budget LLM',
+          roles: ['admin']
+        }
+      },
+      {
+        path: 'knowledge-graph',
+        loadComponent: () => import('./features/knowledge/graph-visualizer/graph-visualizer.component').then(m => m.GraphVisualizerComponent),
+        data: {
+          title: 'Knowledge Graph',
+          description: 'Visualização do grafo de conhecimento Neo4j'
+        }
+      },
+      {
         path: 'documents',
         loadComponent: () => import('./pages/documents/documents').then(m => m.DocumentsComponent),
         data: {

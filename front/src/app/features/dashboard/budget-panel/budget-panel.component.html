@@ -1,0 +1,65 @@
+<div class="budget-panel">
+    <div class="panel-header">
+        <h3>💰 Budget & Usage</h3>
+        <button (click)="toggleAutoRefresh()" [class.active]="autoRefresh()">
+            {{ autoRefresh() ? '⏸️ Pause' : '▶️ Auto-refresh' }}
+        </button>
+    </div>
+
+    @if (loading() && !metrics()) {
+    <div class="loading">Loading budget data...</div>
+    }
+
+    @if (error()) {
+    <div class="error-message">{{ error() }}</div>
+    }
+
+    @if (metrics(); as data) {
+    <!-- Guardrail Alert -->
+    @if (data.guardrailActive) {
+    <div class="guardrail-alert">
+        ⚠️ Budget Guardrail Active - Cloud models restricted
+    </div>
+    }
+
+    <!-- Total Budget -->
+    <div class="total-budget">
+        <div class="budget-label">Total Monthly Budget</div>
+        <div class="budget-amount">\${{ data.totalBudget.toFixed(2) }}</div>
+        <div class="budget-progress-bar">
+            <div class="budget-progress-fill" [style.width.%]="totalPercentage()"
+                [class.warning]="totalPercentage() > 75" [class.danger]="totalPercentage() > 90">
+            </div>
+        </div>
+        <div class="budget-stats">
+            <span>Spent: \${{ data.totalSpent.toFixed(2) }}</span>
+            <span>{{ totalPercentage() }}%</span>
+        </div>
+    </div>
+
+    <!-- Provider Breakdown -->
+    <div class="providers-list">
+        @for (provider of data.providers; track provider.provider) {
+        <div class="provider-card" [class.over-budget]="provider.percentage > 100">
+            <div class="provider-header">
+                <span class="provider-name">{{ providerDisplayName(provider.provider) }}</span>
+                <span class="provider-percentage">{{ provider.percentage.toFixed(1) }}%</span>
+            </div>
+            <div class="provider-bar">
+                <div class="provider-bar-fill" [style.width.%]="Math.min(provider.percentage, 100)"
+                    [class.warning]="provider.percentage > 75" [class.danger]="provider.percentage > 90">
+                </div>
+            </div>
+            <div class="provider-details">
+                <span>\${{ provider.spent.toFixed(4) }} / \${{ provider.budget.toFixed(2) }}</span>
+                <span class="remaining">\${{ provider.remaining.toFixed(2) }} left</span>
+            </div>
+        </div>
+        }
+    </div>
+
+    <div class="last-updated">
+        Last updated: {{ lastUpdated() | date:'short' }}
+    </div>
+    }
+</div>
