@@ -96,6 +96,12 @@ class KnowledgeRepository:
         )
         return count_result[0]["total"] if count_result else 0
 
+    async def delete_user_data(self, user_id: int) -> int:
+        """Remove todos os nós associados a um user_id específico."""
+        query = "MATCH (n {user_id: $user_id}) DETACH DELETE n"
+        await self._db.execute(query, {"user_id": user_id}, operation="repo_delete_user_data")
+        return 0
+
     async def clear_code_entities(self):
         query = f"MATCH (n) WHERE n:{GraphLabel.CODE_FUNCTION.value} OR n:{GraphLabel.CODE_CLASS.value} OR n:{GraphLabel.CODE_FILE.value} DETACH DELETE n"
         await self._db.execute(query, operation="repo_cleanup_code")
