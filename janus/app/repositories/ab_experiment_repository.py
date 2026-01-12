@@ -2,7 +2,7 @@ import random
 
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.ab_assignment_models import ExperimentAssignment
 from app.models.ab_experiment_models import Experiment, ExperimentArm, ExperimentResult
 
@@ -14,7 +14,7 @@ class ABExperimentRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def create_experiment(self, name: str, user_id: str | None) -> Experiment:
         s = self._get_session()

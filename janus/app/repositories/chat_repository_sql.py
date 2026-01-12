@@ -5,7 +5,7 @@ import structlog
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.user_models import Message
 from app.models.user_models import Session as ChatSession
 from app.repositories.user_repository import UserRepository
@@ -25,7 +25,7 @@ class ChatRepositorySQL:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def _resolve_user_id(self, user_id: str) -> int | None:
         """

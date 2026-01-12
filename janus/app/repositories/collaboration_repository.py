@@ -25,9 +25,9 @@ class CollaborationRepository:
     def _get_system(self) -> MultiAgentSystem:
         return get_multi_agent_system()
 
-    def create_agent(self, role: AgentRole) -> SpecializedAgent:
+    async def create_agent(self, role: AgentRole) -> SpecializedAgent:
         logger.debug("Criando agente no repositório", role=role.value)
-        return self._get_system().create_agent(role)
+        return await self._get_system().create_agent(role)
 
     def find_all_agents(self) -> list[dict[str, Any]]:
         logger.debug("Buscando todos os agentes no repositório")

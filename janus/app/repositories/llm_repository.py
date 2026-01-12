@@ -47,7 +47,7 @@ class LLMRepository:
     Abstrai todas as interações diretas com a infraestrutura de LLMs.
     """
 
-    def invoke_llm(
+    async def invoke_llm(
         self,
         prompt: str,
         role: ModelRole,
@@ -113,7 +113,7 @@ class LLMRepository:
                         arm = s.query(ExperimentArm).filter(ExperimentArm.id == arm_id).first()
                         if arm and arm.model_spec and ":" in arm.model_spec:
                             provider, model = arm.model_spec.split(":", 1)
-                            llm = get_llm(
+                            llm = await get_llm(
                                 role=role,
                                 priority=priority,
                                 cache_key=f"ab_{provider}_{model}_{role.value}",
@@ -134,7 +134,7 @@ class LLMRepository:
             except Exception:
                 client = None
             if client is None:
-                client = get_llm_client(
+                client = await get_llm_client(
                     role=role, priority=priority, user_id=user_id, project_id=project_id
                 )
             if _OTEL and span is not None:
@@ -147,7 +147,7 @@ class LLMRepository:
             import time as _t
 
             _start = _t.time()
-            enriched = client.send_enriched(prompt, timeout_s=timeout_seconds)
+            enriched = await client.send_enriched(prompt, timeout_s=timeout_seconds)
 
             # Armazena no cache de resposta
             try:
@@ -200,7 +200,7 @@ class LLMRepository:
             try:
                 failed_provider = getattr(client, "provider", "unknown") if client else None
                 exclude = [failed_provider] if failed_provider else None
-                client_fb = get_llm_client(
+                client_fb = await get_llm_client(
                     role=role,
                     priority=priority,
                     user_id=user_id,
@@ -212,7 +212,7 @@ class LLMRepository:
                     client, "provider", None
                 ):
                     raise e
-                enriched_fb = client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
+                enriched_fb = await client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
                 if _OTEL and _tracer is not None:
                     try:
                         with _tracer.start_as_current_span("llm.invoke.failover") as span_fb:

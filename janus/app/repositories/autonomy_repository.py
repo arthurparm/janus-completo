@@ -1,7 +1,7 @@
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 
 
@@ -12,7 +12,7 @@ class AutonomyRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def create_run(
         self,

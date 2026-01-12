@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import and_, desc
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.config_models import AgentConfiguration, PriorityLevel
 
 
@@ -24,7 +24,7 @@ class AgentConfigRepository:
         """Obtém sessão do banco de dados."""
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def get_active_config(self, agent_name: str, agent_role: str) -> AgentConfiguration | None:
         """Obtém a configuração ativa para um agente específico."""

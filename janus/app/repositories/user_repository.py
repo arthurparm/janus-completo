@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.user_models import Consent, OAuthToken, Profile, Role, User, UserRole
 
 
@@ -14,7 +14,7 @@ class UserRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def get_user(self, user_id: int) -> User | None:
         s = self._get_session()
@@ -95,7 +95,7 @@ class ProfileRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def get_by_user(self, user_id: int) -> Profile | None:
         s = self._get_session()
@@ -141,7 +141,7 @@ class ConsentRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def add_consent(
         self, user_id: int, scope: str, granted: bool = True, expires_at: Any | None = None
@@ -209,7 +209,7 @@ class OAuthTokenRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def upsert(
         self,

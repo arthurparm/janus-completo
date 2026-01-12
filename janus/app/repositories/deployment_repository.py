@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.config_models import Base
 
 
@@ -31,7 +31,7 @@ class DeploymentRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def stage(self, model_id: str, percent: int) -> dict[str, Any]:
         s = self._get_session()

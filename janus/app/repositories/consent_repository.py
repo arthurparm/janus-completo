@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.consent_models import Consent
 
 
@@ -11,7 +11,7 @@ class ConsentRepository:
     def _get_session(self) -> Session:
         if self._session:
             return self._session
-        return mysql_db.get_session_direct()
+        return db.get_session_direct()
 
     def is_granted(self, user_id: str, scope: str) -> bool:
         s = self._get_session()

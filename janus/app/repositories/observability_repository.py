@@ -11,7 +11,7 @@ from app.core.monitoring.poison_pill_handler import (
     get_poison_pill_handler,
 )
 from app.db.graph import get_graph_db
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.db.vector_store import get_collection_info
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import AuditEvent, Message
@@ -126,7 +126,7 @@ class ObservabilityRepository:
         return {"llm": llm_stats, "multi_agent": ma_stats, "poison_pills": pp_stats}
 
     def get_user_metrics(self, user_id: str) -> dict[str, Any]:
-        s = mysql_db.get_session_direct()
+        s = db.get_session_direct()
         try:
             convs = s.query(ChatSession).filter(ChatSession.user_id == int(user_id)).all()
             conversations_count = len(convs)
@@ -160,7 +160,7 @@ class ObservabilityRepository:
             s.close()
 
     def get_user_activity(self, user_id: str) -> dict[str, Any]:
-        s = mysql_db.get_session_direct()
+        s = db.get_session_direct()
         try:
             runs = s.query(AutonomyRun).filter(AutonomyRun.user_id == user_id).all()
             runs_count = len(runs)
@@ -306,7 +306,7 @@ class ObservabilityRepository:
             raise ObservabilityRepositoryError("Falha ao promover item de quarentena.") from e
 
     def record_audit_event(self, event: dict[str, Any]) -> None:
-        s = mysql_db.get_session_direct()
+        s = db.get_session_direct()
         try:
             # Converte user_id para int apenas se for um valor numérico válido
             raw_user_id = event.get("user_id")
@@ -353,7 +353,7 @@ class ObservabilityRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        s = mysql_db.get_session_direct()
+        s = db.get_session_direct()
         try:
             q = s.query(AuditEvent)
             if user_id is not None:
@@ -412,7 +412,7 @@ async def get_observability_repository(
 
 # Compat: função utilitária direta para registrar eventos de auditoria
 def record_audit_event_direct(event: dict[str, Any]) -> None:
-    s = mysql_db.get_session_direct()
+    s = db.get_session_direct()
     try:
         # Converte user_id para int apenas se for um valor numérico válido
         raw_user_id = event.get("user_id")
