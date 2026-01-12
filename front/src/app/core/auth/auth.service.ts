@@ -1,9 +1,10 @@
 /* eslint-disable no-console */
-import { Injectable, inject } from '@angular/core'
+import { Injectable, inject, signal, computed } from '@angular/core'
 import { HttpClient } from '@angular/common/http'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
-import { BehaviorSubject, firstValueFrom } from 'rxjs'
+import { firstValueFrom, Observable } from 'rxjs'
 import { Auth, signInAnonymously, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut, User as FirebaseUser } from '@angular/fire/auth'
+import { toObservable } from '@angular/core/rxjs-interop'
 
 export interface User {
   id: string
@@ -24,21 +25,31 @@ export interface AuthExchangeResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly _isAuthenticated = new BehaviorSubject<boolean>(false)
-  private readonly _user = new BehaviorSubject<User | null>(null)
+  // ✨ Migrated to Signals
+  private readonly _isAuthenticated = signal<boolean>(false)
+  private readonly _user = signal<User | null>(null)
+  private readonly _firebaseAuthReady = signal<boolean>(false)
 
-  readonly isAuthenticated$ = this._isAuthenticated.asObservable()
-  readonly user$ = this._user.asObservable()
+  // Readonly signal accessors
+  readonly isAuthenticated = this._isAuthenticated.asReadonly()
+  readonly user = this._user.asReadonly()
+  readonly firebaseAuthReady = this._firebaseAuthReady.asReadonly()
+
+  // 🔄 Backward compatibility: Expose Observables for existing consumers
+  readonly isAuthenticated$ = toObservable(this._isAuthenticated)
+  readonly user$ = toObservable(this._user)
+  readonly firebaseAuthReady$ = toObservable(this._firebaseAuthReady)
+
+  // Computed signals
+  readonly isAdmin = computed(() => this._user()?.roles?.includes('admin') ?? false)
+  readonly userEmail = computed(() => this._user()?.email ?? '')
 
   get currentUserValue(): User | null {
-    return this._user.value
+    return this._user()
   }
 
   private auth: Auth = inject(Auth)
   private http = inject(HttpClient)
-
-  // Expose firebase auth state for components that need to wait for it (like Firestore listeners)
-  readonly firebaseAuthReady$ = new BehaviorSubject<boolean>(false)
 
   constructor() {
     this.initializeAuth()
@@ -51,7 +62,7 @@ export class AuthService {
 
       if (firebaseUser) {
         // User is signed in (anonymous or real)
-        this.firebaseAuthReady$.next(true)
+        this._firebaseAuthReady.set(true)
 
         if (!firebaseUser.isAnonymous) {
           // It's a real user, try to exchange token for Janus session
@@ -67,8 +78,8 @@ export class AuthService {
         }
       } else {
         // Signed out
-        this._isAuthenticated.next(false)
-        this._user.next(null)
+        this._isAuthenticated.set(false)
+        this._user.set(null)
 
         // Ensure anonymous session for Firestore if needed? 
         // Original code did signInAnonymously. We can keep that for "public" access if desired.
@@ -126,8 +137,8 @@ export class AuthService {
       if (janus) {
         localStorage.setItem(AUTH_TOKEN_KEY, janus)
 
-        this._isAuthenticated.next(true)
-        this._user.next({
+        this._isAuthenticated.set(true)
+        this._user.set({
           id: out.user?.id || firebaseUser.uid,
           email: firebaseUser.email || '',
           roles: out.user?.roles || ['user'],
@@ -144,8 +155,8 @@ export class AuthService {
   async logout(): Promise<void> {
     console.log('[AuthService] logout')
     localStorage.removeItem(AUTH_TOKEN_KEY)
-    this._isAuthenticated.next(false)
-    this._user.next(null)
+    this._isAuthenticated.set(false)
+    this._user.set(null)
     await signOut(this.auth)
   }
 }
