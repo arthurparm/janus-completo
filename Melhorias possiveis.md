@@ -373,9 +373,16 @@ Mudanças estruturais viabilizadas pelo custo marginal do DeepSeek-V3/R1.
 - [ ] **Model Quality Metrics**: Score de seleção considera apenas custo e latência. Adicionar métricas de qualidade (taxa de retry, feedback humano, precisão de respostas).
 - [ ] **Fallback Chain Configurável**: Fallback entre provedores é hardcoded. Extrair para configuração (`LLM_FALLBACK_CHAIN`).
 
-### Rate Limiting & Quotas
+### Rate Limiting & Quotas (P0 - Crítico)
 
-- [ ] **Rate Limit Per-Model Não Persistido**: Limites por modelo (`LLM_RATE_LIMITS`) resetam no restart. Persistir em Redis para consistência multi-instância.
+- [ ] **Rate Limit In-Memory (Unsafe for Scale)** - 🔥 CRÍTICO
+  - *Problema*: Contadores estão em memória. Múltiplas instâncias do Janus multiplicam o limite efetivo (risco de banimento).
+  - *Solução*: Implementar `RedisUsageTracker` com scripts Lua para controle atômico distribuído.
+  - *Impacto*: Segurança para escalar (Docker/K8s) sem violar regras dos providers.
+- [ ] **Ausência de Wait Time Feedback** - Retries ineficientes
+  - *Problema*: `is_available()` retorna apenas True/False. Router não sabe quanto tempo esperar.
+  - *Solução*: Retornar struct `{ available: bool, wait_seconds: float }` para backoff inteligente.
+  - *Impacto*: Redução de retries cegos e latência percebida.
 - [ ] **Quota Consumption Visibility**: Não há endpoint para visualizar consumo de quotas por usuário/projeto em tempo real.
 - [ ] **Quota Alerts**: Orçamentos mensais (`OPENAI_MONTHLY_BUDGET_USD`, etc.) não disparam alertas quando atingem thresholds (50%, 80%, 100%).
 
