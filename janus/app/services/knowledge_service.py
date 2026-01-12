@@ -175,9 +175,9 @@ class KnowledgeService:
                 "total_relationships": 0,
             }
 
-    async def reindex_concepts(self, batch_size: int = 50) -> int:
+    async def reindex_graph(self, batch_size: int = 50, labels: list[str] = None) -> int:
         manager = GraphEmbeddingsManager()
-        return await manager.reindex_concepts(batch_size=batch_size)
+        return await manager.reindex_graph(batch_size=batch_size, labels=labels)
 
     # --- Governança / HITL ---
 

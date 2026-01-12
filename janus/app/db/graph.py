@@ -137,6 +137,8 @@ class GraphDatabase:
                         # Vector Index for Hybrid Search
                         # Neo4j 5.11+ required
                         try:
+                            # 1. Vector Indexes (One per key label)
+                            # Concept
                             await session.run(
                                 """
                                 CREATE VECTOR INDEX concept_embeddings IF NOT EXISTS
@@ -147,9 +149,52 @@ class GraphDatabase:
                                 }}
                                 """
                             )
-                            logger.info("Índice vetorial 'concept_embeddings' verificado/criado.")
+                            # Technology
+                            await session.run(
+                                """
+                                CREATE VECTOR INDEX technology_embeddings IF NOT EXISTS
+                                FOR (n:Technology) ON (n.embedding)
+                                OPTIONS {indexConfig: {
+                                    `vector.dimensions`: 1536,
+                                    `vector.similarity_function`: 'cosine'
+                                }}
+                                """
+                            )
+                            # Tool
+                            await session.run(
+                                """
+                                CREATE VECTOR INDEX tool_embeddings IF NOT EXISTS
+                                FOR (n:Tool) ON (n.embedding)
+                                OPTIONS {indexConfig: {
+                                    `vector.dimensions`: 1536,
+                                    `vector.similarity_function`: 'cosine'
+                                }}
+                                """
+                            )
+                            # Pattern
+                            await session.run(
+                                """
+                                CREATE VECTOR INDEX pattern_embeddings IF NOT EXISTS
+                                FOR (n:Pattern) ON (n.embedding)
+                                OPTIONS {indexConfig: {
+                                    `vector.dimensions`: 1536,
+                                    `vector.similarity_function`: 'cosine'
+                                }}
+                                """
+                            )
+                            
+                            # 2. Universal Full-Text Index (Lexical Search)
+                            await session.run(
+                                """
+                                CREATE FULLTEXT INDEX keyword_search IF NOT EXISTS
+                                FOR (n:Concept|Technology|Tool|Pattern|Solution|Error|Person)
+                                ON EACH [n.name, n.description, n.summary]
+                                """
+                            )
+
+                            logger.info("Índices Vetoriais e Full-Text (Universal) verificados/criados.")
                         except Exception as e:
-                            logger.warning(f"Falha ao criar índice vetorial: {e}")
+                            logger.warning(f"Falha ao criar índices avançados (Vector/FullText): {e}")
 
                         # Core Constraints
                         await session.run(

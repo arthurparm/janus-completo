@@ -40,6 +40,7 @@ class RelatedConceptsResponse(BaseModel):
 
 class ReindexRequest(BaseModel):
     batch_size: int = 50
+    labels: list[str] | None = None
 
 
 class ReindexResponse(BaseModel):
@@ -193,7 +194,7 @@ async def related_concepts(
 async def reindex_concepts(
     request: ReindexRequest, service: KnowledgeService = Depends(get_knowledge_service)
 ):
-    count = await service.reindex_concepts(batch_size=request.batch_size)
+    count = await service.reindex_graph(batch_size=request.batch_size, labels=request.labels)
     return ReindexResponse(status="success", updated_count=count)
 
 
