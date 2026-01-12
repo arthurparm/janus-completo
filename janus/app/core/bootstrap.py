@@ -17,7 +17,7 @@ from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
 from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
-from app.db.mysql_config import init_mysql_database
+from app.db import db
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.repositories.collaboration_repository import CollaborationRepository
@@ -37,6 +37,7 @@ from app.services.autonomy_service import AutonomyService
 from app.services.chat_service import ChatService
 from app.services.collaboration_service import CollaborationService
 from app.services.context_service import ContextService
+from app.services.config_service import get_config_service
 from app.services.document_service import DocumentIngestionService
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
@@ -60,12 +61,12 @@ async def bootstrap_infrastructure():
 
     try:
         try:
-            init_mysql_database()
+            db.create_tables()
             # Register Data Retention Listeners
             from app.db.sync_events import register_cleanup_events
             register_cleanup_events()
         except Exception:
-            logger.warning("MySQL init falhou; prosseguindo sem criar tabelas automaticamente.")
+            logger.warning("DB init failed; proceeding without auto-create tables.")
         await asyncio.gather(initialize_graph_db(), initialize_memory_db(), initialize_broker())
         logger.info("Infrastructure initialized successfully.")
     except Exception as e:
@@ -79,6 +80,10 @@ async def shutdown_infrastructure(app: FastAPI):
     logger.info("Application shutdown: Closing resources...")
     for worker in getattr(app.state, "workers", []):
         await worker.stop()
+
+    # Parar Config Service
+    if getattr(app.state, "config_service", None):
+        await app.state.config_service.stop()
 
     # Cancela consumidor de treinamento
     try:
@@ -112,9 +117,9 @@ async def bootstrap_dependencies(app: FastAPI):
 
         mas = get_multi_agent_system()
         # Inicia atores padrão para estarem prontos para tarefas
-        mas.create_agent(AgentRole.PROJECT_MANAGER)
-        mas.create_agent(AgentRole.CODER)
-        mas.create_agent(AgentRole.RESEARCHER)
+        await mas.create_agent(AgentRole.PROJECT_MANAGER)
+        await mas.create_agent(AgentRole.CODER)
+        await mas.create_agent(AgentRole.RESEARCHER)
         # Outros agentes serão criados sob demanda ou aqui
         logger.info("Multi-Agent System actors initialized.")
     except Exception as e:
@@ -142,6 +147,10 @@ async def bootstrap_dependencies(app: FastAPI):
     app.state.tool_service = ToolService(app.state.tool_repo)
     app.state.collaboration_service = CollaborationService(app.state.collaboration_repo)
     app.state.document_service = DocumentIngestionService(app.state.memory_service)
+    
+    # Config Service (Hot Reload)
+    app.state.config_service = get_config_service()
+    await app.state.config_service.start()
 
     # LLM
     app.state.llm_repo = LLMRepository()

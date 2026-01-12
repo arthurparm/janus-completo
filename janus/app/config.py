@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,13 +39,12 @@ class AppSettings(BaseSettings):
     QDRANT_API_KEY: SecretStr | None = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
 
-    # MySQL - Configuration-as-Data
-    MYSQL_HOST: str = "mysql"
-    MYSQL_PORT: int = 3306
-    MYSQL_USER: str = "janus"
-    MYSQL_PASSWORD: SecretStr = "janus_pass"
-    MYSQL_DATABASE: str = "janus_config"
-    MYSQL_ROOT_PASSWORD: SecretStr = "janus_root"
+    # PostgreSQL - Configuration-as-Data
+    POSTGRES_HOST: str = "postgres"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "janus"
+    POSTGRES_PASSWORD: SecretStr = "janus_pass"
+    POSTGRES_DB: str = "janus_db"
 
     # SQLite - Persistência local
     SQLITE_DB_PATH: str = "data/janus.db"
@@ -140,6 +139,12 @@ class AppSettings(BaseSettings):
     # Penalização de custo para modelos que excedem tetos
     LLM_COST_PENALTY_INCREMENT: float = 0.25
     LLM_COST_PENALTY_MAX_FACTOR: float = 2.0
+
+    # Auto-Healer - Database
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_RECYCLE: int = 3600
+    DB_POOL_TIMEOUT: int = 30
 
     # LLM Providers
     OPENAI_API_KEY: SecretStr | None = None
@@ -244,13 +249,18 @@ class AppSettings(BaseSettings):
     AUTH_JWT_SECRET: str | None = None
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
 
-    # Sprint 1: RabbitMQ
+    # RabbitMQ
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
     RABBITMQ_PASSWORD: str = "janus_pass"
     RABBITMQ_MANAGEMENT_PORT: int = 15672
     BROKER_USE_MSGPACK: bool = True
+
+    # Redis
+    REDIS_ENABLED: bool = Field(default=False, env="REDIS_ENABLED")
+    REDIS_URL: str = Field(default="redis://redis:6379", env="REDIS_URL")
+
     RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, int]] = {
         "janus.knowledge.consolidation": {
             "x-message-ttl": 86400000,
@@ -481,6 +491,29 @@ class AppSettings(BaseSettings):
 
     # Workspace e File System
     WORKSPACE_ROOT: str = "/app/workspace"
+
+    def update(self, new_values: dict[str, Any]):
+        """Atualiza as configurações em tempo de execução."""
+        for key, value in new_values.items():
+            if hasattr(self, key):
+                # Helper simples para conversão de tipos básicos se necessário
+                # Em um cenário ideal, recriaríamos o modelo, mas aqui queremos atualizar o singleton
+                try:
+                    current_val = getattr(self, key)
+                    if isinstance(current_val, bool) and not isinstance(value, bool):
+                        if str(value).lower() in ("true", "1", "yes"):
+                            value = True
+                        elif str(value).lower() in ("false", "0", "no"):
+                            value = False
+                    elif isinstance(current_val, int) and not isinstance(value, int):
+                        value = int(value)
+                    elif isinstance(current_val, float) and not isinstance(value, float):
+                        value = float(value)
+                    
+                    setattr(self, key, value)
+                except Exception:
+                    # Se falhar conversão, tenta setar direto ou ignora
+                    setattr(self, key, value)
 
 
 settings = AppSettings()

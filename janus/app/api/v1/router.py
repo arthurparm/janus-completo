@@ -25,11 +25,13 @@ from .endpoints import (
     meta_agent,
     observability,
     optimization,
+    pricing,
     pending_actions,
     productivity,
     profiles,
     rag,
     reflexion,
+    admin_config,
     sandbox,
     system_overview,
     system_status,
@@ -67,6 +69,9 @@ else:
     api_router.include_router(documents.router, prefix="/documents")
     api_router.include_router(productivity.router)
     api_router.include_router(agent.router, prefix="/agent")
+    api_router.include_router(optimization.router, prefix="/optimization", tags=["Optimization"])
+    api_router.include_router(pricing.router, prefix="/pricing", tags=["Pricing"])
+    api_router.include_router(admin_config.router, prefix="", tags=["Admin"])
     api_router.include_router(memory.router, prefix="/memory")
     api_router.include_router(learning.router, prefix="/learning")
     api_router.include_router(tasks.router, prefix="/tasks")  # Sprint 1: Task management
