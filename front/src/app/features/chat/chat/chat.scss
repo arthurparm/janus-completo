@@ -276,6 +276,79 @@
     letter-spacing: 0.5px;
   }
 
+  .thought-process {
+    margin-bottom: 1rem;
+
+    details {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+
+      &[open] {
+        border-color: rgba(124, 58, 237, 0.4);
+        background: rgba(0, 0, 0, 0.3);
+
+        summary {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          color: var(--accent-pink);
+        }
+      }
+
+      summary {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        user-select: none;
+        transition: color 0.2s;
+        font-family: 'Fira Code', monospace;
+
+        &:hover {
+          color: var(--text-secondary);
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        .icon {
+          font-size: 1rem;
+        }
+
+        .label {
+          font-weight: 500;
+        }
+
+        &::marker {
+          content: '';
+          display: none;
+        }
+      }
+
+      .thought-content {
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-style: italic;
+        line-height: 1.6;
+        border-top: 1px solid transparent;
+        /* Placeholder for transition */
+
+        /* Markdown styles within thought */
+        p {
+          margin: 0.5rem 0;
+        }
+
+        code {
+          color: var(--accent-pink);
+          font-style: normal;
+        }
+      }
+    }
+  }
+
   .text {
     word-break: break-word;
     line-height: 1.6;
