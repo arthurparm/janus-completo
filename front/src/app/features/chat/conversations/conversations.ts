@@ -9,6 +9,7 @@ import { MatMenuModule } from '@angular/material/menu'
 import { MatIconModule } from '@angular/material/icon'
 import { ConversationRefreshService } from '../../../services/conversation-refresh.service'
 import { DemoService } from '../../../core/services/demo.service'
+import { UiService } from '../../../shared/services/ui.service'
 import { filter, Subject, takeUntil } from 'rxjs'
 
 @Component({
@@ -27,6 +28,7 @@ export class ConversationsComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>()
   private refreshService = inject(ConversationRefreshService)
   private demoService = inject(DemoService)
+  private ui = inject(UiService)
 
   // UI State for Template (Proxies to Store)
   get items() { return this.store.items() }
@@ -124,9 +126,6 @@ export class ConversationsComponent implements OnInit, OnDestroy {
   editingId: string | null = null
   newTitleTemp = ''
 
-  showDeleteModal = false
-  conversationToDelete: ConversationMeta | null = null
-
   rename(it: ConversationMeta) {
     this.editingId = it.conversation_id
     this.newTitleTemp = it.title || ''
@@ -158,19 +157,17 @@ export class ConversationsComponent implements OnInit, OnDestroy {
   }
 
   remove(it: ConversationMeta) {
-    this.conversationToDelete = it
-    this.showDeleteModal = true
-  }
-
-  confirmDelete() {
-    if (!this.conversationToDelete) return
-    this.store.removeConversation(this.conversationToDelete.conversation_id);
-    this.closeDeleteModal();
-  }
-
-  closeDeleteModal() {
-    this.showDeleteModal = false
-    this.conversationToDelete = null
+    const title = it.title || 'conversa sem título'
+    this.ui.showConfirm({
+      title: 'Confirmar exclusão',
+      message: `Tem certeza que deseja excluir permanentemente a conversa "${title}"?\n\nEsta ação não pode ser desfeita. Todo o histórico será perdido.`,
+      confirmText: 'Sim, excluir',
+      cancelText: 'Cancelar',
+      confirmColor: 'warn'
+    }).subscribe(confirmed => {
+      if (!confirmed) return
+      this.store.removeConversation(it.conversation_id)
+    })
   }
 
   setSort(key: 'updated_at' | 'created_at') { this.sortKey = key; this.applyFilters() }
