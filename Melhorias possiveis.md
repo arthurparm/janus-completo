@@ -9,13 +9,13 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 
 *Foco: Estabilidade fiduciária, segurança de dados e fundação para escala.*
 
-- [ ] **Migração MySQL → PostgreSQL (pgvector)** 🚨
+- [x] **Migração MySQL → PostgreSQL (pgvector)** 🚨
   - *Motivo*: MySQL atual bloqueia analytics de JSON e vector search nativo. Sem JSONB indexável e arrays.
   - *Ação*: Migrar dados, ativar `pgvector` e `pg_trgm`.
-- [ ] **Redis State Backend (RateLimit & Pricing)** 🚨
+- [x] **Redis State Backend (RateLimit & Pricing)** 🚨
   - *Motivo*: Contadores de custo em memória zeram no restart; risco financeiro e de bloqueio de API.
   - *Ação*: Implementar `RedisUsageTracker` para persistência atômica.
-- [ ] **Configuration Hot-Reload**
+- [x] **Configuration Hot-Reload**
   - *Motivo*: Alterar flags/timeouts exige restart (downtime). `AppSettings` é imutável.
   - *Ação*: Implementar `DynamicConfigManager` que observa Redis/File.
 - [ ] **Security Headers & Sanitization**
@@ -32,7 +32,7 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 
 *Foco: Respalda a inteligência do sistema com memória e busca de nova geração.*
 
-- [ ] **Neo4j Vector Index & GraphRAG**
+- [x] **Neo4j Vector Index & GraphRAG**
   - *Gaps*: Vector Search ausente, GraphRAG básico, Hybrid Search incompleto.
   - *Ação*: Ativar index vetorial e queries híbridas (Graph + Vector + Text).
 - [ ] **LLM Streaming (UX/DX)**

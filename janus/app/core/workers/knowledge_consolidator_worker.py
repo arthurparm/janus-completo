@@ -23,8 +23,10 @@ from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
 from app.core.memory.graph_guardian import graph_guardian
 from app.core.memory.memory_core import decrypt_text, get_memory_db
 from app.db.graph import get_graph_db
+from app.db.graph import get_graph_db
 from app.db.vector_store import get_async_qdrant_client
 from app.models.schemas import Experience
+from app.core.memory.graph_embeddings import GraphEmbeddingsManager
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +283,28 @@ class KnowledgeConsolidator:
             except Exception as e:
                 logger.error(f"Erro ao normalizar entidade {entity.get('name')}: {e}")
 
+        # --- EVOLUTION: Pre-calculate Embeddings for Real-time consistency ---
+        concepts_to_embed = []
+        indices_map = {} # map normalized entity index to 'normalized_entities' list index
+        
+        for idx, ne in enumerate(normalized_entities):
+            # Only embed Concepts, Technologies, Tools, etc. (Skip specialized types if needed)
+            # For robustness, we embed mostly everything that is useful for search
+            if ne["type"] in ("CONCEPT", "TECHNOLOGY", "TOOL", "PERSON", "PATTERN", "SOLUTION", "ERROR"):
+                concepts_to_embed.append(ne["name"])
+                indices_map[len(concepts_to_embed)-1] = idx
+        
+        if concepts_to_embed:
+            try:
+                emb_manager = GraphEmbeddingsManager()
+                vectors = await emb_manager.embed_batch(concepts_to_embed)
+                for i, vec in enumerate(vectors):
+                    original_idx = indices_map[i]
+                    # Inject embedding directly into properties to be picked up by Cypher
+                    normalized_entities[original_idx]["embedding"] = vec
+            except Exception as e:
+                logger.warning(f"Falha ao gerar embeddings em tempo real na consolidação: {e}")
+
         # Executa MERGE de entidades em transação única, agrupando por label
         if normalized_entities:
             try:
@@ -303,6 +327,9 @@ class KnowledgeConsolidator:
                                 MERGE (n:{label} {{name: ent.name}})
                                 SET n += ent.properties,
                                     n.last_seen = datetime()
+                                FOREACH (ignoreMe IN CASE WHEN ent.embedding IS NOT NULL THEN [1] ELSE [] END |
+                                    SET n.embedding = ent.embedding
+                                )
                                 WITH n
                                 MATCH (e:Experience {{id: $exp_id}})
                                 MERGE (e)-[:MENTIONS]->(n)

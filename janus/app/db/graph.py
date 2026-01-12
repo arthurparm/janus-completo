@@ -134,6 +134,23 @@ class GraphDatabase:
                     )
 
                     try:
+                        # Vector Index for Hybrid Search
+                        # Neo4j 5.11+ required
+                        try:
+                            await session.run(
+                                """
+                                CREATE VECTOR INDEX concept_embeddings IF NOT EXISTS
+                                FOR (n:Concept) ON (n.embedding)
+                                OPTIONS {indexConfig: {
+                                    `vector.dimensions`: 1536,
+                                    `vector.similarity_function`: 'cosine'
+                                }}
+                                """
+                            )
+                            logger.info("Índice vetorial 'concept_embeddings' verificado/criado.")
+                        except Exception as e:
+                            logger.warning(f"Falha ao criar índice vetorial: {e}")
+
                         # Core Constraints
                         await session.run(
                             "CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE"

@@ -38,6 +38,15 @@ class RelatedConceptsResponse(BaseModel):
     results: list[RelatedConceptItem]
 
 
+class ReindexRequest(BaseModel):
+    batch_size: int = 50
+
+
+class ReindexResponse(BaseModel):
+    status: str
+    updated_count: int
+
+
 class EntityRelationshipsItem(BaseModel):
     related_entity: str
     related_type: str
@@ -173,6 +182,19 @@ async def related_concepts(
     )
     items = [RelatedConceptItem(**row) for row in results]
     return RelatedConceptsResponse(results=items)
+
+
+@router.post(
+    "/concepts/reindex",
+    response_model=ReindexResponse,
+    summary="Reindexa (gera embeddings) para conceitos que ainda não possuem",
+    description="Útil após migrações ou inserções em massa. Processa em lotes.",
+)
+async def reindex_concepts(
+    request: ReindexRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
+    count = await service.reindex_concepts(batch_size=request.batch_size)
+    return ReindexResponse(status="success", updated_count=count)
 
 
 class NodeTypesResponse(BaseModel):

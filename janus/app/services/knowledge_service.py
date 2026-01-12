@@ -14,6 +14,7 @@ CODEBASE_DIR = "/app"
 
 
 # --- Custom Service-Layer Exceptions ---
+from app.core.memory.graph_embeddings import GraphEmbeddingsManager
 
 
 class KnowledgeServiceError(Exception):
@@ -173,6 +174,10 @@ class KnowledgeService:
                 "total_nodes": 0,
                 "total_relationships": 0,
             }
+
+    async def reindex_concepts(self, batch_size: int = 50) -> int:
+        manager = GraphEmbeddingsManager()
+        return await manager.reindex_concepts(batch_size=batch_size)
 
     # --- Governança / HITL ---
 
