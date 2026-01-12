@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import time
 from collections import OrderedDict
@@ -93,23 +94,38 @@ class _TTLCache:
 _cache = _TTLCache(max_items=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
 
 _local_model: SentenceTransformer | None = None
+_local_model_failed: bool = False
 _openai_embedder: OpenAIEmbeddings | None = None
 
 
 def _load_local_model() -> SentenceTransformer:
-    global _local_model
+    global _local_model, _local_model_failed
     if _local_model is not None:
         return _local_model
+    if _local_model_failed:
+        raise RuntimeError("Modelo local de embeddings está indisponível neste ambiente")
     if SentenceTransformer is None:
         raise RuntimeError("sentence-transformers não está instalado")
     model_name = _DEFAULT_LOCAL_MODEL
     logger.info(f"Carregando modelo local de embeddings: {model_name}")
-    _local_model = SentenceTransformer(model_name)
     try:
-        _EMB_MODEL_LOADED.labels("local").set(1)
-    except Exception:
-        pass
-    return _local_model
+        _local_model = SentenceTransformer(model_name)
+        try:
+            _EMB_MODEL_LOADED.labels("local").set(1)
+        except Exception:
+            pass
+        return _local_model
+    except NotImplementedError:
+        _local_model_failed = True
+        logger.warning(
+            "Falha ao inicializar modelo local de embeddings (meta tensor); "
+            "desativando modelo local e usando fallback.",
+        )
+        raise
+    except Exception as e:
+        _local_model_failed = True
+        logger.error("Erro ao carregar modelo local de embeddings.", exc_info=e)
+        raise
 
 
 def _load_openai_embedder() -> OpenAIEmbeddings:
@@ -152,14 +168,44 @@ def _normalize_vectors(vectors: list[list[float]], size: int) -> list[list[float
     return [_pad_or_truncate(list(map(float, v)), size) for v in vectors]
 
 
+def _simple_local_embedding_single(text: str, size: int) -> list[float]:
+    tokens = text.lower().split()
+    vec = np.zeros(size, dtype=np.float32)
+    for tok in tokens:
+        h = hashlib.sha256(tok.encode("utf-8")).digest()
+        idx = int.from_bytes(h[:4], "little") % size
+        sign = 1.0 if (h[4] & 1) else -1.0
+        vec[idx] += sign
+    norm = float(np.linalg.norm(vec)) or 1.0
+    return (vec / norm).tolist()
+
+
+def _simple_local_embedding(texts: list[str]) -> list[list[float]]:
+    return [_simple_local_embedding_single(t, _TARGET_VECTOR_SIZE) for t in texts]
+
+
 def _emb_local(texts: list[str]) -> list[list[float]]:
-    model = _load_local_model()
-    arr = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
-    if isinstance(arr, np.ndarray):
-        vectors = arr.tolist()
-    else:
-        vectors = [list(map(float, x)) for x in arr]
-    return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
+    try:
+        model = _load_local_model()
+        arr = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        if isinstance(arr, np.ndarray):
+            vectors = arr.tolist()
+        else:
+            vectors = [list(map(float, x)) for x in arr]
+        return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
+    except Exception as e:
+        msg = str(e) if e else ""
+        if isinstance(e, NotImplementedError) or "meta tensor" in msg:
+            logger.warning(
+                "Embedding local com sentence-transformers indisponível neste ambiente "
+                "(meta tensor); usando fallback local baseado em hash.",
+            )
+        else:
+            logger.error(
+                "Embedding local com sentence-transformers falhou; usando fallback local baseado em hash.",
+                exc_info=e,
+            )
+        return _simple_local_embedding(texts)
 
 
 def _emb_openai(texts: list[str]) -> list[list[float]]:
