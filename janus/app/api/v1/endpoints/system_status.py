@@ -4,7 +4,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.db.mysql_config import init_mysql_database
 from app.services.db_migration_service import db_migration_service
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.services.llm_service import LLMService, get_llm_service
@@ -180,21 +179,12 @@ async def get_user_status(
     return UserStatusResponse(**m)
 
 
-@router.post(
-    "/init/mysql", summary="Inicializa tabelas MySQL (cria se não existirem)", tags=["System"]
-)
-async def init_mysql():
-    try:
-        init_mysql_database()
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error("Falha ao inicializar MySQL", exc_info=e)
-        return {"status": "error", "detail": str(e)}
+
 
 
 @router.get(
     "/db/validate",
-    summary="Valida schema MySQL (users/sessions/messages/profiles)",
+    summary="Valida schema Database (users/sessions/messages/profiles)",
     tags=["System"],
 )
 async def validate_db_schema():
@@ -202,7 +192,7 @@ async def validate_db_schema():
 
 
 @router.post(
-    "/db/migrate", summary="Migra schema MySQL (cria índices/constraints ausentes)", tags=["System"]
+    "/db/migrate", summary="Migra schema Database (cria índices/constraints ausentes)", tags=["System"]
 )
 async def migrate_db_schema():
     return db_migration_service.migrate_schema()

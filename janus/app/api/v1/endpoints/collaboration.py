@@ -76,7 +76,7 @@ async def create_agent(
     """Delega a criação de um novo agente para o CollaborationService."""
     # ValueError é tratado pelo handler central -> 400
     role = AgentRole(request.role)
-    agent_data = service.create_agent(role)
+    agent_data = await service.create_agent(role)
     return CreateAgentResponse(
         **agent_data, message=f"Agente {agent_data['role']} criado com sucesso"
     )

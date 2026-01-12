@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db.mysql_config import mysql_db
+from app.db import db
 from app.models.consent_models import Consent
 from app.repositories.user_repository import UserRepository
 
@@ -10,7 +10,7 @@ router = APIRouter(tags=["Consents"], prefix="/consents")
 
 
 def _get_session() -> Session:
-    return mysql_db.get_session_direct()
+    return db.get_session_direct()
 
 
 class ConsentRequest(BaseModel):
