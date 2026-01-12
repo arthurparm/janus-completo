@@ -24,12 +24,13 @@ except ImportError:
     ServiceUnavailable = type("ServiceUnavailable", (Exception,), {})
 
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 try:
-    from langgraph.checkpoint.sqlite import SqliteSaver
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 except ImportError:
-    SqliteSaver = None
+    AsyncSqliteSaver = None
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
@@ -633,14 +634,8 @@ class MetaAgentGraphBuilder:
 
     def __init__(self, agent_instance):
         self.agent = agent_instance
-        # Use direct connection for persistence to avoid context manager ambiguity
-        import sqlite3
-
-        # Ensure data directory exists (using ephemeral /tmp to surpass windows volume locking)
-        db_path = "/tmp/meta_agent_langgraph.db"
-
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.checkpointer = SqliteSaver(self.conn) if SqliteSaver else None
+        # Use MemorySaver for stability (avoids async context issues with SQLite)
+        self.checkpointer = MemorySaver()
 
     def build(self):
         workflow = StateGraph(AgentState)
@@ -1014,7 +1009,6 @@ class MetaAgent:
         real_issues = []
         for i in items:
             try:
-                # Handle enum conversion
                 i_copy = i.copy()
                 i_copy["severity"] = _safe_issue_severity(i.get("severity"))
                 i_copy["category"] = _safe_issue_category(i.get("category"))
@@ -1035,15 +1029,103 @@ class MetaAgent:
             except Exception:
                 pass
 
+        issues_count = len(real_issues)
+        status_raw = state_dict.get("status", "") or "unknown"
+        diagnosis = state_dict.get("diagnosis", "") or ""
+        metrics = state_dict.get("metrics", {}) or {}
+
+        base_status = "unknown"
+        base_score = 95
+        try:
+            health_entry = metrics.get("health") or metrics.get("system_health")
+            health_data = None
+            if isinstance(health_entry, str):
+                import json as _json
+
+                health_data = _json.loads(health_entry)
+            elif isinstance(health_entry, dict):
+                health_data = health_entry
+            if health_data:
+                system_health = health_data.get("system_health") or health_data
+                status_value = system_health.get("status")
+                if isinstance(status_value, str) and status_value:
+                    base_status = status_value
+                score_value = system_health.get("score")
+                if isinstance(score_value, (int, float)):
+                    base_score = int(score_value)
+        except Exception:
+            pass
+
+        if base_status == "unknown" and status_raw not in {"", "unknown"}:
+            base_status = status_raw
+
+        if issues_count == 0:
+            overall_status = base_status if base_status != "unknown" else "healthy"
+
+            adjusted_score = base_score
+            try:
+                resources_entry = metrics.get("resources")
+                resources_data = None
+                if isinstance(resources_entry, str):
+                    import json as _json
+
+                    resources_data = _json.loads(resources_entry)
+                elif isinstance(resources_entry, dict):
+                    resources_data = resources_entry
+                penalty = 0
+                if isinstance(resources_data, dict):
+                    cpu = resources_data.get("cpu", {})
+                    mem = resources_data.get("memory", {})
+                    disk = resources_data.get("disk", {})
+                    cpu_pct = float(cpu.get("percent_total", 0.0) or 0.0)
+                    mem_pct = float(mem.get("percent_used", 0.0) or 0.0)
+                    disk_pct = float(disk.get("percent_used", 0.0) or 0.0)
+                    if cpu_pct > 70.0:
+                        penalty += 2
+                    if mem_pct > 70.0:
+                        penalty += 2
+                    if disk_pct > 80.0:
+                        penalty += 1
+                penalty = min(penalty + 1, 5)
+                adjusted_score = base_score - penalty
+            except Exception:
+                adjusted_score = base_score - 1
+
+            health_score = max(80, min(99, adjusted_score))
+        else:
+            if base_status in {"unknown", ""}:
+                overall_status = "degraded"
+                base = 80
+            else:
+                overall_status = base_status if base_status != "healthy" else "degraded"
+                base = base_score
+            penalty = min(40, issues_count * 10)
+            health_score = max(30, min(100, base - penalty))
+
+        if not diagnosis:
+            if issues_count == 0:
+                metric_keys = sorted(metrics.keys())
+                if metric_keys:
+                    metrics_part = ", ".join(metric_keys)
+                else:
+                    metrics_part = "sem métricas adicionais registradas"
+                diagnosis = (
+                    "Sistema saudável neste ciclo. Nenhum problema foi detectado. "
+                    f"Métricas analisadas: {metrics_part}."
+                )
+            else:
+                titles = [i.title for i in real_issues]
+                diagnosis = "Problemas detectados: " + "; ".join(titles)
+
         return StateReport(
             cycle_id=state_dict.get("cycle_id"),
             timestamp=datetime.fromtimestamp(state_dict.get("timestamp", 0)),
-            overall_status=state_dict.get("status", "unknown"),
-            health_score=80,  # Placeholder
+            overall_status=overall_status,
+            health_score=health_score,
             issues_detected=real_issues,
             recommendations=recs,
-            summary=state_dict.get("diagnosis", ""),
-            metrics_snapshot=state_dict.get("metrics", {}),
+            summary=diagnosis,
+            metrics_snapshot=metrics,
         )
 
     def _create_error_report(self, error_msg: str) -> StateReport:
