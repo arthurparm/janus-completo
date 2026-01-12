@@ -137,169 +137,185 @@ export class ConversationsComponent implements OnInit, OnDestroy {
     this.editingId = null
   }
 
-  cancelRename() {
-    this.editingId = null
-    this.newTitleTemp = ''
+    this.editingId = it.conversation_id
+this.newTitleTemp = it.title || ''
   }
 
-  duplicate(it: ConversationMeta) {
-    if (!confirm(`Deseja duplicar a conversa "${it.title}"?`)) return
+saveRename(it: ConversationMeta) {
+  if (!this.newTitleTemp || !this.newTitleTemp.trim()) return
+  this.store.renameConversation(it.conversation_id, this.newTitleTemp.trim())
+  this.editingId = null
+}
 
-    this.api.startChat(`Cópia de ${it.title}`).subscribe({
-      next: (resp) => {
-        this.router.navigate(['/chat', resp.conversation_id])
-      },
-      error: (err) => {
-        // Handle error via toast or alert if needed
-        console.error('Failed to duplicate', err)
-      }
-    })
-  }
+cancelRename() {
+  this.editingId = null
+  this.newTitleTemp = ''
+}
 
-  remove(it: ConversationMeta) {
-    const title = it.title || 'conversa sem título'
-    this.ui.showConfirm({
-      title: 'Confirmar exclusão',
-      message: `Tem certeza que deseja excluir permanentemente a conversa "${title}"?\n\nEsta ação não pode ser desfeita. Todo o histórico será perdido.`,
-      confirmText: 'Sim, excluir',
-      cancelText: 'Cancelar',
-      confirmColor: 'warn'
-    }).subscribe(confirmed => {
-      if (!confirmed) return
-      this.store.removeConversation(it.conversation_id)
-    })
-  }
+duplicate(it: ConversationMeta) {
+  if (!confirm(`Deseja duplicar a conversa "${it.title}"?`)) return
 
-  setSort(key: 'updated_at' | 'created_at') { this.sortKey = key; this.applyFilters() }
-  toggleDir() { this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc'; this.applyFilters() }
-  nextPage() { const max = Math.ceil(this.filteredCount / this.pageSize); if (this.page < max) this.page += 1 }
-  prevPage() { if (this.page > 1) this.page -= 1 }
+  this.api.startChat(`Cópia de ${it.title}`).pipe(
+    takeUntil(this.destroy$)
+  ).subscribe({
+    next: (resp) => {
+      this.router.navigate(['/chat', resp.conversation_id])
+    },
+    error: (err) => {
+      // Handle error via toast or alert if needed
+      console.error('Failed to duplicate', err)
+    }
+  })
+}
 
-  startNew() {
-    this.api.startChat('Nova conversa').subscribe({
-      next: (resp) => {
-        this.router.navigate(['/chat', resp.conversation_id])
-      },
-      error: (err) => {
-        console.error('Failed to start chat', err)
-      }
-    })
-  }
+remove(it: ConversationMeta) {
+  const title = it.title || 'conversa sem título'
+  this.ui.showConfirm({
+    title: 'Confirmar exclusão',
+    message: `Tem certeza que deseja excluir permanentemente a conversa "${title}"?\n\nEsta ação não pode ser desfeita. Todo o histórico será perdido.`,
+    confirmText: 'Sim, excluir',
+    cancelText: 'Cancelar',
+    confirmColor: 'warn'
+  }).pipe(
+    takeUntil(this.destroy$)
+  ).subscribe(confirmed => {
+    if (!confirmed) return
+    this.store.removeConversation(it.conversation_id)
+  })
+}
 
-  open(it: ConversationMeta) {
-    this.router.navigate(['/chat', it.conversation_id])
-  }
+setSort(key: 'updated_at' | 'created_at') { this.sortKey = key; this.applyFilters() }
+toggleDir() { this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc'; this.applyFilters() }
+nextPage() { const max = Math.ceil(this.filteredCount / this.pageSize); if (this.page < max) this.page += 1 }
+prevPage() { if (this.page > 1) this.page -= 1 }
 
-  statusChip(it: ConversationMeta): 'Nova' | 'Em andamento' | 'Resolvida' {
-    const hasMsg = !!it.last_message
-    const updated = Number(it.updated_at || 0)
-    const now = Date.now()
-    const days = (now - updated) / (1000 * 60 * 60 * 24)
+startNew() {
+  this.api.startChat('Nova conversa').pipe(
+    takeUntil(this.destroy$)
+  ).subscribe({
+    next: (resp) => {
+      this.router.navigate(['/chat', resp.conversation_id])
+    },
+    error: (err) => {
+      console.error('Failed to start chat', err)
+    }
+  })
+}
 
-    if (!hasMsg) return 'Nova'
-    if (days > 7) return 'Resolvida'
-    return 'Em andamento'
-  }
+open(it: ConversationMeta) {
+  this.router.navigate(['/chat', it.conversation_id])
+}
 
-  // Missing methods from template
-  clearSearch() {
-    this.q = ''
-    this.applyFilters()
-  }
+statusChip(it: ConversationMeta): 'Nova' | 'Em andamento' | 'Resolvida' {
+  const hasMsg = !!it.last_message
+  const updated = Number(it.updated_at || 0)
+  const now = Date.now()
+  const days = (now - updated) / (1000 * 60 * 60 * 24)
 
-  setViewMode(mode: 'grid' | 'list') {
-    this.viewMode = mode
-  }
+  if (!hasMsg) return 'Nova'
+  if (days > 7) return 'Resolvida'
+  return 'Em andamento'
+}
 
-  retryLoad() {
-    this.load()
-  }
+// Missing methods from template
+clearSearch() {
+  this.q = ''
+  this.applyFilters()
+}
 
-  formatTimeAgo(timestamp: string | number | undefined): string {
-    const date = this.parseDate(timestamp)
-    if (!date) return ''
+setViewMode(mode: 'grid' | 'list') {
+  this.viewMode = mode
+}
 
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
+retryLoad() {
+  this.load()
+}
 
-    if (diffMins < 1) return 'agora'
-    if (diffMins < 60) return `${diffMins}m atrás`
-    if (diffHours < 24) return `${diffHours}h atrás`
-    if (diffDays < 7) return `${diffDays}d atrás`
-    return date.toLocaleDateString('pt-BR')
-  }
+formatTimeAgo(timestamp: string | number | undefined): string {
+  const date = this.parseDate(timestamp)
+  if (!date) return ''
 
-  formatDate(timestamp: string | number | undefined): string {
-    const date = this.parseDate(timestamp)
-    if (!date) return ''
-    return date.toLocaleDateString('pt-BR')
-  }
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'agora'
+  if (diffMins < 60) return `${diffMins}m atrás`
+  if (diffHours < 24) return `${diffHours}h atrás`
+  if (diffDays < 7) return `${diffDays}d atrás`
+  return date.toLocaleDateString('pt-BR')
+}
+
+formatDate(timestamp: string | number | undefined): string {
+  const date = this.parseDate(timestamp)
+  if (!date) return ''
+  return date.toLocaleDateString('pt-BR')
+}
 
   private parseDate(timestamp: string | number | undefined): Date | null {
-    if (!timestamp) return null
-    const num = Number(timestamp)
-    if (!isNaN(num)) {
-      if (num < 946684800000) {
-        return new Date(num * 1000)
-      }
-      return new Date(num)
+  if (!timestamp) return null
+  const num = Number(timestamp)
+  if (!isNaN(num)) {
+    if (num < 946684800000) {
+      return new Date(num * 1000)
     }
-    const date = new Date(timestamp)
-    if (isNaN(date.getTime())) return null
-    return date
+    return new Date(num)
+  }
+  const date = new Date(timestamp)
+  if (isNaN(date.getTime())) return null
+  return date
+}
+
+truncateText(text: string, maxLength: number): string {
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
+
+  export (conversation: ConversationMeta) {
+  console.log('Export conversation:', conversation)
+}
+
+firstPage() {
+  this.page = 1
+}
+
+lastPage() {
+  const maxPage = Math.ceil(this.filteredCount / this.pageSize)
+  this.page = maxPage
+}
+
+goToPage(pageNum: number) {
+  this.page = pageNum
+}
+
+onPageSizeChange() {
+  this.page = 1
+}
+
+getVisiblePages(): number[] {
+  const totalPages = Math.ceil(this.filteredCount / this.pageSize)
+  const currentPage = this.page
+  const maxVisible = 5
+
+  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+  const end = Math.min(totalPages, start + maxVisible - 1)
+
+  if (end - start < maxVisible - 1) {
+    start = Math.max(1, end - maxVisible + 1)
   }
 
-  truncateText(text: string, maxLength: number): string {
-    if (!text) return ''
-    if (text.length <= maxLength) return text
-    return text.substring(0, maxLength) + '...'
+  const pages = []
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
   }
 
-  export(conversation: ConversationMeta) {
-    console.log('Export conversation:', conversation)
-  }
+  return pages
+}
 
-  firstPage() {
-    this.page = 1
-  }
-
-  lastPage() {
-    const maxPage = Math.ceil(this.filteredCount / this.pageSize)
-    this.page = maxPage
-  }
-
-  goToPage(pageNum: number) {
-    this.page = pageNum
-  }
-
-  onPageSizeChange() {
-    this.page = 1
-  }
-
-  getVisiblePages(): number[] {
-    const totalPages = Math.ceil(this.filteredCount / this.pageSize)
-    const currentPage = this.page
-    const maxVisible = 5
-
-    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
-    const end = Math.min(totalPages, start + maxVisible - 1)
-
-    if (end - start < maxVisible - 1) {
-      start = Math.max(1, end - maxVisible + 1)
-    }
-
-    const pages = []
-    for (let i = start; i <= end; i++) {
-      pages.push(i)
-    }
-
-    return pages
-  }
-
-  getEndIndex(): number {
-    return Math.min(this.page * this.pageSize, this.filteredCount)
-  }
+getEndIndex(): number {
+  return Math.min(this.page * this.pageSize, this.filteredCount)
+}
 }
