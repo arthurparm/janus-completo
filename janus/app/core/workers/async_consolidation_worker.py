@@ -109,11 +109,10 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                         # Routing key para a conversa específica
                         routing_key = f"janus.event.conversation.{conversation_id}.memory"
 
-                        await broker.publish(
+                        await broker.publish_to_exchange(
                             exchange_name="janus.events",
                             routing_key=routing_key,
                             message=msgpack.packb(event_payload, use_bin_type=True),
-                            use_msgpack=False,  # Já empacotamos manualmente
                         )
                         logger.debug(f"Evento de memória publicado para {conversation_id}")
             except Exception as evt_err:
