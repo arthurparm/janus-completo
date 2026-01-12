@@ -116,10 +116,10 @@ async def process_sandbox_task(task: TaskMessage) -> None:
         state = TaskState(**raw_state)
         state.current_agent_role = "sandbox"
 
-        code = state.data_payload.get("script_code")
+        code = state.data_payload.script_code
         if not code or not code.strip():
-            state.data_payload["sandbox_output"] = ""
-            state.data_payload["sandbox_error"] = "No code provided to sandbox."
+            state.data_payload.sandbox_output = ""
+            state.data_payload.sandbox_error = "No code provided to sandbox."
             state.history.append(
                 {
                     "agent_role": "sandbox",
@@ -134,8 +134,8 @@ async def process_sandbox_task(task: TaskMessage) -> None:
             return
 
         stdout, stderr = _run_in_docker(code)
-        state.data_payload["sandbox_output"] = stdout
-        state.data_payload["sandbox_error"] = stderr
+        state.data_payload.sandbox_output = stdout
+        state.data_payload.sandbox_error = stderr
         state.history.append(
             {
                 "agent_role": "sandbox",
