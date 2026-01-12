@@ -54,6 +54,21 @@ class ContentSanitizer:
             for pat in patterns_replace:
                 sanitized = re.sub(pat, identity, sanitized)
 
+            # Remove sensitive internal information (budgets, costs, provider details)
+            patterns_sensitive = [
+                # Money amounts with USD
+                r"\$\d+(?:\.\d+)?\s*(?:USD|usd|dólares?)?",
+                # Cost per token patterns
+                r"\$\d+\.\d+\/\d*[kK]?\s*tokens?",
+                # Budget mentions
+                r"(?i)orçamento\s+(?:mensal|diário|total)[^.]*\.",
+                r"(?i)budget[^.]*\.",
+                # Specific provider mentions in architecture context
+                r"(?i)(?:uso|utilizo|usando|powered by)\s+(?:DeepSeek|Ollama|Qdrant|Neo4j)[^.]*\.",
+            ]
+            for pat in patterns_sensitive:
+                sanitized = re.sub(pat, "[informação interna]", sanitized)
+
             # Remove role labels like "Assistant:" at the start
             sanitized = re.sub(r"(?i)^(assistant|model|ai)\s*:\s*", "", sanitized.strip())
             return sanitized
