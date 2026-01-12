@@ -5,7 +5,9 @@ Consome a fila JANUS.tasks.agent.professor, revisa código com LLM e decide
 se retorna ao CodeAgent para correções ou segue para Sandbox.
 """
 
+import json
 import logging
+import re
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
@@ -21,21 +23,55 @@ logger = logging.getLogger(__name__)
 
 
 def _build_review_prompt(state: TaskState) -> str:
-    code = state.data_payload.get("script_code", "")
+    code = state.data_payload.script_code or ""
     prompt = [
-        "Revise o código a seguir com foco em correção, clareza e segurança.",
-        "Se houver problemas, explique sucintamente e sugira correções objetivas.",
-        "Se estiver correto, reconheça e recomende testes mínimos.",
-        "Código:",
+        "ATUE COMO: Engenheiro de Software Sênior e Especialista em Segurança.",
+        "TAREFA: Revisar rigorosamente o código Python abaixo.",
+        "",
+        "CRITÉRIOS DE AVALIAÇÃO:",
+        "1. CORREÇÃO: O código faz o que deve fazer? Existem bugs lógicos?",
+        "2. SEGURANÇA: Existem vulnerabilidades (injection, paths inseguros)?",
+        "3. QUALIDADE: O código segue PEP 8? Tem docstrings? Usa type hints?",
+        "",
+        "CÓDIGO PARA REVISÃO:",
         code,
+        "",
+        "FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):",
+        "Retorne APENAS um objeto JSON válido (sem markdown, sem texto extra) com a seguinte estrutura:",
+        "{",
+        '    "status": "APPROVED" | "REJECTED",',
+        '    "critical_issues": ["lista de problemas que impedem a aprovação"],',
+        '    "suggestions": ["sugestões de melhoria (não bloqueantes)"],',
+        '    "security_score": 1-10',
+        "}",
+        "Se status for APPROVED, 'critical_issues' deve estar vazio."
     ]
     return "\n".join(prompt)
 
 
-def _has_errors(review: str) -> bool:
-    text = review.lower()
-    hints = ["erro", "bug", "corrig", "falha", "inseguro", "exceção"]
-    return any(h in text for h in hints)
+def _parse_review_json(review_text: str) -> dict[str, Any]:
+    """Parse JSON response from LLM, handling potential markdown blocks."""
+    try:
+        # Tenta extrair JSON de blocos markdown se houver
+        match = re.search(r"```json\n(.*?)\n```", review_text, re.DOTALL)
+        if match:
+            clean_text = match.group(1)
+        else:
+            clean_text = review_text.strip()
+            # Remove possíveis backticks soltos
+            if clean_text.startswith("```"):
+                clean_text = clean_text.strip("`")
+
+        return json.loads(clean_text)
+    except Exception:
+        # Fallback para parsing manual "sujo" ou rejeição por padrão em caso de erro grave
+        logger.warning(f"Falha ao parsear JSON do Professor: {review_text[:100]}...")
+        # Se falhar o parse, assumimos rejeição para segurança
+        return {
+            "status": "REJECTED",
+            "critical_issues": ["Falha no formato da revisão (JSON inválido)."],
+            "suggestions": []
+        }
 
 
 @protect_against_poison_pills(
@@ -48,7 +84,7 @@ async def process_professor_task(task: TaskMessage) -> None:
         state = TaskState(**raw_state)
         state.current_agent_role = "professor"
 
-        code = state.data_payload.get("script_code")
+        code = state.data_payload.script_code
         if not code:
             # Sem código para revisar, encaminhar ao coder
             state.next_agent_role = "coder"
@@ -64,19 +100,41 @@ async def process_professor_task(task: TaskMessage) -> None:
             priority=ModelPriority.HIGH_QUALITY,
             timeout_seconds=None,
         )
-        review = result.get("response", "")
-        state.data_payload["review_notes"] = review
+        review_text = result.get("response", "")
+        # Parse JSON
+        review_data = _parse_review_json(review_text)
+
+        # Add metadata to payload
+        state.data_payload.review_notes = json.dumps(review_data, indent=2, ensure_ascii=False)
+
+        has_errors = review_data.get("status") == "REJECTED"
+
         state.history.append(
             {
                 "agent_role": "professor",
                 "action": "code_reviewed",
-                "notes": f"errors={'yes' if _has_errors(review) else 'no'}",
+                "notes": f"status={review_data.get('status')}, score={review_data.get('security_score')}",
                 "timestamp": datetime.utcnow().timestamp(),
             }
         )
 
-        if _has_errors(review):
-            state.next_agent_role = "coder"
+        if has_errors:
+            if state.retries < 10:
+                state.retries += 1
+                state.next_agent_role = "coder"
+
+                # Format feedback for Coder
+                issues = "\n- ".join(review_data.get("critical_issues", []))
+                state.data_payload.review_notes = f"REJEITADO PELO PROFESSOR:\nIssues:\n- {issues}"
+
+                logger.info(
+                    f"Deep Reflexion: Retrying task ({state.retries}/10)",
+                    extra={"task_id": state.task_id, "attempt": state.retries}
+                )
+            else:
+                logger.warning("Deep Reflexion: Max retries (10) reached. Forcing Sandbox.")
+                state.data_payload.review_notes += "\n[SYSTEM] MAX RETRIES REACHED. PROCEEDING WITH CAUTION."
+                state.next_agent_role = "sandbox"
         else:
             state.next_agent_role = "sandbox"
 
