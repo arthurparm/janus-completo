@@ -1,12 +1,13 @@
 import ast
 import json
 import logging
+import re
 from typing import Any
 
 from app.core.evolution.prompts import TOOL_GENERATION_PROMPT, TOOL_SPECIFICATION_PROMPT
 from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService
-from app.services.tool_service import ToolService
+from app.services.tool_service import ToolNotFoundError, ToolService
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,28 @@ class EvolutionManager:
                 break
         self._save_backlog(backlog)
 
+    def _resolve_tool_name(self, capability_request: str, spec: dict[str, Any]) -> str:
+        tool_name = str(spec.get("tool_name") or "").strip()
+
+        if not tool_name:
+            match = re.search(
+                r"(?i)nome\s+interno[^\n:]*:\s*['\"]([a-zA-Z_][a-zA-Z0-9_]*)['\"]",
+                capability_request,
+            )
+            if match:
+                tool_name = match.group(1).strip()
+
+        if not tool_name:
+            base = capability_request.strip().splitlines()[0].lower()
+            base = re.sub(r"[^a-z0-9_]+", "_", base)
+            base = re.sub(r"_+", "_", base).strip("_")
+            if not base:
+                raise ValueError("Não foi possível determinar um nome interno para a ferramenta.")
+            tool_name = base
+
+        spec["tool_name"] = tool_name
+        return tool_name
+
     async def evolve_tool(self, capability_request: str) -> dict[str, Any]:
         """
         Inicia o processo de criação de uma nova ferramenta baseada em uma necessidade.
@@ -143,29 +166,54 @@ class EvolutionManager:
         logger.info(f"[Evolution] Iniciando evolução para: {capability_request}")
 
         try:
-            # 1. Especificação
             spec = await self._specify_tool(capability_request)
             if not spec:
                 raise ValueError("Falha na especificação da ferramenta.")
 
-            logger.info(f"[Evolution] Especificação gerada: {spec.get('tool_name')}")
+            tool_name = self._resolve_tool_name(capability_request, spec)
 
-            # 2. Geração de Código
+            existing_metadata = None
+            try:
+                existing_metadata = self.tool_service.get_tool_details(tool_name)
+            except ToolNotFoundError:
+                existing_metadata = None
+            except Exception as e:
+                logger.warning(f"[Evolution] Falha ao verificar ferramenta existente: {e}")
+
+            logger.info(f"[Evolution] Especificação gerada: {tool_name}")
+
             code = await self._generate_code(spec)
             if not code:
                 raise ValueError("Falha na geração de código.")
 
-            # 3. Validação Estática (Safety Check)
             if not self._validate_safety(code):
                 raise ValueError("Código gerado violou verificações de segurança.")
 
-            # 4. Registro
             tool_meta = self._register_tool(spec, code)
 
             logger.info(f"[Evolution] Ferramenta '{tool_meta.name}' registrada com sucesso.")
             from dataclasses import asdict
+            from enum import Enum
 
-            return asdict(tool_meta)
+            raw = asdict(tool_meta)
+
+            category = raw.get("category")
+            if isinstance(category, Enum):
+                raw["category"] = category.value
+
+            permission = raw.get("permission_level")
+            if isinstance(permission, Enum):
+                raw["permission_level"] = permission.value
+
+            raw["existed_before"] = existing_metadata is not None
+            if existing_metadata is not None:
+                raw["evolution_message"] = (
+                    "Ferramenta existente refinada e atualizada com nova implementação."
+                )
+            else:
+                raw["evolution_message"] = "Nova ferramenta criada com sucesso."
+
+            return raw
 
         except Exception as e:
             logger.error(f"[Evolution] Falha no processo de evolução: {e}", exc_info=True)
@@ -208,7 +256,9 @@ class EvolutionManager:
         import asyncio
 
         spec_str = json.dumps(spec, indent=2)
-        prompt = TOOL_GENERATION_PROMPT.format(specification=spec_str)
+        # Evita erros de KeyError em str.format causados por chaves literais no prompt
+        # substituindo apenas o placeholder específico de especificação.
+        prompt = TOOL_GENERATION_PROMPT.replace("{specification}", spec_str)
 
         response = await asyncio.to_thread(
             self.llm_service.invoke_llm,
@@ -250,13 +300,24 @@ class EvolutionManager:
 
     def _register_tool(self, spec: dict[str, Any], code: str):
         """Registra a ferramenta no ToolService."""
+        # Normaliza safety_level da especificação para PermissionLevel válido
+        raw_safety = str(spec.get("safety_level", "safe") or "safe").strip().lower()
+        # O prompt pode sugerir "unsafe", mas o enum real usa "dangerous"
+        if raw_safety == "unsafe":
+            mapped_permission = "dangerous"
+        elif raw_safety in {"safe", "read_only", "write", "dangerous"}:
+            mapped_permission = raw_safety
+        else:
+            # Fallback defensivo: qualquer valor desconhecido vira "safe"
+            mapped_permission = "safe"
+
         request_data = {
             "name": spec.get("tool_name"),
             "description": spec.get("description"),
             "code": code,
             "function_name": spec.get("tool_name"),  # Assumindo que a função tem o mesmo nome
             "category": "dynamic",  # Nova categoria para ferramentas evoluídas
-            "permission_level": spec.get("safety_level", "safe"),
+            "permission_level": mapped_permission,
             "tags": ["evolved", "auto-generated"],
         }
 
