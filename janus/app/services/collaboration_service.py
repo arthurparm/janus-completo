@@ -39,6 +39,7 @@ except Exception:
         dependencies: list[str] = field(default_factory=list)
 
 
+from app.core.infrastructure.context_cache import get_context_cache
 from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import QueueName, TaskMessage, TaskState
 
@@ -215,7 +216,21 @@ class CollaborationService:
         """
         Publica o TaskState na fila adequada com base em `next_agent_role`.
         Fallback: roteia para `JANUS.tasks.router` quando indefinido.
+        
+        Stateful Workers: If context not cached, store static context and set flag.
         """
+        # Stateful Workers: Cache static context on first hop
+        if not task_state.context_cached:
+            cache = get_context_cache()
+            static_context = {
+                "original_goal": task_state.original_goal,
+                "meta": task_state.meta,
+            }
+            context_hash = cache.store(task_state.task_id, static_context)
+            task_state.context_cached = True
+            task_state.static_context_hash = context_hash
+            logger.debug("Static context cached for task", task_id=task_state.task_id)
+
         role = (task_state.next_agent_role or "router").lower()
         # Mapear filas por papel
         if role in ("coder", "code", "code_agent"):
@@ -236,6 +251,22 @@ class CollaborationService:
             ).model_dump_json()
         elif role in ("sandbox", "tester", "test"):
             queue = QueueName.TASKS_AGENT_SANDBOX.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+        elif role in ("red_team", "security", "auditor"):
+            queue = QueueName.TASKS_AGENT_RED_TEAM.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+        elif role in ("thinker", "thinker_agent", "architect", "reasoning"):
+            queue = QueueName.TASKS_AGENT_THINKER.value
             msg = TaskMessage(
                 task_id=task_state.task_id,
                 task_type="task_state",
