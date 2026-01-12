@@ -11,6 +11,7 @@ from prometheus_client import Counter, Histogram
 
 from app.config import settings
 from app.core.infrastructure.prompt_loader import get_prompt
+from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 from app.core.llm.llm_manager import ModelRole, get_llm
 from app.core.memory.graph_embeddings import GraphEmbeddingsManager
 from app.core.memory.memory_core import get_memory_db
@@ -41,9 +42,10 @@ except Exception as e:
     graph = None
 
 try:
-    cypher_prompt = PromptTemplate.from_template(get_prompt("cypher_generation"))
-    qa_prompt = PromptTemplate.from_template(get_prompt("qa_synthesis"))
-except KeyError as e:
+    # Use fallback mechanism to ensure we get the prompt from DB or File
+    cypher_prompt = PromptTemplate.from_template(get_prompt_with_fallback("cypher_generation"))
+    qa_prompt = PromptTemplate.from_template(get_prompt_with_fallback("qa_synthesis"))
+except Exception as e:
     logger.critical(f"Graph RAG Core: FATAL - Falha ao carregar prompts. Erro: {e}")
     graph = None
 
@@ -231,14 +233,14 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     if context is None:
         # Hybrid Search Strategy (Vector + Graph)
         t0_hybrid = time.perf_counter()
-        
+
         # 1. Vector Search for Seed Nodes (Concepts)
         # Find entry points in the graph that are semantically relevant
         seed_nodes = await _embeddings.vector_search(question, k=5, min_score=0.7)
         graph_ctx = []
-        
+
         if seed_nodes:
-             # 2. Graph Traversal (Expansion from seeds)
+            # 2. Graph Traversal (Expansion from seeds)
             seed_ids = [n["id"] for n in seed_nodes]
             try:
                 # Expand 1-hop around seeds to get context
@@ -256,29 +258,33 @@ async def query_knowledge_graph(question: str, limit: int = 10) -> str:
                 expansion_res = await async_db.query(traversal_query, {"seed_ids": seed_ids})
                 graph_ctx = expansion_res
                 _RAG_EVENTS.labels("graph_expansion", "success").inc()
-                logger.info(f"Graph RAG: Expanded {len(seed_nodes)} seeds into {len(graph_ctx)} relationships")
+                logger.info(
+                    f"Graph RAG: Expanded {len(seed_nodes)} seeds into {len(graph_ctx)} relationships"
+                )
             except Exception as e:
                 logger.error(f"Graph RAG expansion failed: {e}")
-        
+
         # Fallback to legacy LLM-Cypher if Vector Search yields nothing?
-        # Only if strict legacy mode is needed. For now, let's keep it simple: 
+        # Only if strict legacy mode is needed. For now, let's keep it simple:
         # Hybrid = Vector Seeds -> Graph Expansion.
-        
+
         # If no seeds found via vector, try legacy Cypher generation?
         if not graph_ctx and not seed_nodes:
-             # Legacy Fallback
-             graph_ret = GraphRetriever(async_graph_db=async_db, schema_provider=graph)
-             graph_ctx = await graph_ret.retrieve_with_llm(question)
+            # Legacy Fallback
+            graph_ret = GraphRetriever(async_graph_db=async_db, schema_provider=graph)
+            graph_ctx = await graph_ret.retrieve_with_llm(question)
 
-        _RAG_STAGE_LAT.labels("hybrid_retrieval", "success").observe(time.perf_counter() - t0_hybrid)
+        _RAG_STAGE_LAT.labels("hybrid_retrieval", "success").observe(
+            time.perf_counter() - t0_hybrid
+        )
 
         # Optional: additional vector retrieval from episodic memory (Qdrant)
         vector_ret = VectorRetriever()
         vector_ctx = await vector_ret.retrieve(question, k=max(1, min(5, limit)))
-        
+
         # Fusion
         fused_ctx = {
-            "graph": graph_ctx[: max(1, limit*2)],
+            "graph": graph_ctx[: max(1, limit * 2)],
             "vector": [{"id": v.get("id"), "content": v.get("content", "")} for v in vector_ctx][
                 : max(1, limit)
             ],

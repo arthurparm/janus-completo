@@ -19,6 +19,8 @@ from qdrant_client import AsyncQdrantClient
 
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
+from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
 from app.core.memory.graph_guardian import graph_guardian
 from app.core.memory.memory_core import decrypt_text, get_memory_db
@@ -50,40 +52,7 @@ RELATIONSHIPS_CREATED = Counter(
 _consolidation_cb = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
 
 # Prompt para extração de conhecimento
-EXTRACTION_PROMPT = """Você é um especialista em extração de conhecimento estruturado.
-
-Analise a experiência abaixo e extraia:
-1. **Entidades**: Conceitos, tecnologias, pessoas, lugares, ferramentas mencionadas
-2. **Relacionamentos**: Como as entidades se relacionam entre si
-3. **Insights**: Conhecimento-chave ou lições aprendidas
-
-EXPERIÊNCIA:
-{experience_content}
-
-METADADOS:
-{metadata}
-
-Retorne APENAS um JSON válido com esta estrutura:
-{{
-  "entities": [
-    {{"name": "nome_da_entidade", "type": "tipo", "properties": {{}}}},
-    ...
-  ],
-  "relationships": [
-    {{"from": "entidade_origem", "to": "entidade_destino", "type": "tipo_relacao", "properties": {{}}}},
-    ...
-  ],
-  "insights": [
-    {{"text": "insight descoberto", "confidence": 0.8}},
-    ...
-  ]
-}}
-
-Tipos comuns de entidades: CONCEPT, TECHNOLOGY, TOOL, PERSON, ERROR, SOLUTION, PATTERN
-Tipos comuns de relacionamentos: USES, RELATES_TO, CAUSES, SOLVES, DEPENDS_ON, IMPLEMENTS
-
-Seja conciso e preciso. Extraia apenas informações relevantes e verificáveis.
-"""
+# EXTRACTION_PROMPT is now loaded dynamically
 
 
 class KnowledgeConsolidator:
@@ -167,15 +136,11 @@ class KnowledgeConsolidator:
             raise ValueError("LLM não inicializado para extração de conhecimento.")
 
         # Formata prompt
-        prompt_text = EXTRACTION_PROMPT.format(
-            experience_content=experience_content[:2000],  # Limita tamanho
-            metadata=json.dumps(metadata, indent=2, ensure_ascii=False)[:500],
+        messages = get_formatted_prompt(
+            "knowledge_extraction",
+            experience_content=experience_content,
+            metadata=json.dumps(metadata, ensure_ascii=False),
         )
-
-        messages = [
-            SystemMessage(content="Você é um especialista em extração de conhecimento."),
-            HumanMessage(content=prompt_text),
-        ]
 
         # Invoca LLM
         start = time.perf_counter()
@@ -285,15 +250,23 @@ class KnowledgeConsolidator:
 
         # --- EVOLUTION: Pre-calculate Embeddings for Real-time consistency ---
         concepts_to_embed = []
-        indices_map = {} # map normalized entity index to 'normalized_entities' list index
-        
+        indices_map = {}  # map normalized entity index to 'normalized_entities' list index
+
         for idx, ne in enumerate(normalized_entities):
             # Only embed Concepts, Technologies, Tools, etc. (Skip specialized types if needed)
             # For robustness, we embed mostly everything that is useful for search
-            if ne["type"] in ("CONCEPT", "TECHNOLOGY", "TOOL", "PERSON", "PATTERN", "SOLUTION", "ERROR"):
+            if ne["type"] in (
+                "CONCEPT",
+                "TECHNOLOGY",
+                "TOOL",
+                "PERSON",
+                "PATTERN",
+                "SOLUTION",
+                "ERROR",
+            ):
                 concepts_to_embed.append(ne["name"])
-                indices_map[len(concepts_to_embed)-1] = idx
-        
+                indices_map[len(concepts_to_embed) - 1] = idx
+
         if concepts_to_embed:
             try:
                 emb_manager = GraphEmbeddingsManager()
@@ -480,9 +453,11 @@ class KnowledgeConsolidator:
                                 type=q.get("type"),
                                 from_name=q.get("from_name"),
                                 to_name=q.get("to_name"),
-                                confidence=float(q.get("properties", {}).get("confidence", 0.0))
-                                if isinstance(q.get("properties"), dict)
-                                else 0.0,
+                                confidence=(
+                                    float(q.get("properties", {}).get("confidence", 0.0))
+                                    if isinstance(q.get("properties"), dict)
+                                    else 0.0
+                                ),
                                 source_snippet=(
                                     q.get("properties", {}).get("source_snippet")
                                     if isinstance(q.get("properties"), dict)
@@ -753,9 +728,9 @@ class KnowledgeConsolidator:
                 """,
                 params={
                     "doc_id": doc_id,
-                    "file_name": points[0].payload.get("metadata", {}).get("file_name")
-                    if points
-                    else None,
+                    "file_name": (
+                        points[0].payload.get("metadata", {}).get("file_name") if points else None
+                    ),
                     "user_id": user_id,
                 },
                 operation="create_document_node",

@@ -5,43 +5,30 @@ Implements advanced RAG techniques:
 1. HyDE (Hypothetical Document Embeddings): Generate a hypothetical answer before search
 2. Re-Ranking: Use LLM to re-rank retrieved chunks by relevance
 """
+
 from typing import Any
 
 import structlog
 
 from app.config import settings
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 logger = structlog.get_logger(__name__)
 
-HYDE_PROMPT = """Given the following question, generate a hypothetical ideal answer that would perfectly address it.
-This answer will be used for semantic search, so be specific and use relevant terminology.
-
-Question: {question}
-
-Hypothetical Answer:"""
-
-RERANK_PROMPT = """You are a relevance ranker. Given a question and a list of text chunks, rank them by relevance.
-Return ONLY a comma-separated list of indices (0-indexed) from most to least relevant.
-
-Question: {question}
-
-Chunks:
-{chunks}
-
-Ranking (indices only, e.g., "2,0,4,1,3"):"""
+# HYDE_PROMPT and RERANK_PROMPT are now loaded dynamically
 
 
 async def generate_hypothetical_answer(question: str) -> str:
     """
     Generate a hypothetical ideal answer for semantic search (HyDE).
-    
+
     HyDE improves retrieval by searching for the "shape" of an ideal answer
     rather than the question itself.
-    
+
     Args:
         question: User's question
-        
+
     Returns:
         Hypothetical answer for embedding
     """
@@ -55,7 +42,7 @@ async def generate_hypothetical_answer(question: str) -> str:
             cache_key="hyde",
         )
 
-        prompt = HYDE_PROMPT.format(question=question)
+        prompt = get_formatted_prompt("hyde_generation", question=question)
         response = await llm.ainvoke(prompt)
         hypothetical = response.content.strip()
 
@@ -78,12 +65,12 @@ async def rerank_chunks(
 ) -> list[dict[str, Any]]:
     """
     Re-rank retrieved chunks using LLM.
-    
+
     Args:
         question: User's question
         chunks: List of retrieved chunks with 'content' field
         top_k: Number of top results to return
-        
+
     Returns:
         Re-ranked list of chunks
     """
@@ -101,12 +88,14 @@ async def rerank_chunks(
         )
 
         # Format chunks for ranking
-        chunks_text = "\n".join([
-            f"[{i}] {chunk.get('content', chunk.get('text', ''))[:200]}..."
-            for i, chunk in enumerate(chunks)
-        ])
+        chunks_text = "\n".join(
+            [
+                f"[{i}] {chunk.get('content', chunk.get('text', ''))[:200]}..."
+                for i, chunk in enumerate(chunks)
+            ]
+        )
 
-        prompt = RERANK_PROMPT.format(question=question, chunks=chunks_text)
+        prompt = get_formatted_prompt("rerank", question=question, chunks=chunks_text)
         response = await llm.ainvoke(prompt)
         ranking_str = response.content.strip()
 
@@ -143,12 +132,12 @@ async def enhanced_rag_search(
 ) -> list[dict[str, Any]]:
     """
     Perform enhanced RAG search with HyDE and Re-Ranking.
-    
+
     Args:
         question: User's question
         search_fn: Async function that takes a query and returns chunks
         top_k: Number of final results to return
-        
+
     Returns:
         List of most relevant chunks
     """

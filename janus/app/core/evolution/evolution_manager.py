@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any
 
-from app.core.evolution.prompts import TOOL_GENERATION_PROMPT, TOOL_SPECIFICATION_PROMPT
+
 from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService
 from app.services.tool_service import ToolNotFoundError, ToolService
@@ -222,8 +222,13 @@ class EvolutionManager:
     async def _specify_tool(self, request: str) -> dict[str, Any] | None:
         """Usa LLM para criar a especificação técnica da ferramenta."""
         import asyncio
+        from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
-        prompt = TOOL_SPECIFICATION_PROMPT.format(request=request)
+        try:
+            prompt = get_formatted_prompt("tool_specification", request=request)
+        except Exception as e:
+            logger.error(f"[Evolution] Falha ao carregar prompt tool_specification: {e}")
+            return None
 
         # Executar síncrono em thread pool
         response = await asyncio.to_thread(
@@ -254,11 +259,16 @@ class EvolutionManager:
     async def _generate_code(self, spec: dict[str, Any]) -> str | None:
         """Usa LLM para gerar o código Python."""
         import asyncio
+        from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
         spec_str = json.dumps(spec, indent=2)
-        # Evita erros de KeyError em str.format causados por chaves literais no prompt
-        # substituindo apenas o placeholder específico de especificação.
-        prompt = TOOL_GENERATION_PROMPT.replace("{specification}", spec_str)
+
+        try:
+            # Use get_formatted_prompt which handles fallback and formatting
+            prompt = get_formatted_prompt("tool_generation", specification=spec_str)
+        except Exception as e:
+            logger.error(f"[Evolution] Falha ao carregar prompt tool_generation: {e}")
+            return None
 
         response = await asyncio.to_thread(
             self.llm_service.invoke_llm,

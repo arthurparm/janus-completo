@@ -124,8 +124,18 @@ class RedisManager:
         finally:
             await ps.close()
 
+    async def get_client(self) -> redis.Redis:
+        """Retorna o cliente raw de forma assíncrona (compatibilidade)."""
+        if self._client is None:
+             raise RuntimeError("RedisManager not initialized or Redis disabled.")
+        return self._client
+
 # Singleton global accessor
 redis_manager = RedisManager.get_instance()
+
+def get_redis_manager() -> RedisManager:
+    """Dependency accessor for RedisManager singleton."""
+    return RedisManager.get_instance()
 
 async def get_redis() -> AsyncGenerator[redis.Redis, None]:
     """Dependency for FastAPI"""

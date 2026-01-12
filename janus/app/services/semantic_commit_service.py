@@ -4,6 +4,7 @@ Semantic Commit Message Service.
 Analyzes git diffs and generates semantic commit messages using LLM.
 Follows Conventional Commits specification: type(scope): description
 """
+
 import asyncio
 import re
 import subprocess
@@ -12,6 +13,7 @@ from typing import Any
 import structlog
 
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 logger = structlog.get_logger(__name__)
 
@@ -29,38 +31,17 @@ COMMIT_TYPES = {
     "revert": "Reverting a previous commit",
 }
 
-SEMANTIC_COMMIT_PROMPT = """Analyze the following git diff and generate a semantic commit message.
-
-Follow the Conventional Commits specification:
-- Format: type(scope): description
-- Types: feat, fix, docs, style, refactor, perf, test, chore, ci, revert
-- Scope: optional, describes the area of the codebase affected
-- Description: concise, imperative mood, no period at end
-
-Rules:
-1. Be specific about WHAT changed
-2. Use imperative mood ("add" not "added")
-3. Keep under 72 characters
-4. If multiple unrelated changes, list the most significant one
-
-Git Diff:
-```
-{diff}
-```
-
-Respond with ONLY the commit message, nothing else.
-Example: feat(auth): add JWT token refresh endpoint
-"""
+# SEMANTIC_COMMIT_PROMPT is now loaded dynamically from DB or fallback files
 
 
 async def get_git_diff(repo_path: str = ".", staged_only: bool = True) -> str:
     """
     Get git diff for the repository.
-    
+
     Args:
         repo_path: Path to the git repository.
         staged_only: If True, only show staged changes (git diff --cached).
-        
+
     Returns:
         Git diff output as string.
     """
@@ -80,7 +61,7 @@ async def get_git_diff(repo_path: str = ".", staged_only: bool = True) -> str:
                 capture_output=True,
                 text=True,
                 timeout=30,
-            )
+            ),
         )
 
         if result.returncode != 0:
@@ -116,7 +97,7 @@ async def get_changed_files(repo_path: str = ".", staged_only: bool = True) -> l
                 capture_output=True,
                 text=True,
                 timeout=10,
-            )
+            ),
         )
 
         if result.returncode != 0:
@@ -131,27 +112,27 @@ async def get_changed_files(repo_path: str = ".", staged_only: bool = True) -> l
 def _clean_commit_message(response_content: str) -> str:
     """Robust method to clean LLM response and extract commit message."""
     content = response_content.strip()
-    
+
     # 1. Try to find content inside markdown code blocks
     code_block_pattern = re.compile(r"```(?:text|markdown)?\s*(.*?)\s*```", re.DOTALL)
     match = code_block_pattern.search(content)
     if match:
         content = match.group(1).strip()
-    
+
     # 2. Remove quotes if present
-    content = content.strip('"\'`')
-    
+    content = content.strip("\"'`")
+
     # 3. Use regex to ensure it looks like a semantic commit (type(scope): or type:)
     # This acts as a validator and cleaner
     semantic_pattern = re.compile(r"^([a-z]+)(?:\([a-z0-9_\-\./]+\))?: .+$", re.IGNORECASE)
-    
+
     # If content has multiple lines, take the first one that matches
-    lines = content.split('\n')
+    lines = content.split("\n")
     for line in lines:
         line = line.strip()
         if semantic_pattern.match(line):
             return line
-            
+
     # Fallback: just return the first non-empty line
     return lines[0].strip() if lines else content
 
@@ -163,12 +144,12 @@ async def generate_semantic_commit(
 ) -> dict[str, Any]:
     """
     Generate a semantic commit message based on git diff.
-    
+
     Args:
         repo_path: Path to the git repository.
         staged_only: If True, analyze only staged changes.
         max_diff_chars: Maximum characters of diff to send to LLM.
-        
+
     Returns:
         Dict with commit_message, files_changed, and metadata.
     """
@@ -193,7 +174,22 @@ async def generate_semantic_commit(
         truncated = True
 
     # Generate commit message using LLM
-    prompt = SEMANTIC_COMMIT_PROMPT.format(diff=diff)
+    try:
+    # Prepare context from changed files
+    context_str = f"Files changed:\n{chr(10).join(['- ' + f for f in files[:20]])}"
+    if len(files) > 20:
+        context_str += f"\n...and {len(files) - 20} more files"
+
+    try:
+        prompt = get_formatted_prompt("semantic_commit", diff=diff, context=context_str)
+    except Exception as e:
+        logger.error("Failed to load semantic commit prompt", error=str(e))
+        return {
+            "success": False,
+            "error": f"Prompt error: {e}",
+            "commit_message": None,
+            "files_changed": files,
+        }
 
     try:
         llm = await get_llm(
@@ -205,13 +201,13 @@ async def generate_semantic_commit(
         # Retry logic for fragility
         retries = 2
         last_error = None
-        
+
         for attempt in range(retries):
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, llm.invoke, prompt)
                 raw_content = response.content.strip()
-                
+
                 commit_message = _clean_commit_message(raw_content)
 
                 logger.info(
@@ -230,7 +226,7 @@ async def generate_semantic_commit(
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed for semantic commit: {e}")
                 last_error = e
-                await asyncio.sleep(1) # exponential backoff if needed
+                await asyncio.sleep(1)  # exponential backoff if needed
 
         raise last_error or Exception("Failed after retries")
 
@@ -247,10 +243,10 @@ async def generate_semantic_commit(
 async def suggest_commit_type(files: list[str]) -> str:
     """
     Suggest a commit type based on file paths (heuristic).
-    
+
     Args:
         files: List of changed file paths.
-        
+
     Returns:
         Suggested commit type.
     """
@@ -259,7 +255,7 @@ async def suggest_commit_type(files: list[str]) -> str:
 
     # Enhanced heuristics based on file paths
     # Priority ordered
-    
+
     for f in files:
         f_lower = f.lower()
         if "test" in f_lower or "spec" in f_lower:
@@ -268,7 +264,10 @@ async def suggest_commit_type(files: list[str]) -> str:
             return "docs"
         if any(x in f_lower for x in ["ci/", ".github", "dockerfile", "docker-compose", ".gitlab"]):
             return "ci"
-        if any(x in f_lower for x in ["requirements", "package.json", "pyproject.toml", "poetry.lock", ".gitignore"]):
+        if any(
+            x in f_lower
+            for x in ["requirements", "package.json", "pyproject.toml", "poetry.lock", ".gitignore"]
+        ):
             return "chore"
         if "migration" in f_lower or "alembic" in f_lower:
             return "chore"

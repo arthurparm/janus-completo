@@ -8,6 +8,7 @@ from app.core.autonomy.goal_manager import Goal
 from app.core.autonomy.policy_engine import PolicyEngine
 from app.core.llm import ModelPriority, ModelRole
 from app.core.tools.action_module import PermissionLevel, action_registry
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.services.llm_service import LLMService
 
 logger = structlog.get_logger(__name__)
@@ -127,29 +128,19 @@ def _validate_steps(
 def _build_draft_prompt(
     goal: Goal, metrics: dict[str, Any], tools: list[str], max_steps: int
 ) -> str:
-    sys = (
-        "Você é o PLANNER DRAFTER do Janus. Seu objetivo é criar um RASCUNHO de plano.\n"
-        "Retorne um JSON com 'steps'. Não se preocupe com perfeição agora, apenas cubra o objetivo.\n"
-    )
-    goal_txt = f"Objetivo: {goal.title}\nDescrição: {goal.description}\n"
+    goal_txt = f"Objetivo: {goal.title}\nDescrição: {goal.description}"
     sys_info = json.dumps(metrics or {}, ensure_ascii=False)
     tools_list = ", ".join(tools[:50])
 
-    return f"{sys}\n{goal_txt}\nEstado: {sys_info}\nTools: {tools_list}\n"
+    return get_formatted_prompt(
+        "autonomy_plan_draft", goal=goal_txt, state=sys_info, tools=tools_list
+    )
 
 
 # === Stage 2: CRITIQUE ===
 def _build_critique_prompt(goal: Goal, draft_plan: list[dict[str, Any]], tools: list[str]) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
-    sys = (
-        "Você é o PLANNER CRITIC do Janus. Analise o plano de rascunho abaixo.\n"
-        "Identifique 3 pontos fracos:\n"
-        "1. Falta de robustez (passos que podem falhar sem fallback)\n"
-        "2. Segurança (uso de tools destrutivas sem checagem)\n"
-        "3. Lógica (dependências erradas)\n"
-        "Retorne APENAS um texto curto listando as críticas. Se estiver perfeito, diga 'OK'."
-    )
-    return f"{sys}\nObjetivo: {goal.title}\nRascunho:\n{plan_str}\n"
+    return get_formatted_prompt("autonomy_plan_critique", goal=goal.title, draft=plan_str)
 
 
 # === Stage 3: REFINE ===
@@ -157,20 +148,10 @@ def _build_refine_prompt(
     goal: Goal, draft_plan: list[dict[str, Any]], critique: str, tools: list[str], max_steps: int
 ) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
-    sys = (
-        "Você é o PLANNER REFINER. Baseado no Rascunho e nas Críticas, gere o PLANO FINAL ROBUSTO.\n"
-        "Use o schema JSON rigoroso com 'critical', 'retry', 'fallback_tool'.\n"
-        "MELHORE o plano para resolver as críticas.\n"
-    )
-    schema = (
-        "Exemplo de saída:\n"
-        "[\n"
-        '  {"tool": "get_system_info", "args": {}, "critical": true},\n'
-        '  {"tool": "search_web", "args": {"query": "error 500"}, "retry": 2, "fallback_tool": "get_logs"}\n'
-        "]"
-    )
     tools_list = ", ".join(tools[:50])
-    return f"{sys}\nObjetivo: {goal.title}\nCrítica: {critique}\nRascunho: {plan_str}\nTools: {tools_list}\n{schema}"
+    return get_formatted_prompt(
+        "autonomy_plan_refine", goal=goal.title, critique=critique, draft=plan_str, tools=tools_list
+    )
 
 
 async def build_plan_for_goal(

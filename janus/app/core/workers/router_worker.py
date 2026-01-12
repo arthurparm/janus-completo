@@ -12,6 +12,8 @@ import msgpack
 
 from app.core.autonomy.planner import build_plan_for_goal
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.llm.router import ModelPriority, ModelRole, get_llm
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
@@ -20,14 +22,28 @@ from app.services.collaboration_service import CollaborationService
 logger = logging.getLogger(__name__)
 
 
-def _infer_first_agent(original_goal: str) -> str:
-    """Usa o Planner para sugerir o primeiro agente; fallback para 'coder'."""
+async def _decompose_complex_task(goal: str) -> str:
+    """Usa o prompt task_decomposition para analisar requisições complexas."""
     try:
-        build_plan_for_goal(original_goal)
-        # Heurística simples: primeira ação geralmente é planejar (Thinker)
-        return "thinker"
-    except Exception:
-        return "thinker"
+        llm = await get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
+        prompt = get_formatted_prompt(
+            "task_decomposition",
+            project_description=goal,
+            request=goal,
+            context="Nenhum contexto adicional",
+            agents="THINKER, CODER, PROFESSOR, SANDBOX, RED_TEAM",
+        )
+        # Se for rastro LangChain, usar ainvoke ou similar. Aqui simplificamos.
+        res = await llm.ainvoke(prompt)
+        return res.content
+    except Exception as e:
+        logger.warning(f"Falha na decomposição de tarefa: {e}")
+        return ""
+
+
+def _infer_first_agent(original_goal: str) -> str:
+    """Fallback heurístico para o primeiro agente; prefere 'thinker'."""
+    return "thinker"
 
 
 def _contains_knowledge_payload(state: TaskState) -> bool:
@@ -89,10 +105,7 @@ async def process_router_task(task: TaskMessage) -> None:
             # Publica tarefa de consolidação em paralelo sem alterar o fluxo principal
             payload = state.data_payload
             content = (
-                payload.tool_output
-                or payload.sandbox_output
-                or state.original_goal
-                or ""
+                payload.tool_output or payload.sandbox_output or state.original_goal or ""
             ).strip()
             origin_agent = None
             try:

@@ -65,45 +65,66 @@ def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
 
 
 # Mapeamento de nomes de prompt para variáveis hardcoded (fallback final)
+# Se o nome não estiver aqui, assume-se o nome em UPPERCASE no módulo de prompts
 HARDCODED_PROMPTS = {
     "tool_specification": "TOOL_SPECIFICATION_PROMPT",
     "tool_generation": "TOOL_GENERATION_PROMPT",
     "tool_validation": "tool_validation_prompt",
+    "semantic_commit": "SEMANTIC_COMMIT_PROMPT",
+    "hyde_generation": "HYDE_PROMPT",
+    "rerank": "RERANK_PROMPT",
+    "knowledge_extraction": "EXTRACTION_PROMPT",
+    "meta_agent": "META_AGENT_PROMPT",
 }
 
 
-def get_evolution_prompt(prompt_name: str, **format_kwargs) -> str:
+def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
     """
-    Carrega prompt de evolução de ferramentas com fallback completo.
+    Carrega prompt com fallback completo e formatação opcional.
 
     Args:
-        prompt_name: Nome do prompt (tool_specification, tool_generation, tool_validation)
-        **format_kwargs: Variáveis para formatar no prompt (ex: request, specification)
+        prompt_name: Nome do prompt (ex: semantic_commit, task_decomposition)
+        **format_kwargs: Variáveis para formatar no prompt
 
     Returns:
         Prompt formatado pronto para uso
     """
-    # Tentar DB ou arquivo
+    # 1. Tentar DB ou arquivo (via get_prompt_with_fallback)
     prompt = get_prompt_with_fallback(prompt_name)
 
-    # Fallback para hardcoded
+    # 2. Fallback para hardcoded se não encontrado acima
     if not prompt:
-        from app.core.evolution import prompts as hardcoded_prompts
+        # Tenta carregar dos módulos conhecidos de prompts
+        from app.core.evolution import prompts as evo_prompts
+        from app.core.infrastructure import prompt_loader as loader_defaults
 
-        var_name = HARDCODED_PROMPTS.get(prompt_name, prompt_name.upper())
-        prompt = getattr(hardcoded_prompts, var_name, None)
+        var_name = HARDCODED_PROMPTS.get(prompt_name)
+
+        # Tenta em ordem de prioridade nos módulos
+        if var_name:
+            prompt = getattr(evo_prompts, var_name, None)
+            if not prompt:
+                # Tenta no loader_defaults.PROMPTS se existir
+                prompt = loader_defaults.PROMPTS.get(prompt_name)
+        else:
+            # Tenta o nome em UPPERCASE
+            prompt = getattr(evo_prompts, prompt_name.upper(), None)
+
         if prompt:
-            logger.debug("Usando prompt hardcoded como fallback", prompt_name=prompt_name)
+            logger.debug("Usando prompt hardcoded como fallback final", prompt_name=prompt_name)
 
     if not prompt:
-        raise ValueError(f"Prompt '{prompt_name}' não encontrado em nenhuma fonte")
+        raise ValueError(
+            f"Prompt '{prompt_name}' não encontrado em nenhuma fonte (DB, Arquivo ou Memória)"
+        )
 
-    # Formatar se kwargs fornecidos
+    # 3. Formatar se kwargs fornecidos
     if format_kwargs:
         try:
             return prompt.format(**format_kwargs)
         except KeyError as e:
             logger.error("Variável faltando no prompt", prompt_name=prompt_name, missing=str(e))
-            return prompt  # Retornar sem formatar
+            # Tenta retornar parcial se possível ou limpo
+            return prompt
 
     return prompt
