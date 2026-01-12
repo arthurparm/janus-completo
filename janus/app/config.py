@@ -155,12 +155,31 @@ class AppSettings(BaseSettings):
     OLLAMA_ORCHESTRATOR_MODEL: str = "qwen2.5:14b"
     OLLAMA_CODER_MODEL: str = "qwen2.5-coder:14b"
     OLLAMA_CURATOR_MODEL: str = "qwen2.5:14b"
+    DEEPSEEK_API_KEY: SecretStr | None = None
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL_NAME: str = "deepseek-chat"
+    DEEPSEEK_MODELS: list[str] = ["deepseek-chat", "deepseek-reasoner"]
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor
     OPENAI_MONTHLY_BUDGET_USD: float = 50.0
     GEMINI_MONTHLY_BUDGET_USD: float = 25.0
     OLLAMA_MONTHLY_BUDGET_USD: float = 0.0
+    DEEPSEEK_MONTHLY_BUDGET_USD: float = 20.0
+    # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spend >= this % of total budget
+    BUDGET_THRESHOLD_PERCENT: float = 0.90
+
+    # Deep Self-Healing: CoderAgent retry loop settings
+    # Maximum iterations for compiler error auto-correction (DeepSeek makes this affordable)
+    CODER_MAX_SELF_HEALING_ITERATIONS: int = 20
+    CODER_SELF_HEALING_ENABLED: bool = True
+
+    # Reasoning RAG (HyDE & Re-Ranking)
+    # HyDE: Generate hypothetical document before semantic search
+    RAG_HYDE_ENABLED: bool = True
+    # Re-Ranking: Use LLM to re-rank retrieved chunks
+    RAG_RERANK_ENABLED: bool = True
+    RAG_RERANK_TOP_K: int = 5
 
     # Preço por 1k tokens (USD) por provedor
     # Valores padrão podem ser ajustados via .env conforme necessidade
@@ -170,6 +189,9 @@ class AppSettings(BaseSettings):
     GEMINI_COST_PER_1K_OUTPUT_USD: float = 1.5
     OLLAMA_COST_PER_1K_INPUT_USD: float = 0.0
     OLLAMA_COST_PER_1K_OUTPUT_USD: float = 0.0
+    DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00027
+    DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00110
+    DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.00007
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
     OLLAMA_KEEP_ALIVE: str | None = "30m"  # mantém modelos carregados para reduzir cold-start
     OLLAMA_NUM_CTX: int | None = 4096  # contexto máximo por requisição
@@ -188,6 +210,18 @@ class AppSettings(BaseSettings):
     GEMINI_MODEL_PRICING: dict[str, dict[str, float]] = {
         "gemini-2.5-flash": {"input_per_1k_usd": 0.5, "output_per_1k_usd": 1.5},
         # Adicione aqui outros modelos (ex.: "gemini-2.5-pro")
+    }
+    DEEPSEEK_MODEL_PRICING: dict[str, dict[str, float]] = {
+        "deepseek-chat": {
+            "input_per_1k_usd": 0.00027,
+            "output_per_1k_usd": 0.00110,
+            "cache_read_per_1k_usd": 0.00007,
+        },
+        "deepseek-reasoner": {
+            "input_per_1k_usd": 0.00055,
+            "output_per_1k_usd": 0.00219,
+            "cache_read_per_1k_usd": 0.00014,
+        },
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
@@ -349,7 +383,7 @@ class AppSettings(BaseSettings):
 
     # ======= Validadores para variáveis de ambiente complexas =======
 
-    @field_validator("OPENAI_MODELS", "GEMINI_MODELS", mode="before")
+    @field_validator("OPENAI_MODELS", "GEMINI_MODELS", "DEEPSEEK_MODELS", mode="before")
     def _parse_models_list(cls, v: Any):
         # Aceita JSON array ou lista separada por vírgulas
         if isinstance(v, str):
@@ -382,7 +416,7 @@ class AppSettings(BaseSettings):
                 return {"orchestrator": items} if items else {}
         return v or {}
 
-    @field_validator("OPENAI_MODEL_PRICING", "GEMINI_MODEL_PRICING", mode="before")
+    @field_validator("OPENAI_MODEL_PRICING", "GEMINI_MODEL_PRICING", "DEEPSEEK_MODEL_PRICING", mode="before")
     def _parse_model_pricing(cls, v: Any):
         # Aceita JSON objeto {model: {input_per_1k_usd: float, output_per_1k_usd: float}}
         if isinstance(v, str):
@@ -393,6 +427,7 @@ class AppSettings(BaseSettings):
                     return {
                         "input_per_1k_usd": float(d.get("input_per_1k_usd", 0.0)),
                         "output_per_1k_usd": float(d.get("output_per_1k_usd", 0.0)),
+                        "cache_read_per_1k_usd": float(d.get("cache_read_per_1k_usd", 0.0)),
                     }
 
                 return {str(k): coerce(val) for k, val in obj.items() if isinstance(val, dict)}
