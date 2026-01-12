@@ -1,29 +1,37 @@
 import { Component, OnInit, OnDestroy, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { JanusApiService } from '../../../services/janus-api.service';
-import { interval, Subscription } from 'rxjs';
+import { interval, Subscription, Observable } from 'rxjs';
 import { switchMap, startWith } from 'rxjs/operators';
 
+interface BudgetSummaryResponse {
+  providers: ProviderBudget[];
+  total_spent: number;
+  total_budget: number;
+  guardrail_active: boolean;
+  timestamp: string;
+}
+
 interface ProviderBudget {
-    provider: string;
-    spent: number;
-    budget: number;
-    remaining: number;
-    percentage: number;
+  provider: string;
+  spent: number;
+  budget: number;
+  remaining: number;
+  percentage: number;
 }
 
 interface BudgetMetrics {
-    providers: ProviderBudget[];
-    totalSpent: number;
-    totalBudget: number;
-    guardrailActive: boolean;
+  providers: ProviderBudget[];
+  totalSpent: number;
+  totalBudget: number;
+  guardrailActive: boolean;
 }
 
 @Component({
-    selector: 'app-budget-panel',
-    standalone: true,
-    imports: [CommonModule],
-    template: `
+  selector: 'app-budget-panel',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
     <div class="budget-panel">
       <div class="panel-header">
         <h3>💰 Budget & Usage</h3>
@@ -96,7 +104,7 @@ interface BudgetMetrics {
       }
     </div>
   `,
-    styles: [`
+  styles: [`
     .budget-panel {
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       border-radius: 12px;
@@ -282,130 +290,95 @@ interface BudgetMetrics {
   `]
 })
 export class BudgetPanelComponent implements OnInit, OnDestroy {
-    private api = inject(JanusApiService);
+  private api = inject(JanusApiService);
 
-    // Signals
-    metrics = signal<BudgetMetrics | null>(null);
-    loading = signal(false);
-    error = signal<string | null>(null);
-    autoRefresh = signal(true);
-    lastUpdated = signal(new Date());
+  // Signals
+  metrics = signal<BudgetMetrics | null>(null);
+  loading = signal(false);
+  error = signal<string | null>(null);
+  autoRefresh = signal(true);
+  lastUpdated = signal(new Date());
 
-    // Computed
-    totalPercentage = computed(() => {
-        const m = this.metrics();
-        if (!m || m.totalBudget === 0) return 0;
-        return (m.totalSpent / m.totalBudget) * 100;
-    });
+  // Computed
+  totalPercentage = computed(() => {
+    const m = this.metrics();
+    if (!m || m.totalBudget === 0) return 0;
+    return (m.totalSpent / m.totalBudget) * 100;
+  });
 
-    Math = Math; // For template
+  Math = Math; // For template
 
-    private refreshSub?: Subscription;
+  private refreshSub?: Subscription;
 
-    ngOnInit() {
-        this.startAutoRefresh();
+  ngOnInit() {
+    this.startAutoRefresh();
+  }
+
+  ngOnDestroy() {
+    this.stopAutoRefresh();
+  }
+
+  private startAutoRefresh() {
+    if (this.refreshSub) return;
+
+    // Poll every 30 seconds
+    this.refreshSub = interval(30000).pipe(
+      startWith(0),
+      switchMap(() => this.fetchMetrics())
+    ).subscribe();
+  }
+
+  private stopAutoRefresh() {
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = undefined;
+  }
+
+  toggleAutoRefresh() {
+    if (this.autoRefresh()) {
+      this.autoRefresh.set(false);
+      this.stopAutoRefresh();
+    } else {
+      this.autoRefresh.set(true);
+      this.startAutoRefresh();
     }
+  }
 
-    ngOnDestroy() {
-        this.stopAutoRefresh();
-    }
+  private fetchMetrics(): Observable<void> {
+    this.loading.set(true);
+    this.error.set(null);
 
-    private startAutoRefresh() {
-        if (this.refreshSub) return;
+    return new Observable(observer => {
+      this.api.getBudgetSummary().subscribe({
+        next: (data: BudgetSummaryResponse) => {
+          this.metrics.set({
+            providers: data.providers,
+            totalSpent: data.total_spent,
+            totalBudget: data.total_budget,
+            guardrailActive: data.guardrail_active
+          });
 
-        // Poll every 30 seconds
-        this.refreshSub = interval(30000).pipe(
-            startWith(0),
-            switchMap(() => this.fetchMetrics())
-        ).subscribe();
-    }
-
-    private stopAutoRefresh() {
-        this.refreshSub?.unsubscribe();
-        this.refreshSub = undefined;
-    }
-
-    toggleAutoRefresh() {
-        if (this.autoRefresh()) {
-            this.autoRefresh.set(false);
-            this.stopAutoRefresh();
-        } else {
-            this.autoRefresh.set(true);
-            this.startAutoRefresh();
+          this.lastUpdated.set(new Date());
+          this.loading.set(false);
+          observer.next();
+          observer.complete();
+        },
+        error: (err: Error) => {
+          this.error.set('Failed to load budget metrics');
+          console.error(err);
+          this.loading.set(false);
+          observer.error(err);
         }
-    }
+      });
+    });
+  }
 
-    private fetchMetrics() {
-        this.loading.set(true);
-        this.error.set(null);
-
-        return this.api.getMetricsSummary().subscribe({
-            next: (data) => {
-                // Transform backend metrics to our format
-                const providers: ProviderBudget[] = [
-                    {
-                        provider: 'openai',
-                        spent: this.extractProviderSpent(data, 'openai'),
-                        budget: 50, // From config
-                        remaining: 0,
-                        percentage: 0
-                    },
-                    {
-                        provider: 'deepseek',
-                        spent: this.extractProviderSpent(data, 'deepseek'),
-                        budget: 20,
-                        remaining: 0,
-                        percentage: 0
-                    },
-                    {
-                        provider: 'google_gemini',
-                        spent: this.extractProviderSpent(data, 'google_gemini'),
-                        budget: 25,
-                        remaining: 0,
-                        percentage: 0
-                    }
-                ];
-
-                // Calculate percentages and remaining
-                providers.forEach(p => {
-                    p.remaining = Math.max(0, p.budget - p.spent);
-                    p.percentage = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
-                });
-
-                const totalSpent = providers.reduce((sum, p) => sum + p.spent, 0);
-                const totalBudget = providers.reduce((sum, p) => sum + p.budget, 0);
-
-                this.metrics.set({
-                    providers,
-                    totalSpent,
-                    totalBudget,
-                    guardrailActive: totalSpent >= (totalBudget * 0.9)
-                });
-
-                this.lastUpdated.set(new Date());
-                this.loading.set(false);
-            },
-            error: (err) => {
-                this.error.set('Failed to load budget metrics');
-                console.error(err);
-                this.loading.set(false);
-            }
-        });
-    }
-
-    private extractProviderSpent(data: any, provider: string): number {
-        // This would need to match actual backend metrics structure
-        // For now, returning mock data
-        return Math.random() * 10;
-    }
-
-    providerDisplayName(provider: string): string {
-        const names: Record<string, string> = {
-            'openai': 'OpenAI',
-            'deepseek': 'DeepSeek',
-            'google_gemini': 'Google Gemini',
-            'ollama': 'Ollama (Local)'
-        };
-        return names[provider] || provider;
-    }
+  providerDisplayName(provider: string): string {
+    const names: Record<string, string> = {
+      'openai': 'OpenAI',
+      'deepseek': 'DeepSeek',
+      'google_gemini': 'Google Gemini',
+      'ollama': 'Ollama (Local)'
+    };
+    return names[provider] || provider;
+  }
 }

@@ -183,3 +183,64 @@ class ABExperimentSetRequest(BaseModel):
 async def set_ab_experiment(req: ABExperimentSetRequest):
     settings.LLM_AB_EXPERIMENT_ID = int(req.experiment_id)
     return {"status": "ok", "LLM_AB_EXPERIMENT_ID": int(req.experiment_id)}
+
+
+# --- Budget & Pricing Endpoints ---
+
+@router.get("/budget/summary", summary="Retorna resumo de budget e gastos por provedor")
+async def get_budget_summary():
+    """
+    Retorna resumo de budget e gastos por provedor.
+    
+    Utilizado pelo Budget Panel do frontend para mostrar consumo em tempo real.
+    """
+    from app.core.llm import pricing
+    from datetime import datetime
+    
+    providers = ["openai", "google_gemini", "deepseek", "ollama"]
+    
+    provider_data = []
+    total_spent = 0.0
+    total_budget = 0.0
+    
+    for provider in providers:
+        spent = pricing._provider_spend_usd.get(provider, 0.0)
+        budget = pricing._provider_budgets_usd.get(provider, 0.0)
+        remaining = max(0.0, budget - spent)
+        percentage = (spent / budget * 100) if budget > 0 else 0.0
+        
+        provider_data.append({
+            "provider": provider,
+            "spent": spent,
+            "budget": budget,
+            "remaining": remaining,
+            "percentage": percentage
+        })
+        
+        total_spent += spent
+        total_budget += budget
+    
+    guardrail_active = total_spent >= (total_budget * 0.9)
+    
+    return {
+        "providers": provider_data,
+        "total_spent": total_spent,
+        "total_budget": total_budget,
+        "guardrail_active": guardrail_active,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@router.get("/pricing/providers", summary="Retorna tabela de preços por provedor")
+async def get_provider_pricing():
+    """Retorna tabela de preços por provedor (USD por 1K tokens)."""
+    from app.core.llm import pricing
+    
+    return {
+        provider: {
+            "input_per_1k_usd": p.input_per_1k_usd,
+            "output_per_1k_usd": p.output_per_1k_usd,
+            "cache_read_per_1k_usd": getattr(p, "cache_read_per_1k_usd", None)
+        }
+        for provider, p in pricing._provider_pricing.items()
+    }

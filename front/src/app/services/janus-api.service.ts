@@ -613,6 +613,15 @@ export class JanusApiService {
     return this.http.get<MetricsSummary>(this.buildUrl(`/api/v1/observability/metrics/summary`))
   }
 
+  // Alias for convenience
+  getMetricsSummary(): Observable<MetricsSummary> {
+    return this.getObservabilityMetricsSummary()
+  }
+
+  getBudgetSummary(): Observable<any> {
+    return this.http.get(this.buildUrl(`/api/v1/llm/budget/summary`))
+  }
+
   getQuarantinedMessages(queue?: string): Observable<QuarantinedMessagesResponse> {
     const params = queue ? `?queue=${encodeURIComponent(queue)}` : ''
     return this.http.get<QuarantinedMessagesResponse>(this.buildUrl(`/api/v1/observability/poison-pills/quarantined${params}`))
