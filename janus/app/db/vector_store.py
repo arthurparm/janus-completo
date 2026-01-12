@@ -262,6 +262,32 @@ def reset_client():
     logger.info("Clientes Qdrant resetados.")
 
 
+
+def delete_points_by_filter(collection_name: str, filter_conditions: dict) -> None:
+    """Deleta pontos que correspondem ao filtro especificado."""
+    collection_name = _validate_collection_name(collection_name)
+    client = get_qdrant_client()
+    try:
+        # Converte dict simples para Qdrant Filter
+        # Limitação: suporta apenas match exato por enquanto para simplificar
+        q_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key=k,
+                    match=models.MatchValue(value=v)
+                ) for k, v in filter_conditions.items()
+            ]
+        )
+
+        client.delete(
+            collection_name=collection_name,
+            points_selector=models.FilterSelector(filter=q_filter)
+        )
+        logger.info(f"Pontos deletados de '{collection_name}' com filtro: {filter_conditions}")
+    except Exception as e:
+        logger.error(f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
+        raise
+
 def get_collection_info(collection_name: str) -> dict:
     collection_name = _validate_collection_name(collection_name)
     client = get_qdrant_client()
