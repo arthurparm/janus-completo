@@ -221,6 +221,48 @@ class GoalManager:
         except Exception as e:
             logger.error("Failed to hydrate from SQLite", error=str(e))
 
+    def _save_to_firestore(self, goal: Goal):
+        """Sync goal to Firestore if enabled. Non-critical: SQLite is source of truth."""
+        if not self._firestore_enabled:
+            return
+
+        try:
+            from google.cloud import firestore
+            db = firestore.Client()
+            doc_ref = db.collection(self._collection).document(goal.id)
+            doc_ref.set(goal.to_dict())
+            logger.debug(f"Goal {goal.id} synced to Firestore")
+        except Exception as e:
+            # Non-critical: SQLite is source of truth
+            logger.warning(f"Failed to sync goal {goal.id} to Firestore: {e}")
+
+    def _delete_from_firestore(self, goal_id: str):
+        """Delete goal from Firestore if enabled. Non-critical fallback."""
+        if not self._firestore_enabled:
+            return
+
+        try:
+            from google.cloud import firestore
+            db = firestore.Client()
+            doc_ref = db.collection(self._collection).document(goal_id)
+            doc_ref.delete()
+            logger.debug(f"Goal {goal_id} deleted from Firestore")
+        except Exception as e:
+            logger.warning(f"Failed to delete goal {goal_id} from Firestore: {e}")
+
+    def _log_to_memory_service(self, goal: Goal, action: str):
+        """Log goal action to memory service for context and searchability."""
+        if not self._memory_service:
+            return
+
+        try:
+            event_text = f"Goal {action}: {goal.title} (Priority: {goal.priority}, Status: {goal.status})"
+            logger.info(f"Goal event: {event_text}", goal_id=goal.id, action=action)
+            # Future: could store in vector memory for semantic search
+            # self._memory_service.store(event_text, metadata={"goal_id": goal.id, "action": action})
+        except Exception as e:
+            logger.warning(f"Failed to log goal {goal.id} to memory service: {e}")
+
     def create_goal(
         self,
         title: str,
