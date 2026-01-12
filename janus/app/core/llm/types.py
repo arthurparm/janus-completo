@@ -9,6 +9,7 @@ class ModelRole(Enum):
     ORCHESTRATOR = "orchestrator"
     CODE_GENERATOR = "code_generator"
     KNOWLEDGE_CURATOR = "knowledge_curator"
+    SECURITY_AUDITOR = "security_auditor"
 
 
 class ModelPriority(Enum):
@@ -30,6 +31,7 @@ class CachedLLM:
 class ProviderPricing:
     input_per_1k_usd: float
     output_per_1k_usd: float
+    cache_read_per_1k_usd: float = 0.0
 
 
 @dataclass
