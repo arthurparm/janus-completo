@@ -251,7 +251,10 @@ export class ChatComponent implements OnInit, OnDestroy {
 
         this.api.getChatHistory(cid).subscribe({
             next: (res) => {
-                this.messages = res.messages;
+                this.messages = res.messages.map(m => {
+                    const extracted = this.extractReasoning(m.text);
+                    return { ...m, ...extracted };
+                });
                 this.title = res.conversation_id;
                 this.loading = false;
                 this.cdr.detectChanges(); // Force view update
@@ -388,9 +391,11 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.api.sendChatMessage(this.conversationId, content, 'orchestrator', 'fast_and_cheap', undefined, userId).subscribe({
             next: (res) => {
                 if (res.response) {
+                    const extracted = this.extractReasoning(res.response);
                     const msg: ChatMessage = {
                         role: res.role || 'assistant',
-                        text: res.response,
+                        text: extracted.text,
+                        reasoning: extracted.reasoning || undefined,
                         timestamp: Date.now() / 1000,
                         citations: res.citations
                     };
@@ -509,5 +514,21 @@ export class ChatComponent implements OnInit, OnDestroy {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+    }
+
+    private extractReasoning(fullText: string): { text: string, reasoning: string | undefined } {
+        if (!fullText) return { text: '', reasoning: undefined };
+
+        // Regex to capture <thinking> content </thinking>
+        // using [\s\S] to match newlines
+        const match = fullText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+
+        if (match) {
+            const reasoning = match[1].trim();
+            const text = fullText.replace(match[0], '').trim();
+            return { text, reasoning };
+        }
+
+        return { text: fullText, reasoning: undefined };
     }
 }
