@@ -225,7 +225,7 @@ class MetaAgent:
         if not issues:
             return {"diagnosis": "No issues to diagnose."}
 
-        prompt = await get_formatted_prompt(
+        prompt = get_formatted_prompt(
             "meta_agent_diagnosis",
             issues=json.dumps(issues, indent=2),
             metrics=json.dumps(state.get("metrics", {}), indent=2),
@@ -259,7 +259,7 @@ class MetaAgent:
         logger.info("[MetaAgent] Node: Plan")
         diagnosis = state.get("diagnosis", "")
 
-        prompt = await get_formatted_prompt(
+        prompt = get_formatted_prompt(
             "meta_agent_planning",
             diagnosis=diagnosis,
             issues=json.dumps(state.get("detected_issues", []), indent=2),
@@ -307,7 +307,7 @@ class MetaAgent:
                 "retry_count": state.get("retry_count", 0) + 1,
             }
 
-        prompt = await get_formatted_prompt(
+        prompt = get_formatted_prompt(
             "meta_agent_reflection",
             plan=json.dumps(plan, indent=2),
             diagnosis=state.get("diagnosis", ""),
