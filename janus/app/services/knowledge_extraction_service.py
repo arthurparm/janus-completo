@@ -47,7 +47,7 @@ class KnowledgeExtractionService:
 
         try:
             # Obter prompt do sistema modular
-            system_prompt = await get_formatted_prompt("knowledge_extraction_system")
+            system_prompt = get_formatted_prompt("knowledge_extraction_system")
 
             # Se falhar o carregamento do prompt, usar fallback direto no código
             if not system_prompt:

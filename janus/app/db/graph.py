@@ -48,11 +48,34 @@ class GraphDatabase:
             await self._driver.close()
             self._driver = None
 
+    async def _get_existing_schema(self, session) -> set[str]:
+        """Retorna conjunto de nomes de índices e constraints existentes."""
+        names = set()
+        try:
+            # Tenta listar índices (Neo4j 4.3+)
+            result = await session.run("SHOW INDEXES YIELD name RETURN name")
+            async for record in result:
+                if record["name"]:
+                    names.add(record["name"])
+            
+            # Tenta listar constraints
+            result = await session.run("SHOW CONSTRAINTS YIELD name RETURN name")
+            async for record in result:
+                if record["name"]:
+                    names.add(record["name"])
+        except Exception:
+            # Ignora erros (versões antigas ou falta de permissão)
+            pass
+        return names
+
     async def _initialize_ontology(self):
         async with self._ontology_lock:
             if not self._known_relationship_types and self._driver is not None:
                 # Registra tipos básicos de relacionamento
                 async with self._driver.session() as session:
+                    # Carrega esquema existente para evitar notificações desnecessárias
+                    existing_schema = await self._get_existing_schema(session)
+
                     await self.register_relationship_type(session, GraphRelationship.CONTAINS.value)
                     await self.register_relationship_type(session, GraphRelationship.CALLS.value)
                     await self.register_relationship_type(
@@ -139,148 +162,186 @@ class GraphDatabase:
                         try:
                             # 1. Vector Indexes (One per key label)
                             # Concept
-                            await session.run(
-                                """
-                                CREATE VECTOR INDEX concept_embeddings IF NOT EXISTS
-                                FOR (n:Concept) ON (n.embedding)
-                                OPTIONS {indexConfig: {
-                                    `vector.dimensions`: 1536,
-                                    `vector.similarity_function`: 'cosine'
-                                }}
-                                """
-                            )
+                            if "concept_embeddings" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE VECTOR INDEX concept_embeddings IF NOT EXISTS
+                                    FOR (n:Concept) ON (n.embedding)
+                                    OPTIONS {indexConfig: {
+                                        `vector.dimensions`: 1536,
+                                        `vector.similarity_function`: 'cosine'
+                                    }}
+                                    """
+                                )
                             # Technology
-                            await session.run(
-                                """
-                                CREATE VECTOR INDEX technology_embeddings IF NOT EXISTS
-                                FOR (n:Technology) ON (n.embedding)
-                                OPTIONS {indexConfig: {
-                                    `vector.dimensions`: 1536,
-                                    `vector.similarity_function`: 'cosine'
-                                }}
-                                """
-                            )
+                            if "technology_embeddings" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE VECTOR INDEX technology_embeddings IF NOT EXISTS
+                                    FOR (n:Technology) ON (n.embedding)
+                                    OPTIONS {indexConfig: {
+                                        `vector.dimensions`: 1536,
+                                        `vector.similarity_function`: 'cosine'
+                                    }}
+                                    """
+                                )
                             # Tool
-                            await session.run(
-                                """
-                                CREATE VECTOR INDEX tool_embeddings IF NOT EXISTS
-                                FOR (n:Tool) ON (n.embedding)
-                                OPTIONS {indexConfig: {
-                                    `vector.dimensions`: 1536,
-                                    `vector.similarity_function`: 'cosine'
-                                }}
-                                """
-                            )
+                            if "tool_embeddings" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE VECTOR INDEX tool_embeddings IF NOT EXISTS
+                                    FOR (n:Tool) ON (n.embedding)
+                                    OPTIONS {indexConfig: {
+                                        `vector.dimensions`: 1536,
+                                        `vector.similarity_function`: 'cosine'
+                                    }}
+                                    """
+                                )
                             # Pattern
-                            await session.run(
-                                """
-                                CREATE VECTOR INDEX pattern_embeddings IF NOT EXISTS
-                                FOR (n:Pattern) ON (n.embedding)
-                                OPTIONS {indexConfig: {
-                                    `vector.dimensions`: 1536,
-                                    `vector.similarity_function`: 'cosine'
-                                }}
-                                """
-                            )
-                            
-                            # 2. Universal Full-Text Index (Lexical Search)
-                            await session.run(
-                                """
-                                CREATE FULLTEXT INDEX keyword_search IF NOT EXISTS
-                                FOR (n:Concept|Technology|Tool|Pattern|Solution|Error|Person)
-                                ON EACH [n.name, n.description, n.summary]
-                                """
-                            )
+                            if "pattern_embeddings" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE VECTOR INDEX pattern_embeddings IF NOT EXISTS
+                                    FOR (n:Pattern) ON (n.embedding)
+                                    OPTIONS {indexConfig: {
+                                        `vector.dimensions`: 1536,
+                                        `vector.similarity_function`: 'cosine'
+                                    }}
+                                    """
+                                )
 
-                            logger.info("Índices Vetoriais e Full-Text (Universal) verificados/criados.")
+                            # 2. Universal Full-Text Index (Lexical Search)
+                            if "keyword_search" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE FULLTEXT INDEX keyword_search IF NOT EXISTS
+                                    FOR (n:Concept|Technology|Tool|Pattern|Solution|Error|Person)
+                                    ON EACH [n.name, n.description, n.summary]
+                                    """
+                                )
+
+                            logger.info(
+                                "Índices Vetoriais e Full-Text (Universal) verificados."
+                            )
                         except Exception as e:
-                            logger.warning(f"Falha ao criar índices avançados (Vector/FullText): {e}")
+                            logger.warning(
+                                f"Falha ao criar índices avançados (Vector/FullText): {e}"
+                            )
 
                         # Core Constraints
-                        await session.run(
-                            "CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE"
-                        )
+                        if "experience_id_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT experience_id_unique IF NOT EXISTS FOR (e:Experience) REQUIRE e.id IS UNIQUE"
+                            )
+                        if "reltype_name_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT reltype_name_unique IF NOT EXISTS FOR (t:RelationshipType) REQUIRE t.name IS UNIQUE"
+                            )
+                        if "concept_name_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE"
+                            )
 
                         # JARVIS Constraints & Indexes
-                        await session.run(
-                            "CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT goal_id_unique IF NOT EXISTS FOR (g:Goal) REQUIRE g.id IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT episode_id_unique IF NOT EXISTS FOR (e:Episode) REQUIRE e.id IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT action_id_unique IF NOT EXISTS FOR (a:Action) REQUIRE a.id IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT plan_id_unique IF NOT EXISTS FOR (p:Plan) REQUIRE p.id IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE INDEX episode_timestamp_idx IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)"
-                        )
+                        if "user_name_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE"
+                            )
+                        if "goal_id_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT goal_id_unique IF NOT EXISTS FOR (g:Goal) REQUIRE g.id IS UNIQUE"
+                            )
+                        if "episode_id_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT episode_id_unique IF NOT EXISTS FOR (e:Episode) REQUIRE e.id IS UNIQUE"
+                            )
+                        if "action_id_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT action_id_unique IF NOT EXISTS FOR (a:Action) REQUIRE a.id IS UNIQUE"
+                            )
+                        if "plan_id_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT plan_id_unique IF NOT EXISTS FOR (p:Plan) REQUIRE p.id IS UNIQUE"
+                            )
+                        if "episode_timestamp_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX episode_timestamp_idx IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)"
+                            )
 
-                        await session.run(
-                            "CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY"
-                        )
-                        await session.run(
-                            "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY"
-                        )
-                        await session.run(
-                            "CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX person_name_idx IF NOT EXISTS FOR (p:Person) ON (p.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX error_name_idx IF NOT EXISTS FOR (e:Error) ON (e.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX solution_name_idx IF NOT EXISTS FOR (s:Solution) ON (s.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX pattern_name_idx IF NOT EXISTS FOR (p:Pattern) ON (p.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)"
-                        )
-                        await session.run(
-                            "CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)"
-                        )
-                        await session.run(
-                            "CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)"
-                        )
-                        await session.run(
-                            "CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)"
-                        )
-                        await session.run(
-                            "CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)"
-                        )
-                        await session.run(
-                            "CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)"
-                        )
+                        if "file_path_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE"
+                            )
+                        if "codefile_path_unique" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT codefile_path_unique IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE"
+                            )
+                        if "function_node_key" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY"
+                            )
+                        if "class_node_key" not in existing_schema:
+                            await session.run(
+                                "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY"
+                            )
+                        
+                        # Indexes
+                        if "concept_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)"
+                            )
+                        if "technology_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX technology_name_idx IF NOT EXISTS FOR (t:Technology) ON (t.name)"
+                            )
+                        if "tool_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX tool_name_idx IF NOT EXISTS FOR (t:Tool) ON (t.name)"
+                            )
+                        if "person_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX person_name_idx IF NOT EXISTS FOR (p:Person) ON (p.name)"
+                            )
+                        if "error_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX error_name_idx IF NOT EXISTS FOR (e:Error) ON (e.name)"
+                            )
+                        if "solution_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX solution_name_idx IF NOT EXISTS FOR (s:Solution) ON (s.name)"
+                            )
+                        if "pattern_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX pattern_name_idx IF NOT EXISTS FOR (p:Pattern) ON (p.name)"
+                            )
+                        if "function_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX function_name_idx IF NOT EXISTS FOR (f:Function) ON (f.name)"
+                            )
+                        if "class_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX class_name_idx IF NOT EXISTS FOR (c:Class) ON (c.name)"
+                            )
+                        if "function_name_file_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX function_name_file_idx IF NOT EXISTS FOR (f:Function) ON (f.name, f.file_path)"
+                            )
+                        if "class_name_file_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX class_name_file_idx IF NOT EXISTS FOR (c:Class) ON (c.name, c.file_path)"
+                            )
+                        if "file_path_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX file_path_idx IF NOT EXISTS FOR (f:File) ON (f.path)"
+                            )
+                        if "codefile_path_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX codefile_path_idx IF NOT EXISTS FOR (f:CodeFile) ON (f.path)"
+                            )
+                        if "experience_consolidated_at_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)"
+                            )
                     except Exception:
                         try:
                             await session.run(
@@ -504,8 +565,8 @@ class GraphDatabase:
                 await tx.close()
         return total_updated
 
-    async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> int:
-        query = f"MERGE (n:{label} {{name: $name}}) RETURN id(n) as node_id"
+    async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> str:
+        query = f"MERGE (n:{label} {{name: $name}}) RETURN elementId(n) as node_id"
         start = asyncio.get_event_loop().time()
         result = await tx.run(query, name=name)
         record = await result.single()
@@ -517,10 +578,10 @@ class GraphDatabase:
         return record["node_id"]
 
     async def merge_relationship(
-        self, tx: AsyncTransaction, source_id: int, target_id: int, rel_type: str
+        self, tx: AsyncTransaction, source_id: str, target_id: str, rel_type: str
     ):
         await self.register_relationship_type(tx, rel_type)
-        query = f"MATCH (a), (b) WHERE id(a) = $source_id AND id(b) = $target_id MERGE (a)-[:`{rel_type}`]->(b)"
+        query = f"MATCH (a) WHERE elementId(a) = $source_id MATCH (b) WHERE elementId(b) = $target_id MERGE (a)-[:`{rel_type}`]->(b)"
         start = asyncio.get_event_loop().time()
         await tx.run(query, source_id=source_id, target_id=target_id)
         try:

@@ -79,7 +79,7 @@ class KnowledgeGraphService:
                 RETURN elementId(e) as id
                 """
 
-                await db.run_query(
+                await db.query(
                     query,
                     {
                         "name": name,
@@ -128,7 +128,7 @@ class KnowledgeGraphService:
                 RETURN type(r)
                 """
 
-                result = await db.run_query(
+                result = await db.query(
                     query,
                     {
                         "source_name": source_name,

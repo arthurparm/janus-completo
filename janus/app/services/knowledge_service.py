@@ -144,9 +144,10 @@ class KnowledgeService:
             )
 
             # Check memory/Qdrant health
-            from app.core.memory.memory_core import check_memory_health
+            from app.core.memory.memory_core import get_memory_db
 
-            qdrant_healthy = await check_memory_health()
+            memory_db = await get_memory_db()
+            qdrant_healthy = memory_db.health_check()
 
             # Determine overall status
             if qdrant_healthy and total_nodes > 0:
