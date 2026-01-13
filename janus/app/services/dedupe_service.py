@@ -172,7 +172,8 @@ class DedupeService:
                     for c in getattr(resp, "collections", []) or []
                     if c.name.startswith("user_")
                 ]
-            except Exception:
+            except Exception as e:
+                logger.warning("failed_to_list_qdrant_collections", error=str(e))
                 colls = []
             for coll in colls:
                 filt = [
@@ -193,10 +194,13 @@ class DedupeService:
                     summary["collections"].append(
                         {"name": coll, "with_hash": int(getattr(cnt, "count", 0) or 0)}
                     )
-                except Exception:
+                except Exception as e:
+                    logger.debug("failed_to_count_qdrant_collection", collection=coll, error=str(e))
                     summary["collections"].append({"name": coll, "with_hash": 0})
-        except Exception:
-            logger.warning("Falha ao detectar duplicidades em Qdrant", exc_info=True)
+        except Exception as e:
+            logger.warning(
+                "qdrant_duplicate_detection_failed", user_id=user_id, error=str(e), exc_info=True
+            )
         return summary
 
     def _write_report(self, data: dict[str, Any]) -> str:
@@ -215,16 +219,16 @@ class DedupeService:
             report["db"]["detected"] = self.detect_db_duplicates()
             if not dry_run:
                 report["db"]["fixed"] = self.fix_db_duplicates()
-        except Exception:
-            logger.warning("Falha em dedupe DB", exc_info=True)
+        except Exception as e:
+            logger.warning("db_dedupe_failed", error=str(e), exc_info=True)
         try:
             report["neo4j"]["fixed"] = await self.dedupe_graph()
-        except Exception:
-            logger.warning("Falha em dedupe Neo4j", exc_info=True)
+        except Exception as e:
+            logger.warning("neo4j_dedupe_failed", error=str(e), exc_info=True)
         try:
             report["qdrant"]["detected"] = self.detect_qdrant_duplicates()
-        except Exception:
-            logger.warning("Falha em dedupe Qdrant", exc_info=True)
+        except Exception as e:
+            logger.warning("qdrant_dedupe_failed", error=str(e), exc_info=True)
         path = self._write_report(report)
         report["report_path"] = path
         return report

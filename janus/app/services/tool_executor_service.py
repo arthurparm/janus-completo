@@ -40,7 +40,7 @@ class ToolExecutorService:
 
                     calls.append({"name": name, "args": args})
             except Exception as e:
-                logger.warning(f"Failed to parse tool call block: {e}")
+                logger.warning("tool_call_parse_failed", error=str(e), block_content=content[:100])
 
         return calls
 
@@ -72,7 +72,13 @@ class ToolExecutorService:
 
                 outputs.append({"name": name, "result": str(result)})
             except Exception as e:
-                logger.error(f"Tool execution failed for {name}", exc_info=e)
+                logger.error(
+                    "tool_execution_failed",
+                    tool_name=name,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                    exc_info=True,
+                )
                 outputs.append(
                     {"name": name, "result": f"System: Tool Error (STOP and rethink): {e!s}"}
                 )
