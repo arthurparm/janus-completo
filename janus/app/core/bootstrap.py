@@ -75,26 +75,7 @@ async def bootstrap_dependencies(app: FastAPI):
     # Workers (referência apenas, gerenciados pelo Kernel)
     app.state.workers = kernel.workers
 
-    # Compatibility with older middleware/endpoints
-    # We might need config_service if it was previously there.
-    # Kernel doesn't seem to initialize config_service explicitly in my previous read?
-    # Checking previous kernel.py... it didn't have config_service.
-    # But bootstrap had it. I should add config service to Kernel if needed.
-    # For now, let's init it here if Kernel doesn't have it, or add it to Kernel in a separate step.
-    # Ideally, Kernel should own it.
-
-    # Actually, let's keep it safe. If Kernel doesn't have it, we might break something.
-    # But for "PERFECT" refactor, Kernel must own it.
-    # I will assume I need to ADD config_service to Kernel in a subsequent step if I missed it,
-    # but strictly speaking, I should have checked.
-    # Let's check if I can add it to Kernel.py via another edit or if I should init it here.
-    # The previous bootstrap.py had:
-    # app.state.config_service = get_config_service()
-    # await app.state.config_service.start()
-
-    # I will add it to this mapping for now, but creating it here would violate the "Single Source of Truth" principle
-    # if Kernel is supposed to be it.
-    # However, to avoid breaking the app immediately if I didn't add it to Kernel,
-    # I'll import it here, BUT the right way is to move it to Kernel.
+    # Config Service
+    app.state.config_service = kernel.config_service
 
     logger.info("Kernel dependencies mapped to FastAPI state.")
