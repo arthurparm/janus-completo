@@ -115,13 +115,26 @@ def _load_local_model() -> SentenceTransformer:
         except Exception:
             pass
         return _local_model
-    except NotImplementedError:
-        _local_model_failed = True
+    except NotImplementedError as e:
         logger.warning(
-            "Falha ao inicializar modelo local de embeddings (meta tensor); "
-            "desativando modelo local e usando fallback.",
+            f"Falha ao inicializar modelo local de embeddings com configuração padrão: {e}. "
+            "Tentando fallback para CPU..."
         )
-        raise
+        try:
+            _local_model = SentenceTransformer(model_name, device="cpu")
+            try:
+                _EMB_MODEL_LOADED.labels("local_cpu").set(1)
+            except Exception:
+                pass
+            return _local_model
+        except Exception as ex:
+            _local_model_failed = True
+            logger.error(
+                "Falha ao inicializar modelo local de embeddings mesmo em CPU; "
+                "desativando modelo local e usando fallback hash.",
+                exc_info=ex,
+            )
+            raise
     except Exception as e:
         _local_model_failed = True
         logger.error("Erro ao carregar modelo local de embeddings.", exc_info=e)

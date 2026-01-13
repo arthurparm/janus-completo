@@ -3,6 +3,7 @@ import asyncio
 import structlog
 
 from app.config import settings
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.agent_service import AgentService
@@ -119,14 +120,7 @@ class KnowledgeConsolidator:
         Usa o LLM para extrair 'Sabedoria' (Lições, Regras, Fatos) do texto bruto.
         Isso é o que permite a evolução real do sistema.
         """
-        prompt = (
-            "Analyze the following interaction log or text. "
-            "Extract distinct 'Lessons', 'Rules', or 'User Preferences' that should be permanently remembered "
-            "to improve future performance. "
-            "Ignore trivial chit-chat. Focus on actionable insights.\n\n"
-            f"Content:\n{text}\n\n"
-            'Output format (JSON list of strings): ["Lesson: Always confirm before delete", "Preference: User likes concise answers"]'
-        )
+        prompt = get_formatted_prompt("knowledge_wisdom_extraction", text=text)
 
         try:
             response = await self._llm_service.invoke_llm(

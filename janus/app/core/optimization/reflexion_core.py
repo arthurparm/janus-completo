@@ -183,12 +183,11 @@ class ReflexionSession:
                 logger.info(f"Reflexion Iteração {iteration + 1}/{self.config.max_iterations}")
 
                 # 2. Executar (Gerar Solução)
-                execution_prompt = f"""Execute a seguinte tarefa: {self.task}
-
-Contexto/Lições de tentativas anteriores:
-{current_context}
-
-Responda com a solução completa."""
+                execution_prompt = get_formatted_prompt(
+                    "reflexion_execution",
+                    task=self.task,
+                    current_context=current_context
+                )
 
                 try:
                     # Aqui usamos o LLM diretamente para simplicidade, mas o ideal é um agente

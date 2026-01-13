@@ -72,7 +72,7 @@ async def invoke_llm(request: LLMInvokeRequest, service: LLMService = Depends(ge
     role = ModelRole(request.role)
     priority = ModelPriority(request.priority)
 
-    result = service.invoke_llm(
+    result = await service.invoke_llm(
         prompt=request.prompt,
         role=role,
         priority=priority,

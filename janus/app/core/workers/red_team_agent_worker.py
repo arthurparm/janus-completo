@@ -1,5 +1,6 @@
 import logging
 
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.infrastructure.message_broker import get_broker
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
@@ -16,22 +17,7 @@ def _build_security_prompt(goal: str, context: str, code_snippets: dict) -> str:
     if not code_block:
         code_block = context # Fallback se snippets não estiverem estruturados
 
-    return (
-        f"VOCÊ É UM HACKER ÉTICO E ESPECIALISTA EM SEGURANÇA DE SOFTWARE (RED TEAM).\n"
-        f"Sua missão é destruir este código encontrando vulnerabilidades críticas.\n\n"
-        f"OBJETIVO DO CÓDIGO: {goal}\n\n"
-        f"CÓDIGO PARA AUDITORIA:\n"
-        f"```\n{code_block}\n```\n\n"
-        f"Analise procurando por:\n"
-        f"- Injection (SQL, Command, etc)\n"
-        f"- XSS / CSRF\n"
-        f"- Hardcoded secrets\n"
-        f"- Logic flaws\n"
-        f"- Insegurança na manipulação de arquivos\n\n"
-        f"Se encontrar ALGO critico, inicie sua resposta com 'VULNERABLE'.\n"
-        f"Se estiver seguro, inicie com 'SAFE'.\n"
-        f"Seja impiedoso. Explique o vetor de ataque."
-    )
+    return get_formatted_prompt("security_red_team_audit", goal=goal, code_block=code_block)
 
 def _is_vulnerable(text: str) -> bool:
     return "VULNERABLE" in text.upper()
