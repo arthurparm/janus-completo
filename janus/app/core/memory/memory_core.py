@@ -259,7 +259,7 @@ class MemoryCore:
         return {
             "offline": self.provider.is_offline,
             "circuit_breaker_open": cb.is_open(),
-            "metrics": cb.get_health_status(),
+            "metrics": cb.get_health_status() if hasattr(cb, "get_health_status") else {},
         }
 
     async def _safe_embed(self, text: str) -> list[float]:

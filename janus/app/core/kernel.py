@@ -175,7 +175,7 @@ class Kernel:
             asyncio.create_task(self._warm_up_llms_async())
 
             # 8. Senses (Optional)
-            self._init_senses()
+            await self._init_senses()
 
             logger.info("Kernel startup complete. System is ready.")
         except KernelError as ke:
@@ -421,9 +421,18 @@ class Kernel:
         except Exception as e:
             # If workers fail, system is degraded but maybe usable
             logger.error(f"Background process initialization failed: {e}")
-            # We might choose to NOT raise here if we want partial startup,
-            # but strictly speaking a broken worker is bad.
-            # For robustness, we log error but let the API come up so we can inspect /health
+
+            # Register a failing health check so /health endpoint reports the error
+            if hasattr(self, "monitor") and self.monitor:
+                self.monitor.register_health_check(
+                    "background_workers",
+                    lambda: {
+                        "status": "unhealthy",
+                        "message": f"Startup failed: {e}",
+                        "details": {"error": str(e)},
+                    },
+                    is_critical=True,
+                )
             pass
 
     async def _run_auto_index(self):
