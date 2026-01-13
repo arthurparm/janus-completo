@@ -164,13 +164,24 @@ class AppSettings(BaseSettings):
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL_NAME: str = "deepseek-chat"
     DEEPSEEK_MODELS: list[str] = ["deepseek-chat", "deepseek-reasoner"]
+    XAI_API_KEY: SecretStr | None = None
+    XAI_BASE_URL: str = "https://api.x.ai/v1"
+    XAI_MODEL_NAME: str = "grok-4-1-fast-reasoning"
+    XAI_MODELS: list[str] = [
+        "grok-4-1-fast-reasoning",
+        "grok-4",
+        "grok-3",
+        "grok-2",
+        "grok-2-1212",
+    ]
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor
-    OPENAI_MONTHLY_BUDGET_USD: float = 50.0
-    GEMINI_MONTHLY_BUDGET_USD: float = 25.0
+    OPENAI_MONTHLY_BUDGET_USD: float = 10.0
+    GEMINI_MONTHLY_BUDGET_USD: float = 10.0
     OLLAMA_MONTHLY_BUDGET_USD: float = 0.0
-    DEEPSEEK_MONTHLY_BUDGET_USD: float = 20.0
+    DEEPSEEK_MONTHLY_BUDGET_USD: float = 10.0
+    XAI_MONTHLY_BUDGET_USD: float = 10.0
     # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spend >= this % of total budget
     BUDGET_THRESHOLD_PERCENT: float = 0.90
 
@@ -197,6 +208,8 @@ class AppSettings(BaseSettings):
     DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00027
     DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00110
     DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.00007
+    XAI_COST_PER_1K_INPUT_USD: float = 0.00020
+    XAI_COST_PER_1K_OUTPUT_USD: float = 0.00050
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
     OLLAMA_KEEP_ALIVE: str | None = "30m"  # mantém modelos carregados para reduzir cold-start
     OLLAMA_NUM_CTX: int | None = 4096  # contexto máximo por requisição
@@ -226,6 +239,28 @@ class AppSettings(BaseSettings):
             "input_per_1k_usd": 0.00055,
             "output_per_1k_usd": 0.00219,
             "cache_read_per_1k_usd": 0.00014,
+        },
+    }
+    XAI_MODEL_PRICING: dict[str, dict[str, float]] = {
+        "grok-4.1-fast-reasoning": {
+            "input_per_1k_usd": 0.00020,
+            "output_per_1k_usd": 0.00050,
+        },
+        "grok-4.1-fast": {
+            "input_per_1k_usd": 0.00020,
+            "output_per_1k_usd": 0.00050,
+        },
+        "grok-4-1-fast-reasoning": {
+            "input_per_1k_usd": 0.00020,
+            "output_per_1k_usd": 0.00050,
+        },
+        "grok-4": {
+            "input_per_1k_usd": 0.00030,
+            "output_per_1k_usd": 0.00070,
+        },
+        "grok-3": {
+            "input_per_1k_usd": 0.00025,
+            "output_per_1k_usd": 0.00060,
         },
     }
 
@@ -393,7 +428,9 @@ class AppSettings(BaseSettings):
 
     # ======= Validadores para variáveis de ambiente complexas =======
 
-    @field_validator("OPENAI_MODELS", "GEMINI_MODELS", "DEEPSEEK_MODELS", mode="before")
+    @field_validator(
+        "OPENAI_MODELS", "GEMINI_MODELS", "DEEPSEEK_MODELS", "XAI_MODELS", mode="before"
+    )
     def _parse_models_list(cls, v: Any):
         # Aceita JSON array ou lista separada por vírgulas
         if isinstance(v, str):
@@ -426,7 +463,13 @@ class AppSettings(BaseSettings):
                 return {"orchestrator": items} if items else {}
         return v or {}
 
-    @field_validator("OPENAI_MODEL_PRICING", "GEMINI_MODEL_PRICING", "DEEPSEEK_MODEL_PRICING", mode="before")
+    @field_validator(
+        "OPENAI_MODEL_PRICING",
+        "GEMINI_MODEL_PRICING",
+        "DEEPSEEK_MODEL_PRICING",
+        "XAI_MODEL_PRICING",
+        mode="before",
+    )
     def _parse_model_pricing(cls, v: Any):
         # Aceita JSON objeto {model: {input_per_1k_usd: float, output_per_1k_usd: float}}
         if isinstance(v, str):
@@ -509,7 +552,7 @@ class AppSettings(BaseSettings):
                         value = int(value)
                     elif isinstance(current_val, float) and not isinstance(value, float):
                         value = float(value)
-                    
+
                     setattr(self, key, value)
                 except Exception:
                     # Se falhar conversão, tenta setar direto ou ignora

@@ -7,11 +7,9 @@ jobs:
     name: Build and Deploy
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout (agora @v5)
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # 2. Setup Node.js (com cache quando lockfile existir)
       - name: Setup Node.js (with npm cache)
         if: ${{ hashFiles('front/package-lock.json') != '' }}
         uses: actions/setup-node@v5
@@ -25,8 +23,6 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '20'
-
-      # 3. Instala as dependências (front)
       - name: Install dependencies (front via npm ci)
         if: ${{ hashFiles('front/package-lock.json') != '' }}
         run: npm ci
@@ -36,19 +32,15 @@ jobs:
         if: ${{ hashFiles('front/package-lock.json') == '' }}
         run: npm install
         working-directory: front
-
-      # 3.1. Cria o .env.production com a URL da API (Tailscale/Public)
       - name: Create .env.production (VITE_API_BASE_URL)
         run: |
           echo "VITE_API_BASE_URL=${{ secrets.BACKEND_API_URL }}" > .env.production
         working-directory: front
 
-      # 4. Compila a aplicação Angular (Angular 20)
       - name: Build Angular application (Angular 20)
         run: npm run build -- --configuration production --base-href /
         working-directory: front
-
-      # 5. Faz o deploy para o FTP com sincronização (limpeza)
+        
       - name: FTP Deploy (com sincronização)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
