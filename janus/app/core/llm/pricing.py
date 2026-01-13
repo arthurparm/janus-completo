@@ -121,7 +121,6 @@ _tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
 _tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
 
 
-
 def _today_str() -> str:
     try:
         return datetime.utcnow().strftime("%Y-%m-%d")
@@ -176,7 +175,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
             except Exception:
                 current_spends[p] = _provider_spend_usd.get(p, 0.0)
     else:
-         for p in cloud_providers:
+        for p in cloud_providers:
             current_spends[p] = _provider_spend_usd.get(p, 0.0)
 
     total_spend = sum(current_spends.values())
@@ -189,6 +188,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
 
     if exceeded:
         import structlog
+
         logger = structlog.get_logger(__name__)
         logger.warning(
             f"Budget threshold exceeded! Spend: ${total_spend:.2f} >= "
@@ -226,14 +226,22 @@ def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
                 return ProviderPricing(
                     mp.get("input_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_INPUT_USD),
                     mp.get("output_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD),
-                    mp.get(
-                        "cache_read_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD
-                    ),
+                    mp.get("cache_read_per_1k_usd", settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD),
                 )
             return ProviderPricing(
                 settings.DEEPSEEK_COST_PER_1K_INPUT_USD,
                 settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD,
                 settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD,
+            )
+        if provider == "xai":
+            mp = getattr(settings, "XAI_MODEL_PRICING", {}).get(model_name)
+            if mp:
+                return ProviderPricing(
+                    mp.get("input_per_1k_usd", settings.XAI_COST_PER_1K_INPUT_USD),
+                    mp.get("output_per_1k_usd", settings.XAI_COST_PER_1K_OUTPUT_USD),
+                )
+            return ProviderPricing(
+                settings.XAI_COST_PER_1K_INPUT_USD, settings.XAI_COST_PER_1K_OUTPUT_USD
             )
         # ollama
         return ProviderPricing(
@@ -351,7 +359,9 @@ async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             pass
 
 
-async def register_usage(provider: str, user_id: str | None, project_id: str | None, cost_usd: float):
+async def register_usage(
+    provider: str, user_id: str | None, project_id: str | None, cost_usd: float
+):
     cost = max(0.0, float(cost_usd))
     if cost == 0.0:
         return

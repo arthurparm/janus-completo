@@ -105,6 +105,13 @@ def _validate_deepseek_key(key: str | None) -> bool:
     return True
 
 
+def _validate_xai_key(key: str | None) -> bool:
+    if not key or not key.startswith("xai-") or len(key) < 20:
+        logger.warning("XAI_API_KEY parece inválido.")
+        return False
+    return True
+
+
 def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
@@ -216,10 +223,12 @@ def _infer_provider(llm: BaseChatModel) -> str:
     if isinstance(llm, ChatOllama):
         return "ollama"
     if isinstance(llm, ChatOpenAI):
-        # Diferencia DeepSeek de OpenAI pela URL base
+        # Diferencia DeepSeek/xAI/OpenAI pela URL base
         base_url = str(getattr(llm, "openai_api_base", "") or getattr(llm, "base_url", ""))
         if "deepseek" in base_url.lower():
             return "deepseek"
+        if "x.ai" in base_url.lower():
+            return "xai"
         return "openai"
     if isinstance(llm, ChatGoogleGenerativeAI):
         return "google_gemini"

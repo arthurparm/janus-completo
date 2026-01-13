@@ -16,6 +16,7 @@ from .factory import (
     _validate_deepseek_key,
     _validate_gemini_key,
     _validate_openai_key,
+    _validate_xai_key,
 )
 from .pricing import (
     ModelStats,
@@ -115,6 +116,14 @@ async def get_llm(
     Suporta overrides via configuração (provider/model/temperature/exclude_providers/priority).
     """
     # Overrides por configuração dinâmica
+    try:
+        if config:
+            if "priority" in config:
+                priority = ModelPriority(config["priority"])
+            if "role" in config:
+                role = ModelRole(config["role"])
+            if "exclude_providers" in config:
+                exclude_providers = config.get("exclude_providers")
     except Exception as e:
         logger.warning(f"Error applying LLM overrides from config: {e}", exc_info=True)
         # Continue to default selection logic
@@ -137,7 +146,7 @@ async def get_llm(
         ModelRole.ORCHESTRATOR: settings.OLLAMA_ORCHESTRATOR_MODEL,
         ModelRole.CODE_GENERATOR: settings.OLLAMA_CODER_MODEL,
         ModelRole.KNOWLEDGE_CURATOR: settings.OLLAMA_CURATOR_MODEL,
-        ModelRole.REASONER: settings.OLLAMA_CODER_MODEL, # Fallback local para reasoner
+        ModelRole.REASONER: settings.OLLAMA_CODER_MODEL,  # Fallback local para reasoner
     }
     local_model_name = model_map.get(role, settings.OLLAMA_ORCHESTRATOR_MODEL)
 
@@ -187,9 +196,20 @@ async def get_llm(
             raise RuntimeError(f"Falha crítica ao carregar modelo local. Causa: {e}") from e
 
     # Provedores de Nuvem (catálogo com factories por modelo)
-    # DeepSeek é listado primeiro para ter prioridade em FAST_AND_CHEAP
-    cloud_catalog = [
-        {
+    # ESTRATÉGIA: Para HIGH_QUALITY (Meta Agent), priorize xAI Grok (2M context + reasoning)
+    # Para FAST_AND_CHEAP, priorize DeepSeek (mais barato)
+
+    # Definir ordem baseada na prioridade
+    if priority == ModelPriority.HIGH_QUALITY:
+        # Grok primeiro: 2M context window + reasoning é ideal para Meta Agent
+        provider_order = ["xAI", "OpenAI", "Google Gemini", "DeepSeek"]
+    else:
+        # DeepSeek primeiro para economizar (FAST_AND_CHEAP)
+        provider_order = ["DeepSeek", "Google Gemini", "xAI", "OpenAI"]
+
+    # Catálogo de provedores (ordem será ajustada abaixo)
+    cloud_providers = {
+        "DeepSeek": {
             "name": "DeepSeek",
             "provider_key": "deepseek",
             "enabled": _validate_deepseek_key(
@@ -200,16 +220,18 @@ async def get_llm(
             # We keep it standard but ensure base_url is correct.
             "initializer_factory": lambda model: ChatOpenAI(
                 model=model,
-                temperature=0, # DeepSeek Reasoner generally ignores this or prefers 0/null
+                temperature=0,  # DeepSeek Reasoner generally ignores this or prefers 0/null
                 api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
                 base_url=settings.DEEPSEEK_BASE_URL,
-                max_tokens=8000 if "reasoner" in model else None, # R1 needs room for thinking
+                max_tokens=8000 if "reasoner" in model else None,  # R1 needs room for thinking
             ),
-            "models": settings.DEEPSEEK_MODELS
-            if getattr(settings, "DEEPSEEK_MODELS", None)
-            else [settings.DEEPSEEK_MODEL_NAME],
+            "models": (
+                settings.DEEPSEEK_MODELS
+                if getattr(settings, "DEEPSEEK_MODELS", None)
+                else [settings.DEEPSEEK_MODEL_NAME]
+            ),
         },
-        {
+        "Google Gemini": {
             "name": "Google Gemini",
             "provider_key": "google_gemini",
             "enabled": _validate_gemini_key(
@@ -222,22 +244,48 @@ async def get_llm(
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
                 ),
             ),
-            "models": settings.GEMINI_MODELS
-            if getattr(settings, "GEMINI_MODELS", None)
-            else [settings.GEMINI_MODEL_NAME],
+            "models": (
+                settings.GEMINI_MODELS
+                if getattr(settings, "GEMINI_MODELS", None)
+                else [settings.GEMINI_MODEL_NAME]
+            ),
         },
-        {
+        "OpenAI": {
             "name": "OpenAI",
             "provider_key": "openai",
             "enabled": _validate_openai_key(
                 getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
             ),
             "initializer_factory": lambda model: _create_openai_model(model),
-            "models": settings.OPENAI_MODELS
-            if getattr(settings, "OPENAI_MODELS", None)
-            else [settings.OPENAI_MODEL_NAME],
+            "models": (
+                settings.OPENAI_MODELS
+                if getattr(settings, "OPENAI_MODELS", None)
+                else [settings.OPENAI_MODEL_NAME]
+            ),
         },
-    ]
+        "xAI": {
+            "name": "xAI Grok",
+            "provider_key": "xai",
+            "enabled": _validate_xai_key(
+                getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
+            ),
+            "initializer_factory": lambda model: ChatOpenAI(
+                model=model,
+                temperature=0,
+                api_key=getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)(),
+                base_url=settings.XAI_BASE_URL,
+                max_tokens=8000,  # Grok supports large outputs
+            ),
+            "models": (
+                settings.XAI_MODELS
+                if getattr(settings, "XAI_MODELS", None)
+                else [settings.XAI_MODEL_NAME]
+            ),
+        },
+    }
+
+    # Ordenar catálogo de acordo com a prioridade
+    cloud_catalog = [cloud_providers[name] for name in provider_order if name in cloud_providers]
 
     # Estratégia 2: Rápido e Barato ou Alta Qualidade
     if priority in [ModelPriority.FAST_AND_CHEAP, ModelPriority.HIGH_QUALITY]:
@@ -261,7 +309,9 @@ async def get_llm(
             if exclude_providers and provider_key in exclude_providers:
                 continue
             if not (
-                p["enabled"] and _circuit_closed(provider_key) and await _budget_allows(provider_key)
+                p["enabled"]
+                and _circuit_closed(provider_key)
+                and await _budget_allows(provider_key)
             ):
                 continue
 
@@ -474,7 +524,3 @@ async def get_llm(
             exc_info=True,
         )
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e
-
-
-
-

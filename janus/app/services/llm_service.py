@@ -68,7 +68,7 @@ class LLMService:
                 if self._prompt_service:
                     try:
                         identity_header = await self._prompt_service.get_prompt(
-                            "janus_identity_header"
+                            "janus_identity_jarvis"  # Fixed: was janus_identity_header (doesn't exist)
                         )
                     except Exception as e:
                         logger.warning(f"Failed to fetch identity prompt: {e}")
