@@ -66,6 +66,10 @@ class MemoryCore:
         """Inicializa provedores."""
         await self.provider.initialize()
 
+    async def close(self):
+        """Fecha recursos."""
+        await self.provider.close()
+
     async def _try_revive_connection(self) -> bool:
         """Tentativa de reviver conexão (wrapper)."""
         return await self.provider.try_revive()
@@ -354,3 +358,10 @@ async def get_memory_db() -> MemoryCore:
     if _memory_db_instance is None:
         await initialize_memory_db()
     return _memory_db_instance
+
+
+async def close_memory_db():
+    global _memory_db_instance
+    if _memory_db_instance:
+        await _memory_db_instance.close()
+        _memory_db_instance = None

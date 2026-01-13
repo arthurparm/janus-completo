@@ -10,33 +10,7 @@ from app.repositories.collaboration_repository import (
     CollaborationRepository,
 )
 
-try:
-    from app.core.agents.multi_agent_system import Task, TaskPriority, TaskStatus
-except Exception:
-    from dataclasses import dataclass, field
-    from enum import Enum
-
-    class TaskStatus(Enum):  # type: ignore
-        PENDING = "pending"
-        IN_PROGRESS = "in_progress"
-        COMPLETED = "completed"
-        FAILED = "failed"
-        BLOCKED = "blocked"
-
-    class TaskPriority(Enum):  # type: ignore
-        LOW = 1
-        MEDIUM = 2
-        HIGH = 3
-        CRITICAL = 4
-
-    @dataclass
-    class Task:  # type: ignore
-        id: str = field(default_factory=lambda: str(uuid.uuid4()))
-        description: str = ""
-        assigned_to: str | None = None
-        status: TaskStatus = TaskStatus.PENDING
-        priority: TaskPriority = TaskPriority.MEDIUM
-        dependencies: list[str] = field(default_factory=list)
+from app.core.agents.structures import Task, TaskPriority, TaskStatus
 
 
 from app.core.infrastructure.context_cache import get_context_cache
@@ -216,7 +190,7 @@ class CollaborationService:
         """
         Publica o TaskState na fila adequada com base em `next_agent_role`.
         Fallback: roteia para `JANUS.tasks.router` quando indefinido.
-        
+
         Stateful Workers: If context not cached, store static context and set flag.
         """
         # Stateful Workers: Cache static context on first hop
@@ -290,7 +264,8 @@ class CollaborationService:
                     if ar and ar != "router":
                         origin_agent = ar
                         break
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Falha ao determinar agente de origem: {e}")
                 origin_agent = None
             meta = {
                 "source_task_id": task_state.task_id,

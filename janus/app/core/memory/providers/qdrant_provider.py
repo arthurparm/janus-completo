@@ -211,3 +211,9 @@ class QdrantProvider:
     @property
     def circuit_breaker(self):
         return self._cb
+
+    async def close(self):
+        """Fecha a conexão com o cliente Qdrant."""
+        if self.client:
+            await self.client.close()
+            logger.info("Conexão Qdrant fechada.")

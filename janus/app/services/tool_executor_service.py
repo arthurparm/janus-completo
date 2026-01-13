@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import re
 from typing import Any
@@ -10,6 +11,12 @@ from app.core.tools import action_registry
 logger = structlog.get_logger(__name__)
 
 
+class ToolExecutorError(Exception):
+    """Erro base para execução de ferramentas."""
+
+    pass
+
+
 class ToolExecutorService:
     """
     Service responsible for parsing tool calls from LLM output and executing them.
@@ -19,7 +26,6 @@ class ToolExecutorService:
         """Extrai chamadas de ferramenta XML do texto."""
         calls = []
         # Regex para capturar blocos <tool_use>...</tool_use>
-        # Flags: DOTALL para pegar quebras de linha
         pattern = re.compile(r"<tool_use>(.*?)</tool_use>", re.DOTALL)
         matches = pattern.findall(text)
 
@@ -35,7 +41,7 @@ class ToolExecutorService:
                     try:
                         args = json.loads(args_str)
                     except json.JSONDecodeError:
-                        # Tenta fallback frouxo se o modelo alucinar aspas
+                        # Fallback se o modelo alucinar formatação
                         args = {"raw_args": args_str}
 
                     calls.append({"name": name, "args": args})
@@ -56,11 +62,7 @@ class ToolExecutorService:
                 continue
 
             try:
-                # Executa a ferramenta
-                # Suporta async e sync
-                import inspect
-
-                # LangChain tools usually implement invoke (sync) and ainvoke (async)
+                # Suporta async (ainvoke) e sync (invoke/func)
                 if hasattr(tool, "ainvoke"):
                     result = await tool.ainvoke(args)
                 elif inspect.iscoroutinefunction(tool.func) or (
@@ -79,6 +81,7 @@ class ToolExecutorService:
                     error=str(e),
                     exc_info=True,
                 )
+                # Retorna erro formatado para o LLM tentar corrigir
                 outputs.append(
                     {"name": name, "result": f"System: Tool Error (STOP and rethink): {e!s}"}
                 )

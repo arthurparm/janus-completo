@@ -1,50 +1,51 @@
-import asyncio
+"""
+Knowledge Consolidator Scheduler (Legacy Wrapper)
 
-import structlog
+This module keeps the content of `knowledge_consolidator.py` for backward compatibility
+with `bootstrap.py` and `kernel.py`, but delegates all actual logic to the new
+`app.core.workers.knowledge_consolidator_worker.py` (Sprint 13).
+
+It acts as a SCHEDULER that periodically triggers the batch consolidation.
+"""
+
+import asyncio
+import logging
+from typing import Any
 
 from app.config import settings
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
-from app.core.llm import ModelPriority, ModelRole
-from app.repositories.knowledge_repository import KnowledgeRepository
-from app.services.agent_service import AgentService
-from app.services.llm_service import LLMService
-from app.services.memory_service import MemoryService
+from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator as worker_impl
 
-logger = structlog.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeConsolidator:
     """
-    Este worker transforma experiências brutas em conhecimento estruturado.
-    Recebe suas dependências via DI para ser totalmente testável e desacoplado.
+    [DEPRECATED LOGIC]
+    Wrapper scheduler that triggers `knowledge_consolidator_worker.consolidate_batch`.
+    Maintains the interface expected by Kernel/Bootstrap.
     """
 
     def __init__(
         self,
-        agent_service: AgentService,
-        memory_service: MemoryService,
-        knowledge_repo: KnowledgeRepository,
-        llm_service: LLMService,
+        agent_service: Any = None,
+        memory_service: Any = None,
+        knowledge_repo: Any = None,
+        llm_service: Any = None,
     ):
-        self._agent_service = agent_service
-        self._memory_service = memory_service
-        self._knowledge_repo = knowledge_repo
-        self._llm_service = llm_service
+        # We accept dependencies to satisfy the interface, but we don't use them.
+        # The worker implementation (worker_impl) manages its own dependencies via DI/Functions.
         self.is_running = False
         self._task = None
-        self.canonical_form_cache = {}
 
     async def start(self):
+        """Starts the periodic consolidation loop."""
         if not self.is_running:
             self.is_running = True
-            try:
-                await self._knowledge_repo.ensure_basic_constraints()
-            except Exception:
-                pass
             self._task = asyncio.create_task(self._consolidation_cycle())
-            logger.info("Knowledge Consolidator worker iniciado.")
+            logger.info("Knowledge Consolidator Scheduler started (delegating to Worker).")
 
     async def stop(self):
+        """Stops the scheduler."""
         if self.is_running and self._task:
             self.is_running = False
             self._task.cancel()
@@ -52,145 +53,17 @@ class KnowledgeConsolidator:
                 await self._task
             except asyncio.CancelledError:
                 pass
-            logger.info("Knowledge Consolidator worker parado.")
+            logger.info("Knowledge Consolidator Scheduler stopped.")
 
     async def _consolidation_cycle(self):
+        """Background loop that triggers batch consolidation."""
         while self.is_running:
             try:
-                logger.info("Iniciando ciclo de consolidação de conhecimento.")
-                await self.run_consolidation()
-                logger.info("Ciclo de consolidação de conhecimento concluído.")
+                # Delegate to the new worker implementation
+                await worker_impl.consolidate_batch(limit=10, min_score=0.0)
             except Exception as e:
-                logger.error("Erro durante o ciclo de consolidação.", exc_info=e)
+                logger.error("Error during consolidation cycle (Scheduler):", exc_info=e)
 
-            self.canonical_form_cache.clear()
-            await asyncio.sleep(settings.KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS)
-
-    async def run_consolidation(self):
-        # Coleta experiências recentes (MVP): usa busca ampla
-        try:
-            unprocessed_experiences = await self._memory_service.recall_experiences(
-                query="consolidate", limit=50
-            )
-        except Exception:
-            unprocessed_experiences = []
-        if not unprocessed_experiences:
-            logger.info("Nenhuma nova experiência para consolidar.")
-            return
-
-        logger.info(f"Processando {len(unprocessed_experiences)} experiências...")
-        seen = set()
-        for exp in unprocessed_experiences:
-            try:
-                exp_id = str(exp.get("id") or exp.get("experience_id") or "")
-                if exp_id and exp_id in seen:
-                    continue
-                seen.add(exp_id)
-                content = str(exp.get("content") or "")
-                meta = exp.get("metadata") or {}
-                conf = None
-                try:
-                    conf = (
-                        float(meta.get("confidence"))
-                        if meta.get("confidence") is not None
-                        else None
-                    )
-                except Exception:
-                    conf = None
-                if conf is not None and conf < float(
-                    getattr(settings, "KNOWLEDGE_MIN_CONFIDENCE", 0.6)
-                ):
-                    continue
-                concepts = self._extract_concepts(content)
-                if concepts:
-                    await self._knowledge_repo.merge_experience_mentions(exp, concepts)
-
-                # --- Evolution Step: Extract Wisdom (Lessons/Rules) ---
-                await self._extract_and_save_wisdom(content)
-
-            except Exception as e:
-                logger.debug("Falha ao consolidar experiência", exc_info=e)
-
-    async def _extract_issues_and_lessons(self, text: str) -> list:
-        # Mantém compatibilidade com regex simples apenas para conceitos/tags rápidas
-        return self._extract_concepts(text)
-
-    async def _extract_and_save_wisdom(self, text: str):
-        """
-        Usa o LLM para extrair 'Sabedoria' (Lições, Regras, Fatos) do texto bruto.
-        Isso é o que permite a evolução real do sistema.
-        """
-        prompt = get_formatted_prompt("knowledge_wisdom_extraction", text=text)
-
-        try:
-            response = await self._llm_service.invoke_llm(
-                prompt=prompt,
-                role=ModelRole.KNOWLEDGE_CURATOR,
-                priority=ModelPriority.BACKGROUND_BATCH,
-            )
-            content = response.get("response", "")
-
-            # Tenta parsear JSON
-            import json
-
-            start = content.find("[")
-            end = content.rfind("]")
-            if start != -1 and end != -1:
-                json_str = content[start : end + 1]
-                lessons = json.loads(json_str)
-
-                for lesson in lessons:
-                    if isinstance(lesson, str) and len(lesson) > 10:
-                        logger.info(f"Evolução: Nova lição aprendida: {lesson}")
-                        # Salva como uma memória especial de 'Sabedoria'
-                        await self._memory_service.add_experience(
-                            type="lesson",
-                            content=lesson,
-                            metadata={"source": "consolidation_worker", "confidence": 1.0},
-                        )
-        except Exception as e:
-            logger.warning("Falha ao extrair sabedoria via LLM", exc_info=e)
-
-    def _extract_concepts(self, text: str) -> list:
-        # Extrai termos significativos (MVP): palavras alfanuméricas com tamanho >= 4
-        import re
-
-        tokens = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9_\.]{4,}", text or "")
-        # Normaliza e remove stopwords simples
-        stop = {
-            "para",
-            "como",
-            "quando",
-            "onde",
-            "porque",
-            "isso",
-            "dessa",
-            "nesta",
-            "with",
-            "that",
-            "this",
-            "from",
-            "into",
-            "have",
-            "been",
-        }
-        canon = []
-        for t in tokens:
-            tt = t.strip().lower().strip("._")
-            if not tt or tt in stop:
-                continue
-            canon.append(tt)
-        # Top-N únicos preservando ordem
-        seen = set()
-        result = []
-        for w in canon:
-            if w in seen:
-                continue
-            seen.add(w)
-            result.append(w)
-            if len(result) >= 20:
-                break
-        return result
-
-    # O restante da lógica interna (extração, persistência) seria mantido,
-    # mas adaptado para usar self._agent_service, self._memory_service, self._knowledge_repo
+            # Wait for next cycle
+            interval = getattr(settings, "KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS", 60)
+            await asyncio.sleep(interval)

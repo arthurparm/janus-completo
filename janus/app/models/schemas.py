@@ -146,6 +146,67 @@ class QueueName(str, Enum):
     PRODUCTIVITY_GOOGLE = "janus.productivity.google"
 
 
+# --- Knowledge Graph Schemas ---
+
+
+class EntityType(str, Enum):
+    """Tipos de Entidade (reflete GraphLabel)."""
+
+    FILE = "File"
+    FUNCTION = "Function"
+    CLASS = "Class"
+    CONCEPT = "Concept"
+    ENTITY = "Entity"
+    SKILL = "Skill"
+    TASK = "Task"
+    ISSUE = "Issue"
+    DOCUMENT = "Document"
+    USER = "User"
+    GOAL = "Goal"
+    ACTION = "Action"
+    MENTAL_STATE = "MentalState"
+    OUTCOME = "Outcome"
+
+
+class RelationType(str, Enum):
+    """Tipos de Relacionamento (reflete GraphRelationship)."""
+
+    CONTAINS = "CONTAINS"
+    CALLS = "CALLS"
+    IMPORTS = "IMPORTS"
+    DEFINES = "DEFINES"
+    INHERITS_FROM = "INHERITS_FROM"
+    IMPLEMENTS = "IMPLEMENTS"
+    USES = "USES"
+    IS_SYNONYM_OF = "IS_SYNONYM_OF"
+    IS_A = "IS_A"
+    RELATED_TO = "RELATED_TO"
+    MENTIONS = "MENTIONS"
+    CAUSES = "CAUSES"
+    SOLVES = "SOLVES"
+    HAS_GOAL = "HAS_GOAL"
+
+
+class KnowledgeEntity(BaseModel):
+    """Representa uma entidade extraída para o Knowledge Graph."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    type: str  # EntityType
+    description: str | None = None
+    properties: dict[str, Any] = Field(default_factory=dict)
+    source_id: str | None = None
+
+
+class KnowledgeRelationship(BaseModel):
+    """Representa um relacionamento extraído para o Knowledge Graph."""
+
+    source: str
+    target: str
+    type: str  # RelationType
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+
 class TaskMessage(BaseModel):
     """
     Representa uma mensagem de tarefa para o message broker.

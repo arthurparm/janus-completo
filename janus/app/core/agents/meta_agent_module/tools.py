@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: Any = 50) -> str:
+async def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: Any = 50) -> str:
     """
     Analisa a memória episódica em busca de padrões de falha.
 
@@ -48,35 +48,12 @@ def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: Any = 
         # Buscar experiências de falha usando MemoryCore (Qdrant)
         query = "error failure exception crash bug"
 
-        import asyncio
         from app.core.memory.memory_core import get_memory_db
 
-        async def _fetch_failures():
-            mem = await get_memory_db()
-            results = await mem.arecall_filtered(
-                query=query, filters={"type": "action_failure"}, limit=max_results
-            )
-            return results
-
-        try:
-            # Try to get running loop to avoid "loop is already running" error if called within async context
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
-                # We are likely in a sync wrapper of a tool called by LangChain or similar
-                # For safety in this specific context (tool execution), we might need to rely on
-                # the fact that this tool is often called in a thread pool by LangChain
-                # But if invoked directly, we need robust handling.
-                # For now, let's assume standard thread pool execution via asyncio.run if isolated,
-                # or direct wait if we can. But 'tool' decorators usually imply sync interface often.
-                # Let's inspect the context. The original code used asyncio.run() which is risky inside loops.
-                # Refactoring to use a safe runner or assume thread pool.
-                # Since this is a @tool, it might be running in a thread.
-                results = asyncio.run_coroutine_threadsafe(_fetch_failures(), loop).result()
-            else:
-                results = asyncio.run(_fetch_failures())
-        except RuntimeError:
-            # Fallback if no loop is running (standard script execution)
-            results = asyncio.run(_fetch_failures())
+        mem = await get_memory_db()
+        results = await mem.arecall_filtered(
+            query=query, filters={"type": "action_failure"}, limit=max_results
+        )
 
         if not results:
             return json.dumps(

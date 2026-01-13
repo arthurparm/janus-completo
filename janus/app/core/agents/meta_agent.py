@@ -9,7 +9,9 @@ melhorias sem intervenção humana.
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
+from typing import Any
 
 try:
     from google.api_core.exceptions import DeadlineExceeded, ServiceUnavailable
@@ -29,8 +31,8 @@ from app.core.agents.meta_agent_module.schemas import (
     DiagnosisSchema,
     PlanSchema,
     CritiqueSchema,
-    safe_issue_severity,  # Importado se necessário, mas não utilizado diretamente aqui
-    safe_issue_category,  # Importado se necessário
+    safe_issue_severity,
+    safe_issue_category,
 )
 from app.core.agents.meta_agent_module.tools import (
     analyze_memory_for_failures,
@@ -70,7 +72,12 @@ META_AGENT_HEALTH_SCORE = Gauge(
 )
 
 
-# Helper for robust invoking
+class MetaAgentError(Exception):
+    """Erro interno do Meta-Agente."""
+
+    pass
+
+
 class MetaAgentRetryStrategy:
     @staticmethod
     def is_retryable_error(exception):
@@ -157,23 +164,16 @@ class MetaAgent:
     async def monitor_node_logic(self, state: AgentState) -> dict:
         """Coleta métricas e identifica anomalias iniciais."""
         logger.info("[MetaAgent] Node: Monitor")
-        # Coleta paralela. Note: asyncio.to_thread needs sync functions, invoke is sync (usually)
-        # But if tools are async internally, tool.invoke might run event loop issues.
-        # Tools in tools.py are wrapped with @tool, invoke calls the function.
-        # Since analyze_memory_for_failures in new tools.py uses internal asyncio run/loop handling,
-        # we can call invoke safely in thread.
         try:
             results = await asyncio.gather(
                 asyncio.to_thread(get_system_health_metrics.invoke, {}),
-                asyncio.to_thread(
-                    analyze_memory_for_failures.invoke, {"time_window_hours": 24, "max_results": 20}
-                ),
+                analyze_memory_for_failures.ainvoke({"time_window_hours": 24, "max_results": 20}),
                 asyncio.to_thread(get_resource_usage.invoke, {}),
             )
 
             metrics = {"health": results[0], "failures": results[1], "resources": results[2]}
 
-            # Simple heuristic detection (could be moved to LLM later if needed)
+            # Simple heuristic detection
             issues = []
             try:
                 health_data = (
@@ -183,7 +183,6 @@ class MetaAgent:
                     json.loads(metrics["failures"]) if isinstance(metrics["failures"], str) else {}
                 )
 
-                # Check Global Health
                 if health_data.get("system_health", {}).get("status") != "healthy":
                     issues.append(
                         {
@@ -197,7 +196,6 @@ class MetaAgent:
                         }
                     )
 
-                # Check Recent Failures
                 if fail_data.get("status") == "failures_found":
                     issues.append(
                         {
@@ -235,15 +233,22 @@ class MetaAgent:
 
         try:
             assert self.llm is not None
-            response = await self.llm.ainvoke(prompt)
-            # Parse structured output (simulated for now, usually use with_structured_output)
-            # Assuming prompt instructs JSON output
+
             try:
-                # Clean markdown code blocks if present
-                content = response.content.replace("```json", "").replace("```", "").strip()
-                diag_data = json.loads(content)
-                return {"diagnosis": diag_data.get("root_cause", response.content)}
-            except Exception:
+                structured_llm = self.llm.with_structured_output(DiagnosisSchema)
+                diag_result = await structured_llm.ainvoke(prompt)
+
+                if hasattr(diag_result, "root_cause"):
+                    return {"diagnosis": diag_result.root_cause}
+                elif isinstance(diag_result, dict):
+                    return {"diagnosis": diag_result.get("root_cause", str(diag_result))}
+                else:
+                    return {"diagnosis": str(diag_result)}
+            except Exception as parse_err:
+                logger.warning(
+                    f"Structured output failed for diagnosis: {parse_err}. Falling back to raw."
+                )
+                response = await self.llm.ainvoke(prompt)
                 return {"diagnosis": response.content}
         except Exception as e:
             logger.error(f"Error in diagnosis node: {e}", exc_info=True)
@@ -262,20 +267,26 @@ class MetaAgent:
 
         try:
             assert self.llm is not None
-            response = await self.llm.ainvoke(prompt)
-            # Parse structured output
+
             try:
-                content = response.content.replace("```json", "").replace("```", "").strip()
-                plan_data = json.loads(content)
-                recommendations = plan_data.get("recommendations", [])
+                structured_llm = self.llm.with_structured_output(PlanSchema)
+                plan_result = await structured_llm.ainvoke(prompt)
+
+                recommendations = []
+                if hasattr(plan_result, "recommendations"):
+                    recommendations = [rec.dict() for rec in plan_result.recommendations]
+                elif isinstance(plan_result, dict):
+                    recommendations = plan_result.get("recommendations", [])
+
                 return {"candidate_plan": recommendations}
-            except Exception:
-                # Fallback manual parsing or simple plan
+
+            except Exception as parse_err:
+                logger.warning(f"Structured output failed for plan: {parse_err}")
                 return {
                     "candidate_plan": [
                         {
-                            "title": "Manual Investigation",
-                            "description": "LLM failed to output JSON plan. Check logs.",
+                            "title": "Manual Investigation (Fallback)",
+                            "description": "Meta Agent failed to generate structured plan.",
                             "priority": 1,
                             "suggested_agent": "sysadmin",
                         }
@@ -304,22 +315,27 @@ class MetaAgent:
 
         try:
             assert self.llm is not None
-            response = await self.llm.ainvoke(prompt)
-            # Parse structured output
+
             try:
-                content = response.content.replace("```json", "").replace("```", "").strip()
-                critique = json.loads(content)
-                if critique.get("approved"):
-                    return {"critique": critique, "final_plan": plan, "status": "approved"}
+                structured_llm = self.llm.with_structured_output(CritiqueSchema)
+                critique_result = await structured_llm.ainvoke(prompt)
+
+                critique_dict = (
+                    critique_result.dict() if hasattr(critique_result, "dict") else critique_result
+                )
+                if not isinstance(critique_dict, dict):
+                    critique_dict = {"approved": False, "reason": "Invalid critique structure"}
+
+                if critique_dict.get("approved"):
+                    return {"critique": critique_dict, "final_plan": plan, "status": "approved"}
                 else:
                     return {
-                        "critique": critique,
+                        "critique": critique_dict,
                         "status": "retry",
                         "retry_count": state.get("retry_count", 0) + 1,
                     }
-            except Exception:
-                # Assume approved if parsing fails but not explicit rejection? Risky.
-                # Safest: Reject.
+            except Exception as parse_err:
+                logger.warning(f"Structured critique failed: {parse_err}")
                 return {
                     "critique": {"approved": False, "reason": "Critique parsing failed"},
                     "status": "retry",
@@ -339,20 +355,25 @@ class MetaAgent:
         plan = state.get("final_plan", [])
         results = []
 
-        # In a real implementation, this would dispatch tasks to other agents
-        # For now, we just acknowledge
         for rec in plan:
-            # Create Task logic would go here
+            self._dispatch_task(rec)
             results.append({"title": rec.get("title"), "status": "dispatched"})
             logger.info(f"Dispatched recommendation: {rec.get('title')}")
 
-            # Update metrics
             META_AGENT_RECOMMENDATIONS.labels(rec.get("category", "general")).inc()
 
         META_AGENT_CYCLES.labels("success").inc()
         return {"execution_results": results, "status": "completed"}
 
     # --- Helpers ---
+
+    def _dispatch_task(self, recommendation: dict):
+        """Despacha uma tarefa baseada na recomendação."""
+        logger.info(
+            f"[MetaAgent] Dispatching Task: {recommendation.get('title')}",
+            priority=recommendation.get("priority"),
+            agent=recommendation.get("suggested_agent"),
+        )
 
     def _state_dict_to_report(self, state: dict) -> StateReport:
         """Converte dicionário de estado para objeto StateReport."""
@@ -372,15 +393,15 @@ class MetaAgent:
                         ),
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error converting issue to obj: {e}")
 
         recs = []
         for r_dict in state.get("final_plan", []):
             try:
                 recs.append(
                     Recommendation(
-                        id=str(uuid.uuid4()),  # Generate ID for new recs
+                        id=str(uuid.uuid4()),
                         category=safe_issue_category(r_dict.get("category", "performance")),
                         title=r_dict.get("title", ""),
                         description=r_dict.get("description", ""),
@@ -391,25 +412,30 @@ class MetaAgent:
                         created_at=datetime.now(),
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error converting recommendation to obj: {e}")
 
         health_score = 100 - (len(issues) * 10)
         health_score = max(0, health_score)
 
-        # Update Gauge
         META_AGENT_HEALTH_SCORE.set(health_score)
 
-        return StateReport(
-            cycle_id=state.get("cycle_id", "unknown"),
-            timestamp=datetime.fromtimestamp(state.get("timestamp", datetime.now().timestamp())),
-            overall_status=state.get("status", "unknown"),
-            health_score=health_score,
-            issues_detected=issues,
-            recommendations=recs,
-            summary=state.get("diagnosis", "No diagnosis"),
-            metrics_snapshot=state.get("metrics", {}),
-        )
+        try:
+            return StateReport(
+                cycle_id=state.get("cycle_id", "unknown"),
+                timestamp=datetime.fromtimestamp(
+                    state.get("timestamp", datetime.now().timestamp())
+                ),
+                overall_status=state.get("status", "unknown"),
+                health_score=health_score,
+                issues_detected=issues,
+                recommendations=recs,
+                summary=state.get("diagnosis", "No diagnosis"),
+                metrics_snapshot=state.get("metrics", {}),
+            )
+        except Exception as e:
+            logger.error(f"Error creating StateReport object: {e}")
+            raise
 
     def _log_report(self, report: StateReport):
         logger.info(
