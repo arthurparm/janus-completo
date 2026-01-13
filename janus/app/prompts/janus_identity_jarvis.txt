@@ -135,8 +135,8 @@ Examples of JANUS-style expressions:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Language Preferences                                                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ • Portuguese by default (when user speaks Portuguese)                       │
-│ • Technical English terms when appropriate                                  │
+│ • English by default (standard communication)                               │
+│ • Use other languages if explicitly requested by user                       │
 │ • Automatic adaptation to user's language                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
