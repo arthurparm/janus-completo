@@ -175,66 +175,75 @@ async def generate_semantic_commit(
 
     # Generate commit message using LLM
     try:
-    # Prepare context from changed files
-    context_str = f"Files changed:\n{chr(10).join(['- ' + f for f in files[:20]])}"
-    if len(files) > 20:
-        context_str += f"\n...and {len(files) - 20} more files"
+        # Prepare context from changed files
+        context_str = f"Files changed:\n{chr(10).join(['- ' + f for f in files[:20]])}"
+        if len(files) > 20:
+            context_str += f"\n...and {len(files) - 20} more files"
 
-    try:
-        prompt = get_formatted_prompt("semantic_commit", diff=diff, context=context_str)
+        try:
+            prompt = get_formatted_prompt("semantic_commit", diff=diff, context=context_str)
+        except Exception as e:
+            logger.error("Failed to load semantic commit prompt", error=str(e))
+            return {
+                "success": False,
+                "error": f"Prompt error: {e}",
+                "commit_message": None,
+                "files_changed": files,
+            }
+
+        try:
+            llm = await get_llm(
+                role=ModelRole.ORCHESTRATOR,
+                priority=ModelPriority.FAST_AND_CHEAP,
+                cache_key="semantic_commit",
+            )
+
+            # Retry logic for fragility
+            retries = 2
+            last_error = None
+
+            for attempt in range(retries):
+                try:
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(None, llm.invoke, prompt)
+                    raw_content = response.content.strip()
+
+                    commit_message = _clean_commit_message(raw_content)
+
+                    logger.info(
+                        "Semantic commit generated",
+                        commit_message=commit_message,
+                        files=len(files),
+                    )
+
+                    return {
+                        "success": True,
+                        "commit_message": commit_message,
+                        "files_changed": files,
+                        "truncated": truncated,
+                        "diff_chars": len(diff),
+                    }
+                except Exception as e:
+                    logger.warning(f"Attempt {attempt + 1} failed for semantic commit: {e}")
+                    last_error = e
+                    await asyncio.sleep(1)  # exponential backoff if needed
+
+            raise last_error or Exception("Failed after retries")
+
+        except Exception as e:
+            logger.error("Failed to generate commit message", error=str(e))
+            return {
+                "success": False,
+                "error": str(e),
+                "commit_message": None,
+                "files_changed": files,
+            }
+
     except Exception as e:
-        logger.error("Failed to load semantic commit prompt", error=str(e))
+        logger.error("Unexpected error in generate_semantic_commit", error=str(e))
         return {
             "success": False,
-            "error": f"Prompt error: {e}",
-            "commit_message": None,
-            "files_changed": files,
-        }
-
-    try:
-        llm = await get_llm(
-            role=ModelRole.ORCHESTRATOR,
-            priority=ModelPriority.FAST_AND_CHEAP,
-            cache_key="semantic_commit",
-        )
-
-        # Retry logic for fragility
-        retries = 2
-        last_error = None
-
-        for attempt in range(retries):
-            try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, llm.invoke, prompt)
-                raw_content = response.content.strip()
-
-                commit_message = _clean_commit_message(raw_content)
-
-                logger.info(
-                    "Semantic commit generated",
-                    commit_message=commit_message,
-                    files=len(files),
-                )
-
-                return {
-                    "success": True,
-                    "commit_message": commit_message,
-                    "files_changed": files,
-                    "truncated": truncated,
-                    "diff_chars": len(diff),
-                }
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed for semantic commit: {e}")
-                last_error = e
-                await asyncio.sleep(1)  # exponential backoff if needed
-
-        raise last_error or Exception("Failed after retries")
-
-    except Exception as e:
-        logger.error("Failed to generate commit message", error=str(e))
-        return {
-            "success": False,
-            "error": str(e),
+            "error": f"Unexpected error: {str(e)}",
             "commit_message": None,
             "files_changed": files,
         }
