@@ -192,7 +192,15 @@ class Kernel:
             except Exception as e:
                 logger.warning(f"DB table creation skipped or failed: {e}")
 
-            await asyncio.gather(initialize_graph_db(), initialize_memory_db(), initialize_broker())
+            # Initialize Core Infra
+            from app.core.infrastructure.redis_manager import RedisManager
+
+            await asyncio.gather(
+                initialize_graph_db(),
+                initialize_memory_db(),
+                initialize_broker(),
+                RedisManager.get_instance().initialize(),
+            )
 
             # Initialize Firebase if enabled
             await self._init_firebase()
@@ -322,14 +330,15 @@ class Kernel:
             self.observability_service = ObservabilityService(self.observability_repo)
             self.optimization_service = OptimizationService(self.optimization_repo)
             self.prompt_service = PromptService(self.prompt_repo)
-        
-        # Config Service (Hot Reload)
-        from app.services.config_service import get_config_service
-        self.config_service = get_config_service()
-        # Not async start here, it's done in startup
-        
-        # Logic Layer
-        self.llm_service = LLMService(self.llm_repo, self.prompt_service)
+
+            # Config Service (Hot Reload)
+            from app.services.config_service import get_config_service
+
+            self.config_service = get_config_service()
+            # Not async start here, it's done in startup
+
+            # Logic Layer
+            self.llm_service = LLMService(self.llm_repo, self.prompt_service)
             self.assistant_service = AssistantService(self.llm_service)
             self.goal_manager = GoalManager(self.memory_service)
 
@@ -360,7 +369,7 @@ class Kernel:
         try:
             await self.monitor.check_all_components()
             await self.monitor.start_monitoring(interval_seconds=30)
-        
+
             # Start Config Service
             if self.config_service:
                 await self.config_service.start()

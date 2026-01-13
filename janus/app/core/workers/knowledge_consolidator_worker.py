@@ -16,6 +16,7 @@ from prometheus_client import Counter, Histogram
 
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.db.vector_store import get_async_qdrant_client
+from app.models.schemas import VectorCollection
 from app.services.knowledge_extraction_service import get_knowledge_extraction_service
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 
@@ -60,14 +61,22 @@ class KnowledgeConsolidator:
         except Exception as e:
             logger.error(f"Failed to initialize KnowledgeConsolidator: {e}")
 
-    async def consolidate_batch(self, limit: int = 10, min_score: float = 0.0):
+    async def consolidate_batch(self, limit: int = 10, min_score: float = 0.0) -> dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.
         Entry point principal do worker.
         """
+        stats = {
+            "successful": 0,
+            "total_processed": 0,
+            "total_entities": 0,
+            "total_relationships": 0,
+        }
+
         await self._initialize()
         if not self.qdrant_client:
-            return
+            logger.warning("Qdrant client unavailable, returning empty stats")
+            return stats
 
         try:
             # 1. Buscar experiências não consolidadas
@@ -76,14 +85,20 @@ class KnowledgeConsolidator:
 
             # Filtro simplificado: buscar ultimas memories
             # Idealmente: filter={"must_not": [{"key": "metadata.consolidated", "match": {"value": True}}]}
-            results = await self.qdrant_client.scroll(
-                collection_name="episodes",  # Nome hipotético da coleção de memória
-                limit=limit,
-                with_payload=True,
-                with_vectors=False,
-            )
+            try:
+                results = await self.qdrant_client.scroll(
+                    collection_name=VectorCollection.EPISODIC_MEMORY.value,  # Nome hipotético da coleção de memória
+                    limit=limit,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception as e:
+                # Se a coleção não existir ou der erro de conexão
+                logger.warning(f"Failed to scroll episodes collection: {e}")
+                return stats
 
             points = results[0]  # scroll returns (points, next_page_offset)
+            stats["total_processed"] = len(points)
 
             for point in points:
                 if not point.payload:
@@ -97,11 +112,22 @@ class KnowledgeConsolidator:
                 if metadata.get("consolidated"):
                     continue
 
-                await self.consolidate_experience(str(exp_id), content, metadata)
+                try:
+                    result = await self.consolidate_experience(str(exp_id), content, metadata)
+                    if result:
+                        stats["successful"] += 1
+                        stats["total_entities"] += result.get("entities_created", 0)
+                        stats["total_relationships"] += result.get("relationships_created", 0)
+                except Exception:
+                    # Individual failures logged in consolidate_experience
+                    pass
+
+            return stats
 
         except Exception as e:
             logger.error(f"Batch consolidation failed: {e}", exc_info=True)
             CONSOLIDATION_COUNTER.labels(outcome="failure", exception_type=type(e).__name__).inc()
+            return stats
 
     @resilient(circuit_breaker=_consolidation_cb)
     async def consolidate_experience(
@@ -136,7 +162,7 @@ class KnowledgeConsolidator:
             RELATIONSHIPS_CREATED.inc(created_rels)
 
             # 3. Marcar como consolidado (Atualizar Qdrant)
-            # await self._mark_as_consolidated(experience_id)
+            await self._mark_as_consolidated(experience_id)
 
             duration = time.time() - start_time
             CONSOLIDATION_LATENCY.labels(outcome="success").observe(duration)
@@ -145,6 +171,9 @@ class KnowledgeConsolidator:
             logger.info(
                 f"Consolidated experience {experience_id}: {created_ents} entities, {created_rels} relationships."
             )
+
+            # Retorna stats para o chamador
+            return {"entities_created": created_ents, "relationships_created": created_rels}
 
         except Exception as e:
             duration = time.time() - start_time
@@ -157,7 +186,7 @@ class KnowledgeConsolidator:
         """Atualiza flag no Qdrant para evitar reprocessamento."""
         try:
             await self.qdrant_client.set_payload(
-                collection_name="episodes",
+                collection_name=VectorCollection.EPISODIC_MEMORY.value,
                 payload={"metadata": {"consolidated": True}},
                 points=[experience_id],
             )
