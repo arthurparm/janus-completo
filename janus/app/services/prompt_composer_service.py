@@ -131,9 +131,13 @@ class PromptComposer:
             token_count=token_count,
         )
 
-    def _estimate_tokens(self, text: str) -> int:
+    def estimate_tokens(self, text: str) -> int:
         """Estimate token count (chars / 4)."""
         return len(text) // 4 if text else 0
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Internal alias for token estimation."""
+        return self.estimate_tokens(text)
 
     @lru_cache(maxsize=128)
     def _get_cache_key(

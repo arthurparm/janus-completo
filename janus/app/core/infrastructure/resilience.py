@@ -129,6 +129,20 @@ class CircuitBreaker:
             )
         return result
 
+    def get_health_status(self) -> dict[str, Any]:
+        """
+        Retorna métricas de saúde do Circuit Breaker.
+        """
+        return {
+            "state": self.state.value,
+            "failure_count": self.failure_count,
+            "failure_threshold": self.failure_threshold,
+            "recovery_timeout": self.recovery_timeout,
+            "last_failure_time": self.last_failure_time,
+            "open_since": self._open_since,
+            "is_open": self.state == CircuitBreakerState.OPEN,
+        }
+
     def __call__(self, func: Callable) -> Callable:
         """
         Decorador para proteger funções síncronas.
@@ -209,9 +223,9 @@ class CircuitBreaker:
                 failure_count=self.failure_count,
                 failure_threshold=self.failure_threshold,
                 last_failure_time=self.last_failure_time,
-                time_since_last_failure=time.time() - self.last_failure_time
-                if self.last_failure_time
-                else None,
+                time_since_last_failure=(
+                    time.time() - self.last_failure_time if self.last_failure_time else None
+                ),
             )
 
         if self.state == CircuitBreakerState.OPEN:
@@ -466,7 +480,9 @@ def resilient(
 
                     def call():
                         return circuit_breaker.call_async(protected_call)
+
                 else:
+
                     def call():
                         return func(*args, **kwargs)
 

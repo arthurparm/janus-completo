@@ -29,7 +29,7 @@ class PromptRepository:
         self,
         prompt_name: str,
         namespace: str = "default",
-        language: str = "pt-BR",
+        language: str = "en",
         model_target: str = "general",
     ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
@@ -81,7 +81,7 @@ class PromptRepository:
         prompt_text: str,
         version: str,
         namespace: str = "default",
-        language: str = "pt-BR",
+        language: str = "en",
         model_target: str = "general",
         created_by: str = "meta-agent",
         activate: bool = False,

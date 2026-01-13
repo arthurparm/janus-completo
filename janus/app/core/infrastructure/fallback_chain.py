@@ -4,6 +4,7 @@ Provides observability, metrics, and circuit breaker integration.
 """
 
 from typing import Any, Callable, TypeVar
+import asyncio
 import structlog
 from prometheus_client import Counter
 
@@ -90,6 +91,10 @@ class FallbackChain:
                     result = await strategy(*args, **kwargs)
                 else:
                     result = strategy(*args, **kwargs)
+                    # If the callable returned a coroutine (e.g., lambda: async_func()),
+                    # we need to await it to avoid "coroutine never awaited" warning
+                    if asyncio.iscoroutine(result):
+                        result = await result
 
                 # Track success
                 FALLBACK_COUNTER.labels(
@@ -142,7 +147,3 @@ class FallbackChain:
             f"All {len(self.strategies)} fallback strategies failed for '{self.component_name}'. "
             f"Last error: {last_error}"
         ) from last_error
-
-
-# Import asyncio at module level for iscoroutinefunction check
-import asyncio

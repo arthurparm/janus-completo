@@ -86,23 +86,88 @@ class PromptBuilderService:
 
         return compiled.text
 
-    async def is_capabilities_query(self, message: str) -> bool:
+    def is_capabilities_query(self, message: str) -> bool:
         """Check if message is asking about capabilities."""
         from app.core.prompts.intent_classifier import IntentClassifier
 
         classifier = IntentClassifier()
+        # IntentClassifier methods are synchronous in recent versions
         return classifier.is_capabilities_query(message)
 
-    async def is_tool_request(self, message: str) -> bool:
+    def is_tool_request(self, message: str) -> bool:
         """Check if message is requesting tool creation."""
         from app.core.prompts.intent_classifier import IntentClassifier
 
         classifier = IntentClassifier()
         return classifier.is_tool_request(message)
 
-    async def is_script_request(self, message: str) -> bool:
+    def is_script_request(self, message: str) -> bool:
         """Check if message is requesting script generation."""
         from app.core.prompts.intent_classifier import IntentClassifier
 
         classifier = IntentClassifier()
         return classifier.is_script_request(message)
+
+    def is_discovery_query(self, message: str) -> bool:
+        """Check if message is an interactive discovery query."""
+        keywords = [
+            "quais ferramentas",
+            "quais tools",
+            "o que você pode fazer",
+            "what tools",
+            "listar ferramentas",
+        ]
+        return any(k in message.lower() for k in keywords)
+
+    def is_docs_query(self, message: str) -> bool:
+        """Check if message is asking for tool documentation."""
+        keywords = [
+            "como usar a ferramenta",
+            "documentação da tool",
+            "docs da tool",
+            "exemplos de uso",
+        ]
+        return any(k in message.lower() for k in keywords)
+
+    def render_discovery_intro(self, tools: Any) -> str:
+        """Render introductory message listing available tools."""
+        tool_list = []
+        # Try ToolService.list_tools pattern
+        if hasattr(tools, "list_tools"):
+            try:
+                # Assuming ToolService signature: list_tools(category, permission_level, tags)
+                tool_list = tools.list_tools(category=None, permission_level=None, tags=None)
+            except Exception:
+                # Fallback for simple list_tools()
+                try:
+                    tool_list = tools.list_tools()
+                except Exception:
+                    pass
+        # Fallback to get_tools pattern (legacy or mock)
+        elif hasattr(tools, "get_tools"):
+            tool_list = tools.get_tools()
+
+        names = [t.name for t in tool_list] if isinstance(tool_list, list) else []
+
+        if not names:
+            return "Estou equipado com diversas ferramentas para análise de código e sistema. Pergunte 'quais ferramentas' novamente para tentar recarregar a lista."
+
+        return f"Estou equipado com as seguintes ferramentas: {', '.join(names)}. Pergunte 'como usar [ferramenta]' para mais detalhes."
+
+    def render_tools_documentation(self, tools: Any) -> str:
+        """Render detailed documentation for all tools."""
+        # Simple implementation for fallback
+        return "Documentação detalhada das ferramentas: ..."
+
+    def render_local_capabilities(self, tools: Any) -> str:
+        """Render local capabilities overview."""
+        return "Posso analisar código, executar comandos de terminal, e gerenciar arquivos."
+
+    def estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count using character heuristic (char/4).
+        Used for quick cost/size estimation without full tokenization.
+        """
+        if not text:
+            return 0
+        return len(text) // 4

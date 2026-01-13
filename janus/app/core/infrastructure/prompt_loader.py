@@ -9,35 +9,7 @@ from prometheus_client import Counter
 
 from app.repositories.prompt_repository import PromptRepository
 
-def _load_default_prompts() -> dict[str, str]:
-    """Carrega prompts padrão de arquivos .txt."""
-    prompts = {}
-    names = [
-        "cypher_generation",
-        "qa_synthesis",
-        "react_agent",
-        "meta_agent_supervisor",
-        "jarvis_persona",
-        "meta_agent_plan",
-        "meta_agent_act",
-    ]
-    # app/core/infrastructure/prompt_loader.py -> .../app/prompts
-    prompts_dir = Path(__file__).parent.parent.parent / "prompts"
-    
-    for name in names:
-        try:
-            path = prompts_dir / f"{name}.txt"
-            if path.exists():
-                prompts[name] = path.read_text(encoding="utf-8")
-            else:
-                logging.getLogger(__name__).warning(f"Prompt padrao nao encontrado em arquivo: {name}")
-                prompts[name] = ""
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"Erro ao carregar prompt padrao {name}: {e}")
-            prompts[name] = ""
-    return prompts
-
-PROMPTS = _load_default_prompts()
+PROMPTS = {}
 
 
 PROMPT_CACHE_HITS = Counter(
@@ -76,7 +48,9 @@ class PromptLoader:
         if self.use_database:
             try:
                 self._prompt_repo = PromptRepository()
-                self._logger.info("PromptLoader inicializado com suporte a banco de dados Relacional")
+                self._logger.info(
+                    "PromptLoader inicializado com suporte a banco de dados Relacional"
+                )
             except Exception as e:
                 self._logger.warning(
                     f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
@@ -95,7 +69,7 @@ class PromptLoader:
             namespace or "default",
             name,
             version or "v1",
-            (lang or "pt-BR").lower(),
+            (lang or "en").lower(),
             (model or "any").lower(),
         )
 
@@ -121,7 +95,14 @@ class PromptLoader:
         self._external_provider = provider
         self.invalidate()
 
-    def _get_prompt_from_database(self, name: str, version: str | None = None) -> str | None:
+    def _get_prompt_from_database(
+        self,
+        name: str,
+        version: str | None = None,
+        namespace: str | None = None,
+        lang: str | None = None,
+        model: str | None = None,
+    ) -> str | None:
         """Busca prompt do banco de dados Relacional."""
         if not self.use_database or not self._prompt_repo:
             return None
@@ -134,7 +115,13 @@ class PromptLoader:
                     return prompt.prompt_text
             else:
                 # Buscar versão ativa
-                prompt = self._prompt_repo.get_active_prompt(name)
+                # Defaults from make_key are used if passed, otherwise repository defaults
+                prompt = self._prompt_repo.get_active_prompt(
+                    prompt_name=name,
+                    namespace=namespace or "default",
+                    language=lang or "en",
+                    model_target=model or "general",
+                )
                 if prompt:
                     return prompt.prompt_text
         except Exception as e:
@@ -176,7 +163,9 @@ class PromptLoader:
 
         # 1. Tentar banco de dados primeiro (se habilitado)
         if self.use_database:
-            template = self._get_prompt_from_database(name, version)
+            template = self._get_prompt_from_database(
+                name, version=version, namespace=namespace, lang=lang, model=model
+            )
             if template:
                 self._logger.debug(f"Prompt '{name}' carregado do banco de dados")
 
@@ -198,7 +187,7 @@ class PromptLoader:
                 self._logger.debug(f"Prompt '{name}' carregado do fallback em memória")
             except KeyError:
                 raise KeyError(
-                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, ou memória)."
+                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo)."
                 )
 
         self._validate_placeholders(template, variables)
