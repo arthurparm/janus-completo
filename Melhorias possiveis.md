@@ -208,6 +208,154 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 
 ---
 
+## 💬 Prompt System (Modular Architecture)
+
+### Melhorias Identificadas (Jan/2026)
+
+- [ ] **LLM-based Context Compression** 🔥
+  - *Arquivo*: `app/core/prompts/modules/context_compression.py:78`
+  - *Gap*: Usa compressão extrativa simples (caracteres / 4)
+  - *Ação*: Integrar LLM (DeepSeek-Distill) para compressão semântica inteligente
+  - *Impacto*: Melhor preservação de contexto em conversas longas
+
+- [ ] **ML-based Intent Classification** 💡
+  - *Arquivo*: `app/core/prompts/intent_classifier.py`
+  - *Gap*: Classificação baseada em keywords (pode errar em casos ambíguos)
+  - *Ação*: Treinar modelo ML simples (SVM/BERT lightweight) com logs históricos
+  - *Impacto*: 95%+ accuracy vs ~80% atual
+
+- [ ] **Proper Tokenizer Integration** 🔧
+  - *Arquivo*: `app/core/prompts/base.py:73`
+  - *Gap*: Estimativa de tokens usa heurística (`len(text) // 4`)
+  - *Ação*: Integrar `tiktoken` para contagem precisa
+  - *Impacto*: Precisão de métricas e budgets
+
+- [ ] **Prompt Caching (LRU)** ⚡
+  - *Arquivo*: `app/services/prompt_composer_service.py`
+  - *Gap*: Cache desabilitado (skeleton implementado)
+  - *Ação*: Ativar `@lru_cache` com TTL de 5 minutos
+  - *Impacto*: Reduzir latência em 30-40% para mensagens similares
+
+- [ ] **Sophisticated Fallback Hierarchy** 🔥🔥🔥
+  - *Gap*: **474+ ocorrências** de `except Exception:` com fallbacks silenciosos ou simplificados em todo o codebase
+  - *Arquivos críticos identificados*:
+    - `reasoning_protocol.py:53-56` - Fallback simples quando protocolo não encontrado
+    - `document_service.py` - **28 fallbacks genéricos** (!!)
+    - `chat_service.py` - **50+ fallbacks sem logging adequado**
+    - `knowledge_consolidator_worker.py` - Fallback síncrono sem estratégia
+    - `autonomy_service.py:474-493` - Fallback de tool único (poderia ter chain)
+    - `tool_executor_service.py:38` - Parsing com fallback "frouxo" sem validação
+    - `semantic_commit_service.py:136` - Fallback naïve (primeira linha não-vazia)
+    - `vision/screen_capture.py:99` - Fallback fullscreen sem aviso
+    - `router_worker.py:45` - Heurística hardcoded como fallback
+  - *Problemas*:
+    1. **Silent Failures**: 90% dos `except Exception:` não logam contexto suficiente
+    2. **No Retry Strategy**: Apenas captura e ignora, sem tentativas graduais
+    3. **No Circuit Breaking**: Falhas repetidas não abrem circuit breaker
+    4. **No Monitoring**: Métricas de fallback rate ausentes
+    5. **Single-Level**: Maioria tem apenas 1 fallback, deveria ter hierarchy
+    6. **No Degradation Strategy**: Tudo-ou-nada vs graceful degradation
+  - *Ação*:
+    1. **Criar `FallbackChain` pattern**:
+
+       ```python
+       class FallbackChain:
+           def __init__(self, strategies: list[Callable]):
+               self.strategies = strategies
+           
+           async def execute(self, *args, **kwargs):
+               for i, strategy in enumerate(self.strategies):
+                   try:
+                       result = await strategy(*args, **kwargs)
+                       if i > 0:  # Fallback usado
+                           FALLBACK_COUNTER.labels(level=i).inc()
+                       return result
+                   except Exception as e:
+                       logger.warning(f"Strategy {i} failed: {e}")
+                       if i == len(self.strategies) - 1:
+                           raise  # Último fallback falhou
+               ```
+    2. **Implementar hierarchical fallbacks**:
+       - Primary → Secondary → Tertiary → Minimal → Error
+       - Reasoning: Full Protocol → Generic → Minimal → Error
+       - Tools: Preferred → Alternative → Built-in → Manual
+       - Parsing: Strict → Lenient → Regex → Raw
+    3. **Adicionar logging estruturado**:
+
+       ```python
+       except Exception as e:
+           logger.warning(
+               "fallback_triggered",
+               primary_failed=str(e),
+               fallback_level=level,
+               context={...}
+           )
+       ```
+
+    4. **Métricas de saúde**:
+       - `fallback_rate_total` (by component)
+       - `fallback_success_rate` (quantos fallbacks funcionaram)
+       - `fallback_depth_avg` (qual nível foi usado em média)
+    5. **Circuit Breaker Integration**:
+       - Se primary falha >5x em 60s → abrir circuit e usar fallback direto
+       - Auto-recovery após timeout
+  - *Impacto*:
+    - **Robustez**: Sistema degrada graciosamente vs crash hard
+    - **Observabilidade**: Saber onde fallbacks são usados frequentemente
+    - **Confiabilidade**: 99.9% uptime com degradação inteligente
+    - **Performance**: Evitar tentar primary quando sabidamente falho
+  - *Prioridade*: **P0** - Afeta estabilidade de produção
+  - *Estimativa*: 3-5 dias para implementar framework + refatorar top 20 services
+
+- [ ] **Dynamic Module Priority** 🎯
+  - *Gap*: Prioridade dos módulos é estática (10-50)
+  - *Ação*: Ajustar prioridade baseado em contexto (histórico longo = compression first)
+  - *Impacto*: Otimização adaptativa de token budget
+
+- [ ] **Expand Intent Types** 🌐
+  - *Gap*: Apenas 13 intents definidos
+  - *Ação*: Adicionar: `REFACTORING`, `DOCUMENTATION_QUERY`, `ARCHITECTURE_DESIGN`, `DATA_ANALYSIS`
+  - *Impacto*: Prompts mais especializados para casos edge
+
+- [ ] **Multi-Language Protocol Support** 🌍
+  - *Gap*: Protocolos misturados PT/EN
+  - *Ação*: Separar templates por idioma, detectar idioma do usuário
+  - *Impacto*: Melhor UX para usuários não-PT
+
+- [ ] **Adaptive Token Budget** 💰
+  - *Gap*: Token budget fixo por módulo
+  - *Ação*: Alocar budget dinamicamente baseado em complexidade da tarefa
+  - *Impacto*: Usar tokens onde mais importam
+
+- [ ] **Auto-tuning via Feedback** 📊
+  - *Gap*: Não há loop de feedback sobre qualidade de prompts
+  - *Ação*: Coletar user feedback (👍/👎) e A/B test variantes
+  - *Impacto*: Otimização contínua de templates
+
+### Concluído (Jan/2026)
+
+- [x] **Eliminação de Código Legado** ✅
+  - Removidas 504 linhas de código monolítico (`_build_prompt_legacy`)
+  - Arquivo reduzido de 583 → 115 linhas
+  - 100% modular, zero fallbacks legados
+
+- [x] **Arquitetura Modular** ✅
+  - 5 módulos composíveis criados
+  - Intent-based module selection
+  - Token reduction: 44-54% (2500 → 1200-1400 tokens)
+
+- [x] **Intent Classifier** ✅
+  - Extraído de lógica de prompt
+  - Keyword-based com confidence scoring
+  - 13 categorias de intent
+
+- [x] **Context Compression (Basic)** ✅
+  - Chain-of-Density simples implementado
+  - Bypass para históricos curtos (≤3 msgs)
+  - Compressão para 150-200 tokens
+
+---
+
 ## ✅ Histórico de Conclusões (Arquivado)
 
 ### Jan/2026 - Auditoria & Autonomia
