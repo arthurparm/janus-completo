@@ -40,7 +40,7 @@
                     </div>
                 </header>
 
-                <section class="help-summary glass-panel">
+                <section class="help-summary card">
                     <h2>Como usar o modo autônomo</h2>
                     <p>1. Escolha o perfil de risco adequado ao ambiente.</p>
                     <p>2. Defina o intervalo entre ciclos de verificação.</p>
@@ -93,7 +93,8 @@
                     <div class="terminal-window">
                         <div class="log-line" *ngFor="let log of getDisplayLogs(logs$ | async)">
                             <span class="timestamp">{{ log.timestamp | date:'HH:mm:ss' }}</span>
-                            <span class="level" [class.level-error]="log.level === 'error'">[{{ log.level | uppercase }}]</span>
+                            <span class="level" [class.level-error]="log.level === 'error'">[{{ log.level | uppercase
+                                }}]</span>
                             <span class="message">
                                 <ng-container *ngIf="getToolNameFromLog(log.message) as tool; else plainMessage">
                                     Executando ferramenta <span class="tool-name">{{ tool }}</span>

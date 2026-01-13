@@ -55,7 +55,7 @@
       <!-- Quick Actions -->
       <div class="flex flex-wrap gap-2">
         <button *ngFor="let action of quickActions" (click)="executeQuickAction(action)"
-          class="glass-button text-sm px-3 py-1.5 hover:bg-white/10"
+          class="btn btn-ghost text-sm px-3 py-1.5 hover:bg-white/10"
           [class.border-purple-500]="action.color === 'primary'" [class.text-purple-400]="action.color === 'primary'"
           [class.border-cyan-500]="action.color === 'accent'" [class.text-cyan-400]="action.color === 'accent'">
           <span class="flex items-center gap-2">
