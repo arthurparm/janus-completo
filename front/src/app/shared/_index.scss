@@ -17,8 +17,7 @@
  * =============================================================================
  */
 
-// Forward all exports from the design system
-@forward 'design-system';
-
-// Also use it so this file can be imported directly
-@use 'design-system' as *;
+// Forward new design system modules
+@forward '../../../styles/tokens';
+@forward '../../../styles/animations';
+@forward '../../../styles/components';

@@ -1,0 +1,387 @@
+/**
+ * =============================================================================
+ * JANUS COMPONENTS - Clean Professional Styles
+ * =============================================================================
+ *
+ * Base component styles (buttons, cards, inputs, tables, badges).
+ * All components follow GitHub-inspired clean aesthetic.
+ *
+ * =============================================================================
+ */
+
+@use 'tokens' as *;
+@use 'animations' as *;
+
+// =============================================================================
+// BUTTONS
+// =============================================================================
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+    padding: $spacing-2 $spacing-4;
+    border: $border-width-thin solid transparent;
+    border-radius: $radius-sm;
+    font-family: $font-body;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    line-height: $line-height-tight;
+    cursor: pointer;
+    transition: all $transition-fast;
+    text-decoration: none;
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+// Primary button
+.btn-primary {
+    background: $color-accent-primary;
+    color: $color-text-on-emphasis;
+    border-color: $color-accent-primary;
+
+    &:hover:not(:disabled) {
+        background: $color-accent-primary-hover;
+        border-color: $color-accent-primary-hover;
+        transform: translateY(-1px);
+        box-shadow: $shadow-accent-lg;
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+}
+
+// Secondary button
+.btn-secondary {
+    background: transparent;
+    color: $color-text-secondary;
+    border-color: $color-border-default;
+
+    &:hover:not(:disabled) {
+        background: $color-bg-tertiary;
+        border-color: $color-border-emphasis;
+        color: $color-text-primary;
+    }
+}
+
+// Danger button
+.btn-danger {
+    background: transparent;
+    color: $color-error;
+    border-color: $color-error;
+
+    &:hover:not(:disabled) {
+        background: $color-error-bg;
+        box-shadow: 0 0 0 3px rgba(248, 81, 73, 0.2);
+    }
+}
+
+// Ghost button (minimal)
+.btn-ghost {
+    background: transparent;
+    color: $color-text-secondary;
+    border-color: transparent;
+
+    &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.05);
+        color: $color-text-primary;
+    }
+}
+
+// =============================================================================
+// CARDS
+// =============================================================================
+
+.card {
+    background: $color-bg-secondary;
+    border: $border-width-thin solid $color-border-default;
+    border-radius: $radius-lg;
+    padding: $spacing-6;
+    box-shadow: $shadow-sm;
+    @include hover-lift;
+}
+
+// Card header
+.card-header {
+    padding-bottom: $spacing-4;
+    border-bottom: $border-width-thin solid $color-border-muted;
+    margin-bottom: $spacing-4;
+
+    h3 {
+        margin: 0;
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $color-text-primary;
+    }
+}
+
+// Card body
+.card-body {
+    color: $color-text-secondary;
+    line-height: $line-height-relaxed;
+}
+
+// Elevated card (higher z-index look)
+.card-elevated {
+    background: $color-bg-tertiary;
+    box-shadow: $shadow-lg;
+}
+
+// =============================================================================
+// INPUTS & FORMS
+// =============================================================================
+
+.input {
+    width: 100%;
+    padding: $spacing-2 $spacing-3;
+    background: $color-bg-primary;
+    color: $color-text-primary;
+    border: $border-width-thin solid $color-border-default;
+    border-radius: $radius-sm;
+    font-family: $font-body;
+    font-size: $font-size-sm;
+    transition: all $transition-fast;
+
+    &::placeholder {
+        color: $color-text-tertiary;
+    }
+
+    &:focus {
+        outline: none;
+        border-color: $color-border-emphasis;
+        box-shadow: $shadow-accent;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+// Textarea
+.textarea {
+    @extend .input;
+    resize: vertical;
+    min-height: 100px;
+    font-family: $font-mono;
+}
+
+// Input with icon
+.input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    .input {
+        padding-left: $spacing-8;
+    }
+
+    .input-icon {
+        position: absolute;
+        left: $spacing-3;
+        color: $color-text-tertiary;
+        pointer-events: none;
+    }
+}
+
+// =============================================================================
+// TABLES
+// =============================================================================
+
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+
+    thead {
+        th {
+            padding: $spacing-3 $spacing-4;
+            background: $color-bg-tertiary;
+            color: $color-text-secondary;
+            font-size: $font-size-xs;
+            font-weight: $font-weight-semibold;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: $border-width-thin solid $color-border-default;
+
+            &:first-child {
+                border-top-left-radius: $radius-sm;
+            }
+
+            &:last-child {
+                border-top-right-radius: $radius-sm;
+            }
+        }
+    }
+
+    tbody {
+        tr {
+            transition: background $transition-fast;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.02);
+            }
+
+            td {
+                padding: $spacing-3 $spacing-4;
+                border-bottom: $border-width-thin solid $color-border-muted;
+                color: $color-text-primary;
+                font-size: $font-size-sm;
+            }
+        }
+    }
+}
+
+// Striped table
+.table-striped {
+    tbody tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.01);
+    }
+}
+
+// =============================================================================
+// BADGES
+// =============================================================================
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-1;
+    padding: $spacing-1 $spacing-2;
+    border-radius: $radius-full;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    line-height: 1;
+}
+
+.badge-success {
+    background: $color-success-bg;
+    color: $color-success;
+}
+
+.badge-warning {
+    background: $color-warning-bg;
+    color: $color-warning;
+}
+
+.badge-error {
+    background: $color-error-bg;
+    color: $color-error;
+}
+
+.badge-info {
+    background: $color-info-bg;
+    color: $color-info;
+}
+
+.badge-neutral {
+    background: rgba(255, 255, 255, 0.1);
+    color: $color-text-secondary;
+}
+
+// =============================================================================
+// UTILITIES
+// =============================================================================
+
+// Text colors
+.text-primary {
+    color: $color-text-primary;
+}
+
+.text-secondary {
+    color: $color-text-secondary;
+}
+
+.text-tertiary {
+    color: $color-text-tertiary;
+}
+
+.text-accent {
+    color: $color-accent-primary;
+}
+
+.text-success {
+    color: $color-success;
+}
+
+.text-warning {
+    color: $color-warning;
+}
+
+.text-error {
+    color: $color-error;
+}
+
+// Background colors
+.bg-primary {
+    background: $color-bg-primary;
+}
+
+.bg-secondary {
+    background: $color-bg-secondary;
+}
+
+.bg-tertiary {
+    background: $color-bg-tertiary;
+}
+
+// Borders
+.border {
+    border: $border-width-thin solid $color-border-default;
+}
+
+.border-top {
+    border-top: $border-width-thin solid $color-border-default;
+}
+
+.border-bottom {
+    border-bottom: $border-width-thin solid $color-border-default;
+}
+
+// Spacing utilities (margin, padding)
+@for $i from 0 through 16 {
+    .m-#{$i} {
+        margin: #{$i * 0.25}rem;
+    }
+
+    .mt-#{$i} {
+        margin-top: #{$i * 0.25}rem;
+    }
+
+    .mb-#{$i} {
+        margin-bottom: #{$i * 0.25}rem;
+    }
+
+    .ml-#{$i} {
+        margin-left: #{$i * 0.25}rem;
+    }
+
+    .mr-#{$i} {
+        margin-right: #{$i * 0.25}rem;
+    }
+
+    .p-#{$i} {
+        padding: #{$i * 0.25}rem;
+    }
+
+    .pt-#{$i} {
+        padding-top: #{$i * 0.25}rem;
+    }
+
+    .pb-#{$i} {
+        padding-bottom: #{$i * 0.25}rem;
+    }
+
+    .pl-#{$i} {
+        padding-left: #{$i * 0.25}rem;
+    }
+
+    .pr-#{$i} {
+        padding-right: #{$i * 0.25}rem;
+    }
+}

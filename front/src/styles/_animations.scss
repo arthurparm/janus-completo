@@ -1,0 +1,235 @@
+/**
+ * =============================================================================
+ * JANUS ANIMATIONS - Subtle & Professional
+ * =============================================================================
+ *
+ * Keyframe animations and transition utilities for "alive" feeling.
+ * Designed to be smooth, professional, and not distracting.
+ *
+ * =============================================================================
+ */
+
+@use 'tokens' as *;
+
+// =============================================================================
+// KEYFRAME ANIMATIONS
+// =============================================================================
+
+// --- Pulse (for live indicators) ---
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.7;
+        transform: scale(0.95);
+    }
+}
+
+// --- Fade In Up (staggered element entry) ---
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// --- Fade In (simple) ---
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+// --- Skeleton Shimmer (loading states) ---
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+// --- Spin (loading spinners) ---
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+// --- Subtle Background Shift (ambient effect) ---
+@keyframes ambientShift {
+
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+// --- Slide Down (dropdowns, menus) ---
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// --- Scale Up (modals) ---
+@keyframes scaleUp {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+// =============================================================================
+// UTILITY CLASSES
+// =============================================================================
+
+// --- Pulse live indicator ---
+.pulse-live {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+// --- Fade transitions ---
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+// --- Staggered delays (for sequential animations) ---
+.stagger-1 {
+    animation-delay: 0.1s;
+}
+
+.stagger-2 {
+    animation-delay: 0.2s;
+}
+
+.stagger-3 {
+    animation-delay: 0.3s;
+}
+
+.stagger-4 {
+    animation-delay: 0.4s;
+}
+
+.stagger-5 {
+    animation-delay: 0.5s;
+}
+
+// --- Loading spinner ---
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+// =============================================================================
+// MIXINS FOR COMMON ANIMATIONS
+// =============================================================================
+
+// --- Hover lift effect ---
+@mixin hover-lift($distance: -2px) {
+    transition: transform $transition-normal, box-shadow $transition-normal;
+
+    &:hover:not(:disabled) {
+        transform: translateY($distance);
+        box-shadow: $shadow-lg;
+    }
+}
+
+// --- Hover scale effect ---
+@mixin hover-scale($scale: 1.02) {
+    transition: transform $transition-fast;
+
+    &:hover:not(:disabled) {
+        transform: scale($scale);
+    }
+}
+
+// --- Skeleton loading background ---
+@mixin skeleton {
+    background: linear-gradient(90deg,
+            $color-bg-secondary 0%,
+            $color-bg-tertiary 50%,
+            $color-bg-secondary 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: $radius-sm;
+}
+
+// --- Focus ring animation ---
+@mixin focus-ring {
+    transition: box-shadow $transition-fast;
+
+    &:focus {
+        outline: none;
+        box-shadow: $shadow-accent;
+    }
+}
+
+// =============================================================================
+// BACKGROUND AMBIENT (for body/containers)
+// =============================================================================
+
+@mixin ambient-background {
+    position: relative;
+
+    &::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: -1;
+        pointer-events: none;
+
+        // Subtle radial gradients for depth
+        background:
+            radial-gradient(ellipse 80% 50% at 20% 40%,
+                rgba(88, 166, 255, 0.03) 0%,
+                transparent 50%),
+            radial-gradient(ellipse 60% 40% at 80% 80%,
+                rgba(31, 111, 235, 0.02) 0%,
+                transparent 50%);
+
+        background-size: 200% 200%;
+        animation: ambientShift 30s ease-in-out infinite;
+    }
+}

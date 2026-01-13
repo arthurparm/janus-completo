@@ -1,0 +1,153 @@
+/**
+ * =============================================================================
+ * JANUS DESIGN TOKENS - Clean Professional Theme
+ * =============================================================================
+ *
+ * GitHub-inspired design system with subtle animations and professional aesthetic.
+ * Base colors, spacing, typography, and design primitives.
+ *
+ * =============================================================================
+ */
+
+// =============================================================================
+// 1. COLOR TOKENS - GitHub Dark Inspired
+// =============================================================================
+
+// --- Background Colors ---
+$color-bg-primary: #0d1117; // Main background
+$color-bg-secondary: #161b22; // Cards, panels
+$color-bg-tertiary: #21262d; // Elevated surfaces
+$color-bg-overlay: rgba(22, 27, 34, 0.95); // Modals, dropdowns
+
+// --- Accent Colors ---
+$color-accent-primary: #58a6ff; // Links, primary actions
+$color-accent-primary-hover: #79c0ff; // Hover state
+$color-accent-secondary: #1f6feb; // Darker blue for emphasis
+$color-accent-muted: rgba(88, 166, 255, 0.1); // Subtle backgrounds
+
+// --- Text Colors ---
+$color-text-primary: #c9d1d9; // Main text
+$color-text-secondary: #8b949e; // Muted text
+$color-text-tertiary: #6e7681; // Disabled, placeholders
+$color-text-link: #58a6ff; // Links
+$color-text-on-emphasis: #ffffff; // Text on colored backgrounds
+
+// --- Status Colors ---
+$color-success: #3fb950; // Success states
+$color-success-bg: rgba(63, 185, 80, 0.1);
+$color-warning: #d29922; // Warning states
+$color-warning-bg: rgba(210, 153, 34, 0.1);
+$color-error: #f85149; // Error states
+$color-error-bg: rgba(248, 81, 73, 0.1);
+$color-info: #58a6ff; // Info states
+$color-info-bg: rgba(88, 166, 255, 0.1);
+
+// --- Border Colors ---
+$color-border-default: #30363d; // Default borders
+$color-border-muted: #21262d; // Subtle borders
+$color-border-emphasis: #58a6ff; // Focused borders
+
+// --- Shadow Colors ---
+$color-shadow: rgba(0, 0, 0, 0.5); // Drop shadows
+
+// =============================================================================
+// 2. SPACING TOKENS - 4px Base Scale
+// =============================================================================
+
+$spacing-0: 0;
+$spacing-1: 0.25rem; // 4px
+$spacing-2: 0.5rem; // 8px
+$spacing-3: 0.75rem; // 12px
+$spacing-4: 1rem; // 16px
+$spacing-6: 1.5rem; // 24px
+$spacing-8: 2rem; // 32px
+$spacing-12: 3rem; // 48px
+$spacing-16: 4rem; // 64px
+
+// =============================================================================
+// 3. TYPOGRAPHY TOKENS
+// =============================================================================
+
+// --- Font Families ---
+$font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+$font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+$font-mono: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', monospace;
+
+// --- Font Sizes ---
+$font-size-xs: 0.75rem; // 12px
+$font-size-sm: 0.875rem; // 14px
+$font-size-base: 1rem; // 16px
+$font-size-lg: 1.125rem; // 18px
+$font-size-xl: 1.25rem; // 20px
+$font-size-2xl: 1.5rem; // 24px
+$font-size-3xl: 1.875rem; // 30px
+$font-size-4xl: 2.25rem; // 36px
+
+// --- Font Weights ---
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+// --- Line Heights ---
+$line-height-tight: 1.25;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.75;
+
+// =============================================================================
+// 4. BORDER & RADIUS TOKENS
+// =============================================================================
+
+$border-width-thin: 1px;
+$border-width-thick: 2px;
+
+$radius-sm: 6px; // Subtle rounding
+$radius-md: 8px; // Standard
+$radius-lg: 12px; // Cards
+$radius-full: 9999px; // Pills, badges
+
+// =============================================================================
+// 5. SHADOW TOKENS - Layered Depth
+// =============================================================================
+
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+$shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4);
+$shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.5);
+$shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.6);
+
+// Accent shadows (for hover states)
+$shadow-accent: 0 0 0 3px rgba(88, 166, 255, 0.3);
+$shadow-accent-lg: 0 4px 12px rgba(88, 166, 255, 0.2);
+
+// =============================================================================
+// 6. TRANSITION TOKENS
+// =============================================================================
+
+$transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1); // Micro-interactions
+$transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1); // Standard
+$transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1); // Page transitions
+
+// Custom easing
+$ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+// =============================================================================
+// 7. Z-INDEX TOKENS
+// =============================================================================
+
+$z-index-dropdown: 100;
+$z-index-sticky: 200;
+$z-index-fixed: 300;
+$z-index-modal-backdrop: 400;
+$z-index-modal: 500;
+$z-index-popover: 600;
+$z-index-tooltip: 700;
+$z-index-notification: 800;
+
+// =============================================================================
+// 8. BREAKPOINTS (for future responsive work)
+// =============================================================================
+
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
