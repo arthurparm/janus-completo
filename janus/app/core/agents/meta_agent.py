@@ -381,8 +381,33 @@ def get_system_health_metrics() -> str:
         ma_system = get_multi_agent_system()
         pp_handler = get_poison_pill_handler()
 
+        # Global Errors
+        from app.core.monitoring.error_tracker import GlobalErrorTracker
+
+        error_stats = GlobalErrorTracker.get_instance().get_stats()
+
+        # Task Statistics
+        task_stats = {"pending": 0, "in_progress": 0, "completed": 0, "failed": 0, "blocked": 0}
+        recent_failures = []
+
+        for t in ma_system.workspace.tasks.values():
+            status_key = t.status.value.lower()
+            if status_key in task_stats:
+                task_stats[status_key] += 1
+
+            if t.status.value == "failed":
+                recent_failures.append(
+                    {
+                        "id": t.id,
+                        "description": t.description,
+                        "error": t.error,
+                        "completed_at": str(t.completed_at),
+                    }
+                )
+
         metrics = {
             "system_health": system_health,
+            "error_tracking": error_stats,
             "llm_manager": {
                 "pool_keys": len(_llm_pool),
                 "pool_total_instances": sum(len(v) for v in _llm_pool.values()),
@@ -396,6 +421,8 @@ def get_system_health_metrics() -> str:
                 "workspace_tasks": len(ma_system.workspace.tasks),
                 "workspace_artifacts": len(ma_system.workspace.artifacts),
                 "workspace_messages": len(ma_system.workspace.messages),
+                "task_stats": task_stats,
+                "recent_failures": recent_failures[-5:],  # Last 5
             },
             "poison_pills": pp_handler.get_health_status(),
         }
@@ -700,11 +727,13 @@ class MetaAgent:
 
         self.last_report: StateReport | None = None
         self.cycle_count = 0
-        self._initialize_agent()
+        # self._initialize_agent() called lazily
 
-    def _initialize_agent(self):
+    async def _initialize_agent(self):
         try:
-            self.llm = get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
+            self.llm = await get_llm(
+                role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY
+            )
             logger.info("Meta-Agente (LangGraph) inicializado com sucesso.")
         except Exception as e:
             logger.warning(f"Meta-Agente iniciou sem LLM: {e}")
@@ -713,7 +742,7 @@ class MetaAgent:
     async def run_analysis_cycle(self) -> StateReport:
         """Entry point do ciclo (via LangGraph)."""
         if not self.llm:
-            self._initialize_agent()
+            await self._initialize_agent()
         if not self.llm:
             return self._create_error_report("LLM Unavailable")
 
@@ -792,6 +821,79 @@ class MetaAgent:
                         title="Falhas Recentes Detectadas",
                         description=f"{fails.get('total_failures')} falhas encontradas na memória",
                         evidence=fails,
+                    ).to_dict()
+                )
+        except Exception:
+            pass
+
+        # Check Resources triggers
+        try:
+            res_data = json.loads(results[2]) if isinstance(results[2], str) else {}
+            if isinstance(res_data, dict):
+                cpu_p = float(res_data.get("cpu", {}).get("percent_total", 0))
+                mem_p = float(res_data.get("memory", {}).get("percent_used", 0))
+
+                if cpu_p > 80.0:
+                    issues.append(
+                        DetectedIssue(
+                            id="high_cpu",
+                            severity=IssueSeverity.MEDIUM,
+                            category=IssueCategory.RESOURCE,
+                            title="Alta Utilização de CPU",
+                            description=f"CPU total em {cpu_p}%",
+                            evidence={"cpu_percent": cpu_p},
+                        ).to_dict()
+                    )
+                if mem_p > 80.0:
+                    issues.append(
+                        DetectedIssue(
+                            id="high_mem",
+                            severity=IssueSeverity.MEDIUM,
+                            category=IssueCategory.RESOURCE,
+                            title="Alta Utilização de Memória",
+                            description=f"Memória em {mem_p}%",
+                            evidence={"memory_percent": mem_p},
+                        ).to_dict()
+                    )
+        except Exception:
+            pass
+
+        # Check Task Failures
+        try:
+            health_data = json.loads(results[0]) if isinstance(results[0], str) else {}
+            ma_stats = health_data.get("multi_agent_system", {})
+            task_stats = ma_stats.get("task_stats", {})
+            failed_count = task_stats.get("failed", 0)
+
+            if failed_count > 0:
+                issues.append(
+                    DetectedIssue(
+                        id="failed_tasks",
+                        severity=IssueSeverity.HIGH,
+                        category=IssueCategory.RELIABILITY,
+                        title="Tarefas Falharam Recentemente",
+                        description=f"{failed_count} tarefas falharam.",
+                        evidence=ma_stats.get("recent_failures", []),
+                    ).to_dict()
+                )
+        except Exception:
+            pass
+
+        # Check Global Error Tracker
+        try:
+            health_data = json.loads(results[0]) if isinstance(results[0], str) else {}
+            err_stats = health_data.get("error_tracking", {})
+            last_err_time = err_stats.get("last_error_seconds_ago", -1)
+
+            if last_err_time >= 0 and last_err_time < 600:  # Errors in last 10 mins
+                issues.append(
+                    DetectedIssue(
+                        id="recent_exceptions",
+                        severity=IssueSeverity.HIGH,
+                        category=IssueCategory.RELIABILITY,
+                        title="Exceções Recentes no Sistema",
+                        description=f"{len(err_stats.get('recent_errors', []))} erros detectados recentemente.",
+                        evidence=err_stats,
                     ).to_dict()
                 )
         except Exception:

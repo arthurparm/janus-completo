@@ -396,174 +396,39 @@ class SpecializedAgent:
         self.config_repo = AgentConfigRepository()
         self.config_repo = AgentConfigRepository()
         self.event_callback = None
-        self._initialize_agent()
+        self.executor: Any | None = None
+        # self._initialize_agent() chamada lazily no execute_task
         ACTIVE_AGENTS_GAUGE.inc()
-        logger.info(f"Agente '{self.agent_id}' ({role.value}) inicializado")
+        logger.info(f"Agente '{self.agent_id}' ({role.value}) instanciado")
 
     def set_event_callback(self, callback):
         """Define callback assíncrono para eventos de progresso."""
         self.event_callback = callback
 
-    def _get_prompt_for_role(self, config) -> str:
+    async def _get_prompt_for_role(self, config) -> str:
         """Obtém o prompt para o papel do agente (do banco ou fallback)."""
         if config and config.prompt_template:
             return config.prompt_template
 
-        # Fallback para prompts padrão
-        prompts = {
-            AgentRole.PROJECT_MANAGER: """Você é um Gerente de Projetos especializado em coordenar equipes de agentes.
+        # Tentar buscar do PromptService
+        try:
+            from app.services.prompt_service import get_prompt_service
 
-Suas responsabilidades:
-- Analisar requisitos e dividir projetos em tarefas menores e específicas
-- Atribuir tarefas aos agentes especializados apropriados
-- Monitorar o progresso e identificar bloqueios
-- Facilitar a comunicação entre agentes
-- Garantir a qualidade e completude do trabalho
+            # Mapeia role para nome padronizado do prompt
+            # Ex: PROJECT_MANAGER -> agent_project_manager
+            prompt_name = f"agent_{self.role.value}"
 
-IMPORTANTE: Ao usar ferramentas:
-- Para list_directory: Use path="/app/workspace"
-- Para write_file: Forneça file_path, content, overwrite
+            prompt_text = await get_prompt_service().get_prompt(prompt_name)
+            if prompt_text:
+                return prompt_text
 
-Ferramentas disponíveis: {tools}
-Nomes das ferramentas: {tool_names}
+            logger.error(f"Prompt não encontrado para {prompt_name}, usando fallback básico.")
 
-==== FORMATO OBRIGATÓRIO (SIGA EXATAMENTE) ====
-VOCÊ DEVE SEMPRE USAR ESTE FORMATO:
+        except Exception as e:
+            logger.error(f"Erro ao buscar prompt para {self.role.value}: {e}")
 
-Thought: [seu raciocínio sobre o que fazer]
-Action: [nome_da_ferramenta - deve ser UMA de {tool_names}]
-Action Input: {{"parametro": "valor"}}
-
-... aguarde a Observation ...
-
-Observation: [resultado da ferramenta]
-Thought: [continue raciocinando ou conclua]
-... repita Thought/Action/Observation quantas vezes necessário ...
-
-Thought: Eu sei a resposta final
-Final Answer: [resposta em texto puro, SEM ```]
-
-REGRAS ABSOLUTAS:
-1. Action Input DEVE ser JSON válido em UMA linha
-2. NUNCA use ``` (code blocks) em Action Input ou Final Answer
-3. Se precisar retornar JSON, coloque direto no Final Answer SEM ```
-4. Escape strings corretamente: use \\n para quebras de linha
-
-Question: {input}
-{agent_scratchpad}""",
-            AgentRole.RESEARCHER: """Você é um Agente de Pesquisa especializado em análise e investigação.
-
-Suas responsabilidades:
-- Buscar informações relevantes (web, documentação, memória)
-- Analisar e sintetizar dados
-- Identificar padrões e insights
-- Fornecer relatórios estruturados
-
-Ferramentas disponíveis: {tools}
-
-Use este formato:
-Question: {input}
-Thought: [seu raciocínio]
-Action: [{tool_names}]
-Action Input: [input]
-Observation: [resultado]
-...
-Final Answer: [resposta]
-{agent_scratchpad}""",
-            AgentRole.CODER: """Você é um Agente Desenvolvedor especializado em escrever código de alta qualidade.
-
-Suas responsabilidades:
-- Implementar funcionalidades conforme especificado
-- Escrever código limpo e bem documentado
-- Seguir best practices e padrões
-- Criar arquivos usando write_file
-
-Ferramentas disponíveis: {tools}
-Nomes: {tool_names}
-
-==== FORMATO OBRIGATÓRIO (CRÍTICO) ====
-
-Thought: [seu raciocínio]
-Action: [nome_ferramenta]
-Action Input: {{"parametro": "valor"}}
-
-Observation: [resultado]
-... repita ...
-
-Final Answer: [resposta SEM ```]
-
-REGRAS PARA write_file:
-1. Sempre forneça: file_path, content, overwrite
-2. content deve ser STRING com \\n para quebras de linha
-3. JSON em UMA linha
-4. Use ' (aspas simples) dentro de strings Python
-5. NUNCA use ``` em nenhum lugar
-
-EXEMPLO PERFEITO:
-Action: write_file
-Action Input: {{"file_path": "app.py", "content": "def hello():\\n    print('Hello World')\\n\\nif __name__ == '__main__':\\n    hello()", "overwrite": false}}
-
-Question: {input}
-{agent_scratchpad}""",
-            AgentRole.TESTER: """Você é um Agente de Testes especializado em validação e qualidade.
-
-Suas responsabilidades:
-- Criar casos de teste
-- Executar testes e validações
-- Identificar bugs e problemas
-- Reportar resultados detalhadamente
-
-Ferramentas: {tools}
-Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
-{agent_scratchpad}""",
-            AgentRole.DOCUMENTER: """Você é um Agente Documentador especializado em criar documentação clara.
-
-Suas responsabilidades:
-- Escrever documentação técnica
-- Criar guias e tutoriais
-- Documentar APIs e código
-- Manter documentação atualizada
-
-Ferramentas: {tools}
-Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
-{agent_scratchpad}""",
-            AgentRole.OPTIMIZER: """Você é um Agente Otimizador especializado em melhorar performance e qualidade.
-
-Suas responsabilidades:
-- Analisar código para otimizações
-- Identificar gargalos de performance
-- Sugerir refatorações
-- Aplicar best practices
-
-Ferramentas: {tools}
-Formato: Question: {input}, Thought, Action [{tool_names}], Action Input, Observation, ..., Final Answer
-{agent_scratchpad}""",
-            AgentRole.SYSADMIN: """Você é um Administrador de Sistema (SysAdmin) com acesso IRRESTRITO ao servidor.
-
-Suas responsabilidades:
-- Gerenciar o Sistema Operacional e Serviços
-- Instalar dependências (pip, mpm, apt)
-- Diagnosticar problemas de infraestrutura
-- Executar comandos de shell arbitrarios
-
-⚠️ ZONA DE PERIGO ⚠️
-Você possui acesso a ferramentas 'execute_system_command' e escritas em disco irrestritas.
-Use estes poderes com extrema cautela. Antes de rodar um comando destrutivo, verifique duas vezes.
-
-Ferramentas disponíveis: {tools}
-Nomes das ferramentas: {tool_names}
-
-FORMATO OBRIGATÓRIO:
-Thought: [seu raciocínio]
-Action: [nome_ferramenta]
-Action Input: {{"parametro": "valor"}}
-...
-Final Answer: [resposta]
-
-{agent_scratchpad}""",
-        }
-
-        return prompts.get(self.role, prompts[AgentRole.PROJECT_MANAGER])
+        # Fallback minimalista de segurança (os prompts reais devem estar no banco)
+        return f"Você é um agente especializado no papel de {self.role.value}. Aja de forma prestativa e eficiente."
 
     def _get_llm_config_for_role(self, config):
         """Obtém configuração do LLM para o papel do agente (do banco ou fallback)."""
@@ -592,7 +457,7 @@ Final Answer: [resposta]
 
         return llm_mapping.get(self.role, (ModelRole.ORCHESTRATOR, ModelPriority.LOCAL_ONLY))
 
-    def _initialize_agent(self):
+    async def _initialize_agent(self):
         """Inicializa o executor do agente com prompt especializado."""
         # Tentar carregar configuração do banco de dados
         config = None
@@ -608,12 +473,12 @@ Final Answer: [resposta]
             logger.warning(f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
 
         # Carregar prompt (do banco ou fallback)
-        prompt_text = self._get_prompt_for_role(config)
+        prompt_text = await self._get_prompt_for_role(config)
         prompt = PromptTemplate.from_template(prompt_text)
 
         # Selecionar LLM (do banco ou fallback)
         llm_role, llm_priority = self._get_llm_config_for_role(config)
-        llm = get_llm(role=llm_role, priority=llm_priority)
+        llm = await get_llm(role=llm_role, priority=llm_priority)
 
         # Selecionar ferramentas baseado no papel
         tools = self._get_tools_for_role()
@@ -645,7 +510,7 @@ Final Answer: [resposta]
                 verbose=True,
             )
             self.executor = agent
-            
+
         logger.info(f"Agente '{self.agent_id}' inicializado com sucesso.")
 
     async def execute_task(self, task: Task, max_retries: int = 2) -> dict[str, Any]:
@@ -659,6 +524,9 @@ Final Answer: [resposta]
         Returns:
             Dicionário com resultado da execução
         """
+        if not self.executor:
+            await self._initialize_agent()
+
         if task.status != TaskStatus.PENDING:
             raise ValueError(f"Tarefa {task.id} não está em estado PENDING")
 
@@ -686,9 +554,17 @@ Final Answer: [resposta]
                 start_time = asyncio.get_event_loop().time()
 
                 # Langchain invoke suporta callbacks em config
-                result = await asyncio.to_thread(
-                    self.executor.invoke, {"input": task.description}, {"callbacks": run_callbacks}
-                )
+                if hasattr(self.executor, "ainvoke"):
+                    result = await self.executor.ainvoke(
+                        {"input": task.description}, {"callbacks": run_callbacks}
+                    )
+                else:
+                    # Fallback for older langchain versions or different executor types
+                    result = await asyncio.to_thread(
+                        self.executor.invoke,
+                        {"input": task.description},
+                        {"callbacks": run_callbacks},
+                    )
                 duration = asyncio.get_event_loop().time() - start_time
 
                 # Limpar output (remover markdown se presente)
@@ -845,7 +721,7 @@ class MultiAgentSystem:
         """Cria um novo agente especializado e seu ator correspondente (ASYNC)."""
         agent = SpecializedAgent(role, self.workspace)
         await agent.initialize()
-        
+
         self.agents[agent.agent_id] = agent
 
         # Inicializa o Ator para este agente
@@ -925,17 +801,7 @@ class MultiAgentSystem:
         logger.info(f"Iniciando projeto: {project_description}")
 
         # 1. PM analisa e decompõe o projeto
-        decomposition_prompt = f"""Analise este projeto e decomponha em tarefas específicas:
-
-Projeto: {project_description}
-
-Para cada tarefa, especifique:
-1. Descrição clara da tarefa
-2. Agente mais adequado (researcher/coder/tester/documenter/optimizer)
-3. Prioridade (low/medium/high/critical)
-4. Dependências (se houver)
-
-Retorne em formato estruturado."""
+        decomposition_prompt = get_formatted_prompt("multi_agent_decomposition", project_description=project_description)
 
         pm_task = Task(
             description=decomposition_prompt,

@@ -41,6 +41,7 @@ from app.repositories.reflexion_repository import ReflexionRepository
 from app.repositories.sandbox_repository import SandboxRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.tool_repository import ToolRepository
+from app.repositories.prompt_repository import PromptRepository
 
 # Services
 from app.services.agent_service import AgentService
@@ -63,6 +64,7 @@ from app.services.scheduler_service import get_scheduler, initialize_default_job
 from app.services.task_service import TaskService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
+from app.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -97,6 +99,7 @@ class Kernel:
         self.chat_repo = None
         self.optimization_repo = None
         self.observability_repo = None
+        self.prompt_repo = None
 
         # Services
         self.agent_service: AgentService | None = None
@@ -115,7 +118,8 @@ class Kernel:
         self.llm_service: LLMService | None = None
         self.chat_service: ChatService | None = None
         self.assistant_service: AssistantService | None = None
-        self.prompt_service: PromptBuilderService | None = None
+        self.prompt_builder_service: PromptBuilderService | None = None
+        self.prompt_service: PromptService | None = None
         self.tool_executor: ToolExecutorService | None = None
         self.rag_service: RAGService | None = None
 
@@ -264,7 +268,9 @@ class Kernel:
 
         self.llm_repo = LLMRepository()
         self.chat_repo = ChatRepositorySQL()
+        self.chat_repo = ChatRepositorySQL()
         self.optimization_repo = OptimizationRepository()
+        self.prompt_repo = PromptRepository()
 
         # Monitoring
         self.monitor = get_health_monitor()
@@ -288,7 +294,8 @@ class Kernel:
         self.observability_service = ObservabilityService(self.observability_repo)
         self.optimization_service = OptimizationService(self.optimization_repo)
 
-        self.llm_service = LLMService(self.llm_repo)
+        self.prompt_service = PromptService(self.prompt_repo)
+        self.llm_service = LLMService(self.llm_repo, self.prompt_service)
         self.assistant_service = AssistantService(self.llm_service)
 
         # Warmup LLM moved to startup background task
@@ -306,7 +313,7 @@ class Kernel:
 
         # Chat
         # Core specialized services
-        self.prompt_service = PromptBuilderService()
+        self.prompt_builder_service = PromptBuilderService(self.prompt_service)
         self.tool_executor = ToolExecutorService()
         self.rag_service = RAGService(self.chat_repo, self.llm_service, self.memory_service)
 
@@ -316,7 +323,7 @@ class Kernel:
             self.llm_service,
             self.tool_service,
             self.memory_service,
-            prompt_service=self.prompt_service,
+            prompt_service=self.prompt_builder_service,
             tool_executor_service=self.tool_executor,
             rag_service=self.rag_service,
         )

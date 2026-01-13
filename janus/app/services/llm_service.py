@@ -7,6 +7,7 @@ from app.config import settings
 from app.core.llm import ModelPriority, ModelRole, get_llm_client
 from app.core.monitoring.health_monitor import check_llm_manager_health
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
+from app.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -40,8 +41,9 @@ class LLMService:
     Orquestra a lógica de negócio, recebendo suas dependências via DI.
     """
 
-    def __init__(self, repo: LLMRepository):
+    def __init__(self, repo: LLMRepository, prompt_service: PromptService | None = None):
         self._repo = repo
+        self._prompt_service = prompt_service
 
     async def invoke_llm(
         self,
@@ -61,11 +63,25 @@ class LLMService:
                 identity = getattr(settings, "AGENT_IDENTITY_NAME", None) or getattr(
                     settings, "APP_NAME", "Janus"
                 )
-                identity_header = (
-                    f"System: Você é {identity}, um assistente de IA confiável e colaborativo. "
-                    f"Ao referir-se a si mesmo, use '{identity}'. Nunca se identifique como GPT, ChatGPT ou outro nome. "
-                    f"Não divulgue nomes de modelos ou provedores. Responda naturalmente no idioma do usuário."
-                )
+
+                identity_header = ""
+                if self._prompt_service:
+                    try:
+                        identity_header = await self._prompt_service.get_prompt(
+                            "janus_identity_header"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch identity prompt: {e}")
+
+                if not identity_header:
+                    # Fallback default identity
+                    identity_header = (
+                        f"System: Você é {identity}, um assistente de IA confiável e colaborativo. "
+                        f"Ao referir-se a si mesmo, use '{identity}'. Nunca se identifique como GPT, ChatGPT ou outro nome. "
+                        f"Não divulgue nomes de modelos ou provedores. Responda naturalmente no idioma do usuário."
+                    )
+
+                # If prompt from DB has placeholders, formatted here could be an option, but for now assuming static text or simple concat
                 prompt = f"{identity_header}\n\n{prompt}"
 
             return await self._repo.invoke_llm(
