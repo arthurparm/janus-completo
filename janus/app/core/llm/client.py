@@ -225,13 +225,14 @@ class LLMClient:
             # If resilient is sync, we must run it in thread pool.
 
             import asyncio
+
             loop = asyncio.get_event_loop()
 
             if timeout > 0:
                 # Run the sync decorated_invoke in a thread
                 result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
             else:
-                 result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
+                result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
 
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(
@@ -321,8 +322,8 @@ class LLMClient:
                 tokens_out_est = output_tokens
                 try:
                     await register_usage(self.provider, self.user_id, self.project_id, cost)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to register LLM usage cost: {e}")
             except Exception as e:
                 logger.warning(f"Failed to cache LLM response: {e}")
 
@@ -430,13 +431,13 @@ class LLMClient:
         # SOLUÇÃO IMEDIATA: Parsing de <think> tags se presente no texto (comum em Ollama/DeepSeek destilado)
         # Parsing de <think> tags se presente no texto (DeepSeek/Ollama)
         import re
+
         reasoning = None
 
         # Padrão 1: <think> content </think>
         match = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
         if match:
             reasoning = match.group(1).strip()
-
 
         return {
             "response": text,

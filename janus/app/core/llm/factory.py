@@ -207,8 +207,8 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 LLM_POOL_WARMS.labels(provider, model).inc()
             except Exception:
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to warm up LLM pool for spec '{spec}': {e}")
     return warmed
 
 
