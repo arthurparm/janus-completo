@@ -75,7 +75,30 @@ class SpecializedAgent:
             logger.error(f"Erro ao buscar prompt para {self.role.value}: {e}")
 
         # Fallback minimalista de segurança (os prompts reais devem estar no banco)
-        return f"Você é um agente especializado no papel de {self.role.value}. Aja de forma prestativa e eficiente."
+        # Fallback minimalista de segurança (os prompts reais devem estar no banco)
+        return (
+            f"Você é um agente especializado no papel de {self.role.value}.\n"
+            "Aja de forma prestativa e eficiente.\n\n"
+            "TOOLS:\n"
+            "------\n"
+            "You have access to the following tools:\n\n"
+            "{tools}\n\n"
+            "To use a tool, please use the following format:\n\n"
+            "```\n"
+            "Thought: Do I need to use a tool? Yes\n"
+            "Action: the action to take, should be one of [{tool_names}]\n"
+            "Action Input: the input to the action\n"
+            "Observation: the result of the action\n"
+            "```\n\n"
+            "When you have a response to say to the Human, or if you do not need to use a tool, you must use the format:\n\n"
+            "```\n"
+            "Thought: Do I need to use a tool? No\n"
+            "Final Answer: [your response here]\n"
+            "```\n\n"
+            "Begin!\n\n"
+            "New input: {input}\n"
+            "{agent_scratchpad}"
+        )
 
     def _get_llm_config_for_role(self, config):
         """Obtém configuração do LLM para o papel do agente (do banco ou fallback)."""
