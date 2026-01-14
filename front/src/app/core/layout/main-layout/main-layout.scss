@@ -11,28 +11,28 @@
 .app-sidebar {
     width: 260px;
     flex-shrink: 0;
-    border-right: 1px solid var(--panel-border);
-    background: rgba(10, 15, 26, 0.3);
+    border-right: 1px solid var(--janus-border);
+    background: var(--janus-bg-surface);
     backdrop-filter: blur(16px);
     position: sticky;
     top: 64px;
     height: calc(100vh - 64px);
     overflow-y: auto;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width var(--janus-transition-normal);
 }
 
 .content {
     flex: 1;
-    padding: 2rem;
+    padding: var(--janus-spacing-lg);
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
 }
 
 .app-footer {
-    border-top: 1px solid var(--panel-border);
-    background: rgba(10, 15, 26, 0.9);
-    padding: 1rem 0;
+    border-top: 1px solid var(--janus-border);
+    background: var(--janus-bg-dark);
+    padding: var(--janus-spacing-md) 0;
     margin-top: auto;
     font-size: 0.75rem;
     z-index: 10;
@@ -43,15 +43,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 2rem;
+    padding: 0 var(--janus-spacing-lg);
 }
 
 .status-indicator {
     width: 8px;
     height: 8px;
-    background: var(--success-color);
+    background: var(--janus-primary);
     border-radius: 50%;
-    box-shadow: 0 0 10px var(--success-color);
+    box-shadow: 0 0 10px var(--janus-primary);
     animation: pulse 2s infinite;
 }
 

@@ -5,7 +5,7 @@
             <div class="header-left">
                 <h1 class="header-title">
                     <mat-icon>build</mat-icon>
-                    Ferramentas do Sistema
+                    {{ 'NAV.TOOLS' | translate }}
                 </h1>
                 <p class="header-subtitle">Capacidades disponíveis para o agente autônomo</p>
             </div>
@@ -106,7 +106,7 @@
         @if (loading) {
         <div class="loading-state">
             <div class="loading-spinner"></div>
-            <p>Carregando ferramentas...</p>
+            <p>{{ 'COMMON.LOADING' | translate }}</p>
         </div>
         }
 

@@ -57,7 +57,6 @@ export interface ModalConfig {
           <div class="modal-actions">
             <button
               *ngFor="let action of actions; let i = index"
-              mat-button
               [class]="getActionButtonClasses(action)"
               [disabled]="action.disabled || action.loading"
               (click)="handleAction(action)"
@@ -77,7 +76,8 @@ export interface ModalConfig {
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -86,74 +86,62 @@ export interface ModalConfig {
     }
 
     .modal-container {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 11px 15px -7px rgba(0, 0, 0, 0.2), 
-                  0 24px 38px 3px rgba(0, 0, 0, 0.14), 
-                  0 9px 46px 8px rgba(0, 0, 0, 0.12);
+      background: var(--janus-bg-card);
+      border: 1px solid var(--janus-border);
+      border-radius: var(--janus-radius-lg);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
       max-height: 90vh;
       max-width: 90vw;
       display: flex;
       flex-direction: column;
       animation: slideIn 0.3s ease-out;
+      color: var(--janus-text-primary);
     }
 
-    .modal-container.small {
-      width: 400px;
-    }
-
-    .modal-container.medium {
-      width: 600px;
-    }
-
-    .modal-container.large {
-      width: 800px;
-    }
-
-    .modal-container.full {
-      width: 95vw;
-      height: 95vh;
-    }
-
-    .modal-container.centered {
-      margin: auto;
-    }
+    .modal-container.small { width: 400px; }
+    .modal-container.medium { width: 600px; }
+    .modal-container.large { width: 800px; }
+    .modal-container.full { width: 95vw; height: 95vh; }
+    .modal-container.centered { margin: auto; }
 
     .modal-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px 24px;
-      border-bottom: 1px solid #e0e0e0;
+      padding: var(--janus-spacing-md) var(--janus-spacing-lg);
+      border-bottom: 1px solid var(--janus-border);
     }
 
     .modal-title {
       margin: 0;
       font-size: 1.25rem;
-      font-weight: 500;
-      color: rgba(0, 0, 0, 0.87);
+      font-weight: 600;
+      color: var(--janus-text-primary);
     }
 
     .modal-close {
       background: none;
       border: none;
-      padding: 8px;
+      padding: 4px;
       cursor: pointer;
+      color: var(--janus-text-secondary);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
     }
 
     .modal-close:hover {
-      background-color: rgba(0, 0, 0, 0.04);
+      background-color: rgba(255, 255, 255, 0.1);
+      color: var(--janus-text-primary);
     }
 
     .modal-body {
       flex: 1;
-      padding: 24px;
+      padding: var(--janus-spacing-lg);
       overflow-y: auto;
+      color: var(--janus-text-secondary);
     }
 
     .modal-body.scrollable {
@@ -161,85 +149,79 @@ export interface ModalConfig {
     }
 
     .modal-footer {
-      padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      padding: var(--janus-spacing-md) var(--janus-spacing-lg);
+      border-top: 1px solid var(--janus-border);
       display: flex;
       justify-content: flex-end;
+      background: rgba(0, 0, 0, 0.2);
     }
 
     .modal-actions {
       display: flex;
-      gap: 8px;
+      gap: var(--janus-spacing-sm);
     }
 
     .modal-actions button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      border-radius: var(--janus-radius-md);
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
       min-width: 88px;
     }
 
     .action-primary {
-      background-color: #1976d2;
-      color: white;
+      background-color: var(--janus-primary);
+      color: var(--janus-bg-dark);
+    }
+    .action-primary:hover:not(:disabled) {
+      background-color: var(--janus-primary-hover);
+      box-shadow: 0 0 10px rgba(0, 255, 157, 0.3);
     }
 
     .action-secondary {
       background-color: transparent;
-      color: #1976d2;
-      border: 1px solid #1976d2;
+      border-color: var(--janus-border);
+      color: var(--janus-text-primary);
+    }
+    .action-secondary:hover:not(:disabled) {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: var(--janus-text-secondary);
     }
 
     .action-danger {
-      background-color: #f44336;
-      color: white;
+      background-color: transparent;
+      border-color: var(--janus-accent);
+      color: var(--janus-accent);
     }
-
-    .action-primary:hover:not(:disabled) {
-      background-color: #1565c0;
-    }
-
-    .action-secondary:hover:not(:disabled) {
-      background-color: rgba(25, 118, 210, 0.04);
-    }
-
     .action-danger:hover:not(:disabled) {
-      background-color: #d32f2f;
+      background-color: rgba(255, 0, 85, 0.1);
     }
 
     button:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
+      filter: grayscale(1);
     }
 
     @keyframes fadeIn {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     @keyframes slideIn {
-      from {
-        transform: translateY(-20px);
-        opacity: 0;
-      }
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     @media (max-width: 768px) {
       .modal-container {
         width: 95vw !important;
         margin: 16px;
-      }
-
-      .modal-header,
-      .modal-body,
-      .modal-footer {
-        padding-left: 16px;
-        padding-right: 16px;
       }
     }
   `]

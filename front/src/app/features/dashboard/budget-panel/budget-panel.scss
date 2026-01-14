@@ -1,9 +1,13 @@
+@use '../../../../styles/tokens' as *;
+@use '../../../../styles/mixins' as *;
+
 .budget-panel {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border-radius: 12px;
+    @include glass-panel;
     padding: 1.5rem;
-    color: #eee;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: var(--janus-text-primary);
+    
+    // Fallback if mixin doesn't fully cover it or we want specific override
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
 }
 
 .panel-header {
@@ -15,56 +19,87 @@
     h3 {
         margin: 0;
         font-size: 1.5rem;
+        color: var(--janus-text-primary);
+        font-weight: 600;
     }
 }
 
 button {
+    // Standardizing button styles
     padding: 0.5rem 1rem;
-    background: #2a2a3e;
-    color: #4a90e2;
-    border: 1px solid #4a90e2;
-    border-radius: 6px;
+    background: rgba(var(--janus-secondary), 0.1);
+    color: var(--janus-secondary);
+    border: 1px solid var(--janus-secondary);
+    border-radius: var(--janus-radius-md);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all var(--janus-transition-fast);
+    font-family: inherit;
+    font-size: 0.9rem;
 
     &:hover {
-        background: #4a90e2;
-        color: white;
+        background: var(--janus-secondary);
+        color: var(--janus-bg-dark);
+        box-shadow: 0 0 10px rgba(0, 184, 255, 0.4);
     }
 
     &.active {
-        background: #4a90e2;
-        color: white;
+        background: var(--janus-secondary);
+        color: var(--janus-bg-dark);
     }
 }
 
 .guardrail-alert {
-    background: #ff4444;
+    background: rgba(255, 51, 51, 0.2);
+    border: 1px solid $color-error;
+    color: $color-error;
     padding: 1rem;
-    border-radius: 8px;
+    border-radius: var(--janus-radius-md);
     margin-bottom: 1rem;
     text-align: center;
     font-weight: bold;
+    animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 51, 51, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0); }
 }
 
 .total-budget {
-    background: rgba(74, 144, 226, 0.1);
-    border: 2px solid #4a90e2;
-    border-radius: 8px;
+    background: rgba(0, 184, 255, 0.05);
+    border: 1px solid var(--janus-secondary);
+    border-radius: var(--janus-radius-md);
     padding: 1.5rem;
     margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--janus-secondary);
+    }
 }
 
 .budget-label {
     font-size: 0.9rem;
-    opacity: 0.8;
+    color: var(--janus-text-secondary);
     margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .budget-amount {
-    font-size: 2rem;
-    font-weight: bold;
+    font-size: 2.5rem;
+    font-weight: 700;
     margin-bottom: 1rem;
+    color: var(--janus-text-primary);
+    text-shadow: 0 0 20px rgba(0, 184, 255, 0.3);
 }
 
 .budget-progress-bar {
@@ -77,15 +112,16 @@ button {
 
 .budget-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #4a90e2, #357abd);
-    transition: width 0.3s ease;
+    background: linear-gradient(90deg, var(--janus-secondary), #357abd);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 6px;
 
     &.warning {
-        background: linear-gradient(90deg, #f39c12, #e67e22);
+        background: linear-gradient(90deg, $color-warning, #e67e22);
     }
 
     &.danger {
-        background: linear-gradient(90deg, #e74c3c, #c0392b);
+        background: linear-gradient(90deg, $color-error, #c0392b);
     }
 }
 
@@ -93,6 +129,7 @@ button {
     display: flex;
     justify-content: space-between;
     font-size: 0.9rem;
+    color: var(--janus-text-secondary);
 }
 
 .providers-list {
@@ -101,18 +138,22 @@ button {
 }
 
 .provider-card {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--janus-radius-md);
     padding: 1rem;
-    border-left: 4px solid #4a90e2;
-    transition: transform 0.2s;
+    border: 1px solid transparent;
+    border-left: 4px solid var(--janus-secondary);
+    transition: all var(--janus-transition-fast);
 
     &:hover {
         transform: translateX(4px);
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     &.over-budget {
-        border-left-color: #e74c3c;
+        border-left-color: $color-error;
         background: rgba(231, 76, 60, 0.1);
     }
 }
@@ -121,36 +162,39 @@ button {
     display: flex;
     justify-content: space-between;
     margin-bottom: 0.5rem;
-    font-weight: bold;
+    font-weight: 600;
 }
 
 .provider-name {
     text-transform: capitalize;
+    color: var(--janus-text-primary);
 }
 
 .provider-percentage {
-    color: #4a90e2;
+    color: var(--janus-secondary);
+    font-family: $font-mono;
 }
 
 .provider-bar {
-    height: 8px;
+    height: 6px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
     margin-bottom: 0.5rem;
 }
 
 .provider-bar-fill {
     height: 100%;
-    background: #4a90e2;
+    background: var(--janus-secondary);
     transition: width 0.3s ease;
+    border-radius: 3px;
 
     &.warning {
-        background: #f39c12;
+        background: $color-warning;
     }
 
     &.danger {
-        background: #e74c3c;
+        background: $color-error;
     }
 }
 
@@ -158,26 +202,34 @@ button {
     display: flex;
     justify-content: space-between;
     font-size: 0.85rem;
-    opacity: 0.8;
+    color: var(--janus-text-muted);
 }
 
 .remaining {
-    color: #2ecc71;
+    color: $color-success;
+    font-weight: 500;
 }
 
 .last-updated {
     text-align: center;
     font-size: 0.8rem;
-    opacity: 0.6;
-    margin-top: 1rem;
+    color: var(--janus-text-muted);
+    margin-top: 1.5rem;
+    
+    &::before {
+        content: '•';
+        margin-right: 0.5rem;
+        color: var(--janus-secondary);
+    }
 }
 
 .loading,
 .error-message {
     padding: 2rem;
     text-align: center;
+    color: var(--janus-text-secondary);
 }
 
 .error-message {
-    color: #e74c3c;
+    color: $color-error;
 }

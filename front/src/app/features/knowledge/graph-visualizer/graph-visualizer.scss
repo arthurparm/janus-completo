@@ -1,10 +1,14 @@
+@use 'sass:color';
+@use '../../../../styles/tokens' as *;
+@use '../../../../styles/mixins' as *;
+
 .graph-container {
     width: 100%;
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: var(--bg-primary, #1a1a2e);
-    color: var(--text-primary, #eee);
+    background: var(--janus-bg-dark);
+    color: var(--janus-text-primary);
 }
 
 .graph-header {
@@ -12,7 +16,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--border-color, #333);
+    border-bottom: 1px solid var(--janus-border);
+    background: var(--janus-bg-surface);
 }
 
 .graph-controls {
@@ -22,52 +27,64 @@
 
 .cytoscape-canvas {
     flex: 1;
-    background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+    background: linear-gradient(135deg, var(--janus-bg-dark) 0%, var(--janus-bg-surface) 100%);
 }
 
 .node-info-panel {
+    @include glass-panel;
     position: absolute;
     right: 20px;
     top: 100px;
     width: 300px;
     padding: 1.5rem;
-    background: rgba(26, 26, 46, 0.95);
-    border: 1px solid #4a90e2;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+    background: rgba(var(--janus-bg-card-rgb), 0.95); // Fallback to card bg
+    background: var(--janus-bg-card);
+    border: 1px solid var(--janus-secondary);
+    border-radius: var(--janus-radius-md);
+    box-shadow: 0 8px 32px rgba(0, 184, 255, 0.3);
 }
 
 .error-message {
     padding: 1rem;
-    background: #ff4444;
-    color: white;
+    background: $color-error-bg;
+    color: $color-error;
+    border: 1px solid $color-error;
     margin: 1rem;
-    border-radius: 4px;
+    border-radius: var(--janus-radius-sm);
 }
 
 button {
+    @include btn-primary; // Standard button styles
     padding: 0.5rem 1rem;
-    background: #4a90e2;
-    color: white;
+    background: var(--janus-secondary);
+    color: var(--janus-bg-dark);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--janus-radius-sm);
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background var(--janus-transition-fast);
+    font-weight: 500;
 
     &:hover:not(:disabled) {
-        background: #357abd;
+        background: color.adjust(#00b8ff, $lightness: 10%);
+        box-shadow: 0 0 10px rgba(0, 184, 255, 0.4);
     }
 
     &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        background: var(--janus-text-muted);
     }
 }
 
 select {
     padding: 0.5rem;
-    background: #2a2a3e;
-    color: white;
-    border: 1px solid #4a90e2;
-    border-radius: 4px;
+    background: var(--janus-bg-card);
+    color: var(--janus-text-primary);
+    border: 1px solid var(--janus-secondary);
+    border-radius: var(--janus-radius-sm);
+    outline: none;
+    
+    &:focus {
+        box-shadow: 0 0 0 2px rgba(0, 184, 255, 0.2);
+    }
 }

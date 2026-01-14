@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
+import { TranslateModule } from '@ngx-translate/core'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService } from '../../services/janus-api.service'
 import { DemoService } from '../../core/services/demo.service'
@@ -26,7 +27,7 @@ export interface ToolStats {
 @Component({
     selector: 'app-tools',
     standalone: true,
-    imports: [CommonModule, FormsModule, MatIconModule],
+    imports: [CommonModule, FormsModule, MatIconModule, TranslateModule],
     templateUrl: './tools.html',
     styleUrl: './tools.scss'
 })

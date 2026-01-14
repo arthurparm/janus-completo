@@ -1,18 +1,23 @@
-:host {
-  --chat-bg: #0a0f1a;
-  --chat-bg: #0a0f1a;
-  --chat-surface: rgba(17, 24, 39, 0.4);
-  --chat-surface: rgba(17, 24, 39, 0.4);
-  --chat-border: rgba(0, 212, 255, 0.2);
-  --chat-border: rgba(0, 212, 255, 0.2);
-  --text-primary: #e0f8ff;
-  --text-secondary: #9ec8d6;
-  --text-muted: #6b7280;
-  --accent-cyan: #00d4ff;
-  --accent-purple: #7c3aed;
+@use '../../../../styles/tokens' as *;
+@use '../../../../styles/mixins' as *;
 
-  --card-bg: rgba(10, 15, 26, 0.6);
-  --card-hover: rgba(17, 24, 39, 0.8);
+:host {
+  // Map local variables to global tokens for consistency
+  --chat-bg: var(--janus-bg-dark);
+  --chat-surface: var(--janus-bg-surface);
+  --chat-border: var(--janus-border);
+  
+  --text-primary: var(--janus-text-primary);
+  --text-secondary: var(--janus-text-secondary);
+  --text-muted: var(--janus-text-muted);
+  
+  --accent-cyan: var(--janus-secondary);
+  --accent-purple: #7c3aed; // Keeping specific accent for this feature
+  
+  --card-bg: var(--janus-bg-card);
+  --card-hover: rgba(255, 255, 255, 0.05);
+  
+  --error: #ef4444;
 }
 
 .conversations-layout {
@@ -22,17 +27,15 @@
   background: transparent;
   padding: 0;
   overflow: hidden;
-  font-family: 'Inter', sans-serif;
+  font-family: $font-body;
   color: var(--text-primary);
 }
-
 
 .conversations-header {
   padding: 1.5rem 2rem;
   background: var(--chat-surface);
   border-bottom: 1px solid var(--chat-border);
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  @include glass-panel;
 }
 
 .header-content {
@@ -91,8 +94,9 @@
   align-items: center;
 }
 
-
 .btn-secondary {
+  @include btn-outline; // Assuming .btn-outline is in _components.scss or we recreate styles
+  // Overriding/Ensuring specific styles
   background: transparent;
   border: 1px solid var(--chat-border);
   color: var(--text-secondary);
@@ -100,15 +104,16 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--janus-radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--janus-transition-fast);
   height: 38px;
 
   &:hover {
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
-    background: rgba(0, 212, 255, 0.1);
+    background: rgba(var(--janus-secondary-rgb), 0.1); // Assuming we had rgb vars, falling back to simple rgba if not
+    background: rgba(0, 184, 255, 0.1);
   }
 
   .icon {
@@ -118,16 +123,17 @@
 }
 
 .btn-primary {
+  @include btn-primary; // Use standard button
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
   border: none;
   color: white;
   padding: 0.5rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--janus-radius-md);
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.2);
-  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2);
+  transition: all var(--janus-transition-fast);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -135,15 +141,14 @@
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 184, 255, 0.3);
   }
 }
 
-
 .filters-section {
   padding: 1rem 1.5rem;
-  background: rgba(10, 15, 26, 0.3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--chat-border);
 }
 
 .filters-container {
@@ -169,19 +174,19 @@
 
   .search-input {
     width: 100%;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--chat-border);
-    border-radius: 8px;
+    border-radius: var(--janus-radius-md);
     padding: 0.5rem 2.2rem 0.5rem 2.2rem;
     color: var(--text-primary);
     font-size: 0.9rem;
     outline: none;
-    transition: all 0.2s;
+    transition: all var(--janus-transition-fast);
     height: 38px;
 
     &:focus {
       border-color: var(--accent-cyan);
-      box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
+      box-shadow: 0 0 10px rgba(0, 184, 255, 0.1);
     }
   }
 
@@ -206,28 +211,26 @@
   }
 }
 
-
 .action-btn {
   padding: 6px 16px;
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--janus-transition-fast);
   border: 1px solid transparent;
 
   &.primary {
     background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
     color: white;
-    box-shadow: 0 4px 10px rgba(0, 212, 255, 0.2);
+    box-shadow: 0 4px 10px rgba(0, 184, 255, 0.2);
 
     &:hover {
-      box-shadow: 0 6px 15px rgba(0, 212, 255, 0.3);
+      box-shadow: 0 6px 15px rgba(0, 184, 255, 0.3);
       transform: translateY(-1px);
     }
   }
 }
-
 
 .edit-title-wrapper {
   display: flex;
@@ -267,7 +270,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--janus-transition-fast);
 
   &:hover {
     background: rgba(255, 255, 255, 0.1);
@@ -300,7 +303,7 @@
   select {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--chat-border);
-    border-radius: 8px;
+    border-radius: var(--janus-radius-md);
     padding: 0.4rem 0.8rem;
     color: var(--text-secondary);
     font-size: 0.85rem;
@@ -309,8 +312,8 @@
     min-width: 140px;
     height: 38px;
     appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ec8d6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    // Keep the SVG arrow but color matched if needed
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a0a0a0'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.5rem center;
     background-size: 1rem;
@@ -321,7 +324,7 @@
     }
 
     option {
-      background: #0a0f1a;
+      background: var(--janus-bg-card);
       padding: 8px;
     }
   }
@@ -345,7 +348,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all var(--janus-transition-fast);
 
     &:hover {
       color: var(--text-primary);
@@ -353,7 +356,7 @@
     }
 
     &.active {
-      background: rgba(0, 212, 255, 0.15);
+      background: rgba(0, 184, 255, 0.15);
       color: var(--accent-cyan);
     }
 
@@ -363,7 +366,6 @@
     }
   }
 }
-
 
 .content-scrollbox {
   flex: 1;
@@ -379,11 +381,10 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 212, 255, 0.2);
+    background: rgba(0, 184, 255, 0.2);
     border-radius: 3px;
   }
 }
-
 
 .conversations-container {
   display: grid;
@@ -408,21 +409,19 @@
   border-radius: 12px;
   padding: 1.5rem;
   position: relative;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--janus-transition-normal) cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   animation: slideIn 0.4s ease-out backwards;
   display: flex;
   flex-direction: column;
   height: 100%;
-  height: 100%;
-  min-height: 240px;
   min-height: 240px;
 
   &:hover {
     background: var(--card-hover);
     border-color: var(--accent-cyan);
     transform: translateY(-4px);
-    box-shadow: 0 12px 40px -10px rgba(0, 212, 255, 0.15);
+    box-shadow: 0 12px 40px -10px rgba(0, 184, 255, 0.15);
 
     .card-actions-hover {
       opacity: 1;
@@ -452,7 +451,6 @@
         overflow: hidden;
         flex: 1;
         padding-right: 2rem;
-        padding-right: 2rem;
       }
 
       .message-count {
@@ -481,7 +479,7 @@
 
         &.new {
           color: var(--accent-cyan);
-          background: rgba(0, 212, 255, 0.1);
+          background: rgba(0, 184, 255, 0.1);
         }
 
         &.progress {
@@ -514,7 +512,6 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
       flex: 1;
-      flex: 1;
     }
 
     .conversation-tags {
@@ -537,7 +534,6 @@
       color: var(--text-muted);
     }
   }
-
 
   &.list-item {
     min-height: 0;
@@ -580,8 +576,6 @@
     }
   }
 
-
-
   .card-actions-hover {
     opacity: 0;
     pointer-events: none;
@@ -592,7 +586,6 @@
     display: flex;
     gap: 0.5rem;
     background: rgba(10, 15, 26, 0.8);
-    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     padding: 4px;
     border-radius: 8px;
@@ -625,7 +618,6 @@
     }
   }
 
-
   .empty-state {
     display: flex;
     flex-direction: column;
@@ -650,7 +642,6 @@
       font-size: 0.9rem;
     }
   }
-
 
   .pagination-bar {
     padding: 1rem 1.5rem;
@@ -696,11 +687,9 @@
 
   .glass-menu {
     background: rgba(10, 15, 26, 0.9) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
     backdrop-filter: blur(12px) !important;
     border: 1px solid var(--chat-border) !important;
   }
-
 
   .loading-container {
     display: flex;
@@ -719,7 +708,7 @@
   .spinner {
     width: 30px;
     height: 30px;
-    border: 3px solid rgba(0, 212, 255, 0.1);
+    border: 3px solid rgba(0, 184, 255, 0.1);
     border-top-color: var(--accent-cyan);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -765,14 +754,14 @@
   .warning-icon {
     height: 5rem;
     width: 5rem;
-    color: var(--error, #ff4757);
+    color: var(--error);
     position: relative;
     z-index: 1;
   }
 
   h2 {
     font-family: 'Orbitron', sans-serif;
-    color: var(--error, #ff4757);
+    color: var(--error);
     font-size: 1.8rem;
     margin-bottom: 1rem;
     text-shadow: 0 0 20px rgba(255, 71, 87, 0.3);
@@ -790,13 +779,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: $font-mono;
     font-size: 0.85rem;
     color: var(--text-muted);
     background: rgba(0, 0, 0, 0.3);
     padding: 1rem 2rem;
     border-radius: 0.5rem;
-    border-left: 3px solid var(--error, #ff4757);
+    border-left: 3px solid var(--error);
     align-items: flex-start;
 
     span {

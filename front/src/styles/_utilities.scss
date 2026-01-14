@@ -1,4 +1,5 @@
-@use 'tokens' as *;
+@use 'sass:map';
+@use './tokens' as *;
 
 // =============================================================================
 // LAYOUT UTILITIES
@@ -120,7 +121,7 @@
 }
 
 .font-mono {
-    font-family: $font-mono;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .uppercase {
@@ -237,28 +238,28 @@
 }
 
 .rounded-sm {
-    border-radius: $radius-sm;
+    border-radius: var(--janus-radius-sm);
 }
 
 .rounded {
-    border-radius: $radius-md;
+    border-radius: var(--janus-radius-md);
 }
 
 .rounded-lg {
-    border-radius: $radius-lg;
+    border-radius: var(--janus-radius-lg);
 }
 
 // Transitions
 .transition-colors {
-    transition: background-color $transition-fast, color $transition-fast, border-color $transition-fast;
+    transition: background-color var(--janus-transition-fast), color var(--janus-transition-fast), border-color var(--janus-transition-fast);
 }
 
 .transition-opacity {
-    transition: opacity $transition-fast;
+    transition: opacity var(--janus-transition-fast);
 }
 
 .transition-transform {
-    transition: transform $transition-fast;
+    transition: transform var(--janus-transition-fast);
 }
 
 .duration-200 {

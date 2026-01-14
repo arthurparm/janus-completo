@@ -25,13 +25,13 @@ export interface ConfirmDialogData {
       </div>
       <p class="dialog-message">{{ data.message }}</p>
       <div class="dialog-actions">
-        <button mat-button class="btn-neutral" (click)="onCancel()">
+        <button class="btn btn-secondary btn-sm" (click)="onCancel()">
           {{ data.cancelText || 'Cancelar' }}
         </button>
         <button
-          mat-raised-button
-          class="btn-danger"
-          color="{{ data.confirmColor || 'warn' }}"
+          class="btn btn-sm"
+          [class.btn-danger]="data.confirmColor === 'warn' || !data.confirmColor"
+          [class.btn-primary]="data.confirmColor === 'primary'"
           (click)="onConfirm()">
           {{ data.confirmText || 'Confirmar' }}
         </button>
@@ -40,13 +40,13 @@ export interface ConfirmDialogData {
   `,
   styles: [`
     .confirm-dialog-content {
-      padding: 24px 24px 20px;
+      padding: 24px;
       max-width: 420px;
-      background: rgba(3, 7, 18, 0.96);
-      border-radius: 12px;
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.85);
-      color: #e5f4ff;
+      background: var(--janus-bg-card);
+      border-radius: var(--janus-radius-lg);
+      border: 1px solid var(--janus-border);
+      box-shadow: var(--janus-shadow-glow);
+      color: var(--janus-text-primary);
     }
 
     .dialog-header {
@@ -59,33 +59,32 @@ export interface ConfirmDialogData {
     .dialog-icon {
       width: 32px;
       height: 32px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 30% 0%, #f97316, #b91c1c);
+      border-radius: 50%;
+      background: rgba(255, 176, 32, 0.1); /* Warning bg */
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 18px rgba(248, 113, 113, 0.6);
+      border: 1px solid rgba(255, 176, 32, 0.3);
       flex-shrink: 0;
     }
 
     .icon-symbol {
       font-weight: 800;
       font-size: 18px;
-      color: #fef2f2;
+      color: #ffb020; /* Warning color */
     }
 
     .dialog-title {
       margin: 0;
-      font-size: 1.05rem;
+      font-size: 1.125rem;
       font-weight: 600;
-      letter-spacing: 0.02em;
-      color: #f9fafb;
+      color: var(--janus-text-primary);
     }
 
     .dialog-message {
-      margin: 0 0 20px 0;
+      margin: 0 0 24px 0;
       font-size: 0.94rem;
-      color: #9ca3af;
+      color: var(--janus-text-secondary);
       line-height: 1.6;
       white-space: pre-line;
     }
@@ -93,36 +92,62 @@ export interface ConfirmDialogData {
     .dialog-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
-      margin-top: 4px;
+      gap: 12px;
     }
 
-    .btn-neutral {
-      color: #e5e7eb;
-      border-radius: 999px;
-      padding-inline: 16px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      background: rgba(15, 23, 42, 0.7);
-      min-width: 0;
+    /* Inline btn styles if global styles not applied in ViewEncapsulation.Emulated (default) */
+    /* But since we use simple classes, we can rely on global styles if we didn't encapsulate too strictly. */
+    /* Actually, Angular component styles are encapsulated. So .btn classes from global styles MIGHT NOT apply if they are not ::ng-deep or if we don't import them. */
+    /* Best practice: Import tokens and define/re-use styles or use the global class if it's available. */
+    /* Since we added .btn to global styles (styles.scss), it SHOULD be available if we don't override it, BUT Angular View Encapsulation usually isolates component styles. */
+    /* HOWEVER, global styles defined in styles.scss are available to all components unless shadowed. */
+    /* Wait, global styles in styles.scss are NOT encapsulated, they apply globally. */
+    /* So <button class="btn"> should work! */
+    
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        border-radius: var(--janus-radius-md);
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s;
     }
 
-    .btn-neutral:hover {
-      background: rgba(31, 41, 55, 0.9);
-      border-color: rgba(148, 163, 184, 0.7);
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.875rem;
+    }
+
+    .btn-secondary {
+        background-color: transparent;
+        border-color: var(--janus-border);
+        color: var(--janus-text-primary);
+    }
+    .btn-secondary:hover {
+        background-color: rgba(255, 255, 255, 0.05);
     }
 
     .btn-danger {
-      background: linear-gradient(135deg, #f97316, #ef4444);
-      color: #f9fafb;
-      box-shadow: 0 0 14px rgba(248, 113, 113, 0.45);
-      border-radius: 999px;
-      padding-inline: 20px;
-      min-width: 0;
+        background-color: rgba(255, 0, 85, 0.1);
+        border-color: var(--janus-accent);
+        color: var(--janus-accent);
+    }
+    .btn-danger:hover {
+        background-color: rgba(255, 0, 85, 0.2);
+        box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
     }
 
-    .btn-danger:hover {
-      box-shadow: 0 0 20px rgba(248, 113, 113, 0.7);
+    .btn-primary {
+        background-color: var(--janus-primary);
+        color: var(--janus-bg-dark);
     }
+    .btn-primary:hover {
+        background-color: var(--janus-primary-hover);
+    }
+
   `]
 })
 export class ConfirmDialogComponent {

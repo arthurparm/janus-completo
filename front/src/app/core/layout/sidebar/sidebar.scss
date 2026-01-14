@@ -9,7 +9,7 @@
 
 .section-title {
     font-size: 0.7rem;
-    color: var(--text-muted);
+    color: var(--janus-text-muted);
     text-transform: uppercase;
     letter-spacing: 1.5px;
     margin-bottom: 0.75rem;
@@ -29,8 +29,8 @@
     gap: 12px;
     padding: 0.75rem 1rem;
     text-decoration: none;
-    color: var(--text-secondary);
-    border-radius: 8px;
+    color: var(--janus-text-secondary);
+    border-radius: var(--janus-radius-md);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: 1px solid transparent;
     position: relative;
@@ -54,7 +54,7 @@
 
     &:hover {
         background: rgba(0, 212, 255, 0.05);
-        color: var(--cyan);
+        color: var(--janus-secondary);
         padding-left: 1.25rem;
         /* Slide effect */
         border-color: rgba(0, 212, 255, 0.1);
@@ -70,9 +70,9 @@
 
     &.active {
         background: linear-gradient(90deg, rgba(0, 212, 255, 0.1), transparent);
-        color: var(--cyan);
-        border-left: 3px solid var(--cyan);
-        border-radius: 0 8px 8px 0;
+        color: var(--janus-secondary);
+        border-left: 3px solid var(--janus-secondary);
+        border-radius: 0 var(--janus-radius-md) var(--janus-radius-md) 0;
 
         .icon {
             filter: grayscale(0%);
@@ -87,7 +87,7 @@
         top: 0;
         bottom: 0;
         width: 2px;
-        background: var(--cyan);
+        background: var(--janus-secondary);
         opacity: 0;
         transition: opacity 0.3s;
     }

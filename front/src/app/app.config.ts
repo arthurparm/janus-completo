@@ -1,8 +1,10 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode } from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode, importProvidersFrom } from '@angular/core';
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, HttpClient } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
 import { provideAnimations } from '@angular/platform-browser/animations';
+import { TranslateModule } from '@ngx-translate/core';
+import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { baseUrlInterceptor } from './core/interceptors/base-url.interceptor';
 import { errorLoggerInterceptor } from './core/interceptors/error-logger.interceptor';
 import { errorMappingInterceptor } from './core/interceptors/error-mapping.interceptor';
@@ -25,6 +27,15 @@ export const appConfig: ApplicationConfig = {
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })
     ),
     provideHttpClient(withInterceptors([baseUrlInterceptor, authInterceptor, errorLoggerInterceptor, errorMappingInterceptor])),
+    importProvidersFrom(
+      TranslateModule.forRoot({
+        defaultLanguage: 'pt-BR'
+      })
+    ),
+    provideTranslateHttpLoader({
+      prefix: './assets/i18n/',
+      suffix: '.json'
+    }),
 
     // Firebase
     provideFirebaseApp(() => initializeApp(environment.firebase)),

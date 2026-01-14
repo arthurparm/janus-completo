@@ -1,0 +1,32 @@
+{
+  "APP": {
+    "TITLE": "Janus System",
+    "WELCOME": "Welcome to Janus System"
+  },
+  "AUTH": {
+    "LOGIN": "Login",
+    "LOGOUT": "Logout",
+    "EMAIL": "Email",
+    "PASSWORD": "Password",
+    "FORGOT_PASSWORD": "Forgot password?",
+    "SIGN_IN_GOOGLE": "Sign in with Google"
+  },
+  "NAV": {
+    "HOME": "Home",
+    "CHAT": "Chat",
+    "DASHBOARD": "Dashboard",
+    "TOOLS": "Tools",
+    "WORKERS": "Workers",
+    "DOCUMENTS": "Documents",
+    "SETTINGS": "Settings"
+  },
+  "COMMON": {
+    "LOADING": "Loading...",
+    "ERROR": "An error occurred",
+    "SUCCESS": "Operation successful",
+    "CANCEL": "Cancel",
+    "CONFIRM": "Confirm",
+    "SAVE": "Save",
+    "DELETE": "Delete"
+  }
+}

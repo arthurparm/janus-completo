@@ -1,0 +1,108 @@
+/**
+ * =============================================================================
+ * JANUS MIXINS
+ * =============================================================================
+ *
+ * Reusable mixins for effects, layouts, and utilities.
+ *
+ * =============================================================================
+ */
+
+@use 'styles/tokens' as *;
+
+@mixin glass-panel {
+    background: rgba(13, 20, 35, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--janus-border);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+@mixin ambient-background {
+    background: 
+        radial-gradient(circle at 15% 50%, rgba(0, 184, 255, 0.03), transparent 25%), 
+        radial-gradient(circle at 85% 30%, rgba(124, 58, 237, 0.03), transparent 25%);
+    background-attachment: fixed;
+}
+
+// Button Mixins
+@mixin btn-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--janus-spacing-sm);
+    padding: var(--janus-spacing-sm) var(--janus-spacing-md);
+    border-radius: var(--janus-radius-md);
+    font-weight: 500;
+    transition: var(--janus-transition-fast);
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+}
+
+@mixin btn-primary {
+    @include btn-base;
+    background-color: var(--janus-primary);
+    color: var(--janus-bg-dark);
+    border-color: transparent;
+
+    &:hover {
+        background-color: var(--janus-primary-hover);
+        box-shadow: var(--janus-shadow-glow);
+    }
+}
+
+@mixin btn-secondary {
+    @include btn-base;
+    background-color: var(--janus-bg-surface);
+    border-color: var(--janus-border);
+    color: var(--janus-text-primary);
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-color: var(--janus-text-secondary);
+    }
+}
+
+@mixin btn-outline {
+    @include btn-base;
+    background-color: transparent;
+    border-color: var(--janus-border);
+    color: var(--janus-text-secondary);
+
+    &:hover {
+        border-color: var(--janus-text-primary);
+        color: var(--janus-text-primary);
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+}
+
+@mixin btn-ghost {
+    @include btn-base;
+    background-color: transparent;
+    color: var(--janus-text-secondary);
+    border-color: transparent;
+    
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: var(--janus-text-primary);
+    }
+}
+
+@mixin btn-danger {
+    @include btn-base;
+    background-color: transparent;
+    border-color: var(--janus-accent);
+    color: var(--janus-accent);
+
+    &:hover {
+         background-color: rgba(255, 0, 85, 0.1);
+    }
+}

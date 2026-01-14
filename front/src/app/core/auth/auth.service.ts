@@ -131,7 +131,7 @@ export class AuthService {
     try {
       const token = await firebaseUser.getIdToken()
       // Reuse existing endpoint for now. Ideally should be /v1/auth/firebase/exchange
-      const out = await firstValueFrom(this.http.post<AuthExchangeResponse>(`${API_BASE_URL}/v1/auth/supabase/exchange`, { token }))
+      const out = await firstValueFrom(this.http.post<AuthExchangeResponse>(`${API_BASE_URL}/v1/auth/firebase/exchange`, { token }))
 
       const janus = String(out?.token || '')
       if (janus) {

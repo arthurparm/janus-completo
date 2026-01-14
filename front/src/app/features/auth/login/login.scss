@@ -1,34 +1,168 @@
-.login { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: var(--bg) }
-.panel { width: 100%; max-width: 420px; background: color-mix(in srgb, var(--bg) 80%, var(--fg) 20%); border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 24px; animation: fadeIn .4s ease }
-.brand { text-align: center; margin-bottom: 16px }
-.brand .logo { width: 64px; height: 64px; margin: 0 auto 12px; background: radial-gradient(circle at 30% 30%, var(--primary-color) 0%, transparent 60%), radial-gradient(circle at 70% 70%, var(--orange) 0%, transparent 60%); border-radius: 16px; animation: drift 6s ease-in-out infinite }
-.brand h1 { color: var(--fg); font-size: 1.4rem; margin: 0 0 6px }
-.brand .subtitle { color: color-mix(in srgb, var(--fg) 60%, #999 40%); font-size: .9rem; margin: 0 }
+@use 'styles/tokens' as *;
 
-.form { display: grid; gap: 12px }
-.field { display: grid; gap: 6px }
-.field label { color: var(--fg); font-weight: 600 }
-.field input { border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent 80%); border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, var(--bg) 92%, var(--fg) 8%); color: var(--fg); outline: none; transition: border .2s ease, box-shadow .2s ease }
-.field input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 30%, transparent 70%) }
-.password { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px }
-.password .toggle { border: none; background: transparent; color: var(--primary-color); font-weight: 600; cursor: pointer }
-.error { color: #d22; font-size: .85rem }
+:host {
+    display: block;
+}
 
-.extras { display: flex; justify-content: space-between; align-items: center }
-.remember { display: inline-flex; align-items: center; gap: 8px; color: var(--fg) }
-.link { color: var(--primary-color); text-decoration: none }
-.link:hover { text-decoration: underline }
+.login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--janus-spacing-lg);
+    background: var(--janus-bg-dark);
+    position: relative;
+    overflow: hidden;
 
-.primary { border: none; border-radius: 10px; padding: 12px; background: var(--primary-color); color: white; font-weight: 700; cursor: pointer; transition: transform .05s ease, filter .2s ease }
-.primary:hover { filter: brightness(1.02) }
-.primary:active { transform: translateY(1px) }
+    // Background effect
+    &::before {
+        content: '';
+        position: absolute;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle at center, rgba(56, 189, 248, 0.03) 0%, transparent 50%);
+        top: -50%;
+        left: -50%;
+        z-index: 0;
+        animation: pulse-slow 10s infinite;
+    }
+}
 
-.alt-actions { display: grid; gap: 8px }
-.sso { border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent 80%); border-radius: 10px; padding: 10px; background: color-mix(in srgb, var(--bg) 92%, var(--fg) 8%); color: var(--fg); cursor: pointer }
-.sso.google { border-color: #4285F4 }
-.sso.github { border-color: #222 }
+.glass-panel {
+    background: rgba(18, 18, 18, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--janus-radius-lg);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 440px;
+    position: relative;
+    z-index: 10;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 
-.more { display: flex; justify-content: center; gap: 6px; color: var(--fg) }
-.error.global { text-align: center }
+    &:hover {
+        box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.6);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+}
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+.brand {
+    text-align: center;
+    margin-bottom: 2rem;
+
+    h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--janus-text-primary);
+        margin-bottom: 0.25rem;
+        text-shadow: 0 0 10px rgba(0, 255, 157, 0.3);
+    }
+
+    p {
+        font-family: $font-mono;
+        font-size: 0.75rem;
+        color: var(--janus-primary);
+        letter-spacing: 0.05em;
+    }
+}
+
+.glass-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--janus-radius-md);
+    padding: 0.75rem 1rem;
+    color: var(--janus-text-primary);
+    font-family: $font-mono;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+
+    &:focus {
+        outline: none;
+        border-color: var(--janus-primary);
+        box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.1);
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    &::placeholder {
+        color: var(--janus-text-muted);
+    }
+}
+
+.glass-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.875rem;
+    border-radius: var(--janus-radius-md);
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: 1px solid transparent;
+    text-transform: uppercase;
+
+    // Primary style
+    background: rgba(0, 255, 157, 0.1);
+    color: var(--janus-primary);
+    border-color: rgba(0, 255, 157, 0.3);
+
+    &:hover:not(:disabled) {
+        background: rgba(0, 255, 157, 0.2);
+        box-shadow: 0 0 15px rgba(0, 255, 157, 0.2);
+        transform: translateY(-1px);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    // Secondary style
+    &.secondary {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--janus-text-secondary);
+        border-color: rgba(255, 255, 255, 0.1);
+        font-size: 0.75rem;
+        padding: 0.75rem;
+
+        &:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--janus-text-primary);
+        }
+    }
+}
+
+label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--janus-text-secondary);
+    margin-bottom: 0.5rem;
+    font-family: $font-mono;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.animate-spin-slow {
+    animation: spin 3s linear infinite;
+}
+
+.animate-reverse-spin {
+    animation: spin 4s linear infinite reverse;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-slow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+}

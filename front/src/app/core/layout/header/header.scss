@@ -4,8 +4,8 @@
   height: 64px;
   background: rgba(10, 15, 26, 0.3);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--panel-border);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--janus-border);
+  box-shadow: var(--janus-shadow-glow);
   display: flex;
   align-items: center;
   position: sticky;
@@ -17,7 +17,7 @@
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 var(--janus-spacing-lg);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -41,11 +41,11 @@
   font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: 2px;
-  color: var(--fg);
+  color: var(--janus-text-primary);
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 
   .dot {
-    color: var(--cyan);
+    color: var(--janus-secondary);
     animation: pulse 2s infinite;
   }
 }
@@ -55,12 +55,12 @@
   0%,
   100% {
     opacity: 1;
-    text-shadow: 0 0 10px var(--cyan);
+    text-shadow: 0 0 10px var(--janus-secondary);
   }
 
   50% {
     opacity: 0.5;
-    text-shadow: 0 0 5px var(--cyan);
+    text-shadow: 0 0 5px var(--janus-secondary);
   }
 }
 
@@ -70,7 +70,7 @@
   align-items: center;
 
   a {
-    color: var(--text-secondary);
+    color: var(--janus-text-secondary);
     text-decoration: none;
     padding: 8px 16px;
     border-radius: 4px;
@@ -82,7 +82,7 @@
     border: 1px solid transparent;
 
     &:hover {
-      color: var(--cyan);
+      color: var(--janus-secondary);
       background: rgba(0, 212, 255, 0.1);
       border-color: rgba(0, 212, 255, 0.2);
       box-shadow: 0 0 15px rgba(0, 212, 255, 0.15);
@@ -90,7 +90,7 @@
     }
 
     &.active {
-      color: var(--cyan);
+      color: var(--janus-secondary);
       background: rgba(0, 212, 255, 0.05);
       border-color: rgba(0, 212, 255, 0.3);
       box-shadow: inset 0 0 10px rgba(0, 212, 255, 0.1);
@@ -106,8 +106,8 @@
 .logout-btn {
   margin-left: 1rem;
   background: transparent;
-  border: 1px solid var(--panel-border);
-  color: var(--text-muted);
+  border: 1px solid var(--janus-border);
+  color: var(--janus-text-muted);
   padding: 6px 16px;
   border-radius: 20px;
   cursor: pointer;
@@ -117,8 +117,8 @@
   transition: all 0.3s;
 
   &:hover {
-    border-color: var(--error-color);
-    color: var(--error-color);
+    border-color: var(--janus-accent);
+    color: var(--janus-accent);
     background: rgba(239, 68, 68, 0.1);
     box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
   }
@@ -138,14 +138,14 @@
     line-height: 1.2;
     
     .label {
-      color: var(--text-muted);
+      color: var(--janus-text-muted);
       font-size: 0.65rem;
       letter-spacing: 1px;
       font-weight: 500;
     }
     
     .value {
-      color: var(--cyan);
+      color: var(--janus-secondary);
       font-weight: 600;
       font-size: 0.9rem;
       text-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
@@ -156,7 +156,7 @@
 .menu-toggle {
   display: none;
   background: transparent;
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--janus-border);
   border-radius: 4px;
   padding: 8px;
   cursor: pointer;
@@ -165,7 +165,7 @@
     display: block;
     width: 24px;
     height: 2px;
-    background: var(--fg);
+    background: var(--janus-text-primary);
     margin: 4px 0;
     transition: 0.3s;
   }
@@ -190,8 +190,8 @@
     flex-direction: column;
     background: rgba(10, 15, 26, 0.95);
     backdrop-filter: blur(16px);
-    padding: 1rem;
-    border-bottom: 1px solid var(--panel-border);
+    padding: var(--janus-spacing-md);
+    border-bottom: 1px solid var(--janus-border);
     gap: 8px;
 
     &.open {

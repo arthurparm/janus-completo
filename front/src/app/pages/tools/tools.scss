@@ -1,3 +1,6 @@
+@use '../../../styles/tokens' as *;
+@use '../../../styles/mixins' as *;
+
 /* Tools Page Styles */
 
 .tools-layout {
@@ -36,12 +39,12 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: rgba(17, 24, 39, 0.7);
-        -webkit-backdrop-filter: blur(12px);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(0, 212, 255, 0.15);
+        background: rgba(var(--janus-bg-surface-rgb), 0.7); // Fallback
+        background: rgba(26, 26, 26, 0.7);
+        @include glass-panel;
+        border: 1px solid var(--janus-border);
         padding: 1.5rem;
-        border-radius: 12px;
+        border-radius: var(--janus-radius-lg);
         margin-bottom: 1rem;
     }
 
@@ -51,11 +54,11 @@
         gap: 0.75rem;
         font-size: 1.75rem;
         font-weight: 700;
-        color: white;
+        color: var(--janus-text-primary);
         margin: 0;
 
         mat-icon {
-            color: var(--cyan, #00d4ff);
+            color: var(--janus-secondary);
             font-size: 2rem;
             width: 2rem;
             height: 2rem;
@@ -63,7 +66,7 @@
     }
 
     .header-subtitle {
-        color: rgba(158, 200, 214, 0.7);
+        color: var(--janus-text-secondary);
         margin: 0.25rem 0 0 2.75rem;
         font-size: 0.9rem;
     }
@@ -73,12 +76,12 @@
     display: flex;
     align-items: center;
     gap: 2rem;
-    background: rgba(17, 24, 39, 0.5);
+    background: var(--janus-bg-surface);
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--janus-border);
     padding: 1rem 1.5rem;
-    border-radius: 12px;
+    border-radius: var(--janus-radius-md);
     flex-wrap: wrap;
 
     .stat-item {
@@ -89,17 +92,17 @@
         .stat-number {
             font-size: 1.5rem;
             font-weight: 700;
-            color: white;
+            color: var(--janus-text-primary);
         }
 
         .stat-label {
             font-size: 0.75rem;
-            color: rgba(158, 200, 214, 0.6);
+            color: var(--janus-text-secondary);
             text-transform: uppercase;
         }
 
         &.success .stat-number {
-            color: #00ff88;
+            color: $color-success;
         }
     }
 
@@ -113,7 +116,7 @@
 
         .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, var(--cyan, #00d4ff), #00ff88);
+            background: linear-gradient(90deg, var(--janus-secondary), $color-success);
             border-radius: 4px;
             transition: width 0.5s ease;
         }
@@ -142,7 +145,7 @@
         .search-icon {
             position: absolute;
             left: 0.75rem;
-            color: rgba(158, 200, 214, 0.5);
+            color: var(--janus-text-muted);
             width: 20px;
             height: 20px;
             font-size: 20px;
@@ -152,19 +155,19 @@
     .search-input {
         width: 100%;
         padding: 0.75rem 1rem 0.75rem 2.5rem;
-        background: rgba(10, 15, 26, 0.6);
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        border-radius: 8px;
-        color: white;
+        background: var(--janus-bg-card);
+        border: 1px solid var(--janus-border);
+        border-radius: var(--janus-radius-md);
+        color: var(--janus-text-primary);
 
         &:focus {
             outline: none;
-            border-color: var(--cyan, #00d4ff);
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+            border-color: var(--janus-secondary);
+            box-shadow: 0 0 10px rgba(0, 184, 255, 0.2);
         }
 
         &::placeholder {
-            color: rgba(158, 200, 214, 0.5);
+            color: var(--janus-text-muted);
         }
     }
 
@@ -175,21 +178,21 @@
 
     .filter-select {
         padding: 0.75rem 1rem;
-        background: rgba(10, 15, 26, 0.6);
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        border-radius: 8px;
-        color: white;
+        background: var(--janus-bg-card);
+        border: 1px solid var(--janus-border);
+        border-radius: var(--janus-radius-md);
+        color: var(--janus-text-primary);
         cursor: pointer;
         min-width: 150px;
 
         &:focus {
             outline: none;
-            border-color: var(--cyan, #00d4ff);
+            border-color: var(--janus-secondary);
         }
 
         option {
-            background: #1a1a2e;
-            color: white;
+            background: var(--janus-bg-dark);
+            color: var(--janus-text-primary);
         }
     }
 }
@@ -202,22 +205,22 @@
 }
 
 .tool-card {
-    background: rgba(17, 24, 39, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: var(--janus-bg-surface);
+    border: 1px solid var(--janus-border);
+    border-radius: var(--janus-radius-md);
     padding: 1.25rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all var(--janus-transition-fast);
 
     &:hover {
-        background: rgba(17, 24, 39, 0.7);
-        border-color: rgba(0, 212, 255, 0.3);
+        background: var(--janus-bg-card);
+        border-color: var(--janus-secondary);
         transform: translateY(-2px);
     }
 
     &.selected {
-        border-color: var(--cyan, #00d4ff);
-        background: rgba(0, 212, 255, 0.05);
+        border-color: var(--janus-secondary);
+        background: rgba(0, 184, 255, 0.05);
     }
 
     .card-header {
@@ -231,14 +234,14 @@
         width: 40px;
         height: 40px;
         border-radius: 8px;
-        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(124, 58, 237, 0.2));
+        background: linear-gradient(135deg, rgba(0, 184, 255, 0.2), rgba(124, 58, 237, 0.2));
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
 
         mat-icon {
-            color: var(--cyan, #00d4ff);
+            color: var(--janus-secondary);
             font-size: 20px;
             width: 20px;
             height: 20px;
@@ -253,7 +256,7 @@
     .tool-name {
         font-size: 1rem;
         font-weight: 600;
-        color: white;
+        color: var(--janus-text-primary);
         margin: 0;
         white-space: nowrap;
         overflow: hidden;
@@ -262,7 +265,7 @@
 
     .tool-category {
         font-size: 0.75rem;
-        color: rgba(158, 200, 214, 0.6);
+        color: var(--janus-text-secondary);
         text-transform: uppercase;
     }
 
@@ -284,18 +287,18 @@
         }
 
         &.permission-safe {
-            background: rgba(0, 255, 136, 0.15);
-            color: #00ff88;
+            background: $color-success-bg;
+            color: $color-success;
         }
 
         &.permission-moderate {
-            background: rgba(255, 184, 0, 0.15);
-            color: #ffb800;
+            background: $color-warning-bg;
+            color: $color-warning;
         }
 
         &.permission-dangerous {
-            background: rgba(255, 71, 87, 0.15);
-            color: #ff4757;
+            background: $color-error-bg;
+            color: $color-error;
         }
 
         &.permission-critical {
@@ -309,7 +312,7 @@
     }
 
     .tool-description {
-        color: rgba(158, 200, 214, 0.8);
+        color: var(--janus-text-secondary);
         font-size: 0.9rem;
         line-height: 1.5;
         margin: 0 0 0.75rem 0;
@@ -338,13 +341,13 @@
         &.more {
             background: rgba(255, 255, 255, 0.05);
             border-color: rgba(255, 255, 255, 0.2);
-            color: rgba(158, 200, 214, 0.6);
+            color: var(--janus-text-muted);
         }
     }
 
     .card-footer {
         padding-top: 0.75rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid var(--janus-border);
     }
 
     .tool-meta {
@@ -358,7 +361,7 @@
         align-items: center;
         gap: 0.25rem;
         font-size: 0.75rem;
-        color: rgba(158, 200, 214, 0.6);
+        color: var(--janus-text-muted);
 
         mat-icon {
             font-size: 14px;
@@ -367,18 +370,18 @@
         }
 
         &.confirmation {
-            color: #ffb800;
+            color: $color-warning;
         }
 
         &.rate-limit {
-            color: #00d4ff;
+            color: var(--janus-secondary);
         }
     }
 
     .expanded-details {
         margin-top: 1rem;
         padding-top: 1rem;
-        border-top: 1px solid rgba(0, 212, 255, 0.2);
+        border-top: 1px solid var(--janus-border);
         animation: slideDown 0.2s ease;
 
         .details-section {
@@ -389,7 +392,7 @@
             }
 
             h4 {
-                color: var(--cyan, #00d4ff);
+                color: var(--janus-secondary);
                 font-size: 0.8rem;
                 text-transform: uppercase;
                 margin: 0 0 0.5rem 0;
@@ -409,13 +412,13 @@
 
             .detail-label {
                 font-size: 0.7rem;
-                color: rgba(158, 200, 214, 0.5);
+                color: var(--janus-text-muted);
                 text-transform: uppercase;
             }
 
             .detail-value {
                 font-size: 0.85rem;
-                color: white;
+                color: var(--janus-text-primary);
             }
         }
     }
@@ -435,9 +438,9 @@
 
 /* Category Sidebar */
 .category-sidebar {
-    background: rgba(17, 24, 39, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: var(--janus-bg-surface);
+    border: 1px solid var(--janus-border);
+    border-radius: var(--janus-radius-md);
     padding: 1.25rem;
     height: fit-content;
     position: sticky;
@@ -446,7 +449,7 @@
     .sidebar-title {
         font-size: 0.8rem;
         text-transform: uppercase;
-        color: rgba(158, 200, 214, 0.6);
+        color: var(--janus-text-secondary);
         margin: 0 0 1rem 0;
         letter-spacing: 0.05em;
     }
@@ -465,9 +468,9 @@
         background: transparent;
         border: 1px solid transparent;
         border-radius: 8px;
-        color: rgba(158, 200, 214, 0.8);
+        color: var(--janus-text-secondary);
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all var(--janus-transition-fast);
         text-align: left;
         width: 100%;
 
@@ -490,26 +493,26 @@
         }
 
         &:hover {
-            background: rgba(0, 212, 255, 0.05);
-            border-color: rgba(0, 212, 255, 0.2);
+            background: rgba(0, 184, 255, 0.05);
+            border-color: rgba(0, 184, 255, 0.2);
         }
 
         &.active {
-            background: rgba(0, 212, 255, 0.1);
-            border-color: var(--cyan, #00d4ff);
-            color: var(--cyan, #00d4ff);
+            background: rgba(0, 184, 255, 0.1);
+            border-color: var(--janus-secondary);
+            color: var(--janus-secondary);
 
             .category-count {
-                background: rgba(0, 212, 255, 0.2);
+                background: rgba(0, 184, 255, 0.2);
             }
         }
 
         &.clear {
-            color: rgba(255, 255, 255, 0.5);
+            color: var(--janus-text-muted);
             font-style: italic;
 
             &:hover {
-                color: white;
+                color: var(--janus-text-primary);
             }
         }
     }
@@ -522,32 +525,32 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1.25rem;
-    border-radius: 8px;
+    border-radius: var(--janus-radius-md);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all var(--janus-transition-fast);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--cyan, #00d4ff), var(--purple, #7c3aed));
+    background: linear-gradient(135deg, var(--janus-secondary), var(--janus-primary));
     border: none;
-    color: white;
+    color: var(--janus-bg-dark);
 
     &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+        box-shadow: 0 4px 20px rgba(0, 184, 255, 0.3);
     }
 }
 
 .btn-secondary {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(158, 200, 214, 0.9);
+    border: 1px solid var(--janus-border);
+    color: var(--janus-text-secondary);
 
     &:hover {
         background: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.3);
-        color: white;
+        color: var(--janus-text-primary);
     }
 }
 
@@ -566,17 +569,17 @@
         font-size: 64px;
         width: 64px;
         height: 64px;
-        color: rgba(158, 200, 214, 0.3);
+        color: var(--janus-text-muted);
         margin-bottom: 1rem;
     }
 
     h3 {
-        color: white;
+        color: var(--janus-text-primary);
         margin: 0 0 0.5rem 0;
     }
 
     p {
-        color: rgba(158, 200, 214, 0.6);
+        color: var(--janus-text-secondary);
         margin: 0;
     }
 }
@@ -584,8 +587,8 @@
 .loading-spinner {
     width: 48px;
     height: 48px;
-    border: 3px solid rgba(0, 212, 255, 0.2);
-    border-top-color: var(--cyan, #00d4ff);
+    border: 3px solid rgba(0, 184, 255, 0.2);
+    border-top-color: var(--janus-secondary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 1rem;
@@ -638,19 +641,19 @@
         font-size: 4rem;
         height: 4rem;
         width: 4rem;
-        color: var(--error); // or #ff4444
+        color: $color-error;
         margin-bottom: 1.5rem;
     }
 
     h2 {
         font-family: 'Orbitron', sans-serif;
-        color: var(--error);
+        color: $color-error;
         font-size: 1.5rem;
         margin-bottom: 1rem;
     }
 
     p {
-        color: var(--text-secondary);
+        color: var(--janus-text-secondary);
         font-size: 1.1rem;
         line-height: 1.6;
         max-width: 600px;
@@ -660,9 +663,9 @@
     .tech-detail {
         display: flex;
         gap: 1.5rem;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: $font-mono;
         font-size: 0.8rem;
-        color: var(--text-muted);
+        color: var(--janus-text-muted);
         background: rgba(0, 0, 0, 0.3);
         padding: 0.8rem 1.5rem;
         border-radius: 0.5rem;

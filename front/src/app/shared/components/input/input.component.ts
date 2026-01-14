@@ -105,11 +105,11 @@ export interface ValidationRule {
     }
 
     .app-input.error {
-      --mdc-filled-text-field-error-active-indicator-color: #f44336;
+      --mdc-filled-text-field-error-active-indicator-color: var(--janus-accent);
     }
 
     .app-input.success {
-      --mdc-filled-text-field-active-indicator-color: #4caf50;
+      --mdc-filled-text-field-active-indicator-color: var(--janus-primary);
     }
 
     mat-error, .success-message {
@@ -117,6 +117,14 @@ export interface ValidationRule {
       align-items: center;
       gap: 0.5rem;
       font-size: 0.875rem;
+    }
+
+    mat-error {
+        color: var(--janus-accent);
+    }
+    
+    .success-message {
+        color: var(--janus-primary);
     }
 
     mat-error mat-icon, .success-message mat-icon {

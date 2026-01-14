@@ -1,20 +1,27 @@
+@use '../../../styles/tokens' as *;
+@use '../../../styles/mixins' as *;
+
 :host {
   display: block;
 }
 
 .page-header {
   padding: 24px 0 8px;
-  border-bottom: 1px solid rgba(0, 191, 255, 0.2);
+  border-bottom: 1px solid var(--janus-border);
 }
 
 .page-header h1 {
-  color: var(--cyan);
-  text-shadow: 0 0 10px rgba(0, 191, 255, 0.3);
+  color: var(--janus-secondary);
+  text-shadow: 0 0 10px rgba(0, 184, 255, 0.3);
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
 }
 
 .page-header .subtitle {
-  color: var(--muted);
+  color: var(--janus-text-secondary);
   max-width: 980px;
+  margin-top: 0.5rem;
 }
 
 .timeline-section {
@@ -40,8 +47,8 @@
   bottom: 0;
   background: linear-gradient(
       to bottom,
-      rgba(0, 191, 255, 0.1),
-      rgba(0, 191, 255, 0.2)
+      rgba(0, 184, 255, 0.1),
+      rgba(0, 184, 255, 0.2)
   );
   filter: contrast(1.2);
 }
@@ -53,8 +60,8 @@
   left: 0;
   right: 0;
   height: var(--line-fill);
-  background: linear-gradient(180deg, var(--blue), var(--cyan));
-  box-shadow: 0 0 12px rgba(0, 191, 255, 0.6);
+  background: linear-gradient(180deg, var(--janus-secondary), var(--janus-primary));
+  box-shadow: 0 0 12px rgba(0, 184, 255, 0.6);
   transition: height 160ms ease-out;
 }
 
@@ -92,7 +99,7 @@
   right: -40px;
   width: 40px;
   height: 2px;
-  background: rgba(0, 191, 255, 0.3);
+  background: rgba(0, 184, 255, 0.3);
 }
 
 .timeline-item:nth-child(even) {
@@ -107,32 +114,42 @@
   left: -40px;
   width: 40px;
   height: 2px;
-  background: rgba(0, 191, 255, 0.3);
+  background: rgba(0, 184, 255, 0.3);
 }
 
 .timeline-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(0, 191, 255, 0.3);
-  border-radius: 12px;
+  background: var(--janus-bg-surface);
+  border: 1px solid var(--janus-border);
+  border-radius: var(--janus-radius-lg);
   padding: 16px 20px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--janus-shadow-lg);
   backdrop-filter: blur(2px);
+  transition: all var(--janus-transition-fast);
+
+  &:hover {
+      background: var(--janus-bg-card);
+      border-color: var(--janus-secondary);
+  }
 }
 
 .timeline-card h3 {
   margin: 8px 0 10px;
-  color: var(--fg);
+  color: var(--janus-text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .timeline-card .tag {
   font-size: 0.85em;
-  color: var(--orange);
+  color: $color-warning;
   font-weight: 600;
   letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
 .timeline-card p {
-  color: var(--muted);
+  color: var(--janus-text-secondary);
+  line-height: 1.5;
 }
 
 .timeline-actions {
@@ -146,10 +163,10 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(135deg, var(--blue), var(--orange));
-  color: #fff;
+  background: linear-gradient(135deg, var(--janus-secondary), $color-warning);
+  color: var(--janus-bg-dark);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--janus-radius-md);
   padding: 12px 20px;
   font-weight: 700;
   cursor: pointer;
@@ -158,7 +175,7 @@
 
 .load-more-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(0, 191, 255, 0.25);
+  box-shadow: 0 10px 20px rgba(0, 184, 255, 0.25);
 }
 
 .load-more-btn:disabled {
