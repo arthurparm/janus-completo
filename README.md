@@ -1,4 +1,4 @@
-# Janus — Manual Completo (Reescrito)
+# Janus — Manual Completo
 
 ## Índice
 
@@ -27,10 +27,10 @@
   - [4.5 Chat: Request/Response, Streaming e Eventos](#45-chat-requestresponse-streaming-e-eventos)
   - [4.6 Identidade: Auth, Users e Profiles](#46-identidade-auth-users-e-profiles)
   - [4.7 Governança Operacional: Consents e Pending Actions](#47-governança-operacional-consents-e-pending-actions)
-- [4.8 Mensageria: TaskMessage, Filas e Workers](#48-mensageria-taskmessage-filas-e-workers)
-- [4.9 Ferramentas e Sandbox](#49-ferramentas-e-sandbox)
-- [4.10 Documentos e RAG](#410-documentos-e-rag)
-- [4.11 Recipes Rápidos de Uso da API](#411-recipes-rápidos-de-uso-da-api)
+  - [4.8 Mensageria: TaskMessage, Filas e Workers](#48-mensageria-taskmessage-filas-e-workers)
+  - [4.9 Ferramentas e Sandbox](#49-ferramentas-e-sandbox)
+  - [4.10 Documentos e RAG](#410-documentos-e-rag)
+  - [4.11 Recipes Rápidos de Uso da API](#411-recipes-rápidos-de-uso-da-api)
 - [5. Frontend (Site)](#5-frontend-site)
   - [5.1 Páginas e Fluxos](#51-páginas-e-fluxos)
   - [5.2 Integração com a API](#52-integração-com-a-api)
@@ -59,7 +59,7 @@ Pilares fundamentais:
 - **Resiliência por design**: circuit breakers, retries, timeouts, modo degradado e métricas para detecção precoce.
 - **Contratos estáveis**: API unificada (`/api/v1`) para desacoplar frontend, workers e integrações externas.
 
-Referência rápida: [README](file:///e:/repos/janus-completo/README.md) e [Project-Structure.md](file:///e:/repos/janus-completo/docs/Project-Structure.md).
+Referência rápida: [README](README.md) e [Project-Structure.md](docs/Project-Structure.md).
 
 ### 1.2 Filosofia de Design e Decisões Arquiteturais
 
@@ -103,7 +103,7 @@ Em termos práticos:
 
 ### 2.1 Topologia
 
-- Composição do app: [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L1-L300)
+- Composição do app: [main.py](janus/app/main.py#L1-L300)
   - Inicialização paralela de Neo4j, Qdrant e RabbitMQ
   - Construção de serviços e repositórios
   - Arranque de workers
@@ -132,11 +132,11 @@ Principais blocos do diagrama:
 
 ### 2.2 Camadas e Responsabilidades
 
-- API: [endpoints](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints) — definem contratos HTTP, validação e mapeamento entre requests/responses e serviços.
-- Serviços: [services](file:///e:/repos/janus-completo/janus/app/services) — traduzem casos de uso (chat, memória, conhecimento, autonomia) em chamadas coordenadas ao núcleo e repositórios.
-- Núcleo: [core](file:///e:/repos/janus-completo/janus/app/core) — implementa políticas de LLM, memória, ferramentas, workers e observabilidade compartilhadas por toda a aplicação.
-- Persistência: [repositories](file:///e:/repos/janus-completo/janus/app/repositories), [db](file:///e:/repos/janus-completo/janus/app/db) — centralizam acesso a bancos, coleções vetoriais e grafos, incluindo mapeamentos de modelos de domínio.
-- Configuração: [config.py](file:///e:/repos/janus-completo/janus/app/config.py) — concentra leitura de variáveis de ambiente, flags de recursos e URLs de provedores/infra.
+- API: [endpoints](janus/app/api/v1/endpoints) — definem contratos HTTP, validação e mapeamento entre requests/responses e serviços.
+- Serviços: [services](janus/app/services) — traduzem casos de uso (chat, memória, conhecimento, autonomia) em chamadas coordenadas ao núcleo e repositórios.
+- Núcleo: [core](janus/app/core) — implementa políticas de LLM, memória, ferramentas, workers e observabilidade compartilhadas por toda a aplicação.
+- Persistência: [repositories](janus/app/repositories), [db](janus/app/db) — centralizam acesso a bancos, coleções vetoriais e grafos, incluindo mapeamentos de modelos de domínio.
+- Configuração: [config.py](janus/app/config.py) — concentra leitura de variáveis de ambiente, flags de recursos e URLs de provedores/infra.
 
 ---
 
@@ -167,8 +167,8 @@ Frontend -> JanusApiService -> /api/v1/chat (ou /llm/invoke)
 
 Referências:
 
-- [router.py](file:///e:/repos/janus-completo/janus/app/core/llm/router.py): Algoritmo de seleção e scoring.
-- [llm_manager.py](file:///e:/repos/janus-completo/janus/app/core/llm/llm_manager.py): Gestão de ciclo de vida e cache.
+- [router.py](janus/app/core/llm/router.py): Algoritmo de seleção e scoring.
+- [llm_manager.py](janus/app/core/llm/llm_manager.py): Gestão de ciclo de vida e cache.
 
 #### 3.1.1 Contratos do Chat (API)
 
@@ -186,7 +186,7 @@ Principais endpoints:
 
 Referências:
 
-- [chat.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/chat.py)
+- [chat.py](janus/app/api/v1/endpoints/chat.py)
 
 #### 3.1.2 Sequência Lógica do Chat (Request/Response)
 
@@ -241,8 +241,8 @@ Resposta típica (campos ilustrativos):
 
 Referências:
 
-- [chat_service.py](file:///e:/repos/janus-completo/janus/app/services/chat_service.py)
-- [llm_service.py](file:///e:/repos/janus-completo/janus/app/services/llm_service.py)
+- [chat_service.py](janus/app/services/chat_service.py)
+- [llm_service.py](janus/app/services/llm_service.py)
 
 #### 3.1.3 Loop de Ferramentas (Tools) — “ReAct” Controlado
 
@@ -260,8 +260,8 @@ Esse design separa claramente:
 
 Referências:
 
-- [chat_service.py](file:///e:/repos/janus-completo/janus/app/services/chat_service.py)
-- [tools](file:///e:/repos/janus-completo/janus/app/core/tools)
+- [chat_service.py](janus/app/services/chat_service.py)
+- [tools](janus/app/core/tools)
 
 #### 3.1.4 Streaming (SSE) — Protocolo de Eventos
 
@@ -278,7 +278,7 @@ Além do stream de tokens, existe um stream dedicado a **eventos de agentes** (H
 
 Referências:
 
-- [chat.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/chat.py#L433-L534)
+- [chat.py](janus/app/api/v1/endpoints/chat.py#L433-L534)
 
 #### 3.1.5 Modos de Falha e Degradação
 
@@ -291,7 +291,7 @@ O chat foi desenhado para “falhar bem”:
 
 #### 3.1.6 Detalhamento interno do `router.get_llm()`
 
-O coração do roteamento de modelos está em [router.get_llm](file:///e:/repos/janus-completo/janus/app/core/llm/router.py#L105-L525), que encapsula overrides dinâmicos, cache, política de custo e fallback:
+O coração do roteamento de modelos está em [router.get_llm](janus/app/core/llm/router.py#L105-L525), que encapsula overrides dinâmicos, cache, política de custo e fallback:
 
 1. **Overrides dinâmicos por config**  
    - Se o `config` opcional for passado, o método tenta sobrescrever `priority`, `exclude_providers`, `cache_key`, `provider`, `model` e `temperature`.  
@@ -361,9 +361,9 @@ Texto -> embeddings -> Qdrant (Episódio)
 
 Referências:
 
-- [memory_core.py](file:///e:/repos/janus-completo/janus/app/core/memory/memory_core.py): Gestão de curto/longo prazo.
-- [knowledge_consolidator_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/knowledge_consolidator_worker.py): O "cérebro" da consolidação.
-- [graph_guardian.py](file:///e:/repos/janus-completo/janus/app/core/memory/graph_guardian.py): Normalização de entidades.
+- [memory_core.py](janus/app/core/memory/memory_core.py): Gestão de curto/longo prazo.
+- [knowledge_consolidator_worker.py](janus/app/core/workers/knowledge_consolidator_worker.py): O "cérebro" da consolidação.
+- [graph_guardian.py](janus/app/core/memory/graph_guardian.py): Normalização de entidades.
 
 #### 3.2.1 Escrita (Memorização) — Segurança, Quotas e Cache
 
@@ -384,7 +384,7 @@ Na prática, isso significa:
 
 Referências:
 
-- [memory_core.py](file:///e:/repos/janus-completo/janus/app/core/memory/memory_core.py)
+- [memory_core.py](janus/app/core/memory/memory_core.py)
 
 #### 3.2.2 Leitura (Recall) — Recuperação para Enriquecimento do Prompt
 
@@ -397,7 +397,7 @@ O recall é usado para “trazer de volta” experiências relevantes:
 
 Referências:
 
-- [memory_service.py](file:///e:/repos/janus-completo/janus/app/services/memory_service.py)
+- [memory_service.py](janus/app/services/memory_service.py)
 
 #### 3.2.3 Indexação de Interações de Chat (Memória por Usuário)
 
@@ -410,7 +410,7 @@ Além da memória “episódica do sistema”, o Janus também indexa interaçõ
 
 Referências:
 
-- [memory_service.py](file:///e:/repos/janus-completo/janus/app/services/memory_service.py#L131-L195)
+- [memory_service.py](janus/app/services/memory_service.py#L131-L195)
 
 #### 3.2.4 Consolidação Assíncrona (RabbitMQ) — Do Episódio ao Grafo
 
@@ -422,8 +422,8 @@ A consolidação roda fora do chat:
 
 Referências:
 
-- [async_consolidation_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/async_consolidation_worker.py)
-- [knowledge_consolidator_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/knowledge_consolidator_worker.py)
+- [async_consolidation_worker.py](janus/app/core/workers/async_consolidation_worker.py)
+- [knowledge_consolidator_worker.py](janus/app/core/workers/knowledge_consolidator_worker.py)
 
 #### 3.2.5 Documentos Pessoais (Ingestão) — Upload/Link e Indexação Vetorial
 
@@ -457,8 +457,8 @@ Metadados gravados por chunk (payload do ponto):
 
 Referências:
 
-- Endpoint de upload/link/status/list/delete: [documents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/documents.py)
-- Serviço de extração/chunking/dedupe/upsert: [document_service.py](file:///e:/repos/janus-completo/janus/app/services/document_service.py)
+- Endpoint de upload/link/status/list/delete: [documents.py](janus/app/api/v1/endpoints/documents.py)
+- Serviço de extração/chunking/dedupe/upsert: [document_service.py](janus/app/services/document_service.py)
 
 #### 3.2.6 RAG (Recuperação) — Busca Vetorial, Filtros e Citações
 
@@ -478,12 +478,12 @@ Características operacionais:
 
 Referências:
 
-- Endpoints RAG: [rag.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/rag.py)
-- MemoryService (recall com filtros): [memory_service.py](file:///e:/repos/janus-completo/janus/app/services/memory_service.py)
+- Endpoints RAG: [rag.py](janus/app/api/v1/endpoints/rag.py)
+- MemoryService (recall com filtros): [memory_service.py](janus/app/services/memory_service.py)
 
 #### 3.2.7 Detalhamento interno do `MemoryCore` (Qdrant + Cache + Resiliência)
 
-O [MemoryCore](file:///e:/repos/janus-completo/janus/app/core/memory/memory_core.py#L1-L200) implementa a camada de memória episódica sobre Qdrant com quotas, criptografia e cache de curto prazo:
+O [MemoryCore](janus/app/core/memory/memory_core.py#L1-L200) implementa a camada de memória episódica sobre Qdrant com quotas, criptografia e cache de curto prazo:
 
 1. **Quotas por origem (anti-flood)**  
    - Cada origem (`origin`) mantém um registro `{window_start, items, bytes}`.  
@@ -570,8 +570,8 @@ START -> Monitor --(healthy)--> END
 
 Referências:
 
-- [autonomy.py endpoints](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/autonomy.py)
-- [meta_agent.py](file:///e:/repos/janus-completo/janus/app/core/agents/meta_agent.py): Implementação do LangGraph.
+- [autonomy.py endpoints](janus/app/api/v1/endpoints/autonomy.py)
+- [meta_agent.py](janus/app/core/agents/meta_agent.py): Implementação do LangGraph.
 
 #### 3.3.1 Autonomia (Loop) — O que muda em relação ao Chat
 
@@ -588,7 +588,7 @@ O controle do risco é obrigatório porque ferramentas podem alterar estado do m
 
 Referências:
 
-- [policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py)
+- [policy_engine.py](janus/app/core/autonomy/policy_engine.py)
 
 #### 3.3.2 Policy Engine — Regras mínimas antes de agir
 
@@ -604,11 +604,11 @@ O Policy Engine aplica quatro camadas simples, mas eficazes:
 
 Referências:
 
-- [policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py#L35-L116)
+- [policy_engine.py](janus/app/core/autonomy/policy_engine.py#L35-L116)
 
 #### 3.3.2.1 Detalhamento interno do `PolicyEngine.validate_tool_call()`
 
-Em [policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py#L11-L129), o `PolicyEngine` implementa as regras acima de forma concreta:
+Em [policy_engine.py](janus/app/core/autonomy/policy_engine.py#L11-L129), o `PolicyEngine` implementa as regras acima de forma concreta:
 
 1. **Configuração de risco (`PolicyConfig`)**  
    - `risk_profile`: `"conservative"`, `"balanced"` ou `"aggressive"`.  
@@ -656,11 +656,11 @@ O Reflexion funciona como uma auditoria assíncrona da eficiência:
 
 Referências:
 
-- [reflexion_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/reflexion_worker.py)
+- [reflexion_worker.py](janus/app/core/workers/reflexion_worker.py)
 
 #### 3.3.4 Meta-Agente (LangGraph) — Detalhamento do Grafo de Estado
 
-O [MetaAgent](file:///e:/repos/janus-completo/janus/app/core/agents/meta_agent.py#L640-L870) implementa o grafo OODA via LangGraph, com persistência opcional:
+O [MetaAgent](janus/app/core/agents/meta_agent.py#L640-L870) implementa o grafo OODA via LangGraph, com persistência opcional:
 
 1. **Graph Builder e Checkpointer**  
    - `MetaAgentGraphBuilder.build()` cria um `StateGraph(AgentState)` com nós nomeados: `monitor`, `diagnose`, `plan`, `reflect`, `execute`, `dead_letter`.  
@@ -742,8 +742,8 @@ O sistema suporta testes A/B de modelos (`ABExperimentModels`), permitindo servi
 
 Referências:
 
-- [data_harvester.py](file:///e:/repos/janus-completo/janus/app/core/workers/data_harvester.py): Coleta e preparação de dataset.
-- [ab_experiment_models.py](file:///e:/repos/janus-completo/janus/app/models/ab_experiment_models.py): Definição de experimentos.
+- [data_harvester.py](janus/app/core/workers/data_harvester.py): Coleta e preparação de dataset.
+- [ab_experiment_models.py](janus/app/models/ab_experiment_models.py): Definição de experimentos.
 
 #### 3.4.1 Retenção e Segurança do Dataset
 
@@ -755,7 +755,7 @@ O harvester aplica mecanismos práticos para manter o dataset utilizável:
 
 Referências:
 
-- [data_harvester.py](file:///e:/repos/janus-completo/janus/app/core/workers/data_harvester.py#L117-L166)
+- [data_harvester.py](janus/app/core/workers/data_harvester.py#L117-L166)
 
 ### 3.5 Observabilidade
 
@@ -768,8 +768,8 @@ Dashboards Grafana (janus-overview, janus-llm-performance, janus-chat-overview)
 
 Referências:
 
-- [observability](file:///e:/repos/janus-completo/janus/observability)
-- [grafana dashboards](file:///e:/repos/janus-completo/janus/grafana/dashboards)
+- [observability](janus/observability)
+- [grafana dashboards](janus/grafana/dashboards)
 
 #### 3.5.1 O que medir (e por quê)
 
@@ -792,7 +792,7 @@ O Janus tem dois modos de “subir e rodar”, que compartilham o mesmo núcleo:
 
 #### 3.6.1 Modo API: FastAPI lifespan → Kernel.startup()
 
-A fonte de verdade do lifecycle do backend (modo API) é o `lifespan()` do FastAPI, em [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L25-L92), que chama o Kernel:
+A fonte de verdade do lifecycle do backend (modo API) é o `lifespan()` do FastAPI, em [main.py](janus/app/main.py#L25-L92), que chama o Kernel:
 
 1. **Criação do Kernel**: `Kernel.get_instance()`.
 2. **Infraestrutura**: `kernel.startup()` inicializa Neo4j, Qdrant e RabbitMQ em paralelo, além de MySQL (best-effort) e Firebase (opcional).
@@ -801,8 +801,8 @@ A fonte de verdade do lifecycle do backend (modo API) é o `lifespan()` do FastA
 
 Referências:
 
-- Lifecycle da API: [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L25-L92)
-- Startup do Kernel: [kernel.py](file:///e:/repos/janus-completo/janus/app/core/kernel.py#L133-L201)
+- Lifecycle da API: [main.py](janus/app/main.py#L25-L92)
+- Startup do Kernel: [kernel.py](janus/app/core/kernel.py#L133-L201)
 
 #### 3.6.2 O que o Kernel inicializa (ordem lógica)
 
@@ -820,12 +820,12 @@ O `Kernel.startup()` segue uma ordem que evita “meio sistema” rodando:
 
 Referências:
 
-- Startup (infra → serviços → workers): [kernel.py](file:///e:/repos/janus-completo/janus/app/core/kernel.py#L133-L400)
-- Registro de OS tools: [kernel.py](file:///e:/repos/janus-completo/janus/app/core/kernel.py#L184-L190)
+- Startup (infra → serviços → workers): [kernel.py](janus/app/core/kernel.py#L133-L400)
+- Registro de OS tools: [kernel.py](janus/app/core/kernel.py#L184-L190)
 
 #### 3.6.3 Modo Daemon: loop contínuo + watchdog
 
-O modo daemon, em [daemon.py](file:///e:/repos/janus-completo/janus/app/interfaces/daemon/daemon.py), roda o `Kernel.startup()` num loop “restarting”, com backoff em falhas e batimentos (heartbeat) para detecção de travamentos.
+O modo daemon, em [daemon.py](janus/app/interfaces/daemon/daemon.py), roda o `Kernel.startup()` num loop “restarting”, com backoff em falhas e batimentos (heartbeat) para detecção de travamentos.
 
 Sequência:
 
@@ -836,8 +836,8 @@ Sequência:
 
 Referências:
 
-- Daemon/Jarvis Mode: [daemon.py](file:///e:/repos/janus-completo/janus/app/interfaces/daemon/daemon.py#L11-L114)
-- Watchdog: [watchdog.py](file:///e:/repos/janus-completo/janus/app/core/monitoring/watchdog.py#L23-L87)
+- Daemon/Jarvis Mode: [daemon.py](janus/app/interfaces/daemon/daemon.py#L11-L114)
+- Watchdog: [watchdog.py](janus/app/core/monitoring/watchdog.py#L23-L87)
 
 ### 3.7 Parlamento (Router → Coder → Professor → Sandbox)
 
@@ -853,7 +853,7 @@ O `TaskState` é o envelope que atravessa o pipeline:
 - `history`: trilha de auditoria do que cada agente fez (eventos).
 - `status`: marca progresso/resultado.
 
-Referência: [TaskState](file:///e:/repos/janus-completo/janus/app/models/schemas.py#L185-L210)
+Referência: [TaskState](janus/app/models/schemas.py#L185-L210)
 
 #### 3.7.2 Fluxo padrão (visão operacional)
 
@@ -899,11 +899,11 @@ sequenceDiagram
 
 Referências:
 
-- Router: [router_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/router_worker.py#L1-L163)
-- Coder: [code_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/code_agent_worker.py#L1-L111)
-- Professor: [professor_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/professor_agent_worker.py)
-- Sandbox: [sandbox_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/sandbox_agent_worker.py#L1-L174)
-- Roteamento para fila do próximo agente: [collaboration_service.py](file:///e:/repos/janus-completo/janus/app/services/collaboration_service.py)
+- Router: [router_worker.py](janus/app/core/workers/router_worker.py#L1-L163)
+- Coder: [code_agent_worker.py](janus/app/core/workers/code_agent_worker.py#L1-L111)
+- Professor: [professor_agent_worker.py](janus/app/core/workers/professor_agent_worker.py)
+- Sandbox: [sandbox_agent_worker.py](janus/app/core/workers/sandbox_agent_worker.py#L1-L174)
+- Roteamento para fila do próximo agente: [collaboration_service.py](janus/app/services/collaboration_service.py)
 
 #### 3.7.3 Roteador (Router Worker): inferência de primeiro agente e side-publish
 
@@ -915,7 +915,7 @@ O Router Worker atua como “recepcionista”:
 4. Publica o `TaskState` na fila do próximo agente via `CollaborationService.pass_task()`.
 5. Em sucesso “com conhecimento”, pode publicar uma tarefa paralela de consolidação para a fila `janus.knowledge.consolidation` (side-publish, não bloqueia o pipeline).
 
-Referência: [router_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/router_worker.py#L64-L151)
+Referência: [router_worker.py](janus/app/core/workers/router_worker.py#L64-L151)
 
 #### 3.7.4 Agente Coder: geração de código + heurística de complexidade
 
@@ -928,7 +928,7 @@ O Coder Worker:
    - complexo → `professor` (revisão)
    - simples → `sandbox` (execução rápida)
 
-Referência: [code_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/code_agent_worker.py#L49-L99)
+Referência: [code_agent_worker.py](janus/app/core/workers/code_agent_worker.py#L49-L99)
 
 #### 3.7.5 Agente Professor: revisão e retorno ao Coder quando necessário
 
@@ -938,7 +938,7 @@ O Professor Worker funciona como gate de qualidade:
 2. Executa revisão (critique) via LLM com papel curator.
 3. Se detectar problemas, roteia de volta ao `coder`; caso contrário, manda para o `sandbox`.
 
-Referência: [professor_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/professor_agent_worker.py)
+Referência: [professor_agent_worker.py](janus/app/core/workers/professor_agent_worker.py)
 
 #### 3.7.6 Agente Sandbox: execução e feedback
 
@@ -947,11 +947,11 @@ O Sandbox Worker executa o script e decide com base no resultado:
 - Se houver erro (`stderr`), retorna ao `coder` (iterar correção).
 - Em sucesso, retorna ao `router` (encaminhar conclusão/próximos passos).
 
-Referência: [sandbox_agent_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/sandbox_agent_worker.py#L112-L164)
+Referência: [sandbox_agent_worker.py](janus/app/core/workers/sandbox_agent_worker.py#L112-L164)
 
 #### 3.7.7 CollaborationService — Roteamento físico do Parlamento via RabbitMQ
 
-Enquanto o Router Worker decide *quem* deve agir em seguida, o [CollaborationService.pass_task](file:///e:/repos/janus-completo/janus/app/services/collaboration_service.py#L213-L295) decide *para qual fila física* o `TaskState` será enviado:
+Enquanto o Router Worker decide *quem* deve agir em seguida, o [CollaborationService.pass_task](janus/app/services/collaboration_service.py#L213-L295) decide *para qual fila física* o `TaskState` será enviado:
 
 1. **Resolução do papel lógico**  
    - Lê `task_state.next_agent_role` (fallback `"router"`).  
@@ -996,7 +996,7 @@ O HealthMonitor:
 2. Executa `check_all_components()` periodicamente.
 3. Calcula um score/estado agregado do sistema.
 
-Referência: [health_monitor.py](file:///e:/repos/janus-completo/janus/app/core/monitoring/health_monitor.py#L134-L214)
+Referência: [health_monitor.py](janus/app/core/monitoring/health_monitor.py#L134-L214)
 
 #### 3.8.2 Poison Pill Handler: isolamento de mensagens problemáticas
 
@@ -1006,7 +1006,7 @@ Mensagens que falham repetidamente podem travar consumidores. O PoisonPillHandle
 2. Ao exceder limiares (falhas repetidas/consecutivas), coloca em quarentena.
 3. Expõe métricas Prometheus e status de saúde.
 
-Referência: [poison_pill_handler.py](file:///e:/repos/janus-completo/janus/app/core/monitoring/poison_pill_handler.py#L64-L342)
+Referência: [poison_pill_handler.py](janus/app/core/monitoring/poison_pill_handler.py#L64-L342)
 
 #### 3.8.3 Auto-Healer: reconectar, reconciliar e “destravar” o sistema
 
@@ -1018,7 +1018,7 @@ O Auto-Healer roda como tarefa em background e aplica ações práticas:
 - Decair penalizações e reset oportunista de circuit breakers de LLM.
 - Disparar ciclo do Meta-Agente se saúde geral degradar.
 
-Referência: [auto_healer.py](file:///e:/repos/janus-completo/janus/app/core/monitoring/auto_healer.py#L1-L234)
+Referência: [auto_healer.py](janus/app/core/monitoring/auto_healer.py#L1-L234)
 
 ### 3.9 Produtividade (Google)
 
@@ -1034,27 +1034,27 @@ Filas usadas (atuais):
 - `janus.productivity.google.calendar`
 - `janus.productivity.google.mail`
 
-Referência: [google_productivity_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/google_productivity_worker.py#L76-L490)
+Referência: [google_productivity_worker.py](janus/app/core/workers/google_productivity_worker.py#L76-L490)
 
 ## 4. API de Backend
 
 ### 4.1 Superfície de Endpoints
 
-- A fonte de verdade do que é exposto em `/api/v1` está em: [router.py](file:///e:/repos/janus-completo/janus/app/api/v1/router.py)
-- Endpoints (por módulo): [endpoints/](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints)
+- A fonte de verdade do que é exposto em `/api/v1` está em: [router.py](janus/app/api/v1/router.py)
+- Endpoints (por módulo): [endpoints/](janus/app/api/v1/endpoints)
 
 Principais domínios:
 
-- Sistema: [system_status.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_status.py), [system_overview.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_overview.py)
-- Chat: [chat.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/chat.py)
-- LLM: [llm.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/llm.py)
-- Memória e RAG: [memory.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/memory.py), [rag.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/rag.py), [documents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/documents.py)
-- Conhecimento: [knowledge.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/knowledge.py)
-- Autonomia e Assistente: [autonomy.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/autonomy.py), [assistant.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/assistant.py)
-- Governança de usuário: [users.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/users.py), [profiles.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/profiles.py), [consents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/consents.py), [pending_actions.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/pending_actions.py), [auth.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/auth.py)
-- Workers e filas: [workers.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/workers.py), [tasks.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/tasks.py)
-- Observabilidade: [observability.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/observability.py)
-- Aprendizado, avaliação e deploy: [learning.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/learning.py), [evaluation.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/evaluation.py), [deployment.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/deployment.py), [feedback.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/feedback.py)
+- Sistema: [system_status.py](janus/app/api/v1/endpoints/system_status.py), [system_overview.py](janus/app/api/v1/endpoints/system_overview.py)
+- Chat: [chat.py](janus/app/api/v1/endpoints/chat.py)
+- LLM: [llm.py](janus/app/api/v1/endpoints/llm.py)
+- Memória e RAG: [memory.py](janus/app/api/v1/endpoints/memory.py), [rag.py](janus/app/api/v1/endpoints/rag.py), [documents.py](janus/app/api/v1/endpoints/documents.py)
+- Conhecimento: [knowledge.py](janus/app/api/v1/endpoints/knowledge.py)
+- Autonomia e Assistente: [autonomy.py](janus/app/api/v1/endpoints/autonomy.py), [assistant.py](janus/app/api/v1/endpoints/assistant.py)
+- Governança de usuário: [users.py](janus/app/api/v1/endpoints/users.py), [profiles.py](janus/app/api/v1/endpoints/profiles.py), [consents.py](janus/app/api/v1/endpoints/consents.py), [pending_actions.py](janus/app/api/v1/endpoints/pending_actions.py), [auth.py](janus/app/api/v1/endpoints/auth.py)
+- Workers e filas: [workers.py](janus/app/api/v1/endpoints/workers.py), [tasks.py](janus/app/api/v1/endpoints/tasks.py)
+- Observabilidade: [observability.py](janus/app/api/v1/endpoints/observability.py)
+- Aprendizado, avaliação e deploy: [learning.py](janus/app/api/v1/endpoints/learning.py), [evaluation.py](janus/app/api/v1/endpoints/evaluation.py), [deployment.py](janus/app/api/v1/endpoints/deployment.py), [feedback.py](janus/app/api/v1/endpoints/feedback.py)
 
 ### 4.2 Contratos
 
@@ -1086,7 +1086,7 @@ O Janus possui dois “perfis” de exposição de API, controlados por `PUBLIC_
 - **Full API**: expõe endpoints internos e públicos (ideal para operação completa).
 - **Minimal API**: expõe somente o conjunto necessário para uso “público”/controlado (chat + governança + deploy + feedback).
 
-O comportamento está em: [api/v1/router.py](file:///e:/repos/janus-completo/janus/app/api/v1/router.py#L1-L62)
+O comportamento está em: [api/v1/router.py](janus/app/api/v1/router.py#L1-L62)
 
 Implicação prática:
 
@@ -1108,9 +1108,9 @@ O pipeline de request é composto (ordem lógica) por:
 
 Referências:
 
-- Middlewares e binding: [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L95-L149)
-- Tokens (assinatura/verificação): [auth.py (infra)](file:///e:/repos/janus-completo/janus/app/core/infrastructure/auth.py#L1-L52)
-- Erros padronizados: [problem_details.py](file:///e:/repos/janus-completo/janus/app/api/problem_details.py#L1-L53)
+- Middlewares e binding: [main.py](janus/app/main.py#L95-L149)
+- Tokens (assinatura/verificação): [auth.py (infra)](janus/app/core/infrastructure/auth.py#L1-L52)
+- Erros padronizados: [problem_details.py](janus/app/api/problem_details.py#L1-L53)
 
 ### 4.5 Chat: Request/Response, Streaming e Eventos
 
@@ -1133,7 +1133,7 @@ Endpoints principais:
 
 Referências:
 
-- [chat.py endpoints](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/chat.py#L91-L525)
+- [chat.py endpoints](janus/app/api/v1/endpoints/chat.py#L91-L525)
 
 ### 4.6 Identidade: Auth, Users e Profiles
 
@@ -1150,9 +1150,9 @@ Contratos principais:
 
 Referências:
 
-- [auth.py endpoints](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/auth.py#L1-L56)
-- [users.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/users.py)
-- [profiles.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/profiles.py)
+- [auth.py endpoints](janus/app/api/v1/endpoints/auth.py#L1-L56)
+- [users.py](janus/app/api/v1/endpoints/users.py)
+- [profiles.py](janus/app/api/v1/endpoints/profiles.py)
 
 ### 4.7 Governança Operacional: Consents e Pending Actions
 
@@ -1176,8 +1176,8 @@ Fluxo de aprovação de ação pendente:
 
 Referências:
 
-- [consents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/consents.py#L14-L86)
-- [pending_actions.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/pending_actions.py#L28-L80)
+- [consents.py](janus/app/api/v1/endpoints/consents.py#L14-L86)
+- [pending_actions.py](janus/app/api/v1/endpoints/pending_actions.py#L28-L80)
 
 ### 4.8 Mensageria: TaskMessage, Filas e Workers
 
@@ -1188,7 +1188,7 @@ Grande parte do “caminho frio” do Janus funciona via RabbitMQ para evitar qu
 
 O contrato base de mensageria é `TaskMessage` (serialização msgpack), e os nomes oficiais das filas ficam em `QueueName`:
 
-- [schemas.py](file:///e:/repos/janus-completo/janus/app/models/schemas.py#L105-L137)
+- [schemas.py](janus/app/models/schemas.py#L105-L137)
 
 Filas importantes (valores atuais):
 
@@ -1210,10 +1210,10 @@ Comportamento do broker (resiliência):
 
 Referências:
 
-- Broker: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L101-L210)
-- Worker de consolidação: [async_consolidation_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/async_consolidation_worker.py#L1-L110)
-- Worker de reflexion: [reflexion_worker.py](file:///e:/repos/janus-completo/janus/app/core/workers/reflexion_worker.py)
-- Task endpoints (saúde, política, reconciliação): [tasks.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/tasks.py#L66-L142)
+- Broker: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L101-L210)
+- Worker de consolidação: [async_consolidation_worker.py](janus/app/core/workers/async_consolidation_worker.py#L1-L110)
+- Worker de reflexion: [reflexion_worker.py](janus/app/core/workers/reflexion_worker.py)
+- Task endpoints (saúde, política, reconciliação): [tasks.py](janus/app/api/v1/endpoints/tasks.py#L66-L142)
 
 #### 4.8.1 Orquestração ponta a ponta: API → Orchestrator → Consumers
 
@@ -1228,9 +1228,9 @@ O Janus expõe um controle explícito de ciclo de vida de workers, útil para op
 
 Referências:
 
-- Endpoints de controle: [workers.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/workers.py#L32-L94)
-- Orquestrador (lista e ordem de workers): [orchestrator.py](file:///e:/repos/janus-completo/janus/app/core/workers/orchestrator.py#L12-L89)
-- Consumer robusto + poison-pill/dlx: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L236-L343)
+- Endpoints de controle: [workers.py](janus/app/api/v1/endpoints/workers.py#L32-L94)
+- Orquestrador (lista e ordem de workers): [orchestrator.py](janus/app/core/workers/orchestrator.py#L12-L89)
+- Consumer robusto + poison-pill/dlx: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L236-L343)
 
 #### 4.8.2 Consumer robusto: prefetch, ACK/NACK, DLX/DLQ e reconexão
 
@@ -1255,7 +1255,7 @@ _on_message(message):
   -> error: message.nack(requeue=False)  # tenta DLX
 ```
 
-Referência (implementação completa do consumer): [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L267-L385)
+Referência (implementação completa do consumer): [message_broker.py](janus/app/core/infrastructure/message_broker.py#L267-L385)
 
 #### 4.8.3 Políticas de fila: TTL, max-length, prioridade e compatibilidade com DLX
 
@@ -1270,8 +1270,8 @@ O mapeamento de políticas esperadas por fila vem de `settings.RABBITMQ_QUEUE_CO
 
 Referências:
 
-- Tradução de política → argumentos: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L219-L239)
-- Publicação com prioridade e content-type: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L169-L218)
+- Tradução de política → argumentos: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L219-L239)
+- Publicação com prioridade e content-type: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L169-L218)
 
 #### 4.8.4 Modo degradado: quando o broker está offline
 
@@ -1286,8 +1286,8 @@ Impacto operacional:
 
 Referências:
 
-- Loop de consumo com retry: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L348-L384)
-- Publish ignora quando offline: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py#L126-L168)
+- Loop de consumo com retry: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L348-L384)
+- Publish ignora quando offline: [message_broker.py](janus/app/core/infrastructure/message_broker.py#L126-L168)
 
 ### 4.9 Ferramentas e Sandbox
 
@@ -1321,12 +1321,12 @@ Sandbox (execução de Python controlada):
 
 Referências:
 
-- Endpoints tools: [tools.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/tools.py)
-- ToolService e proteções: [tool_service.py](file:///e:/repos/janus-completo/janus/app/services/tool_service.py)
-- Endpoints sandbox: [sandbox.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/sandbox.py)
-- SandboxService (capabilities/restrições): [sandbox_service.py](file:///e:/repos/janus-completo/janus/app/services/sandbox_service.py)
-- Implementação de ferramentas core: [agent_tools.py](file:///e:/repos/janus-completo/janus/app/core/tools/agent_tools.py)
-- Gerador dinâmico (API endpoint): [action_module.py](file:///e:/repos/janus-completo/janus/app/core/tools/action_module.py)
+- Endpoints tools: [tools.py](janus/app/api/v1/endpoints/tools.py)
+- ToolService e proteções: [tool_service.py](janus/app/services/tool_service.py)
+- Endpoints sandbox: [sandbox.py](janus/app/api/v1/endpoints/sandbox.py)
+- SandboxService (capabilities/restrições): [sandbox_service.py](janus/app/services/sandbox_service.py)
+- Implementação de ferramentas core: [agent_tools.py](janus/app/core/tools/agent_tools.py)
+- Gerador dinâmico (API endpoint): [action_module.py](janus/app/core/tools/action_module.py)
 
 #### 4.9.1 Registro e catálogo (built-ins + dinâmicas)
 
@@ -1338,7 +1338,7 @@ O catálogo de ferramentas do runtime é o `action_registry` (singleton), que ma
 
 Ferramentas built-in são registradas automaticamente ao importar o módulo de tools core:
 
-- o módulo [agent_tools.py](file:///e:/repos/janus-completo/janus/app/core/tools/agent_tools.py#L729-L876) registra ferramentas como filesystem, memória, web e sandbox.
+- o módulo [agent_tools.py](janus/app/core/tools/agent_tools.py#L729-L876) registra ferramentas como filesystem, memória, web e sandbox.
 
 Ferramentas dinâmicas são criadas via API e registradas pelo serviço:
 
@@ -1348,9 +1348,9 @@ Ferramentas dinâmicas são criadas via API e registradas pelo serviço:
 
 Referências:
 
-- Registro e telemetria: [action_module.py](file:///e:/repos/janus-completo/janus/app/core/tools/action_module.py#L338-L574)
-- Serviço e proteções (PROTECTED_TOOLS): [tool_service.py](file:///e:/repos/janus-completo/janus/app/services/tool_service.py#L35-L214)
-- Repositório sobre o registry: [tool_repository.py](file:///e:/repos/janus-completo/janus/app/repositories/tool_repository.py#L19-L58)
+- Registro e telemetria: [action_module.py](janus/app/core/tools/action_module.py#L338-L574)
+- Serviço e proteções (PROTECTED_TOOLS): [tool_service.py](janus/app/services/tool_service.py#L35-L214)
+- Repositório sobre o registry: [tool_repository.py](janus/app/repositories/tool_repository.py#L19-L58)
 
 #### 4.9.2 Execução ponta a ponta (planejar → validar → executar → auditar)
 
@@ -1369,17 +1369,17 @@ Há dois caminhos principais que executam ferramentas com governança:
 
 Referências:
 
-- Execução do assistente: [assistant_service.py](file:///e:/repos/janus-completo/janus/app/services/assistant_service.py#L37-L162)
-- Policy Engine (inclui rate limit do ActionRegistry): [policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py#L92-L116)
-- Auditoria/telemetria de tool calls: [action_module.py](file:///e:/repos/janus-completo/janus/app/core/tools/action_module.py#L476-L574)
+- Execução do assistente: [assistant_service.py](janus/app/services/assistant_service.py#L37-L162)
+- Policy Engine (inclui rate limit do ActionRegistry): [policy_engine.py](janus/app/core/autonomy/policy_engine.py#L92-L116)
+- Auditoria/telemetria de tool calls: [action_module.py](janus/app/core/tools/action_module.py#L476-L574)
 
 **Autonomia (loop contínuo)**:
 O loop de autonomia aplica a mesma validação (Policy Engine) e, quando necessário, cria uma “ação pendente” para revisão humana (HITL) antes de executar.
 
 Referências:
 
-- Caminho de validação + pending action: [autonomy_service.py](file:///e:/repos/janus-completo/janus/app/services/autonomy_service.py#L305-L343)
-- Aprovação e execução de pendências: [pending_actions.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/pending_actions.py#L28-L80)
+- Caminho de validação + pending action: [autonomy_service.py](janus/app/services/autonomy_service.py#L305-L343)
+- Aprovação e execução de pendências: [pending_actions.py](janus/app/api/v1/endpoints/pending_actions.py#L28-L80)
 
 #### 4.9.3 Sandbox (execução segura de Python)
 
@@ -1396,9 +1396,9 @@ O sandbox existe em dois níveis:
 
 Referências:
 
-- Endpoints: [sandbox.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/sandbox.py#L21-L57)
-- Capabilities e validação de entrada: [sandbox_service.py](file:///e:/repos/janus-completo/janus/app/services/sandbox_service.py#L30-L80)
-- Execução restrita e import whitelist: [python_sandbox.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/python_sandbox.py#L31-L159)
+- Endpoints: [sandbox.py](janus/app/api/v1/endpoints/sandbox.py#L21-L57)
+- Capabilities e validação de entrada: [sandbox_service.py](janus/app/services/sandbox_service.py#L30-L80)
+- Execução restrita e import whitelist: [python_sandbox.py](janus/app/core/infrastructure/python_sandbox.py#L31-L159)
 
 ### 4.10 Documentos e RAG
 
@@ -1422,9 +1422,9 @@ RAG:
 
 Referências:
 
-- Endpoints documents: [documents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/documents.py)
-- Serviço de ingestão: [document_service.py](file:///e:/repos/janus-completo/janus/app/services/document_service.py)
-- Endpoints rag: [rag.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/rag.py)
+- Endpoints documents: [documents.py](janus/app/api/v1/endpoints/documents.py)
+- Serviço de ingestão: [document_service.py](janus/app/services/document_service.py)
+- Endpoints rag: [rag.py](janus/app/api/v1/endpoints/rag.py)
 
 ---
 
@@ -1548,7 +1548,7 @@ Esses recipes complementam as descrições de processos (capítulo 3) e contrato
 
 ### 5.1 Páginas e Fluxos
 
-- Documentação: [documentacao.html](file:///e:/repos/janus-completo/front/src/app/pages/documentacao/documentacao.html)
+- Documentação: [documentacao.html](front/src/app/pages/documentacao/documentacao.html)
 - Arquitetura: `/arquitetura`
 - Sprints: `/sprints`
 - Chat: `/chat`
@@ -1593,7 +1593,7 @@ Ordem de start (por healthcheck):
 
 Passo a passo (ambiente local):
 
-1. Configure `./janus/app/.env` (é o arquivo lido pelo settings e injetado no compose) conforme [config.py](file:///e:/repos/janus-completo/janus/app/config.py).
+1. Configure `./janus/app/.env` (é o arquivo lido pelo settings e injetado no compose) conforme [config.py](janus/app/config.py).
 2. Suba tudo:
 
 ```bash
@@ -1617,7 +1617,7 @@ Notas operacionais:
 
 ### 6.2 Variáveis e Configuração
 
-O backend usa `pydantic-settings` e, por padrão, lê o arquivo `app/.env` (configurado em [config.py](file:///e:/repos/janus-completo/janus/app/config.py#L8-L12)). No Docker Compose, o mesmo arquivo é passado via `env_file: ./janus/app/.env` para `janus-api`, `mysql`, `rabbitmq` e `grafana`.
+O backend usa `pydantic-settings` e, por padrão, lê o arquivo `app/.env` (configurado em [config.py](janus/app/config.py#L8-L12)). No Docker Compose, o mesmo arquivo é passado via `env_file: ./janus/app/.env` para `janus-api`, `mysql`, `rabbitmq` e `grafana`.
 
 Regras de parsing úteis (quando configurado por ambiente):
 
@@ -1666,8 +1666,8 @@ Variáveis principais (por domínio):
 Pontos de atenção (para refletir o comportamento real do código):
 
 - `AUTH_JWT_SECRET` tem fallback para `"janus_dev_secret"` no código de assinatura; em produção, defina explicitamente.
-- `RABBITMQ_QUEUE_CONFIG` aparece duas vezes em [config.py](file:///e:/repos/janus-completo/janus/app/config.py#L213-L290); a última definição sobrescreve a anterior em runtime.
-- Existe um gancho de “API Key global” via `PUBLIC_API_KEY` em [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L112-L128), mas essa variável não está declarada em [config.py](file:///e:/repos/janus-completo/janus/app/config.py). Do jeito que está, esse modo não é habilitável apenas via `.env` sem ajuste no settings.
+- `RABBITMQ_QUEUE_CONFIG` aparece duas vezes em [config.py](janus/app/config.py#L213-L290); a última definição sobrescreve a anterior em runtime.
+- Existe um gancho de “API Key global” via `PUBLIC_API_KEY` em [main.py](janus/app/main.py#L112-L128), mas essa variável não está declarada em [config.py](janus/app/config.py). Do jeito que está, esse modo não é habilitável apenas via `.env` sem ajuste no settings.
 
 ---
 
@@ -1679,34 +1679,34 @@ Governança no Janus é “ponta a ponta”: do request até a execução de fer
 
 Camadas principais:
 
-1. **Identificação do ator (Actor Binding)**: o backend resolve o usuário do request e grava em `request.state.actor_user_id` ([main.py](file:///e:/repos/janus-completo/janus/app/main.py#L131-L137)). A resolução é:
+1. **Identificação do ator (Actor Binding)**: o backend resolve o usuário do request e grava em `request.state.actor_user_id` ([main.py](janus/app/main.py#L131-L137)). A resolução é:
    - `Authorization: Bearer <token>` (token do Janus, validado via HMAC), ou
-   - fallback: `X-User-Id: <int>` ([auth infra](file:///e:/repos/janus-completo/janus/app/core/infrastructure/auth.py#L48-L61)).
+   - fallback: `X-User-Id: <int>` ([auth infra](janus/app/core/infrastructure/auth.py#L48-L61)).
 2. **Tokens do Janus (formato próprio, não-JWT padrão)**:
    - `token = base64url(json_payload).signature`
-   - `signature = HMAC-SHA256(json_payload_serializado)` com `AUTH_JWT_SECRET` ([auth infra](file:///e:/repos/janus-completo/janus/app/core/infrastructure/auth.py#L12-L45)).
+   - `signature = HMAC-SHA256(json_payload_serializado)` com `AUTH_JWT_SECRET` ([auth infra](janus/app/core/infrastructure/auth.py#L12-L45)).
    - Implicação: bibliotecas JWT comuns não validam esse token; ele é apenas um mecanismo interno de autenticação do Janus.
 3. **Emissão controlada de token**:
-   - `POST /api/v1/auth/token`: só permite emitir token para o próprio usuário, ou para terceiros se o ator for admin ([auth endpoint](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/auth.py#L23-L35)).
-   - `POST /api/v1/auth/supabase/exchange`: aceita token do Supabase (JWT padrão), extrai `email/sub`, cria usuário se necessário e emite token do Janus ([auth endpoint](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/auth.py#L42-L71)).
-4. **RBAC simples (admin)**: rotas sensíveis exigem `UserRepository.is_admin` (ex.: deploy) ([deployment.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/deployment.py#L24-L33)).
-5. **Consentimentos por escopo (opt-in)**: integrações dependem de consentimentos persistidos (MySQL). O fluxo OAuth do Google, por exemplo, registra tokens e adiciona scopes ao usuário ([productivity.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/productivity.py#L645-L716)).
-6. **Policy Engine (tool calls)**: valida pedidos de ação conforme risco/permissão e decide executar, bloquear, ou transformar em pendência para aprovação humana ([policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py)).
-7. **Pending Actions**: ações que exigem revisão humana vão para uma fila/registro pendente e só são executadas após aprovação ([pending_actions.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/pending_actions.py)).
+   - `POST /api/v1/auth/token`: só permite emitir token para o próprio usuário, ou para terceiros se o ator for admin ([auth endpoint](janus/app/api/v1/endpoints/auth.py#L23-L35)).
+   - `POST /api/v1/auth/supabase/exchange`: aceita token do Supabase (JWT padrão), extrai `email/sub`, cria usuário se necessário e emite token do Janus ([auth endpoint](janus/app/api/v1/endpoints/auth.py#L42-L71)).
+4. **RBAC simples (admin)**: rotas sensíveis exigem `UserRepository.is_admin` (ex.: deploy) ([deployment.py](janus/app/api/v1/endpoints/deployment.py#L24-L33)).
+5. **Consentimentos por escopo (opt-in)**: integrações dependem de consentimentos persistidos (MySQL). O fluxo OAuth do Google, por exemplo, registra tokens e adiciona scopes ao usuário ([productivity.py](janus/app/api/v1/endpoints/productivity.py#L645-L716)).
+6. **Policy Engine (tool calls)**: valida pedidos de ação conforme risco/permissão e decide executar, bloquear, ou transformar em pendência para aprovação humana ([policy_engine.py](janus/app/core/autonomy/policy_engine.py)).
+7. **Pending Actions**: ações que exigem revisão humana vão para uma fila/registro pendente e só são executadas após aprovação ([pending_actions.py](janus/app/api/v1/endpoints/pending_actions.py)).
 
 Referências:
 
-- Binding/autorização base: [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L108-L133), [auth.py (infra)](file:///e:/repos/janus-completo/janus/app/core/infrastructure/auth.py#L39-L52)
-- Consentimentos: [consents.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/consents.py)
-- Pending actions: [pending_actions.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/pending_actions.py)
-- Policy Engine: [policy_engine.py](file:///e:/repos/janus-completo/janus/app/core/autonomy/policy_engine.py)
+- Binding/autorização base: [main.py](janus/app/main.py#L108-L133), [auth.py (infra)](janus/app/core/infrastructure/auth.py#L39-L52)
+- Consentimentos: [consents.py](janus/app/api/v1/endpoints/consents.py)
+- Pending actions: [pending_actions.py](janus/app/api/v1/endpoints/pending_actions.py)
+- Policy Engine: [policy_engine.py](janus/app/core/autonomy/policy_engine.py)
 
 ### 7.2 Endurecimento e Segredos
 
-- Nunca logue chaves; sanitize em [sanitizer.py](file:///e:/repos/janus-completo/janus/app/core/llm/sanitizer.py)
+- Nunca logue chaves; sanitize em [sanitizer.py](janus/app/core/llm/sanitizer.py)
 - Em produção, sempre configure `AUTH_JWT_SECRET` (evita o default de desenvolvimento).
-- Há rate limiting em memória por IP e por chave (`X-API-Key`) em [rate_limit_middleware.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/rate_limit_middleware.py). Se você habilitar o modo de “API key global” (gancho em [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L112-L128)), trate a chave como segredo (equivale a “chave mestra”).
-- HTTPS/Tailscale: [tailscale-security-comparison.md](file:///e:/repos/janus-completo/janus/docs/guides/tailscale-security-comparison.md)
+- Há rate limiting em memória por IP e por chave (`X-API-Key`) em [rate_limit_middleware.py](janus/app/core/infrastructure/rate_limit_middleware.py). Se você habilitar o modo de “API key global” (gancho em [main.py](janus/app/main.py#L112-L128)), trate a chave como segredo (equivale a “chave mestra”).
+- HTTPS/Tailscale: [tailscale-security-comparison.md](docs/guides/tailscale-security-comparison.md)
 
 ---
 
@@ -1715,28 +1715,28 @@ Referências:
 ### 8.1 Checklist de Operação (primeiros 2 minutos)
 
 1. Verifique que a API está viva:
-   - `GET /healthz` (básico) e `GET /health` (detalhado): [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L165-L187)
+   - `GET /healthz` (básico) e `GET /health` (detalhado): [main.py](janus/app/main.py#L165-L187)
 2. Verifique saúde agregada (API full):
    - `GET /api/v1/system/status`
-   - `GET /api/v1/system/health/services`: [system_status.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_status.py#L58-L152)
-   - `GET /api/v1/system/overview`: [system_overview.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_overview.py)
+   - `GET /api/v1/system/health/services`: [system_status.py](janus/app/api/v1/endpoints/system_status.py#L58-L152)
+   - `GET /api/v1/system/overview`: [system_overview.py](janus/app/api/v1/endpoints/system_overview.py)
 3. Verifique health específico:
-   - `GET /api/v1/observability/health/system` e endpoints de componentes: [observability.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/observability.py)
-   - `GET /api/v1/optimization/health`: [optimization.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/optimization.py)
-   - `GET /api/v1/tasks/health/rabbitmq`: [tasks.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/tasks.py#L98-L112)
+   - `GET /api/v1/observability/health/system` e endpoints de componentes: [observability.py](janus/app/api/v1/endpoints/observability.py)
+   - `GET /api/v1/optimization/health`: [optimization.py](janus/app/api/v1/endpoints/optimization.py)
+   - `GET /api/v1/tasks/health/rabbitmq`: [tasks.py](janus/app/api/v1/endpoints/tasks.py#L98-L112)
 4. Verifique métricas:
-   - `GET /metrics` (Prometheus): [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L99-L103)
+   - `GET /metrics` (Prometheus): [main.py](janus/app/main.py#L99-L103)
 
 ### 8.2 Erros comuns e ações
 
 - Qdrant 400: IDs inválidos → use UUID/integer não assinado
-- Broker offline: modo degradado → ver [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py)
+- Broker offline: modo degradado → ver [message_broker.py](janus/app/core/infrastructure/message_broker.py)
 - Circuit breaker aberto: aguarde recovery ou reset via `POST /api/v1/llm/circuit-breakers/{provider}/reset`
-- Checkpoint/persistência de execuções LangGraph: ver [meta_agent.py](file:///e:/repos/janus-completo/janus/app/core/agents/meta_agent.py)
+- Checkpoint/persistência de execuções LangGraph: ver [meta_agent.py](janus/app/core/agents/meta_agent.py)
 - `401 Unauthorized` em rotas de sistema/usuário → checar se há ator (`Authorization: Bearer ...` ou `X-User-Id`).
 - `403 Forbidden` em rotas sensíveis (deploy, ações administrativas) → checar se o ator é admin (MySQL).
-- “Endpoint sumiu” → checar `PUBLIC_API_MINIMAL` em [router.py](file:///e:/repos/janus-completo/janus/app/api/v1/router.py#L1-L62).
-- “MsgPack estranho” → checar `Accept: application/msgpack` e clientes que não esperam binário em [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L135-L149).
+- “Endpoint sumiu” → checar `PUBLIC_API_MINIMAL` em [router.py](janus/app/api/v1/router.py#L1-L62).
+- “MsgPack estranho” → checar `Accept: application/msgpack` e clientes que não esperam binário em [main.py](janus/app/main.py#L135-L149).
 
 ### 8.3 Banco MySQL (schema e bootstrapping)
 
@@ -1746,7 +1746,7 @@ Se rotas de users/profiles/consents falharem por tabela ausente ou schema incomp
 - `GET /api/v1/system/db/validate` valida schema
 - `POST /api/v1/system/db/migrate` aplica migrações de índices/constraints
 
-Referência: [system_status.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_status.py#L183-L208)
+Referência: [system_status.py](janus/app/api/v1/endpoints/system_status.py#L183-L208)
 
 ### 8.4 RabbitMQ (fila travada, DLQ e poison pills)
 
@@ -1762,7 +1762,7 @@ Ações:
   - Unacked vs Ready messages
   - DLQ (`janus.dlq`) acumulando mensagens
 
-O Janus expõe suporte operacional para quarentena/poison pills via API de observabilidade: [observability.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/observability.py).
+O Janus expõe suporte operacional para quarentena/poison pills via API de observabilidade: [observability.py](janus/app/api/v1/endpoints/observability.py).
 
 ### 8.5 Neo4j e Qdrant (sintomas rápidos)
 
@@ -1777,14 +1777,14 @@ O Janus expõe suporte operacional para quarentena/poison pills via API de obser
 
 ## 9. Referências e Código
 
-- Composição e lifecycle: [main.py](file:///e:/repos/janus-completo/janus/app/main.py#L60-L220)
-- Status do sistema: [system_status.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/system_status.py#L40-L140)
-- LLM manager: [llm_manager.py](file:///e:/repos/janus-completo/janus/app/core/llm/llm_manager.py)
-- Broker e filas: [message_broker.py](file:///e:/repos/janus-completo/janus/app/core/infrastructure/message_broker.py)
-- Configuração: [config.py](file:///e:/repos/janus-completo/janus/app/config.py)
-- Autonomy: [autonomy.py](file:///e:/repos/janus-completo/janus/app/api/v1/endpoints/autonomy.py)
-- Observabilidade: [observability/](file:///e:/repos/janus-completo/janus/observability)
-- Dashboards Grafana: [grafana/dashboards](file:///e:/repos/janus-completo/janus/grafana/dashboards)
+- Composição e lifecycle: [main.py](janus/app/main.py#L60-L220)
+- Status do sistema: [system_status.py](janus/app/api/v1/endpoints/system_status.py#L40-L140)
+- LLM manager: [llm_manager.py](janus/app/core/llm/llm_manager.py)
+- Broker e filas: [message_broker.py](janus/app/core/infrastructure/message_broker.py)
+- Configuração: [config.py](janus/app/config.py)
+- Autonomy: [autonomy.py](janus/app/api/v1/endpoints/autonomy.py)
+- Observabilidade: [observability/](janus/observability)
+- Dashboards Grafana: [grafana/dashboards](janus/grafana/dashboards)
 
 ---
 
