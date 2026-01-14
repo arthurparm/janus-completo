@@ -181,6 +181,10 @@ class AgentState(TypedDict, total=False):
 
     # Execution
     execution_results: list[dict[str, Any]]
+    execution_error: str | None
+
+    # Error Reflexion
+    error_analysis: dict[str, Any] | None
 
     # Control Flow
     status: str
@@ -192,6 +196,12 @@ class DiagnosisSchema(BaseModel):
     root_cause: str = Field(..., description="A causa raiz técnica identificada.")
     severity: str = Field(..., description="Gravidade: low, medium, high, critical")
     confidence: float = Field(..., description="Nível de confiança no diagnóstico (0.0 a 1.0)")
+
+
+class ReflexionAnalysisSchema(BaseModel):
+    root_cause: str = Field(..., description="Verbalização clara da causa raiz da falha.")
+    error_type: str = Field(..., description="Classificação do tipo de erro (e.g., Lógica, Ambiente, Timeout).")
+    actionable_insights: list[str] = Field(..., description="Lista de insights acionáveis para a próxima tentativa.")
 
 
 class RecommendationItem(BaseModel):

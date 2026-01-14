@@ -73,10 +73,31 @@ def _redact_secrets(_, __, event_dict: dict[str, Any]):
             return "***"
         return s[:2] + "***" + s[-2:]
 
+    # First pass: Redact known sensitive keys
     for k in list(event_dict.keys()):
         lk = str(k).lower()
         if any(sk in lk for sk in _SENSITIVE_KEYS):
             event_dict[k] = _mask(event_dict[k])
+    
+    # Second pass: Apply PII redaction to message and string values
+    # We apply this to 'event' (the message) and other string fields
+    # Be careful not to over-redact structured data if it's not a string
+    
+    try:
+        from app.core.memory.security import redact_pii_text_only
+        
+        # Redact the main log message
+        if "event" in event_dict and isinstance(event_dict["event"], str):
+            event_dict["event"] = redact_pii_text_only(event_dict["event"])
+            
+        # Redact other string values (optional, can be expensive)
+        # for k, v in event_dict.items():
+        #     if isinstance(v, str) and k != "event":
+        #         event_dict[k] = redact_pii_text_only(v)
+    except Exception:
+        # Fail safe: if redaction fails, don't crash, but keep original
+        pass
+            
     return event_dict
 
 

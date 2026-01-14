@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
 from app.core.infrastructure.redis_manager import redis_manager, RedisManager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,7 +32,8 @@ class RedisUsageTracker:
             if raw is None:
                 return 0.0
             return float(raw)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to get provider spend for {provider}: {e}", exc_info=True)
             return 0.0
 
     async def increment_provider_spend(self, provider: str, cost_usd: float) -> float:
@@ -42,8 +46,11 @@ class RedisUsageTracker:
             key = self._provider_key(provider)
             value = await client.incrbyfloat(key, amount)
             return float(value)
-        except Exception:
-            return 0.0
+        except Exception as e:
+            logger.error(f"Failed to increment provider spend for {provider}: {e}", exc_info=True)
+            # Retorna 0.0 para não quebrar o fluxo, mas loga erro crítico.
+            # TODO: Adicionar fila de dead-letter ou persistência secundária
+            raise e # Relançar exceção para que o chamador saiba que a contabilidade falhou
 
     async def get_tenant_spend(self, kind: str, id_: str, date: Optional[str] = None) -> float:
         if not id_:
@@ -55,7 +62,8 @@ class RedisUsageTracker:
             if raw is None:
                 return 0.0
             return float(raw)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to get tenant spend for {kind}:{id_}: {e}", exc_info=True)
             return 0.0
 
     async def increment_tenant_spend(
@@ -75,8 +83,10 @@ class RedisUsageTracker:
             if not date: # Only set expire if it's the current day bucket being created
                  await client.expire(key, 60 * 60 * 24 * 45)
             return float(value)
-        except Exception:
-            return 0.0
+        except Exception as e:
+            logger.error(f"Failed to increment tenant spend for {kind}:{id_}: {e}", exc_info=True)
+            # Relança exceção para evitar perda silenciosa de dados financeiros
+            raise e
 
 
 def get_redis_usage_tracker() -> Optional[RedisUsageTracker]:

@@ -23,6 +23,8 @@ async def start_all_workers():
     from app.core.workers.autonomy_worker import start_autonomy_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
     from app.core.workers.distillation_worker import start_distillation_worker
+    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
+    from app.core.workers.debate_critic_worker import start_debate_critic_worker
     from app.core.workers.google_productivity_worker import start_google_productivity_consumer
     from app.core.workers.meta_agent_worker import (
         start_failure_event_consumer,
@@ -35,10 +37,15 @@ async def start_all_workers():
     from app.core.workers.router_worker import start_router_worker
     from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
     from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
+    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
 
     logger.info("Iniciando orquestrador de workers...")
 
     workers = []
+
+    # Worker de manutenção de memória (Generative Memory)
+    await memory_maintenance_worker.start()
+    workers.append(memory_maintenance_worker.task)
 
     # Worker de consolidação de conhecimento
     consolidation_worker = await start_consolidation_worker()
@@ -100,6 +107,13 @@ async def start_all_workers():
 
     google_productivity_task = await start_google_productivity_consumer()
     workers.append(google_productivity_task)
+
+    # Debate System Workers
+    debate_proponent = await start_debate_proponent_worker()
+    workers.append(debate_proponent)
+
+    debate_critic = await start_debate_critic_worker()
+    workers.append(debate_critic)
 
     logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

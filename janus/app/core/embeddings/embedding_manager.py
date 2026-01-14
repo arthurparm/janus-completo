@@ -60,8 +60,9 @@ _DEFAULT_LOCAL_MODEL = getattr(
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 )
 _DEFAULT_OPENAI_MODEL = getattr(settings, "EMBEDDINGS_OPENAI_MODEL_NAME", "text-embedding-3-small")
+_DEFAULT_OPENROUTER_MODEL = getattr(settings, "EMBEDDINGS_OPENROUTER_MODEL_NAME", "qwen/qwen3-embedding-8b")
 _TARGET_VECTOR_SIZE = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
-_PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai"
+_PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai" | "openrouter"
 _CACHE_TTL = int(getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600))
 _CACHE_MAX = int(getattr(settings, "MEMORY_SHORT_MAX_ITEMS", 512))
 
@@ -97,6 +98,7 @@ _cache = _TTLCache(max_items=_CACHE_MAX, ttl_seconds=_CACHE_TTL)
 _local_model: Any = None
 _local_model_failed: bool = False
 _openai_embedder: Any = None
+_openrouter_embedder: Any = None
 
 
 def _load_local_model() -> SentenceTransformer:
@@ -169,6 +171,41 @@ def _load_openai_embedder() -> OpenAIEmbeddings:
     return _openai_embedder
 
 
+def _load_openrouter_embedder() -> OpenAIEmbeddings:
+    global _openrouter_embedder
+    if _openrouter_embedder is not None:
+        return _openrouter_embedder
+    if OpenAIEmbeddings is None:
+        raise RuntimeError("langchain_openai não está disponível para embeddings")
+    
+    try:
+        or_key = (
+            settings.OPENROUTER_API_KEY.get_secret_value()
+            if getattr(settings, "OPENROUTER_API_KEY", None)
+            else None
+        )
+    except Exception:
+        or_key = None
+        
+    if not or_key:
+        raise RuntimeError("OPENROUTER_API_KEY não configurada para embeddings OpenRouter")
+        
+    model_name = _DEFAULT_OPENROUTER_MODEL
+    logger.info(f"Inicializando OpenRouterEmbeddings com modelo: {model_name}")
+    # OpenRouter usa interface compatível com OpenAI
+    _openrouter_embedder = OpenAIEmbeddings(
+        model=model_name, 
+        api_key=or_key,
+        base_url=settings.OPENROUTER_BASE_URL,
+        check_embedding_ctx_length=False # Evita verificações específicas da OpenAI
+    )
+    try:
+        _EMB_MODEL_LOADED.labels("openrouter").set(1)
+    except Exception:
+        pass
+    return _openrouter_embedder
+
+
 def _pad_or_truncate(vec: list[float], size: int) -> list[float]:
     if len(vec) == size:
         return vec
@@ -228,25 +265,33 @@ def _emb_openai(texts: list[str]) -> list[list[float]]:
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
 
 
+def _emb_openrouter(texts: list[str]) -> list[list[float]]:
+    embedder = _load_openrouter_embedder()
+    vectors = embedder.embed_documents(texts)
+    return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
+
+
 def embed_text(text: str) -> list[float]:
     """
     Retorna embedding para um único texto, com fallback automático.
 
     - Tenta provedor preferido (local por padrão)
-    - Se falhar, tenta o outro (OpenAI ou local)
+    - Se falhar, tenta os outros (OpenAI, OpenRouter ou local)
     - Em caso de falha total, retorna vetor zero com tamanho alvo
     """
-    key = f"emb:{_TARGET_VECTOR_SIZE}:{_DEFAULT_LOCAL_MODEL}:{_DEFAULT_OPENAI_MODEL}:{text.strip()[:4000]}"
+    key = f"emb:{_TARGET_VECTOR_SIZE}:{_DEFAULT_LOCAL_MODEL}:{_DEFAULT_OPENAI_MODEL}:{_DEFAULT_OPENROUTER_MODEL}:{text.strip()[:4000]}"
     cached = _cache.get(key)
     if cached is not None:
         return cached
 
-    providers = [(_PROVIDER_PREF or "local").lower()]
-    # garante ordem de fallback
-    if providers[0] == "local":
-        providers.append("openai")
-    else:
-        providers.append("local")
+    pref = (_PROVIDER_PREF or "local").lower()
+    providers = [pref]
+    
+    # Ordem de fallback
+    available = ["local", "openrouter", "openai"]
+    for p in available:
+        if p != pref:
+            providers.append(p)
 
     for p in providers:
         try:
@@ -257,6 +302,8 @@ def embed_text(text: str) -> list[float]:
                 vec = _emb_local([text])[0]
             elif p == "openai":
                 vec = _emb_openai([text])[0]
+            elif p == "openrouter":
+                vec = _emb_openrouter([text])[0]
             else:
                 continue
             _cache.put(key, vec)
@@ -291,11 +338,14 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
     # Estratégia simples: tentar provider preferido, com fallback; sem cache por-item para lote
-    providers = [(_PROVIDER_PREF or "local").lower()]
-    if providers[0] == "local":
-        providers.append("openai")
-    else:
-        providers.append("local")
+    pref = (_PROVIDER_PREF or "local").lower()
+    providers = [pref]
+    
+    # Ordem de fallback
+    available = ["local", "openrouter", "openai"]
+    for p in available:
+        if p != pref:
+            providers.append(p)
 
     for p in providers:
         try:
@@ -306,6 +356,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 res = _emb_local(texts)
             elif p == "openai":
                 res = _emb_openai(texts)
+            elif p == "openrouter":
+                res = _emb_openrouter(texts)
             else:
                 continue
             try:

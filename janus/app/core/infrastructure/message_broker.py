@@ -197,9 +197,10 @@ class MessageBroker:
                 expiration=expiration,
                 content_type=content_type,
             )
-            cm = _tracer.start_as_current_span("broker.publish") if _OTEL else nullcontext()
-            async with cm as span:  # type: ignore
-                if _OTEL and span is not None:
+            
+            # Trace setup (Otel)
+            if _OTEL and _tracer:
+                with _tracer.start_as_current_span("broker.publish") as span:
                     try:
                         tid = TRACE_ID.get()
                         sid = USER_ID.get()
@@ -213,7 +214,11 @@ class MessageBroker:
                         span.set_attribute("broker.content_type", content_type)
                     except Exception:
                         pass
+                    await channel.default_exchange.publish(msg, routing_key=queue_name)
+            else:
+                # No OTEL or tracer, just publish
                 await channel.default_exchange.publish(msg, routing_key=queue_name)
+
             _MESSAGES_PUBLISHED.labels(queue_name).inc()
 
     def _get_queue_arguments(self, queue_name: str) -> dict[str, Any]:
@@ -292,9 +297,10 @@ class MessageBroker:
                 else:
                     payload = json.loads(message.body.decode("utf-8"))
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
-                cm = _tracer.start_as_current_span("broker.consume") if _OTEL else nullcontext()
-                async with cm as span:  # type: ignore
-                    if _OTEL and span is not None:
+                
+                # Tracing manual
+                if _OTEL and _tracer:
+                    with _tracer.start_as_current_span("broker.consume") as span:
                         try:
                             tid = TRACE_ID.get()
                             sid = USER_ID.get()
@@ -306,6 +312,8 @@ class MessageBroker:
                             span.set_attribute("broker.content_type", str(ct))
                         except Exception:
                             pass
+                        await callback(task)
+                else:
                     await callback(task)
             except Exception as e:
                 logger.error("Erro ao processar mensagem; reenfileirando", exc_info=e)
@@ -676,3 +684,21 @@ async def get_broker() -> MessageBroker:
 # Exportar uma referência para a instância singleton (para imports legados)
 # NOTA: Esta é uma referência que será None até initialize_broker() ser chamada
 message_broker = _broker_instance
+
+
+# Adapter para uso em contexts managers assíncronos (async with)
+class _AgnosticContextManager:
+    def __init__(self, coro):
+        self._coro = coro
+    
+    async def __aenter__(self):
+        return await self._coro
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+def get_broker_context() -> _AgnosticContextManager:
+    """
+    Helper para usar 'async with get_broker() as broker' se o código legado esperar isso.
+    """
+    return _AgnosticContextManager(get_broker())

@@ -78,11 +78,24 @@ class LifeCycleWorker:
             try:
                 # Payload correto para o worker
                 payload = {"mode": "batch", "limit": 50, "min_score": 0.0}
+                
+                # FIX: publish_consolidation_task internamente chama get_broker()
+                # e faz await broker.publish(). Não precisamos de um contexto manager aqui
+                # se a função já lida com a conexão.
+                
+                # Se publish_consolidation_task estiver tentando usar 'async with get_broker()',
+                # isso falharia pois get_broker retorna o objeto direto.
+                # Verificamos que publish_consolidation_task usa 'broker = await get_broker()',
+                # então a chamada direta é segura.
+                
                 await publish_consolidation_task(payload=payload)
+                
                 self._last_consolidation_ts = now
                 logger.info("LifeCycle: Tarefa de consolidação enviada com sucesso.")
             except Exception as e:
-                logger.error(f"LifeCycle: Falha ao enviar consolidação: {e}")
+                # Logar exceção completa para debug
+                import traceback
+                logger.error(f"LifeCycle: Falha ao enviar consolidação: {e}\n{traceback.format_exc()}")
 
         # 3. Auto-Check de Falhas (Resilience)
         try:

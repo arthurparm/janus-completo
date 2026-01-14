@@ -10,25 +10,40 @@ Templates otimizados para funcionalidades core do Janus:
 - Compressão de contexto em conversas longas
 """
 
+# Nota: Estas constantes são definidas como strings vazias inicialmente
+# e devem ser carregadas de forma assíncrona durante a inicialização.
+
 # ==================== MEMORY INTEGRATION TEMPLATE ====================
 
-MEMORY_INTEGRATION_TEMPLATE = get_prompt_with_fallback("memory_integration")
+MEMORY_INTEGRATION_TEMPLATE = ""
 
 
 # ==================== GRAPH QUERY PLANNING TEMPLATE ====================
 
-GRAPH_QUERY_PLANNING_TEMPLATE = get_prompt_with_fallback("graph_query_planning")
+GRAPH_QUERY_PLANNING_TEMPLATE = ""
 
 
 # ==================== ERROR RECOVERY TEMPLATE ====================
 
-ERROR_RECOVERY_TEMPLATE = get_prompt_with_fallback("error_recovery")
+ERROR_RECOVERY_TEMPLATE = ""
 
 
 # ==================== CONTEXT COMPRESSION TEMPLATE ====================
 
-CONTEXT_COMPRESSION_TEMPLATE = get_prompt_with_fallback("context_compression")
+CONTEXT_COMPRESSION_TEMPLATE = ""
 
+
+async def load_specialized_prompts():
+    """Carrega os templates especializados de forma assíncrona."""
+    global MEMORY_INTEGRATION_TEMPLATE
+    global GRAPH_QUERY_PLANNING_TEMPLATE
+    global ERROR_RECOVERY_TEMPLATE
+    global CONTEXT_COMPRESSION_TEMPLATE
+
+    MEMORY_INTEGRATION_TEMPLATE = await get_prompt_with_fallback("memory_integration")
+    GRAPH_QUERY_PLANNING_TEMPLATE = await get_prompt_with_fallback("graph_query_planning")
+    ERROR_RECOVERY_TEMPLATE = await get_prompt_with_fallback("error_recovery")
+    CONTEXT_COMPRESSION_TEMPLATE = await get_prompt_with_fallback("context_compression")
 
 
 # Exportar todos os templates
@@ -37,4 +52,5 @@ __all__ = [
     "GRAPH_QUERY_PLANNING_TEMPLATE",
     "ERROR_RECOVERY_TEMPLATE",
     "CONTEXT_COMPRESSION_TEMPLATE",
+    "load_specialized_prompts",
 ]

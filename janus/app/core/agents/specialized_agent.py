@@ -54,7 +54,8 @@ class SpecializedAgent:
 
     async def _get_prompt_for_role(self, config) -> str:
         """Obtém o prompt para o papel do agente (do banco ou fallback)."""
-        if config and config.prompt_template:
+        # config pode ser None ou um objeto AgentConfiguration
+        if config and hasattr(config, "prompt_template") and config.prompt_template:
             return config.prompt_template
 
         # Tentar buscar do PromptService
@@ -132,7 +133,8 @@ class SpecializedAgent:
         # Tentar carregar configuração do banco de dados
         config = None
         try:
-            config = self.config_repo.get_active_config(
+            # FIX: Await necessário pois o repositório agora é async
+            config = await self.config_repo.get_active_config(
                 agent_name=self.agent_id, agent_role=self.role.value
             )
             if config:

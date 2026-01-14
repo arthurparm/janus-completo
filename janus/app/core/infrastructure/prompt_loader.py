@@ -95,7 +95,7 @@ class PromptLoader:
         self._external_provider = provider
         self.invalidate()
 
-    def _get_prompt_from_database(
+    async def _get_prompt_from_database(
         self,
         name: str,
         version: str | None = None,
@@ -103,33 +103,42 @@ class PromptLoader:
         lang: str | None = None,
         model: str | None = None,
     ) -> str | None:
-        """Busca prompt do banco de dados Relacional."""
+        """Busca prompt do banco de dados Relacional (Async)."""
         if not self.use_database or not self._prompt_repo:
             return None
 
         try:
-            if version:
-                # Buscar versão específica
-                prompt = self._prompt_repo.get_prompt_version_by_id(int(version))
-                if prompt and prompt.prompt_name == name:
-                    return prompt.prompt_text
-            else:
-                # Buscar versão ativa
-                # Defaults from make_key are used if passed, otherwise repository defaults
-                prompt = self._prompt_repo.get_active_prompt(
-                    prompt_name=name,
-                    namespace=namespace or "default",
-                    language=lang or "en",
-                    model_target=model or "general",
-                )
-                if prompt:
-                    return prompt.prompt_text
+            from app.db import get_db_session
+            
+            # Usar gerenciador de sessão para injetar sessão no repositório
+            async for session in get_db_session():
+                # Injetar sessão temporariamente
+                self._prompt_repo._session = session
+                try:
+                    if version:
+                        # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
+                        # prompt = await self._prompt_repo.get_prompt_version_by_id(int(version))
+                        pass 
+                    else:
+                        # Buscar versão ativa
+                        prompt = await self._prompt_repo.get_active_prompt(
+                            prompt_name=name,
+                            namespace=namespace or "default",
+                            language=lang or "en",
+                            model_target=model or "general",
+                        )
+                        if prompt:
+                            return prompt.prompt_text
+                finally:
+                    self._prompt_repo._session = None
+                break # Apenas uma sessão necessária
+                
         except Exception as e:
             self._logger.error(f"Erro ao buscar prompt '{name}' do banco: {e}")
 
         return None
 
-    def get(
+    async def get(
         self,
         name: str,
         *,
@@ -163,7 +172,7 @@ class PromptLoader:
 
         # 1. Tentar banco de dados primeiro (se habilitado)
         if self.use_database:
-            template = self._get_prompt_from_database(
+            template = await self._get_prompt_from_database(
                 name, version=version, namespace=namespace, lang=lang, model=model
             )
             if template:
@@ -172,6 +181,7 @@ class PromptLoader:
         # 2. Tentar provider externo se banco falhou
         if template is None and self._external_provider is not None:
             try:
+                # Nota: Providers externos ainda podem ser síncronos se não atualizados
                 candidate = self._external_provider(name)
                 if isinstance(candidate, str) and candidate:
                     template = candidate
@@ -207,12 +217,12 @@ class PromptLoader:
 prompt_loader = PromptLoader()
 
 
-def get_prompt(prompt_name: str) -> str:
-    # compatibilidade retro
-    return prompt_loader.get(prompt_name)
+async def get_prompt(prompt_name: str) -> str:
+    # compatibilidade retro - agora async
+    return await prompt_loader.get(prompt_name)
 
 
-def get_prompt_advanced(
+async def get_prompt_advanced(
     prompt_name: str,
     *,
     namespace: str | None = None,
@@ -222,7 +232,7 @@ def get_prompt_advanced(
     variables: dict[str, Any] | None = None,
     hot_reload: bool | None = None,
 ) -> str:
-    return prompt_loader.get(
+    return await prompt_loader.get(
         prompt_name,
         namespace=namespace,
         version=version,

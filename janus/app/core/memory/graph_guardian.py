@@ -508,6 +508,63 @@ class GraphGuardian:
             "original_to": to_entity,
         }
 
+    def check_policy(self, entity_type: str, relation_type: str) -> bool:
+        """
+        Verifica se uma relação entre tipos de entidade é permitida pela política de segurança/integridade.
+        
+        Args:
+            entity_type: Tipo da entidade (ex: ERROR, FUNCTION)
+            relation_type: Tipo da relação (ex: SOLVES, CALLS)
+            
+        Returns:
+            True se permitido, False caso contrário.
+        """
+        # Normaliza tipos para garantir que existem no schema
+        norm_entity = self.normalize_entity_type(entity_type)
+        norm_relation = self.normalize_relation_type(relation_type)
+        
+        if not norm_relation:
+            logger.warning(f"Política: Relação negada por tipo inválido: {relation_type}")
+            return False
+            
+        # Política básica: Tipos devem ser reconhecidos
+        # Futuro: Implementar restrições semânticas (ex: DOCUMENTATION cannot CALL CODE)
+        
+        return True
+
+    async def quarantine_item(self, item_type: str, content: dict, source_id: str, reason: str):
+        """
+        Coloca um item em quarentena para revisão manual.
+        
+        Args:
+            item_type: Tipo do item (entity/relationship)
+            content: Conteúdo do item
+            source_id: ID da origem (experience_id)
+            reason: Motivo da quarentena
+        """
+        logger.warning(f"QUARENTENA ({reason}): {item_type} de {source_id} - {content}")
+        
+        try:
+            from app.db.postgres_config import postgres_db
+            from app.models.quarantine_models import QuarantineItem
+            
+            async with postgres_db.get_session_async() as session:
+                item = QuarantineItem(
+                    item_type=item_type,
+                    source_id=source_id,
+                    content=content,
+                    reason=reason
+                )
+                session.add(item)
+                await session.commit()
+                logger.info(f"Item persistido na quarentena: ID {item.id}")
+                
+        except Exception as e:
+            logger.error(f"Falha ao persistir item na quarentena: {e}")
+            # Não quebrar o fluxo se o DB falhar, apenas logar
+            
+        return True
+
 
 # Instância global do guardião
 graph_guardian = GraphGuardian()

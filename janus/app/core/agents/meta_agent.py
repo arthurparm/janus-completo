@@ -28,19 +28,21 @@ from app.core.agents.meta_agent_module.schemas import (
     Recommendation,
     StateReport,
     AgentState,
+    ReflexionAnalysisSchema,
     DiagnosisSchema,
     PlanSchema,
     CritiqueSchema,
     safe_issue_severity,
     safe_issue_category,
 )
+from app.core.agents.meta_agent_module.graph_builder import MetaAgentGraphBuilder
+from app.core.memory.working_memory import get_working_memory
 from app.core.agents.meta_agent_module.tools import (
     analyze_memory_for_failures,
     get_system_health_metrics,
     analyze_performance_trends,
     get_resource_usage,
 )
-from app.core.agents.meta_agent_module.graph_builder import MetaAgentGraphBuilder
 
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
@@ -225,7 +227,7 @@ class MetaAgent:
         if not issues:
             return {"diagnosis": "No issues to diagnose."}
 
-        prompt = get_formatted_prompt(
+        prompt = await get_formatted_prompt(
             "meta_agent_diagnosis",
             issues=json.dumps(issues, indent=2),
             metrics=json.dumps(state.get("metrics", {}), indent=2),
@@ -259,7 +261,7 @@ class MetaAgent:
         logger.info("[MetaAgent] Node: Plan")
         diagnosis = state.get("diagnosis", "")
 
-        prompt = get_formatted_prompt(
+        prompt = await get_formatted_prompt(
             "meta_agent_planning",
             diagnosis=diagnosis,
             issues=json.dumps(state.get("detected_issues", []), indent=2),
@@ -307,7 +309,7 @@ class MetaAgent:
                 "retry_count": state.get("retry_count", 0) + 1,
             }
 
-        prompt = get_formatted_prompt(
+        prompt = await get_formatted_prompt(
             "meta_agent_reflection",
             plan=json.dumps(plan, indent=2),
             diagnosis=state.get("diagnosis", ""),
@@ -355,15 +357,97 @@ class MetaAgent:
         plan = state.get("final_plan", [])
         results = []
 
-        for rec in plan:
-            self._dispatch_task(rec)
-            results.append({"title": rec.get("title"), "status": "dispatched"})
-            logger.info(f"Dispatched recommendation: {rec.get('title')}")
+        try:
+            for rec in plan:
+                self._dispatch_task(rec)
+                results.append({"title": rec.get("title"), "status": "dispatched"})
+                logger.info(f"Dispatched recommendation: {rec.get('title')}")
 
-            META_AGENT_RECOMMENDATIONS.labels(rec.get("category", "general")).inc()
+                META_AGENT_RECOMMENDATIONS.labels(rec.get("category", "general")).inc()
 
-        META_AGENT_CYCLES.labels("success").inc()
-        return {"execution_results": results, "status": "completed"}
+            META_AGENT_CYCLES.labels("success").inc()
+            return {"execution_results": results, "status": "completed"}
+
+        except Exception as e:
+            logger.error(f"[MetaAgent] Execution Failed: {e}", exc_info=True)
+            return {
+                "execution_error": str(e),
+                "status": "execution_failed",
+            }
+
+    async def error_reflexion_node_logic(self, state: AgentState) -> dict:
+        """
+        Nó de Reflexion & Self-Correction (Shinn et al., 2023).
+        Analisa a falha, gera insights e armazena na memória de curto prazo.
+        """
+        logger.info("[MetaAgent] Node: Error Reflexion")
+        error_msg = state.get("execution_error", "Unknown error")
+        retry_count = state.get("retry_count", 0)
+        max_retries = state.get("max_retries", 3)
+
+        if retry_count >= max_retries:
+            logger.warning("Max retries reached in Reflexion.")
+            return {"status": "give_up"}
+
+        # 1. Analisar Erro com LLM
+        # Fallback prompt if file not found
+        default_prompt = (
+            "Analyze the following execution failure in the Janus system.\n"
+            "Error: {error}\n"
+            "Plan: {plan}\n"
+            "Context: {context}\n"
+            "Provide a structured analysis including root cause, error type, and actionable insights for the next attempt."
+        )
+        
+        try:
+            prompt = await get_formatted_prompt(
+                "reflexion_analysis",
+                default=default_prompt,
+                error=error_msg,
+                plan=json.dumps(state.get("final_plan", []), indent=2),
+                context=state.get("diagnosis", "No context"),
+            )
+        except Exception:
+            prompt = default_prompt.format(
+                error=error_msg,
+                plan=json.dumps(state.get("final_plan", []), indent=2),
+                context=state.get("diagnosis", "No context"),
+            )
+
+        try:
+            llm = await get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
+            structured_llm = llm.with_structured_output(ReflexionAnalysisSchema)
+            analysis_data = await structured_llm.ainvoke(prompt)
+            
+            # 2. Armazenar na Memória de Trabalho (Curto Prazo)
+            wm = get_working_memory()
+            wm.add(
+                type="reflexion",
+                content=f"Failure Analysis: {analysis_data.root_cause}. Insights: {analysis_data.actionable_insights}",
+                metadata={
+                    "error_type": analysis_data.error_type,
+                    "cycle_id": state.get("cycle_id"),
+                    "retry_count": retry_count
+                }
+            )
+
+            # 3. Atualizar Estado
+            return {
+                "error_analysis": analysis_data.model_dump(),
+                "status": "retry",
+                "retry_count": retry_count + 1,
+                # Atualiza o diagnóstico para o próximo planejamento considerar os insights
+                "diagnosis": f"Previous Failure: {analysis_data.root_cause}. Fix: {analysis_data.actionable_insights}", 
+            }
+
+        except Exception as e:
+            logger.error(f"Reflexion failed: {e}")
+            # Se a reflexão falhar, apenas incrementa retry e tenta novamente (ou desiste)
+            return {
+                "status": "retry", 
+                "retry_count": retry_count + 1,
+                "execution_error": f"{error_msg} | Reflexion failed: {e}"
+            }
 
     # --- Helpers ---
 

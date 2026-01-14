@@ -17,6 +17,7 @@ from .factory import (
     _validate_gemini_key,
     _validate_openai_key,
     _validate_xai_key,
+    create_ollama_llm,
 )
 from .pricing import (
     ModelStats,
@@ -162,25 +163,7 @@ async def get_llm(
             # Bloqueia se provedor local estiver excluído
             if exclude_providers and "ollama" in exclude_providers:
                 raise RuntimeError("Provedor local 'ollama' está excluído para esta seleção.")
-            # Model kwargs para tunar desempenho do OllaM
-            model_kwargs: dict[str, Any] = {}
-            if settings.OLLAMA_NUM_CTX:
-                model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
-            if settings.OLLAMA_NUM_THREAD:
-                model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
-            if settings.OLLAMA_NUM_BATCH:
-                model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
-            if settings.OLLAMA_GPU_LAYERS:
-                model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-            if settings.OLLAMA_KEEP_ALIVE:
-                model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
-
-            llm = ChatOllama(
-                base_url=settings.OLLAMA_HOST,
-                model=local_model_name,
-                temperature=0,
-                model_kwargs=model_kwargs,
-            )
+            llm = create_ollama_llm(local_model_name)
             # Primeiro uso pode exigir carregar o modelo; aumentamos o timeout para reduzir falsos negativos
             if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
                 raise RuntimeError(f"Health check falhou para modelo '{local_model_name}'")
@@ -490,26 +473,7 @@ async def get_llm(
         if exclude_providers and "ollama" in exclude_providers:
             raise RuntimeError("Fallback local desativado: 'ollama' está excluído.")
 
-        # Recalcular model kwargs localmente ou pegar de constants
-        # Para simplificar aqui, assumimos defaults ou hardcoded similares
-        model_kwargs: dict[str, Any] = {}
-        if settings.OLLAMA_NUM_CTX:
-            model_kwargs["num_ctx"] = settings.OLLAMA_NUM_CTX
-        if settings.OLLAMA_NUM_THREAD:
-            model_kwargs["num_thread"] = settings.OLLAMA_NUM_THREAD
-        if settings.OLLAMA_NUM_BATCH:
-            model_kwargs["num_batch"] = settings.OLLAMA_NUM_BATCH
-        if settings.OLLAMA_GPU_LAYERS:
-            model_kwargs["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-        if settings.OLLAMA_KEEP_ALIVE:
-            model_kwargs["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
-
-        llm = ChatOllama(
-            base_url=settings.OLLAMA_HOST,
-            model=local_model_name,
-            temperature=0,
-            model_kwargs=model_kwargs,
-        )
+        llm = create_ollama_llm(local_model_name)
         if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
             raise RuntimeError(
                 f"Health check falhou para modelo local '{local_model_name}' no fallback"

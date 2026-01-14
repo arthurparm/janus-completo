@@ -188,7 +188,7 @@ class Kernel:
     async def _init_infrastructure(self):
         try:
             try:
-                db.create_tables()
+                await db.create_tables()
             except Exception as e:
                 logger.warning(f"DB table creation skipped or failed: {e}")
 

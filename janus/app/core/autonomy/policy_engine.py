@@ -44,6 +44,23 @@ class PolicyEngine:
         self.config = config or PolicyConfig()
         self._cycle_started_at: float = time.time()
         self._actions_in_cycle: int = 0
+        
+        # Padrões suspeitos de Prompt Injection
+        self._injection_patterns = [
+            "ignore previous instructions",
+            "ignore all instructions",
+            "ignore the above instructions",
+            "override system prompt",
+            "delete system prompt",
+            "reveal system prompt",
+            "show system prompt",
+            "you are now unsafe",
+            "disable safety protocols",
+            "ignore your constraints",
+            "act as an unrestricted",
+            "jailbreak",
+            "developer mode",
+        ]
 
     def reset_cycle_quota(self):
         self._cycle_started_at = time.time()
@@ -98,6 +115,29 @@ class PolicyEngine:
             return PolicyDecision(allowed=True)
 
         # Fallback
+        return PolicyDecision(allowed=True)
+
+    def validate_content_safety(self, content: str) -> PolicyDecision:
+        """
+        Verifica se o conteúdo do prompt contém tentativas de injeção ou violações de segurança.
+        """
+        if not content or not isinstance(content, str):
+            return PolicyDecision(allowed=True)
+            
+        # Normalização básica para dificultar bypass por case/espaços/leetspeak
+        content_lower = content.lower()
+        
+        # Leetspeak normalization (basic)
+        normalized = content_lower.replace("@", "a").replace("$", "s").replace("0", "o").replace("1", "i").replace("!", "i")
+        
+        for pattern in self._injection_patterns:
+            if pattern in content_lower or pattern in normalized:
+                logger.warning(f"Potential prompt injection detected: '{pattern}'")
+                return PolicyDecision(
+                    allowed=False, 
+                    reason=f"Conteúdo bloqueado por conter padrão suspeito: {pattern}"
+                )
+                
         return PolicyDecision(allowed=True)
 
     def validate_tool_call(self, tool_name: str, input_args: dict | None = None) -> PolicyDecision:

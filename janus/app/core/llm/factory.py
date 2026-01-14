@@ -112,6 +112,13 @@ def _validate_xai_key(key: str | None) -> bool:
     return True
 
 
+def _validate_openrouter_key(key: str | None) -> bool:
+    if not key or not key.startswith("sk-or-") or len(key) < 20:
+        logger.warning("OPENROUTER_API_KEY parece inválido.")
+        return False
+    return True
+
+
 def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
@@ -134,6 +141,28 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
             executor.shutdown(wait=False, cancel_futures=True)
 
 
+def create_ollama_llm(model_name: str) -> ChatOllama:
+    """Creates a configured ChatOllama instance with standard settings."""
+    mk: dict[str, Any] = {}
+    if settings.OLLAMA_NUM_CTX:
+        mk["num_ctx"] = settings.OLLAMA_NUM_CTX
+    if settings.OLLAMA_NUM_THREAD:
+        mk["num_thread"] = settings.OLLAMA_NUM_THREAD
+    if settings.OLLAMA_NUM_BATCH:
+        mk["num_batch"] = settings.OLLAMA_NUM_BATCH
+    if settings.OLLAMA_GPU_LAYERS:
+        mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+    if settings.OLLAMA_KEEP_ALIVE:
+        mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+
+    return ChatOllama(
+        base_url=settings.OLLAMA_HOST,
+        model=model_name,
+        temperature=0,
+        model_kwargs=mk,
+    )
+
+
 def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
     warmed: dict[str, int] = {}
     items = specs or list(getattr(settings, "LLM_POOL_WARM_PROVIDERS", []) or [])
@@ -145,20 +174,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
             if _get_from_pool(provider, model):
                 continue
             if provider == "ollama":
-                mk: dict[str, Any] = {}
-                if settings.OLLAMA_NUM_CTX:
-                    mk["num_ctx"] = settings.OLLAMA_NUM_CTX
-                if settings.OLLAMA_NUM_THREAD:
-                    mk["num_thread"] = settings.OLLAMA_NUM_THREAD
-                if settings.OLLAMA_NUM_BATCH:
-                    mk["num_batch"] = settings.OLLAMA_NUM_BATCH
-                if settings.OLLAMA_GPU_LAYERS:
-                    mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
-                if settings.OLLAMA_KEEP_ALIVE:
-                    mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
-                llm = ChatOllama(
-                    base_url=settings.OLLAMA_HOST, model=model, temperature=0, model_kwargs=mk
-                )
+                llm = create_ollama_llm(model)
                 if not _health_check_ollama(
                     llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3
                 ):
@@ -206,6 +222,23 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     # Não usamos o http_client compartilhado da OpenAI para evitar conflito de rate limit
                 )
                 _add_to_pool("deepseek", model, llm)
+            elif provider == "openrouter":
+                if not _validate_openrouter_key(
+                    getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)()
+                ):
+                    continue
+                # Reuse OpenAI client structure but with OpenRouter params
+                llm = ChatOpenAI(
+                    model=model,
+                    temperature=0,
+                    api_key=getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)(),
+                    base_url=settings.OPENROUTER_BASE_URL,
+                    default_headers={
+                        "HTTP-Referer": "https://janus.ai",  # Required by OpenRouter
+                        "X-Title": "Janus Agent",  # Optional
+                    },
+                )
+                _add_to_pool("openrouter", model, llm)
             else:
                 continue
             key = _pool_key(provider, model)
@@ -223,12 +256,14 @@ def _infer_provider(llm: BaseChatModel) -> str:
     if isinstance(llm, ChatOllama):
         return "ollama"
     if isinstance(llm, ChatOpenAI):
-        # Diferencia DeepSeek/xAI/OpenAI pela URL base
+        # Diferencia DeepSeek/xAI/OpenAI/OpenRouter pela URL base
         base_url = str(getattr(llm, "openai_api_base", "") or getattr(llm, "base_url", ""))
         if "deepseek" in base_url.lower():
             return "deepseek"
         if "x.ai" in base_url.lower():
             return "xai"
+        if "openrouter" in base_url.lower():
+            return "openrouter"
         return "openai"
     if isinstance(llm, ChatGoogleGenerativeAI):
         return "google_gemini"

@@ -283,7 +283,7 @@ def get_resource_usage() -> str:
             "cpu": {
                 "percent_total": psutil.cpu_percent(interval=0.5),
                 "count": psutil.cpu_count(),
-                "load_avg": psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A",
+                "load_avg": "N/A",  # Disabled on Windows/Error
             },
             "memory": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),

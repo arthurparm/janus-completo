@@ -25,6 +25,7 @@ class MetaAgentGraphBuilder:
         workflow.add_node("plan", self._node_plan_wrapper)
         workflow.add_node("reflect", self._node_reflect_wrapper)
         workflow.add_node("execute", self._node_execute_wrapper)
+        workflow.add_node("error_reflexion", self._node_error_reflexion_wrapper)
         workflow.add_node("dead_letter", self._node_dead_letter_wrapper)
 
         # 2. Add Edges
@@ -45,7 +46,20 @@ class MetaAgentGraphBuilder:
             {"approved": "execute", "retry": "plan", "give_up": "dead_letter"},
         )
 
-        workflow.add_edge("execute", END)
+        # Execution -> Error Reflexion (if failed) or End
+        workflow.add_conditional_edges(
+            "execute",
+            self._check_execution,
+            {"completed": END, "failed": "error_reflexion"}
+        )
+
+        # Error Reflexion -> Plan (Retry) or Dead Letter
+        workflow.add_conditional_edges(
+            "error_reflexion",
+            self._check_reflexion,
+            {"retry": "plan", "give_up": "dead_letter"}
+        )
+
         workflow.add_edge("dead_letter", END)
 
         if self.checkpointer:
@@ -70,6 +84,9 @@ class MetaAgentGraphBuilder:
     async def _node_execute_wrapper(self, state: AgentState) -> dict:
         return await self.agent.execution_node_logic(state)
 
+    async def _node_error_reflexion_wrapper(self, state: AgentState) -> dict:
+        return await self.agent.error_reflexion_node_logic(state)
+
     async def _node_dead_letter_wrapper(self, state: AgentState) -> dict:
         logger.critical(f"DEAD LETTER: Cycle {state.get('cycle_id')} failed after max retries.")
         # Alerting logic here
@@ -82,6 +99,16 @@ class MetaAgentGraphBuilder:
         if not state.get("detected_issues"):
             return "healthy"
         return "unhealthy"
+
+    def _check_execution(self, state: AgentState) -> Literal["completed", "failed"]:
+        if state.get("status") == "execution_failed":
+            return "failed"
+        return "completed"
+
+    def _check_reflexion(self, state: AgentState) -> Literal["retry", "give_up"]:
+        if state.get("status") == "retry":
+            return "retry"
+        return "give_up"
 
     def _check_critique(self, state: AgentState) -> Literal["approved", "retry", "give_up"]:
         critique = state.get("critique", {})

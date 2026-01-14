@@ -20,25 +20,40 @@ if not PROMPTS_DIR.exists() and Path("/app/app/prompts").exists():
 _file_prompts_cache: dict[str, str] = {}
 
 
-def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
+async def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
     """
-    Carrega prompt com fallback hierárquico:
+    Carrega prompt com fallback hierárquico (Async):
     1. Banco de dados (via prompt_loader.get_prompt)
+    2. Arquivo local
     """
     from app.core.infrastructure.prompt_loader import get_prompt
 
     # 1. Tentar banco de dados primeiro
     try:
-        db_prompt = get_prompt(prompt_name, **kwargs)
+        db_prompt = await get_prompt(prompt_name, **kwargs)
         if db_prompt and not db_prompt.startswith("Prompt não encontrado"):
             return db_prompt
     except Exception as e:
         logger.warning("Falha ao buscar prompt do DB", prompt_name=prompt_name, error=str(e))
 
-    # 2. (Funcionalidade de arquivo removida por solicitação do usuário)
+    # 2. Fallback para arquivo local (Desenvolvimento/Recuperação)
+    if PROMPTS_DIR.exists():
+        file_path = PROMPTS_DIR / f"{prompt_name}.txt"
+        if file_path.exists():
+            try:
+                # Cache simples em memória para evitar I/O constante
+                if prompt_name in _file_prompts_cache:
+                    return _file_prompts_cache[prompt_name]
+                
+                content = file_path.read_text(encoding="utf-8")
+                _file_prompts_cache[prompt_name] = content
+                logger.debug("Prompt carregado de arquivo local", prompt_name=prompt_name, path=str(file_path))
+                return content
+            except Exception as e:
+                logger.warning("Erro ao ler arquivo de prompt", prompt_name=prompt_name, error=str(e))
 
     # 3. Retornar None
-    logger.warning("Prompt não encontrado em DB", prompt_name=prompt_name)
+    logger.warning("Prompt não encontrado em DB ou Arquivo", prompt_name=prompt_name)
     return None
 
 
@@ -47,9 +62,9 @@ def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
 HARDCODED_PROMPTS = {}
 
 
-def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
+async def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
     """
-    Carrega prompt do banco e aplica formatação.
+    Carrega prompt do banco e aplica formatação (Async).
 
     Args:
         prompt_name: Nome do prompt (ex: semantic_commit, task_decomposition)
@@ -59,7 +74,7 @@ def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
         Prompt formatado pronto para uso
     """
     # 1. Tentar DB (via get_prompt_with_fallback)
-    prompt = get_prompt_with_fallback(prompt_name)
+    prompt = await get_prompt_with_fallback(prompt_name)
 
     if not prompt:
         raise ValueError(f"Prompt '{prompt_name}' não encontrado no banco de dados.")
