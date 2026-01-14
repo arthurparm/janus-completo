@@ -93,43 +93,7 @@
 }
 
 // =============================================================================
-// CARDS
-// =============================================================================
-
-.card {
-    background: $color-bg-secondary;
-    border: $border-width-thin solid $color-border-default;
-    border-radius: $radius-lg;
-    padding: $spacing-6;
-    box-shadow: $shadow-sm;
-    @include hover-lift;
-}
-
-// Card header
-.card-header {
-    padding-bottom: $spacing-4;
-    border-bottom: $border-width-thin solid $color-border-muted;
-    margin-bottom: $spacing-4;
-
-    h3 {
-        margin: 0;
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $color-text-primary;
-    }
-}
-
-// Card body
-.card-body {
-    color: $color-text-secondary;
-    line-height: $line-height-relaxed;
-}
-
-// Elevated card (higher z-index look)
-.card-elevated {
-    background: $color-bg-tertiary;
-    box-shadow: $shadow-lg;
-}
+// Cards moved to ui-card.component.scss
 
 // =============================================================================
 // INPUTS & FORMS
@@ -189,100 +153,10 @@
 }
 
 // =============================================================================
-// TABLES
-// =============================================================================
-
-.table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-
-    thead {
-        th {
-            padding: $spacing-3 $spacing-4;
-            background: $color-bg-tertiary;
-            color: $color-text-secondary;
-            font-size: $font-size-xs;
-            font-weight: $font-weight-semibold;
-            text-align: left;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: $border-width-thin solid $color-border-default;
-
-            &:first-child {
-                border-top-left-radius: $radius-sm;
-            }
-
-            &:last-child {
-                border-top-right-radius: $radius-sm;
-            }
-        }
-    }
-
-    tbody {
-        tr {
-            transition: background $transition-fast;
-
-            &:hover {
-                background: rgba(255, 255, 255, 0.02);
-            }
-
-            td {
-                padding: $spacing-3 $spacing-4;
-                border-bottom: $border-width-thin solid $color-border-muted;
-                color: $color-text-primary;
-                font-size: $font-size-sm;
-            }
-        }
-    }
-}
-
-// Striped table
-.table-striped {
-    tbody tr:nth-child(even) {
-        background: rgba(255, 255, 255, 0.01);
-    }
-}
+// Tables moved to ui-table.component.scss
 
 // =============================================================================
-// BADGES
-// =============================================================================
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: $spacing-1;
-    padding: $spacing-1 $spacing-2;
-    border-radius: $radius-full;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-medium;
-    line-height: 1;
-}
-
-.badge-success {
-    background: $color-success-bg;
-    color: $color-success;
-}
-
-.badge-warning {
-    background: $color-warning-bg;
-    color: $color-warning;
-}
-
-.badge-error {
-    background: $color-error-bg;
-    color: $color-error;
-}
-
-.badge-info {
-    background: $color-info-bg;
-    color: $color-info;
-}
-
-.badge-neutral {
-    background: rgba(255, 255, 255, 0.1);
-    color: $color-text-secondary;
-}
+// Badges moved to ui-badge.component.scss
 
 // =============================================================================
 // UTILITIES

@@ -1,0 +1,72 @@
+@use 'styles/components' as *;
+// Note: We import components above just for mixins/variables, 
+// but we define the actual card styles locally here. 
+// Ideally 'styles/tokens' is what we want if we are refactoring strict dependencies,
+// but for now we follow the existing pattern.
+@use 'styles/tokens' as *;
+@use 'styles/animations' as *;
+
+:host {
+    display: block;
+}
+
+.card {
+    background: $color-bg-secondary;
+    border: $border-width-thin solid $color-border-default;
+    border-radius: $radius-lg;
+    // padding: $spacing-6; // Moved padding to body to allow full-width headers/footers if needed, or keeping it?
+    // Maintaining padding for now but ensuring flex
+    display: flex;
+    flex-direction: column;
+    height: 100%; // Fill the host
+    overflow: hidden; // Contain children
+    box-shadow: $shadow-sm;
+    @include hover-lift;
+
+    &.elevated {
+        background: $color-bg-tertiary;
+        box-shadow: $shadow-lg;
+    }
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center; // Center vertically
+    padding: $spacing-4 $spacing-6; // Consistent horizontal padding
+    border-bottom: $border-width-thin solid $color-border-muted;
+    background: rgba(255, 255, 255, 0.02); // Subtle header differentiation
+
+    h3 {
+        margin: 0;
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $color-text-primary;
+    }
+
+    .subtitle {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--color-fg-muted);
+    }
+}
+
+.card-body {
+    flex: 1; // Take remaining space
+    display: flex;
+    flex-direction: column;
+    min-height: 0; // Allow scrolling inside
+    color: $color-text-secondary;
+    line-height: $line-height-relaxed;
+    // padding: $spacing-6; // Restore padding here if we removed it from card? 
+    // Wait, typical card has padding on wrapper. If we want body to scroll, padding might interfere with scrollbar.
+    // For now, let's keep padding on the card wrapper but make body flex.
+    // actually, let's move padding to body/header to be safe for "flush" content later? 
+    // No, keep it simple for now: CARD has padding.
+}
+
+.card-footer {
+    padding: $spacing-4 $spacing-6;
+    border-top: $border-width-thin solid $color-border-default;
+    background: rgba(255, 255, 255, 0.02);
+}

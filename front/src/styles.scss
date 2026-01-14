@@ -14,8 +14,10 @@
 // =============================================================================
 
 @use 'styles/tokens' as *;
+@use 'styles/utilities' as *;
 @use 'styles/animations' as *;
 @use 'styles/components' as *;
+@use 'styles/markdown' as *;
 
 // =============================================================================
 // 2. GLOBAL RESETS & BASE STYLES
@@ -178,28 +180,5 @@ pre {
 }
 
 // =============================================================================
-// 7. LEGACY COMPATIBILITY (for gradual migration)
-// =============================================================================
-
-// Map old Magicpunk classes to new system (temporary)
-.glass-panel {
-  @extend .card;
-}
-
-.glass-button {
-  @extend .btn;
-  @extend .btn-primary;
-}
-
-.glass-input {
-  @extend .input;
-}
-
-.text-cyan {
-  @extend .text-accent;
-}
-
-.text-purple,
-.text-pink {
-  @extend .text-accent; // Consolidate to single accent color
-}
+// 7. LEGACY COMPATIBILITY (Removed)
+// Old Magicpunk classes have been fully migrated to .card, .btn, and .input.
