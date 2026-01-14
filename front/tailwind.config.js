@@ -9,7 +9,10 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: '#eff6ff',
+          DEFAULT: 'var(--janus-primary)',
+          hover: 'var(--janus-primary-hover)',
+          dim: 'var(--janus-primary-dim)',
+          50: '#eff6ff', // Keep these for legacy or specific shade needs if not covered by vars
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
@@ -22,6 +25,7 @@ module.exports = {
           950: '#172554'
         },
         secondary: {
+          DEFAULT: 'var(--janus-secondary)',
           50: '#fdf4ff',
           100: '#fae8ff',
           200: '#f5d0fe',
@@ -35,6 +39,7 @@ module.exports = {
           950: '#4a044e'
         },
         accent: {
+          DEFAULT: 'var(--janus-accent)',
           50: '#f0fdfa',
           100: '#ccfbf1',
           200: '#99f6e4',
@@ -48,6 +53,10 @@ module.exports = {
           950: '#042f2e'
         },
         dark: {
+          bg: 'var(--janus-bg-dark)',
+          card: 'var(--janus-bg-card)',
+          surface: 'var(--janus-bg-surface)',
+          border: 'var(--janus-border)',
           50: '#f8fafc',
           100: '#f1f5f9',
           200: '#e2e8f0',
@@ -59,11 +68,28 @@ module.exports = {
           800: '#1e293b',
           900: '#0f172a',
           950: '#020617'
+        },
+        text: {
+            primary: 'var(--janus-text-primary)',
+            secondary: 'var(--janus-text-secondary)',
+            muted: 'var(--janus-text-muted)',
         }
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui'],
         mono: ['Roboto Mono', 'ui-monospace', 'monospace']
+      },
+      borderRadius: {
+        sm: 'var(--janus-radius-sm)',
+        md: 'var(--janus-radius-md)',
+        lg: 'var(--janus-radius-lg)',
+      },
+      spacing: {
+        xs: 'var(--janus-spacing-xs)',
+        sm: 'var(--janus-spacing-sm)',
+        md: 'var(--janus-spacing-md)',
+        lg: 'var(--janus-spacing-lg)',
+        xl: 'var(--janus-spacing-xl)',
       },
       backdropBlur: {
         xs: '2px',

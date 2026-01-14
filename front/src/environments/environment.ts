@@ -1,9 +1,5 @@
 export const environment = {
   production: false,
-  supabase: {
-    url: 'https://tfunopczianlvppoabmz.supabase.co',
-    anonKey: 'sb_publishable_UXz6Oy840f6JQEXiJXe7Lg_LmuosUCA'
-  },
   // Tailscale Funnel Configuration - Acesso público via Tailscale
   tailscale: {
     enabled: true, // Tailscale Funnel ativado para acesso público

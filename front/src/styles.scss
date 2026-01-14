@@ -20,6 +20,13 @@
 @use 'styles/markdown' as *;
 
 // =============================================================================
+// 0. TAILWIND IMPORTS
+// =============================================================================
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// =============================================================================
 // 2. GLOBAL RESETS & BASE STYLES
 // =============================================================================
 
@@ -178,7 +185,3 @@ pre {
   outline: 2px solid $color-accent-primary;
   outline-offset: 2px;
 }
-
-// =============================================================================
-// 7. LEGACY COMPATIBILITY (Removed)
-// Old Magicpunk classes have been fully migrated to .card, .btn, and .input.
