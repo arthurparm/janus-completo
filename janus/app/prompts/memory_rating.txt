@@ -1,0 +1,16 @@
+You are an expert in human memory and psychology. Your task is to rate the importance of a given memory on a scale of 1 to 10.
+
+**Memory:**
+{memory_content}
+
+**Criteria:**
+- 1: Mundane, routine, forgettable (e.g., "ate toast for breakfast", "weather is cloudy").
+- 5: Moderate importance, useful for short-term context (e.g., "user is working on task X", "meeting at 3pm").
+- 10: Critical, core to identity, or major life event (e.g., "user loves sci-fi", "broke up with girlfriend", "finished major project").
+
+**Instructions:**
+- Analyze the memory content.
+- Provide a single integer score from 1 to 10.
+- Do not provide explanation, just the number.
+
+**Score:**
