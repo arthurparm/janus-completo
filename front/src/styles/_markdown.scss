@@ -1,0 +1,222 @@
+@use 'tokens' as *;
+
+// =============================================================================
+// MARKDOWN CONTENT STYLES
+// =============================================================================
+
+.markdown-content {
+    color: $color-text-primary;
+    line-height: $line-height-relaxed;
+    font-size: $font-size-base;
+
+    // Headers
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        margin-top: $spacing-6;
+        margin-bottom: $spacing-3;
+        font-weight: $font-weight-semibold;
+        color: $color-text-primary;
+
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+
+    h1 {
+        font-size: 1.75rem;
+        border-bottom: 1px solid $color-border-muted;
+        padding-bottom: $spacing-2;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+        border-bottom: 1px solid $color-border-muted;
+        padding-bottom: $spacing-2;
+    }
+
+    h3 {
+        font-size: 1.25rem;
+    }
+
+    h4 {
+        font-size: 1rem;
+    }
+
+    // Paragraphs
+    p {
+        margin-bottom: $spacing-4;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+
+    // Lists
+    ul,
+    ol {
+        margin-bottom: $spacing-4;
+        padding-left: $spacing-6;
+
+        li {
+            margin-bottom: $spacing-2;
+
+            // Handle nested lists
+            ul,
+            ol {
+                margin-top: $spacing-2;
+                margin-bottom: 0;
+            }
+        }
+    }
+
+    ul {
+        list-style-type: disc;
+    }
+
+    ol {
+        list-style-type: decimal;
+    }
+
+    // Blockquotes
+    blockquote {
+        border-left: 3px solid $color-accent-purple;
+        margin: $spacing-4 0;
+        padding: $spacing-2 $spacing-4;
+        background: rgba(124, 58, 237, 0.05);
+        color: $color-text-secondary;
+        border-radius: 0 $radius-sm $radius-sm 0;
+
+        p:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    // Inline Code
+    p code,
+    li code,
+    td code {
+        background: rgba(110, 118, 129, 0.3); // GitHub-ish code pill
+        color: $color-text-primary;
+        padding: 0.2em 0.4em;
+        border-radius: $radius-sm;
+        font-family: $font-mono;
+        font-size: 85%;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    // Code Blocks
+    pre {
+        background: transparent !important; // Wrapper handles bg
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+    }
+
+    // Custom Code Wrapper (from MarkdownService)
+    .code-block-wrapper {
+        margin: $spacing-4 0;
+        border: 1px solid $color-border-default;
+        border-radius: $radius-md;
+        background: #0d1117; // GitHub dark code bg
+        overflow: hidden;
+        box-shadow: $shadow-sm;
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: $spacing-2 $spacing-4;
+            background: #161b22;
+            border-bottom: 1px solid $color-border-default;
+            color: $color-text-secondary;
+            font-size: $font-size-xs;
+            font-family: $font-mono;
+
+            .lang-badge {
+                text-transform: uppercase;
+                font-weight: 600;
+                color: $color-text-secondary;
+            }
+        }
+
+        pre {
+            padding: $spacing-4 !important;
+            margin: 0 !important;
+            overflow-x: auto;
+
+            code {
+                font-family: 'Fira Code', $font-mono;
+                font-size: $font-size-sm;
+                line-height: 1.5;
+                background: transparent;
+                padding: 0;
+                border: none;
+            }
+        }
+    }
+
+    // Tables
+    .table-wrapper {
+        margin: $spacing-4 0;
+        overflow-x: auto;
+        border-radius: $radius-md;
+        border: 1px solid $color-border-default;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: $font-size-sm;
+
+        th,
+        td {
+            padding: $spacing-3;
+            border-bottom: 1px solid $color-border-default;
+            text-align: left;
+        }
+
+        th {
+            background: $color-bg-tertiary;
+            font-weight: 600;
+            color: $color-text-primary;
+            white-space: nowrap;
+        }
+
+        td {
+            color: $color-text-secondary;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+    }
+
+    // Links
+    a {
+        color: $color-accent-cyan;
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+
+        &:hover {
+            border-color: $color-accent-cyan;
+        }
+    }
+
+    // Images
+    img {
+        max-width: 100%;
+        border-radius: $radius-md;
+        border: 1px solid $color-border-default;
+        margin: $spacing-4 0;
+    }
+}
