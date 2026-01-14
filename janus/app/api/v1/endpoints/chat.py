@@ -164,6 +164,9 @@ async def send_message(
         )
         for r in vec_results:
             meta = r.get("metadata") or {}
+            content = (
+                r.get("content") or r.get("payload", {}).get("content") or r.get("page_content")
+            )
             citations.append(
                 {
                     "id": r.get("id"),
@@ -172,6 +175,7 @@ async def send_message(
                     "type": meta.get("type"),
                     "origin": meta.get("origin"),
                     "score": r.get("score"),
+                    "snippet": content,
                 }
             )
     except Exception as e:

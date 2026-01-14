@@ -18,6 +18,8 @@ import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/
 import { TypingIndicatorComponent } from '../../../shared/components/typing-indicator/typing-indicator.component';
 import { VoiceOrbComponent } from '../../../shared/components/voice-orb/voice-orb.component';
 import { HudPanelComponent, HudSection, HudItem, ThoughtEvent } from '../../../shared/components/hud-panel/hud-panel.component';
+import { UiCitationCardComponent } from '../../../shared/components/ui/ui-citation-card/ui-citation-card.component';
+import { MarkdownPipe } from '../../../shared/pipes/markdown.pipe';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
@@ -33,7 +35,9 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         JarvisAvatarComponent,
         TypingIndicatorComponent,
         VoiceOrbComponent,
-        HudPanelComponent
+        HudPanelComponent,
+        UiCitationCardComponent,
+        MarkdownPipe
     ],
     templateUrl: './chat.html',
     styleUrls: ['./chat.scss'],
@@ -448,42 +452,14 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
     }
 
+    // formatMessage is handled by MarkdownPipe in template
+    // keeping this helper if we need direct string manipulation in future
     formatMessage(content: string): string {
-        if (!content) return '';
-        try {
-            // Configure marked with prism for highlighting
-            marked.setOptions({
-                // highlight: (code, lang) => {
-                //    if (Prism.languages[lang]) {
-                //        return Prism.highlight(code, Prism.languages[lang], lang);
-                //    }
-                //    return code;
-                // },
-                breaks: true,
-                gfm: true
-            });
-
-            return marked.parse(content) as string;
-        } catch (e) {
-            return this.simpleFormat(content);
-        }
+        return content || '';
     }
 
     private simpleFormat(content: string): string {
-        if (!content) return '';
-        // Protect code blocks from processing
-        const codeBlocks: string[] = [];
-        const protectedContent = content.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
-            codeBlocks.push(`<pre><code class="language-${lang}">${this.escapeHtml(code)}</code></pre>`);
-            return `__CODEBLOCK_${codeBlocks.length - 1}__`;
-        });
-
-        // Basic markdown-like formatting
-        const formatted = protectedContent
-            .replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>'); // ensure newlines are handled
-
-        return formatted;
+        return content;
     }
 
     // Map AgentEvent to ThoughtEvent for HUD

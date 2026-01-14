@@ -5,16 +5,15 @@
       <div class="header-brand">
         <app-jarvis-avatar [size]="32" [state]="getAvatarState()"></app-jarvis-avatar>
         <div class="header-info">
-          <h2>JANUS<span class="text-cyan">AI</span></h2>
+          <h2>JANUS<span class="text-accent">AI</span></h2>
           <div class="status-indicator online">
             Online • Neural Link Active
           </div>
         </div>
       </div>
       <div class="header-actions">
-        <button class="hud-toggle-btn" [class.active]="hudVisible" (click)="toggleHud()">
+        <button class="btn btn-ghost" [class.active]="hudVisible" (click)="toggleHud()" title="Toggle HUD">
           <span class="icon">👁️</span>
-          <span class="label">HUD</span>
         </button>
       </div>
     </div>
@@ -27,36 +26,47 @@
       </div>
 
       <div *ngFor="let msg of messages" class="message-item" [ngClass]="msg.role" [@messageAnimation]>
-        <div class="avatar user-avatar" *ngIf="msg.role === 'user'">
-          👤
-        </div>
-        <div class="avatar assistant-avatar" *ngIf="msg.role === 'assistant'">
-          <app-jarvis-avatar [size]="36" state="idle"></app-jarvis-avatar>
+        <!-- Avatar Column -->
+        <div class="message-avatar">
+          <div class="avatar-circle user" *ngIf="msg.role === 'user'">👤</div>
+          <app-jarvis-avatar [size]="36" state="idle" *ngIf="msg.role === 'assistant'"></app-jarvis-avatar>
         </div>
 
-        <div class="message-content">
+        <!-- Content Column -->
+        <div class="message-content-wrapper">
           <div class="sender-name">{{ msg.role === 'user' ? 'Você' : 'Janus' }}</div>
 
+          <!-- Reasoning Block -->
           <div class="thought-process" *ngIf="msg.reasoning">
             <details>
               <summary>
                 <span class="icon">🧠</span>
                 <span class="label">Processo de Raciocínio</span>
               </summary>
-              <div class="thought-content" [innerHTML]="formatMessage(msg.reasoning)"></div>
+              <div class="thought-content markdown-content" [innerHTML]="msg.reasoning | markdown"></div>
             </details>
           </div>
 
-          <div class="text" [innerHTML]="formatMessage(msg.text)"></div>
+          <!-- Main Text -->
+          <div class="text markdown-content" [innerHTML]="msg.text | markdown"></div>
+
+          <!-- Citations -->
+          <div class="citations-list" *ngIf="msg.citations && msg.citations.length > 0">
+            <div class="citations-label">Fontes Utilizadas:</div>
+            <app-ui-citation-card *ngFor="let citation of msg.citations" [citation]="citation">
+            </app-ui-citation-card>
+          </div>
+
           <div class="meta">{{ (msg.timestamp || 0) * 1000 | date:'HH:mm' }}</div>
         </div>
       </div>
 
+      <!-- Typing Indicator -->
       <div class="message-item assistant" *ngIf="sending || voiceState === 'processing'">
-        <div class="avatar assistant-avatar">
+        <div class="message-avatar">
           <app-jarvis-avatar [size]="36" state="thinking"></app-jarvis-avatar>
         </div>
-        <div class="message-content typing">
+        <div class="message-content-wrapper typing">
           <app-typing-indicator></app-typing-indicator>
         </div>
       </div>
