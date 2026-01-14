@@ -16,6 +16,12 @@ class ExperienceMetadata(BaseModel):
     source_agent: str | None = None
     status: str | None = None
     ts_ms: int | None = None
+    
+    # Generative Memory Fields (Park et al. 2023)
+    importance: float | None = Field(default=None, ge=0.0, le=10.0, description="Importance score (0-10)")
+    last_accessed_at: int | None = Field(default=None, description="Timestamp ms of last access")
+    access_count: int = Field(default=0, description="Number of times retrieved")
+    pointer_id: str | None = Field(default=None, description="Neo4j Node ID reference")
 
     class Config:
         extra = "allow"
@@ -144,6 +150,9 @@ class QueueName(str, Enum):
     TASKS_AGENT_RED_TEAM = "janus.tasks.agent.red_team"
     TASKS_KNOWLEDGE_DISTILLATION = "janus.knowledge.distillation"
     PRODUCTIVITY_GOOGLE = "janus.productivity.google"
+    # Debate System Queues
+    TASKS_AGENT_DEBATE_PROPONENT = "janus.tasks.agent.debate.proponent"
+    TASKS_AGENT_DEBATE_CRITIC = "janus.tasks.agent.debate.critic"
 
 
 # --- Knowledge Graph Schemas ---
