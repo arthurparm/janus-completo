@@ -1,6 +1,6 @@
 # Arquitetura do Sistema
 
-Este documento detalha a arquitetura do Janus com referência direta ao código atual e links internos para consulta rápida. Para uma visão consolidada (inclui fluxos e funções críticas), consulte `docs/Janus-Manual.md`.
+Este documento detalha a arquitetura do Janus com referência direta ao código atual e links internos para consulta rápida. Para uma visão consolidada (inclui fluxos e funções críticas), consulte o [README.md](../README.md) principal.
 
 ## Visão Geral
 
