@@ -1,6 +1,6 @@
 # Janus — Organização do Projeto (Atualizado)
 
-Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinhadas ao estado atual do repositório. Para a visão consolidada, veja `docs/Janus-Manual.md`.
+Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinhadas ao estado atual do repositório. Para a visão consolidada, veja o [README.md](../README.md) principal.
 
 ## Visão Geral
 

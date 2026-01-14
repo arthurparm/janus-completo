@@ -1,6 +1,6 @@
 # Uso (Janus 1.0.0)
 
-Este guia cobre fluxos de Autonomia (heartbeat), LLM (invocação/cache/circuit breakers), Knowledge (consolidação/consultas) e Observabilidade, refletindo exatamente os endpoints do código atual. Para visão consolidada, veja `docs/Janus-Manual.md`.
+Este guia cobre fluxos de Autonomia (heartbeat), LLM (invocação/cache/circuit breakers), Knowledge (consolidação/consultas) e Observabilidade, refletindo exatamente os endpoints do código atual. Para visão consolidada, veja o [README.md](../README.md) principal.
 
 ## Autonomia (Heartbeat)
 - Endpoint para iniciar: `POST /api/v1/autonomy/start`

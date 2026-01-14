@@ -1,6 +1,6 @@
 # Configuração
 
-Este documento detalha as variáveis de ambiente e opções de configuração do Janus, conforme definidas em `janus/app/config.py`. Para visão consolidada e exemplos de uso, veja `docs/Janus-Manual.md`.
+Este documento detalha as variáveis de ambiente e opções de configuração do Janus, conforme definidas em `janus/app/config.py`. Para visão consolidada e exemplos de uso, veja o [README.md](../README.md) principal.
 
 ## Estrutura de Configuração
 
