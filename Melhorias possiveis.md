@@ -5,6 +5,26 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 
 ## 🚦 Strategic Execution Phases
 
+### 🧭 Strategic Pivots (2026 Roadmap Review)
+>
+> *Mandated by 2026 Architecture Review. These override conflicting backlog items.*
+
+- [ ] **Generative UI Standardization (A2UI)** ⚠️
+  - *Pivot*: Abandon custom JSON-UI parsers.
+  - *Action*: Adopt Vercel AI SDK / A2UI standards for React component streaming.
+- [ ] **Hybrid Agent Architecture** 🏗️
+  - *Pivot*: Modularize agent runtimes.
+  - *Action*: Use **LangGraph** for orchestration (State/Router) and **PydanticAI** for leaf workers (Type-safe tools).
+- [ ] **Native GraphRAG Pipelines** 🔧
+  - *Pivot*: Stop custom graph builders.
+  - *Action*: Integrate `neo4j_graphrag` package for automated hybrid retrieval & entity extraction.
+- [ ] **Centralized HITL (Human-in-the-Loop)** 🛡️
+  - *Pivot*: Remove decentralised approval logic.
+  - *Action*: Move all human approval interruptions to LangGraph Checkpointers (Postgres).
+- [ ] **Native Security Middleware** 🔒
+  - *Pivot*: Replace regex filters.
+  - *Action*: Deploy LangChain v1.0+ PII Redaction & Moderation middlewares.
+
 ### Fase 1: Foundation & Security (Imediato / P0)
 
 *Foco: Estabilidade fiduciária, segurança de dados e fundação para escala.*
@@ -106,6 +126,167 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
 - [ ] **Sem UI para Poison Pills**: Visualização de mensagens mortas/erros.
 - [ ] **Modo Read-Only Operacional**: UI para janelas de manutenção.
 - [ ] **Fallback de Auto-Analysis**: Evitar "Happy Path" falso vindo de mocks.
+
+#### 🎯 Frontend Sprint Roadmap (2026 Q1)
+
+> **Status**: PLANNED | **Objetivo**: Polir frontend para cobertura completa do backend  
+> **Gap Atual**: 18% (7/38 endpoints com UI) | **Meta**: 90%+ cobertura  
+> **Design**: Abandono do Magicpunk → Clean Professional (GitHub-style dark)
+
+**Estrutura**: 3 páginas/sprint | 2 devs paralelos | ~4 semanas
+
+---
+
+##### Sprint 0: Foundation (1 semana) 🏗️
+
+**Objetivo**: Remover Magicpunk, criar design system limpo
+
+- [x] **Design System Clean**
+  - *Ação*: Deletar `styles.scss` (364 linhas Magicpunk: orbs, scanlines, glows)
+  - *Criar*: `_tokens.scss` (cores profissionais), `_components.scss` (botões/cards limpos)
+  - *Resultado*: Base visual GitHub-style (dark mode, subtle accents)
+
+- [x] Shared Components Library
+  - [x] Planejamento e Design de API
+  - [x] Implementar `UiCardComponent`
+  - [x] Implementar `UiButtonDirective` (mais leve que componente)
+  - [x] Implementar `UiBadgeComponent`
+  - [x] Implementar `UiTableComponent` (container styles)
+  - [x] Refatorar `HudPanelComponent` para usar novos componentes
+
+- [x] **Markdown Service**
+  - *Dependências*: `marked`, `highlight.js`, `dompurify`
+  - *Função*: Renderizar respostas LLM com syntax highlighting
+
+---
+
+##### Sprint 1: Core Pages (1 semana) 🚀
+
+**Página 1: Chat Redesign** ✨
+
+- *Backend*: `chat.py` (23KB)
+- *Expectativa*:
+  - Mensagens renderizadas em **Markdown** (headers, listas, code blocks)
+  - **Citations expandíveis** em cards (file path, score, snippet)
+  - Streaming visual (typing indicator, progress bar)
+  - Layout limpo: sidebar + main (GitHub style)
+- *Features*:
+  - ✅ SSE streaming mantido
+  - ✅ Paginação histórico
+  - ✅ Busca conversas
+  - ✅ Syntax highlighting em código
+  - ✅ Citation cards interativos
+
+**Página 2: Observability Dashboard** 📊
+
+- *Backend*: `observability.py` (8.6KB)
+- *Expectativa*:
+  - **Tab 1 - Poison Pills**: Tabela com filtro por queue, botão cleanup
+  - **Tab 2 - Graph Quarantine**: Lista de entidades quarentenadas (promote/reject actions)
+  - **Tab 3 - Audit Log**: Eventos de auditoria (filtros: tool, status, date range)
+- *Features*:
+  - ✅ Quarantine table com ações inline
+  - ✅ Stats cards (total quarantined, by queue)
+  - ✅ Audit events timeline
+
+**Página 3: LLM Management** 🤖
+
+- *Backend*: `llm.py` (8.7KB)
+- *Expectativa*:
+  - **Provider Cards**: OpenAI ✅, Anthropic ✅, DeepSeek ⚠️ (c/ status health)
+  - **Cache Stats**: Hit rate graph, total entries
+  - **Circuit Breakers**: Visual de estado (open/closed), botão reset
+  - **Budget Summary**: Gráfico spend vs. limit
+- *Features*:
+  - ✅ Real-time provider health
+  - ✅ Toggle enable/disable providers
+  - ✅ Cache performance metrics
+  - ✅ Cost tracking visual
+
+---
+
+##### Sprint 2: Advanced Pages (1 semana) 🔧
+
+**Página 4: RAG/Knowledge** 🧠
+
+- *Backend*: `rag.py` (20KB!)
+- *Expectativa*:
+  - **Tab 1 - Vector Search**: Input query → results table (score, snippet, metadata)
+  - **Tab 2 - Stats**: Total vectors, query latency avg, cache hits
+  - **Tab 3 - Consolidation**: Trigger manual job, view queue status
+- *Features*:
+  - ✅ Search UI com filters (min score, limit)
+  - ✅ Results highlighting
+  - ✅ Consolidation job monitor
+
+**Página 5: Autonomy Dashboard** 🤖
+
+- *Backend*: `autonomy.py` (10.8KB)
+- *Expectativa*:
+  - **Control Panel**: Big toggle Start/Stop, status badge (active/idle)
+  - **Live Plan**: JSON editor visualizando plano atual
+  - **Policy Editor**: Form (risk profile dropdown, allowlist chips, budget slider)
+  - **Execution Timeline**: Histórico de ações executadas
+- *Features*:
+  - ✅ Start/stop controls
+  - ✅ Real-time status
+  - ✅ Plan preview editable
+  - ✅ Policy configuration UI
+
+**Página 6: Meta-Agent Monitor** 🧬
+
+- *Backend*: `meta_agent.py`
+- *Expectativa*:
+  - **OODA Loop Visualization**: 4 stages (Observe → Orient → Decide → Act)
+  - **Current Cycle**: Card showing active stage + reasoning
+  - **History Table**: Past cycles (date, outcome, decisions made)
+- *Features*:
+  - ✅ Real-time cycle updates
+  - ✅ OODA stage progression
+  - ✅ Decision rationale display
+
+---
+
+##### Sprint 3: Nice-to-Have (1 semana) 🎁
+
+**Página 7: Tools Management** 🔧
+
+- *Backend*: `tools.py` (7KB)
+- *Expectativa*:
+  - **Tools Grid**: Cards (name, description, category, permission level)
+  - **Filters**: Por category/permission
+  - **Executor Modal**: Form dinâmico baseado em schema da tool
+- *Features*:
+  - ✅ Tool catalog visual
+  - ✅ Dynamic form generation
+  - ✅ Execute tool com args
+
+**Página 8: Workers Status** ⚙️
+
+- *Backend*: `workers.py`
+- *Expectativa*:
+  - **Worker Cards**: Status (running/stopped), last heartbeat, tasks processed
+  - **Controls**: Start All / Stop All buttons
+  - **Auto-refresh**: Polling 5s
+- *Features*:
+  - ✅ Worker health monitoring
+  - ✅ Mass control actions
+
+**Página 9: System Dashboard** 🏠
+
+- *Backend*: `system_overview.py`
+- *Expectativa*:
+  - **Metrics Cards**: CPU, RAM, uptime, tokens/min (big numbers)
+  - **Service Health**: Grid de indicators (green/yellow/red)
+  - **Quick Links**: Botões para Chat, Autonomy, Observability
+- *Features*:
+  - ✅ At-a-glance system health
+  - ✅ Navigation hub
+  - ✅ Real-time metrics
+
+---
+
+**Progresso**: 0/9 páginas | **Próximo**: Sprint 0 (Design System)
 
 ### 🛡️ Backend & Infraestrutura
 
@@ -275,6 +456,7 @@ Este documento centraliza o planejamento estratégico, dívidas técnicas e inov
                        if i == len(self.strategies) - 1:
                            raise  # Último fallback falhou
                ```
+
     2. **Implementar hierarchical fallbacks**:
        - Primary → Secondary → Tertiary → Minimal → Error
        - Reasoning: Full Protocol → Generic → Minimal → Error
