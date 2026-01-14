@@ -2,11 +2,10 @@
 Configuração do banco de dados PostgreSQL para Configuration-as-Data.
 """
 
-from collections.abc import Generator
-from contextlib import contextmanager
+from collections.abc import Generator, AsyncGenerator
+from contextlib import contextmanager, asynccontextmanager
 
-from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from app.config import settings
@@ -14,86 +13,97 @@ from app.models.config_models import Base
 
 
 class PostgresDatabase:
-    """Gerenciador de conexão PostgreSQL para configurações dinâmicas."""
+    """Gerenciador de conexão PostgreSQL assíncrono para configurações dinâmicas."""
 
     def __init__(self):
-        self._engine: Engine | None = None
+        self._engine: AsyncEngine | None = None
         self._session_factory = None
         self._initialize_engine()
 
     def _initialize_engine(self):
-        """Inicializa o engine SQLAlchemy com configurações otimizadas."""
+        """Inicializa o engine SQLAlchemy com driver asyncpg."""
         postgres_url = (
-            f"postgresql+psycopg2://{settings.POSTGRES_USER}:"
+            f"postgresql+asyncpg://{settings.POSTGRES_USER}:"
             f"{settings.POSTGRES_PASSWORD.get_secret_value()}@"
             f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
             f"{settings.POSTGRES_DB}"
         )
 
-        self._engine = create_engine(
+        self._engine = create_async_engine(
             postgres_url,
-            poolclass=QueuePool,
-            pool_size=10,
-            max_overflow=20,
+            # poolclass=QueuePool,  # Removido para compatibilidade com AsyncIO
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
             pool_pre_ping=True,
-            pool_recycle=3600,
-            pool_timeout=30,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
             echo=settings.ENVIRONMENT == "development",
         )
 
-        self._session_factory = sessionmaker(bind=self._engine, autocommit=False, autoflush=False)
+        self._session_factory = async_sessionmaker(
+            bind=self._engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+        )
 
     @property
-    def engine(self) -> Engine:
-        """Retorna o engine SQLAlchemy."""
+    def engine(self) -> AsyncEngine:
+        """Retorna o engine SQLAlchemy assíncrono."""
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
         return self._engine
 
-    def create_tables(self):
-        """Cria todas as tabelas definidas nos modelos."""
+    async def create_tables(self):
+        """Cria todas as tabelas definidas nos modelos (assíncrono)."""
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-        Base.metadata.create_all(bind=self._engine)
+        
+        async with self._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    def drop_tables(self):
+    async def drop_tables(self):
         """Remove todas as tabelas (usar com cuidado!)."""
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-        Base.metadata.drop_all(bind=self._engine)
+            
+        async with self._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
 
     @contextmanager
-    def get_session(self) -> Generator[Session, None, None]:
-        """Context manager para sessões de banco de dados."""
+    def get_session(self) -> Generator[AsyncSession, None, None]:
+        """
+        [DEPRECATED] Interface síncrona mantida para compatibilidade temporária.
+        Prefira usar get_session_async.
+        """
+        raise NotImplementedError("Use get_session_async() for async database operations")
+
+    @asynccontextmanager
+    async def get_session_async(self) -> AsyncGenerator[AsyncSession, None]:
+        """Context manager para sessões de banco de dados assíncronas."""
         if self._session_factory is None:
             raise RuntimeError("Session factory not initialized")
-        session = self._session_factory()
+        
+        session: AsyncSession = self._session_factory()
         try:
             yield session
-            session.commit()
+            await session.commit()
         except Exception:
-            session.rollback()
+            await session.rollback()
             raise
         finally:
-            session.close()
-
-    def get_session_direct(self) -> Session:
-        """Retorna uma sessão direta (lembre-se de fechar!)."""
-        if self._session_factory is None:
-            raise RuntimeError("Session factory not initialized")
-        return self._session_factory()
-
+            await session.close()
 
 # Instância singleton
 postgres_db = PostgresDatabase()
 
 
-def get_db_session() -> Generator[Session, None, None]:
-    """Dependency injection para FastAPI."""
-    with postgres_db.get_session() as session:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency injection para FastAPI (Async)."""
+    async with postgres_db.get_session_async() as session:
         yield session
 
 
-def init_database():
+async def init_database():
     """Inicializa o banco de dados PostgreSQL."""
-    postgres_db.create_tables()
+    await postgres_db.create_tables()
