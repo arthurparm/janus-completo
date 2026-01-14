@@ -3,8 +3,9 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.models.schemas import ScoredExperience
+from app.models.schemas import ScoredExperience, Experience
 from app.services.memory_service import MemoryService, get_memory_service
+from app.core.memory.generative_memory import generative_memory_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,4 +50,45 @@ async def get_memories_timeline(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve timeline memories",
+        )
+
+@router.get("/generative", response_model=list[ScoredExperience])
+async def get_generative_memories(
+    query: str = Query(..., description="Query for memory retrieval"),
+    limit: int = Query(10, ge=1, le=100),
+):
+    """
+    Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
+    """
+    try:
+        memories = await generative_memory_service.retrieve_memories(query, limit=limit)
+        return memories
+    except Exception as e:
+        logger.error(f"Error retrieving generative memories: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve generative memories: {e}"
+        )
+
+@router.post("/generative", response_model=Experience)
+async def add_generative_memory(
+    content: str,
+    importance: float | None = Query(None, ge=0.0, le=10.0),
+    type: str = "episodic",
+):
+    """
+    Adds a memory to the Generative Stream (calculates importance if missing).
+    """
+    try:
+        meta = {}
+        if importance is not None:
+            meta["importance"] = importance
+            
+        memory = await generative_memory_service.add_memory(content, type=type, metadata=meta)
+        return memory
+    except Exception as e:
+        logger.error(f"Error adding generative memory: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add generative memory: {e}"
         )

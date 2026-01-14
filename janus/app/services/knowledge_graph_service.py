@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.db.graph import get_graph_db
 from app.core.memory.graph_guardian import graph_guardian
-from app.models.schemas import EntityType, RelationType, KnowledgeEntity, KnowledgeRelationship
+from app.models.schemas import EntityType, RelationType, KnowledgeEntity, KnowledgeRelationship, Experience
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,60 @@ class KnowledgeGraphService:
         if not self._graph_db:
             self._graph_db = await get_graph_db()
         return self._graph_db
+
+    async def persist_experience_node(
+        self, experience: Experience, user_id: str | None = None
+    ) -> str | None:
+        """
+        Cria um nó de Experience no grafo e o conecta ao fluxo de memória (NEXT).
+        Implementa o 'Memory Stream' de Park et al. (2023).
+        """
+        db = await self.get_db()
+
+        # Propriedades do nó
+        props = {
+            "id": experience.id,
+            "content": experience.content[:500] if experience.content else "",  # Truncate content for graph
+            "type": experience.type,
+            "timestamp": experience.timestamp,
+            "importance": experience.metadata.importance or 0.0,
+            "created_at": datetime.now().isoformat(),
+        }
+
+        params = {"props": props}
+        
+        # Cria o nó
+        cypher = """
+        MERGE (e:Experience {id: $props.id})
+        SET e += $props
+        """
+
+        if user_id:
+            params["user_id"] = user_id
+            # Conectar ao User e ao fluxo (NEXT)
+            cypher += """
+            WITH e
+            MERGE (u:User {name: $user_id})
+            MERGE (u)-[:HAS_EXPERIENCE]->(e)
+            WITH e, u
+            MATCH (u)-[:HAS_EXPERIENCE]->(prev:Experience)
+            WHERE prev.id <> e.id AND prev.timestamp < e.timestamp
+            WITH e, prev
+            ORDER BY prev.timestamp DESC
+            LIMIT 1
+            MERGE (prev)-[:NEXT]->(e)
+            """
+
+        cypher += " RETURN elementId(e) as id"
+
+        try:
+            result = await db.query(cypher, params)
+            if result:
+                return result[0]["id"]
+            return None
+        except Exception as ex:
+            logger.error(f"Erro ao persistir nó de experiência: {ex}")
+            return None
 
     async def persist_extraction(
         self, experience_id: str, extracted_data: dict[str, Any], source_metadata: dict[str, Any]
@@ -163,8 +217,11 @@ class KnowledgeGraphService:
         if source == target:
             return True  # Auto-referência suspeita
 
-        # TODO: Chamar graph_guardian.check_policy(...)
-        # Por enquanto mantemos lógica simples para não quebrar contrato
+        # Validação de política
+        # Usamos CONCEPT como tipo genérico já que não temos o tipo da entidade aqui
+        if not graph_guardian.check_policy("CONCEPT", relation):
+            return True
+
         return False
 
     async def _send_to_quarantine(self, rel: dict[str, Any], context_id: str, reason: str):

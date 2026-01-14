@@ -21,6 +21,7 @@ from app.core.infrastructure import (
 )
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
+from app.core.middleware.security_headers import SecurityHeadersMiddleware
 
 # Determine log path
 # In Docker, we want logs to land in the mapped volume /app/app/janus.log
@@ -37,9 +38,35 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0. Validate LangSmith Configuration
+    if settings.LANGCHAIN_TRACING_V2 == "true":
+        if not settings.LANGCHAIN_API_KEY:
+            logger.warning(
+                "LangSmith tracing is enabled (LANGCHAIN_TRACING_V2=true) but LANGCHAIN_API_KEY is missing. "
+                "Tracing may fail or be ignored."
+            )
+        else:
+            logger.info("LangSmith tracing enabled and API key configured.")
+
     # 1. Initialize Kernel (Infrastructure & Dependencies)
     kernel = Kernel.get_instance()
     await kernel.startup()
+
+    # 1.1 Load Global Prompts (Async)
+    # This ensures that all prompt constants are populated from the DB before the app starts serving requests.
+    from app.core.infrastructure.advanced_prompts import load_advanced_prompts
+    from app.core.infrastructure.janus_specialized_prompts import load_specialized_prompts
+    from app.core.evolution.prompts import load_evolution_prompts
+    
+    logger.info("Loading global prompts from database...")
+    try:
+        await load_advanced_prompts()
+        await load_specialized_prompts()
+        await load_evolution_prompts()
+        logger.info("Global prompts loaded successfully.")
+    except Exception as e:
+        logger.error(f"Failed to load global prompts: {e}")
+        # We don't raise here to allow startup with empty prompts (they might be fetched on demand or fallback)
 
     # 2. Map Kernel Services to App State (for backward compatibility with Routers)
     app.state.graph_db = kernel.graph_db
@@ -98,6 +125,7 @@ setup_tracing(app)
 
 # --- Configuração da Aplicação ---
 Instrumentator().instrument(app).expose(app)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(

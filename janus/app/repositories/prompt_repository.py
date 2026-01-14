@@ -6,8 +6,9 @@ Permite que o Meta-Agent atualize prompts baseado em análises de performance.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import db
 from app.models.config_models import Prompt
@@ -19,13 +20,20 @@ class PromptRepository:
     def __init__(self, session: Session | None = None):
         self._session = session
 
-    def _get_session(self) -> Session:
-        """Obtém sessão do banco de dados."""
+    async def _get_session(self) -> AsyncSession:
+        """Obtém sessão do banco de dados (Async)."""
         if self._session:
             return self._session
-        return db.get_session_direct()
+        # Criar uma sessão ad-hoc requer um contexto assíncrono.
+        # Como o prompt_repository é usado em contexto síncrono no startup,
+        # vamos levantar um erro claro se tentar usar sem sessão injetada.
+        raise RuntimeError(
+            "PromptRepository requires an injected AsyncSession. "
+            "Use 'async with postgres_db.get_session_async() as session:' "
+            "and pass the session to the repository."
+        )
 
-    def get_active_prompt(
+    async def get_active_prompt(
         self,
         prompt_name: str,
         namespace: str = "default",
@@ -33,24 +41,23 @@ class PromptRepository:
         model_target: str = "general",
     ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
-        session = self._get_session()
-        try:
-            return (
-                session.query(Prompt)
-                .filter(
-                    and_(
-                        Prompt.prompt_name == prompt_name,
-                        Prompt.namespace == namespace,
-                        Prompt.language == language,
-                        Prompt.model_target == model_target,
-                        Prompt.is_active,
-                    )
+        session = await self._get_session()
+        
+        # Async query
+        stmt = (
+            select(Prompt)
+            .filter(
+                and_(
+                    Prompt.prompt_name == prompt_name,
+                    Prompt.namespace == namespace,
+                    Prompt.language == language,
+                    Prompt.model_target == model_target,
+                    Prompt.is_active,
                 )
-                .first()
             )
-        finally:
-            if not self._session:
-                session.close()
+        )
+        result = await session.execute(stmt)
+        return result.scalars().first()
 
     def get_prompt_by_id(self, prompt_id: int) -> Prompt | None:
         """Obtém prompt por ID."""

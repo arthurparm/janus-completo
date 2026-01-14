@@ -247,6 +247,22 @@ class CollaborationService:
                 payload={"task_state": task_state.model_dump()},
                 timestamp=datetime.utcnow().timestamp(),
             ).model_dump_json()
+        elif role in ("debate_proponent", "proponent"):
+            queue = QueueName.TASKS_AGENT_DEBATE_PROPONENT.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+        elif role in ("debate_critic", "critic"):
+            queue = QueueName.TASKS_AGENT_DEBATE_CRITIC.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
         elif role in ("knowledge_consolidator", "knowledge", "consolidator", "librarian", "memory"):
             # Publicação especial para o pipeline de consolidação
             queue = QueueName.KNOWLEDGE_CONSOLIDATION.value
