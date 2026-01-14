@@ -1,0 +1,81 @@
+<ui-card [title]="title" class="hud-panel">
+    <!-- Header Actions -->
+    <div header-actions class="header-actions">
+        <span class="status-dot" [ngClass]="{
+            'connected': connectionStatus === 'connected',
+            'disconnected': connectionStatus === 'disconnected',
+            'connecting': connectionStatus === 'connecting'
+          }">
+        </span>
+        <button uiButton variant="ghost" size="sm" (click)="toggleExpanded()" [class.rotate-180]="!expanded">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+        </button>
+    </div>
+
+    <div class="hud-content-wrapper" *ngIf="expanded" @sectionContent>
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+            <div class="stat-item" *ngFor="let stat of quickStats">
+                <span class="stat-icon">{{ stat.icon }}</span>
+                <span class="stat-value" [ngClass]="stat.status || 'neutral'">{{ stat.value }}</span>
+                <span class="stat-label">{{ stat.label }}</span>
+            </div>
+        </div>
+
+        <!-- Sections -->
+        <div class="sections-list">
+            <div *ngFor="let section of sections" class="section-item">
+                <div class="section-header" (click)="toggleSection(section)">
+                    <div class="section-title">
+                        <span class="section-icon">{{ section.icon }}</span>
+                        <span class="label">{{ section.title }}</span>
+                        <ui-badge *ngIf="section.items.length" variant="neutral" class="count-badge">{{
+                            section.items.length }}</ui-badge>
+                    </div>
+                    <svg class="chevron" [class.rotate-90]="section.collapsed" xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6" />
+                    </svg>
+                </div>
+
+                <div *ngIf="!section.collapsed" @sectionContent class="section-body">
+                    <div *ngFor="let item of section.items" @itemEnter class="info-row">
+                        <span class="info-label">{{ item.label }}</span>
+                        <span class="info-value" [ngClass]="item.status || 'neutral'">{{ item.value }}</span>
+                    </div>
+                    <div *ngIf="section.items.length === 0" class="empty-state">
+                        No data
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Thought Stream -->
+        <div class="thought-stream" *ngIf="showThoughtStream">
+            <div class="stream-header">
+                <span class="stream-title">Cognitive Stream</span>
+                <button uiButton variant="ghost" size="sm" class="clear-btn" (click)="clearThoughts.emit()"
+                    *ngIf="thoughts.length">Clear</button>
+            </div>
+
+            <div class="stream-content" #streamContainer>
+                <div *ngFor="let thought of thoughts" @itemEnter class="thought-item"
+                    [ngClass]="getThoughtColorClass(thought.type)">
+                    <div class="thought-meta">
+                        <span class="thought-type">{{ getThoughtTypeLabel(thought.type) }}</span>
+                        <span class="thought-time">{{ formatTime(thought.timestamp) }}</span>
+                    </div>
+                    <div class="thought-text">{{ thought.content }}</div>
+                </div>
+
+                <div *ngIf="thoughts.length === 0" class="stream-empty">
+                    <div class="pulse-dot"></div>
+                    <span>Awaiting signal...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</ui-card>
