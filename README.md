@@ -59,7 +59,7 @@ Pilares fundamentais:
 - **Resiliência por design**: circuit breakers, retries, timeouts, modo degradado e métricas para detecção precoce.
 - **Contratos estáveis**: API unificada (`/api/v1`) para desacoplar frontend, workers e integrações externas.
 
-Referência rápida: [README](README.md) e [Project-Structure.md](docs/Project-Structure.md).
+Referência rápida: [Project-Structure.md](docs/Project-Structure.md).
 
 ### 1.2 Filosofia de Design e Decisões Arquiteturais
 

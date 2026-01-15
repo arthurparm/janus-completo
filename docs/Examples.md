@@ -1,6 +1,6 @@
 # Exemplos de Código
 
-Exemplos práticos para interagir com a API usando Python e cURL. Todos os endpoints refletem o código atual.
+Exemplos práticos para interagir com a API usando Python e cURL. Todos os endpoints refletem o código atual. Para a visão consolidada, veja o [README.md](../README.md) principal.
 
 ## Python (requests)
 

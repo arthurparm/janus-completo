@@ -30,7 +30,7 @@ Guia de diagnóstico e resolução de problemas comuns.
 
 -- Dataset vazio
   - Execute `POST /api/v1/learning/harvest`.
-  - Liste modelos/datasets conforme endpoints disponíveis em `docs/Usage.md`.
+  - Liste modelos/datasets conforme endpoints disponíveis em `docs/Usage.md` (ou [README.md](../README.md)).
 
 ## Portas e Ambiente
 

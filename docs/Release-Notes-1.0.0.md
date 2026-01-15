@@ -66,17 +66,17 @@ Este documento resume as mudanças, melhorias, correções e instruções de atu
   - `GET /api/v1/tasks/queue/{queue_name}`
 
 ## Documentação Complementar
-- Manual consolidado: `docs/Janus-Manual.md`
+- Manual consolidado: [README.md](../README.md)
 - Arquitetura e fluxos: `docs/Architecture.md`
 - Uso e exemplos: `docs/Usage.md`, `docs/Examples.md`
 - Troubleshooting: `docs/Troubleshooting.md`
 
 ## Links Úteis
 - Changelog completo: `CHANGELOG.md`
-- Guia de Uso: `doc/Usage.md`
-- Configuração: `doc/Configuration.md`
-- Troubleshooting: `doc/Troubleshooting.md`
-- Arquitetura: `doc/Architecture.md`
+- Guia de Uso: `docs/Usage.md`
+- Configuração: `docs/Configuration.md`
+- Troubleshooting: `docs/Troubleshooting.md`
+- Arquitetura: `docs/Architecture.md`
 
 ## Créditos
 A todos os contribuidores que ajudaram a consolidar a primeira versão estável do Janus.
