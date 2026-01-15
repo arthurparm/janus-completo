@@ -20,6 +20,7 @@ import { VoiceOrbComponent } from '../../../shared/components/voice-orb/voice-or
 import { HudPanelComponent, HudSection, HudItem, ThoughtEvent } from '../../../shared/components/hud-panel/hud-panel.component';
 import { UiCitationCardComponent } from '../../../shared/components/ui/ui-citation-card/ui-citation-card.component';
 import { MarkdownPipe } from '../../../shared/pipes/markdown.pipe';
+import { DynamicHostComponent } from '../generative-ui/dynamic-host.component';
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
@@ -37,7 +38,8 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         VoiceOrbComponent,
         HudPanelComponent,
         UiCitationCardComponent,
-        MarkdownPipe
+        MarkdownPipe,
+        DynamicHostComponent
     ],
     templateUrl: './chat.html',
     styleUrls: ['./chat.scss'],
@@ -257,7 +259,8 @@ export class ChatComponent implements OnInit, OnDestroy {
             next: (res) => {
                 this.messages = res.messages.map(m => {
                     const extracted = this.extractReasoning(m.text);
-                    return { ...m, ...extracted };
+                    const parsed = this.parseUiElements(extracted.text);
+                    return { ...m, text: parsed.text, reasoning: extracted.reasoning, ui: parsed.ui };
                 });
                 this.title = res.conversation_id;
                 this.loading = false;
@@ -396,10 +399,12 @@ export class ChatComponent implements OnInit, OnDestroy {
             next: (res) => {
                 if (res.response) {
                     const extracted = this.extractReasoning(res.response);
+                    const parsed = this.parseUiElements(extracted.text);
                     const msg: ChatMessage = {
                         role: res.role || 'assistant',
-                        text: extracted.text,
+                        text: parsed.text,
                         reasoning: extracted.reasoning || undefined,
+                        ui: parsed.ui,
                         timestamp: Date.now() / 1000,
                         citations: res.citations
                     };
@@ -506,5 +511,27 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
 
         return { text: fullText, reasoning: undefined };
+    }
+
+    private parseUiElements(text: string): { text: string, ui?: { type: string, data: any } } {
+        if (!text) return { text: '' };
+
+        // Regex to capture <janus-ui type="...">JSON</janus-ui>
+        const match = text.match(/<janus-ui\s+type="([^"]+)">([\s\S]*?)<\/janus-ui>/i);
+
+        if (match) {
+            const type = match[1];
+            const jsonContent = match[2];
+            try {
+                const data = JSON.parse(jsonContent);
+                // Remove the tag from text
+                const cleanText = text.replace(match[0], '').trim();
+                return { text: cleanText, ui: { type, data } };
+            } catch (e) {
+                console.error('Failed to parse GenUI JSON', e);
+                return { text };
+            }
+        }
+        return { text };
     }
 }

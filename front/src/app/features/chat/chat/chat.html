@@ -50,6 +50,11 @@
           <!-- Main Text -->
           <div class="text markdown-content" [innerHTML]="msg.text | markdown"></div>
 
+          <!-- Generative UI -->
+          <div class="gen-ui-container mt-4" *ngIf="msg.ui">
+            <app-dynamic-host [type]="msg.ui.type" [data]="msg.ui.data"></app-dynamic-host>
+          </div>
+
           <!-- Citations -->
           <div class="citations-list" *ngIf="msg.citations && msg.citations.length > 0">
             <div class="citations-label">Fontes Utilizadas:</div>
@@ -84,7 +89,7 @@
         </app-voice-orb>
 
         <button class="send-btn" (click)="sendMessage()" [disabled]="!newMessage.trim() || sending">
-          <span class="material-icons">send</span>
+          <ui-icon>send</ui-icon>
         </button>
       </div>
     </div>

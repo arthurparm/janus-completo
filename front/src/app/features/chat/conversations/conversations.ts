@@ -1,12 +1,11 @@
 /* eslint-disable no-console */
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject } from '@angular/core'
+import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, ConversationMeta } from '../../../services/janus-api.service'
 import { ConversationStore } from '../store/conversation.store'
 import { Router, NavigationEnd } from '@angular/router'
-import { MatMenuModule } from '@angular/material/menu'
-import { MatIconModule } from '@angular/material/icon'
 import { ConversationRefreshService } from '../../../services/conversation-refresh.service'
 import { DemoService } from '../../../core/services/demo.service'
 import { UiService } from '../../../shared/services/ui.service'
@@ -15,7 +14,7 @@ import { filter, Subject, takeUntil } from 'rxjs'
 @Component({
   selector: 'app-conversations',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatMenuModule, MatIconModule],
+  imports: [CommonModule, FormsModule, UiIconComponent],
   templateUrl: './conversations.html',
   styleUrl: './conversations.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
