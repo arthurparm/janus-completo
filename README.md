@@ -12,11 +12,12 @@
 2.  [Instalação e Configuração](#2-instalação-e-configuração)
 3.  [Arquitetura e Estrutura do Projeto](#3-arquitetura-e-estrutura-do-projeto)
 4.  [Guia de Uso e Processos](#4-guia-de-uso-e-processos)
-5.  [Autonomia e Meta-Agente (Deep Dive)](#5-autonomia-e-meta-agente-deep-dive)
-6.  [Exemplos Práticos](#6-exemplos-práticos)
-7.  [Troubleshooting](#7-troubleshooting)
-8.  [Roadmap e Futuro](#8-roadmap-e-futuro)
-9.  [Histórico de Versões (Release Notes)](#9-histórico-de-versões-release-notes)
+5.  [Mecanismos e Componentes (Inventory)](#5-mecanismos-e-componentes-inventory)
+6.  [Autonomia e Meta-Agente (Deep Dive)](#6-autonomia-e-meta-agente-deep-dive)
+7.  [Exemplos Práticos](#7-exemplos-práticos)
+8.  [Troubleshooting](#8-troubleshooting)
+9.  [Roadmap e Futuro](#9-roadmap-e-futuro)
+10. [Histórico de Versões (Release Notes)](#10-histórico-de-versões-release-notes)
 
 ---
 
@@ -167,11 +168,72 @@ O Janus opera orientado a metas quando em modo autônomo.
 
 ---
 
-## 5. Autonomia e Meta-Agente (Deep Dive)
+## 5. Mecanismos e Componentes (Inventory)
+
+Esta seção lista os mecanismos do Janus, dividindo-os entre os que já possuem documentação consolidada e os que serão detalhados futuramente.
+
+### ✅ Mecanismos Documentados (Core)
+
+#### 🧠 Inteligência & Orquestração
+- **LLM Routing (`janus/app/core/llm/router.py`)**: Roteamento dinâmico baseado em custo/latência.
+- **Autonomy Loop (`janus/app/services/autonomy_service.py`)**: Ciclo OODA para operação autônoma.
+- **Meta-Agente (`janus/app/core/agents/meta_agent.py`)**: Supervisor de alto nível em LangGraph.
+- **Policy Engine (`janus/app/core/autonomy/policy_engine.py`)**: Governança de execução de ferramentas.
+
+#### 💾 Memória & Conhecimento
+- **Hot Path Vector (`janus/app/core/memory/memory_core.py`)**: Gravação rápida em Qdrant.
+- **Cold Path Graph (`janus/app/core/workers/knowledge_consolidator_worker.py`)**: Consolidação assíncrona em Neo4j.
+- **RAG Híbrido (`janus/app/core/memory/graph_rag_core.py`)**: Recuperação combinando vetores e grafo.
+
+#### ⚙️ Infraestrutura & Workers
+- **Message Broker (`janus/app/core/infrastructure/message_broker.py`)**: Wrapper resiliente para RabbitMQ.
+- **Orchestrator (`janus/app/core/workers/orchestrator.py`)**: Gestão de ciclo de vida de workers.
+
+---
+
+### 🚧 Mecanismos Identificados (A Documentar)
+
+Os componentes abaixo existem no código mas carecem de documentação detalhada neste manual.
+
+#### Workers Especializados (`janus/app/core/workers/`)
+- [ ] **Code Agent (`code_agent_worker.py`)**: Agente especializado em geração de código.
+- [ ] **Professor Agent (`professor_agent_worker.py`)**: Agente revisor/crítico de código.
+- [ ] **Data Harvester (`data_harvester.py`)**: Coletor de dados para fine-tuning.
+- [ ] **Distillation Worker (`distillation_worker.py`)**: Processo de destilação de conhecimento.
+- [ ] **Google Productivity (`google_productivity_worker.py`)**: Integração com Calendar/Gmail.
+- [ ] **Neural Training (`neural_training_worker.py`)**: Pipeline de treinamento de modelos.
+- [ ] **Red Team Agent (`red_team_agent_worker.py`)**: Testes adversariais internos.
+- [ ] **Thinker Agent (`thinker_agent_worker.py`)**: Agente de raciocínio profundo (DeepSeek integration).
+
+#### Serviços de Aplicação (`janus/app/services/`)
+- [ ] **AB Testing (`ab_testing_service.py`)**: Framework de testes A/B para prompts/modelos.
+- [ ] **Bias Check (`bias_check_service.py`)**: Verificação de viés em respostas.
+- [ ] **Data Retention (`data_retention_service.py`)**: Políticas de expurgo de dados.
+- [ ] **DB Migration (`db_migration_service.py`)**: Migrações de esquema de banco.
+- [ ] **Dedupe Service (`dedupe_service.py`)**: Deduplicação de dados.
+- [ ] **Document Parser (`document_parser_service.py`)**: Extração de texto de arquivos.
+- [ ] **Feedback Service (`feedback_service.py`)**: Gestão de feedback de usuários.
+- [ ] **Prompt Builder/Composer (`prompt_*_service.py`)**: Montagem dinâmica de prompts.
+- [ ] **Semantic Commit (`semantic_commit_service.py`)**: Geração de mensagens de commit.
+- [ ] **Scheduler (`scheduler_service.py`)**: Agendamento de tarefas recorrentes.
+
+#### Core e Infraestrutura (`janus/app/core/`)
+- [ ] **Evolution Manager (`evolution/evolution_manager.py`)**: Mecanismo de auto-evolução do sistema.
+- [ ] **Self Study (`evolution/self_study_manager.py`)**: Rotina de aprendizado autônomo.
+- [ ] **Janus Lab (`evolution/janus_lab.py`)**: Ambiente de experimentação isolado.
+- [ ] **Senses (Vision/Audio)**: Capacidades multimodais em `janus/app/core/senses`.
+- [ ] **Python Sandbox (`infrastructure/python_sandbox.py`)**: Isolamento de execução de código.
+- [ ] **Windows Agent Client (`infrastructure/windows_agent_client.py`)**: Integração com agente desktop.
+- [ ] **Firebase Integration (`infrastructure/firebase.py`)**: Uso de Firebase (auth/db).
+- [ ] **Redis Manager (`infrastructure/redis_manager.py`)**: Gestão de cache distribuído.
+
+---
+
+## 6. Autonomia e Meta-Agente (Deep Dive)
 
 O Janus implementa um ciclo **OODA (Observe, Orient, Decide, Act)** supervisionado.
 
-### 5.1 O Processo (`AutonomyService`)
+### 6.1 O Processo (`AutonomyService`)
 1.  **Perceber**: Coleta métricas de sistema (CPU, RAM, Erros).
 2.  **Planejar**: Verifica metas ativas. Se não houver plano, usa o LLM para gerar um plano de passos baseado nas ferramentas disponíveis.
 3.  **Executar**: Itera sobre os passos.
@@ -179,14 +241,14 @@ O Janus implementa um ciclo **OODA (Observe, Orient, Decide, Act)** supervisiona
     -   Se a ação for perigosa (ex: deletar arquivo) e o perfil for conservador, solicita aprovação humana.
 4.  **Refletir**: Se algo falhar, o sistema tenta replanejar (`replan_goal`).
 
-### 5.2 O Meta-Agente (`MetaAgent`)
+### 6.2 O Meta-Agente (`MetaAgent`)
 Um agente de nível superior (construído com **LangGraph**) que monitora a saúde do próprio Janus.
 -   Nós do grafo: `Monitor` -> `Diagnose` -> `Plan` -> `Reflect` -> `Execute`.
 -   Objetivo: Detectar anomalias (ex: taxa de erro alta) e propor correções (ex: resetar circuit breaker).
 
 ---
 
-## 6. Exemplos Práticos
+## 7. Exemplos Práticos
 
 ### Python (Requests)
 
@@ -222,7 +284,7 @@ curl -s http://localhost:8000/api/v1/autonomy/status
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 ### Problemas Comuns
 
@@ -238,7 +300,7 @@ curl -s http://localhost:8000/api/v1/autonomy/status
 
 ---
 
-## 8. Roadmap e Futuro
+## 9. Roadmap e Futuro
 
 ### Visão 2026 (Extrato)
 O Janus evolui para uma arquitetura de **Meta-Agente** baseada em **LangGraph**, com foco em:
@@ -255,7 +317,7 @@ O Janus evolui para uma arquitetura de **Meta-Agente** baseada em **LangGraph**,
 
 ---
 
-## 9. Histórico de Versões (Release Notes)
+## 10. Histórico de Versões (Release Notes)
 
 ### Versão 1.0.0
 -   **Destaques**: Orquestração unificada de workers, Consolidação de conhecimento robusta, Meta-Agente integrado.
