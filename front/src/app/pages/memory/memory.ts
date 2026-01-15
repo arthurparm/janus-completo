@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService } from '../../services/janus-api.service'
 import { DemoService } from '../../core/services/demo.service'
-import { MatIconModule } from '@angular/material/icon'
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component'
 
 export interface Memory {
     id?: string
@@ -17,7 +17,7 @@ export interface Memory {
 @Component({
     selector: 'app-memory',
     standalone: true,
-    imports: [CommonModule, FormsModule, MatIconModule],
+    imports: [CommonModule, FormsModule, UiIconComponent],
     templateUrl: './memory.html',
     styleUrl: './memory.scss'
 })

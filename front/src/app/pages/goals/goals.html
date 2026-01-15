@@ -4,23 +4,23 @@
         <div class="header-content">
             <div class="header-left">
                 <h1 class="header-title">
-                    <mat-icon>flag</mat-icon>
+                    <ui-icon>flag</ui-icon>
                     Metas Autônomas
                 </h1>
                 <p class="header-subtitle">
                     Gerencie os objetivos do sistema
                     <span *ngIf="usingFallback" class="fallback-badge" title="Modo Offline/API (Sem Realtime)">
-                        <mat-icon>cloud_off</mat-icon> API Mode
+                        <ui-icon>cloud_off</ui-icon> API Mode
                     </span>
                 </p>
             </div>
 
             <div class="header-right">
                 <button class="btn-refresh" *ngIf="usingFallback" (click)="loadGoalsFromApi()" title="Atualizar Lista">
-                    <mat-icon>refresh</mat-icon>
+                    <ui-icon>refresh</ui-icon>
                 </button>
                 <button class="btn-primary" (click)="openNewGoalForm()">
-                    <mat-icon>add</mat-icon>
+                    <ui-icon>add</ui-icon>
                     Nova Meta
                 </button>
             </div>
@@ -59,7 +59,7 @@
     <!-- OFFLINE WARNING -->
     @if (isOffline) {
     <div class="offline-warning-container">
-        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <ui-icon class="warning-icon">cloud_off</ui-icon>
         <h2>Sistema Offline</h2>
         <p>
             O gerenciamento de Metas Autônomas requer conexão ativa com o Backend.<br>
@@ -75,7 +75,7 @@
         <div class="filters-container">
             <div class="search-group">
                 <div class="search-input-wrapper">
-                    <mat-icon class="search-icon">search</mat-icon>
+                    <ui-icon class="search-icon">search</ui-icon>
                     <input type="text" [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Buscar metas..."
                         class="search-input" aria-label="Buscar metas" title="Buscar metas">
                 </div>
@@ -93,17 +93,17 @@
 
                 <div class="sort-controls">
                     <button class="sort-btn" [class.active]="sortBy === 'priority'" (click)="toggleSort('priority')">
-                        <mat-icon>priority_high</mat-icon>
+                        <ui-icon>priority_high</ui-icon>
                         Prioridade
                     </button>
                     <button class="sort-btn" [class.active]="sortBy === 'deadline_ts'"
                         (click)="toggleSort('deadline_ts')">
-                        <mat-icon>event</mat-icon>
+                        <ui-icon>event</ui-icon>
                         Prazo
                     </button>
                     <button class="sort-btn" [class.active]="sortBy === 'created_at'"
                         (click)="toggleSort('created_at')">
-                        <mat-icon>history</mat-icon>
+                        <ui-icon>history</ui-icon>
                         Data
                     </button>
                 </div>
@@ -116,7 +116,7 @@
     <div class="new-goal-overlay" (click)="cancelNewGoal()">
         <div class="new-goal-modal" (click)="$event.stopPropagation()">
             <h2 class="modal-title">
-                <mat-icon>add_task</mat-icon>
+                <ui-icon>add_task</ui-icon>
                 Nova Meta
             </h2>
 
@@ -160,10 +160,10 @@
                     <button type="submit" class="btn-primary"
                         [disabled]="saving || !newGoal.title || !newGoal.description">
                         @if (saving) {
-                        <mat-icon class="spinning">autorenew</mat-icon>
+                        <ui-icon class="spinning">autorenew</ui-icon>
                         Salvando...
                         } @else {
-                        <mat-icon>save</mat-icon>
+                        <ui-icon>save</ui-icon>
                         Criar Meta
                         }
                     </button>
@@ -186,7 +186,7 @@
 
         @if (error && !loading) {
         <div class="error-state">
-            <mat-icon>error_outline</mat-icon>
+            <ui-icon>error_outline</ui-icon>
             <h3>Erro ao carregar metas</h3>
             <p>{{ error }}</p>
             <button class="btn-retry" (click)="loadGoals()">Tentar novamente</button>
@@ -196,12 +196,12 @@
 
         @if (!loading && !error && filteredGoals.length === 0) {
         <div class="empty-state">
-            <mat-icon>flag</mat-icon>
+            <ui-icon>flag</ui-icon>
             <h3>{{ searchQuery || statusFilter ? 'Nenhuma meta encontrada' : 'Nenhuma meta ainda' }}</h3>
             <p>{{ searchQuery || statusFilter ? 'Tente ajustar os filtros' : 'Crie sua primeira meta para começar' }}
             </p>
             <button class="btn-primary" (click)="openNewGoalForm()">
-                <mat-icon>add</mat-icon>
+                <ui-icon>add</ui-icon>
                 Criar Meta
             </button>
         </div>
@@ -213,45 +213,71 @@
             @for (goal of filteredGoals; track goal.id) {
             <div class="goal-card" [class]="'status-' + goal.status" [class.overdue]="isOverdue(goal)">
 
-                <div class="card-header">
+                <div class="card-header relative">
                     <div class="priority-badge" [class]="getPriorityClass(goal.priority)">
                         {{ goal.priority }}
                     </div>
                     <h3 class="goal-title">{{ goal.title }}</h3>
-                    <button class="menu-btn" [matMenuTriggerFor]="goalMenu">
-                        <mat-icon>more_vert</mat-icon>
-                    </button>
 
-                    <mat-menu #goalMenu="matMenu">
-                        @if (goal.status !== 'in_progress') {
-                        <button mat-menu-item (click)="updateStatus(goal, 'in_progress')">
-                            <mat-icon>play_arrow</mat-icon>
-                            <span>Iniciar</span>
+                    <!-- Menu Trigger -->
+                    <div class="menu-container relative">
+                        <button class="menu-btn p-1 rounded-full hover:bg-white/10 transition-colors"
+                            (click)="toggleMenu(goal.id, $event)">
+                            <ui-icon>more_vert</ui-icon>
                         </button>
+
+                        <!-- Dropdown Menu -->
+                        @if (activeMenuGoalId === goal.id) {
+                        <div class="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden"
+                            (click)="$event.stopPropagation()">
+
+                            @if (goal.status !== 'in_progress') {
+                            <button
+                                class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center gap-3 text-sm text-white transition-colors border-b border-slate-800/50 last:border-0"
+                                (click)="updateStatus(goal, 'in_progress')">
+                                <ui-icon class="text-blue-400">play_arrow</ui-icon>
+                                <span>Iniciar</span>
+                            </button>
+                            }
+
+                            @if (goal.status !== 'completed') {
+                            <button
+                                class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center gap-3 text-sm text-white transition-colors border-b border-slate-800/50 last:border-0"
+                                (click)="updateStatus(goal, 'completed')">
+                                <ui-icon class="text-green-400">check_circle</ui-icon>
+                                <span>Concluir</span>
+                            </button>
+                            }
+
+                            @if (goal.status !== 'pending') {
+                            <button
+                                class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center gap-3 text-sm text-white transition-colors border-b border-slate-800/50 last:border-0"
+                                (click)="updateStatus(goal, 'pending')">
+                                <ui-icon class="text-yellow-400">undo</ui-icon>
+                                <span>Voltar para Pendente</span>
+                            </button>
+                            }
+
+                            @if (goal.status !== 'failed') {
+                            <button
+                                class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center gap-3 text-sm text-white transition-colors border-b border-slate-800/50 last:border-0"
+                                (click)="updateStatus(goal, 'failed')">
+                                <ui-icon class="text-red-400">cancel</ui-icon>
+                                <span>Marcar como Falhou</span>
+                            </button>
+                            }
+
+                            <div class="border-t border-slate-700 my-1"></div>
+
+                            <button
+                                class="w-full text-left px-4 py-3 hover:bg-red-900/30 text-red-400 flex items-center gap-3 text-sm transition-colors"
+                                (click)="deleteGoal(goal)">
+                                <ui-icon>delete</ui-icon>
+                                <span>Excluir</span>
+                            </button>
+                        </div>
                         }
-                        @if (goal.status !== 'completed') {
-                        <button mat-menu-item (click)="updateStatus(goal, 'completed')">
-                            <mat-icon>check_circle</mat-icon>
-                            <span>Concluir</span>
-                        </button>
-                        }
-                        @if (goal.status !== 'pending') {
-                        <button mat-menu-item (click)="updateStatus(goal, 'pending')">
-                            <mat-icon>undo</mat-icon>
-                            <span>Voltar para Pendente</span>
-                        </button>
-                        }
-                        @if (goal.status !== 'failed') {
-                        <button mat-menu-item (click)="updateStatus(goal, 'failed')">
-                            <mat-icon>cancel</mat-icon>
-                            <span>Marcar como Falhou</span>
-                        </button>
-                        }
-                        <button mat-menu-item (click)="deleteGoal(goal)" class="delete-item">
-                            <mat-icon>delete</mat-icon>
-                            <span>Excluir</span>
-                        </button>
-                    </mat-menu>
+                    </div>
                 </div>
 
 
@@ -260,7 +286,7 @@
 
                     @if (goal.success_criteria) {
                     <div class="success-criteria">
-                        <mat-icon>check_box</mat-icon>
+                        <ui-icon>check_box</ui-icon>
                         <span>{{ goal.success_criteria }}</span>
                     </div>
                     }
@@ -269,12 +295,12 @@
 
                 <div class="card-footer">
                     <div class="status-badge" [class]="'status-' + goal.status">
-                        <mat-icon>{{ getStatusIcon(goal.status) }}</mat-icon>
+                        <ui-icon>{{ getStatusIcon(goal.status) }}</ui-icon>
                         {{ getStatusLabel(goal.status) }}
                     </div>
 
                     <div class="deadline" [class.overdue]="isOverdue(goal)">
-                        <mat-icon>event</mat-icon>
+                        <ui-icon>event</ui-icon>
                         {{ formatDeadline(goal.deadline_ts) }}
                     </div>
                 </div>

@@ -3,8 +3,7 @@ import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, Goal } from '../../services/janus-api.service'
 import { DemoService } from '../../core/services/demo.service'
-import { MatIconModule } from '@angular/material/icon'
-import { MatDialogModule, MatDialog } from '@angular/material/dialog'
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component'
 import { MatMenuModule } from '@angular/material/menu'
 import { Firestore, collection, collectionData, query } from '@angular/fire/firestore';
 import { Subscription, filter, take } from 'rxjs';
@@ -13,14 +12,13 @@ import { AuthService } from '../../core/auth/auth.service';
 @Component({
     selector: 'app-goals',
     standalone: true,
-    imports: [CommonModule, FormsModule, MatIconModule, MatDialogModule, MatMenuModule],
+    imports: [CommonModule, FormsModule, UiIconComponent, MatMenuModule],
     templateUrl: './goals.html',
     styleUrl: './goals.scss'
 })
 export class GoalsComponent implements OnInit, OnDestroy {
     private api = inject(JanusApiService)
     private cdr = inject(ChangeDetectorRef)
-    private dialog = inject(MatDialog)
     private demoService = inject(DemoService)
     private firestore = inject(Firestore)
     private authService = inject(AuthService)

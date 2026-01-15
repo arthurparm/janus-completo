@@ -9,11 +9,11 @@
 
       <div class="flex gap-3">
         <button (click)="refreshData()" class="btn-secondary flex items-center gap-2 text-sm">
-          <mat-icon class="text-base">refresh</mat-icon>
+          <ui-icon class="text-base">refresh</ui-icon>
           Atualizar
         </button>
         <button (click)="runQuickAnalysis()" class="btn-primary flex items-center gap-2 text-sm">
-          <mat-icon class="text-base">play_arrow</mat-icon>
+          <ui-icon class="text-base">play_arrow</ui-icon>
           Nova Análise
         </button>
       </div>
@@ -26,21 +26,21 @@
           <div class="text-sm text-slate-400">Disponibilidade</div>
           <div class="text-2xl font-bold text-white">{{ servicesAvailability() }}%</div>
         </div>
-        <mat-icon class="text-purple-400">dns</mat-icon>
+        <ui-icon class="text-purple-400">dns</ui-icon>
       </div>
       <div class="glass-card p-4 flex items-center justify-between">
         <div>
           <div class="text-sm text-slate-400">Tempo de Resposta</div>
           <div class="text-2xl font-bold text-white">{{ averageResponseTime() }}ms</div>
         </div>
-        <mat-icon class="text-pink-400">speed</mat-icon>
+        <ui-icon class="text-pink-400">speed</ui-icon>
       </div>
       <div class="glass-card p-4 flex items-center justify-between">
         <div>
           <div class="text-sm text-slate-400">Workers Ativos</div>
           <div class="text-2xl font-bold text-white">{{ workers().length }}</div>
         </div>
-        <mat-icon class="text-cyan-400">engineering</mat-icon>
+        <ui-icon class="text-cyan-400">engineering</ui-icon>
       </div>
     </div>
   </div>
@@ -59,7 +59,7 @@
           [class.border-purple-500]="action.color === 'primary'" [class.text-purple-400]="action.color === 'primary'"
           [class.border-cyan-500]="action.color === 'accent'" [class.text-cyan-400]="action.color === 'accent'">
           <span class="flex items-center gap-2">
-            <mat-icon [class.text-base]="true">{{ action.icon }}</mat-icon>
+            <ui-icon [class.text-base]="true">{{ action.icon }}</ui-icon>
             {{ action.label }}
           </span>
         </button>
@@ -124,7 +124,7 @@
               <div class="text-xs text-slate-400 uppercase tracking-wider">Tempo de Atividade</div>
               <div class="text-lg font-bold text-white font-mono">{{ formatUptime(sys.uptime_seconds) }}</div>
             </div>
-            <mat-icon class="text-cyan-500">timer</mat-icon>
+            <ui-icon class="text-cyan-500">timer</ui-icon>
           </div>
 
           <div class="flex items-center justify-between p-3 bg-slate-800/30 rounded border border-white/5">
@@ -132,7 +132,7 @@
               <div class="text-xs text-slate-400 uppercase tracking-wider">Ambiente</div>
               <div class="text-lg font-bold text-white capitalize">{{ sys.environment }}</div>
             </div>
-            <mat-icon class="text-purple-500">settings_input_component</mat-icon>
+            <ui-icon class="text-purple-500">settings_input_component</ui-icon>
           </div>
         </div>
       </div>
@@ -146,7 +146,7 @@
 
         <div class="flex items-center justify-between mb-3">
           <div class="p-2 rounded bg-opacity-20" [style.background-color]="metric.color + '33'">
-            <mat-icon [style.color]="metric.color">{{ metric.icon }}</mat-icon>
+            <ui-icon [style.color]="metric.color">{{ metric.icon }}</ui-icon>
           </div>
           <div class="text-right">
             <div class="text-xl font-bold text-white">{{ metric.value }}{{ metric.unit }}</div>
@@ -156,10 +156,10 @@
 
         <div class="flex items-center justify-between border-t border-white/5 pt-3">
           <div class="flex items-center gap-1">
-            <mat-icon class="text-xs w-4 h-4 overflow-visible" [class.text-green-400]="metric.trend === 'up'"
+            <ui-icon class="text-xs w-4 h-4 overflow-visible" [class.text-green-400]="metric.trend === 'up'"
               [class.text-red-400]="metric.trend === 'down'" [class.text-slate-400]="metric.trend === 'stable'">
               {{ metric.trend === 'up' ? 'trending_up' : (metric.trend === 'down' ? 'trending_down' : 'remove') }}
-            </mat-icon>
+            </ui-icon>
             <span class="text-xs" [class.text-green-400]="metric.trend === 'up'"
               [class.text-red-400]="metric.trend === 'down'">{{ metric.trendValue }}</span>
           </div>
@@ -183,7 +183,7 @@
                 <div class="text-xs text-slate-500 uppercase">{{ service.status }}</div>
               </div>
             </div>
-            <mat-icon class="text-slate-600 text-sm">chevron_right</mat-icon>
+            <ui-icon class="text-slate-600 text-sm">chevron_right</ui-icon>
           </div>
         </div>
       </div>
@@ -196,7 +196,7 @@
             class="glass-card p-3 cursor-pointer hover:bg-white/5 transition-colors">
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
-                <mat-icon class="text-slate-400 text-base">smart_toy</mat-icon>
+                <ui-icon class="text-slate-400 text-base">smart_toy</ui-icon>
                 <span class="font-medium text-white text-sm">Worker {{ worker.id }}</span>
               </div>
               <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
@@ -222,7 +222,7 @@
 <div *ngIf="loading() || isInitializing()"
   class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
   <div class="flex flex-col items-center">
-    <mat-spinner diameter="48" mode="indeterminate" color="accent"></mat-spinner>
+    <ui-spinner size="lg"></ui-spinner>
     <div class="mt-4 text-white font-medium text-sm">
       <span *ngIf="isInitializing()">Inicializando Sistema...</span>
       <span *ngIf="!isInitializing() && loading()">Sincronizando...</span>
@@ -242,11 +242,11 @@
     <!-- Header -->
     <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
       <div class="flex items-center gap-3">
-        <mat-icon class="text-purple-400">tune</mat-icon>
+        <ui-icon class="text-purple-400">tune</ui-icon>
         <h2 class="text-xl font-bold text-white tracking-tight">Configurações do Sistema</h2>
       </div>
       <button (click)="closeSettings()" class="text-slate-400 hover:text-white transition-colors">
-        <mat-icon>close</mat-icon>
+        <ui-icon>close</ui-icon>
       </button>
     </div>
 
@@ -261,7 +261,7 @@
             class="bg-slate-800/50 p-4 rounded-xl border border-white/5 hover:border-purple-500/50 transition-colors cursor-pointer group">
             <div class="flex items-center justify-between mb-2">
               <span class="text-white font-medium">Tema da Interface</span>
-              <mat-icon class="text-slate-500 group-hover:text-purple-400 transition-colors">dark_mode</mat-icon>
+              <ui-icon class="text-slate-500 group-hover:text-purple-400 transition-colors">dark_mode</ui-icon>
             </div>
             <p class="text-xs text-slate-400">Magicpunk Dark (Ativo)</p>
           </div>
@@ -286,7 +286,7 @@
         <div class="space-y-3">
           <div class="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-white/5">
             <div class="flex items-center gap-3">
-              <mat-icon class="text-pink-400">psychology</mat-icon>
+              <ui-icon class="text-pink-400">psychology</ui-icon>
               <div>
                 <div class="text-sm text-white font-medium">Análise Proativa</div>
                 <div class="text-xs text-slate-500">Permitir que Janus sugira melhorias automaticamente</div>
@@ -299,13 +299,13 @@
 
           <div class="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-white/5">
             <div class="flex items-center gap-3">
-              <mat-icon class="text-cyan-400">memory</mat-icon>
+              <ui-icon class="text-cyan-400">memory</ui-icon>
               <div>
                 <div class="text-sm text-white font-medium">Uso de Memória</div>
                 <div class="text-xs text-slate-500">Otimizado para performance (Max 4GB)</div>
               </div>
             </div>
-            <mat-icon class="text-slate-600">chevron_right</mat-icon>
+            <ui-icon class="text-slate-600">chevron_right</ui-icon>
           </div>
         </div>
       </div>
@@ -313,7 +313,7 @@
       <!-- Section: System Info -->
       <div class="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
         <div class="flex gap-3">
-          <mat-icon class="text-purple-400">info</mat-icon>
+          <ui-icon class="text-purple-400">info</ui-icon>
           <div>
             <div class="text-sm font-bold text-white mb-1">Sobre o Janus AI</div>
             <p class="text-xs text-purple-200/70 leading-relaxed">

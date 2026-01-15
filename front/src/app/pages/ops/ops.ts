@@ -1,14 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
+import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
 import { FormsModule } from '@angular/forms';
 import { JanusApiService, DeploymentStageResponse } from '../../services/janus-api.service';
 
@@ -17,15 +10,8 @@ import { JanusApiService, DeploymentStageResponse } from '../../services/janus-a
     standalone: true,
     imports: [
         CommonModule,
-        MatTabsModule,
-        MatCardModule,
-        MatButtonModule,
-        MatIconModule,
-        MatProgressBarModule,
-        MatChipsModule,
-        MatFormFieldModule,
-        MatSelectModule,
-        MatInputModule,
+        UiButtonComponent,
+        UiIconComponent,
         FormsModule
     ],
     templateUrl: './ops.html',
@@ -38,6 +24,7 @@ export class OpsComponent implements OnInit {
     rolloutPercent = 0;
     isDeploying = false;
     deploymentLog: string[] = [];
+    activeTab: 'deployment' | 'experiments' = 'deployment';
 
     // A/B Test State
     experiments = [

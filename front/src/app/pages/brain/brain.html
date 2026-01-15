@@ -1,123 +1,153 @@
-<div class="brain-container">
+<div class="brain-container text-white">
 
     <header>
         <h1
             class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500 font-orbitron">
             The Brain
         </h1>
-        <p class="text-text-secondary mt-2">Central de Conhecimento, Memória e Reflexão</p>
+        <p class="text-slate-400 mt-2">Central de Conhecimento, Memória e Reflexão</p>
 
         <!-- Global Brain Stats -->
         <div class="flex gap-4 mt-4" *ngIf="graphStats">
-            <mat-chip-set>
-                <mat-chip>
-                    <mat-icon matChipAvatar>hub</mat-icon>
-                    {{ graphStats.total_nodes }} Nódulos
-                </mat-chip>
-                <mat-chip>
-                    <mat-icon matChipAvatar>share</mat-icon>
-                    {{ graphStats.total_relationships }} Conexões
-                </mat-chip>
-            </mat-chip-set>
+            <div class="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                <ui-icon class="text-purple-400">hub</ui-icon>
+                <span>{{ graphStats.total_nodes }} Nódulos</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                <ui-icon class="text-pink-400">share</ui-icon>
+                <span>{{ graphStats.total_relationships }} Conexões</span>
+            </div>
         </div>
     </header>
 
-    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs" [(selectedIndex)]="selectedTab">
+    <!-- Custom Tabs -->
+    <div class="mt-8 border-b border-slate-700 flex gap-6">
+        <button (click)="selectedTab = 0" class="pb-2 px-1 text-sm font-medium transition-colors border-b-2"
+            [class.border-purple-500]="selectedTab === 0" [class.text-white]="selectedTab === 0"
+            [class.border-transparent]="selectedTab !== 0" [class.text-slate-400]="selectedTab !== 0">
+            Semantic Explorer
+        </button>
+        <button (click)="selectedTab = 1" class="pb-2 px-1 text-sm font-medium transition-colors border-b-2"
+            [class.border-purple-500]="selectedTab === 1" [class.text-white]="selectedTab === 1"
+            [class.border-transparent]="selectedTab !== 1" [class.text-slate-400]="selectedTab !== 1">
+            Reflexion Log
+        </button>
+        <button (click)="selectedTab = 2" class="pb-2 px-1 text-sm font-medium transition-colors border-b-2"
+            [class.border-purple-500]="selectedTab === 2" [class.text-white]="selectedTab === 2"
+            [class.border-transparent]="selectedTab !== 2" [class.text-slate-400]="selectedTab !== 2">
+            Timeline Episódica
+        </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content py-6">
 
         <!-- Tab 1: Semantic Graph -->
-        <mat-tab label="Semantic Explorer">
+        <div *ngIf="selectedTab === 0">
             <div class="py-6">
 
-                <div class="search-bar">
-                    <mat-form-field appearance="outline">
-                        <mat-label>Buscar Conceito no Grafo</mat-label>
-                        <input matInput [(ngModel)]="searchEntity" (keyup.enter)="exploreEntity()"
-                            placeholder="Ex: AuthService">
-                        <button mat-icon-button matSuffix (click)="exploreEntity()">
-                            <mat-icon>search</mat-icon>
+                <div class="search-bar mb-6">
+                    <div
+                        class="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg p-2 focus-within:ring-2 focus-within:ring-purple-500">
+                        <input [(ngModel)]="searchEntity" (keyup.enter)="exploreEntity()"
+                            placeholder="Buscar Conceito no Grafo (Ex: AuthService)"
+                            class="bg-transparent border-none text-white w-full focus:outline-none px-2">
+                        <button (click)="exploreEntity()" class="p-2 hover:bg-slate-700 rounded-full transition-colors">
+                            <ui-icon>search</ui-icon>
                         </button>
-                    </mat-form-field>
+                    </div>
                 </div>
 
-                <div class="constellation-view">
+                <div
+                    class="constellation-view relative bg-slate-900/50 rounded-xl overflow-hidden border border-slate-800 h-[400px] flex items-center justify-center">
 
                     <div *ngIf="loadingGraph"
                         class="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
-                        <mat-progress-bar mode="indeterminate" class="w-1/2"></mat-progress-bar>
+                        <ui-spinner size="lg"></ui-spinner>
                     </div>
 
-                    <div *ngIf="!currentEntity && !loadingGraph" class="empty-state">
-                        <mat-icon class="text-6xl mb-4 text-white/20">hub</mat-icon>
-                        <p>Busque uma entidade para explorar suas conexões.</p>
+                    <div *ngIf="!currentEntity && !loadingGraph" class="empty-state text-center">
+                        <ui-icon class="text-6xl mb-4 text-slate-700 block mx-auto">hub</ui-icon>
+                        <p class="text-slate-500">Busque uma entidade para explorar suas conexões.</p>
                     </div>
 
                     <!-- Center Body -->
-                    <div class="center-node" *ngIf="currentEntity">
+                    <div class="center-node absolute z-10 w-32 h-32 bg-purple-600 rounded-full flex items-center justify-center text-center font-bold shadow-lg shadow-purple-900/50"
+                        *ngIf="currentEntity">
                         {{ currentEntity }}
                     </div>
 
                     <!-- Orbiting Satellites (Simple CSS positioning for demo) -->
-                    <div class="orbit-nodes" *ngIf="relationships.length > 0">
-                        <div class="satellite" *ngFor="let rel of relationships; let i = index"
-                            [style.transform]="'rotate(' + (i * (360 / relationships.length)) + 'deg) translate(180px) rotate(-' + (i * (360 / relationships.length)) + 'deg)'">
-                            <span class="font-bold">{{ rel.related_entity }}</span>
-                            <small>{{ rel.relationship }}</small>
+                    <div class="orbit-nodes absolute inset-0" *ngIf="relationships.length > 0">
+                        <div class="absolute top-1/2 left-1/2 w-0 h-0" *ngFor="let rel of relationships; let i = index"
+                            [style.transform]="'rotate(' + (i * (360 / relationships.length)) + 'deg)'">
+                            <div class="absolute flex flex-col items-center justify-center w-24 h-24 -ml-12 -mt-12 text-xs text-center bg-slate-800 rounded-full border border-slate-600 shadow-md transform translate-x-[180px]"
+                                [style.transform]="'translate(180px) rotate(-' + (i * (360 / relationships.length)) + 'deg)'">
+                                <span class="font-bold text-white mb-1">{{ rel.related_entity }}</span>
+                                <small class="text-slate-400">{{ rel.relationship }}</small>
+                            </div>
                         </div>
                     </div>
 
                 </div>
 
-                <div class="mt-4 text-center text-sm text-text-muted">
+                <div class="mt-4 text-center text-sm text-slate-500">
                     * Visualização simplificada 'Costelação'. Para grafo completo use a ferramenta Documents.
                 </div>
 
             </div>
-        </mat-tab>
+        </div>
 
         <!-- Tab 2: Reflexion Logs -->
-        <mat-tab label="Reflexion Log">
+        <div *ngIf="selectedTab === 1">
             <div class="py-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2>Lições Aprendidas</h2>
-                    <button mat-stroked-button (click)="loadReflexion()">
-                        <mat-icon>refresh</mat-icon> Atualizar
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold">Lições Aprendidas</h2>
+                    <button class="btn-secondary flex items-center gap-2" (click)="loadReflexion()">
+                        <ui-icon>refresh</ui-icon> Atualizar
                     </button>
                 </div>
 
-                <div class="reflexion-list" *ngIf="!loadingReflexion">
-                    <div class="lesson-card" *ngFor="let lesson of lessons">
-                        <mat-icon [color]="getScoreColor(lesson.score)">lightbulb</mat-icon>
-                        <div class="content">
-                            <h4>{{ lesson.content }}</h4>
-                            <div class="meta">
+                <div class="reflexion-list space-y-4" *ngIf="!loadingReflexion">
+                    <div class="glass-card p-4 rounded-xl border border-white/5 flex gap-4 items-start"
+                        *ngFor="let lesson of lessons">
+                        <ui-icon [class.text-green-400]="(lesson.score || 0) > 0.8"
+                            [class.text-yellow-400]="(lesson.score || 0) <= 0.8">lightbulb</ui-icon>
+                        <div class="content flex-1">
+                            <h4 class="text-white font-medium mb-1">{{ lesson.content }}</h4>
+                            <div class="text-xs text-slate-400">
                                 Score: {{ lesson.score | number:'1.2-2' }} • ID: {{ lesson.id | slice:0:8 }}
                             </div>
                         </div>
                         <div class="ml-auto">
-                            <mat-chip [class.bg-green-500]="(lesson.score || 0) > 0.8"
-                                [class.bg-orange-500]="(lesson.score || 0) < 0.5">
+                            <span class="px-2 py-1 rounded text-xs font-bold"
+                                [class.bg-green-500]="(lesson.score || 0) > 0.8"
+                                [class.text-white]="(lesson.score || 0) > 0.8"
+                                [class.bg-orange-500]="(lesson.score || 0) < 0.5"
+                                [class.text-white]="(lesson.score || 0) < 0.5"
+                                [class.bg-slate-700]="(lesson.score || 0) >= 0.5 && (lesson.score || 0) <= 0.8">
                                 {{ (lesson.score || 0) * 100 | number:'1.0-0' }}% Conf
-                            </mat-chip>
+                            </span>
                         </div>
                     </div>
-                    <div *ngIf="lessons.length === 0" class="text-center p-8 text-text-muted">
+                    <div *ngIf="lessons.length === 0" class="text-center p-8 text-slate-500">
                         Nenhuma lição de reflexão registrada ainda.
                     </div>
                 </div>
 
-                <div *ngIf="loadingReflexion">
-                    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                <div *ngIf="loadingReflexion" class="flex justify-center py-8">
+                    <ui-spinner size="md"></ui-spinner>
                 </div>
 
             </div>
-        </mat-tab>
+        </div>
 
-        <!-- Tab 3: Episodic Memory (Legacy) -->
-        <mat-tab label="Timeline Episódica">
+        <!-- Tab 3: Episodic Memory -->
+        <div *ngIf="selectedTab === 2">
             <div class="py-6">
                 <app-memory></app-memory>
             </div>
-        </mat-tab>
+        </div>
 
-    </mat-tab-group>
+    </div>
 </div>

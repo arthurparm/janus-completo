@@ -4,14 +4,14 @@ import { AuthService } from '../../core/auth/auth.service'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, DocSearchResponse, DocSearchResultItem, DocListResponse, UploadResponse, DocListItem } from '../../services/janus-api.service'
-import { MatIconModule } from '@angular/material/icon'
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component'
 
 export type SearchResult = DocSearchResultItem;
 
 @Component({
     selector: 'app-documents',
     standalone: true,
-    imports: [CommonModule, FormsModule, MatIconModule],
+    imports: [CommonModule, FormsModule, UiIconComponent],
     templateUrl: './documents.html',
     styleUrl: './documents.scss'
 })

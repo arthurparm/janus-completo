@@ -4,7 +4,7 @@
         <div class="header-content">
             <div class="header-left">
                 <h1 class="header-title">
-                    <mat-icon>psychology</mat-icon>
+                    <ui-icon>psychology</ui-icon>
                     Memória Episódica
                 </h1>
                 <p class="header-subtitle">Explore a linha do tempo de memórias do sistema</p>
@@ -25,7 +25,7 @@
     <!-- OFFLINE WARNING -->
     @if (isOffline) {
     <div class="offline-warning-container">
-        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <ui-icon class="warning-icon">cloud_off</ui-icon>
         <h2>Sistema Offline</h2>
         <p>
             O acesso à Memória Episódica requer conexão ativa com o Vector Database (Qdrant).<br>
@@ -41,7 +41,7 @@
         <div class="filters-container">
             <div class="search-group">
                 <div class="search-input-wrapper">
-                    <mat-icon class="search-icon">search</mat-icon>
+                    <ui-icon class="search-icon">search</ui-icon>
                     <input type="text" [(ngModel)]="searchQuery" (keyup.enter)="search()"
                         placeholder="Busca semântica nas memórias..." class="search-input" aria-label="Buscar memórias"
                         title="Buscar">
@@ -67,11 +67,11 @@
 
             <div class="filter-actions">
                 <button class="btn-primary" (click)="search()">
-                    <mat-icon>search</mat-icon>
+                    <ui-icon>search</ui-icon>
                     Buscar
                 </button>
                 <button class="btn-secondary" (click)="clearFilters()">
-                    <mat-icon>clear</mat-icon>
+                    <ui-icon>clear</ui-icon>
                     Limpar
                 </button>
             </div>
@@ -103,7 +103,7 @@
 
         @if (error && !loading) {
         <div class="error-state">
-            <mat-icon>error_outline</mat-icon>
+            <ui-icon>error_outline</ui-icon>
             <h3>Erro ao carregar memórias</h3>
             <p>{{ error }}</p>
             <button class="btn-primary" (click)="loadTimeline()">Tentar novamente</button>
@@ -113,7 +113,7 @@
 
         @if (!loading && !error && memories.length === 0) {
         <div class="empty-state">
-            <mat-icon>psychology</mat-icon>
+            <ui-icon>psychology</ui-icon>
             <h3>Nenhuma memória encontrada</h3>
             <p>Tente ajustar o período ou a busca</p>
         </div>
@@ -138,7 +138,7 @@
                         <div class="memory-content">
                             <div class="memory-header">
                                 <div class="memory-type">
-                                    <mat-icon>{{ getTypeIcon(memory.type) }}</mat-icon>
+                                    <ui-icon>{{ getTypeIcon(memory.type) }}</ui-icon>
                                     <span>{{ getTypeLabel(memory.type) }}</span>
                                 </div>
                                 <span class="memory-time">{{ formatTime(memory.timestamp) }}</span>
@@ -149,10 +149,11 @@
                             @if (memory.score !== undefined) {
                             <div class="memory-footer">
                                 <div class="memory-score" [class]="getScoreClass(memory.score)">
-                                    <mat-icon>insights</mat-icon>
+                                    <ui-icon>insights</ui-icon>
                                     <span>Relevância: {{ getScorePercent(memory.score) }}%</span>
                                     <div class="score-bar">
-                                        <div class="score-fill" [style.width.%]="getScorePercent(memory.score)"></div>
+                                        <div class="score-fill" [style.width.%]="getScorePercent(memory.score)">
+                                        </div>
                                     </div>
                                 </div>
                             </div>

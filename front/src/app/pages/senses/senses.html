@@ -9,12 +9,12 @@
     </header>
 
     <div class="connection-bar">
-        <mat-icon>settings_ethernet</mat-icon>
+        <ui-icon>settings_ethernet</ui-icon>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>WebRTC Gateway URL</mat-label>
             <input matInput [(ngModel)]="janusUrl" placeholder="wss://janus.server...">
         </mat-form-field>
-        <button mat-flat-button [color]="isConnected ? 'warn' : 'primary'"
+        <button ui-button [variant]="isConnected ? 'destructive' : 'default'"
             (click)="isConnected ? disconnect() : connect()">
             {{ isConnected ? 'DISCONNECT' : 'CONNECT' }}
         </button>
@@ -40,7 +40,7 @@
                         <input #fileInput type="file" hidden (change)="onFileSelected($event)" accept="image/*">
 
                         <div *ngIf="!analyzing && !uploadProgress">
-                            <mat-icon class="text-6xl text-cyan-400 mb-4">add_a_photo</mat-icon>
+                            <ui-icon class="text-6xl text-cyan-400 mb-4" size="xl">add_a_photo</ui-icon>
                             <h3>Drop Image Here</h3>
                             <p>or click to browse</p>
                         </div>
@@ -51,14 +51,14 @@
                         </div>
 
                         <div *ngIf="analyzing" class="animate-pulse">
-                            <mat-icon class="text-6xl text-green-400 mb-4 animate-spin">smart_toy</mat-icon>
+                            <ui-icon class="text-6xl text-green-400 mb-4 animate-spin" size="xl">smart_toy</ui-icon>
                             <h3>Analyzing...</h3>
                         </div>
 
                     </div>
 
                     <div class="analysis-result" *ngIf="lastAnalysisResult">
-                        <mat-icon>check_circle</mat-icon>
+                        <ui-icon>check_circle</ui-icon>
                         <span>{{ lastAnalysisResult }}</span>
                     </div>
                 </div>
@@ -71,7 +71,7 @@
                         <video #videoElement autoplay playsinline [muted]="true" *ngIf="isConnected"></video>
 
                         <div class="placeholder" *ngIf="!isConnected">
-                            <mat-icon>videocam_off</mat-icon>
+                            <ui-icon>videocam_off</ui-icon>
                             <span>No Signal</span>
                         </div>
                     </div>
@@ -92,12 +92,12 @@
                 <div class="audio-visualizer">
                     <div class="ripple" [class.active]="isListening"
                         [style.transform]="'scale(' + (1 + volumeLevel/50) + ')'"></div>
-                    <mat-icon class="text-6xl relative z-10" [class.text-cyan-400]="isListening">mic</mat-icon>
+                    <ui-icon class="text-6xl relative z-10" [class.text-cyan-400]="isListening" size="xl">mic</ui-icon>
                 </div>
 
                 <div class="flex justify-center gap-4">
-                    <button mat-fab extended color="primary" (click)="toggleMic()">
-                        <mat-icon>{{ isListening ? 'mic_off' : 'mic' }}</mat-icon>
+                    <button ui-button size="lg" (click)="toggleMic()">
+                        <ui-icon>{{ isListening ? 'mic_off' : 'mic' }}</ui-icon>
                         {{ isListening ? 'Mute Microphone' : 'Enable Microphone' }}
                     </button>
                 </div>

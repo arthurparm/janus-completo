@@ -4,7 +4,7 @@
         <div class="header-content">
             <div class="header-left">
                 <h1 class="header-title">
-                    <mat-icon>build</mat-icon>
+                    <ui-icon>build</ui-icon>
                     {{ 'NAV.TOOLS' | translate }}
                 </h1>
                 <p class="header-subtitle">Capacidades disponíveis para o agente autônomo</p>
@@ -12,7 +12,7 @@
 
             <div class="header-right">
                 <button class="btn-secondary" (click)="loadData()">
-                    <mat-icon>refresh</mat-icon>
+                    <ui-icon>refresh</ui-icon>
                     Atualizar
                 </button>
             </div>
@@ -57,7 +57,7 @@
     <!-- OFFLINE WARNING -->
     @if (isOffline) {
     <div class="offline-warning-container">
-        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <ui-icon class="warning-icon">cloud_off</ui-icon>
         <h2>Sistema Offline</h2>
         <p>
             O gerenciamento de ferramentas requer conexão ativa com o Backend do Agente.<br>
@@ -73,7 +73,7 @@
         <div class="filters-container">
             <div class="search-group">
                 <div class="search-input-wrapper">
-                    <mat-icon class="search-icon">search</mat-icon>
+                    <ui-icon class="search-icon">search</ui-icon>
                     <input type="text" [(ngModel)]="searchQuery" (input)="applyFilters()"
                         placeholder="Buscar ferramentas..." class="search-input" aria-label="Buscar ferramentas"
                         title="Campo de busca">
@@ -113,7 +113,7 @@
 
         @if (error && !loading) {
         <div class="error-state">
-            <mat-icon>error_outline</mat-icon>
+            <ui-icon>error_outline</ui-icon>
             <h3>Erro ao carregar ferramentas</h3>
             <p>{{ error }}</p>
             <button class="btn-primary" (click)="loadData()">Tentar novamente</button>
@@ -123,10 +123,11 @@
 
         @if (!loading && !error && filteredTools.length === 0) {
         <div class="empty-state">
-            <mat-icon>build</mat-icon>
+            <ui-icon>build</ui-icon>
             <h3>{{ searchQuery || categoryFilter || permissionFilter ? 'Nenhuma ferramenta encontrada' : 'Nenhuma
                 ferramenta disponível' }}</h3>
-            <p>{{ searchQuery || categoryFilter || permissionFilter ? 'Tente ajustar os filtros' : 'O sistema não possui
+            <p>{{ searchQuery || categoryFilter || permissionFilter ? 'Tente ajustar os filtros' : 'O sistema não
+                possui
                 ferramentas registradas' }}</p>
         </div>
         }
@@ -139,14 +140,14 @@
 
                 <div class="card-header">
                     <div class="tool-icon">
-                        <mat-icon>{{ getCategoryIcon(tool.category) }}</mat-icon>
+                        <ui-icon>{{ getCategoryIcon(tool.category) }}</ui-icon>
                     </div>
                     <div class="tool-info">
                         <h3 class="tool-name">{{ tool.name }}</h3>
                         <span class="tool-category">{{ tool.category }}</span>
                     </div>
                     <div class="permission-badge" [class]="getPermissionColor(tool.permission_level)">
-                        <mat-icon>{{ getPermissionIcon(tool.permission_level) }}</mat-icon>
+                        <ui-icon>{{ getPermissionIcon(tool.permission_level) }}</ui-icon>
                         {{ tool.permission_level }}
                     </div>
                 </div>
@@ -172,13 +173,13 @@
                     <div class="tool-meta">
                         @if (tool.requires_confirmation) {
                         <span class="meta-item confirmation">
-                            <mat-icon>verified_user</mat-icon>
+                            <ui-icon>verified_user</ui-icon>
                             Requer confirmação
                         </span>
                         }
                         @if (tool.rate_limit_per_minute) {
                         <span class="meta-item rate-limit">
-                            <mat-icon>speed</mat-icon>
+                            <ui-icon>speed</ui-icon>
                             {{ formatRateLimit(tool.rate_limit_per_minute) }}
                         </span>
                         }
@@ -235,14 +236,14 @@
             @for (item of getStatsByCategory() | keyvalue; track item.key) {
             <button class="category-item" [class.active]="categoryFilter === item.key"
                 (click)="categoryFilter = item.key; applyFilters()">
-                <mat-icon>{{ getCategoryIcon(item.key) }}</mat-icon>
+                <ui-icon>{{ getCategoryIcon(item.key) }}</ui-icon>
                 <span class="category-name">{{ item.key }}</span>
                 <span class="category-count">{{ item.value }}</span>
             </button>
             }
             @if (categoryFilter) {
             <button class="category-item clear" (click)="categoryFilter = ''; applyFilters()">
-                <mat-icon>clear</mat-icon>
+                <ui-icon>clear</ui-icon>
                 <span class="category-name">Limpar filtro</span>
             </button>
             }

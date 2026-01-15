@@ -6,7 +6,7 @@
         <header class="analysis-header">
             <div class="header-content">
                 <div class="header-icon">
-                    <mat-icon>psychology</mat-icon>
+                    <ui-icon>psychology</ui-icon>
                 </div>
                 <div class="header-text">
                     <h1>Auto-Análise</h1>
@@ -15,14 +15,14 @@
             </div>
 
             <button class="refresh-btn" (click)="refreshAnalysis()" title="Atualizar Análise">
-                <mat-icon>refresh</mat-icon>
+                <ui-icon>refresh</ui-icon>
             </button>
         </header>
 
         <!-- Loading State -->
         @if (loading) {
         <div class="loading-state">
-            <div class="spinner"></div>
+            <ui-spinner size="md"></ui-spinner>
             <p>Analisando circuitos neurais...</p>
         </div>
         }
@@ -30,7 +30,7 @@
         @if (!loading && analysis) {
         <!-- Status Card -->
         <div class="status-card" [ngClass]="analysis.overall_health">
-            <mat-icon class="status-icon">{{ getHealthIcon() }}</mat-icon>
+            <ui-icon class="status-icon">{{ getHealthIcon() }}</ui-icon>
             <h2>{{ getHealthText() }}</h2>
 
             <div class="status-details">
@@ -52,7 +52,7 @@
         <!-- Insights Grid -->
         <div class="insights-grid">
             <div class="section-title">
-                <mat-icon>insights</mat-icon>
+                <ui-icon>insights</ui-icon>
                 <h3>Insights & Recomendações</h3>
             </div>
 
@@ -67,7 +67,7 @@
 
                     <div class="insight-body">
                         <div class="suggestion-box">
-                            <mat-icon>lightbulb</mat-icon>
+                            <ui-icon>lightbulb</ui-icon>
                             <span>{{ insight.suggestion }}</span>
                         </div>
                     </div>
@@ -80,7 +80,7 @@
         @if (analysis.fun_fact) {
         <div class="fun-fact-card">
             <div class="fact-icon">
-                <mat-icon>auto_awesome</mat-icon>
+                <ui-icon>auto_awesome</ui-icon>
             </div>
             <div class="fact-content">
                 <h4>Você Sabia?</h4>
@@ -93,7 +93,7 @@
         <!-- Error State -->
         @if (!loading && !analysis) {
         <div class="error-state">
-            <mat-icon>error_outline</mat-icon>
+            <ui-icon>error_outline</ui-icon>
             <h3>Análise Indisponível</h3>
             <p>Não foi possível conectar aos sistemas de diagnóstico.</p>
             <button class="btn-primary" (click)="refreshAnalysis()">Tentar Novamente</button>

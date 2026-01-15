@@ -12,13 +12,9 @@ import { JanusApiService, ServiceHealthItem, WorkerStatusResponse, AutoAnalysisR
 import { LoadingComponent } from '../../shared/components/loading/loading.component';
 import { ErrorComponent } from '../../shared/components/error/error.component';
 import { UiService } from '../../shared/services/ui.service';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatCardModule } from '@angular/material/card';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
+import { UiSpinnerComponent } from '../../shared/components/ui/spinner/spinner.component';
+import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
 
 const UPDATE_INTERVAL_SECONDS = 30; // Aumentado de 5 para 30 segundos para reduzir carga
 const LATENCY_THRESHOLD_MS = 500;
@@ -48,13 +44,10 @@ interface DashboardMetric {
     CommonModule,
     RouterModule,
     BaseChartDirective,
-    MatButtonModule,
-    MatIconModule,
-    MatCardModule,
-    MatChipsModule,
-    MatProgressBarModule,
-    MatTooltipModule,
-    MatProgressSpinnerModule
+    BaseChartDirective,
+    UiIconComponent,
+    UiSpinnerComponent,
+    UiButtonComponent
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss',

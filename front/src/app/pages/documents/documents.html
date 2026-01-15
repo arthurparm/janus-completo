@@ -5,7 +5,7 @@
         <div class="header-content">
             <div class="header-left">
                 <h1 class="header-title">
-                    <mat-icon>folder</mat-icon>
+                    <ui-icon>folder</ui-icon>
                     Documentos <small style="font-size: 12px; color: #888;">(User: {{ auth.currentUserValue?.id ||
                         'None' }})</small>
                 </h1>
@@ -14,7 +14,7 @@
 
             <div class="header-actions">
                 <button class="btn-primary" (click)="triggerFileSelect()">
-                    <mat-icon>upload_file</mat-icon>
+                    <ui-icon>upload_file</ui-icon>
                     Enviar Arquivo
                 </button>
                 <input #fileInput type="file" hidden accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.csv"
@@ -38,17 +38,17 @@
     <!-- Messages -->
     @if (error) {
     <div class="message error-message">
-        <mat-icon>error</mat-icon>
+        <ui-icon>error</ui-icon>
         {{ error }}
         <button class="dismiss-btn" (click)="error = null">
-            <mat-icon>close</mat-icon>
+            <ui-icon>close</ui-icon>
         </button>
     </div>
     }
 
     @if (successMessage) {
     <div class="message success-message">
-        <mat-icon>check_circle</mat-icon>
+        <ui-icon>check_circle</ui-icon>
         {{ successMessage }}
     </div>
     }
@@ -64,7 +64,7 @@
     <!-- OFFLINE WARNING -->
     @if (isOffline) {
     <div class="offline-warning-container">
-        <mat-icon class="warning-icon">cloud_off</mat-icon>
+        <ui-icon class="warning-icon">cloud_off</ui-icon>
         <h2>Sistema Offline</h2>
         <p>
             O gerenciamento de documentos requer conexão ativa com o Vector Database (Qdrant).<br>
@@ -83,7 +83,7 @@
             <!-- Search Box -->
             <div class="action-card">
                 <h3 class="card-title">
-                    <mat-icon>search</mat-icon>
+                    <ui-icon>search</ui-icon>
                     Busca Semântica
                 </h3>
                 <div class="search-form">
@@ -100,10 +100,10 @@
                     <div class="search-actions">
                         <button class="btn-primary" (click)="search()" [disabled]="searching || !searchQuery.trim()">
                             @if (searching) {
-                            <mat-icon class="spinning">autorenew</mat-icon>
+                            <ui-icon class="spinning">autorenew</ui-icon>
                             Buscando...
                             } @else {
-                            <mat-icon>search</mat-icon>
+                            <ui-icon>search</ui-icon>
                             Buscar
                             }
                         </button>
@@ -120,7 +120,7 @@
                     @for (result of searchResults; track result.id) {
                     <div class="result-item">
                         <div class="result-header">
-                            <mat-icon>{{ getFileIcon(result.file_name) }}</mat-icon>
+                            <ui-icon>{{ getFileIcon(result.file_name) }}</ui-icon>
                             <span class="result-file">{{ result.file_name || 'Documento' }}</span>
                             <span class="result-score" [class]="getScoreClass(result.score)">
                                 {{ getScorePercent(result.score) }}%
@@ -138,14 +138,14 @@
             <!-- URL Link Box -->
             <div class="action-card">
                 <h3 class="card-title">
-                    <mat-icon>link</mat-icon>
+                    <ui-icon>link</ui-icon>
                     Indexar URL
                 </h3>
                 <div class="url-form">
                     <input type="url" [(ngModel)]="urlToLink" placeholder="https://exemplo.com/documento.html"
                         class="url-input">
                     <button class="btn-secondary" (click)="linkUrl()" [disabled]="uploading || !urlToLink.trim()">
-                        <mat-icon>add_link</mat-icon>
+                        <ui-icon>add_link</ui-icon>
                         Indexar
                     </button>
                 </div>
@@ -165,7 +165,7 @@
 
             @if (!loading && documents.length === 0) {
             <div class="empty-state">
-                <mat-icon>folder_open</mat-icon>
+                <ui-icon>folder_open</ui-icon>
                 <h4>Nenhum documento</h4>
                 <p>Envie arquivos ou indexe URLs para começar</p>
             </div>
@@ -176,17 +176,17 @@
                 @for (doc of documents; track doc.doc_id) {
                 <div class="doc-card">
                     <div class="doc-icon">
-                        <mat-icon>{{ getFileIcon(doc.file_name) }}</mat-icon>
+                        <ui-icon>{{ getFileIcon(doc.file_name) }}</ui-icon>
                     </div>
                     <div class="doc-info">
                         <h4 class="doc-name">{{ doc.file_name || 'Documento' }}</h4>
                         <div class="doc-meta">
                             <span class="meta-item">
-                                <mat-icon>layers</mat-icon>
+                                <ui-icon>layers</ui-icon>
                                 {{ doc.chunks }} chunks
                             </span>
                             <span class="meta-item">
-                                <mat-icon>schedule</mat-icon>
+                                <ui-icon>schedule</ui-icon>
                                 {{ formatDate(doc.last_index_ts) }}
                             </span>
                         </div>
@@ -194,10 +194,10 @@
                     <div class="doc-actions">
                         <button class="icon-btn search" (click)="searchQuery = 'doc:' + doc.doc_id; search()"
                             title="Buscar neste documento">
-                            <mat-icon>search</mat-icon>
+                            <ui-icon>search</ui-icon>
                         </button>
                         <button class="icon-btn delete" (click)="deleteDocument(doc)" title="Excluir">
-                            <mat-icon>delete</mat-icon>
+                            <ui-icon>delete</ui-icon>
                         </button>
                     </div>
                 </div>

@@ -1,127 +1,176 @@
-<div class="autonomy-container">
-    <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" class="custom-tabs">
-        <mat-tab label="Painel de Autonomia">
-            <div class="tab-content">
-                <header class="control-tower">
-                    <div class="status-indicator" [class.active]="status?.active">
-                        <div class="pulse-ring"></div>
-                        <mat-icon>{{ status?.active ? 'autorenew' : 'pause_circle_outline' }}</mat-icon>
+<div class="autonomy-container text-white">
+
+    <!-- Custom Tabs -->
+    <div class="mb-6 border-b border-slate-700 flex gap-6">
+        <button (click)="selectedTab = 0" class="pb-2 px-1 text-sm font-medium transition-colors border-b-2"
+            [class.border-purple-500]="selectedTab === 0" [class.text-white]="selectedTab === 0"
+            [class.border-transparent]="selectedTab !== 0" [class.text-slate-400]="selectedTab !== 0">
+            Painel de Autonomia
+        </button>
+        <button (click)="selectedTab = 1" class="pb-2 px-1 text-sm font-medium transition-colors border-b-2"
+            [class.border-purple-500]="selectedTab === 1" [class.text-white]="selectedTab === 1"
+            [class.border-transparent]="selectedTab !== 1" [class.text-slate-400]="selectedTab !== 1">
+            Metas estratégicas
+        </button>
+    </div>
+
+    <!-- Tab 1: Painel de Autonomia -->
+    <div *ngIf="selectedTab === 0">
+        <div class="tab-content">
+            <header
+                class="control-tower bg-slate-900/50 p-6 rounded-xl border border-slate-700 mb-6 flex flex-col md:flex-row items-center gap-6">
+                <div class="status-indicator relative flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 border-2 border-slate-600 transition-all duration-500"
+                    [class.active]="status?.active" [class.border-green-500]="status?.active">
+                    <div class="pulse-ring absolute inset-0 rounded-full border-2 border-green-500 opacity-0"
+                        [class.animate-ping]="status?.active" *ngIf="status?.active"></div>
+                    <ui-icon class="text-3xl" [class.text-green-400]="status?.active"
+                        [class.text-slate-400]="!status?.active">
+                        {{ status?.active ? 'autorenew' : 'pause_circle_outline' }}
+                    </ui-icon>
+                </div>
+
+                <div class="header-content flex-1 text-center md:text-left">
+                    <h1
+                        class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
+                        Autonomia do Janus</h1>
+
+                    <div class="rt-status-bar mt-2 flex flex-wrap items-center justify-center md:justify-start gap-3"
+                        *ngIf="rtStatus">
+                        <span
+                            class="state-badge px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 border border-slate-700"
+                            [class.bg-purple-900]="rtStatus.state === 'thinking'"
+                            [class.text-purple-200]="rtStatus.state === 'thinking'"
+                            [class.bg-blue-900]="rtStatus.state === 'executing'"
+                            [class.text-blue-200]="rtStatus.state === 'executing'">
+                            {{ getRtStateLabel(rtStatus.state) }}
+                        </span>
+                        <span class="detail-text text-slate-300 text-sm italic">{{ rtStatus.detail }}</span>
                     </div>
 
-                    <div class="header-content">
-                        <h1>Autonomia do Janus</h1>
-                        <div class="rt-status-bar" *ngIf="rtStatus">
-                            <span class="state-badge" [class.thinking]="rtStatus.state === 'thinking'"
-                                [class.executing]="rtStatus.state === 'executing'">
-                                {{ getRtStateLabel(rtStatus.state) }}
-                            </span>
-                            <span class="detail-text">{{ rtStatus.detail }}</span>
-                        </div>
-                        <p class="subtitle" *ngIf="!rtStatus">
-                            Status:
-                            <span [class.text-active]="status?.active">
-                                {{ status?.active ? 'ATIVO' : 'EM ESPERA' }}
-                            </span>
-                            <span *ngIf="status?.active"> • Ciclo #{{ status?.cycle_count }}</span>
-                        </p>
-                        <p class="helper-text">
-                            Quando a autonomia está ativa, o Janus executa ciclos periódicos usando ferramentas
-                            aprovadas para monitorar o sistema, revisar metas e tomar ações dentro do perfil de risco
-                            definido abaixo.
-                        </p>
-                    </div>
-
-                    <div class="actions">
-                        <button mat-flat-button [color]="status?.active ? 'warn' : 'primary'" class="giant-toggle"
-                            (click)="toggleAutonomy()" [disabled]="isLoading">
-                            <mat-icon>{{ status?.active ? 'stop' : 'play_arrow' }}</mat-icon>
-                            {{ status?.active ? 'Parar autonomia' : 'Iniciar autonomia' }}
-                        </button>
-                    </div>
-                </header>
-
-                <section class="help-summary card">
-                    <h2>Como usar o modo autônomo</h2>
-                    <p>1. Escolha o perfil de risco adequado ao ambiente.</p>
-                    <p>2. Defina o intervalo entre ciclos de verificação.</p>
-                    <p>3. Ative a autonomia e acompanhe o registro de ações.</p>
-                    <p>4. Use a aba de metas estratégicas para orientar as decisões.</p>
-                </section>
-
-                <section class="config-deck" *ngIf="!status?.active">
-                    <mat-card class="dark-card">
-                        <mat-card-header>
-                            <mat-icon mat-card-avatar>tune</mat-icon>
-                            <mat-card-title>Parâmetros da autonomia</mat-card-title>
-                        </mat-card-header>
-                        <mat-card-content class="form-grid">
-
-                            <mat-form-field appearance="outline">
-                                <mat-label>Perfil de risco</mat-label>
-                                <mat-select [(ngModel)]="selectedRisk">
-                                    <mat-option value="conservative">
-                                        <span class="safe">🛡️ Conservador</span> (somente leitura, nenhuma ação
-                                        destrutiva)
-                                    </mat-option>
-                                    <mat-option value="balanced">
-                                        <span class="balanced">⚖️ Balanceado</span> (edições consideradas seguras)
-                                    </mat-option>
-                                    <mat-option value="aggressive">
-                                        <span class="danger">🔥 Agressivo</span> (acesso amplo, exige confiança)
-                                    </mat-option>
-                                </mat-select>
-                            </mat-form-field>
-
-                            <mat-form-field appearance="outline">
-                                <mat-label>Intervalo entre ciclos (segundos)</mat-label>
-                                <input matInput type="number" [(ngModel)]="cycleInterval" min="10" max="3600">
-                            </mat-form-field>
-
-                        </mat-card-content>
-                    </mat-card>
-                </section>
-
-                <section class="live-feed">
-                    <div class="feed-header">
-                        <mat-icon>terminal</mat-icon>
-                        <h2>Registro de ações</h2>
-                    </div>
-                    <p class="helper-text">
-                        Aqui você acompanha as últimas ações executadas pelo modo autônomo. Cada linha mostra o horário,
-                        o nível do evento e a mensagem enviada pelo núcleo de autonomia.
+                    <p class="subtitle mt-1 text-slate-400" *ngIf="!rtStatus">
+                        Status:
+                        <span class="font-bold" [class.text-green-400]="status?.active"
+                            [class.text-red-400]="!status?.active">
+                            {{ status?.active ? 'ATIVO' : 'EM ESPERA' }}
+                        </span>
+                        <span *ngIf="status?.active" class="ml-2 text-slate-500">• Ciclo #{{ status?.cycle_count
+                            }}</span>
                     </p>
-                    <div class="terminal-window">
-                        <div class="log-line" *ngFor="let log of getDisplayLogs(logs$ | async)">
-                            <span class="timestamp">{{ log.timestamp | date:'HH:mm:ss' }}</span>
-                            <span class="level" [class.level-error]="log.level === 'error'">[{{ log.level | uppercase
-                                }}]</span>
-                            <span class="message">
-                                <ng-container *ngIf="getToolNameFromLog(log.message) as tool; else plainMessage">
-                                    Executando ferramenta <span class="tool-name">{{ tool }}</span>
-                                </ng-container>
-                                <ng-template #plainMessage>{{ log.message }}</ng-template>
-                            </span>
-                            <span class="repeat-badge" *ngIf="log.count > 1">×{{ log.count }}</span>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </mat-tab>
 
-        <mat-tab label="Metas estratégicas">
-            <div class="tab-content">
-                <p class="helper-text">
-                    Defina aqui objetivos de médio e longo prazo que o Janus deve perseguir.
-                    O modo de autonomia usa essas metas como referência para planejar ações,
-                    priorizar tarefas e decidir quais ferramentas acionar.
+                    <p class="helper-text mt-2 text-xs text-slate-500 max-w-2xl">
+                        Quando a autonomia está ativa, o Janus executa ciclos periódicos usando ferramentas
+                        aprovadas para monitorar o sistema, revisar metas e tomar ações dentro do perfil de risco
+                        definido abaixo.
+                    </p>
+                </div>
+
+                <div class="actions">
+                    <button
+                        class="px-6 py-4 rounded-xl font-bold text-lg flex items-center gap-3 transition-all transform hover:scale-105 shadow-xl"
+                        [class.bg-red-500]="status?.active" [class.hover:bg-red-600]="status?.active"
+                        [class.bg-green-600]="!status?.active" [class.hover:bg-green-700]="!status?.active"
+                        (click)="toggleAutonomy()" [disabled]="isLoading">
+                        <ui-icon class="text-2xl">{{ status?.active ? 'stop' : 'play_arrow' }}</ui-icon>
+                        {{ status?.active ? 'Parar Autonomia' : 'Iniciar Autonomia' }}
+                    </button>
+                </div>
+            </header>
+
+            <section
+                class="help-summary bg-slate-800/50 p-4 rounded-lg border border-slate-700 mb-6 text-sm text-slate-300">
+                <h2 class="text-white font-semibold mb-2">Como usar o modo autônomo</h2>
+                <ul class="space-y-1">
+                    <li>1. Escolha o perfil de risco adequado ao ambiente.</li>
+                    <li>2. Defina o intervalo entre ciclos de verificação.</li>
+                    <li>3. Ative a autonomia e acompanhe o registro de ações.</li>
+                    <li>4. Use a aba de metas estratégicas para orientar as decisões.</li>
+                </ul>
+            </section>
+
+            <section class="config-deck mb-6" *ngIf="!status?.active">
+                <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
+                        <ui-icon class="text-purple-400">tune</ui-icon>
+                        <h3 class="font-bold text-white">Parâmetros da Autonomia</h3>
+                    </div>
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        <div class="form-group flex flex-col gap-2">
+                            <label class="text-sm font-medium text-slate-400">Perfil de Risco</label>
+                            <div class="relative">
+                                <select [(ngModel)]="selectedRisk"
+                                    class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 appearance-none focus:outline-none focus:border-purple-500">
+                                    <option value="conservative">🛡️ Conservador (somente leitura)</option>
+                                    <option value="balanced">⚖️ Balanceado (edições seguras)</option>
+                                    <option value="aggressive">🔥 Agressivo (acesso amplo)</option>
+                                </select>
+                                <ui-icon
+                                    class="absolute right-3 top-2.5 pointer-events-none text-slate-500">expand_more</ui-icon>
+                            </div>
+                        </div>
+
+                        <div class="form-group flex flex-col gap-2">
+                            <label class="text-sm font-medium text-slate-400">Intervalo entre ciclos (segundos)</label>
+                            <input type="number" [(ngModel)]="cycleInterval" min="10" max="3600"
+                                class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500">
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <section class="live-feed">
+                <div class="feed-header flex items-center gap-2 mb-3">
+                    <ui-icon class="text-slate-400">terminal</ui-icon>
+                    <h2 class="text-lg font-semibold text-white">Registro de Ações</h2>
+                </div>
+                <p class="helper-text text-sm text-slate-500 mb-4">
+                    Aqui você acompanha as últimas ações executadas pelo modo autônomo. Cada linha mostra o horário,
+                    o nível do evento e a mensagem enviada pelo núcleo de autonomia.
                 </p>
-                <p class="helper-text">
-                    Comece descrevendo o resultado desejado (por exemplo, “manter o ambiente estável
-                    durante o horário comercial”) e critérios claros de sucesso. O Janus usa essas
-                    informações para alinhar os ciclos de autonomia com o que realmente importa.
-                </p>
-                <app-goals></app-goals>
-            </div>
-        </mat-tab>
-    </mat-tab-group>
+                <div
+                    class="terminal-window bg-black border border-slate-800 rounded-xl p-4 font-mono text-sm h-96 overflow-y-auto custom-scrollbar">
+                    <div class="log-line mb-1 border-b border-white/5 pb-1 last:border-0"
+                        *ngFor="let log of getDisplayLogs(logs$ | async)">
+                        <span class="timestamp text-slate-500 mr-2">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+                        <span class="level mr-2 font-bold" [class.text-red-500]="log.level === 'error'"
+                            [class.text-yellow-500]="log.level === 'warn'" [class.text-blue-500]="log.level === 'info'"
+                            [class.text-slate-400]="log.level === 'debug'">
+                            [{{ log.level | uppercase }}]
+                        </span>
+                        <span class="message text-slate-300">
+                            <ng-container *ngIf="getToolNameFromLog(log.message) as tool; else plainMessage">
+                                Executando ferramenta <span class="tool-name text-purple-400 font-bold">{{ tool
+                                    }}</span>
+                            </ng-container>
+                            <ng-template #plainMessage>{{ log.message }}</ng-template>
+                        </span>
+                        <span class="repeat-badge ml-2 px-1.5 py-0.5 bg-slate-800 rounded text-xs text-slate-400"
+                            *ngIf="log.count > 1">×{{ log.count }}</span>
+                    </div>
+                    <!-- Empty State for Logs -->
+                    <div *ngIf="!(logs$ | async)?.length" class="text-slate-600 italic text-center mt-10">
+                        Aguardando logs...
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Tab 2: Metas estratégicas -->
+    <div *ngIf="selectedTab === 1">
+        <div class="tab-content">
+            <p class="helper-text text-slate-400 mb-2">
+                Defina aqui objetivos de médio e longo prazo que o Janus deve perseguir.
+                O modo de autonomia usa essas metas como referência para planejar ações,
+                priorizar tarefas e decidir quais ferramentas acionar.
+            </p>
+            <p class="helper-text text-slate-400 mb-6">
+                Comece descrevendo o resultado desejado (por exemplo, “manter o ambiente estável
+                durante o horário comercial”) e critérios claros de sucesso. O Janus usa essas
+                informações para alinhar os ciclos de autonomia com o que realmente importa.
+            </p>
+            <app-goals></app-goals>
+        </div>
+    </div>
 </div>

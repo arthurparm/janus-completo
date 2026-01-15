@@ -1,14 +1,10 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
+import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
+import { UiSpinnerComponent } from '../../shared/components/ui/spinner/spinner.component';
 
 import { JanusApiService, KnowledgeStats, EntityRelationshipItem, ReflexionLesson } from '../../services/janus-api.service';
 import { MemoryComponent } from '../memory/memory';
@@ -18,16 +14,11 @@ import { MemoryComponent } from '../memory/memory';
     standalone: true,
     imports: [
         CommonModule,
-        MatTabsModule,
-        MatCardModule,
-        MatIconModule,
-        MatButtonModule,
-        MatInputModule,
-        MatFormFieldModule,
         FormsModule,
-        MatChipsModule,
-        MatProgressBarModule,
-        MemoryComponent
+        MemoryComponent,
+        UiIconComponent,
+        UiButtonComponent,
+        UiSpinnerComponent
     ],
     templateUrl: './brain.html',
     styleUrl: './brain.scss'
