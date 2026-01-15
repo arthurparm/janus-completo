@@ -1,102 +1,103 @@
 # Janus — Organização do Projeto (Atualizado)
 
-Este documento descreve a estrutura, nomenclatura e convenções adotadas, alinhadas ao estado atual do repositório. Para a visão consolidada, veja o [README.md](../README.md) principal.
+Este documento descreve a estrutura, nomenclatura e o mapeamento lógico dos ~750 arquivos do projeto, facilitando a navegação e o entendimento da arquitetura descrita no [README.md](../README.md).
 
-## Visão Geral
+## Visão Geral da Estrutura
 
 ```
 / (raiz)
-├─ README.md
-├─ docker-compose.yml
-├─ front/                         # Aplicação Angular (UI)
-├─ janus/                         # Backend (FastAPI, serviços, workers, core)
-│  ├─ app/                        # Código da aplicação
-│  │  ├─ api/                     # Endpoints REST (/api/v1)
-│  │  ├─ core/                    # LLM, memória, infra, tools, workers
-│  │  ├─ db/                      # Conectores (Neo4j/Qdrant/MySQL)
-│  │  ├─ services/                # Orquestração e regras de negócio
-│  │  ├─ models/                  # Modelos Pydantic/ORM
-│  │  ├─ repositories/            # Persistência e integrações
-│  │  ├─ config.py                # Configurações (Pydantic Settings)
-│  │  └─ main.py                  # FastAPI app / lifecycle
-│  ├─ tests/                      # Testes (unit/integration/e2e)
-│  ├─ docker/                     # Dockerfiles (base e Ollama)
-│  ├─ grafana/                    # Dashboards prontos
-│  ├─ observability/              # Compose e configs (otel/promtail)
-│  ├─ http/                       # Coleções de requisições (.http)
-│  └─ pyproject.toml              # Dependências e ferramentas (Poetry/uv)
-├─ docs/                          # Documentação Markdown (manual e guias)
-│  ├─ Janus-Manual.md
-│  ├─ Project-Structure.md
-│  ├─ qdrant_resilience_improvements.md
-│  └─ guides/
-│     └─ tailscale-security-comparison.md
-├─ docker/                       # Imagens Docker base
-│  ├─ Dockerfile
-│  └─ ollama.Dockerfile
-├─ scripts/                      # Utilitários e automações
-│  └─ init-ollama.sh
-├─ http/                         # Coleções de requisições para teste manual
-├─ grafana/                      # Dashboards e provisionamento
-└─ prometheus/                   # Configuração do Prometheus
+├─ README.md                      # Manual completo e ponto de entrada
+├─ ROADMAP.md                     # Planejamento estratégico e débito técnico
+├─ docker-compose.yml             # Orquestração de containers (API, Front, BDs)
+├─ front/                         # Aplicação Angular (Interface do Usuário)
+├─ janus/                         # Backend Python (Cérebro do Sistema)
+│  ├─ app/                        # Código-fonte da aplicação
+│  │  ├─ api/                     # Interface HTTP (FastAPI Endpoints)
+│  │  ├─ core/                    # Núcleo da lógica agêntica e infraestrutura
+│  │  ├─ services/                # Camada de aplicação e regras de negócio
+│  │  ├─ repositories/            # Acesso a dados (Neo4j, Qdrant, MySQL)
+│  │  ├─ models/                  # Definições de tipos (Pydantic) e esquemas
+│  │  ├─ config.py                # Configuração centralizada
+│  │  └─ main.py                  # Entrypoint, lifecycle e composição
+│  └─ tests/                      # Testes automatizados
+└─ docs/                          # Documentação técnica detalhada
 ```
-
-## Princípios de Organização
-
-- Separação por domínio e responsabilidade:
-  - `front/` contém exclusivamente o código de interface (Angular).
-  - `janus/` concentra o backend e serviços core.
-  - `docs/` serve de fonte única de verdade para documentação.
-  - `docker/` guarda Dockerfiles; `docker-compose.yml` permanece na raiz para orquestração.
-  - `scripts/` mantém utilitários independentes do app (instalação, setup, manutenção).
-- Nomenclatura consistente e explícita:
-  - Prefira nomes descritivos (`documentacao`, `arquitetura`, `dashboard`) ao invés de abreviações obscuras.
-  - Use minúsculas e hífens/underscores de acordo com o ecossistema (Angular vs Python).
-- Caminhos estáveis para CI/CD:
-  - Evite mover arquivos sem ajustes correspondentes no `docker-compose.yml` e pipelines.
-- Documentação próxima do código:
-  - Manual consolidado em `docs/Janus-Manual.md`.
-  - Referencie `docs/` na UI (página Documentação em `front/src/app/pages/documentacao`).
-
-## Estrutura Interna do Backend (`/janus`)
-
-- `app/` — Código da aplicação:
-  - `api/` (routers) em `janus/app/api/v1/endpoints/*`
-  - `core/` (LLM, memória, resiliência, workers)
-  - `services/` (orquestração e lógica de domínio)
-  - `models/`, `repositories/`, `db/`
-- `tests/` — testes unitários e de integração
-- `pyproject.toml` — dependências e metadados
-
-## Estrutura Interna do Frontend (`/front`)
-
-- `src/app/pages/` — páginas (Documentação, Arquitetura, Sprints)
-- `src/app/features/` — features (chat, knowledge, operations, overview)
-
-- `src/app/services/` — consumo das APIs do Janus
-- `proxy.conf.json` — mapeamento de rotas do backend durante o desenvolvimento
-
-## Convenções de Nomenclatura
-
-- Angular:
-  - Componentes: `PascalCase` para classes (ex.: `ChatComponent`), kebab-case para paths.
-  - Pastas por feature/página com `html/scss/ts` co-localizados.
-- Python:
-  - Módulos e pacotes em `snake_case`.
-  - Classes em `PascalCase`.
-
-## Boas Práticas Complementares
-
-- Servir documentação (`/docs`) via backend ou web server no deploy.
-- Utilizar coleções `http/` para validação rápida de endpoints (ex.: `janus/http/E2E-Production-Scenario.http`).
-- Adotar versionamento semântico e changelogs em `docs/Release-Notes-*`.
-
-## Próximas Melhorias Sugeridas
-
-- Consolidar `grafana/` e `prometheus/` sob `infra/observability/` (se preferir) e ajustar `docker-compose.yml`.
-- Documentar rotas estáticas no backend para servir `docs/` e `http/`.
-- Adicionar arquivos de configuração a `/config` (ex.: `config/app.example.yaml`).
 
 ---
 
-Dúvidas ou sugestões: veja `README.md` e abra uma issue descrevendo a proposta de melhoria de organização.
+## Mapeamento Lógico: Onde encontrar o quê?
+
+Esta seção conecta os conceitos arquiteturais do Manual (`README.md`) aos arquivos físicos.
+
+### 1. Orquestração e API (A Porta de Entrada)
+Responsável por receber requisições, autenticar e despachar para serviços.
+- **Entrypoint**: `janus/app/main.py` (Inicia API, conecta BDs, sobe workers).
+- **Rotas**: `janus/app/api/v1/endpoints/`
+  - `chat.py`: Endpoints de conversa e streaming.
+  - `llm.py`: Invocação direta de modelos.
+  - `autonomy.py`: Controle do loop autônomo.
+  - `tasks.py` / `workers.py`: Gestão de tarefas assíncronas.
+
+### 2. O Cérebro (LLM & Roteamento)
+Onde a decisão de qual modelo usar acontece, controle de custos e resiliência.
+- **Roteamento e Seleção**: `janus/app/core/llm/router.py` (Lógica FAST/CHEAP vs HIGH/QUALITY).
+- **Gestão de Ciclo de Vida**: `janus/app/core/llm/llm_manager.py` (Cache, Circuit Breaker, Budgets).
+- **Clientes**: `janus/app/core/llm/client.py` (Abstração sobre OpenAI/Anthropic/Ollama).
+
+### 3. Memória e Conhecimento (Hot Path & Cold Path)
+Como o Janus lembra e aprende.
+- **Hot Path (Vetor Rápido)**:
+  - `janus/app/core/memory/memory_core.py`: Gravação imediata no Qdrant.
+  - `janus/app/services/memory_service.py`: Busca e contexto de curto prazo.
+- **Cold Path (Consolidação em Grafo)**:
+  - `janus/app/core/workers/knowledge_consolidator_worker.py`: Worker que processa memórias em background.
+  - `janus/app/core/memory/graph_guardian.py`: Normalização de entidades para o Neo4j.
+  - `janus/app/services/knowledge_service.py`: Lógica de alto nível do grafo.
+- **Documentos & RAG**:
+  - `janus/app/services/document_service.py`: Ingestão, chunking e indexação.
+  - `janus/app/core/memory/graph_rag_core.py`: Lógica de RAG híbrido.
+
+### 4. Autonomia e Agentes (Policy & Tools)
+Onde o sistema age sobre o mundo.
+- **Meta-Agente (O Supervisor)**:
+  - `janus/app/core/agents/meta_agent.py`: Implementação do grafo de estado (LangGraph) OODA.
+  - `janus/app/core/agents/meta_agent_worker.py`: Worker que roda ciclos do meta-agente.
+- **Parlamento (Multi-Agentes)**:
+  - `janus/app/core/workers/code_agent_worker.py`: Agente programador.
+  - `janus/app/core/workers/professor_agent_worker.py`: Agente revisor.
+  - `janus/app/core/workers/router_worker.py`: Distribuidor de tarefas.
+- **Governança (Policy Engine)**:
+  - `janus/app/core/autonomy/policy_engine.py`: Regras de segurança (Risk Profile, Allowlist).
+  - `janus/app/core/tools/action_module.py`: Registro e execução de ferramentas.
+
+### 5. Workers e Mensageria (RabbitMQ)
+O sistema nervoso assíncrono.
+- **Broker**: `janus/app/core/infrastructure/message_broker.py` (Publicação/Consumo resiliente).
+- **Workers**: `janus/app/core/workers/` (Todos os consumidores de fila ficam aqui).
+- **Orquestrador**: `janus/app/core/workers/orchestrator.py` (Inicia e gerencia processos worker).
+
+### 6. Frontend (Angular)
+A interface visual.
+- **Páginas**: `front/src/app/pages/` (Documentação, Chat, Arquitetura).
+- **Serviços de API**: `front/src/app/services/` (Comunicação com o backend).
+- **Componentes Compartilhados**: `front/src/app/shared/`.
+
+---
+
+## Convenções de Nomenclatura
+
+- **Python (Backend)**:
+  - Módulos e pacotes: `snake_case` (ex: `llm_manager.py`).
+  - Classes: `PascalCase` (ex: `LLMManager`).
+  - Variáveis/Funções: `snake_case`.
+- **TypeScript (Frontend)**:
+  - Componentes: `PascalCase` (ex: `ChatComponent`).
+  - Arquivos: `kebab-case` (ex: `chat-component.ts`).
+
+## Princípios de Organização
+
+1.  **Separação por Responsabilidade**: `core` contém a infraestrutura e lógica pura; `services` orquestra casos de uso; `api` apenas expõe via HTTP.
+2.  **Workers Isolados**: Cada worker em `janus/app/core/workers` deve ser independente e focado em uma tarefa (Consolidação, Treino, Execução).
+3.  **Configuração Centralizada**: Tudo que é variável de ambiente passa por `janus/app/config.py`.
+
+Dúvidas sobre onde colocar um novo arquivo? Consulte o diretório `services/` para lógica de negócio ou `core/` se for uma funcionalidade fundamental do sistema.
