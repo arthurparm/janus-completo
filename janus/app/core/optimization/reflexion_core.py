@@ -14,6 +14,7 @@ from typing import Any
 
 from app.config import settings
 from app.core.agents.agent_manager import AgentType, agent_manager
+from app.core.agents.utils import parse_json_strict
 from app.core.llm.client import get_llm_client
 from app.core.llm.router import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
@@ -100,33 +101,10 @@ class ReflexionSession:
 
     def _extract_json(self, response: str) -> dict[str, Any]:
         """Extrai JSON da resposta do LLM de forma robusta."""
-        text = response.strip()
-
-        # 1. Tentar fazer parse direto
         try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-        # 2. Tentar extrair de blocos de código ```json ... ```
-        code_block_pattern = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
-        match = code_block_pattern.search(text)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-
-        # 3. Tentar encontrar qualquer objeto JSON {...}
-        json_pattern = re.compile(r"(\{.*\})", re.DOTALL)
-        match = json_pattern.search(text)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-
-        raise ValueError(f"Não foi possível extrair JSON válido da resposta: {text[:100]}...")
+            return parse_json_strict(response)
+        except Exception as e:
+            raise ValueError(f"Não foi possível extrair JSON válido da resposta: {response[:100]}...") from e
 
     async def _default_evaluator(self, task: str, result: str) -> dict[str, Any]:
         await self._ensure_llm()

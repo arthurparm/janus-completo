@@ -24,6 +24,14 @@ class LLMAdapter(ABC):
 
 
 class OpenAIAdapter(LLMAdapter):
+    def invoke(self, prompt: str, **kwargs) -> Any:
+        # Handle 'strict' mode shortcut
+        if kwargs.pop("strict", False):
+            if "response_format" not in kwargs:
+                kwargs["response_format"] = {"type": "json_object"}
+
+        return super().invoke(prompt, **kwargs)
+
     def apply_output_limit(self, max_output_tokens: int) -> None:
         try:
             mk = getattr(self.base_model, "model_kwargs", None)
@@ -33,6 +41,7 @@ class OpenAIAdapter(LLMAdapter):
                 self.base_model.model_kwargs = {"max_tokens": max_output_tokens}
         except Exception as e:
             logger.warning(f"Failed to apply output limit for OpenAI: {e}")
+
 
 
 class GeminiAdapter(LLMAdapter):

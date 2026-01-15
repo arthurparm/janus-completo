@@ -10,6 +10,7 @@ from app.core.llm import ModelPriority, ModelRole
 from app.core.tools.action_module import PermissionLevel, action_registry
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.services.llm_service import LLMService
+from app.core.agents.utils import parse_json_strict
 
 logger = structlog.get_logger(__name__)
 
@@ -42,40 +43,14 @@ def _list_allowed_tools(policy: PolicyEngine | None) -> list[str]:
 
 
 def _extract_json_array(text: str) -> list[dict[str, Any]] | None:
-    # Tenta parsear diretamente
     try:
-        data = json.loads(text)
+        data = parse_json_strict(text)
         if isinstance(data, list):
             return data
-        # Se retornou um dict com chave "steps"
         if isinstance(data, dict) and "steps" in data and isinstance(data["steps"], list):
             return data["steps"]
     except Exception:
         pass
-
-    # Tenta extrair entre fences ```json ... ```
-    try:
-        m = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-        if m:
-            content = m.group(1)
-            data = json.loads(content)
-            if isinstance(data, list):
-                return data
-            if isinstance(data, dict) and "steps" in data and isinstance(data["steps"], list):
-                return data["steps"]
-    except Exception:
-        pass
-
-    # Tenta extrair primeiro array solto
-    try:
-        m = re.search(r"(\[\s*{.*?}\s*\])", text, re.DOTALL)
-        if m:
-            arr = json.loads(m.group(1))
-            if isinstance(arr, list):
-                return arr
-    except Exception:
-        pass
-
     return None
 
 
@@ -302,14 +277,12 @@ async def replan_goal(
             timeout_seconds=30,
         )
         text = res.get("response", "")
-        # Tenta extrair JSON
-        m = re.search(r"(\{.*\})", text, re.DOTALL)
-        if m:
-            data = json.loads(m.group(1))
-            return data
-        # Se falhar o parse, tenta interpretar texto simples ou abortar
-        if "ABORT" in text:
-            return {"action": "ABORT"}
+        # Tenta extrair JSON (Strict)
+        try:
+            return parse_json_strict(text)
+        except Exception:
+             if "ABORT" in text:
+                return {"action": "ABORT"}
 
     except Exception as e:
         logger.error("Falha ao replanear", exc_info=e)
@@ -361,14 +334,12 @@ async def verify_outcome(
             timeout_seconds=15,
         )
         text = res.get("response", "")
-        # Extract JSON
-        m = re.search(r"(\{.*\})", text, re.DOTALL)
-        if m:
-            return json.loads(m.group(1))
-
-        # Fallback heuristic: if text contains "success": true
-        if "true" in text.lower() and "success" in text.lower():
-            return {"success": True, "reason": "Heuristic validation"}
+        try:
+            return parse_json_strict(text)
+        except Exception:
+             # Fallback heuristic: if text contains "success": true
+             if "true" in text.lower() and "success" in text.lower():
+                return {"success": True, "reason": "Heuristic validation"}
 
         # Se não conseguiu parsear, assume sucesso para não bloquear demais (False Positive preferred to False Negative here?)
         # Or better: Assume success unless explicitly failed.

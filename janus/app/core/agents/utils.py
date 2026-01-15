@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from functools import wraps
-from typing import Any
+from typing import Any, Union
 import inspect
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -60,6 +60,45 @@ def _clean_json_output(text: str) -> str:
     return text
 
 
+def parse_json_strict(content: str) -> Union[dict[str, Any], list[Any]]:
+    """
+    Parses JSON using the Strict Mode + Regex Fallback strategy.
+
+    Strategy:
+    1. Try json.loads(content) directly (Best case: Strict Mode compliance).
+    2. If fails, try cleaning with Regex (Fallback: Markdown/Text removal).
+    3. If fails, raise JSONDecodeError (No "LLM fix" loop here).
+
+    Args:
+        content: The string containing JSON.
+
+    Returns:
+        dict | list: The parsed JSON object or array.
+
+    Raises:
+        json.JSONDecodeError: If parsing fails even after cleanup.
+    """
+    if not content:
+        raise json.JSONDecodeError("Empty content", "", 0)
+
+    # 1. Plan A: Strict Mode (Fastest)
+    try:
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # 2. Plan B: Regex Fallback (Cleanup)
+    cleaned = _clean_json_output(content)
+    try:
+        return json.loads(cleaned)
+    except (json.JSONDecodeError, TypeError) as e:
+        # If it still fails, we propagate the error.
+        # Higher level logic determines if a retry is needed (Network/System),
+        # but valid JSON failure is final here.
+        raise e
+
+
+
 def _create_tool_wrapper(tool):
     """
     Cria um wrapper para ferramentas que trata o input corretamente.
@@ -98,28 +137,15 @@ def _create_tool_wrapper(tool):
                 logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
 
                 try:
-                    # Limpa o argumento de forma agressiva
-                    cleaned = arg.strip()
+                    # Usa a estratégia unificada Strict + Regex
+                    parsed = parse_json_strict(arg)
 
-                    # Remove markdown code fences (```json, ```, etc)
-                    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-                    cleaned = re.sub(r"\s*```$", "", cleaned)
-                    cleaned = cleaned.strip()
-
-                    # Remove quebras de linha e espaços extras dentro do JSON
-                    # (mas preserva \n dentro de strings)
-                    if cleaned.startswith("{") and cleaned.endswith("}"):
-                        logger.debug(
-                            f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}"
+                    if isinstance(parsed, dict):
+                        logger.info(
+                            f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
                         )
-                        parsed = json.loads(cleaned)
-
-                        if isinstance(parsed, dict):
-                            logger.info(
-                                f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
-                            )
-                            # Chama a função com os parâmetros corretos
-                            return await original_func(**parsed)
+                        # Chama a função com os parâmetros corretos
+                        return await original_func(**parsed)
 
                 except (json.JSONDecodeError, TypeError) as e:
                     logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
@@ -149,28 +175,15 @@ def _create_tool_wrapper(tool):
                 logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
 
                 try:
-                    # Limpa o argumento de forma agressiva
-                    cleaned = arg.strip()
+                    # Usa a estratégia unificada Strict + Regex
+                    parsed = parse_json_strict(arg)
 
-                    # Remove markdown code fences (```json, ```, etc)
-                    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-                    cleaned = re.sub(r"\s*```$", "", cleaned)
-                    cleaned = cleaned.strip()
-
-                    # Remove quebras de linha e espaços extras dentro do JSON
-                    # (mas preserva \n dentro de strings)
-                    if cleaned.startswith("{") and cleaned.endswith("}"):
-                        logger.debug(
-                            f"[WRAPPER] {tool_name} - JSON detectado após limpeza: {cleaned[:150]}"
+                    if isinstance(parsed, dict):
+                        logger.info(
+                            f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
                         )
-                        parsed = json.loads(cleaned)
-
-                        if isinstance(parsed, dict):
-                            logger.info(
-                                f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
-                            )
-                            # Chama a função com os parâmetros corretos
-                            return original_func(**parsed)
+                        # Chama a função com os parâmetros corretos
+                        return original_func(**parsed)
 
                 except (json.JSONDecodeError, TypeError) as e:
                     logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")

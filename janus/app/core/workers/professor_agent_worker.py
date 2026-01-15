@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.agents.utils import parse_json_strict
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -50,19 +51,9 @@ def _build_review_prompt(state: TaskState) -> str:
 
 
 def _parse_review_json(review_text: str) -> dict[str, Any]:
-    """Parse JSON response from LLM, handling potential markdown blocks."""
+    """Parse JSON response from LLM using strict mode + regex fallback."""
     try:
-        # Tenta extrair JSON de blocos markdown se houver
-        match = re.search(r"```json\n(.*?)\n```", review_text, re.DOTALL)
-        if match:
-            clean_text = match.group(1)
-        else:
-            clean_text = review_text.strip()
-            # Remove possíveis backticks soltos
-            if clean_text.startswith("```"):
-                clean_text = clean_text.strip("`")
-
-        return json.loads(clean_text)
+        return parse_json_strict(review_text)
     except Exception:
         # Fallback para parsing manual "sujo" ou rejeição por padrão em caso de erro grave
         logger.warning(f"Falha ao parsear JSON do Professor: {review_text[:100]}...")

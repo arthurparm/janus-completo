@@ -174,6 +174,18 @@ class AppSettings(BaseSettings):
         "grok-2",
         "grok-2-1212",
     ]
+    OPENROUTER_API_KEY: SecretStr | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL_NAME: str = "deepseek/deepseek-r1-0528:free"
+    EMBEDDINGS_OPENROUTER_MODEL_NAME: str = "qwen/qwen3-embedding-8b"
+    OPENROUTER_MODELS: list[str] = [
+        "deepseek/deepseek-r1-0528:free",
+        "qwen/qwen3-coder:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+        "meta-llama/llama-3.1-405b-instruct:free",
+        "tngtech/deepseek-r1t-chimera:free",
+    ]
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor
@@ -182,6 +194,7 @@ class AppSettings(BaseSettings):
     OLLAMA_MONTHLY_BUDGET_USD: float = 0.0
     DEEPSEEK_MONTHLY_BUDGET_USD: float = 10.0
     XAI_MONTHLY_BUDGET_USD: float = 10.0
+    OPENROUTER_MONTHLY_BUDGET_USD: float = 5.0
     # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spend >= this % of total budget
     BUDGET_THRESHOLD_PERCENT: float = 0.90
 
@@ -210,6 +223,8 @@ class AppSettings(BaseSettings):
     DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.00007
     XAI_COST_PER_1K_INPUT_USD: float = 0.00020
     XAI_COST_PER_1K_OUTPUT_USD: float = 0.00050
+    OPENROUTER_COST_PER_1K_INPUT_USD: float = 0.0
+    OPENROUTER_COST_PER_1K_OUTPUT_USD: float = 0.0
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
     OLLAMA_KEEP_ALIVE: str | None = "30m"  # mantém modelos carregados para reduzir cold-start
     OLLAMA_NUM_CTX: int | None = 4096  # contexto máximo por requisição
@@ -217,8 +232,31 @@ class AppSettings(BaseSettings):
     OLLAMA_NUM_BATCH: int | None = None  # tamanho de batch de tokens
     OLLAMA_GPU_LAYERS: int | None = None  # camadas na GPU (auto se None)
 
-    # Modularidade: candidatos por papel (ex.: "orchestrator": ["openai:gpt-4o", "google_gemini:gemini-2.5-pro"])
-    LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {}
+    # Modularidade: candidatos por papel
+    # ESTRATÉGIA: OPENROUTER FIRST -> LOCAL FALLBACK
+    LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {
+        "orchestrator": [
+            "openrouter:deepseek/deepseek-r1-0528:free",
+            "openrouter:google/gemini-2.0-flash-exp:free",
+            "openrouter:tngtech/deepseek-r1t-chimera:free",
+            # Fallback Local se OpenRouter falhar/limitar
+            "ollama:deepseek-r1:14b",
+        ],
+        "code_generator": [
+            "openrouter:qwen/qwen3-coder:free",
+            "openrouter:deepseek/deepseek-r1-0528:free",
+            "openrouter:mistralai/devstral-2512:free",
+            # Fallback Local
+            "ollama:qwen2.5-coder:32b",
+        ],
+        "knowledge_curator": [
+            "openrouter:meta-llama/llama-3.3-70b-instruct:free",
+            "openrouter:meta-llama/llama-3.1-405b-instruct:free",
+            "openrouter:nvidia/nemotron-3-nano-30b-a3b:free",
+            # Fallback Local
+            "ollama:qwen2.5:14b",
+        ]
+    }
 
     # Tabelas de preço por modelo (se ausente, usa preço default do provedor)
     OPENAI_MODEL_PRICING: dict[str, dict[str, float]] = {
@@ -262,6 +300,11 @@ class AppSettings(BaseSettings):
             "input_per_1k_usd": 0.00025,
             "output_per_1k_usd": 0.00060,
         },
+    }
+    OPENROUTER_MODEL_PRICING: dict[str, dict[str, float]] = {
+        "deepseek/deepseek-r1-0528:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+        "qwen/qwen3-coder:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+        "meta-llama/llama-3.3-70b-instruct:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
@@ -468,6 +511,7 @@ class AppSettings(BaseSettings):
         "GEMINI_MODEL_PRICING",
         "DEEPSEEK_MODEL_PRICING",
         "XAI_MODEL_PRICING",
+        "OPENROUTER_MODEL_PRICING",
         mode="before",
     )
     def _parse_model_pricing(cls, v: Any):
