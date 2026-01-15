@@ -7,8 +7,8 @@ import { AuthService } from '../../../core/auth/auth.service'
 import { LoadingComponent } from '../../../shared/components/loading/loading.component'
 import { ErrorComponent } from '../../../shared/components/error/error.component'
 import { FormComponent } from '../../../shared/components/form/form.component'
-import { MatButtonModule } from '@angular/material/button'
-import { MatIconModule } from '@angular/material/icon'
+import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
+import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component'
 
 @Component({
   selector: 'app-login-new',
@@ -18,8 +18,8 @@ import { MatIconModule } from '@angular/material/icon'
     LoadingComponent,
     ErrorComponent,
     FormComponent,
-    MatButtonModule,
-    MatIconModule
+    UiButtonComponent,
+    UiIconComponent
   ],
   template: `
     <section class="login">
@@ -66,20 +66,22 @@ import { MatIconModule } from '@angular/material/icon'
           
           <div class="sso-buttons">
             <button 
-              mat-button 
-              class="sso-button google"
+              ui-button 
+              variant="outline"
+              class="w-full justify-center gap-2 h-10 border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
               (click)="loginWithGoogle()"
               [disabled]="isSubmitting">
-              <mat-icon>login</mat-icon>
+              <ui-icon class="text-red-500 scale-75">login</ui-icon>
               Continuar com Google
             </button>
             
             <button 
-              mat-button 
-              class="sso-button github"
+              ui-button 
+              variant="outline"
+              class="w-full justify-center gap-2 h-10 border-gray-300 text-gray-800 hover:bg-gray-50 bg-white"
               (click)="loginWithGithub()"
               [disabled]="isSubmitting">
-              <mat-icon>code</mat-icon>
+              <ui-icon class="scale-75">code</ui-icon>
               Continuar com GitHub
             </button>
           </div>
@@ -338,7 +340,7 @@ export class LoginNewComponent {
     try {
       const { email, password, remember } = event.value
       const ok = await this.auth.loginWithPassword(email, password, remember)
-      
+
       if (ok) {
         this.uiService.showSuccess('Login realizado com sucesso!')
         await new Promise(resolve => setTimeout(resolve, 100))
@@ -361,7 +363,7 @@ export class LoginNewComponent {
 
   async loginWithGoogle() {
     if (this.isSubmitting) return
-    
+
     this.isSubmitting = true
     try {
       const ok = await this.auth.loginWithProvider('google')
@@ -381,7 +383,7 @@ export class LoginNewComponent {
 
   async loginWithGithub() {
     if (this.isSubmitting) return
-    
+
     this.isSubmitting = true
     try {
       const ok = await this.auth.loginWithProvider('github')

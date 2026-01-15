@@ -126,6 +126,7 @@ export interface ChatMessage {
   timestamp: number;
   citations?: Citation[]
   reasoning?: string;
+  ui?: { type: string; data: any };
 }
 
 export interface Tool {
