@@ -8,11 +8,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
         primary: {
-          DEFAULT: 'var(--janus-primary)',
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
           hover: 'var(--janus-primary-hover)',
           dim: 'var(--janus-primary-dim)',
-          50: '#eff6ff', // Keep these for legacy or specific shade needs if not covered by vars
+          50: '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
@@ -25,7 +31,8 @@ module.exports = {
           950: '#172554'
         },
         secondary: {
-          DEFAULT: 'var(--janus-secondary)',
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
           50: '#fdf4ff',
           100: '#fae8ff',
           200: '#f5d0fe',
@@ -38,8 +45,17 @@ module.exports = {
           900: '#701a75',
           950: '#4a044e'
         },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
         accent: {
-          DEFAULT: 'var(--janus-accent)',
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
           50: '#f0fdfa',
           100: '#ccfbf1',
           200: '#99f6e4',
@@ -52,6 +68,15 @@ module.exports = {
           900: '#134e4a',
           950: '#042f2e'
         },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
+        },
+        // Legacy Janus Tokens (Mapped to keep compatibility)
         dark: {
           bg: 'var(--janus-bg-dark)',
           card: 'var(--janus-bg-card)',
@@ -70,9 +95,9 @@ module.exports = {
           950: '#020617'
         },
         text: {
-            primary: 'var(--janus-text-primary)',
-            secondary: 'var(--janus-text-secondary)',
-            muted: 'var(--janus-text-muted)',
+          primary: 'var(--janus-text-primary)',
+          secondary: 'var(--janus-text-secondary)',
+          muted: 'var(--janus-text-muted)',
         }
       },
       fontFamily: {

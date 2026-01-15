@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, inject } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
+import { UiSpinnerComponent } from '../ui/spinner/spinner.component'
 import { LoadingStateService } from '../../../core/services/loading-state.service'
 
 /**
@@ -10,16 +10,15 @@ import { LoadingStateService } from '../../../core/services/loading-state.servic
 @Component({
   selector: 'app-loading',
   standalone: true,
-  imports: [CommonModule, MatProgressSpinnerModule],
+  imports: [CommonModule, UiSpinnerComponent],
   template: `
     <div *ngIf="actualLoading" class="loading-container" [class.overlay]="overlay">
       <div class="loading-content">
-        <mat-spinner 
+        <ui-spinner 
           *ngIf="showSpinner"
           [diameter]="diameter" 
-          [color]="color"
-          [mode]="mode">
-        </mat-spinner>
+          [color]="color">
+        </ui-spinner>
         <p *ngIf="showMessage && actualMessage" class="loading-message">{{ actualMessage }}</p>
         <p *ngIf="subMessage" class="loading-submessage">{{ subMessage }}</p>
       </div>
@@ -73,7 +72,7 @@ import { LoadingStateService } from '../../../core/services/loading-state.servic
 })
 export class LoadingComponent {
   private readonly loadingStateService = inject(LoadingStateService)
-  
+
   @Input() isLoading = false
   @Input() message = ''
   @Input() subMessage = ''

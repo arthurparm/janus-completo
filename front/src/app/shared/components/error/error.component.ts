@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { MatIconModule } from '@angular/material/icon'
-import { MatButtonModule } from '@angular/material/button'
+import { UiIconComponent } from '../ui/icon/icon.component'
+import { UiButtonComponent } from '../ui/button/button.component'
 import { ComponentSize, ComponentColor } from '../../../core/types'
 
 export interface ErrorAction {
@@ -18,11 +18,11 @@ export interface ErrorAction {
 @Component({
   selector: 'app-error',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, UiIconComponent, UiButtonComponent],
   template: `
     <div class="error-container" [class.small]="size === 'small'">
       <div class="error-icon">
-        <mat-icon [style.color]="iconColor">{{ icon }}</mat-icon>
+        <ui-icon [style.color]="iconColor" [size]="size === 'small' ? 'sm' : 'lg'">{{ icon }}</ui-icon>
       </div>
       
       <div class="error-content">
@@ -32,8 +32,8 @@ export interface ErrorAction {
         
         <div *ngIf="actions && actions.length > 0" class="error-actions">
           <button *ngFor="let action of actions" 
-                  mat-button 
-                  [color]="getButtonColor(action.type)"
+                  ui-button
+                  [variant]="action.type === 'secondary' ? 'secondary' : (action.type === 'danger' ? 'destructive' : 'default')"
                   (click)="handleAction(action)">
             {{ action.label }}
           </button>
@@ -41,10 +41,12 @@ export interface ErrorAction {
       </div>
       
       <button *ngIf="dismissible" 
-              mat-icon-button 
+              ui-button
+              variant="ghost"
+              size="icon"
               class="close-button"
               (click)="dismiss.emit()">
-        <mat-icon>close</mat-icon>
+        <ui-icon>close</ui-icon>
       </button>
     </div>
   `,

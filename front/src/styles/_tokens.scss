@@ -41,6 +41,27 @@
   /* Transitions */
   --janus-transition-fast: 150ms ease;
   --janus-transition-normal: 300ms ease;
+
+  /* Shadcn/UI Compatibility (Mapped) */
+  --background: var(--janus-bg-dark);
+  --foreground: var(--janus-text-primary);
+  --card: var(--janus-bg-card);
+  --card-foreground: var(--janus-text-primary);
+  --popover: var(--janus-bg-surface);
+  --popover-foreground: var(--janus-text-primary);
+  --primary: var(--janus-primary);
+  --primary-foreground: #000000;
+  --secondary: var(--janus-secondary);
+  --secondary-foreground: #000000;
+  --muted: var(--janus-bg-surface);
+  --muted-foreground: var(--janus-text-muted);
+  --accent: var(--janus-bg-surface);
+  --accent-foreground: var(--janus-primary);
+  --destructive: var(--janus-accent);
+  --destructive-foreground: #ffffff;
+  --border: var(--janus-border);
+  --input: var(--janus-border);
+  --ring: var(--janus-primary);
 }
 
 /* Light Mode Override (Future Proofing) */

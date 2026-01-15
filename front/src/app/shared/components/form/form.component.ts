@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, TemplateRef, ContentChild } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormGroup, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms'
-import { MatButtonModule } from '@angular/material/button'
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
+import { UiButtonComponent } from '../ui/button/button.component'
+import { UiSpinnerComponent } from '../ui/spinner/spinner.component'
 import { Subject, takeUntil } from 'rxjs'
 
 export interface FormField {
@@ -45,8 +45,8 @@ export interface FormSubmitEvent {
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatButtonModule,
-    MatProgressSpinnerModule
+    UiButtonComponent,
+    UiSpinnerComponent
   ],
   template: `
     <form [formGroup]="form" (ngSubmit)="onSubmit()" class="app-form">
@@ -96,7 +96,9 @@ export interface FormSubmitEvent {
         <button
           *ngIf="config.showCancel !== false"
           type="button"
-          mat-button
+          type="button"
+          ui-button
+          variant="outline"
           (click)="onCancel()"
           [disabled]="isSubmitting"
           class="cancel-button">
@@ -105,12 +107,12 @@ export interface FormSubmitEvent {
 
         <button
           type="submit"
-          mat-raised-button
-          color="primary"
+          type="submit"
+          ui-button
           [disabled]="form.invalid || isSubmitting"
           class="submit-button">
           <span *ngIf="!isSubmitting">{{ config.submitButtonText || 'Enviar' }}</span>
-          <mat-spinner *ngIf="isSubmitting" diameter="20"></mat-spinner>
+          <ui-spinner *ngIf="isSubmitting" size="sm"></ui-spinner>
         </button>
       </div>
 
@@ -263,7 +265,7 @@ export class FormComponent implements OnInit, OnDestroy {
   @Input() initialValues: any = {}
   @Input() isSubmitting = false
   @Input() submitError = ''
-  
+
   @Output() submitted = new EventEmitter<FormSubmitEvent>()
   @Output() cancelled = new EventEmitter<void>()
   @Output() valueChanged = new EventEmitter<any>()
@@ -273,7 +275,7 @@ export class FormComponent implements OnInit, OnDestroy {
   form!: FormGroup
   private destroy$ = new Subject<void>()
 
-  constructor(private fb: FormBuilder) {}
+  constructor(private fb: FormBuilder) { }
 
   ngOnInit() {
     this.buildForm()
@@ -291,23 +293,23 @@ export class FormComponent implements OnInit, OnDestroy {
 
     this.config.fields.forEach(field => {
       const validators = []
-      
+
       if (field.required) {
         validators.push(Validators.required)
       }
-      
+
       if (field.validation?.minLength) {
         validators.push(Validators.minLength(field.validation.minLength))
       }
-      
+
       if (field.validation?.maxLength) {
         validators.push(Validators.maxLength(field.validation.maxLength))
       }
-      
+
       if (field.validation?.pattern) {
         validators.push(Validators.pattern(field.validation.pattern))
       }
-      
+
       if (field.validation?.custom) {
         validators.push(this.createCustomValidator(field.validation.custom))
       }
@@ -356,23 +358,23 @@ export class FormComponent implements OnInit, OnDestroy {
     if (errors['required']) {
       return 'Este campo é obrigatório'
     }
-    
+
     if (errors['email']) {
       return 'Por favor, insira um email válido'
     }
-    
+
     if (errors['minlength']) {
       return `Mínimo ${errors['minlength'].requiredLength} caracteres`
     }
-    
+
     if (errors['maxlength']) {
       return `Máximo ${errors['maxlength'].requiredLength} caracteres`
     }
-    
+
     if (errors['pattern']) {
       return field?.validation?.patternMessage || 'Formato inválido'
     }
-    
+
     if (errors['custom']) {
       return errors['custom']
     }

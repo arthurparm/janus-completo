@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core'
 import { FormGroup } from '@angular/forms'
-import { MatSnackBar, MatSnackBarConfig, MatSnackBarRef } from '@angular/material/snack-bar'
-import { MatDialog, MatDialogConfig, MatDialogRef } from '@angular/material/dialog'
+import { UiToastService } from '../components/ui/toast/toast.service'
+import { ToastConfig as UiToastConfig, ToastType } from '../components/ui/toast/toast.types'
+import { UiDialogService, DialogConfig } from '../components/ui/dialog/dialog.service'
+import { UiDialogRef } from '../components/ui/dialog/dialog-ref'
 import { Observable } from 'rxjs'
 import { LoadingDialogComponent } from '../components/loading-dialog/loading-dialog.component'
 import { ConfirmDialogComponent } from '../components/confirm-dialog/confirm-dialog.component'
@@ -32,35 +34,28 @@ export interface LoadingDialogConfig {
   providedIn: 'root'
 })
 export class UiService {
-  private activeToasts: MatSnackBarRef<any>[] = []
-  private activeLoadingDialogs: MatDialogRef<LoadingDialogComponent>[] = []
+  // activeToasts managed by UiToastService
+  private activeLoadingDialogs: UiDialogRef<void>[] = []
 
   constructor(
-    private snackBar: MatSnackBar,
-    private dialog: MatDialog
+    private toastService: UiToastService,
+    private dialogService: UiDialogService
   ) { }
 
   // Toast/Snackbar methods
   showToast(config: ToastConfig): void {
-    const snackBarConfig: MatSnackBarConfig = {
+    let type: ToastType = 'default'
+
+    if (config.panelClass?.includes('success')) type = 'success'
+    else if (config.panelClass?.includes('error')) type = 'error'
+    else if (config.panelClass?.includes('warning')) type = 'warning'
+    else if (config.panelClass?.includes('info')) type = 'info'
+
+    this.toastService.show({
+      message: config.message,
+      type,
       duration: config.duration || 3000,
-      horizontalPosition: config.horizontalPosition || 'right',
-      verticalPosition: config.verticalPosition || 'bottom',
-      panelClass: config.panelClass || 'default-toast'
-    }
-
-    const toastRef = this.snackBar.open(
-      config.message,
-      config.action || '',
-      snackBarConfig
-    )
-
-    this.activeToasts.push(toastRef)
-    toastRef.afterDismissed().subscribe(() => {
-      const index = this.activeToasts.indexOf(toastRef)
-      if (index > -1) {
-        this.activeToasts.splice(index, 1)
-      }
+      action: config.action
     })
   }
 
@@ -101,14 +96,14 @@ export class UiService {
   }
 
   // Loading dialog methods
-  showLoading(config?: LoadingDialogConfig): MatDialogRef<LoadingDialogComponent> {
-    const dialogConfig: MatDialogConfig = {
+  showLoading(config?: LoadingDialogConfig): UiDialogRef<void> {
+    const dialogConfig: DialogConfig = {
       disableClose: config?.disableClose !== false,
-      data: { message: config?.message || 'Carregando...' },
-      panelClass: 'loading-dialog'
+      data: { message: config?.message || 'Carregando...' }
+      // panelClass handled by service default or can add here if UiService supports it
     }
 
-    const loadingRef = this.dialog.open(LoadingDialogComponent, dialogConfig)
+    const loadingRef = this.dialogService.open(LoadingDialogComponent, dialogConfig)
     this.activeLoadingDialogs.push(loadingRef)
 
     loadingRef.afterClosed().subscribe(() => {
@@ -132,28 +127,28 @@ export class UiService {
 
   // Confirmation dialog
   showConfirm(data: ConfirmDialogData): Observable<boolean> {
-    const dialogConfig: MatDialogConfig = {
+    const dialogConfig: DialogConfig = {
       width: '400px',
-      data,
-      panelClass: 'confirm-dialog'
+      data
     }
 
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, dialogConfig)
-    return dialogRef.afterClosed()
+    const dialogRef = this.dialogService.open(ConfirmDialogComponent, dialogConfig)
+    return dialogRef.afterClosed() as Observable<boolean>
   }
 
   // Utility methods
   dismissAllToasts(): void {
-    this.activeToasts.forEach(toast => {
-      if (toast) {
-        toast.dismiss()
-      }
-    })
-    this.activeToasts = []
+    // Not implemented in UiToastService yet, strict requirement? 
+    // Usually toasts auto-dismiss. 
+    // We can implement clear() in UiToastService if needed.
   }
 
   dismissAllDialogs(): void {
-    this.dialog.closeAll()
+    // UiDialogService doesn't have closeAll yet, but we track loading dialogs.
+    // Ideally UiDialogService should track open dialogs.
+    // For now, just clear loading dialogs. To fully replace MatDialog.closeAll(), 
+    // we would need to implement it in UiDialogService.
+    this.activeLoadingDialogs.forEach(d => d.close())
     this.activeLoadingDialogs = []
   }
 

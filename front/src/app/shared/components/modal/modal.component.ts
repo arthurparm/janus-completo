@@ -1,9 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog'
-import { MatButtonModule } from '@angular/material/button'
-import { MatIconModule } from '@angular/material/icon'
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
+import { UiButtonComponent } from '../ui/button/button.component'
+import { UiIconComponent } from '../ui/icon/icon.component'
+import { UiSpinnerComponent } from '../ui/spinner/spinner.component'
 
 export interface ModalAction {
   label: string
@@ -27,10 +26,9 @@ export interface ModalConfig {
   standalone: true,
   imports: [
     CommonModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule
+    UiButtonComponent,
+    UiIconComponent,
+    UiSpinnerComponent
   ],
   template: `
     <div class="modal-overlay" *ngIf="isOpen" (click)="onBackdropClick($event)">
@@ -40,10 +38,10 @@ export interface ModalConfig {
           <h2 class="modal-title">{{ config.title }}</h2>
           <button 
             *ngIf="config.closable !== false" 
-            class="modal-close" 
+            ui-button variant="ghost" size="icon"
             (click)="close()"
             aria-label="Close modal">
-            <mat-icon>close</mat-icon>
+            <ui-icon>close</ui-icon>
           </button>
         </div>
 
@@ -57,12 +55,13 @@ export interface ModalConfig {
           <div class="modal-actions">
             <button
               *ngFor="let action of actions; let i = index"
-              [class]="getActionButtonClasses(action)"
+              ui-button 
+              [variant]="getButtonVariant(action)"
               [disabled]="action.disabled || action.loading"
               (click)="handleAction(action)"
               [attr.data-testid]="'modal-action-' + i">
               <span *ngIf="!action.loading">{{ action.label }}</span>
-              <mat-spinner *ngIf="action.loading" diameter="20"></mat-spinner>
+              <ui-spinner *ngIf="action.loading" [size]="20" color="white"></ui-spinner>
             </button>
           </div>
         </div>
@@ -119,94 +118,7 @@ export interface ModalConfig {
       color: var(--janus-text-primary);
     }
 
-    .modal-close {
-      background: none;
-      border: none;
-      padding: 4px;
-      cursor: pointer;
-      color: var(--janus-text-secondary);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .modal-close:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-      color: var(--janus-text-primary);
-    }
-
-    .modal-body {
-      flex: 1;
-      padding: var(--janus-spacing-lg);
-      overflow-y: auto;
-      color: var(--janus-text-secondary);
-    }
-
-    .modal-body.scrollable {
-      max-height: 60vh;
-    }
-
-    .modal-footer {
-      padding: var(--janus-spacing-md) var(--janus-spacing-lg);
-      border-top: 1px solid var(--janus-border);
-      display: flex;
-      justify-content: flex-end;
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: var(--janus-spacing-sm);
-    }
-
-    .modal-actions button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 16px;
-      border-radius: var(--janus-radius-md);
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.2s;
-      min-width: 88px;
-    }
-
-    .action-primary {
-      background-color: var(--janus-primary);
-      color: var(--janus-bg-dark);
-    }
-    .action-primary:hover:not(:disabled) {
-      background-color: var(--janus-primary-hover);
-      box-shadow: 0 0 10px rgba(0, 255, 157, 0.3);
-    }
-
-    .action-secondary {
-      background-color: transparent;
-      border-color: var(--janus-border);
-      color: var(--janus-text-primary);
-    }
-    .action-secondary:hover:not(:disabled) {
-      background-color: rgba(255, 255, 255, 0.05);
-      border-color: var(--janus-text-secondary);
-    }
-
-    .action-danger {
-      background-color: transparent;
-      border-color: var(--janus-accent);
-      color: var(--janus-accent);
-    }
-    .action-danger:hover:not(:disabled) {
-      background-color: rgba(255, 0, 85, 0.1);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      filter: grayscale(1);
-    }
+    /* Removed obsolete button styles as UiButton handles them */
 
     @keyframes fadeIn {
       from { opacity: 0; }
@@ -237,11 +149,10 @@ export class ModalComponent implements OnInit, OnDestroy {
     scrollable: false
   }
   @Input() actions: ModalAction[] = []
-  
+
   @Output() closed = new EventEmitter<void>()
   @Output() actionExecuted = new EventEmitter<ModalAction>()
 
-  private dialogRef?: MatDialogRef<any>
 
   ngOnInit() {
     if (this.isOpen) {
@@ -284,9 +195,13 @@ export class ModalComponent implements OnInit, OnDestroy {
     return classes.join(' ')
   }
 
-  getActionButtonClasses(action: ModalAction): string {
-    const type = action.type || 'secondary'
-    return `action-${type}`
+  getButtonVariant(action: ModalAction): 'default' | 'secondary' | 'destructive' | 'outline' {
+    switch (action.type) {
+      case 'primary': return 'default';
+      case 'secondary': return 'outline'; // or secondary
+      case 'danger': return 'destructive';
+      default: return 'outline';
+    }
   }
 
   async handleAction(action: ModalAction): Promise<void> {

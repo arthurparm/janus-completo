@@ -1,0 +1,8 @@
+<div class="message-content-container">
+  <ng-container *ngFor="let segment of segments">
+    <div *ngIf="segment.type === 'text'" class="markdown-content" [innerHTML]="segment.content | markdown"></div>
+    <div *ngIf="segment.type === 'dynamic'" class="dynamic-content-wrapper my-4">
+      <app-dynamic-renderer [type]="segment.componentType!" [data]="segment.data"></app-dynamic-renderer>
+    </div>
+  </ng-container>
+</div>

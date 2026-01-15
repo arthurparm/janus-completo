@@ -1,10 +1,8 @@
 import { Component, Input, forwardRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule, ReactiveFormsModule } from '@angular/forms'
-import { MatFormFieldModule } from '@angular/material/form-field'
-import { MatInputModule } from '@angular/material/input'
-import { MatIconModule } from '@angular/material/icon'
-import { MatButtonModule } from '@angular/material/button'
+import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
+import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component'
 
 export interface ValidationRule {
   type: 'required' | 'email' | 'minLength' | 'maxLength' | 'pattern'
@@ -23,10 +21,8 @@ export interface ValidationRule {
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatIconModule,
-    MatButtonModule
+    UiIconComponent,
+    UiButtonComponent
   ],
   providers: [
     {
@@ -36,123 +32,78 @@ export interface ValidationRule {
     }
   ],
   template: `
-    <mat-form-field class="app-input" [class.error]="hasError()" [class.success]="hasSuccess()">
-      <mat-label *ngIf="label">{{ label }}</mat-label>
+    <div class="app-input-container mb-2 w-full" [class.error]="hasError()" [class.success]="hasSuccess()">
+      <label *ngIf="label" class="block text-sm font-medium text-slate-400 mb-1 ml-1">{{ label }}</label>
       
-      <input
-        matInput
-        [type]="type"
-        [placeholder]="placeholder"
-        [disabled]="disabled"
-        [readonly]="readonly"
-        [(ngModel)]="value"
-        (ngModelChange)="onChange($event)"
-        (blur)="onTouched()"
-        (focus)="onFocus()"
-        [autocomplete]="autocomplete"
-      />
-      
-      <!-- Ícone prefix -->
-      <mat-icon *ngIf="prefixIcon" matPrefix>{{ prefixIcon }}</mat-icon>
-      
-      <!-- Ícone sufix -->
-      <mat-icon *ngIf="suffixIcon" matSuffix>{{ suffixIcon }}</mat-icon>
-      
-      <!-- Botão clear -->
-      <button
-        *ngIf="showClear && value && !disabled"
-        mat-icon-button
-        matSuffix
-        (click)="clear()"
-        type="button"
-        aria-label="Clear"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
-      
-      <!-- Botão de visibilidade para senhas -->
-      <button
-        *ngIf="type === 'password' && showPasswordToggle"
-        mat-icon-button
-        matSuffix
-        (click)="togglePasswordVisibility()"
-        type="button"
-        [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
-      >
-        <mat-icon>{{ showPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
-      </button>
+      <div class="input-wrapper relative flex items-center bg-slate-950 border border-slate-700 rounded-lg transition-all focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500"
+          [class.border-red-500]="hasError()"
+          [class.border-green-500]="hasSuccess()"
+          [class.bg-slate-900]="disabled"
+          [class.cursor-not-allowed]="disabled">
+          
+        <!-- Ícone prefix -->
+        <div *ngIf="prefixIcon" class="pl-3 text-slate-500 flex items-center justify-center">
+            <ui-icon class="text-lg">{{ prefixIcon }}</ui-icon>
+        </div>
+        
+        <input
+            class="w-full bg-transparent border-none text-white text-sm px-3 py-2.5 focus:outline-none disabled:cursor-not-allowed placeholder-slate-600"
+            [type]="type"
+            [placeholder]="placeholder"
+            [disabled]="disabled"
+            [readonly]="readonly"
+            [(ngModel)]="value"
+            (ngModelChange)="onChange($event)"
+            (blur)="onTouched()"
+            (focus)="onFocus()"
+            [autocomplete]="autocomplete"
+        />
+        
+        <div class="actions flex items-center pr-2 gap-1">
+            <!-- Botão clear -->
+            <button
+                *ngIf="showClear && value && !disabled"
+                class="p-1 text-slate-500 hover:text-white rounded-full transition-colors"
+                (click)="clear()"
+                type="button"
+                aria-label="Clear"
+            >
+                <ui-icon class="text-sm">close</ui-icon>
+            </button>
+            
+            <!-- Botão de visibilidade para senhas -->
+            <button
+                *ngIf="type === 'password' && showPasswordToggle"
+                class="p-1 text-slate-500 hover:text-white rounded-full transition-colors"
+                (click)="togglePasswordVisibility()"
+                type="button"
+                [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+            >
+                <ui-icon class="text-lg">{{ showPassword ? 'visibility_off' : 'visibility' }}</ui-icon>
+            </button>
+            
+            <!-- Ícone sufix -->
+            <ui-icon *ngIf="suffixIcon" class="text-slate-500 text-lg mr-1">{{ suffixIcon }}</ui-icon>
+        </div>
+      </div>
       
       <!-- Hint -->
-      <mat-hint *ngIf="hint && !hasError()">{{ hint }}</mat-hint>
+      <div *ngIf="hint && !hasError()" class="mt-1 text-xs text-slate-500 ml-1">{{ hint }}</div>
       
       <!-- Erros de validação -->
-      <mat-error *ngIf="hasError()">
-        <mat-icon>error_outline</mat-icon>
+      <div *ngIf="hasError()" class="mt-1 text-xs text-red-400 flex items-center gap-1 ml-1">
+        <ui-icon class="text-sm">error_outline</ui-icon>
         {{ getErrorMessage() }}
-      </mat-error>
+      </div>
       
       <!-- Sucesso -->
-      <mat-hint *ngIf="hasSuccess() && successMessage" class="success-message">
-        <mat-icon>check_circle</mat-icon>
+      <div *ngIf="hasSuccess() && successMessage" class="mt-1 text-xs text-green-400 flex items-center gap-1 ml-1">
+        <ui-icon class="text-sm">check_circle</ui-icon>
         {{ successMessage }}
-      </mat-hint>
-    </mat-form-field>
+      </div>
+    </div>
   `,
-  styles: [`
-    .app-input {
-      width: 100%;
-      margin-bottom: 0.5rem;
-    }
-
-    .app-input.error {
-      --mdc-filled-text-field-error-active-indicator-color: var(--janus-accent);
-    }
-
-    .app-input.success {
-      --mdc-filled-text-field-active-indicator-color: var(--janus-primary);
-    }
-
-    mat-error, .success-message {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.875rem;
-    }
-
-    mat-error {
-        color: var(--janus-accent);
-    }
-    
-    .success-message {
-        color: var(--janus-primary);
-    }
-
-    mat-error mat-icon, .success-message mat-icon {
-      font-size: 1rem;
-      width: 1rem;
-      height: 1rem;
-    }
-
-    /* Estados de foco */
-    .app-input:focus-within {
-      transform: translateY(-1px);
-      transition: transform 0.2s ease;
-    }
-
-    /* Tamanhos */
-    :host(.small) .app-input {
-      font-size: 0.875rem;
-    }
-
-    :host(.large) .app-input {
-      font-size: 1.125rem;
-    }
-
-    /* Variante outline */
-    :host(.outline) .app-input {
-      --mdc-outlined-text-field-container-shape: 8px;
-    }
-  `]
+  styles: []
 })
 export class InputComponent implements ControlValueAccessor {
   @Input() label = ''
@@ -179,8 +130,8 @@ export class InputComponent implements ControlValueAccessor {
   showPassword = false
   errors: string[] = []
 
-  onChange = (value: string) => {}
-  onTouched = () => {}
+  onChange = (value: string) => { }
+  onTouched = () => { }
 
   writeValue(value: string): void {
     this.value = value
@@ -215,7 +166,7 @@ export class InputComponent implements ControlValueAccessor {
 
   validate(): void {
     this.errors = []
-    
+
     for (const rule of this.validations) {
       const isValid = this.validateRule(rule)
       if (!isValid) {
@@ -245,7 +196,7 @@ export class InputComponent implements ControlValueAccessor {
     return this.errors.length > 0
   }
 
- get showSuccess(): boolean {
+  get showSuccess(): boolean {
     return !this.hasError() && this.touched && !!this.successMessage
   }
 

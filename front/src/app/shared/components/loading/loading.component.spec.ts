@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing'
 import { LoadingComponent } from './loading.component'
 import { LoadingStateService } from '../../../core/services/loading-state.service'
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
 import { of } from 'rxjs'
 
 class MockLoadingStateService {
@@ -33,7 +32,7 @@ describe('LoadingComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [LoadingComponent, MatProgressSpinnerModule],
+      imports: [LoadingComponent],
       providers: [
         { provide: LoadingStateService, useClass: MockLoadingStateService }
       ]
@@ -87,7 +86,7 @@ describe('LoadingComponent', () => {
     it('should return isLoading when loadingKey is not provided', () => {
       component.isLoading = true
       expect(component.actualLoading).toBe(true)
-      
+
       component.isLoading = false
       expect(component.actualLoading).toBe(false)
     })
@@ -95,10 +94,10 @@ describe('LoadingComponent', () => {
     it('should return loading state from service when loadingKey is provided', () => {
       component.loadingKey = 'test-key'
       component.isLoading = false
-      
+
       loadingStateService.startLoading('test-key')
       expect(component.actualLoading).toBe(true)
-      
+
       loadingStateService.stopLoading('test-key')
       expect(component.actualLoading).toBe(false)
     })
@@ -113,10 +112,10 @@ describe('LoadingComponent', () => {
     it('should return message from service when loadingKey is provided', () => {
       component.loadingKey = 'test-key'
       component.message = 'Default message'
-      
+
       loadingStateService.startLoading('test-key', { message: 'Service message' })
       expect(component.actualMessage).toBe('Service message')
-      
+
       loadingStateService.stopLoading('test-key')
       expect(component.actualMessage).toBe('Default message') // Falls back to component message
     })
@@ -126,7 +125,7 @@ describe('LoadingComponent', () => {
     it('should show loading container when actualLoading is true', () => {
       component.isLoading = true
       fixture.detectChanges()
-      
+
       const loadingContainer = fixture.nativeElement.querySelector('.loading-container')
       expect(loadingContainer).toBeTruthy()
     })
@@ -134,7 +133,7 @@ describe('LoadingComponent', () => {
     it('should hide loading container when actualLoading is false', () => {
       component.isLoading = false
       fixture.detectChanges()
-      
+
       const loadingContainer = fixture.nativeElement.querySelector('.loading-container')
       expect(loadingContainer).toBeFalsy()
     })
@@ -143,8 +142,8 @@ describe('LoadingComponent', () => {
       component.isLoading = true
       component.showSpinner = true
       fixture.detectChanges()
-      
-      const spinner = fixture.nativeElement.querySelector('mat-spinner')
+
+      const spinner = fixture.nativeElement.querySelector('ui-spinner')
       expect(spinner).toBeTruthy()
     })
 
@@ -152,8 +151,8 @@ describe('LoadingComponent', () => {
       component.isLoading = true
       component.showSpinner = false
       fixture.detectChanges()
-      
-      const spinner = fixture.nativeElement.querySelector('mat-spinner')
+
+      const spinner = fixture.nativeElement.querySelector('ui-spinner')
       expect(spinner).toBeFalsy()
     })
 
@@ -162,7 +161,7 @@ describe('LoadingComponent', () => {
       component.showMessage = true
       component.message = 'Loading message'
       fixture.detectChanges()
-      
+
       const messageElement = fixture.nativeElement.querySelector('.loading-message')
       expect(messageElement).toBeTruthy()
       expect(messageElement.textContent).toContain('Loading message')
@@ -173,7 +172,7 @@ describe('LoadingComponent', () => {
       component.showMessage = false
       component.message = 'Loading message'
       fixture.detectChanges()
-      
+
       const messageElement = fixture.nativeElement.querySelector('.loading-message')
       expect(messageElement).toBeFalsy()
     })
@@ -182,7 +181,7 @@ describe('LoadingComponent', () => {
       component.isLoading = true
       component.overlay = true
       fixture.detectChanges()
-      
+
       const loadingContainer = fixture.nativeElement.querySelector('.loading-container')
       expect(loadingContainer).toHaveClass('overlay')
     })
@@ -190,7 +189,7 @@ describe('LoadingComponent', () => {
     it('should render ng-content when not loading', () => {
       component.isLoading = false
       fixture.detectChanges()
-      
+
       const ngContent = fixture.nativeElement.querySelector('ng-content')
       expect(ngContent).toBeTruthy()
     })

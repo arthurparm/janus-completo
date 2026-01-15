@@ -18,6 +18,7 @@
 @use 'styles/animations' as *;
 @use 'styles/components' as *;
 @use 'styles/markdown' as *;
+@import '@angular/cdk/overlay-prebuilt.css';
 
 // =============================================================================
 // 0. TAILWIND IMPORTS
