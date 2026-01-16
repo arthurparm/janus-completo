@@ -31,7 +31,8 @@ export class DynamicHostComponent implements OnChanges {
     }
 
     private loadComponent() {
-        this.component = this.componentMap[this.type] || null;
+        const normalizedType = (this.type || '').toLowerCase();
+        this.component = this.componentMap[normalizedType] || null;
         this.inputs = { data: this.data };
     }
 }

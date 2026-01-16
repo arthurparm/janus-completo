@@ -260,7 +260,8 @@ export class ChatComponent implements OnInit, OnDestroy {
                 this.messages = res.messages.map(m => {
                     const extracted = this.extractReasoning(m.text);
                     const parsed = this.parseUiElements(extracted.text);
-                    return { ...m, text: parsed.text, reasoning: extracted.reasoning, ui: parsed.ui };
+                    const ui = m.ui ?? parsed.ui;
+                    return { ...m, text: parsed.text, reasoning: extracted.reasoning, ui };
                 });
                 this.title = res.conversation_id;
                 this.loading = false;
@@ -400,11 +401,12 @@ export class ChatComponent implements OnInit, OnDestroy {
                 if (res.response) {
                     const extracted = this.extractReasoning(res.response);
                     const parsed = this.parseUiElements(extracted.text);
+                    const ui = res.ui ?? parsed.ui;
                     const msg: ChatMessage = {
                         role: res.role || 'assistant',
                         text: parsed.text,
                         reasoning: extracted.reasoning || undefined,
-                        ui: parsed.ui,
+                        ui,
                         timestamp: Date.now() / 1000,
                         citations: res.citations
                     };
@@ -517,7 +519,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         if (!text) return { text: '' };
 
         // Regex to capture <janus-ui type="...">JSON</janus-ui>
-        const match = text.match(/<janus-ui\s+type="([^"]+)">([\s\S]*?)<\/janus-ui>/i);
+        const match = text.match(/<janus-ui\s+type\s*=\s*['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/janus-ui>/i);
 
         if (match) {
             const type = match[1];
@@ -529,7 +531,8 @@ export class ChatComponent implements OnInit, OnDestroy {
                 return { text: cleanText, ui: { type, data } };
             } catch (e) {
                 console.error('Failed to parse GenUI JSON', e);
-                return { text };
+                const cleanText = text.replace(match[0], '').trim();
+                return { text: cleanText };
             }
         }
         return { text };

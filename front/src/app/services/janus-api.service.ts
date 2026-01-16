@@ -152,6 +152,7 @@ export interface ChatMessageResponse {
   role: string;
   conversation_id: string;
   citations: Citation[];
+  ui?: { type: string; data: any };
 }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ChatListItem {
