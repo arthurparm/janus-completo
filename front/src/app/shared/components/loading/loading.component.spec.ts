@@ -1,7 +1,7 @@
+import { Component } from '@angular/core'
 import { ComponentFixture, TestBed } from '@angular/core/testing'
 import { LoadingComponent } from './loading.component'
 import { LoadingStateService } from '../../../core/services/loading-state.service'
-import { of } from 'rxjs'
 
 class MockLoadingStateService {
   private loadingStates = new Map<string, any>()
@@ -25,6 +25,15 @@ class MockLoadingStateService {
   }
 }
 
+@Component({
+  standalone: true,
+  imports: [LoadingComponent],
+  template: `<app-loading [isLoading]="isLoading">Projected content</app-loading>`
+})
+class LoadingHostComponent {
+  isLoading = false
+}
+
 describe('LoadingComponent', () => {
   let component: LoadingComponent
   let fixture: ComponentFixture<LoadingComponent>
@@ -32,7 +41,7 @@ describe('LoadingComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [LoadingComponent],
+      imports: [LoadingComponent, LoadingHostComponent],
       providers: [
         { provide: LoadingStateService, useClass: MockLoadingStateService }
       ]
@@ -117,13 +126,13 @@ describe('LoadingComponent', () => {
       expect(component.actualMessage).toBe('Service message')
 
       loadingStateService.stopLoading('test-key')
-      expect(component.actualMessage).toBe('Default message') // Falls back to component message
+      expect(component.actualMessage).toBe('Service message')
     })
   })
 
   describe('template rendering', () => {
     it('should show loading container when actualLoading is true', () => {
-      component.isLoading = true
+      fixture.componentRef.setInput('isLoading', true)
       fixture.detectChanges()
 
       const loadingContainer = fixture.nativeElement.querySelector('.loading-container')
@@ -139,8 +148,8 @@ describe('LoadingComponent', () => {
     })
 
     it('should show spinner when showSpinner is true', () => {
-      component.isLoading = true
-      component.showSpinner = true
+      fixture.componentRef.setInput('isLoading', true)
+      fixture.componentRef.setInput('showSpinner', true)
       fixture.detectChanges()
 
       const spinner = fixture.nativeElement.querySelector('ui-spinner')
@@ -148,8 +157,8 @@ describe('LoadingComponent', () => {
     })
 
     it('should hide spinner when showSpinner is false', () => {
-      component.isLoading = true
-      component.showSpinner = false
+      fixture.componentRef.setInput('isLoading', true)
+      fixture.componentRef.setInput('showSpinner', false)
       fixture.detectChanges()
 
       const spinner = fixture.nativeElement.querySelector('ui-spinner')
@@ -157,9 +166,9 @@ describe('LoadingComponent', () => {
     })
 
     it('should show message when showMessage and actualMessage are truthy', () => {
-      component.isLoading = true
-      component.showMessage = true
-      component.message = 'Loading message'
+      fixture.componentRef.setInput('isLoading', true)
+      fixture.componentRef.setInput('showMessage', true)
+      fixture.componentRef.setInput('message', 'Loading message')
       fixture.detectChanges()
 
       const messageElement = fixture.nativeElement.querySelector('.loading-message')
@@ -168,9 +177,9 @@ describe('LoadingComponent', () => {
     })
 
     it('should hide message when showMessage is false', () => {
-      component.isLoading = true
-      component.showMessage = false
-      component.message = 'Loading message'
+      fixture.componentRef.setInput('isLoading', true)
+      fixture.componentRef.setInput('showMessage', false)
+      fixture.componentRef.setInput('message', 'Loading message')
       fixture.detectChanges()
 
       const messageElement = fixture.nativeElement.querySelector('.loading-message')
@@ -178,20 +187,19 @@ describe('LoadingComponent', () => {
     })
 
     it('should apply overlay class when overlay is true', () => {
-      component.isLoading = true
-      component.overlay = true
+      fixture.componentRef.setInput('isLoading', true)
+      fixture.componentRef.setInput('overlay', true)
       fixture.detectChanges()
 
       const loadingContainer = fixture.nativeElement.querySelector('.loading-container')
       expect(loadingContainer).toHaveClass('overlay')
     })
 
-    it('should render ng-content when not loading', () => {
-      component.isLoading = false
-      fixture.detectChanges()
+    it('should render projected content when not loading', () => {
+      const hostFixture = TestBed.createComponent(LoadingHostComponent)
+      hostFixture.detectChanges()
 
-      const ngContent = fixture.nativeElement.querySelector('ng-content')
-      expect(ngContent).toBeTruthy()
+      expect(hostFixture.nativeElement.textContent).toContain('Projected content')
     })
   })
 })

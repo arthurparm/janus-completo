@@ -94,7 +94,7 @@ describe('SkeletonComponent', () => {
       const variants = ['text', 'rect', 'circle', 'avatar', 'button', 'card', 'paragraph']
       
       variants.forEach(variant => {
-        component.variant = variant as any
+        fixture.componentRef.setInput('variant', variant as any)
         fixture.detectChanges()
         
         const skeletonElement = fixture.nativeElement.querySelector('.skeleton')
@@ -103,7 +103,7 @@ describe('SkeletonComponent', () => {
     })
 
     it('should apply rounded class when rounded is true', () => {
-      component.rounded = true
+      fixture.componentRef.setInput('rounded', true)
       fixture.detectChanges()
       
       const skeletonElement = fixture.nativeElement.querySelector('.skeleton')
@@ -111,7 +111,7 @@ describe('SkeletonComponent', () => {
     })
 
     it('should apply animated class when animated is true', () => {
-      component.animated = true
+      fixture.componentRef.setInput('animated', true)
       fixture.detectChanges()
       
       const wrapperElement = fixture.nativeElement.querySelector('.skeleton-wrapper')
@@ -121,8 +121,8 @@ describe('SkeletonComponent', () => {
 
   describe('template rendering', () => {
     it('should render correct number of skeleton elements', () => {
-      component.count = 3
-      component.variant = 'card'
+      fixture.componentRef.setInput('count', 3)
+      fixture.componentRef.setInput('variant', 'card')
       fixture.detectChanges()
       
       const skeletonElements = fixture.nativeElement.querySelectorAll('.skeleton')
@@ -130,8 +130,8 @@ describe('SkeletonComponent', () => {
     })
 
     it('should apply custom styles when width and height are provided', () => {
-      component.width = 200
-      component.height = 100
+      fixture.componentRef.setInput('width', 200)
+      fixture.componentRef.setInput('height', 100)
       fixture.detectChanges()
       
       const skeletonElement = fixture.nativeElement.querySelector('.skeleton')

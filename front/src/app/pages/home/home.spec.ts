@@ -4,9 +4,11 @@ import {HomeComponent} from './home';
 import {GlobalStateStore} from '../../core/state/global-state.store';
 import {NotificationService} from '../../core/notifications/notification.service';
 import {JanusApiService} from '../../services/janus-api.service';
+import {UiService} from '../../shared/services/ui.service';
+import {of} from 'rxjs';
 
 class MockGlobalStateStore {
-  loading = signal(false);
+  loading = signal(true);
   apiHealthy = signal<'ok' | 'unknown'>('ok');
   systemStatus = signal<{cpu_usage_percent?: number; memory_usage_percent?: number; disk_usage_percent?: number; uptime_seconds?: number}>({
     cpu_usage_percent: 10,
@@ -26,6 +28,16 @@ class MockNotificationService {
 
 class MockJanusApiService {}
 
+class MockUiService {
+  showSuccess(_message: string) {}
+  showInfo(_message: string) {}
+  showWarning(_message: string) {}
+  showToast(_config: { message: string }) {}
+  showLoading(_config?: { message?: string }) { return { close: () => {} } as any; }
+  hideLoading() {}
+  showConfirm(_data: { title: string; message: string }) { return of(false); }
+}
+
 describe('HomeComponent', () => {
   let component: HomeComponent;
   let fixture: ComponentFixture<HomeComponent>;
@@ -36,7 +48,8 @@ describe('HomeComponent', () => {
       providers: [
         { provide: GlobalStateStore, useClass: MockGlobalStateStore },
         { provide: NotificationService, useClass: MockNotificationService },
-        { provide: JanusApiService, useClass: MockJanusApiService }
+        { provide: JanusApiService, useClass: MockJanusApiService },
+        { provide: UiService, useClass: MockUiService }
       ]
     }).compileComponents();
 
