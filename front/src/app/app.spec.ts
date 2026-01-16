@@ -16,10 +16,12 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', () => {
+  it('should render skip link', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, janus-angular');
+    const skipLink = compiled.querySelector('a.skip-link');
+    expect(skipLink).toBeTruthy();
+    expect(skipLink?.getAttribute('href')).toBe('#main-content');
   });
 });
