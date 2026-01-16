@@ -52,11 +52,11 @@ Your role is to break down complex, ambiguous user requests into a structured, e
 
 Return **ONLY** a valid JSON object. No markdown blocks around it if possible, or just the block.
 
-{
+{{
   "request_summary": "Concise summary of intent",
   "decomposition_strategy": "Brief explanation of the approach",
   "tasks": [
-    {
+    {{
       "task_id": "T001",
       "title": "Actionable Title",
       "description": "Detailed instructions for the agent.",
@@ -64,8 +64,8 @@ Return **ONLY** a valid JSON object. No markdown blocks around it if possible, o
       "dependencies": [],
       "priority": 1,
       "acceptance_criteria": ["File X created", "Tests pass"]
-    },
-    {
+    }},
+    {{
       "task_id": "T002",
       "title": "Dependent Task",
       "description": "...",
@@ -73,14 +73,14 @@ Return **ONLY** a valid JSON object. No markdown blocks around it if possible, o
       "dependencies": ["T001"],
       "priority": 2,
       "acceptance_criteria": ["Report generated"]
-    }
+    }}
   ],
-  "execution_plan": {
+  "execution_plan": {{
     "critical_path": ["T001", "T002"],
     "parallel_groups": [],
     "estimated_time_minutes": 20
-  }
-}
+  }}
+}}
 
 <QUALITY_CHECKS>
 *   Are all dependencies valid task_ids?

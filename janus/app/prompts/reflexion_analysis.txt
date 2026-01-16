@@ -1,0 +1,5 @@
+Analyze the following execution failure in the Janus system.
+Error: {error}
+Plan: {plan}
+Context: {context}
+Provide a structured analysis including root cause, error type, and actionable insights for the next attempt.

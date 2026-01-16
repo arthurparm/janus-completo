@@ -31,20 +31,20 @@ Your task is to analyze the provided text and extract structured knowledge in th
 
 Return ONLY a valid JSON object. Do not include markdown formatting (like ```json).
 Schema:
-{
+{{
   "entities": [
-    {
+    {{
       "name": "Entity Name",
       "type": "Person|Organization|Technology|Concept|Event|Location|Resource",
       "description": "Brief description from context"
-    }
+    }}
   ],
   "relationships": [
-    {
+    {{
       "source": "Source Entity Name",
       "target": "Target Entity Name",
       "relation": "RELATIONSHIP_TYPE",
       "weight": 0.0 to 1.0
-    }
+    }}
   ]
-}
+}}

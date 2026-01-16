@@ -207,23 +207,23 @@ Consider caching results for 5min."
 --- ✅ EXCELLENT EXAMPLE ---
 Request: "Need to check disk usage"
 
-{
+{{
     "tool_name": "get_disk_usage",
     "description": "Returns disk usage statistics (percentage used, free bytes, total bytes) for a specified path.",
     "arguments": [
-        {
+        {{
             "name": "path",
             "type": "str",
             "description": "Absolute or relative path to check. Defaults to root directory.",
             "default": "/",
             "constraints": "Must be a valid filesystem path"
-        },
-        {
+        }},
+        {{
             "name": "human_readable",
             "type": "bool",
             "description": "If True, return sizes in human-readable format (KB, MB, GB).",
             "default": "False"
-        }
+        }}
     ],
     "dependencies": ["shutil", "pathlib"],
     "return_type": "Dict[str, Any]",
@@ -237,19 +237,19 @@ Request: "Need to check disk usage"
     ],
     "performance_notes": "I/O operation, typically <100ms for local disk, may take seconds for network paths. Consider timeout.",
     "usage_example": "Check if /var/log is over 80% full before rotation"
-}
+}}
 
 --- ❌ BAD EXAMPLE (DO NOT DO THIS) ---
 Request: "Do system operation"
 
-{
+{{
     "tool_name": "do_stuff",
     "description": "Does things",
     "arguments": [],
     "dependencies": ["os", "subprocess", "requests"],
     "return_type": "str",
     "safety_level": "safe"
-}
+}}
 
 WHY THIS IS BAD:
 - ❌ Vague name ("do_stuff")
@@ -265,17 +265,17 @@ WHY THIS IS BAD:
 
 Return ONLY valid JSON with this exact structure:
 
-{
+{{
     "tool_name": "action_verb_noun",
     "description": "Clear, specific description of what this tool does (max 120 chars).",
     "arguments": [
-        {
+        {{
             "name": "param_name",
             "type": "str|int|float|bool|list|dict",
             "description": "Complete description including format, valid values, purpose",
             "default": "default_value_as_string",
             "constraints": "Validation rules, range, pattern, etc"
-        }
+        }}
     ],
     "dependencies": ["stdlib_module1", "external_lib1"],
     "return_type": "Dict[str, Any]",
@@ -286,7 +286,7 @@ Return ONLY valid JSON with this exact structure:
     ],
     "performance_notes": "Expected time, memory usage, I/O characteristics",
     "usage_example": "Concrete real-world example of when/why this tool would be used"
-}
+}}
 
 <QUALITY_CHECKLIST>
 Before submitting, verify:

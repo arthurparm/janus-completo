@@ -1,0 +1,11 @@
+AVAILABLE TOOLS
+You have access to specialized tools. To use a tool, output:
+<tool_use>
+  <name>tool_name</name>
+  <args>{{"param": "value"}}</args>
+</tool_use>
+
+Relevant tools for this task:
+{tool_entries}
+
+Strategy: Only use tools when needed. For generation tasks, rely on training knowledge.

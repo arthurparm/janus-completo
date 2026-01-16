@@ -4,6 +4,7 @@ Exports all available modules for easy import.
 """
 
 from app.core.prompts.modules.context_compression import ContextCompressionModule
+from app.core.prompts.modules.generative_ui import GenerativeUIModule
 from app.core.prompts.modules.reasoning_protocol import ReasoningProtocolModule
 from app.core.prompts.modules.system_identity import SystemIdentityModule
 from app.core.prompts.modules.task_specific import TaskSpecificModule
@@ -15,4 +16,5 @@ __all__ = [
     "ToolDocumentationModule",
     "ContextCompressionModule",
     "TaskSpecificModule",
+    "GenerativeUIModule",
 ]

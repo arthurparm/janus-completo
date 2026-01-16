@@ -111,8 +111,8 @@ For each change, document:
 <REQUIRED_OUTPUT>
 Return ONLY a valid JSON object:
 
-{
-  "refined_plan": {
+{{
+  "refined_plan": {{
     "plan_id": "plan_<goal_hash>_<timestamp>_v2",
     "goal_summary": "Unchanged from original",
     "prerequisites": [...],
@@ -121,31 +121,31 @@ Return ONLY a valid JSON object:
     "estimated_duration_minutes": 15,
     "risk_assessment": "low|medium|high",
     "risk_mitigations": [...]
-  },
+  }},
   "changes": [
-    {
+    {{
       "issue_addressed": "Reference to critique issue",
       "change_type": "added|modified|removed|reordered",
       "step_affected": 1,
       "description": "What was changed",
       "reasoning": "Why this addresses the issue"
-    }
+    }}
   ],
   "issues_not_addressed": [
-    {
+    {{
       "issue": "Reference to critique issue",
       "reason": "Why it was not addressed",
       "trade_off": "What would be lost by fixing"
-    }
+    }}
   ],
-  "expected_score_improvement": {
+  "expected_score_improvement": {{
     "goal_alignment": "+0",
     "feasibility": "+1",
     "safety": "+2",
     "efficiency": "+1"
-  },
+  }},
   "summary": "Summary of refinements made"
-}
+}}
 </REQUIRED_OUTPUT>
 
 <QUALITY_CHECKLIST>

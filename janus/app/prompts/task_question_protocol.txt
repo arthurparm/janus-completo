@@ -1,0 +1,5 @@
+QUESTION ANSWERING PROTOCOL
+- Check knowledge: use query_knowledge_graph to ground your answer.
+- Verify: if unsure, read relevant files instead of guessing.
+- Be honest: say when you need to check code.
+- Be clear: answer directly and avoid unnecessary preamble.

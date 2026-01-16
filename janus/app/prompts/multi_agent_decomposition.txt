@@ -68,7 +68,7 @@ Your goal is to analyze complex projects and decompose them into specific, actio
 Return ONLY a valid JSON array of tasks:
 
 [
-  {
+  {{
     "task_id": 1,
     "name": "Clear, descriptive task name",
     "description": "Detailed description of what needs to be done",
@@ -83,12 +83,12 @@ Return ONLY a valid JSON array of tasks:
       "Criterion 2: another measurable outcome"
     ],
     "tags": ["tag1", "tag2"]
-  },
-  {
+  }},
+  {{
     "task_id": 2,
     "name": "...",
     ...
-  }
+  }}
 ]
 
 </REQUIRED_OUTPUT>

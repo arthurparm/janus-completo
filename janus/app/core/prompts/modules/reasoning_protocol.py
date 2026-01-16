@@ -43,25 +43,12 @@ class ReasoningProtocolModule(PromptModule):
 
         if not protocol_name:
             return ""
-
         # Load protocol from database/files
         try:
-            protocol_content = get_prompt_with_fallback(protocol_name)
+            protocol_content = await get_prompt_with_fallback(protocol_name)
             if protocol_content:
                 return f"\n{protocol_content}\n"
         except Exception:
-            # Fallback to simple guidelines if protocol not found
             pass
 
-        # Simple fallback protocol
-        return """
-═══════════════════════════════════════════════════════════════════
-                      REASONING PROTOCOL
-═══════════════════════════════════════════════════════════════════
-
-1. **Analyze**: Break down the request into components
-2. **Verify**: Check if you need context from codebase
-3. **Execute**: Use appropriate tools with verified inputs
-4. **Validate**: Confirm results make sense
-5. **Respond**: Provide clear, actionable answer
-"""
+        return ""

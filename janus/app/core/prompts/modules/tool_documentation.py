@@ -3,6 +3,7 @@ Tool Documentation Module - Dynamic, intent-based tool documentation.
 Only documents tools relevant to the current intent.
 """
 
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
@@ -12,10 +13,8 @@ from app.core.tools import action_registry
 class ToolDocumentationModule(PromptModule):
     """
     Generates compact tool documentation for only the relevant tools.
-    Reduces token usage by loading 3-5 tools instead of all 20+.
     """
 
-    # Map intent types to relevant tool sets
     INTENT_TOOLS = {
         IntentType.TOOL_CREATION: ["evolve_tool"],
         IntentType.SCRIPT_GENERATION: ["write_file", "execute_shell"],
@@ -39,7 +38,6 @@ class ToolDocumentationModule(PromptModule):
         IntentType.DOCUMENTATION: ["read_file", "write_file", "query_knowledge_graph"],
     }
 
-    # Core tools always available
     CORE_TOOLS = ["query_knowledge_graph", "read_file"]
 
     @property
@@ -56,43 +54,19 @@ class ToolDocumentationModule(PromptModule):
 
     async def render(self, intent: IntentType, context: ConversationContext) -> str:
         """Generate compact tool documentation."""
-        # Get relevant tools for this intent
         relevant_tool_names = self.INTENT_TOOLS.get(intent, self.CORE_TOOLS)
 
-        # Fetch tool metadata
         try:
             all_tools = action_registry.list_tools()
         except Exception:
             return ""
 
-        # Filter to relevant tools
         relevant_tools = [t for t in all_tools if t.name in relevant_tool_names]
-
         if not relevant_tools:
             return ""
 
-        # Build compact documentation
-        lines = [
-            "\n═══════════════════════════════════════════════════════════════════",
-            "                        AVAILABLE TOOLS",
-            "═══════════════════════════════════════════════════════════════════",
-            "",
-            "You have access to specialized tools. To use a tool, output:",
-            "<tool_use>",
-            "  <name>tool_name</name>",
-            '  <args>{"param": "value"}</args>',
-            "</tool_use>",
-            "",
-            "**Relevant tools for this task:**",
-        ]
-
-        for tool in relevant_tools:
-            # Extract first line of description (keep it compact)
-            desc = (tool.description or "").split("\n")[0]
-            lines.append(f"• **{tool.name}**: {desc}")
-
-        lines.append(
-            "\n**Strategy**: Only use tools when needed. For generation tasks, use your training knowledge directly.\n"
+        tool_entries = "\n".join(
+            f"- {tool.name}: {(tool.description or '').split('\n')[0]}" for tool in relevant_tools
         )
 
-        return "\n".join(lines)
+        return await get_formatted_prompt("tool_documentation", tool_entries=tool_entries)

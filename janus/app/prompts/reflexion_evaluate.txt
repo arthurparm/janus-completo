@@ -149,25 +149,25 @@ For SUGGESTIONS (how to improve):
 <REQUIRED_OUTPUT>
 Return ONLY a valid JSON object (no markdown, no explanations outside JSON):
 
-{
+{{
   "score": 0.75,
-  "dimensions": {
+  "dimensions": {{
     "correctness": 0.8,
     "completeness": 0.7,
     "quality": 0.75,
     "safety": 0.9
-  },
+  }},
   "strengths": [
     "Specific strength 1 with citation",
     "Specific strength 2 with citation"
   ],
   "issues": [
-    {
+    {{
       "severity": "critical|major|minor",
       "description": "What is wrong",
       "location": "Where in the result",
       "impact": "Why it matters"
-    }
+    }}
   ],
   "suggestions": [
     "Specific, actionable improvement 1",
@@ -175,7 +175,7 @@ Return ONLY a valid JSON object (no markdown, no explanations outside JSON):
   ],
   "verdict": "pass|needs_refinement|fail",
   "summary": "One-sentence summary of evaluation"
-}
+}}
 
 Verdict meanings:
 • "pass": score >= 0.85, ready for use

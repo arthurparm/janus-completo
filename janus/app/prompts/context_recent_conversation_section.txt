@@ -1,0 +1,2 @@
+**Recent Conversation (read-only):**
+{recent_history}

@@ -35,12 +35,12 @@ Your task is to analyze a previous failed attempt, diagnose the root cause, and 
 
 Return a valid JSON object:
 
-{
+{{
   "diagnosis": "Detailed explanation of why the previous attempt failed.",
   "root_cause_category": "syntax|logic|environment|context",
   "correction_plan": "Step-by-step plan for the next attempt, explicitly addressing the failure.",
   "new_reasoning": "Updated thought process to guide the agent."
-}
+}}
 
 <CRITICAL_RULES>
 *   Be harsh in your critique.

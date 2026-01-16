@@ -50,19 +50,19 @@ Your goal is to perform dynamic error recovery when a plan execution fails, ensu
 <REQUIRED_FORMAT>
 You must return a raw JSON object (no markdown formatting):
 
-{
+{{
   "action": "IGNORE" | "RETRY_WITH_ARGS" | "NEW_PLAN" | "ABORT",
   "reasoning": "Why you chose this action",
-  "new_args": {
+  "new_args": {{
     "arg_name": "value"
-  },
+  }},
   "new_steps": [
-    {
+    {{
       "tool_name": "name",
-      "arguments": {}
-    }
+      "arguments": {{}}
+    }}
   ]
-}
+}}
 </REQUIRED_FORMAT>
 
 ═══════════════════════════════════════════════════════════════════════════════

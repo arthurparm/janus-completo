@@ -1,0 +1,4 @@
+Training context metadata (JSON):
+{metadata}
+
+Task: Produce the correct response given this metadata context.

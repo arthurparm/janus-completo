@@ -80,11 +80,11 @@ ANALOGY: You are a carpenter building a new hammer for yourself, not building
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Always Dict[str, Any] with these fields:                                   │
 │                                                                             │
-│ {                                                                           │
+│ {{                                                                           │
 │     "success": bool,      # True if operation succeeded                    │
 │     "data": Any,          # Actual result data (can be None)               │
 │     "error": str | None   # Error message if failed, None if success      │
-│ }                                                                           │
+│ }}                                                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -131,11 +131,11 @@ def your_function(param: str) -> Dict[str, Any]:
     # Validate FIRST, before any processing
     if not param:
         logger.error("param cannot be empty")
-        return {"success": False, "data": None, "error": "param is required"}
+        return {{"success": False, "data": None, "error": "param is required"}}
     
     if not isinstance(param, str):
         logger.error("param must be string, got %s", type(param))
-        return {"success": False, "data": None, "error": f"param must be str"}
+        return {{"success": False, "data": None, "error": f"param must be str"}}
     
     # Now safe to proceed
     ...
@@ -146,19 +146,19 @@ def your_function(param: str) -> Dict[str, Any]:
 try:
     result = risky_operation()
     logger.info("Operation succeeded")
-    return {"success": True, "data": result, "error": None}
+    return {{"success": True, "data": result, "error": None}}
 
 except SpecificError as e:  # Most specific first
     logger.error("Specific error: %s", e)
-    return {"success": False, "data": None, "error": f"Specific error: {e}"}
+    return {{"success": False, "data": None, "error": f"Specific error: {{e}}"}}
 
 except ValueError as e:  # Then category errors
     logger.error("Validation error: %s", e)
-    return {"success": False, "data": None, "error": f"Invalid input: {e}"}
+    return {{"success": False, "data": None, "error": f"Invalid input: {{e}}"}}
 
 except Exception as e:  # General fallback
     logger.exception("Unexpected error")  # Includes traceback
-    return {"success": False, "data": None, "error": f"Unexpected error: {e}"}
+    return {{"success": False, "data": None, "error": f"Unexpected error: {{e}}"}}
 ```
 
 **4. Logging Levels**
@@ -266,15 +266,15 @@ def get_weather_data(
     # Input validation
     if not city or not isinstance(city, str):
         logger.error("Invalid city parameter: %s", city)
-        return {"success": False, "data": None, "error": "city must be non-empty string"}
+        return {{"success": False, "data": None, "error": "city must be non-empty string"}}
     
     if not api_key or not isinstance(api_key, str):
         logger.error("Invalid api_key parameter")
-        return {"success": False, "data": None, "error": "api_key must be non-empty string"}
+        return {{"success": False, "data": None, "error": "api_key must be non-empty string"}}
     
     if units not in VALID_UNITS:
         logger.error("Invalid units: %s", units)
-        return {"success": False, "data": None, "error": f"units must be one of {VALID_UNITS}"}
+        return {{"success": False, "data": None, "error": f"units must be one of {{VALID_UNITS}}"}}
     
     if not isinstance(timeout, int) or timeout < MIN_TIMEOUT or timeout > MAX_TIMEOUT:
         timeout = DEFAULT_TIMEOUT
@@ -285,32 +285,32 @@ def get_weather_data(
         
         response = requests.get(
             API_BASE_URL,
-            params={"q": city, "appid": api_key, "units": units},
+            params={{"q": city, "appid": api_key, "units": units}},
             timeout=timeout
         )
         response.raise_for_status()
         data = response.json()
         
-        weather_data = {
-            "temp": data.get("main", {}).get("temp"),
-            "humidity": data.get("main", {}).get("humidity"),
-            "description": data.get("weather", [{}])[0].get("description")
-        }
+        weather_data = {{
+            "temp": data.get("main", {{}}).get("temp"),
+            "humidity": data.get("main", {{}}).get("humidity"),
+            "description": data.get("weather", [{{}}])[0].get("description")
+        }}
         
         logger.info("Weather retrieved successfully for %s", city)
-        return {"success": True, "data": weather_data, "error": None}
+        return {{"success": True, "data": weather_data, "error": None}}
     
     except requests.exceptions.Timeout:
-        return {"success": False, "data": None, "error": f"Timeout after {timeout}s"}
+        return {{"success": False, "data": None, "error": f"Timeout after {{timeout}}s"}}
     
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            return {"success": False, "data": None, "error": f"City '{city}' not found"}
-        return {"success": False, "data": None, "error": f"HTTP error {e.response.status_code}"}
+            return {{"success": False, "data": None, "error": f"City '{{city}}' not found"}}
+        return {{"success": False, "data": None, "error": f"HTTP error {{e.response.status_code}}"}}
     
     except Exception as e:
         logger.exception("Unexpected error")
-        return {"success": False, "data": None, "error": str(e)}
+        return {{"success": False, "data": None, "error": str(e)}}
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -328,7 +328,7 @@ def get_weather_data(
 │ RIGHT:                                                                      │
 │ @tool(...)                                                                  │
 │ def my_tool(param: str) -> Dict[str, Any]:                                 │
-│     return {"success": True, "data": result, "error": None}                │
+│     return {{"success": True, "data": result, "error": None}}                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -337,13 +337,13 @@ def get_weather_data(
 │ WRONG:                                                                      │
 │ def my_tool():                                                              │
 │     result = do_work()                                                      │
-│     print(f"Result: {result}")                                             │
+│     print(f"Result: {{result}}")                                             │
 │                                                                             │
 │ RIGHT:                                                                      │
 │ def my_tool() -> Dict[str, Any]:                                           │
 │     result = do_work()                                                      │
 │     logger.info("Work completed successfully")                             │
-│     return {"success": True, "data": result, "error": None}                │
+│     return {{"success": True, "data": result, "error": None}}                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -352,16 +352,16 @@ def get_weather_data(
 │ WRONG:                                                                      │
 │ def my_tool():                                                              │
 │     data = requests.get(url).json()  # Can fail!                           │
-│     return {"success": True, "data": data, "error": None}                  │
+│     return {{"success": True, "data": data, "error": None}}                  │
 │                                                                             │
 │ RIGHT:                                                                      │
 │ def my_tool() -> Dict[str, Any]:                                           │
 │     try:                                                                    │
 │         response = requests.get(url, timeout=10)                           │
 │         response.raise_for_status()                                        │
-│         return {"success": True, "data": response.json(), "error": None}  │
+│         return {{"success": True, "data": response.json(), "error": None}}  │
 │     except requests.Timeout:                                               │
-│         return {"success": False, "data": None, "error": "Timeout"}        │
+│         return {{"success": False, "data": None, "error": "Timeout"}}        │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐

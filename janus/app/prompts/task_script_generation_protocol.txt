@@ -1,0 +1,8 @@
+SCRIPT GENERATION PROTOCOL
+When the user requests a standalone script (keywords: "script", "file", "codigo"):
+
+- Action: Use write_file to save to /app/workspace/
+- Process: Generate code, then write the file.
+- Response: Explain what the script does after writing it.
+
+No need to inspect existing code unless the user explicitly asks for consistency.

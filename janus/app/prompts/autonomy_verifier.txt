@@ -35,11 +35,11 @@ Your goal is to semantically validate the result of a plan step execution, ensur
 <REQUIRED_FORMAT>
 You must return a raw JSON object (no markdown):
 
-{
+{{
   "success": boolean,
   "reason": "Clear explanation of why it passed or failed",
   "recommended_correction": "What should be done differently? (Optional)"
-}
+}}
 </REQUIRED_FORMAT>
 
 ═══════════════════════════════════════════════════════════════════════════════

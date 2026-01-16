@@ -1,0 +1,2 @@
+**Compressed Conversation Context (read-only):**
+{compressed_history}

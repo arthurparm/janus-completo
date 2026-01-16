@@ -176,23 +176,23 @@ separated into its own commit.
 <REQUIRED_OUTPUT>
 Return ONLY a valid JSON object:
 
-{
-  "commit_message": {
+{{
+  "commit_message": {{
     "type": "feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert",
     "scope": "module_name",
     "subject": "imperative description of change",
     "body": "Optional longer description\n\nWith multiple paragraphs if needed",
     "footer": "Optional footer with refs or breaking changes",
     "is_breaking": false
-  },
+  }},
   "formatted": "feat(scope): subject\n\nbody\n\nfooter",
-  "analysis": {
+  "analysis": {{
     "files_changed": ["file1.py", "file2.py"],
     "primary_change": "Description of main change",
     "secondary_changes": ["change1", "change2"],
     "confidence": 0.9
-  }
-}
+  }}
+}}
 </REQUIRED_OUTPUT>
 
 <QUALITY_CHECKLIST>

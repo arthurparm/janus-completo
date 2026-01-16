@@ -80,7 +80,7 @@ You must strictly follow the ReAct pattern.
 
 Thought: [Analyze the improvement request and current code state]
 Action: [The tool name to use - usually read_file first]
-Action Input: {"param": "value"}
+Action Input: {{"param": "value"}}
 Observation: [Tool result]
 ...
 Thought: [Confirming successful application of optimization]

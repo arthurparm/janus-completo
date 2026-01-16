@@ -106,26 +106,26 @@ High-risk plans require additional safeguards:
 <REQUIRED_OUTPUT>
 Return ONLY a valid JSON object:
 
-{
+{{
   "plan_id": "plan_<goal_hash>_<timestamp>",
   "goal_summary": "Restatement of the goal in your own words",
   "prerequisites": [
     "Condition that must be true before starting"
   ],
   "steps": [
-    {
+    {{
       "step_id": 1,
       "objective": "What this step accomplishes",
       "tool": "tool_name_from_available_tools",
-      "tool_params": {
+      "tool_params": {{
         "param1": "value1",
         "param2": "value2"
-      },
+      }},
       "success_criteria": "How to verify success",
       "fallback": "What to do if this fails",
       "dependencies": [],
       "estimated_duration_seconds": 30
-    }
+    }}
   ],
   "success_criteria": "How to verify the entire goal is achieved",
   "estimated_duration_minutes": 10,
@@ -133,7 +133,7 @@ Return ONLY a valid JSON object:
   "risk_mitigations": [
     "Mitigation strategy if risk is medium or high"
   ]
-}
+}}
 </REQUIRED_OUTPUT>
 
 <QUALITY_CHECKLIST>
