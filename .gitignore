@@ -58,6 +58,7 @@ Thumbs.db
 .project/*.sqlite
 .project/*.sqlite-wal
 .project/*.sqlite-shm
+.project/comments.json
 .project/complete_drafts.txt
 .project/localProjectSettings.json
 
