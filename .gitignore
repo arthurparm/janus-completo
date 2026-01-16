@@ -55,6 +55,16 @@ Thumbs.db
 /out/production/
 /out/test/
 
+.project/*.sqlite
+.project/*.sqlite-wal
+.project/*.sqlite-shm
+.project/complete_drafts.txt
+.project/localProjectSettings.json
+
+metadata.json
+docs/archive/logs/
+files/
+
 # IDE project files
 /janus-1.0.iml
 *.ipr
