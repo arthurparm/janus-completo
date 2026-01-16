@@ -5,6 +5,7 @@ from fastapi import Request
 
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole, get_llm_client
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_manager_health
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.services.prompt_service import PromptService
@@ -65,24 +66,20 @@ class LLMService:
                 )
 
                 identity_header = ""
-                if self._prompt_service:
-                    try:
-                        identity_header = await self._prompt_service.get_prompt(
-                            "janus_identity_jarvis"  # Fixed: was janus_identity_header (doesn't exist)
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch identity prompt: {e}")
-
-                if not identity_header:
-                    # Fallback default identity
-                    identity_header = (
-                        f"System: Você é {identity}, um assistente de IA confiável e colaborativo. "
-                        f"Ao referir-se a si mesmo, use '{identity}'. Nunca se identifique como GPT, ChatGPT ou outro nome. "
-                        f"Não divulgue nomes de modelos ou provedores. Responda naturalmente no idioma do usuário."
+                try:
+                    identity_header = await get_formatted_prompt(
+                        "system_identity_enforcement",
+                        identity=identity,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to fetch identity prompt",
+                        error=str(e),
+                        prompt_name="system_identity_enforcement",
                     )
 
-                # If prompt from DB has placeholders, formatted here could be an option, but for now assuming static text or simple concat
-                prompt = f"{identity_header}\n\n{prompt}"
+                if identity_header:
+                    prompt = f"{identity_header}\n\n{prompt}"
 
             return await self._repo.invoke_llm(
                 prompt, role, priority, timeout_seconds, user_id=user_id, project_id=project_id

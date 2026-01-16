@@ -18,10 +18,12 @@ from app.core.monitoring.chat_metrics import (
     CHAT_TOKENS_TOTAL,
     update_active_conversations,
 )
+from app.core.ui.generative_ui import extract_ui_block
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.core.exceptions.chat_exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
+    MessageTooLargeError,
     PromptBuildError,
 )
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
@@ -58,6 +60,7 @@ class ChatService:
         prompt_service: PromptBuilderService | None = None,
         tool_executor_service: ToolExecutorService | None = None,
         rag_service: RAGService | None = None,
+        event_logger: Any | None = None,
     ):
         self._repo = repo
         self._llm = llm_service
@@ -79,6 +82,8 @@ class ChatService:
         # New modular services (Phase 2 refactoring)
         self._command_handler = ChatCommandHandler(tool_service, memory_service)
         self._event_publisher = ChatEventPublisher(db_logger=None)  # TODO: inject DB logger
+        if event_logger is not None:
+            self._event_publisher = ChatEventPublisher(db_logger=event_logger)
         self._agent_loop = ChatAgentLoop(
             llm_service=llm_service,
             tool_executor=self._tool_executor,
@@ -98,6 +103,23 @@ class ChatService:
             pass
         return max(1, len(text) // 4)
 
+    def _split_ui(self, text: str) -> tuple[str, dict[str, Any] | None]:
+        return extract_ui_block(text)
+
+    def _validate_conversation_access(
+        self,
+        conversation_id: str,
+        conv: dict[str, Any],
+        user_id: str | None,
+        project_id: str | None,
+    ) -> None:
+        conv_user_id = conv.get("user_id")
+        if user_id and conv_user_id and str(conv_user_id) != str(user_id):
+            raise ChatServiceError("Access denied: user_id mismatch")
+        conv_project_id = conv.get("project_id")
+        if project_id and conv_project_id and str(conv_project_id) != str(project_id):
+            raise ChatServiceError("Access denied: project_id mismatch")
+
     async def _publish_agent_event(
         self,
         conversation_id: str,
@@ -105,6 +127,7 @@ class ChatService:
         agent_role: str,
         content: str,
         task_id: str | None = None,
+        user_id: str | None = None,
     ):
         """Publish agent event using ChatEventPublisher (Phase 2 refactoring)."""
         await self._event_publisher.publish_event(
@@ -113,6 +136,7 @@ class ChatService:
             agent_role=agent_role,
             content=content,
             task_id=task_id,
+            user_id=user_id,
         )
 
     async def start_conversation(
@@ -141,12 +165,25 @@ class ChatService:
         except ChatRepositoryError as e:
             raise ConversationNotFoundError(str(e)) from e
 
+        self._validate_conversation_access(conversation_id, conv, user_id, project_id)
+
+        max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
+        size_bytes = 0
+        try:
+            size_bytes = len(message.encode("utf-8")) if message else 0
+        except Exception:
+            size_bytes = len(message) if message else 0
+        if message and size_bytes > max_bytes:
+            raise MessageTooLargeError(size_bytes, max_bytes)
+
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
         # RAG Logic
         relevant_memories = None
         if self._rag_service:
-            relevant_memories = await self._rag_service.retrieve_context(message)
+            relevant_memories = await self._rag_service.retrieve_context(
+                message, user_id=user_id, conversation_id=conversation_id
+            )
 
         prompt = await self._prompt_service.build_prompt(
             persona, history, message, conv.get("summary"), relevant_memories
@@ -172,6 +209,7 @@ class ChatService:
                 message, conversation_id, user_id
             )
             if assistant_text:
+                clean_text, ui = self._split_ui(assistant_text)
                 elapsed = max(0.0, _time.time() - start_t)
                 CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
                 CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -185,18 +223,21 @@ class ChatService:
                 CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
                 result = {
-                    "response": assistant_text,
+                    "response": clean_text,
                     "provider": "janus",
                     "model": "quick_command",
                     "role": role.value,
                     "conversation_id": conversation_id,
                 }
+                if ui:
+                    result["ui"] = ui
                 return result
 
         # Intercepta fluxo de descoberta interativa de ferramentas/configuração
         if self._prompt_service.is_discovery_query(message):
             start_t = _time.time()
             assistant_text = self._prompt_service.render_discovery_intro(self._tools)
+            _clean_text, ui = self._split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -223,11 +264,13 @@ class ChatService:
                 )
 
             result = {
-                "response": assistant_text,
+                "response": clean_text,
                 "provider": "janus",
                 "model": "discovery",
                 "role": role.value,
             }
+            if ui:
+                result["ui"] = ui
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
@@ -249,6 +292,7 @@ class ChatService:
         if self._prompt_service.is_docs_query(message):
             start_t = _time.time()
             assistant_text = self._prompt_service.render_tools_documentation(self._tools)
+            clean_text, ui = self._split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -274,11 +318,13 @@ class ChatService:
                 pass
 
             result = {
-                "response": assistant_text,
+                "response": clean_text,
                 "provider": "janus",
                 "model": "tools_docs",
                 "role": role.value,
             }
+            if ui:
+                result["ui"] = ui
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
@@ -300,6 +346,7 @@ class ChatService:
         if self._prompt_service.is_capabilities_query(message):
             start_t = _time.time()
             assistant_text = self._prompt_service.render_local_capabilities(self._tools)
+            clean_text, ui = self._split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -325,11 +372,13 @@ class ChatService:
                 pass
 
             result = {
-                "response": assistant_text,
+                "response": clean_text,
                 "provider": "janus",
                 "model": "capabilities",
                 "role": role.value,
             }
+            if ui:
+                result["ui"] = ui
 
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
@@ -362,7 +411,9 @@ class ChatService:
             relevant_memories = None
             if self._rag_service:
                 try:
-                    relevant_memories = await self._rag_service.retrieve_context(message)
+                    relevant_memories = await self._rag_service.retrieve_context(
+                        message, user_id=user_id, conversation_id=conversation_id
+                    )
                 except Exception as e:
                     logger.warning(
                         "rag_context_retrieval_failed",
@@ -403,6 +454,7 @@ class ChatService:
 
         # Store assistant response
         assistant_text = result.get("response", "")
+        clean_text, ui = self._split_ui(assistant_text)
         await asyncio.to_thread(
             self._repo.add_message, conversation_id, role="assistant", text=assistant_text
         )
@@ -411,8 +463,9 @@ class ChatService:
         # Index assistant message for RAG (non-blocking)
         if self._rag_service:
             try:
+                rag_text = clean_text or assistant_text
                 await self._rag_service.maybe_index_message(
-                    text=assistant_text,
+                    text=rag_text,
                     user_id=user_id,
                     conversation_id=conversation_id,
                     role="assistant",
@@ -460,6 +513,9 @@ class ChatService:
 
         result_with_conv = dict(result)
         result_with_conv["conversation_id"] = conversation_id
+        result_with_conv["response"] = clean_text
+        if ui:
+            result_with_conv["ui"] = ui
         # Disparar gatilhos pós-resposta
         try:
             self._trigger_post_response_events(
@@ -474,10 +530,16 @@ class ChatService:
             pass
         return result_with_conv
 
-    def get_history(self, conversation_id: str) -> dict[str, Any]:
+    def get_history(
+        self,
+        conversation_id: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
         logger.info(f"Getting chat history for conversation: {conversation_id}")
         try:
             conv = self._repo.get_conversation(conversation_id)
+            self._validate_conversation_access(conversation_id, conv, user_id, project_id)
 
             # Validar estrutura da conversa
             if not isinstance(conv, dict):
@@ -562,18 +624,7 @@ class ChatService:
                     f"Invalid conversation structure for {conversation_id}"
                 )
 
-            # Validar acesso (RBAC)
-            if user_id and conv.get("user_id") and conv["user_id"] != user_id:
-                logger.warning(
-                    f"User {user_id} attempted to access conversation {conversation_id} owned by {conv['user_id']}"
-                )
-                raise ChatServiceError("Access denied: user_id mismatch")
-
-            if project_id and conv.get("project_id") and conv["project_id"] != project_id:
-                logger.warning(
-                    f"Project mismatch for conversation {conversation_id}: expected {conv['project_id']}, got {project_id}"
-                )
-                raise ChatServiceError("Access denied: project_id mismatch")
+            self._validate_conversation_access(conversation_id, conv, user_id, project_id)
 
             # Obter histórico paginado
             result = self._repo.get_history_paginated(
@@ -709,6 +760,25 @@ class ChatService:
         except Exception:
             pass
 
+        conv = None
+        try:
+            conv = self._repo.get_conversation(conversation_id)
+            self._validate_conversation_access(conversation_id, conv, user_id, project_id)
+        except ChatRepositoryError:
+            _err = json.dumps(
+                {"error": "Conversation not found", "code": "ConversationNotFound"},
+                ensure_ascii=False,
+            )
+            yield f"event: error\ndata: {_err}\n\n"
+            return
+        except ChatServiceError as e:
+            _err = json.dumps(
+                {"error": str(e), "code": "AccessDenied"},
+                ensure_ascii=False,
+            )
+            yield f"event: error\ndata: {_err}\n\n"
+            return
+
         start_t_overall = _time.time()
         start_t = start_t_overall  # Garantir que start_t está definida para o bloco de erro
         trace_id = uuid4().hex
@@ -734,16 +804,17 @@ class ChatService:
         yield f"event: ack\ndata: {_ack}\n\n"
 
         # compute prompt
-        conv = self._repo.get_conversation(conversation_id)
         persona = conv.get("persona") or "assistant"
         history = self._repo.get_recent_messages(conversation_id, limit=20)
 
         # RAG Logic
         relevant_memories = None
         if self._rag_service:
-            relevant_memories = await self._rag_service.retrieve_context(message)
+            relevant_memories = await self._rag_service.retrieve_context(
+                message, user_id=user_id, conversation_id=conversation_id
+            )
 
-        prompt = self._prompt_service.build_prompt(
+        prompt = await self._prompt_service.build_prompt(
             persona, history, message, conv.get("summary"), relevant_memories
         )
         in_tokens = self._prompt_service.estimate_tokens(prompt)
@@ -790,14 +861,16 @@ class ChatService:
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
-            _done = json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "provider": "janus",
-                    "model": "discovery",
-                    "citations": [],
-                }
-            )
+            done_payload = {
+                "conversation_id": conversation_id,
+                "provider": "janus",
+                "model": "discovery",
+                "citations": [],
+            }
+            _, ui = self._split_ui(assistant_text)
+            if ui:
+                done_payload["ui"] = ui
+            _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             try:
                 latency_ms = int((_time.time() - start_t_overall) * 1000)
@@ -855,14 +928,16 @@ class ChatService:
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
-            _done = json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "provider": "janus",
-                    "model": "tools_docs",
-                    "citations": [],
-                }
-            )
+            done_payload = {
+                "conversation_id": conversation_id,
+                "provider": "janus",
+                "model": "tools_docs",
+                "citations": [],
+            }
+            _, ui = self._split_ui(assistant_text)
+            if ui:
+                done_payload["ui"] = ui
+            _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             return
 
@@ -929,14 +1004,16 @@ class ChatService:
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
-            _done = json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "provider": "janus",
-                    "model": "capabilities",
-                    "citations": [],
-                }
-            )
+            done_payload = {
+                "conversation_id": conversation_id,
+                "provider": "janus",
+                "model": "capabilities",
+                "citations": [],
+            }
+            _, ui = self._split_ui(assistant_text)
+            if ui:
+                done_payload["ui"] = ui
+            _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             try:
                 latency_ms = int((_time.time() - start_t_overall) * 1000)
@@ -1004,6 +1081,7 @@ class ChatService:
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             assistant_text = result.get("response", "")
+            clean_text, ui = self._split_ui(assistant_text)
             current_provider = result.get("provider")
             if self._cb_should_block(current_provider):
                 _err = json.dumps(
@@ -1127,15 +1205,15 @@ class ChatService:
                     )
             except Exception:
                 citations = []
-            _done = json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "provider": result.get("provider"),
-                    "model": result.get("model"),
-                    "citations": citations,
-                },
-                ensure_ascii=False,
-            )
+            done_payload = {
+                "conversation_id": conversation_id,
+                "provider": result.get("provider"),
+                "model": result.get("model"),
+                "citations": citations,
+            }
+            if ui:
+                done_payload["ui"] = ui
+            _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             self._cb_on_success(current_provider)
             try:

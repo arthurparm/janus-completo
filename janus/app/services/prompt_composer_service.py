@@ -12,6 +12,7 @@ from app.core.prompts.context import ConversationContext, Message
 from app.core.prompts.intent_classifier import IntentClassifier
 from app.core.prompts.modules import (
     ContextCompressionModule,
+    GenerativeUIModule,
     ReasoningProtocolModule,
     SystemIdentityModule,
     TaskSpecificModule,
@@ -67,6 +68,7 @@ class PromptComposer:
             ReasoningProtocolModule(),
             ContextCompressionModule(),
             ToolDocumentationModule(),
+            GenerativeUIModule(),
             TaskSpecificModule(),
         ]
 

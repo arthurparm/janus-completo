@@ -42,7 +42,7 @@ async def generate_hypothetical_answer(question: str) -> str:
             cache_key="hyde",
         )
 
-        prompt = get_formatted_prompt("hyde_generation", question=question)
+        prompt = await get_formatted_prompt("hyde_generation", question=question)
         response = await llm.ainvoke(prompt)
         hypothetical = response.content.strip()
 
@@ -95,7 +95,7 @@ async def rerank_chunks(
             ]
         )
 
-        prompt = get_formatted_prompt("rerank", question=question, chunks=chunks_text)
+        prompt = await get_formatted_prompt("rerank", question=question, chunks=chunks_text)
         response = await llm.ainvoke(prompt)
         ranking_str = response.content.strip()
 

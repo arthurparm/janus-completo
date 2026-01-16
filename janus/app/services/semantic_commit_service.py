@@ -181,7 +181,7 @@ async def generate_semantic_commit(
             context_str += f"\n...and {len(files) - 20} more files"
 
         try:
-            prompt = get_formatted_prompt("semantic_commit", diff=diff, context=context_str)
+            prompt = await get_formatted_prompt("semantic_commit", diff=diff, context=context_str)
         except Exception as e:
             logger.error("Failed to load semantic commit prompt", error=str(e))
             return {

@@ -17,16 +17,33 @@ from app.models.config_models import Prompt
 class PromptRepository:
     """Repositório para operações CRUD em prompts."""
 
-    def __init__(self, session: Session | None = None):
-        self._session = session
+    def __init__(self, session: Session | AsyncSession | None = None):
+        self._session: Session | AsyncSession | None = None
+        self._async_session: AsyncSession | None = None
+        if session is None:
+            return
+        if isinstance(session, AsyncSession):
+            self._async_session = session
+        else:
+            self._session = session
 
-    async def _get_session(self) -> AsyncSession:
-        """Obtém sessão do banco de dados (Async)."""
-        if self._session:
+    def _get_session_sync(self) -> Session:
+        """Get a sync database session."""
+        if self._session is not None:
+            if isinstance(self._session, AsyncSession):
+                raise RuntimeError(
+                    "PromptRepository has an AsyncSession injected. Use async methods."
+                )
             return self._session
-        # Criar uma sessão ad-hoc requer um contexto assíncrono.
-        # Como o prompt_repository é usado em contexto síncrono no startup,
-        # vamos levantar um erro claro se tentar usar sem sessão injetada.
+        return db.get_session_direct()
+
+    async def _get_session_async(self) -> AsyncSession:
+        """Get an async database session."""
+        if self._async_session is not None:
+            return self._async_session
+        if isinstance(self._session, AsyncSession):
+            return self._session
+        # Creating ad-hoc async sessions must be done by the caller.
         raise RuntimeError(
             "PromptRepository requires an injected AsyncSession. "
             "Use 'async with postgres_db.get_session_async() as session:' "
@@ -41,7 +58,7 @@ class PromptRepository:
         model_target: str = "general",
     ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
-        session = await self._get_session()
+        session = await self._get_session_async()
         
         # Async query
         stmt = (
@@ -59,18 +76,48 @@ class PromptRepository:
         result = await session.execute(stmt)
         return result.scalars().first()
 
+    def get_active_prompt_sync(
+        self,
+        prompt_name: str,
+        namespace: str = "default",
+        language: str = "en",
+        model_target: str = "general",
+    ) -> Prompt | None:
+        """Get the active prompt using a sync session."""
+        session = self._get_session_sync()
+        owns_session = self._session is None
+        try:
+            return (
+                session.query(Prompt)
+                .filter(
+                    and_(
+                        Prompt.prompt_name == prompt_name,
+                        Prompt.namespace == namespace,
+                        Prompt.language == language,
+                        Prompt.model_target == model_target,
+                        Prompt.is_active,
+                    )
+                )
+                .first()
+            )
+        finally:
+            if owns_session:
+                session.close()
+
     def get_prompt_by_id(self, prompt_id: int) -> Prompt | None:
         """Obtém prompt por ID."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             return session.query(Prompt).filter(Prompt.id == prompt_id).first()
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()
 
     def get_prompt_versions(self, prompt_name: str, namespace: str = "default") -> list[Prompt]:
         """Obtém todas as versões de um prompt."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             return (
                 session.query(Prompt)
@@ -79,7 +126,7 @@ class PromptRepository:
                 .all()
             )
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()
 
     def create_prompt_version(
@@ -94,7 +141,8 @@ class PromptRepository:
         activate: bool = False,
     ) -> Prompt:
         """Cria uma nova versão de prompt."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             # Se ativar, desativar versão anterior
             if activate:
@@ -116,12 +164,13 @@ class PromptRepository:
             session.refresh(new_prompt)
             return new_prompt
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()
 
     def activate_prompt_version(self, prompt_id: int) -> bool:
         """Ativa uma versão específica de prompt."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             prompt = session.query(Prompt).filter(Prompt.id == prompt_id).first()
             if not prompt:
@@ -138,7 +187,7 @@ class PromptRepository:
             session.commit()
             return True
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()
 
     def _deactivate_prompt(
@@ -170,7 +219,8 @@ class PromptRepository:
         active_only: bool = True,
     ) -> list[Prompt]:
         """Busca prompts por padrão."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             query = session.query(Prompt)
 
@@ -185,12 +235,13 @@ class PromptRepository:
 
             return query.order_by(desc(Prompt.updated_at)).all()
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()
 
     def get_prompt_stats(self) -> dict[str, Any]:
         """Obtém estatísticas dos prompts."""
-        session = self._get_session()
+        session = self._get_session_sync()
+        owns_session = self._session is None
         try:
             total_prompts = session.query(Prompt).count()
             active_prompts = session.query(Prompt).filter(Prompt.is_active).count()
@@ -203,5 +254,5 @@ class PromptRepository:
                 "inactive_prompts": total_prompts - active_prompts,
             }
         finally:
-            if not self._session:
+            if owns_session:
                 session.close()

@@ -418,6 +418,7 @@ class AppSettings(BaseSettings):
     CONTEXT_WEB_CACHE_MAX_ITEMS: int = 512
 
     # Sprint 4: Python Sandbox (epicbox)
+    SANDBOX_MODE: str = "auto"
     SANDBOX_DOCKER_IMAGE: str = "python:3.11-slim"
     SANDBOX_TIMEOUT_SECONDS: int = 15
     SANDBOX_MEM_LIMIT_MB: int = 16384

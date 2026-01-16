@@ -7,10 +7,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.llm import ModelPriority, ModelRole
+from app.core.ui.generative_ui import extract_ui_block
 from app.services.chat_service import (
     ChatService,
     ChatServiceError,
     ConversationNotFoundError,
+    MessageTooLargeError,
     get_chat_service,
 )
 from app.services.memory_service import MemoryService, get_memory_service
@@ -50,6 +52,7 @@ class ChatMessageResponse(BaseModel):
     role: str
     conversation_id: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
+    ui: dict[str, Any] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -57,6 +60,7 @@ class ChatMessage(BaseModel):
     role: str
     text: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
+    ui: dict[str, Any] | None = None
 
 
 class ChatHistoryResponse(BaseModel):
@@ -91,6 +95,16 @@ class ChatListResponse(BaseModel):
     message_count: int | None = None
     tags: list[str] = Field(default_factory=list)
     last_message_at: str | None = None
+
+
+def _apply_ui_to_message(message: dict[str, Any]) -> dict[str, Any]:
+    text = message.get("text", "")
+    clean_text, ui = extract_ui_block(text)
+    payload = dict(message)
+    payload["text"] = clean_text
+    if ui:
+        payload["ui"] = ui
+    return payload
 
 
 # --- Endpoints ---
@@ -148,7 +162,13 @@ async def send_message(
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except MessageTooLargeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e)
+        )
     except ChatServiceError as e:
+        if "Access denied" in str(e):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # Build citations via vector search on user documents/chat
@@ -209,20 +229,20 @@ async def chat_history(
     )
 
     try:
+        # Obter user_id do header para validação RBAC
+        try:
+            user_id = getattr(http.state, "actor_user_id", None) if http else None
+        except Exception:
+            user_id = None
+
+        # Obter project_id do header se disponível
+        try:
+            project_id = getattr(http.state, "actor_project_id", None) if http else None
+        except Exception:
+            project_id = None
+
         # Se limit for especificado, usar modo paginado com RBAC
         if limit is not None:
-            # Obter user_id do header para validação RBAC
-            try:
-                user_id = getattr(http.state, "actor_user_id", None) if http else None
-            except Exception:
-                user_id = None
-
-            # Obter project_id do header se disponível
-            try:
-                project_id = getattr(http.state, "actor_project_id", None) if http else None
-            except Exception:
-                project_id = None
-
             # Usar método paginado com validação de acesso
             hist = service.get_history_paginated(
                 conversation_id=conversation_id,
@@ -244,7 +264,7 @@ async def chat_history(
             for i, m in enumerate(hist.get("messages", [])):
                 try:
                     if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
-                        messages.append(ChatMessage(**m))
+                        messages.append(ChatMessage(**_apply_ui_to_message(m)))
                     else:
                         logger.warning(f"Skipping invalid message at index {i}: {m}")
                 except Exception as e:
@@ -262,8 +282,10 @@ async def chat_history(
             )
 
         else:
-            # Modo legado - retorna todo o histórico sem validação
-            hist = service.get_history(conversation_id)
+            # Modo legado - retorna todo o histórico com RBAC quando disponível
+            hist = service.get_history(
+                conversation_id, user_id=user_id, project_id=project_id
+            )
             logger.info(
                 f"Retrieved full history for conversation {conversation_id} with {len(hist.get('messages', []))} messages"
             )
@@ -273,7 +295,7 @@ async def chat_history(
             for i, m in enumerate(hist.get("messages", [])):
                 try:
                     if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
-                        messages.append(ChatMessage(**m))
+                        messages.append(ChatMessage(**_apply_ui_to_message(m)))
                     else:
                         logger.warning(f"Skipping invalid message at index {i}: {m}")
                 except Exception as e:
@@ -367,7 +389,7 @@ async def chat_history_paginated(
         for i, m in enumerate(hist.get("messages", [])):
             try:
                 if isinstance(m, dict) and "timestamp" in m and "role" in m and "text" in m:
-                    messages.append(ChatMessage(**m))
+                    messages.append(ChatMessage(**_apply_ui_to_message(m)))
                 else:
                     logger.warning(f"Skipping invalid message at index {i}: {m}")
             except Exception as e:
@@ -435,7 +457,7 @@ async def list_conversations(
     # map items to DTOs
     def map_item(it: dict[str, Any]) -> ChatListResponse:
         last = it.get("last_message")
-        last_msg = ChatMessage(**last) if isinstance(last, dict) else None
+        last_msg = ChatMessage(**_apply_ui_to_message(last)) if isinstance(last, dict) else None
         return ChatListResponse(
             conversation_id=it.get("conversation_id"),
             title=it.get("title"),
@@ -575,6 +597,17 @@ async def stream_message(
         pass
 
     try:
+        if not user_id:
+            try:
+                user_id = getattr(http.state, "actor_user_id", None) if http else None
+            except Exception:
+                user_id = None
+        if not project_id:
+            try:
+                project_id = getattr(http.state, "actor_project_id", None) if http else None
+            except Exception:
+                project_id = None
+
         gen = service.stream_message(
             conversation_id=conversation_id,
             message=message,

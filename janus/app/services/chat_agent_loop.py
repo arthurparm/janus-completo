@@ -4,8 +4,10 @@ Executes ReAct (Reasoning + Acting) loop with tool execution fallbacks.
 """
 
 import asyncio
+import os
 import structlog
 from typing import Any
+from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
 from app.core.llm import ModelRole, ModelPriority
 from app.core.infrastructure.fallback_chain import FallbackChain
 from app.core.exceptions.chat_exceptions import LLMInvocationError, ToolExecutionError
@@ -59,6 +61,38 @@ class ChatAgentLoop:
                 pass
         return max(1, len(text) // 4)
 
+    def _build_policy(self) -> PolicyEngine:
+        risk_profile = os.getenv("CHAT_TOOL_RISK_PROFILE", RiskProfile.BALANCED)
+        auto_confirm = os.getenv("CHAT_TOOL_AUTO_CONFIRM", "false").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        allowlist = {
+            name.strip()
+            for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",")
+            if name.strip()
+        }
+        blocklist = {
+            name.strip()
+            for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",")
+            if name.strip()
+        }
+        max_actions = int(os.getenv("CHAT_TOOL_MAX_ACTIONS", "20"))
+        max_seconds = int(os.getenv("CHAT_TOOL_MAX_SECONDS", "60"))
+
+        return PolicyEngine(
+            PolicyConfig(
+                risk_profile=risk_profile,
+                auto_confirm=auto_confirm,
+                allowlist=allowlist,
+                blocklist=blocklist,
+                max_actions_per_cycle=max_actions,
+                max_seconds_per_cycle=max_seconds,
+            )
+        )
+
     async def run_loop(
         self,
         conversation_id: str,
@@ -95,6 +129,8 @@ class ChatAgentLoop:
         total_out_tokens = 0
         final_response_text = ""
         last_result = {}
+        policy = self._build_policy()
+        policy.reset_cycle_quota()
 
         iteration = 0
         while iteration < max_iterations:
@@ -114,6 +150,7 @@ class ChatAgentLoop:
                     event_type="agent_thought",
                     agent_role=role.value,
                     content=f"Iteration {iteration}/{max_iterations}: Analyzing request and planning response",
+                    user_id=user_id,
                 )
 
             # Invoke LLM with fallback
@@ -155,6 +192,7 @@ class ChatAgentLoop:
                         event_type="decision",
                         agent_role=role.value,
                         content="Finalizing response - analysis complete",
+                        user_id=user_id,
                     )
                 break
 
@@ -174,13 +212,16 @@ class ChatAgentLoop:
                         event_type="tool_call",
                         agent_role=role.value,
                         content=f"Calling tool: {tool_call.get('name', 'unknown')}",
+                        user_id=user_id,
                     )
 
             # Add agent reasoning to prompt
             current_prompt += f"\nAssistant: {response_text}"
 
             # Execute tools
-            tool_outputs = await self._execute_tools_with_fallback(tool_calls)
+            tool_outputs = await self._execute_tools_with_fallback(
+                tool_calls, policy=policy, user_id=user_id
+            )
 
             # Add tool results to prompt
             for output in tool_outputs:
@@ -197,6 +238,7 @@ class ChatAgentLoop:
                         event_type="tool_end",
                         agent_role=role.value,
                         content=f"Tool {output['name']} completed: {result_preview}",
+                        user_id=user_id,
                     )
 
         # Handle max iterations reached
@@ -267,16 +309,22 @@ class ChatAgentLoop:
 
         return await chain.execute()
 
-    async def _execute_tools_with_fallback(self, tool_calls: list[dict]) -> list[dict]:
+    async def _execute_tools_with_fallback(
+        self, tool_calls: list[dict], policy: PolicyEngine | None, user_id: str | None
+    ) -> list[dict]:
         """Execute tools with fallback strategies."""
 
         async def primary():
-            return await self.tool_executor.execute_tool_calls(tool_calls)
+            return await self.tool_executor.execute_tool_calls(
+                tool_calls, policy=policy, user_id=user_id
+            )
 
         async def fallback_permissive():
             # Try with relaxed parameters if primary fails
             logger.info("tool_execution_fallback_permissive")
-            return await self.tool_executor.execute_tool_calls(tool_calls, strict=False)
+            return await self.tool_executor.execute_tool_calls(
+                tool_calls, strict=False, policy=policy, user_id=user_id
+            )
 
         async def minimal_fallback():
             # Return error messages for all tools

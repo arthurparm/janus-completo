@@ -38,6 +38,7 @@ class ChatEventPublisher:
         agent_role: str,
         content: str,
         task_id: str | None = None,
+        user_id: str | None = None,
     ) -> None:
         """
         Publish agent event with fallback strategies.
@@ -56,6 +57,7 @@ class ChatEventPublisher:
             "content": content,
             "timestamp": time.time(),
             "task_id": task_id or conversation_id,
+            "user_id": user_id,
         }
 
         # Create fallback chain

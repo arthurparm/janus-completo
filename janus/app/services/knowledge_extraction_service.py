@@ -46,25 +46,13 @@ class KnowledgeExtractionService:
             return {}
 
         try:
-            # Obter prompt do sistema modular
-            system_prompt = get_formatted_prompt("knowledge_extraction_system")
+            system_prompt = await get_formatted_prompt(
+                "knowledge_extraction_system",
+                text=text[:4000],
+                metadata=json.dumps(metadata or {}),
+            )
 
-            # Se falhar o carregamento do prompt, usar fallback direto no código
-            if not system_prompt:
-                system_prompt = """
-                You are a Knowledge Extraction Expert. 
-                Extract entities and relationships from the provided text.
-                Return ONLY valid JSON with keys: "entities" (list) and "relationships" (list).
-                Entities schema: { "name": str, "type": str, "description": str }
-                Relationships schema: { "source": str, "target": str, "relation": str, "weight": float }
-                Allowed Types: Person, Organization, Technology, Concept, Event, Location, Resource.
-                """
-
-            user_content = f"Text to analyze:\n{text[:4000]}"  # Truncate safety
-            if metadata:
-                user_content += f"\n\nContext Metadata:\n{json.dumps(metadata)}"
-
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_content)]
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content="")]
 
             response = await self.llm.ainvoke(messages)
             content = response.content

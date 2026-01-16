@@ -5,7 +5,9 @@ Configuração do banco de dados PostgreSQL para Configuration-as-Data.
 from collections.abc import Generator, AsyncGenerator
 from contextlib import contextmanager, asynccontextmanager
 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from app.config import settings
@@ -18,12 +20,26 @@ class PostgresDatabase:
     def __init__(self):
         self._engine: AsyncEngine | None = None
         self._session_factory = None
+        self._sync_engine = None
+        self._sync_session_factory = None
         self._initialize_engine()
 
     def _initialize_engine(self):
         """Inicializa o engine SQLAlchemy com driver asyncpg."""
         postgres_url = (
             f"postgresql+asyncpg://{settings.POSTGRES_USER}:"
+            f"{settings.POSTGRES_PASSWORD.get_secret_value()}@"
+            f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
+            f"{settings.POSTGRES_DB}"
+        )
+        sync_driver = "psycopg2"
+        try:
+            import psycopg2  # noqa: F401
+        except Exception:
+            sync_driver = "psycopg"
+
+        sync_url = (
+            f"postgresql+{sync_driver}://{settings.POSTGRES_USER}:"
             f"{settings.POSTGRES_PASSWORD.get_secret_value()}@"
             f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
             f"{settings.POSTGRES_DB}"
@@ -42,6 +58,21 @@ class PostgresDatabase:
 
         self._session_factory = async_sessionmaker(
             bind=self._engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        self._sync_engine = create_engine(
+            sync_url,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_pre_ping=True,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            echo=settings.ENVIRONMENT == "development",
+        )
+        self._sync_session_factory = sessionmaker(
+            bind=self._sync_engine,
             autocommit=False,
             autoflush=False,
             expire_on_commit=False,
@@ -71,12 +102,28 @@ class PostgresDatabase:
             await conn.run_sync(Base.metadata.drop_all)
 
     @contextmanager
-    def get_session(self) -> Generator[AsyncSession, None, None]:
+    def get_session(self) -> Generator[Session, None, None]:
         """
         [DEPRECATED] Interface síncrona mantida para compatibilidade temporária.
         Prefira usar get_session_async.
         """
-        raise NotImplementedError("Use get_session_async() for async database operations")
+        if self._sync_session_factory is None:
+            raise RuntimeError("Sync session factory not initialized")
+        session: Session = self._sync_session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_session_direct(self) -> Session:
+        """Retorna sessao sync para compatibilidade com repositorios legados."""
+        if self._sync_session_factory is None:
+            raise RuntimeError("Sync session factory not initialized")
+        return self._sync_session_factory()
 
     @asynccontextmanager
     async def get_session_async(self) -> AsyncGenerator[AsyncSession, None]:

@@ -2,7 +2,7 @@
 from app.repositories.prompt_repository import PromptRepository
 
 repo = PromptRepository()
-p = repo.get_active_prompt("meta_agent_planning")
+p = repo.get_active_prompt_sync("meta_agent_planning")
 
 if p:
     print(f"Version: {p.prompt_version}")

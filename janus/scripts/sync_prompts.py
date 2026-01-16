@@ -1,15 +1,13 @@
-import asyncio
 import sys
 import os
 from pathlib import Path
 import structlog
+from datetime import datetime
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from app.db.postgres_config import postgres_db
 from app.repositories.prompt_repository import PromptRepository
-from app.config import settings
 
 # Configure logging
 structlog.configure(
@@ -23,7 +21,7 @@ logger = structlog.get_logger()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "app" / "prompts"
 
-async def sync_prompts():
+def sync_prompts():
     """
     Reads all .txt files from janus/app/prompts/ and updates the database.
     Creates new versions if content differs.
@@ -34,8 +32,7 @@ async def sync_prompts():
         logger.error("Prompts directory not found", path=str(PROMPTS_DIR))
         return
 
-    # Initialize DB (Engine is initialized in __init__, just ensure tables exist)
-    # await postgres_db.create_tables() # Optional: ensure tables exist
+    # Engine is initialized on repository creation; ensure tables exist if needed.
     repo = PromptRepository()
     
     files = list(PROMPTS_DIR.glob("*.txt"))
@@ -54,7 +51,7 @@ async def sync_prompts():
                 continue
 
             # Check existing
-            existing = await repo.get_active_prompt(prompt_name)
+            existing = repo.get_active_prompt_sync(prompt_name)
             
             if existing and existing.prompt_text.strip() == content:
                 logger.debug("Prompt up to date", name=prompt_name)
@@ -63,12 +60,13 @@ async def sync_prompts():
 
             # Create new version
             logger.info("Updating prompt", name=prompt_name)
-            await repo.create_prompt_version(
+            version = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            repo.create_prompt_version(
                 prompt_name=prompt_name,
                 prompt_text=content,
+                version=version,
                 created_by="sync_script",
-                activate=True,
-                commit_message="Auto-sync from file system"
+                activate=True
             )
             updated_count += 1
 
@@ -84,6 +82,4 @@ async def sync_prompts():
     )
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(sync_prompts())
+    sync_prompts()

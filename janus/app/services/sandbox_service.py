@@ -3,7 +3,8 @@ from typing import Any
 import structlog
 from fastapi import Request
 
-from app.core.infrastructure.python_sandbox import ExecutionResult
+from app.config import settings
+from app.core.infrastructure.python_sandbox import ExecutionResult, python_sandbox
 from app.repositories.sandbox_repository import SandboxRepository, SandboxRepositoryError
 
 logger = structlog.get_logger(__name__)
@@ -67,31 +68,22 @@ class SandboxService:
         """Retorna as capacidades e restrições do sandbox."""
         logger.info("Buscando capacidades do sandbox via serviço.")
         return {
-            "allowed_modules": [
-                "math",
-                "random",
-                "datetime",
-                "json",
-                "re",
-                "collections",
-                "itertools",
-                "functools",
-                "statistics",
-                "decimal",
-                "fractions",
-            ],
+            "allowed_modules": sorted(python_sandbox.allowed_modules),
             "restrictions": {
                 "filesystem_access": False,
                 "network_access": False,
                 "subprocess": False,
-                "timeout_seconds": 5,
-                "max_output_length": 10000,
+                "timeout_seconds": getattr(settings, "SANDBOX_TIMEOUT_SECONDS", 15),
+                "max_output_length": getattr(settings, "SANDBOX_MAX_OUTPUT_LENGTH", 25000),
+                "mem_limit_mb": getattr(settings, "SANDBOX_MEM_LIMIT_MB", 256),
+                "cpu_limit": getattr(settings, "SANDBOX_CPU_LIMIT", 1.0),
             },
             "features": {
                 "print_support": True,
                 "variable_inspection": True,
                 "context_variables": True,
                 "expression_evaluation": True,
+                "sandbox_mode": str(getattr(settings, "SANDBOX_MODE", "auto")),
             },
         }
 
