@@ -23,6 +23,7 @@ from typing import Any
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.agents.agent_manager import AgentType, agent_manager
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.memory.memory_core import get_memory_db
 from app.core.tools.action_module import action_registry
 from app.models.schemas import Experience
@@ -519,28 +520,15 @@ class ImprovementExecutor:
 
         try:
             # Usa agente para executar os passos
-            prompt = f"""
-Você é o sistema de auto-otimização do Janus.
-
-MELHORIA A APLICAR:
-Tipo: {improvement.improvement_type.value}
-Alvo: {improvement.target_component}
-Descrição: {improvement.description}
-Impacto Esperado: {improvement.expected_impact}
-
-PASSOS DE IMPLEMENTAÇÃO:
-{chr(10).join(f"{i + 1}. {step}" for i, step in enumerate(improvement.implementation_steps))}
-
-TAREFA:
-Execute os passos acima de forma sistemática e segura.
-Documente cada etapa e o resultado obtido.
-Se encontrar problemas, tente soluções alternativas.
-
-IMPORTANTE:
-- Seja conservador - não faça mudanças arriscadas
-- Documente tudo claramente
-- Valide cada mudança antes de prosseguir
-"""
+            formatted_steps = "\n".join(
+                f"{i + 1}. {step}" for i, step in enumerate(improvement.implementation_steps)
+            )
+            prompt = await get_formatted_prompt(
+                "agent_self_optimization",
+                improvement=improvement,
+                formatted_steps=formatted_steps,
+                agent_scratchpad="",
+            )
 
             result = await agent_manager.arun_agent(
                 question=prompt, request=None, agent_type=AgentType.TOOL_USER

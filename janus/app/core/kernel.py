@@ -328,6 +328,9 @@ class Kernel:
             self.collaboration_service = CollaborationService(self.collaboration_repo)
             self.document_service = DocumentIngestionService(self.memory_service)
             self.observability_service = ObservabilityService(self.observability_repo)
+            from app.services.chat_event_logger import ChatEventDbLogger
+
+            self.chat_event_logger = ChatEventDbLogger(self.observability_repo)
             self.optimization_service = OptimizationService(self.optimization_repo)
             self.prompt_service = PromptService(self.prompt_repo)
 
@@ -360,6 +363,7 @@ class Kernel:
                 prompt_service=self.prompt_builder_service,
                 tool_executor_service=self.tool_executor,
                 rag_service=self.rag_service,
+                event_logger=self.chat_event_logger,
             )
         except Exception as e:
             raise KernelError(f"Dependency injection failed: {e}") from e

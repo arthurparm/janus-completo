@@ -11,6 +11,7 @@ from typing import Any
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -22,30 +23,21 @@ from app.services.llm_service import LLMService
 logger = logging.getLogger(__name__)
 
 
-def _build_coding_prompt(state: TaskState) -> str:
+async def _build_coding_prompt(
+    state: TaskState, compilation_error: str | None = None
+) -> str:
     goal = state.original_goal
     review_notes = state.data_payload.review_notes
     context = state.data_payload.context
     thinker_plan = state.data_payload.thinker_plan
-    prompt = [
-        f"Objetivo: {goal}",
-        f"PLANO DE ARQUITETURA (Siga Estritamente): {thinker_plan}" if thinker_plan else "",
-        "INSTRUÇÕES DE CODIFICAÇÃO:",
-        "1. ANÁLISE PRÉVIA (`<thinking>`): Antes de gerar código, analise o problema passo-a-passo dentro de tags <thinking>. Planeje a estrutura, imports e tratamento de erros.",
-        "2. PADRÕES DE CÓDIGO:",
-        "   - Use Type Hints (PEP 484) em TODAS as funções.",
-        "   - Siga PEP 8.",
-        "   - Inclua docstrings no estilo Google ou Sphinx.",
-        "   - Trate erros explicitamente (try/except) onde houver I/O ou risco de falha.",
-        "3. RETORNO:",
-        "   - Retorne o código final dentro de um bloco markdown ```python ou ```.",
-        "   - Garanta que o código seja executável e modular.",
-    ]
-    if context:
-        prompt.append(f"Contexto Técnico: {context}")
-    if review_notes:
-        prompt.append(f"CRÍTICA ANTERIOR (Corrija estes pontos): {review_notes}")
-    return "\n".join(prompt)
+    return await get_formatted_prompt(
+        "code_agent_task",
+        goal=goal,
+        thinker_plan=thinker_plan or "",
+        context=context or "",
+        review_notes=review_notes or "",
+        previous_error=compilation_error or "",
+    )
 
 
 def _estimate_complexity(code: str) -> int:
@@ -79,11 +71,9 @@ async def process_code_task(task: TaskMessage) -> None:
 
         for iteration in range(max_iterations):
             # Build prompt (includes previous error if any)
-            prompt = _build_coding_prompt(state)
-            if compilation_error and iteration > 0:
-                prompt += f"\n\nERRO NA ITERAÇÃO ANTERIOR (corrija isso):\n{compilation_error}"
+            prompt = await _build_coding_prompt(state, compilation_error if iteration > 0 else "")
 
-            result = llm_service.invoke_llm(
+            result = await llm_service.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.CODE_GENERATOR,
                 priority=ModelPriority.HIGH_QUALITY,

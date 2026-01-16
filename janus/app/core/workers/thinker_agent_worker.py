@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -21,25 +22,15 @@ from app.services.llm_service import LLMService
 logger = logging.getLogger(__name__)
 
 
-def _build_thinking_prompt(state: TaskState) -> str:
+async def _build_thinking_prompt(state: TaskState) -> str:
     goal = state.original_goal
     context = state.data_payload.context or ""
-
-    prompt = [
-        f"Objetivo: {goal}",
-        f"Contexto Adicional: {context}" if context else "",
-        "Você é o 'ThinkerAgent', a mente arquitetural do sistema.",
-        "Sua tarefa é planejar a implementação técnica passo-a-passo.",
-        "Saída Obrigatória:",
-        "1. ANÁLISE: Entendimento do problema e edge-cases.",
-        "2. ARQUITETURA: Estrutura de classes/funções e fluxo de dados.",
-        "3. PLANO DE AÇÃO: Lista numerada de passos para o CoderAgent.",
-        "",
-        "NÃO escreva o código final. Escreva o ALGORITMO e a ARQUITETURA.",
-        "Analise edge-cases, segurança e melhor abordagem.",
-        "Forneça um plano detalhado que o 'CodeAgent' possa seguir cegamente."
-    ]
-    return "\n".join(prompt)
+    return await get_formatted_prompt(
+        "agent_thinker",
+        goal=goal,
+        context=context,
+        agent_scratchpad="",
+    )
 
 
 @protect_against_poison_pills(
@@ -53,12 +44,12 @@ async def process_thinker_task(task: TaskMessage) -> None:
         state.current_agent_role = "thinker"
 
         llm_service = LLMService(LLMRepository())
-        prompt = _build_thinking_prompt(state)
+        prompt = await _build_thinking_prompt(state)
 
         # Usa um role/priority que mapeie para o modelo de raciocínio (ex: DeepSeek R1)
         # Se não houver role específico 'THINKING', usamos KNOWLEDGE_CURATOR ou ORCHESTRATOR
         # com prioridade máxima, e assumimos que a config do LLM (DeepSeek) está lá.
-        result = llm_service.invoke_llm(
+        result = await llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.ORCHESTRATOR, # Idealmente seria um novo ModelRole.REASONING
             priority=ModelPriority.HIGH_QUALITY,

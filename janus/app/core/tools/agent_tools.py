@@ -572,8 +572,8 @@ def execute_python_code(code: str) -> str:
         - Sem acesso ao filesystem
         - Sem acesso à network
         - Imports limitados (math, random, datetime, json, re, collections, itertools, functools, statistics)
-        - Timeout de 5 segundos
-        - Output limitado a 10000 caracteres
+        - Timeout configuravel via SANDBOX_TIMEOUT_SECONDS
+        - Output limitado por SANDBOX_MAX_OUTPUT_LENGTH
 
         Útil para: cálculos, processamento de dados, testes de lógica.
 

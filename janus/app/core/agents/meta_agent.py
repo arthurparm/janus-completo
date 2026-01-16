@@ -390,29 +390,12 @@ class MetaAgent:
             return {"status": "give_up"}
 
         # 1. Analisar Erro com LLM
-        # Fallback prompt if file not found
-        default_prompt = (
-            "Analyze the following execution failure in the Janus system.\n"
-            "Error: {error}\n"
-            "Plan: {plan}\n"
-            "Context: {context}\n"
-            "Provide a structured analysis including root cause, error type, and actionable insights for the next attempt."
+        prompt = await get_formatted_prompt(
+            "reflexion_analysis",
+            error=error_msg,
+            plan=json.dumps(state.get("final_plan", []), indent=2),
+            context=state.get("diagnosis", "No context"),
         )
-        
-        try:
-            prompt = await get_formatted_prompt(
-                "reflexion_analysis",
-                default=default_prompt,
-                error=error_msg,
-                plan=json.dumps(state.get("final_plan", []), indent=2),
-                context=state.get("diagnosis", "No context"),
-            )
-        except Exception:
-            prompt = default_prompt.format(
-                error=error_msg,
-                plan=json.dumps(state.get("final_plan", []), indent=2),
-                context=state.get("diagnosis", "No context"),
-            )
 
         try:
             llm = await get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)

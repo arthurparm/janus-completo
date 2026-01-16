@@ -7,9 +7,9 @@ import operator
 from langgraph.graph import END, START, StateGraph
 
 from app.core.llm import ModelPriority, ModelRole
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
-from app.core.prompts.modules.debate import PROPONENT_SYSTEM_PROMPT, CRITIC_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +31,15 @@ async def propose_node(state: DebateState):
     code = state.get('code')
     critique = state.get('critique')
     
-    prompt = [
-        f"OBJETIVO: {goal}",
-        f"INSTRUÇÕES DO SISTEMA:\n{PROPONENT_SYSTEM_PROMPT}"
-    ]
-    
-    if code:
-        prompt.append(f"CÓDIGO ANTERIOR:\n```python\n{code}\n```")
-    if critique:
-        prompt.append(f"CRÍTICA (Corrigir):\n{json.dumps(critique, indent=2)}")
+    review_notes = json.dumps(critique, indent=2) if critique else ""
+    final_prompt = await get_formatted_prompt(
+        "debate_proponent_prompt",
+        goal=goal,
+        current_code=code or "",
+        review_notes=review_notes,
+    )
         
-    prompt.append("Gere a solução completa (ou corrigida) agora.")
-    final_prompt = "\n\n".join(prompt)
-        
-    result = llm.invoke_llm(prompt=final_prompt, role=ModelRole.CODE_GENERATOR, priority=ModelPriority.HIGH_QUALITY)
+    result = await llm.invoke_llm(prompt=final_prompt, role=ModelRole.CODE_GENERATOR, priority=ModelPriority.HIGH_QUALITY)
     response = result.get("response", "")
     
     # Extract code
@@ -62,9 +57,13 @@ async def critique_node(state: DebateState):
     goal = state['goal']
     code = state['code']
     
-    prompt = f"OBJETIVO: {goal}\n\nCÓDIGO:\n```python\n{code}\n```\n\nINSTRUÇÕES:\n{CRITIC_SYSTEM_PROMPT}"
+    prompt = await get_formatted_prompt(
+        "debate_critic_prompt",
+        goal=goal,
+        code=code or "",
+    )
     
-    result = llm.invoke_llm(prompt=prompt, role=ModelRole.PRIMARY_ASSISTANT, priority=ModelPriority.HIGH_QUALITY)
+    result = await llm.invoke_llm(prompt=prompt, role=ModelRole.PRIMARY_ASSISTANT, priority=ModelPriority.HIGH_QUALITY)
     response = result.get("response", "")
     
     try:

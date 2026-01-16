@@ -8,6 +8,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.memory.memory_core import get_memory_db
 from app.repositories.memory_repository import MemoryRepository
 
@@ -179,7 +180,10 @@ class DataHarvester:
             for raw_item in items:
                 item = _normalize_item(raw_item)
                 if item.get("content") and item.get("metadata"):
-                    prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
+                    prompt = await get_formatted_prompt(
+                        "training_metadata_context_prompt",
+                        metadata=json.dumps(item["metadata"], ensure_ascii=False),
+                    )
                     completion = item["content"]
                     training_examples.append({"prompt": prompt, "completion": completion})
 
@@ -253,7 +257,10 @@ async def harvest_data_for_training(
         for raw_item in items:
             item = _normalize_item(raw_item)
             if item.get("content") and item.get("metadata"):
-                prompt = f"Contexto: {json.dumps(item['metadata'], ensure_ascii=False)}"
+                prompt = await get_formatted_prompt(
+                    "training_metadata_context_prompt",
+                    metadata=json.dumps(item["metadata"], ensure_ascii=False),
+                )
                 completion = item["content"]
                 prompt = sanitize_text(prompt)
                 completion = sanitize_text(completion)

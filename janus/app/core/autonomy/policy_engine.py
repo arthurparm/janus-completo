@@ -140,7 +140,12 @@ class PolicyEngine:
                 
         return PolicyDecision(allowed=True)
 
-    def validate_tool_call(self, tool_name: str, input_args: dict | None = None) -> PolicyDecision:
+    def validate_tool_call(
+        self,
+        tool_name: str,
+        input_args: dict | None = None,
+        user_id: str | None = None,
+    ) -> PolicyDecision:
         # Blocklist global
         if tool_name in self.config.blocklist:
             return PolicyDecision(allowed=False, reason="Ferramenta na blocklist")
@@ -151,7 +156,7 @@ class PolicyEngine:
             return PolicyDecision(allowed=False, reason="Ferramenta não registrada")
 
         # Rate limit
-        if not action_registry.check_rate_limit(tool_name):
+        if not action_registry.check_rate_limit(tool_name, user_id=user_id):
             return PolicyDecision(allowed=False, reason="Rate limit atingido")
 
         # Permissões vs risco

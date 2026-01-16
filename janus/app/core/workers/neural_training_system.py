@@ -26,10 +26,26 @@ from typing import Any
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.prompt_fallback import PROMPTS_DIR
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
 logger = logging.getLogger(__name__)
+
+_PROMPT_CACHE: dict[str, str] = {}
+
+
+def _load_prompt_template(prompt_name: str) -> str:
+    if prompt_name in _PROMPT_CACHE:
+        return _PROMPT_CACHE[prompt_name]
+
+    prompt_path = PROMPTS_DIR / f"{prompt_name}.txt"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+
+    content = prompt_path.read_text(encoding="utf-8")
+    _PROMPT_CACHE[prompt_name] = content
+    return content
 
 # ==================== MÉTRICAS ====================
 
@@ -145,7 +161,8 @@ class DatasetPreparator:
             if exp_type == "action_success":
                 # Usa ação como prompt e resultado como completion
                 tool_used = exp.get("metadata", {}).get("tool_used", "")
-                prompt = f"Use a ferramenta {tool_used} para: {content[:100]}"
+                template = _load_prompt_template("training_action_success_prompt")
+                prompt = template.format(tool_used=tool_used, content=content[:100])
                 completion = content
                 dataset.append({"prompt": prompt, "completion": completion})
 
@@ -159,7 +176,8 @@ class DatasetPreparator:
 
             elif exp_type == "lessons_learned":
                 # Usa contexto como prompt e lições como completion
-                prompt = "Quais lições podem ser aprendidas desta situação?"
+                template = _load_prompt_template("training_lessons_learned_prompt")
+                prompt = template
                 completion = content
                 dataset.append({"prompt": prompt, "completion": completion})
 

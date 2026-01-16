@@ -23,6 +23,7 @@ from app.core.agents.utils import (
     _clean_json_output,
     AgentEventCallbackHandler,
 )
+from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -58,48 +59,15 @@ class SpecializedAgent:
         if config and hasattr(config, "prompt_template") and config.prompt_template:
             return config.prompt_template
 
-        # Tentar buscar do PromptService
+        prompt_name = f"agent_{self.role.value}"
         try:
-            from app.services.prompt_service import get_prompt_service
-
-            # Mapeia role para nome padronizado do prompt
-            # Ex: PROJECT_MANAGER -> agent_project_manager
-            prompt_name = f"agent_{self.role.value}"
-
-            prompt_text = await get_prompt_service().get_prompt(prompt_name)
+            prompt_text = await get_prompt_with_fallback(prompt_name)
             if prompt_text:
                 return prompt_text
-
-            logger.error(f"Prompt não encontrado para {prompt_name}, usando fallback básico.")
-
         except Exception as e:
             logger.error(f"Erro ao buscar prompt para {self.role.value}: {e}")
 
-        # Fallback minimalista de segurança (os prompts reais devem estar no banco)
-        # Fallback minimalista de segurança (os prompts reais devem estar no banco)
-        return (
-            f"Você é um agente especializado no papel de {self.role.value}.\n"
-            "Aja de forma prestativa e eficiente.\n\n"
-            "TOOLS:\n"
-            "------\n"
-            "You have access to the following tools:\n\n"
-            "{tools}\n\n"
-            "To use a tool, please use the following format:\n\n"
-            "```\n"
-            "Thought: Do I need to use a tool? Yes\n"
-            "Action: the action to take, should be one of [{tool_names}]\n"
-            "Action Input: the input to the action\n"
-            "Observation: the result of the action\n"
-            "```\n\n"
-            "When you have a response to say to the Human, or if you do not need to use a tool, you must use the format:\n\n"
-            "```\n"
-            "Thought: Do I need to use a tool? No\n"
-            "Final Answer: [your response here]\n"
-            "```\n\n"
-            "Begin!\n\n"
-            "New input: {input}\n"
-            "{agent_scratchpad}"
-        )
+        raise ValueError(f"Prompt não encontrado para {prompt_name}")
 
     def _get_llm_config_for_role(self, config):
         """Obtém configuração do LLM para o papel do agente (do banco ou fallback)."""

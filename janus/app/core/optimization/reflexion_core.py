@@ -108,7 +108,7 @@ class ReflexionSession:
 
     async def _default_evaluator(self, task: str, result: str) -> dict[str, Any]:
         await self._ensure_llm()
-        prompt = get_formatted_prompt("reflexion_evaluate", task=task, result=result)
+        prompt = await get_formatted_prompt("reflexion_evaluate", task=task, result=result)
         try:
             evaluation_str = await self._llm.send(prompt, timeout_s=30)
             return self._extract_json(evaluation_str)
@@ -128,7 +128,7 @@ class ReflexionSession:
         """Gera reflexão e lições aprendidas."""
         await self._ensure_llm()
 
-        prompt = get_formatted_prompt(
+        prompt = await get_formatted_prompt(
             "reflexion_refine",
             task=task,
             previous_attempt=result,
@@ -161,7 +161,7 @@ class ReflexionSession:
                 logger.info(f"Reflexion Iteração {iteration + 1}/{self.config.max_iterations}")
 
                 # 2. Executar (Gerar Solução)
-                execution_prompt = get_formatted_prompt(
+                execution_prompt = await get_formatted_prompt(
                     "reflexion_execution",
                     task=self.task,
                     current_context=current_context

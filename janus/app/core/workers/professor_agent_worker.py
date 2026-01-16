@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.agents.utils import parse_json_strict
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
@@ -23,31 +24,9 @@ from app.services.llm_service import LLMService
 logger = logging.getLogger(__name__)
 
 
-def _build_review_prompt(state: TaskState) -> str:
+async def _build_review_prompt(state: TaskState) -> str:
     code = state.data_payload.script_code or ""
-    prompt = [
-        "ATUE COMO: Engenheiro de Software Sênior e Especialista em Segurança.",
-        "TAREFA: Revisar rigorosamente o código Python abaixo.",
-        "",
-        "CRITÉRIOS DE AVALIAÇÃO:",
-        "1. CORREÇÃO: O código faz o que deve fazer? Existem bugs lógicos?",
-        "2. SEGURANÇA: Existem vulnerabilidades (injection, paths inseguros)?",
-        "3. QUALIDADE: O código segue PEP 8? Tem docstrings? Usa type hints?",
-        "",
-        "CÓDIGO PARA REVISÃO:",
-        code,
-        "",
-        "FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):",
-        "Retorne APENAS um objeto JSON válido (sem markdown, sem texto extra) com a seguinte estrutura:",
-        "{",
-        '    "status": "APPROVED" | "REJECTED",',
-        '    "critical_issues": ["lista de problemas que impedem a aprovação"],',
-        '    "suggestions": ["sugestões de melhoria (não bloqueantes)"],',
-        '    "security_score": 1-10',
-        "}",
-        "Se status for APPROVED, 'critical_issues' deve estar vazio."
-    ]
-    return "\n".join(prompt)
+    return await get_formatted_prompt("professor_code_review", code=code)
 
 
 def _parse_review_json(review_text: str) -> dict[str, Any]:
@@ -84,8 +63,8 @@ async def process_professor_task(task: TaskMessage) -> None:
             return
 
         llm_service = LLMService(LLMRepository())
-        prompt = _build_review_prompt(state)
-        result = llm_service.invoke_llm(
+        prompt = await _build_review_prompt(state)
+        result = await llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.KNOWLEDGE_CURATOR,
             priority=ModelPriority.HIGH_QUALITY,

@@ -225,7 +225,7 @@ class EvolutionManager:
         from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
         try:
-            prompt = get_formatted_prompt("tool_specification", request=request)
+            prompt = await get_formatted_prompt("tool_specification", request=request)
         except Exception as e:
             logger.error(f"[Evolution] Falha ao carregar prompt tool_specification: {e}")
             return None
@@ -265,7 +265,7 @@ class EvolutionManager:
 
         try:
             # Use get_formatted_prompt which handles fallback and formatting
-            prompt = get_formatted_prompt("tool_generation", specification=spec_str)
+            prompt = await get_formatted_prompt("tool_generation", specification=spec_str)
         except Exception as e:
             logger.error(f"[Evolution] Falha ao carregar prompt tool_generation: {e}")
             return None

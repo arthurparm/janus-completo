@@ -12,12 +12,12 @@ from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
-def _build_security_prompt(goal: str, context: str, code_snippets: dict) -> str:
+async def _build_security_prompt(goal: str, context: str, code_snippets: dict) -> str:
     code_block = "\n".join([f"Arquivo: {k}\n{v}" for k, v in code_snippets.items()])
     if not code_block:
         code_block = context # Fallback se snippets não estiverem estruturados
 
-    return get_formatted_prompt("security_red_team_audit", goal=goal, code_block=code_block)
+    return await get_formatted_prompt("security_red_team_audit", goal=goal, code_block=code_block)
 
 def _is_vulnerable(text: str) -> bool:
     return "VULNERABLE" in text.upper()
@@ -54,12 +54,12 @@ async def process_red_team_task(task: TaskMessage) -> None:
             return
 
         # Constroi o prompt adversarial
-        prompt = _build_security_prompt(state.original_goal, context, code_snippets)
+        prompt = await _build_security_prompt(state.original_goal, context, code_snippets)
 
         # Invoca LLM LOCAL
         llm_service = LLMService(LLMRepository())
         try:
-            response_dict = llm_service.invoke_llm(
+            response_dict = await llm_service.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.SECURITY_AUDITOR,
                 priority=ModelPriority.LOCAL_ONLY,

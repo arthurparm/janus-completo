@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
 from app.core.agents.leaf_worker import LeafWorker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.db.postgres_config import postgres_db
 
 logger = logging.getLogger(__name__)
@@ -93,10 +94,12 @@ async def worker_node(state: AgentState):
     
     # Instantiate PydanticAI worker
     # In a real scenario, we would have a factory or registry of workers
-    system_prompt = "You are a helpful assistant."
+    prompt_name = "leaf_worker_assistant"
     if worker_name == "sysadmin":
-        system_prompt = "You are a system administrator. Be careful."
-        
+        prompt_name = "leaf_worker_sysadmin"
+
+    system_prompt = await get_formatted_prompt(prompt_name)
+
     worker = LeafWorker(name=worker_name, system_prompt=system_prompt)
     
     try:

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -11,25 +12,17 @@ from app.repositories.collaboration_repository import CollaborationRepository
 from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
-from app.core.prompts.modules.debate import CRITIC_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-def _build_prompt(state: TaskState) -> str:
+async def _build_prompt(state: TaskState) -> str:
     goal = state.original_goal
     code = state.data_payload.script_code
-    
-    return f"""
-    OBJETIVO ORIGINAL: {goal}
-    
-    CÓDIGO PROPOSTO:
-    ```python
-    {code}
-    ```
-    
-    INSTRUÇÕES DO SISTEMA:
-    {CRITIC_SYSTEM_PROMPT}
-    """
+    return await get_formatted_prompt(
+        "debate_critic_prompt",
+        goal=goal,
+        code=code or "",
+    )
 
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_AGENT_DEBATE_CRITIC.value,
@@ -44,9 +37,9 @@ async def process_critic_task(task: TaskMessage) -> None:
         logger.info(f"Debate Critic processing task {state.task_id}")
 
         llm_service = LLMService(LLMRepository())
-        prompt = _build_prompt(state)
+        prompt = await _build_prompt(state)
         
-        result = llm_service.invoke_llm(
+        result = await llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.PRIMARY_ASSISTANT, 
             priority=ModelPriority.HIGH_QUALITY,

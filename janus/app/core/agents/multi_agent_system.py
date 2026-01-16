@@ -142,7 +142,7 @@ class MultiAgentSystem:
         logger.info(f"Iniciando projeto: {project_description}")
 
         # 1. PM analisa e decompõe o projeto
-        decomposition_prompt = get_formatted_prompt(
+        decomposition_prompt = await get_formatted_prompt(
             "multi_agent_decomposition", project_description=project_description
         )
 

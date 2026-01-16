@@ -309,7 +309,12 @@ class DynamicToolGenerator:
             try:
                 # Executa código no sandbox seguro
                 # Passa os argumentos como contexto
-                result = python_sandbox.execute(code, context=kwargs)
+                result = python_sandbox.execute(
+                    code,
+                    context=kwargs,
+                    call_function=function_name,
+                    call_args=kwargs,
+                )
 
                 if not result.success:
                     logger.error(f"[ActionModule] Erro na execução sandbox: {result.error}")
@@ -320,29 +325,13 @@ class DynamicToolGenerator:
                     # Se esperar que a função execute dentro do sandbox, precisamos ver se ela foi chamada.
                     # O sandbox atual executa o código top-level.
                     # Se o código define uma função, ela estará em 'variables'.
-                    pass
-
-                # Verificar se a função alvo está definida nas variáveis locais do sandbox
-                if result.variables and function_name in result.variables:
-                    func_in_sandbox = result.variables[function_name]
-                    if callable(func_in_sandbox):
-                        # NOTA: Chamar a função diretamente aqui ainda executa no contexto deste processo,
-                        # mas as globais dela estão presas ao sandbox.
-                        # O ideal seria que o sandbox suportasse 'call_function', mas o execute() já retorna as vars.
-                        try:
-                            # Tentar executar a função recuperada com os args
-                            # Atenção: objetos complexos podem não funcionar bem entre fronteiras se o sandbox fosse isolado em processo,
-                            # mas aqui é isolamento lógico (exec restricted).
-                            res = func_in_sandbox(**kwargs)
-                            return str(res)
-                        except Exception as call_err:
-                            return f"Erro ao chamar função '{function_name}': {call_err}"
+                    return result.output.strip()
 
                 # Se a função não foi encontrada mas houve output, retorne o output (comportamento de script)
                 if result.output:
                     return result.output.strip()
 
-                return f"Erro: Função '{function_name}' não encontrada no código e nenhum output gerado."
+                return f"Erro: Function '{function_name}' not found or produced no output."
 
             except Exception as e:
                 logger.error(f"[ActionModule] Erro ao executar código dinâmico: {e}", exc_info=True)
@@ -372,7 +361,7 @@ class ActionRegistry:
         self._tools: dict[str, BaseTool] = {}
         self._metadata: dict[str, ToolMetadata] = {}
         self._call_history: list[ToolCall] = []
-        self._rate_limits: dict[str, list[float]] = {}  # tool_name -> timestamps
+        self._rate_limits: dict[tuple[str, str], list[float]] = {}  # (user_id, tool_name) -> timestamps
 
     def register(
         self,
@@ -463,7 +452,13 @@ class ActionRegistry:
 
         return tools
 
-    def check_rate_limit(self, tool_name: str) -> bool:
+    def _rate_limit_key(self, tool_name: str, user_id: str | None = None) -> tuple[str, str]:
+        effective_user_id = str(user_id) if user_id else USER_ID.get()
+        if not effective_user_id or effective_user_id == "-":
+            effective_user_id = "global"
+        return (effective_user_id, tool_name)
+
+    def check_rate_limit(self, tool_name: str, user_id: str | None = None) -> bool:
         """
         Verifica se a ferramenta atingiu o rate limit.
 
@@ -478,15 +473,16 @@ class ActionRegistry:
         one_minute_ago = now - 60
 
         # Limpa timestamps antigos
-        if tool_name not in self._rate_limits:
-            self._rate_limits[tool_name] = []
+        key = self._rate_limit_key(tool_name, user_id)
+        if key not in self._rate_limits:
+            self._rate_limits[key] = []
 
-        self._rate_limits[tool_name] = [
-            ts for ts in self._rate_limits[tool_name] if ts > one_minute_ago
+        self._rate_limits[key] = [
+            ts for ts in self._rate_limits[key] if ts > one_minute_ago
         ]
 
         # Verifica limite
-        current_calls = len(self._rate_limits[tool_name])
+        current_calls = len(self._rate_limits[key])
         return current_calls < metadata.rate_limit_per_minute
 
     def record_call(
@@ -496,14 +492,16 @@ class ActionRegistry:
         success: bool,
         error: str | None = None,
         input_args: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> None:
         """Registra uma chamada de ferramenta para telemetria."""
         now = time.time()
 
         # Adiciona ao rate limit tracking
-        if tool_name not in self._rate_limits:
-            self._rate_limits[tool_name] = []
-        self._rate_limits[tool_name].append(now)
+        key = self._rate_limit_key(tool_name, user_id)
+        if key not in self._rate_limits:
+            self._rate_limits[key] = []
+        self._rate_limits[key].append(now)
 
         # Registra histórico
         call = ToolCall(
@@ -546,9 +544,10 @@ class ActionRegistry:
         _TOOL_CALLS.labels(tool_name, category, outcome).inc()
         _TOOL_LATENCY.labels(tool_name, category).observe(duration)
         try:
+            effective_user_id = user_id or USER_ID.get()
             record_audit_event_direct(
                 {
-                    "user_id": USER_ID.get(),
+                    "user_id": effective_user_id,
                     "endpoint": f"tool:{tool_name}",
                     "action": "tool_call",
                     "tool": tool_name,

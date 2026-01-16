@@ -8,6 +8,7 @@ from langchain_core.tools import tool
 
 from app.core.llm.llm_manager import ModelPriority, ModelRole
 from app.core.memory.memory_core import get_memory_db  # Usar o getter
+from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,24 @@ class ReasoningSession:
             role=ModelRole.REASONING, priority=ModelPriority.HIGH_QUALITY
         )
         self.tools = tools
-        self.prompt = PromptTemplate.from_template(
-            """Você é um assistente de raciocínio. Responda à pergunta: {input}"""
-        )
+        self.prompt = None
+        self.agent_executor = None
+        self.prompt_name = "reasoning_session"
+
+    async def _ensure_agent(self) -> None:
+        if self.agent_executor:
+            return
+
+        prompt_text = await get_prompt_with_fallback(self.prompt_name)
+        if not prompt_text:
+            raise ValueError(f"Prompt '{self.prompt_name}' nao encontrado.")
+
+        self.prompt = PromptTemplate.from_template(prompt_text)
         self.agent_executor = create_react_agent(self.llm, self.tools, self.prompt)
 
     async def solve_question(self, question: str) -> str:
         try:
+            await self._ensure_agent()
             result = await self.agent_executor.invoke({"input": question})
             return result["output"]
         except Exception as e:

@@ -62,6 +62,17 @@ class RateLimitError(ChatServiceError):
         super().__init__(f"Rate limit exceeded for '{resource}': {limit}/hour")
 
 
+class MessageTooLargeError(ChatServiceError):
+    """Message payload exceeds configured size."""
+
+    def __init__(self, size_bytes: int, limit_bytes: int):
+        self.size_bytes = size_bytes
+        self.limit_bytes = limit_bytes
+        super().__init__(
+            f"Message too large ({size_bytes} bytes > {limit_bytes} bytes)"
+        )
+
+
 class LLMInvocationError(ChatServiceError):
     """LLM invocation failed."""
 

@@ -100,32 +100,48 @@ def _validate_steps(
 
 
 # === Stage 1: DRAFT ===
-def _build_draft_prompt(
+async def _build_draft_prompt(
     goal: Goal, metrics: dict[str, Any], tools: list[str], max_steps: int
 ) -> str:
     goal_txt = f"Objetivo: {goal.title}\nDescrição: {goal.description}"
     sys_info = json.dumps(metrics or {}, ensure_ascii=False)
     tools_list = ", ".join(tools[:50])
 
-    return get_formatted_prompt(
-        "autonomy_plan_draft", goal=goal_txt, state=sys_info, tools=tools_list
+    return await get_formatted_prompt(
+        "autonomy_plan_draft",
+        goal=goal_txt,
+        metrics=sys_info,
+        tools=tools_list,
+        max_steps=max_steps,
     )
 
 
 # === Stage 2: CRITIQUE ===
-def _build_critique_prompt(goal: Goal, draft_plan: list[dict[str, Any]], tools: list[str]) -> str:
+async def _build_critique_prompt(
+    goal: Goal, draft_plan: list[dict[str, Any]], metrics: dict[str, Any]
+) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
-    return get_formatted_prompt("autonomy_plan_critique", goal=goal.title, draft=plan_str)
+    metrics_str = json.dumps(metrics or {}, ensure_ascii=False)
+    return await get_formatted_prompt(
+        "autonomy_plan_critique",
+        goal=goal.title,
+        plan=plan_str,
+        metrics=metrics_str,
+    )
 
 
 # === Stage 3: REFINE ===
-def _build_refine_prompt(
+async def _build_refine_prompt(
     goal: Goal, draft_plan: list[dict[str, Any]], critique: str, tools: list[str], max_steps: int
 ) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
     tools_list = ", ".join(tools[:50])
-    return get_formatted_prompt(
-        "autonomy_plan_refine", goal=goal.title, critique=critique, draft=plan_str, tools=tools_list
+    return await get_formatted_prompt(
+        "autonomy_plan_refine",
+        goal=goal.title,
+        critique=critique,
+        plan=plan_str,
+        tools=tools_list,
     )
 
 
@@ -144,8 +160,8 @@ async def build_plan_for_goal(
 
     # 1. DRAFT
     try:
-        draft_prompt = _build_draft_prompt(goal, metrics, tools, max_steps)
-        draft_res = llm_service.invoke_llm(
+        draft_prompt = await _build_draft_prompt(goal, metrics, tools, max_steps)
+        draft_res = await llm_service.invoke_llm(
             prompt=draft_prompt,
             role=ModelRole.ORCHESTRATOR,  # Drafter uses general orchestrator role
             priority=ModelPriority.DEFAULT,  # Draft can be fast
@@ -160,8 +176,8 @@ async def build_plan_for_goal(
         logger.info("Planner: Rascunho gerado", steps=len(draft_plan))
 
         # 2. CRITIQUE (Self-Correction)
-        critique_prompt = _build_critique_prompt(goal, draft_plan, tools)
-        critique_res = llm_service.invoke_llm(
+        critique_prompt = await _build_critique_prompt(goal, draft_plan, metrics)
+        critique_res = await llm_service.invoke_llm(
             prompt=critique_prompt,
             role=ModelRole.ORCHESTRATOR,  # Critic
             priority=ModelPriority.HIGH_QUALITY,  # Needs strict logic
@@ -175,8 +191,8 @@ async def build_plan_for_goal(
             return draft_plan
 
         # 3. REFINE
-        refine_prompt = _build_refine_prompt(goal, draft_plan, critique_text, tools, max_steps)
-        refine_res = llm_service.invoke_llm(
+        refine_prompt = await _build_refine_prompt(goal, draft_plan, critique_text, tools, max_steps)
+        refine_res = await llm_service.invoke_llm(
             prompt=refine_prompt,
             role=ModelRole.ORCHESTRATOR,  # Refiner
             priority=ModelPriority.HIGH_QUALITY,
@@ -215,43 +231,25 @@ async def build_plan_for_goal(
 
 
 # === Stage 4: REPLANNING (Runtime) ===
-def _build_replanning_prompt(
+async def _build_replanning_prompt(
     goal: Goal,
     failed_step: dict[str, Any],
     error_msg: str,
     remaining_steps: list[dict[str, Any]],
     tools: list[str],
 ) -> str:
-    from json import dumps
-
-    sys = (
-        "Você é o REPLANNER do Janus. A execução de um plano FALHOU.\n"
-        "Sua tarefa: Decidir como recuperar a falha para ainda atingir o Objetivo.\n"
-        "Analise o erro e escolha uma estratégia:\n"
-        "1. IGNORE: O erro é irrelevante, pule esse passo.\n"
-        "2. RETRY_WITH_ARGS: O passo é certo, mas os argumentos estavam errados (ex: query ruim).\n"
-        "3. NEW_PLAN: O plano atual quebrou. Gere novos passos para substituir o restante.\n"
-        "4. ABORT: Impossível continuar.\n"
-    )
-
     ctx = {
         "goal": goal.title,
         "failed_step": failed_step,
         "error": error_msg,
         "remaining_steps_count": len(remaining_steps),
     }
-
-    schema = (
-        "Retorne JSON puro:\n"
-        "{\n"
-        '  "action": "IGNORE" | "RETRY_WITH_ARGS" | "NEW_PLAN" | "ABORT",\n'
-        '  "new_args": { ... } (se action=RETRY_WITH_ARGS),\n'
-        '  "new_steps": [ ... ] (se action=NEW_PLAN, lista de passos completa para terminar o goal)\n'
-        "}"
-    )
-
     tools_list = ", ".join(tools[:50])
-    return f"{sys}\nContexto de Falha:\n{dumps(ctx, indent=2, ensure_ascii=False)}\nTools Disponíveis: {tools_list}\n{schema}"
+    return await get_formatted_prompt(
+        "autonomy_replanner",
+        ctx=json.dumps(ctx, indent=2, ensure_ascii=False),
+        tools_list=tools_list,
+    )
 
 
 async def replan_goal(
@@ -267,10 +265,10 @@ async def replan_goal(
     Decide dinamicamente o que fazer.
     """
     tools = _list_allowed_tools(policy)
-    prompt = _build_replanning_prompt(goal, failed_step, error_msg, remaining_steps, tools)
+    prompt = await _build_replanning_prompt(goal, failed_step, error_msg, remaining_steps, tools)
 
     try:
-        res = llm_service.invoke_llm(
+        res = await llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.HIGH_QUALITY,
@@ -291,15 +289,9 @@ async def replan_goal(
 
 
 # === Stage 5: OUTCOME VERIFICATION (Judge) ===
-def _build_verification_prompt(
+async def _build_verification_prompt(
     goal: Goal, step: dict[str, Any], result: str, error: str | None
 ) -> str:
-    sys = (
-        "Você é o VERIFIER do Janus. Analise o resultado da execução de um passo.\n"
-        "Seu objetivo é dizer se o resultado é ÚTIL para o objetivo ou se foi uma falha semântica "
-        "(ex: retornou vazio, erro disfarçado, ou não respondeu a pergunta).\n"
-        'Retorne JSON: {"success": boolean, "reason": string}'
-    )
     ctx = {
         "goal": goal.title,
         "step_tool": step.get("tool"),
@@ -307,7 +299,10 @@ def _build_verification_prompt(
         "result_preview": result[:1000] if result else "None",
         "error": error,
     }
-    return f"{sys}\nContexto:\n{json.dumps(ctx, indent=2, ensure_ascii=False)}"
+    return await get_formatted_prompt(
+        "autonomy_verifier",
+        ctx=json.dumps(ctx, indent=2, ensure_ascii=False),
+    )
 
 
 async def verify_outcome(
@@ -326,8 +321,8 @@ async def verify_outcome(
         if error:
             return {"success": False, "reason": f"System Error: {error}"}
 
-        prompt = _build_verification_prompt(goal, step, str(result), error)
-        res = llm_service.invoke_llm(
+        prompt = await _build_verification_prompt(goal, step, str(result), error)
+        res = await llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.ORCHESTRATOR,  # Could be a specific JUDGE role
             priority=ModelPriority.DEFAULT,  # Keep it fast

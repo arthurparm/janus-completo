@@ -26,7 +26,7 @@ async def _decompose_complex_task(goal: str) -> str:
     """Usa o prompt task_decomposition para analisar requisições complexas."""
     try:
         llm = await get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
-        prompt = get_formatted_prompt(
+        prompt = await get_formatted_prompt(
             "task_decomposition",
             project_description=goal,
             request=goal,

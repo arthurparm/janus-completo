@@ -7,6 +7,7 @@ import inspect
 from langsmith import traceable
 
 from app.core.tools.sandbox_executor import sandbox
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +110,10 @@ class LeafWorker:
             raise
 
 # Example usage/factory
-def create_coder_worker() -> LeafWorker:
+async def create_coder_worker() -> LeafWorker:
+    system_prompt = await get_formatted_prompt("leaf_worker_coder")
     return LeafWorker(
         name="Coder",
-        system_prompt="You are an expert software engineer. Write clean, efficient code.",
+        system_prompt=system_prompt,
         # Add actual tools here
     )

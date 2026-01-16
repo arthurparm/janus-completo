@@ -10,6 +10,7 @@ from langsmith import traceable
 
 from app.config import settings
 from app.core.llm.llm_manager import ModelRole, get_llm
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,12 @@ class NativeGraphRAG:
             # Synthesis
             # We can use the existing LLM service for synthesis
             llm = await get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
-            prompt = f"Context (retrieved via HyDE={query_text != question}):\n{context}\n\nQuestion: {question}\n\nAnswer:"
+            prompt = await get_formatted_prompt(
+                "graph_rag_synthesis",
+                is_hyde=query_text != question,
+                context=context,
+                question=question,
+            )
             response = await llm.ainvoke(prompt)
             
             return str(response.content)

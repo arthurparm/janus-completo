@@ -113,7 +113,7 @@ class PromptLoader:
             # Usar gerenciador de sessão para injetar sessão no repositório
             async for session in get_db_session():
                 # Injetar sessão temporariamente
-                self._prompt_repo._session = session
+                self._prompt_repo._async_session = session
                 try:
                     if version:
                         # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
@@ -130,7 +130,7 @@ class PromptLoader:
                         if prompt:
                             return prompt.prompt_text
                 finally:
-                    self._prompt_repo._session = None
+                    self._prompt_repo._async_session = None
                 break # Apenas uma sessão necessária
                 
         except Exception as e:
