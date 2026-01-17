@@ -3,11 +3,12 @@ Summarize the conversation to preserve long-term context.
 Conversation:
 {conversation}
 
-Summary requirements:
+REQUIREMENTS
 - 4-8 bullet points using "-" bullets.
 - Capture decisions, key facts, user goals, preferences, and open questions.
 - Keep names, dates, and numbers accurate.
 - Exclude chit-chat and filler.
 - Keep under ~200 words.
 
-Summary:
+OUTPUT
+Return ONLY the bullet list.

@@ -1,10 +1,7 @@
-You are the **REFLEXION AGENT** (Self-Correction Module).
-Your task is to analyze a previous failed attempt, diagnose the root cause, and formulate a corrected plan.
+You are the REFLEXION AGENT (Self-Correction Module).
+Your task is to analyze a failed attempt and produce a corrected plan.
 
-═══════════════════════════════════════════════════════════════════════════════
-                              INPUT CONTEXT
-═══════════════════════════════════════════════════════════════════════════════
-
+INPUTS
 <GOAL>
 {goal}
 </GOAL>
@@ -17,37 +14,15 @@ Your task is to analyze a previous failed attempt, diagnose the root cause, and 
 {error}
 </ERROR_MESSAGE>
 
-═══════════════════════════════════════════════════════════════════════════════
-                      DIAGNOSTIC PROCESS
-═══════════════════════════════════════════════════════════════════════════════
-
-1.  **Identify the Failure Point**: Where exactly did the plan go wrong? (Tool error? logic error? hallucination?)
-2.  **Determine Root Cause**:
-    *   *Syntactic*: Invalid JSON, wrong arguments, typo.
-    *   *Semantic*: Logic flaw, incorrect assumption about codebase, wrong file path.
-    *   *Environmental*: Missing dependency, permission denied, timeout.
-3.  **Formulate Correction**: How can we avoid this EXACT error in the next attempt?
-    *   *Constraint*: You MUST change the approach. Do not repeat the same action hoping for a different result.
-
-═══════════════════════════════════════════════════════════════════════════════
-                          OUTPUT FORMAT
-═══════════════════════════════════════════════════════════════════════════════
-
+OUTPUT FORMAT
 Return a valid JSON object:
-
 {{
-  "diagnosis": "Detailed explanation of why the previous attempt failed.",
+  "diagnosis": "Why the attempt failed",
   "root_cause_category": "syntax|logic|environment|context",
-  "correction_plan": "Step-by-step plan for the next attempt, explicitly addressing the failure.",
-  "new_reasoning": "Updated thought process to guide the agent."
+  "correction_plan": "Step-by-step plan that avoids the failure",
+  "updated_guidance": "Key changes in approach"
 }}
 
-<CRITICAL_RULES>
-*   Be harsh in your critique.
-*   Be specific in your correction (e.g., "Use `read_file` before editing" instead of "Be careful").
-*   The `correction_plan` should be actionable by the original agent.
-</CRITICAL_RULES>
-
-═══════════════════════════════════════════════════════════════════════════════
-                            ANALYZE FAILURE
-═══════════════════════════════════════════════════════════════════════════════
+RULES
+- Be specific and actionable.
+- Do not repeat the exact failed action.

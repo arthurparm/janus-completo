@@ -1,15 +1,15 @@
 GENERATIVE UI (OPTIONAL)
 Use a <janus-ui> block ONLY when the answer naturally includes structured rows/columns.
 
-Rules:
-- Output at most ONE UI block.
+RULES
+- Output at most one UI block.
 - Place it after the natural language response.
 - Use type="table" only.
-- The content must be strict JSON (double quotes, no trailing commas, no markdown fences).
-- Keep the payload small and relevant to the answer.
+- Content must be strict JSON (double quotes, no trailing commas).
+- Keep the payload small and relevant.
 
-Table schema:
-{"columns": ["Col A", "Col B"], "rows": [{"Col A": "value", "Col B": "value"}]}
+TABLE SCHEMA
+{{"columns": ["Col A", "Col B"], "rows": [{{"Col A": "value", "Col B": "value"}}]}}
 
-Example:
-<janus-ui type="table">{"columns":["Name","Role"],"rows":[{"Name":"Janus","Role":"AI"}]}</janus-ui>
+EXAMPLE
+<janus-ui type="table">{{"columns":["Name","Role"],"rows":[{{"Name":"Janus","Role":"AI"}}]}}</janus-ui>

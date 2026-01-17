@@ -1,12 +1,16 @@
 import sys
 import os
+import asyncio
 from pathlib import Path
 import structlog
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
+from app.db import db
+from app.models.config_models import Prompt
 from app.repositories.prompt_repository import PromptRepository
 
 # Configure logging
@@ -21,16 +25,24 @@ logger = structlog.get_logger()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "app" / "prompts"
 
+def _ensure_tables() -> None:
+    try:
+        asyncio.run(db.create_tables())
+    except Exception as e:
+        logger.warning("Failed to ensure prompt tables exist", error=str(e))
+
 def sync_prompts():
     """
     Reads all .txt files from janus/app/prompts/ and updates the database.
     Creates new versions if content differs.
     """
     logger.info("Starting Prompt Synchronization", directory=str(PROMPTS_DIR))
+
+    _ensure_tables()
     
     if not PROMPTS_DIR.exists():
         logger.error("Prompts directory not found", path=str(PROMPTS_DIR))
-        return
+        raise SystemExit(1)
 
     # Engine is initialized on repository creation; ensure tables exist if needed.
     repo = PromptRepository()
@@ -61,14 +73,43 @@ def sync_prompts():
             # Create new version
             logger.info("Updating prompt", name=prompt_name)
             version = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            repo.create_prompt_version(
-                prompt_name=prompt_name,
-                prompt_text=content,
-                version=version,
-                created_by="sync_script",
-                activate=True
-            )
-            updated_count += 1
+            try:
+                repo.create_prompt_version(
+                    prompt_name=prompt_name,
+                    prompt_text=content,
+                    version=version,
+                    created_by="sync_script",
+                    activate=True
+                )
+                updated_count += 1
+            except IntegrityError as e:
+                logger.warning(
+                    "Prompt insert failed; updating existing record",
+                    name=prompt_name,
+                    error=str(e),
+                )
+                session = db.get_session_direct()
+                try:
+                    prompt = (
+                        session.query(Prompt)
+                        .filter(
+                            Prompt.prompt_name == prompt_name,
+                            Prompt.namespace == "default",
+                            Prompt.language == "en",
+                            Prompt.model_target == "general",
+                        )
+                        .first()
+                    )
+                    if not prompt:
+                        raise
+                    prompt.prompt_text = content
+                    prompt.prompt_version = version
+                    prompt.is_active = True
+                    prompt.updated_at = datetime.utcnow()
+                    session.commit()
+                    updated_count += 1
+                finally:
+                    session.close()
 
         except Exception as e:
             logger.error("Failed to sync prompt", name=prompt_name, error=str(e))
@@ -80,6 +121,8 @@ def sync_prompts():
         skipped=skipped_count, 
         errors=error_count
     )
+    if error_count > 0:
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     sync_prompts()

@@ -1,5 +1,5 @@
 CODE REVIEW PROTOCOL
-- Read code: use read_file to get actual content.
-- Analyze: check for bugs, style issues, and best practices.
-- Context: use query_knowledge_graph if project context is needed.
-- Report: provide specific, actionable feedback with line numbers.
+- Read code with read_file.
+- Focus on bugs, security risks, regressions, and missing tests.
+- Cite file and line references.
+- Provide actionable fixes.

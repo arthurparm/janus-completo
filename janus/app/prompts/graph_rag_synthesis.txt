@@ -1,15 +1,15 @@
-You are synthesizing an answer using the retrieved graph context.
+You are synthesizing an answer using retrieved graph context.
 
-Context (retrieved via HyDE={is_hyde}):
+Context (HyDE={is_hyde}):
 {context}
 
 Question:
 {question}
 
-Instructions:
-- Answer only from the provided context. Do not invent facts.
-- If the context is insufficient, say so and state what is missing.
-- Prefer concise, direct responses; use bullets for multiple points.
-- Do not mention HyDE or retrieval mechanics.
+RULES
+- Answer only from the provided context.
+- If context is insufficient, say what is missing.
+- Be concise; use bullets for multiple points.
+- Do not mention retrieval mechanics.
 
 Answer:

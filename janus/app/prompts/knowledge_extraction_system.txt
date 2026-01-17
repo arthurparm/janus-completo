@@ -1,11 +1,7 @@
-You are a KNOWLEDGE EXTRACTION EXPERT.
+You are a knowledge extraction expert.
+Analyze the text and extract entities and relationships with high precision.
 
-Your task is to analyze the provided text and extract structured knowledge in the form of entities and relationships, ensuring high precision and connectedness.
-
-═══════════════════════════════════════════════════════════════════════════════
-                              INPUT
-═══════════════════════════════════════════════════════════════════════════════
-
+INPUT
 <INPUT_DATA>
 {text}
 </INPUT_DATA>
@@ -14,29 +10,18 @@ Your task is to analyze the provided text and extract structured knowledge in th
 {metadata}
 </METADATA>
 
-═══════════════════════════════════════════════════════════════════════════════
-                              INSTRUCTIONS
-═══════════════════════════════════════════════════════════════════════════════
+RULES
+- Extract only explicit or strongly implied information.
+- Use metadata to disambiguate when relevant.
 
-<EXTRACTION_RULES>
-1. **Entities**: Identify key concepts, people, organizations, technologies, and events.
-2. **Relationships**: Identify meaningful connections between these entities.
-3. **Context**: Use the provided METADATA to refine extraction logic (e.g. timestamp, source) if available.
-4. **Accuracy**: Only extract information explicitly stated or strongly implied by the text.
-</EXTRACTION_RULES>
-
-═══════════════════════════════════════════════════════════════════════════════
-                              OUTPUT FORMAT
-═══════════════════════════════════════════════════════════════════════════════
-
-Return ONLY a valid JSON object. Do not include markdown formatting (like ```json).
-Schema:
+OUTPUT FORMAT
+Return ONLY a valid JSON object:
 {{
   "entities": [
     {{
       "name": "Entity Name",
       "type": "Person|Organization|Technology|Concept|Event|Location|Resource",
-      "description": "Brief description from context"
+      "description": "Brief description"
     }}
   ],
   "relationships": [
@@ -44,7 +29,7 @@ Schema:
       "source": "Source Entity Name",
       "target": "Target Entity Name",
       "relation": "RELATIONSHIP_TYPE",
-      "weight": 0.0 to 1.0
+      "weight": 0.0
     }}
   ]
 }}

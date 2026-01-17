@@ -1,4 +1,7 @@
-Training context metadata (JSON):
+Context metadata (JSON):
 {metadata}
 
-Task: Produce the correct response given this metadata context.
+Task:
+- Use the metadata as context for the training sample.
+- The completion should be the content described by the metadata.
+- Output only the content, no extra labels or formatting.

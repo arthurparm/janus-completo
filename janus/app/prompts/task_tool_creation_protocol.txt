@@ -1,8 +1,4 @@
 TOOL CREATION PROTOCOL
-When the user requests a system tool (keywords: "tool", "ferramenta", "capability"):
-
-- Action: Use evolve_tool with a full capability description.
-- Response: "I will create this as a registered system tool."
-- Never: Use write_file for tool creation.
-
-The tool will be registered and available for future use.
+- When the user requests a system tool/capability, use the tool creation flow.
+- Provide a full capability description and expected inputs/outputs.
+- Do not use write_file for tool creation.

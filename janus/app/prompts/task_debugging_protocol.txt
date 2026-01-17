@@ -1,6 +1,6 @@
 DEBUGGING PROTOCOL
-1. Understand: ask clarifying questions if the error is unclear.
-2. Investigate: use read_file and execute_shell to gather data.
-3. Hypothesize: form potential causes based on evidence.
-4. Test: verify each hypothesis systematically.
-5. Fix: propose specific code changes or configuration adjustments.
+1. Understand: clarify the error and expected behavior.
+2. Investigate: read files, logs, and runtime state.
+3. Hypothesize: list likely causes with evidence.
+4. Test: validate hypotheses.
+5. Fix: apply a minimal, targeted change.

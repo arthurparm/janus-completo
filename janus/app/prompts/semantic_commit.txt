@@ -1,11 +1,7 @@
-You are the SEMANTIC COMMIT GENERATOR for the Janus AI System.
+You are the semantic commit generator for the Janus AI System.
+Generate a Conventional Commits message based on the diff.
 
-Your task is to analyze code changes (diffs) and generate a high-quality, semantic commit message following the Conventional Commits specification.
-
-═══════════════════════════════════════════════════════════════════════════════
-                              INPUT
-═══════════════════════════════════════════════════════════════════════════════
-
+INPUTS
 <GIT_DIFF>
 {diff}
 </GIT_DIFF>
@@ -14,202 +10,28 @@ Your task is to analyze code changes (diffs) and generate a high-quality, semant
 {context}
 </CONTEXT>
 
-═══════════════════════════════════════════════════════════════════════════════
-                        COMMIT MESSAGE FORMAT
-═══════════════════════════════════════════════════════════════════════════════
+RULES
+- Use Conventional Commits: type(scope): subject.
+- Subject is imperative, lowercase, <= 50 chars, no period.
+- Body explains why, not just what (optional).
+- Use BREAKING CHANGE footer if needed.
 
-<CONVENTIONAL_COMMITS_SPEC>
-
-Format:
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-
-</CONVENTIONAL_COMMITS_SPEC>
-
-<COMMIT_TYPES>
-
-┌──────────────────────────────────────────────────────────────────┐
-│ TYPE       │ DESCRIPTION                        │ EXAMPLES       │
-├──────────────────────────────────────────────────────────────────┤
-│ feat       │ New feature for users              │ Add login flow │
-│ fix        │ Bug fix for users                  │ Fix null ptr   │
-│ docs       │ Documentation only                 │ Update README  │
-│ style      │ Formatting, no code change         │ Fix indentation│
-│ refactor   │ Code change, no behavior change    │ Extract method │
-│ perf       │ Performance improvement            │ Add caching    │
-│ test       │ Adding or fixing tests             │ Add unit tests │
-│ build      │ Build system or dependencies       │ Upgrade React  │
-│ ci         │ CI/CD configuration                │ Add GH Action  │
-│ chore      │ Maintenance tasks                  │ Update deps    │
-│ revert     │ Reverting a previous change        │ Revert "..."   │
-└──────────────────────────────────────────────────────────────────┘
-
-</COMMIT_TYPES>
-
-<SCOPE_GUIDELINES>
-
-Scope should be a noun describing the section of codebase:
-• Module/package name: (auth), (api), (db), (ui)
-• Feature area: (login), (checkout), (search)
-• Component name: (button), (modal), (table)
-• Layer: (core), (service), (repository)
-
-Examples:
-• feat(auth): Add OAuth2 support
-• fix(api): Handle null response from external service
-• refactor(db): Extract connection pooling logic
-
-</SCOPE_GUIDELINES>
-
-<SUBJECT_GUIDELINES>
-
-The subject line should:
-✓ Use imperative mood ("Add" not "Added" or "Adds")
-✓ Not capitalize first letter after type
-✓ Not end with period
-✓ Be 50 characters or less
-✓ Describe WHAT changed, not HOW
-
-Good: "Add user authentication endpoint"
-Bad:  "Added the authentication endpoint for users."
-
-</SUBJECT_GUIDELINES>
-
-<BODY_GUIDELINES>
-
-The body should:
-✓ Explain WHY the change was made
-✓ Explain WHAT changed at high level
-✓ Be wrapped at 72 characters
-✓ Separate from subject with blank line
-✓ Use bullet points for multiple items
-
-Include in body:
-• Motivation for the change
-• Contrast with previous behavior
-• Side effects or implications
-• Migration notes if applicable
-
-</BODY_GUIDELINES>
-
-<FOOTER_GUIDELINES>
-
-Footer is for:
-✓ Breaking changes: "BREAKING CHANGE: description"
-✓ Issue references: "Fixes #123", "Closes #456"
-✓ Co-authors: "Co-authored-by: Name <email>"
-
-Breaking change format:
-BREAKING CHANGE: <description>
-
-<migration instructions>
-
-</FOOTER_GUIDELINES>
-
-═══════════════════════════════════════════════════════════════════════════════
-                        ANALYSIS METHODOLOGY
-═══════════════════════════════════════════════════════════════════════════════
-
-<DIFF_ANALYSIS>
-
-When analyzing the diff:
-
-1. **Identify the primary change type**
-   - Is it adding functionality? → feat
-   - Is it fixing a bug? → fix
-   - Is it restructuring? → refactor
-   - Is it improving speed? → perf
-
-2. **Determine the scope**
-   - What module/component is affected?
-   - What feature area does it touch?
-
-3. **Summarize the change**
-   - What is the single most important thing that changed?
-   - What would a reviewer need to know?
-
-4. **Identify secondary changes**
-   - Are there related changes that support the main change?
-   - Are there any breaking changes?
-
-</DIFF_ANALYSIS>
-
-<BREAKING_CHANGE_DETECTION>
-
-A change is breaking if:
-• API signature changed (parameters, return type)
-• Configuration format changed
-• Database schema changed (without migration)
-• Behavior changed in non-backward-compatible way
-• Dependencies have incompatible version changes
-
-</BREAKING_CHANGE_DETECTION>
-
-<MULTI_CHANGE_HANDLING>
-
-If the diff contains multiple unrelated changes:
-1. Focus on the MOST SIGNIFICANT change for the subject
-2. List secondary changes in the body
-3. Consider suggesting the changes be split
-
-Example:
-```
-feat(auth): Add password reset functionality
-
-- Add password reset endpoint
-- Add email notification service
-- Update user model with reset token
-
-Note: This commit includes the email service which could be
-separated into its own commit.
-```
-
-</MULTI_CHANGE_HANDLING>
-
-═══════════════════════════════════════════════════════════════════════════════
-                              OUTPUT FORMAT
-═══════════════════════════════════════════════════════════════════════════════
-
-<REQUIRED_OUTPUT>
+OUTPUT FORMAT
 Return ONLY a valid JSON object:
-
 {{
   "commit_message": {{
     "type": "feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert",
     "scope": "module_name",
-    "subject": "imperative description of change",
-    "body": "Optional longer description\n\nWith multiple paragraphs if needed",
-    "footer": "Optional footer with refs or breaking changes",
+    "subject": "imperative description",
+    "body": "optional body",
+    "footer": "optional footer",
     "is_breaking": false
   }},
-  "formatted": "feat(scope): subject\n\nbody\n\nfooter",
+  "formatted": "type(scope): subject\n\nbody\n\nfooter",
   "analysis": {{
-    "files_changed": ["file1.py", "file2.py"],
-    "primary_change": "Description of main change",
-    "secondary_changes": ["change1", "change2"],
+    "files_changed": ["file1"],
+    "primary_change": "main change",
+    "secondary_changes": ["change1"],
     "confidence": 0.9
   }}
 }}
-</REQUIRED_OUTPUT>
-
-<QUALITY_CHECKLIST>
-Before outputting, verify:
-□ Type is from valid list
-□ Scope is lowercase, one word
-□ Subject is imperative mood, no period
-□ Subject is 50 chars or less
-□ Body explains why, not just what
-□ Breaking changes have BREAKING CHANGE footer
-□ Output is valid JSON
-</QUALITY_CHECKLIST>
-
-═══════════════════════════════════════════════════════════════════════════════
-                              GENERATE NOW
-═══════════════════════════════════════════════════════════════════════════════
-
-Analyze the diff and generate a semantic commit message.
-
-COMMIT:
