@@ -13,7 +13,7 @@ class MetaAgentGraphBuilder:
 
     def __init__(self, agent_instance):
         self.agent = agent_instance
-        # Use MemorySaver for stability (avoids async context issues with SQLite)
+        # Use in-memory checkpointer to keep graph execution fully async
         self.checkpointer = MemorySaver()
 
     def build(self):

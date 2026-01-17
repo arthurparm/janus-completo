@@ -1,5 +1,10 @@
+import csv
+import json
+from io import StringIO
+from typing import Any
+
 import structlog
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from app.services.observability_service import ObservabilityService, get_observability_service
@@ -162,9 +167,9 @@ async def user_summary(user_id: str, request: Request):
             ts if last_updated is None or float(ts) > float(last_updated) else last_updated
         )
     try:
-        from app.db.vector_store import get_collection_info
+        from app.db.vector_store import aget_collection_info
 
-        info = get_collection_info(f"user_{user_id}")
+        info = await aget_collection_info(f"user_{user_id}")
         points = int(info.get("points_count") or 0)
     except Exception:
         points = None
@@ -185,13 +190,89 @@ class UserMetricsResponse(BaseModel):
     vector_points: int
 
 
+def _normalize_export_value(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=True)
+    return str(value)
+
+
+def _filter_event_fields(event: dict[str, Any], fields: list[str] | None) -> dict[str, Any]:
+    if not fields:
+        return event
+    return {field: event.get(field) for field in fields}
+
+
+@router.get("/audit/events", summary="Lista eventos de auditoria")
+async def audit_events(
+    user_id: str | None = None,
+    tool: str | None = None,
+    status: str | None = None,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
+    total = service.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+    return {"total": total, "events": events}
+
+
+@router.get("/audit/export", summary="Exporta eventos de auditoria")
+async def export_audit_events(
+    format: str = "csv",
+    fields: str | None = None,
+    user_id: str | None = None,
+    tool: str | None = None,
+    status: str | None = None,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
+    limit: int = 1000,
+    offset: int = 0,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
+    field_list = [f.strip() for f in fields.split(",")] if fields else []
+    field_list = [f for f in field_list if f]
+    if not field_list:
+        field_list = [
+            "id",
+            "user_id",
+            "endpoint",
+            "action",
+            "tool",
+            "status",
+            "latency_ms",
+            "trace_id",
+            "justification",
+            "details_json",
+            "created_at",
+        ]
+
+    rows = [_filter_event_fields(ev, field_list) for ev in events]
+
+    if format.lower() == "json":
+        payload = json.dumps(rows, ensure_ascii=True)
+        return Response(content=payload, media_type="application/json")
+
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=field_list, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        normalized = {k: _normalize_export_value(v) for k, v in row.items()}
+        writer.writerow(normalized)
+    return Response(content=output.getvalue(), media_type="text/csv")
+
+
 @router.get(
     "/metrics/user", response_model=UserMetricsResponse, summary="Métricas agregadas por usuário"
 )
 async def user_metrics(
     user_id: str, service: ObservabilityService = Depends(get_observability_service)
 ):
-    m = service.get_user_metrics(user_id)
+    m = await service.get_user_metrics(user_id)
     return UserMetricsResponse(**m)
 
 

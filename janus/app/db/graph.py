@@ -278,11 +278,11 @@ class GraphDatabase:
                             )
                         if "function_node_key" not in existing_schema:
                             await session.run(
-                                "CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS NODE KEY"
+                                "CREATE CONSTRAINT function_node_key IF NOT EXISTS FOR (f:Function) REQUIRE (f.name, f.file_path) IS UNIQUE"
                             )
                         if "class_node_key" not in existing_schema:
                             await session.run(
-                                "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS NODE KEY"
+                                "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS UNIQUE"
                             )
                         
                         # Indexes

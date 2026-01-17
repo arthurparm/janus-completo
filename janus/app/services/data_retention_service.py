@@ -28,10 +28,8 @@ class DataRetentionService:
         target_collections = ["janus_memory", "janus_knowledge"]
         for col in target_collections:
             try:
-                # Assuming 'metadata.user_id' is the filter key
-                delete_points_by_filter(col, {"metadata.user_id": user_id})
+                await delete_points_by_filter(col, {"metadata.user_id": user_id})
             except Exception as e:
-                # Log but continue to next
                 logger.error(f"Failed to cleanup vector collection {col} for user {user_id}: {e}")
 
         # 2. Cleanup Graph Store (Neo4j)

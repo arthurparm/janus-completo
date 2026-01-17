@@ -6,10 +6,10 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import httpx
 import structlog
 
-from app.core.embeddings.embedding_manager import embed_text
+from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import get_broker
-from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.models.schemas import TaskMessage
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.user_repository import OAuthTokenRepository
@@ -283,12 +283,12 @@ async def start_google_productivity_consumer():
                 if do_index and user_id is not None:
                     try:
                         _t0 = __import__("time").perf_counter()
-                        client = get_qdrant_client()
-                        coll = get_or_create_collection(f"user_{user_id}")
+                        client = get_async_qdrant_client()
+                        coll = await aget_or_create_collection(f"user_{user_id}")
                         title = str(ev.get("title", ""))
                         loc = str(ev.get("location", ""))
                         content = f"{title} @ {loc}"
-                        vec = embed_text(content)
+                        vec = await aembed_text(content)
                         pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
                         payload_q = {
                             "content": content,
@@ -303,7 +303,7 @@ async def start_google_productivity_consumer():
                         from qdrant_client import models as _m
 
                         point = _m.PointStruct(id=pid, vector=vec, payload=payload_q)
-                        client.upsert(collection_name=coll, points=[point])
+                        await client.upsert(collection_name=coll, points=[point])
                         try:
                             _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
                             _PROD_WORKER_USER_EVENTS.labels(
@@ -428,10 +428,10 @@ async def start_google_productivity_consumer():
                     if do_index and user_id is not None:
                         try:
                             _t0 = __import__("time").perf_counter()
-                            client = get_qdrant_client()
-                            coll = get_or_create_collection(f"user_{user_id}")
+                            client = get_async_qdrant_client()
+                            coll = await aget_or_create_collection(f"user_{user_id}")
                             content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
-                            vec = embed_text(content)
+                            vec = await aembed_text(content)
                             composite_id = f"mail:{user_id}:{hash(content)}"
                             pid = str(uuid5(NAMESPACE_URL, composite_id))
                             payload_q = {
@@ -448,7 +448,7 @@ async def start_google_productivity_consumer():
                             from qdrant_client import models as _m
 
                             point = _m.PointStruct(id=pid, vector=vec, payload=payload_q)
-                            client.upsert(collection_name=coll, points=[point])
+                            await client.upsert(collection_name=coll, points=[point])
                             try:
                                 _PROD_WORKER_USER_EVENTS.labels(
                                     str(user_id), "mail_index", "ok"

@@ -106,6 +106,23 @@ class ChatService:
     def _split_ui(self, text: str) -> tuple[str, dict[str, Any] | None]:
         return extract_ui_block(text)
 
+    def _is_explicit_tool_creation(self, message: str) -> bool:
+        if not message:
+            return False
+        lower = message.lower()
+        if "tool" not in lower and "ferramenta" not in lower:
+            return False
+        creation_keywords = ("crie", "criar", "create", "build", "gerar", "generate")
+        return any(k in lower for k in creation_keywords)
+
+    def _format_tool_creation_response(self, result: dict[str, Any]) -> str:
+        if not result:
+            return "Tool creation returned an empty result."
+        name = result.get("name") or result.get("tool_name") or result.get("tool") or "unknown"
+        status = result.get("evolution_message") or "Tool creation completed."
+        payload = json.dumps(result, indent=2, ensure_ascii=False)
+        return f"{status}\n\nTool: {name}\n\n{payload}"
+
     def _validate_conversation_access(
         self,
         conversation_id: str,
@@ -383,6 +400,68 @@ class ChatService:
             result_with_conv = dict(result)
             result_with_conv["conversation_id"] = conversation_id
             # Disparar gatilhos pós-resposta
+            try:
+                self._trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+            return result_with_conv
+
+        # Intercepta solicitaÇõÇœes de criaÇõÇœo de ferramentas
+        if self._prompt_service.is_tool_request(message) and self._is_explicit_tool_creation(message):
+            start_t = _time.time()
+            if not self._tools:
+                assistant_text = "Tool creation is unavailable: tool service is not configured."
+            else:
+                try:
+                    from app.core.evolution import EvolutionManager
+
+                    manager = EvolutionManager(self._llm, self._tools)
+                    tool_result = await manager.evolve_tool(message)
+                    assistant_text = self._format_tool_creation_response(tool_result)
+                except Exception as e:
+                    assistant_text = f"Falha ao criar ferramenta: {e}"
+
+            clean_text, ui = self._split_ui(assistant_text)
+            elapsed = max(0.0, _time.time() - start_t)
+            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
+            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
+
+            await asyncio.to_thread(
+                self._repo.add_message, conversation_id, role="assistant", text=assistant_text
+            )
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
+
+            try:
+                if self._rag_service:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role,
+                        priority=priority,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
+            except Exception:
+                pass
+
+            result = {
+                "response": clean_text,
+                "provider": "janus",
+                "model": "tool_creation",
+                "role": role.value,
+            }
+            if ui:
+                result["ui"] = ui
+
+            result_with_conv = dict(result)
+            result_with_conv["conversation_id"] = conversation_id
             try:
                 self._trigger_post_response_events(
                     conversation_id=conversation_id,
@@ -1183,14 +1262,15 @@ class ChatService:
                     else _models.Filter(must_not=must_not)
                 )
                 client = get_async_qdrant_client()
-                hits = await client.search(
+                res = await client.query_points(
                     collection_name=coll,
-                    query_vector=vec,
+                    query=vec,
                     limit=5,
                     with_payload=True,
                     query_filter=qfilter,
                 )
-                for h in hits or []:
+                hits = getattr(res, "points", res) or []
+                for h in hits:
                     payload = getattr(h, "payload", {}) or {}
                     meta = payload.get("metadata") or {}
                     citations.append(

@@ -44,6 +44,7 @@ from app.core.agents.meta_agent_module.tools import (
     get_resource_usage,
 )
 
+from app.core.agents.utils import parse_json_strict
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
 from app.core.monitoring.health_monitor import get_health_monitor
@@ -163,6 +164,29 @@ class MetaAgent:
 
     # --- Core Logic (Adapted for Dict State) ---
 
+    def _llm_supports_structured_output(self, llm: Any) -> bool:
+        try:
+            base_url = str(getattr(llm, "openai_api_base", "") or getattr(llm, "base_url", ""))
+        except Exception:
+            base_url = ""
+        if "deepseek" in base_url.lower():
+            return False
+        return True
+
+    def _parse_json_response(self, content: str) -> dict[str, Any]:
+        if not content:
+            return {}
+        try:
+            parsed = parse_json_strict(content)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception as exc:
+            logger.warning(f"Failed to parse JSON response: {exc}")
+        return {}
+
+    def _extract_response_text(self, response: Any) -> str:
+        return str(getattr(response, "content", response))
+
     async def monitor_node_logic(self, state: AgentState) -> dict:
         """Coleta métricas e identifica anomalias iniciais."""
         logger.info("[MetaAgent] Node: Monitor")
@@ -237,21 +261,32 @@ class MetaAgent:
             assert self.llm is not None
 
             try:
-                structured_llm = self.llm.with_structured_output(DiagnosisSchema)
-                diag_result = await structured_llm.ainvoke(prompt)
+                if self._llm_supports_structured_output(self.llm):
+                    structured_llm = self.llm.with_structured_output(DiagnosisSchema)
+                    diag_result = await structured_llm.ainvoke(prompt)
 
-                if hasattr(diag_result, "root_cause"):
-                    return {"diagnosis": diag_result.root_cause}
-                elif isinstance(diag_result, dict):
-                    return {"diagnosis": diag_result.get("root_cause", str(diag_result))}
-                else:
+                    if hasattr(diag_result, "root_cause"):
+                        return {"diagnosis": diag_result.root_cause}
+                    if isinstance(diag_result, dict):
+                        return {"diagnosis": diag_result.get("root_cause", str(diag_result))}
                     return {"diagnosis": str(diag_result)}
+
+                response = await self.llm.ainvoke(prompt)
+                raw_text = self._extract_response_text(response)
+                parsed = self._parse_json_response(raw_text)
+                if parsed.get("root_cause"):
+                    return {"diagnosis": parsed["root_cause"]}
+                return {"diagnosis": raw_text}
             except Exception as parse_err:
                 logger.warning(
                     f"Structured output failed for diagnosis: {parse_err}. Falling back to raw."
                 )
                 response = await self.llm.ainvoke(prompt)
-                return {"diagnosis": response.content}
+                raw_text = self._extract_response_text(response)
+                parsed = self._parse_json_response(raw_text)
+                if parsed.get("root_cause"):
+                    return {"diagnosis": parsed["root_cause"]}
+                return {"diagnosis": raw_text}
         except Exception as e:
             logger.error(f"Error in diagnosis node: {e}", exc_info=True)
             return {"diagnosis": f"Diagnosis failed: {e}"}
@@ -271,16 +306,25 @@ class MetaAgent:
             assert self.llm is not None
 
             try:
-                structured_llm = self.llm.with_structured_output(PlanSchema)
-                plan_result = await structured_llm.ainvoke(prompt)
+                if self._llm_supports_structured_output(self.llm):
+                    structured_llm = self.llm.with_structured_output(PlanSchema)
+                    plan_result = await structured_llm.ainvoke(prompt)
 
-                recommendations = []
-                if hasattr(plan_result, "recommendations"):
-                    recommendations = [rec.dict() for rec in plan_result.recommendations]
-                elif isinstance(plan_result, dict):
-                    recommendations = plan_result.get("recommendations", [])
+                    recommendations = []
+                    if hasattr(plan_result, "recommendations"):
+                        recommendations = [rec.dict() for rec in plan_result.recommendations]
+                    elif isinstance(plan_result, dict):
+                        recommendations = plan_result.get("recommendations", [])
 
-                return {"candidate_plan": recommendations}
+                    return {"candidate_plan": recommendations}
+
+                response = await self.llm.ainvoke(prompt)
+                raw_text = self._extract_response_text(response)
+                parsed = self._parse_json_response(raw_text)
+                recommendations = parsed.get("recommendations", [])
+                if isinstance(recommendations, list):
+                    return {"candidate_plan": recommendations}
+                raise ValueError("No recommendations found in JSON response")
 
             except Exception as parse_err:
                 logger.warning(f"Structured output failed for plan: {parse_err}")
@@ -319,23 +363,39 @@ class MetaAgent:
             assert self.llm is not None
 
             try:
-                structured_llm = self.llm.with_structured_output(CritiqueSchema)
-                critique_result = await structured_llm.ainvoke(prompt)
+                if self._llm_supports_structured_output(self.llm):
+                    structured_llm = self.llm.with_structured_output(CritiqueSchema)
+                    critique_result = await structured_llm.ainvoke(prompt)
 
-                critique_dict = (
-                    critique_result.dict() if hasattr(critique_result, "dict") else critique_result
-                )
-                if not isinstance(critique_dict, dict):
-                    critique_dict = {"approved": False, "reason": "Invalid critique structure"}
+                    critique_dict = (
+                        critique_result.dict()
+                        if hasattr(critique_result, "dict")
+                        else critique_result
+                    )
+                    if not isinstance(critique_dict, dict):
+                        critique_dict = {"approved": False, "reason": "Invalid critique structure"}
 
-                if critique_dict.get("approved"):
-                    return {"critique": critique_dict, "final_plan": plan, "status": "approved"}
-                else:
+                    if critique_dict.get("approved"):
+                        return {"critique": critique_dict, "final_plan": plan, "status": "approved"}
                     return {
                         "critique": critique_dict,
                         "status": "retry",
                         "retry_count": state.get("retry_count", 0) + 1,
                     }
+
+                response = await self.llm.ainvoke(prompt)
+                raw_text = self._extract_response_text(response)
+                critique_dict = self._parse_json_response(raw_text)
+                if not critique_dict:
+                    critique_dict = {"approved": False, "reason": "Critique parsing failed"}
+
+                if critique_dict.get("approved"):
+                    return {"critique": critique_dict, "final_plan": plan, "status": "approved"}
+                return {
+                    "critique": critique_dict,
+                    "status": "retry",
+                    "retry_count": state.get("retry_count", 0) + 1,
+                }
             except Exception as parse_err:
                 logger.warning(f"Structured critique failed: {parse_err}")
                 return {
@@ -399,30 +459,56 @@ class MetaAgent:
 
         try:
             llm = await get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.HIGH_QUALITY)
-            structured_llm = llm.with_structured_output(ReflexionAnalysisSchema)
-            analysis_data = await structured_llm.ainvoke(prompt)
+            if self._llm_supports_structured_output(llm):
+                structured_llm = llm.with_structured_output(ReflexionAnalysisSchema)
+                analysis_data = await structured_llm.ainvoke(prompt)
+                analysis_dict = (
+                    analysis_data.model_dump()
+                    if hasattr(analysis_data, 'model_dump')
+                    else analysis_data
+                )
+            else:
+                response = await llm.ainvoke(prompt)
+                raw_text = self._extract_response_text(response)
+                analysis_dict = self._parse_json_response(raw_text)
             
-            # 2. Armazenar na Memória de Trabalho (Curto Prazo)
+            if not isinstance(analysis_dict, dict):
+                analysis_dict = {}
+            
+            root_cause = str(analysis_dict.get('root_cause') or 'Unknown root cause')
+            error_type = str(analysis_dict.get('error_type') or 'unknown')
+            actionable_insights = analysis_dict.get('actionable_insights')
+            if not isinstance(actionable_insights, list):
+                actionable_insights = (
+                    [str(actionable_insights)]
+                    if actionable_insights not in (None, '')
+                    else ['Provide structured JSON output for reflexion analysis.']
+                )
+            
+            # 2. Armazenar na Memoria de Trabalho (Curto Prazo)
             wm = get_working_memory()
             wm.add(
-                type="reflexion",
-                content=f"Failure Analysis: {analysis_data.root_cause}. Insights: {analysis_data.actionable_insights}",
+                type='reflexion',
+                content=f"Failure Analysis: {root_cause}. Insights: {actionable_insights}",
                 metadata={
-                    "error_type": analysis_data.error_type,
-                    "cycle_id": state.get("cycle_id"),
-                    "retry_count": retry_count
+                    'error_type': error_type,
+                    'cycle_id': state.get('cycle_id'),
+                    'retry_count': retry_count
                 }
             )
-
+            
             # 3. Atualizar Estado
             return {
-                "error_analysis": analysis_data.model_dump(),
-                "status": "retry",
-                "retry_count": retry_count + 1,
-                # Atualiza o diagnóstico para o próximo planejamento considerar os insights
-                "diagnosis": f"Previous Failure: {analysis_data.root_cause}. Fix: {analysis_data.actionable_insights}", 
+                'error_analysis': {
+                    'root_cause': root_cause,
+                    'error_type': error_type,
+                    'actionable_insights': actionable_insights,
+                },
+                'status': 'retry',
+                'retry_count': retry_count + 1,
+                # Atualiza o diagnostico para o proximo planejamento considerar os insights
+                "diagnosis": f"Previous Failure: {root_cause}. Fix: {actionable_insights}",
             }
-
         except Exception as e:
             logger.error(f"Reflexion failed: {e}")
             # Se a reflexão falhar, apenas incrementa retry e tenta novamente (ou desiste)
@@ -436,10 +522,11 @@ class MetaAgent:
 
     def _dispatch_task(self, recommendation: dict):
         """Despacha uma tarefa baseada na recomendação."""
+        priority = recommendation.get("priority")
+        agent = recommendation.get("suggested_agent")
         logger.info(
-            f"[MetaAgent] Dispatching Task: {recommendation.get('title')}",
-            priority=recommendation.get("priority"),
-            agent=recommendation.get("suggested_agent"),
+            f"[MetaAgent] Dispatching Task: {recommendation.get('title')} "
+            f"(priority={priority}, agent={agent})"
         )
 
     def _state_dict_to_report(self, state: dict) -> StateReport:

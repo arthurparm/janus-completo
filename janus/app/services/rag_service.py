@@ -142,16 +142,17 @@ class RAGService:
                 )
 
             qfilter = qdrant_models.Filter(must=must)
-            hits = await client.search(
+            res = await client.query_points(
                 collection_name=collection_name,
-                query_vector=vec,
+                query=vec,
                 limit=limit,
                 with_payload=True,
                 query_filter=qfilter,
             )
+            hits = getattr(res, "points", res) or []
 
             memories: list[dict[str, Any]] = []
-            for h in hits or []:
+            for h in hits:
                 score = getattr(h, "score", None)
                 if score is not None and score < 0.3:
                     continue

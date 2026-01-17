@@ -183,13 +183,14 @@ async def rag_user_chat_search(
     cm = _tracer.start_as_current_span("rag.user_chat") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
-            hits = await client.search(
+            res = await client.query_points(
                 collection_name=collection_name,
-                query_vector=vec,
+                query=vec,
                 limit=limit or 5,
                 with_payload=True,
                 query_filter=qfilter,
             )
+        hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -292,13 +293,14 @@ async def rag_productivity_search(
     cm = _tracer.start_as_current_span("rag.productivity") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
-            hits = await client.search(
+            res = await client.query_points(
                 collection_name=coll,
-                query_vector=vec,
+                query=vec,
                 limit=limit or 5,
                 with_payload=True,
                 query_filter=qfilter,
             )
+        hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("productivity", "success").inc()
         _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception:
@@ -421,9 +423,9 @@ async def rag_user_chat_search_v2(
     cm = _tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
-            res = await client.search(
+            res = await client.query_points(
                 collection_name=collection_name,
-                query_vector=vec,
+                query=vec,
                 limit=limit,
                 with_payload=True,
                 query_filter=sc_filter,
@@ -437,13 +439,14 @@ async def rag_user_chat_search_v2(
         res = []
     try:
         _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(res or []))
-        for r in res or []:
+        for r in (getattr(res, "points", res) or []):
             s = float(getattr(r, "score", 0.0) or 0.0)
             _RAG_SCORES.labels("user_chat_v2").observe(max(0.0, min(1.0, s)))
     except Exception:
         pass
+    points = getattr(res, "points", res) or []
     results: list[dict[str, Any]] = []
-    for r in res:
+    for r in points:
         payload = r.payload or {}
         meta = payload.get("metadata", {})
         results.append(

@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from qdrant_client import models
 
-from app.core.embeddings.embedding_manager import embed_text
+from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.filesystem_manager import read_file, write_file
-from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
 from app.services.observability_service import ObservabilityService
 
@@ -176,11 +176,11 @@ async def calendar_add_event(
             pass
     try:
         if bool(payload.index):
-            client = get_qdrant_client()
-            coll = get_or_create_collection(f"user_{payload.user_id}")
+            client = get_async_qdrant_client()
+            coll = await aget_or_create_collection(f"user_{payload.user_id}")
             evt = payload.event.model_dump()
             content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
-            vec = embed_text(content)
+            vec = await aembed_text(content)
             pid = f"calendar:{payload.user_id}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
             payload_q = {
                 "content": content,
@@ -191,7 +191,7 @@ async def calendar_add_event(
                 },
             }
             point = models.PointStruct(id=pid, vector=vec, payload=payload_q)
-            client.upsert(collection_name=coll, points=[point])
+            await client.upsert(collection_name=coll, points=[point])
             try:
                 _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
                 _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "calendar_index", "ok").inc()
@@ -489,10 +489,10 @@ async def notes_add(
     await loop.run_in_executor(None, write_file, path, text, False)
     try:
         if bool(payload.index):
-            client = get_qdrant_client()
-            coll = get_or_create_collection(f"user_{payload.user_id}")
+            client = get_async_qdrant_client()
+            coll = await aget_or_create_collection(f"user_{payload.user_id}")
             content = f"{note.get('title', '')}\n{note.get('content', '')}"
-            vec = embed_text(content)
+            vec = await aembed_text(content)
             pid = f"note:{payload.user_id}:{hash(content)}"
             payload_q = {
                 "content": content,
@@ -503,7 +503,7 @@ async def notes_add(
                 },
             }
             point = models.PointStruct(id=pid, vector=vec, payload=payload_q)
-            client.upsert(collection_name=coll, points=[point])
+            await client.upsert(collection_name=coll, points=[point])
             try:
                 _PROD_REQUESTS_TOTAL.labels("notes_index", "ok").inc()
                 _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "notes_index", "ok").inc()

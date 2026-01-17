@@ -175,7 +175,7 @@ async def get_user_status(
     target_uid = user_id or str(actor)
     if (not is_admin) and (user_id is not None) and (str(user_id) != str(actor)):
         raise HTTPException(status_code=403, detail="Forbidden")
-    m = observability.get_user_metrics(target_uid)
+    m = await observability.get_user_metrics(target_uid)
     return UserStatusResponse(**m)
 
 

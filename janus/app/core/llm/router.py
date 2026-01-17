@@ -190,6 +190,12 @@ async def get_llm(
         # DeepSeek primeiro para economizar (FAST_AND_CHEAP)
         provider_order = ["DeepSeek", "Google Gemini", "xAI", "OpenAI"]
 
+    # Temperatura DeepSeek por papel (fallback para default se não definido)
+    deepseek_temp_by_role = getattr(settings, "DEEPSEEK_TEMPERATURE_BY_ROLE", {}) or {}
+    deepseek_temperature = float(
+        deepseek_temp_by_role.get(role.value, getattr(settings, "DEEPSEEK_TEMPERATURE", 0.0))
+    )
+
     # Catálogo de provedores (ordem será ajustada abaixo)
     cloud_providers = {
         "DeepSeek": {
@@ -198,12 +204,10 @@ async def get_llm(
             "enabled": _validate_deepseek_key(
                 getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
             ),
-            # DeepSeek R1 (reasoner) does not support temperature in some contexts or requires specific handling.
-            # However, standard ChatOpenAI params usually work but 'deepseek-reasoner' might ignore temp.
-            # We keep it standard but ensure base_url is correct.
-            "initializer_factory": lambda model: ChatOpenAI(
+            # DeepSeek R1 (reasoner) pode ignorar temperature; aplicamos temperatura por papel quando suportado.
+            "initializer_factory": lambda model, _temp=deepseek_temperature: ChatOpenAI(
                 model=model,
-                temperature=0,  # DeepSeek Reasoner generally ignores this or prefers 0/null
+                temperature=_temp,
                 api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
                 base_url=settings.DEEPSEEK_BASE_URL,
                 max_tokens=8000 if "reasoner" in model else None,  # R1 needs room for thinking

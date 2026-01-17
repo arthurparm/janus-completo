@@ -4,7 +4,7 @@ def test_health_check(api_client, health_url):
     import requests
     resp = requests.get(health_url)
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "service": "Janus", "version": "0.4.30", "environment": "production", "tailscale": None}
+    assert resp.json() == {"status": "ok", "service": "Janus", "version": "0.5.44", "environment": "production", "tailscale": None}
 
 def test_start_conversation(api_client):
     """Verify that a new conversation can be started."""

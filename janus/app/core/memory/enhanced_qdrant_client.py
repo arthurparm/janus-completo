@@ -207,9 +207,9 @@ class EnhancedQdrantClient:
         async def _search_operation():
             return await self._execute_with_retry(
                 "search",
-                self.client.search,
+                self.client.query_points,
                 collection_name=collection_name,
-                query_vector=query_vector,
+                query=query_vector,
                 query_filter=query_filter,
                 search_params=search_params,
                 limit=limit,

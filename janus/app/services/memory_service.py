@@ -25,9 +25,9 @@ from fastapi import Request
 from qdrant_client import models
 
 from app.config import settings
-from app.core.embeddings.embedding_manager import embed_text
+from app.core.embeddings.embedding_manager import aembed_text
 from app.core.protocols import MemoryRepositoryProtocol
-from app.db.vector_store import get_or_create_collection, get_qdrant_client
+from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -206,77 +206,60 @@ class MemoryService:
     async def index_interaction(
         self, content: str, user_id: str, session_id: str, role: str
     ) -> None:
-        """
-        Indexa uma interação de chat (mensagem do usuário ou assistente) no banco vetorial.
-        Executa operações bloqueantes (embedding, IO) em thread separada.
-        """
+        """Indexa uma interação de chat (async) no Qdrant."""
         if not content or not user_id:
             return
 
         logger.info("Indexando interação no vetor (Memória)", user_id=user_id, role=role)
+        try:
+            collection_name = await aget_or_create_collection(f"user_{user_id}")
+            client = get_async_qdrant_client()
 
-        def _sync_index_logic():
-            try:
-                collection_name = get_or_create_collection(f"user_{user_id}")
-                client = get_qdrant_client()
+            max_points = int(getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000)
 
-                max_points = int(
-                    getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000
-                )
+            qfilter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.type", match=models.MatchValue(value="chat_msg")
+                    ),
+                    models.FieldCondition(
+                        key="metadata.user_id", match=models.MatchValue(value=str(user_id))
+                    ),
+                ]
+            )
 
-                qfilter = models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="metadata.type", match=models.MatchValue(value="chat_msg")
-                        ),
-                        models.FieldCondition(
-                            key="metadata.user_id", match=models.MatchValue(value=str(user_id))
-                        ),
-                    ]
-                )
+            cnt = await client.count_points(
+                collection_name=collection_name, count_filter=qfilter, exact=True
+            )
+            current = int(getattr(cnt, "count", 0) or 0)
+            if current >= max_points:
+                logger.warning("Limite de indexação de chat atingido", user_id=user_id)
+                return
 
-                # Check count
-                cnt = client.count(
-                    collection_name=collection_name, count_filter=qfilter, exact=True
-                )
-                current = int(getattr(cnt, "count", 0) or 0)
+            vec = await aembed_text(content)
+            now_ms = int(time.time() * 1000)
 
-                if current >= max_points:
-                    logger.warning("Limite de indexação de chat atingido", user_id=user_id)
-                    return
+            payload = {
+                "content": content,
+                "ts_ms": now_ms,
+                "metadata": {
+                    "type": "chat_msg",
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "role": role,
+                    "timestamp": now_ms,
+                },
+            }
 
-                # Embed and Upsert
-                vec = embed_text(content)
-                now_ms = int(time.time() * 1000)
+            composite_id = f"chat:{user_id}:{session_id}:{uuid4().hex}"
+            payload["composite_id"] = composite_id
+            point_id = str(uuid4())
+            point = models.PointStruct(id=point_id, vector=vec, payload=payload)
 
-                payload = {
-                    "content": content,
-                    "ts_ms": now_ms,
-                    "metadata": {
-                        "type": "chat_msg",
-                        "user_id": user_id,
-                        "session_id": session_id,
-                        "role": role,
-                        "timestamp": now_ms,
-                    },
-                }
+            await client.upsert(collection_name=collection_name, points=[point])
 
-                # Qdrant requires UUID or int as ID. We store the composite ID in metadata for reference.
-                composite_id = f"chat:{user_id}:{session_id}:{uuid4().hex}"
-                payload["composite_id"] = composite_id
-
-                # Use a proper UUID for the point ID
-                point_id = str(uuid4())
-                point = models.PointStruct(id=point_id, vector=vec, payload=payload)
-
-                client.upsert(collection_name=collection_name, points=[point])
-
-            except Exception as e:
-                logger.error("Erro ao indexar interação", exc_info=e)
-                # Suppress error to avoid breaking chat flow
-
-        # Run in thread pool to avoid blocking async event loop
-        await asyncio.to_thread(_sync_index_logic)
+        except Exception:
+            logger.warning("Falha ao indexar interação", exc_info=True)
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço

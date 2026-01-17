@@ -29,20 +29,27 @@ async def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
     from app.core.infrastructure.prompt_loader import get_prompt
 
     # 1. Tentar banco de dados primeiro
+    db_error = None
     try:
         db_prompt = await get_prompt(prompt_name, **kwargs)
-        if db_prompt and not db_prompt.startswith("Prompt não encontrado"):
+        if db_prompt and not db_prompt.startswith("Prompt nao encontrado"):
             return db_prompt
     except Exception as e:
-        logger.warning("Falha ao buscar prompt do DB", prompt_name=prompt_name, error=str(e))
+        db_error = e
 
-    # 2. Fallback para arquivo local (Desenvolvimento/Recuperação)
+    # 2. Fallback para arquivo local (Desenvolvimento/Recuperacao)
     if PROMPTS_DIR.exists():
         file_path = PROMPTS_DIR / f"{prompt_name}.txt"
         if file_path.exists():
             try:
-                # Cache simples em memória para evitar I/O constante
+                # Cache simples em memoria para evitar I/O constante
                 if prompt_name in _file_prompts_cache:
+                    if db_error:
+                        logger.debug(
+                            "Prompt carregado de arquivo apos falha no DB",
+                            prompt_name=prompt_name,
+                            error=str(db_error),
+                        )
                     return _file_prompts_cache[prompt_name]
                 
                 content = file_path.read_text(encoding="utf-8")
@@ -51,6 +58,9 @@ async def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
                 return content
             except Exception as e:
                 logger.warning("Erro ao ler arquivo de prompt", prompt_name=prompt_name, error=str(e))
+
+    if db_error:
+        logger.warning("Falha ao buscar prompt do DB", prompt_name=prompt_name, error=str(db_error))
 
     # 3. Retornar None
     logger.warning("Prompt não encontrado em DB ou Arquivo", prompt_name=prompt_name)

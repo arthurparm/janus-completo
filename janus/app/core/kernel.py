@@ -281,6 +281,9 @@ class Kernel:
     async def _init_mas_actors(self):
         try:
             from app.core.agents.multi_agent_system import AgentRole, get_multi_agent_system
+            if not getattr(settings, "INIT_MAS_AGENTS_ON_STARTUP", True):
+                logger.info("Multi-Agent System actor init skipped by configuration.")
+                return
 
             mas = get_multi_agent_system()
             await mas.create_agent(AgentRole.PROJECT_MANAGER)

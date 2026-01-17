@@ -57,8 +57,12 @@ except Exception:
 from qdrant_client import models
 
 from app.config import settings
-from app.core.embeddings.embedding_manager import embed_text
-from app.db.vector_store import get_collection_info, get_or_create_collection, get_qdrant_client
+from app.core.embeddings.embedding_manager import aembed_text
+from app.db.vector_store import (
+    aget_collection_info,
+    aget_or_create_collection,
+    get_async_qdrant_client,
+)
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 
 router = APIRouter(tags=["Documents"])
@@ -107,7 +111,7 @@ async def upload_document(
         pass
     # Verifica quota de pontos por usuário antes de indexar
     try:
-        info = get_collection_info(f"user_{uid}")
+        info = await aget_collection_info(f"user_{uid}")
         points_count = int(info.get("points_count") or 0)
         # estima chunks a partir do tamanho do texto, aproximado após parsing; fallback para 1000 bytes/chunk
         est_chunks = max(1, int(len(data or b"") / 1000))
@@ -171,9 +175,9 @@ async def search_documents(
         _DOC_SEARCH_REQ.labels("error").inc()
         _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         return DocSearchResponse(results=[])
-    vec = embed_text(query)
-    client = get_qdrant_client()
-    collection_name = get_or_create_collection(f"user_{uid}")
+    vec = await aembed_text(query)
+    client = get_async_qdrant_client()
+    collection_name = await aget_or_create_collection(f"user_{uid}")
     must: list[models.FieldCondition] = [
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
         models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
@@ -185,16 +189,17 @@ async def search_documents(
     sc_filter = models.Filter(must=must)
     cm = _tracer.start_as_current_span("docs.search") if _OTEL else nullcontext()
     with cm:  # type: ignore
-        res = client.search(
+        res = await client.query_points(
             collection_name=collection_name,
-            query_vector=vec,
+            query=vec,
             limit=limit,
             with_payload=True,
             query_filter=sc_filter,
             score_threshold=min_score if isinstance(min_score, float) else None,
         )
+    points = getattr(res, "points", res) or []
     results: list[dict[str, Any]] = []
-    for r in res:
+    for r in points:
         payload = r.payload or {}
         meta = payload.get("metadata", {})
         results.append(
@@ -241,8 +246,8 @@ async def list_documents(
     uid = user_id or hdr_uid
     if not uid:
         return DocListResponse(items=[])
-    client = get_qdrant_client()
-    coll = get_or_create_collection(f"user_{uid}")
+    client = get_async_qdrant_client()
+    coll = await aget_or_create_collection(f"user_{uid}")
     must: list[models.FieldCondition] = [
         models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
@@ -255,11 +260,10 @@ async def list_documents(
         )
     qfilter = models.Filter(must=must)
     # Busca pontos recentes para obter último timestamp por doc_id
-    hits = client.scroll(
+    scroll_res = await client.scroll(
         collection_name=coll, scroll_filter=qfilter, limit=limit, with_payload=True
     )
-    # hits -> (points, next_page)
-    points = hits[0] or []
+    points = scroll_res[0] if isinstance(scroll_res, tuple) else (scroll_res or [])
     agg: dict[str, dict[str, Any]] = {}
     for h in points:
         payload = getattr(h, "payload", {}) or {}
@@ -307,8 +311,8 @@ async def delete_document(doc_id: str, user_id: str | None = None, request: Requ
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
         )
-    client = get_qdrant_client()
-    coll = get_or_create_collection(f"user_{uid}")
+    client = get_async_qdrant_client()
+    coll = await aget_or_create_collection(f"user_{uid}")
     try:
         qfilter = models.Filter(
             must=[
@@ -319,7 +323,9 @@ async def delete_document(doc_id: str, user_id: str | None = None, request: Requ
                 models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
             ]
         )
-        client.delete(collection_name=coll, points_selector=models.FilterSelector(filter=qfilter))
+        await client.delete(
+            collection_name=coll, points_selector=models.FilterSelector(filter=qfilter)
+        )
     except Exception as e:
         import structlog
 
@@ -395,8 +401,8 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
         )
-    client = get_qdrant_client()
-    coll = get_or_create_collection(f"user_{uid}")
+    client = get_async_qdrant_client()
+    coll = await aget_or_create_collection(f"user_{uid}")
     try:
         qfilter = models.Filter(
             must=[
@@ -407,13 +413,14 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
         qfilter = None
     cm = _tracer.start_as_current_span("docs.status") if _OTEL else nullcontext()
     with cm:  # type: ignore
-        hits = client.search(
+        res = await client.query_points(
             collection_name=coll,
-            query_vector=[0.0] * 1536,
+            query=[0.0] * 1536,
             limit=10,
             with_payload=True,
             query_filter=qfilter,
         )
+    hits = getattr(res, "points", res) or []
     samples: list[dict[str, Any]] = []
     for h in hits or []:
         payload = getattr(h, "payload", {}) or {}
@@ -427,7 +434,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
             }
         )
     try:
-        cnt = client.count(collection_name=coll, count_filter=qfilter, exact=True)
+        cnt = await client.count_points(collection_name=coll, count_filter=qfilter, exact=True)
         total = int(getattr(cnt, "count", 0) or 0)
     except Exception:
         total = len(samples)

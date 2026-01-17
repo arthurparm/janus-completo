@@ -19,6 +19,10 @@ class STTService(STTProvider):
         self._available = False
         self._initialize()
 
+    @property
+    def is_available(self) -> bool:
+        return self._available
+
     def _initialize(self):
         try:
             import speech_recognition as sr

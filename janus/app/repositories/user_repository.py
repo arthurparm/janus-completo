@@ -32,14 +32,37 @@ class UserRepository:
             if not self._session:
                 s.close()
 
-    def create_user(self, email: str | None, display_name: str | None) -> User:
+    def get_by_external_id(self, external_id: str) -> User | None:
         s = self._get_session()
         try:
-            u = User(email=email, display_name=display_name)
+            return s.query(User).filter(User.external_id == external_id).first()
+        finally:
+            if not self._session:
+                s.close()
+
+    def create_user(
+        self, email: str | None, display_name: str | None, external_id: str | None = None
+    ) -> User:
+        s = self._get_session()
+        try:
+            u = User(email=email, display_name=display_name, external_id=external_id)
             s.add(u)
             s.commit()
             s.refresh(u)
             return u
+        finally:
+            if not self._session:
+                s.close()
+
+    def set_external_id(self, user_id: int, external_id: str) -> bool:
+        s = self._get_session()
+        try:
+            u = s.query(User).filter(User.id == user_id).first()
+            if not u:
+                return False
+            u.external_id = external_id
+            s.commit()
+            return True
         finally:
             if not self._session:
                 s.close()
@@ -83,6 +106,32 @@ class UserRepository:
                 .filter(and_(UserRole.user_id == user_id, Role.name == role_name))
             )
             return q.first() is not None
+        finally:
+            if not self._session:
+                s.close()
+
+    def has_any_admin(self) -> bool:
+        s = self._get_session()
+        try:
+            q = (
+                s.query(UserRole)
+                .join(Role, UserRole.role_id == Role.id)
+                .filter(Role.name == "ADMIN")
+            )
+            return q.first() is not None
+        finally:
+            if not self._session:
+                s.close()
+
+    def list_roles(self, user_id: int) -> list[str]:
+        s = self._get_session()
+        try:
+            q = (
+                s.query(Role.name)
+                .join(UserRole, UserRole.role_id == Role.id)
+                .filter(UserRole.user_id == user_id)
+            )
+            return [row[0] for row in q.all()]
         finally:
             if not self._session:
                 s.close()

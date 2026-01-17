@@ -118,10 +118,10 @@ class ObservabilityService:
             logger.error("Erro no repositório ao gerar resumo de métricas", exc_info=e)
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
 
-    def get_user_metrics(self, user_id: str) -> dict[str, Any]:
+    async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
         logger.info("Coletando métricas agregadas por usuário", user_id=user_id)
         try:
-            return self._repo.get_user_metrics(user_id)
+            return await self._repo.get_user_metrics(user_id)
         except ObservabilityRepositoryError as e:
             logger.error("Erro no repositório ao gerar métricas por usuário", exc_info=e)
             raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
@@ -193,6 +193,20 @@ class ObservabilityService:
         except ObservabilityRepositoryError as e:
             logger.error("Erro no repositório ao consultar eventos de auditoria", exc_info=e)
             raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
+
+    def get_audit_events_count(
+        self,
+        user_id: str | None,
+        tool: str | None,
+        status: str | None,
+        start_ts: float | None,
+        end_ts: float | None,
+    ) -> int:
+        try:
+            return self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro no repositÇürio ao contar eventos de auditoria", exc_info=e)
+            raise ObservabilityServiceError("Falha ao contar eventos de auditoria.") from e
 
     def get_llm_usage_summary(self, start_ts: float | None, end_ts: float | None) -> dict[str, Any]:
         o = self._repo.get_audit_events(

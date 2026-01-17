@@ -221,7 +221,6 @@ class EvolutionManager:
 
     async def _specify_tool(self, request: str) -> dict[str, Any] | None:
         """Usa LLM para criar a especificação técnica da ferramenta."""
-        import asyncio
         from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
         try:
@@ -229,10 +228,8 @@ class EvolutionManager:
         except Exception as e:
             logger.error(f"[Evolution] Falha ao carregar prompt tool_specification: {e}")
             return None
-
-        # Executar síncrono em thread pool
-        response = await asyncio.to_thread(
-            self.llm_service.invoke_llm,
+        # Invocar LLM diretamente (async)
+        response = await self.llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.HIGH_QUALITY,
@@ -258,7 +255,6 @@ class EvolutionManager:
 
     async def _generate_code(self, spec: dict[str, Any]) -> str | None:
         """Usa LLM para gerar o código Python."""
-        import asyncio
         from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
         spec_str = json.dumps(spec, indent=2)
@@ -270,8 +266,7 @@ class EvolutionManager:
             logger.error(f"[Evolution] Falha ao carregar prompt tool_generation: {e}")
             return None
 
-        response = await asyncio.to_thread(
-            self.llm_service.invoke_llm,
+        response = await self.llm_service.invoke_llm(
             prompt=prompt,
             role=ModelRole.CODE_GENERATOR,
             priority=ModelPriority.HIGH_QUALITY,

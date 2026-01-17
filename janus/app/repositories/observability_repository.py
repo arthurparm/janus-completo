@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -12,7 +13,7 @@ from app.core.monitoring.poison_pill_handler import (
 )
 from app.db.graph import get_graph_db
 from app.db import db
-from app.db.vector_store import get_collection_info
+from app.db.vector_store import aget_collection_info
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import AuditEvent, Message
 from app.models.user_models import Session as ChatSession
@@ -125,39 +126,42 @@ class ObservabilityRepository:
 
         return {"llm": llm_stats, "multi_agent": ma_stats, "poison_pills": pp_stats}
 
-    def get_user_metrics(self, user_id: str) -> dict[str, Any]:
-        s = db.get_session_direct()
-        try:
-            convs = s.query(ChatSession).filter(ChatSession.user_id == int(user_id)).all()
-            conversations_count = len(convs)
-            total_messages = 0
-            in_tokens = 0
-            out_tokens = 0
-            for c in convs:
-                msgs = s.query(Message).filter(Message.session_id == c.id).all()
-                total_messages += len(msgs)
-                for m in msgs:
-                    tlen = len(m.text or "")
-                    approx_tokens = max(1, int(tlen / 4))
-                    if (m.role or "").lower() == "user":
-                        in_tokens += approx_tokens
-                    else:
-                        out_tokens += approx_tokens
+    async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
+        def _compute_sql_metrics() -> dict[str, Any]:
+            s = db.get_session_direct()
             try:
-                info = get_collection_info(f"user_{user_id}")
-                points_count = int(info.get("points_count") or 0)
-            except Exception:
-                points_count = 0
-            return {
-                "user_id": user_id,
-                "conversations": conversations_count,
-                "messages": total_messages,
-                "approx_in_tokens": in_tokens,
-                "approx_out_tokens": out_tokens,
-                "vector_points": points_count,
-            }
-        finally:
-            s.close()
+                convs = s.query(ChatSession).filter(ChatSession.user_id == int(user_id)).all()
+                conversations_count = len(convs)
+                total_messages = 0
+                in_tokens = 0
+                out_tokens = 0
+                for c in convs:
+                    msgs = s.query(Message).filter(Message.session_id == c.id).all()
+                    total_messages += len(msgs)
+                    for m in msgs:
+                        tlen = len(m.text or "")
+                        approx_tokens = max(1, int(tlen / 4))
+                        if (m.role or "").lower() == "user":
+                            in_tokens += approx_tokens
+                        else:
+                            out_tokens += approx_tokens
+                return {
+                    "user_id": user_id,
+                    "conversations": conversations_count,
+                    "messages": total_messages,
+                    "approx_in_tokens": in_tokens,
+                    "approx_out_tokens": out_tokens,
+                }
+            finally:
+                s.close()
+
+        metrics = await asyncio.to_thread(_compute_sql_metrics)
+        try:
+            info = await aget_collection_info(f"user_{user_id}")
+            metrics["vector_points"] = int(info.get("points_count") or 0)
+        except Exception:
+            metrics["vector_points"] = 0
+        return metrics
 
     def get_user_activity(self, user_id: str) -> dict[str, Any]:
         s = db.get_session_direct()
@@ -386,6 +390,7 @@ class ObservabilityRepository:
                     "status": r.status,
                     "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
+                    "justification": r.justification,
                     "created_at": r.created_at.timestamp()
                     if getattr(r, "created_at", None)
                     else None,
@@ -396,6 +401,41 @@ class ObservabilityRepository:
         except Exception as e:
             logger.error("Erro ao consultar eventos de auditoria", exc_info=e)
             raise ObservabilityRepositoryError("Falha ao consultar eventos de auditoria.") from e
+        finally:
+            s.close()
+
+    def get_audit_events_count(
+        self,
+        user_id: str | None,
+        tool: str | None,
+        status: str | None,
+        start_ts: float | None,
+        end_ts: float | None,
+    ) -> int:
+        s = db.get_session_direct()
+        try:
+            q = s.query(AuditEvent)
+            if user_id is not None:
+                try:
+                    q = q.filter(AuditEvent.user_id == int(user_id))
+                except Exception:
+                    q = q.filter(AuditEvent.user_id == -1)
+            if tool is not None:
+                q = q.filter(AuditEvent.tool == str(tool))
+            if status is not None:
+                q = q.filter(AuditEvent.status == str(status))
+            if start_ts is not None:
+                from datetime import datetime
+
+                q = q.filter(AuditEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
+            if end_ts is not None:
+                from datetime import datetime
+
+                q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
+            return int(q.count())
+        except Exception as e:
+            logger.error("Erro ao contar eventos de auditoria", exc_info=e)
+            raise ObservabilityRepositoryError("Falha ao contar eventos de auditoria.") from e
         finally:
             s.close()
 

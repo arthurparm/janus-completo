@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.graph import GraphDatabase, get_graph_db
 from app.db import db
-from app.db.vector_store import get_qdrant_client
+from app.db.vector_store import get_async_qdrant_client
 from app.repositories.knowledge_repository import KnowledgeRepository
 
 logger = structlog.get_logger(__name__)
@@ -169,15 +169,15 @@ class DedupeService:
             logger.error("Erro no processo de deduplicação do Grafo", exc_info=e)
             raise DedupeError(f"Falha no Grafo: {e}") from e
 
-    def detect_qdrant_duplicates(self, user_id: str | None = None) -> dict[str, Any]:
+    async def detect_qdrant_duplicates(self, user_id: str | None = None) -> dict[str, Any]:
         try:
-            client = get_qdrant_client()
+            client = get_async_qdrant_client()
             summary: dict[str, Any] = {"collections": []}
             from qdrant_client import models as _models
 
             colls: list[str] = []
             try:
-                resp = client.get_collections()
+                resp = await client.get_collections()
                 colls = [
                     c.name
                     for c in getattr(resp, "collections", []) or []
@@ -203,7 +203,7 @@ class DedupeService:
                 qf = _models.Filter(must=filt)
 
                 try:
-                    cnt = client.count(collection_name=coll, count_filter=qf, exact=True)
+                    cnt = await client.count_points(collection_name=coll, count_filter=qf, exact=True)
                     summary["collections"].append(
                         {"name": coll, "with_hash": int(getattr(cnt, "count", 0) or 0)}
                     )

@@ -1,395 +1,393 @@
 {
-  "dashboard": {
-    "title": "Janus - System Overview",
-    "tags": [
-      "janus",
-      "overview"
-    ],
-    "timezone": "browser",
-    "schemaVersion": 16,
-    "version": 1,
-    "refresh": "10s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "System Health Status",
-        "type": "stat",
-        "gridPos": {
-          "x": 0,
-          "y": 0,
-          "w": 6,
-          "h": 4
-        },
-        "targets": [
-          {
-            "expr": "up{job=\"janus\"}",
-            "refId": "A",
-            "legendFormat": "Janus API"
-          }
-        ],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "none",
-          "textMode": "value"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "value": 0,
-                  "color": "red"
-                },
-                {
-                  "value": 1,
-                  "color": "green"
-                }
-              ]
-            },
-            "mappings": [
+  "title": "Janus - System Overview",
+  "tags": [
+    "janus",
+    "overview"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "System Health Status",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"janus\"}",
+          "refId": "A",
+          "legendFormat": "Janus API"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
-                "type": "value",
-                "value": "1",
-                "text": "HEALTHY"
+                "value": 0,
+                "color": "red"
               },
               {
-                "type": "value",
-                "value": "0",
-                "text": "DOWN"
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "value": "1",
+              "text": "HEALTHY"
+            },
+            {
+              "type": "value",
+              "value": "0",
+              "text": "DOWN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Active Agents",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "multi_agent_active_agents",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Circuit Breakers Status",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(janus_resilience_circuit_state{state=\"OPEN\"})",
+          "refId": "A",
+          "legendFormat": "Open Circuits"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              },
+              {
+                "value": 3,
+                "color": "red"
               }
             ]
           }
         }
-      },
-      {
-        "id": 2,
-        "title": "Active Agents",
-        "type": "stat",
-        "gridPos": {
-          "x": 6,
-          "y": 0,
-          "w": 6,
-          "h": 4
-        },
-        "targets": [
-          {
-            "expr": "multi_agent_active_agents",
-            "refId": "A"
-          }
-        ],
-        "options": {
-          "colorMode": "value",
-          "graphMode": "area"
-        }
-      },
-      {
-        "id": 3,
-        "title": "Circuit Breakers Status",
-        "type": "stat",
-        "gridPos": {
-          "x": 12,
-          "y": 0,
-          "w": 6,
-          "h": 4
-        },
-        "targets": [
-          {
-            "expr": "sum(janus_resilience_circuit_state{state=\"OPEN\"})",
-            "refId": "A",
-            "legendFormat": "Open Circuits"
-          }
-        ],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "none"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "value": 0,
-                  "color": "green"
-                },
-                {
-                  "value": 1,
-                  "color": "yellow"
-                },
-                {
-                  "value": 3,
-                  "color": "red"
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 4,
-        "title": "Error Rate",
-        "type": "stat",
-        "gridPos": {
-          "x": 18,
-          "y": 0,
-          "w": 6,
-          "h": 4
-        },
-        "targets": [
-          {
-            "expr": "rate(llm_requests_total{outcome=\"failure\"}[5m])",
-            "refId": "A"
-          }
-        ],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "area"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "unit": "reqps",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "value": 0,
-                  "color": "green"
-                },
-                {
-                  "value": 0.5,
-                  "color": "yellow"
-                },
-                {
-                  "value": 2,
-                  "color": "red"
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 5,
-        "title": "LLM Requests Rate by Provider",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 4,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "rate(llm_requests_total{outcome=\"success\"}[5m])",
-            "refId": "A",
-            "legendFormat": "{{provider}} - {{model}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "reqps",
-            "label": "Requests/sec"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 6,
-        "title": "LLM Request Latency (P95)",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 4,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(llm_request_latency_seconds_bucket[5m]))",
-            "refId": "A",
-            "legendFormat": "{{provider}} - P95"
-          },
-          {
-            "expr": "histogram_quantile(0.50, rate(llm_request_latency_seconds_bucket[5m]))",
-            "refId": "B",
-            "legendFormat": "{{provider}} - P50"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "s",
-            "label": "Latency"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 7,
-        "title": "Multi-Agent Tasks by Status",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 12,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "rate(multi_agent_tasks_total[5m])",
-            "refId": "A",
-            "legendFormat": "{{agent_role}} - {{status}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "ops",
-            "label": "Tasks/sec"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 8,
-        "title": "Task Duration by Agent Role",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 12,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(multi_agent_task_duration_seconds_bucket[5m]))",
-            "refId": "A",
-            "legendFormat": "{{agent_role}} - P95"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "s",
-            "label": "Duration"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 9,
-        "title": "Memory Operations Rate",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 20,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "rate(memory_operations_total[5m])",
-            "refId": "A",
-            "legendFormat": "{{operation}} - {{outcome}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "ops",
-            "label": "Operations/sec"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 10,
-        "title": "Circuit Breaker Failures",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 20,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "janus_resilience_failure_count",
-            "refId": "A",
-            "legendFormat": "{{operation}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "short",
-            "label": "Failure Count"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 11,
-        "title": "Retry Operations",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 28,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "rate(janus_resilience_retries_total[5m])",
-            "refId": "A",
-            "legendFormat": "{{operation}} - {{exception_type}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "ops",
-            "label": "Retries/sec"
-          },
-          {
-            "format": "short"
-          }
-        ]
-      },
-      {
-        "id": 12,
-        "title": "LLM Token Usage",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 28,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "expr": "rate(llm_tokens_total[5m])",
-            "refId": "A",
-            "legendFormat": "{{provider}} - {{direction}}"
-          }
-        ],
-        "yaxes": [
-          {
-            "format": "ops",
-            "label": "Tokens/sec"
-          },
-          {
-            "format": "short"
-          }
-        ]
       }
-    ]
-  }
+    },
+    {
+      "id": 4,
+      "title": "Error Rate",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(llm_requests_total{outcome=\"failure\"}[5m])",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 0.5,
+                "color": "yellow"
+              },
+              {
+                "value": 2,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "LLM Requests Rate by Provider",
+      "type": "graph",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(llm_requests_total{outcome=\"success\"}[5m])",
+          "refId": "A",
+          "legendFormat": "{{provider}} - {{model}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "reqps",
+          "label": "Requests/sec"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "LLM Request Latency (P95)",
+      "type": "graph",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(llm_request_latency_seconds_bucket[5m]))",
+          "refId": "A",
+          "legendFormat": "{{provider}} - P95"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(llm_request_latency_seconds_bucket[5m]))",
+          "refId": "B",
+          "legendFormat": "{{provider}} - P50"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Latency"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Multi-Agent Tasks by Status",
+      "type": "graph",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(multi_agent_tasks_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{agent_role}} - {{status}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ops",
+          "label": "Tasks/sec"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Task Duration by Agent Role",
+      "type": "graph",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(multi_agent_task_duration_seconds_bucket[5m]))",
+          "refId": "A",
+          "legendFormat": "{{agent_role}} - P95"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Duration"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Memory Operations Rate",
+      "type": "graph",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(memory_operations_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{operation}} - {{outcome}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ops",
+          "label": "Operations/sec"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Circuit Breaker Failures",
+      "type": "graph",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "janus_resilience_failure_count",
+          "refId": "A",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "Failure Count"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Retry Operations",
+      "type": "graph",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(janus_resilience_retries_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{operation}} - {{exception_type}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ops",
+          "label": "Retries/sec"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "LLM Token Usage",
+      "type": "graph",
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(llm_tokens_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{provider}} - {{direction}}"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ops",
+          "label": "Tokens/sec"
+        },
+        {
+          "format": "short"
+        }
+      ]
+    }
+  ]
 }

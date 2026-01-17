@@ -34,9 +34,14 @@ class VoiceManager:
         """
         try:
             self.stt = STTService()
+            if self.stt and not self.stt.is_available:
+                logger.info("STT disabled: no microphone detected.")
+                self.stt = None
+
             self.tts = TTSService()
             self.wakeword = WakeWordService(models=["hey_jarvis"])  # Placeholder for "Janus"
-            self._enabled = True
+            # Enable voice only if at least one subsystem is usable
+            self._enabled = any([self.stt, self.tts, self.wakeword])
             logger.info("Voice Manager initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize Voice Manager: {e}")

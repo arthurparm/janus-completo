@@ -66,7 +66,13 @@ class ToolDocumentationModule(PromptModule):
             return ""
 
         tool_entries = "\n".join(
-            f"- {tool.name}: {(tool.description or '').split('\n')[0]}" for tool in relevant_tools
+            f"- {tool.name}: {self._first_line(tool.description)}" for tool in relevant_tools
         )
 
         return await get_formatted_prompt("tool_documentation", tool_entries=tool_entries)
+
+    @staticmethod
+    def _first_line(text: str | None) -> str:
+        if not text:
+            return ""
+        return text.splitlines()[0]
