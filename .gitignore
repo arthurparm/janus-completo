@@ -95,3 +95,6 @@ janus/app/.env
 janus/app/.env.*
 janus/.env*
 *.env
+*.log
+janus/app/janus.log
+janus/janus.log
