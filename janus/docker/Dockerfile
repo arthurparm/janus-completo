@@ -41,7 +41,10 @@ COPY pyproject.toml poetry.lock* ./
 # FASTEST PATH: Export to requirements using a temporary poetry install, then install with uv.
 
 RUN uv pip install poetry poetry-plugin-export && \
-    poetry export -f requirements.txt --output requirements.txt --without-hashes && \
+    if ! poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --no-ansi; then \
+        poetry lock --no-interaction --no-ansi; \
+        poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --no-ansi; \
+    fi && \
     uv pip install -r requirements.txt
 
 # --- Stage 2: Runtime ---

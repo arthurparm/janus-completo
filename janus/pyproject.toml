@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "janus-api"
-version = "0.4.30"
+version = "0.5.44"
 description = "Janus Agentic System API"
 authors = ["arthur.paraiso.mar@gmail.com"]
 
@@ -25,10 +25,8 @@ langchain-community = "*"
 langchain-core = "*"
 langgraph = "*"
 langgraph-checkpoint-postgres = "*"
-langgraph-checkpoint-sqlite = "*"
 pydantic-ai = "*"
 neo4j-graphrag = "*"
-aiosqlite = "*"
 langchain-neo4j = ">=0.0.3"
 langchain-google-genai = ">=0.1.0"
 langchain-groq = "*"

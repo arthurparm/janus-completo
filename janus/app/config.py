@@ -12,7 +12,7 @@ class AppSettings(BaseSettings):
 
     # App
     APP_NAME: str = "Janus"
-    APP_VERSION: str = "0.4.30"
+    APP_VERSION: str = "0.5.44"
     ENVIRONMENT: str = "development"
     # Identidade
     AGENT_IDENTITY_NAME: str = "Janus"
@@ -22,6 +22,7 @@ class AppSettings(BaseSettings):
     DRY_RUN: bool = False
     PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
     AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
+    INIT_MAS_AGENTS_ON_STARTUP: bool = True  # Inicializar agentes do MAS no startup
 
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
@@ -46,8 +47,6 @@ class AppSettings(BaseSettings):
     POSTGRES_PASSWORD: SecretStr = "janus_pass"
     POSTGRES_DB: str = "janus_db"
 
-    # SQLite - Persistência local
-    SQLITE_DB_PATH: str = "data/janus.db"
 
     # Firebase
     FIREBASE_ENABLED: bool = False
@@ -164,6 +163,21 @@ class AppSettings(BaseSettings):
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL_NAME: str = "deepseek-chat"
     DEEPSEEK_MODELS: list[str] = ["deepseek-chat", "deepseek-reasoner"]
+    DEEPSEEK_TEMPERATURE: float = 0.0
+    DEEPSEEK_TEMPERATURE_BY_ROLE: dict[str, float] = Field(
+        default_factory=lambda: {
+            # ConversaÇõÇœ/planejamento (mais criativo) e anÇ­lise leve
+            "orchestrator": 1.0,
+            # Coding/math deve ser determinÇ­stico
+            "code_generator": 0.0,
+            # Curadoria de conhecimento/RAG: baixa aleatoriedade
+            "knowledge_curator": 0.3,
+            # Auditoria/seguranÇõa: determinÇ­stico
+            "security_auditor": 0.0,
+            # Reasoning mais controlado (DeepSeek R1 muitas vezes ignora temp, mas fixamos baixo)
+            "reasoner": 0.0,
+        }
+    )
     XAI_API_KEY: SecretStr | None = None
     XAI_BASE_URL: str = "https://api.x.ai/v1"
     XAI_MODEL_NAME: str = "grok-4-1-fast-reasoning"
