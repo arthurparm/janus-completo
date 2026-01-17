@@ -4,7 +4,50 @@
 
 Este documento define o caminho crítico para o lançamento da **Janus V1**, priorizando robustez, embasamento científico e prontidão para produção.
 
+## 📌 Índice
+
+- Backlog por Dificuldade (Throughput / Médias / Difíceis)
+- Scientific Foundation (State-of-the-Art)
+- Scientific Frontier (Post-V1 Evolution)
+- Infrastructure Strategy (Phase 3)
+- V1 Critical Path (Launch Blockers)
+- Histórico de Conclusões (Arquivado)
+- Levantamentos (Tasks)
+- Anexos — Levantamentos detalhados
+
 ---
+
+## 🧱 Backlog por Dificuldade (Throughput / Médias / Difíceis)
+
+Critério prático:
+- **Throughput**: mudanças bem definidas, mecânicas e de baixo risco (boa para Mini).
+- **Médias**: exigem contexto do sistema e algum design, mas com escopo controlável.
+- **Difíceis**: risco alto, dependências cruzadas, refatoração estrutural, concorrência ou segurança.
+
+### 🟢 Throughput
+
+- Ajustar CSP para produção (reduzir `unsafe-inline`/`unsafe-eval`) em *Security Headers Middleware*.
+- Padronizar toasts de sucesso/erro/warn em fluxos críticos em *UX Improvements*.
+- Varredura e centralização de settings/URLs hardcoded em `environment.ts` em *Hardcoded Settings*.
+- Higienizar `eslint-report.json` e travar regressões no CI em *Linter Bankruptcy*.
+
+### 🟡 Médias
+
+- Completar *UI Coverage* (telas faltantes, empty/error/loading states).
+- Resolver *Autonomy 500 Error* (reproduzir, corrigir, testar).
+- Implementar *Input Sanitization* (política por endpoint + validação extra de payloads livres).
+- Evoluir *Smart Model Routing* com classificação de complexidade (heurística/embedding).
+
+### 🔴 Difíceis
+
+- Corrigir *Broken Thought Stream* (RabbitMQ → SSE → UI) com teste E2E.
+- Eliminar *State Desync* (definir fonte única de estado e migrar).
+- Substituir *Ad-hoc State Management* por store robusta (SignalStore/Elf/NgRx).
+- Unificar Design System (*Design System Conflict*: remover Material gradualmente).
+- Implementar *Audit Log Imutável* (append-only + tamper-evident + acesso).
+- Finalizar *Database Migration Pipeline* (Alembic + CI/deploy).
+- Implementar *Graceful Degradation* (matriz de degradação + health/alertas).
+- Scientific Foundation/Frontier: itens pendentes de pesquisa/implementação (LATS/ToT/Self-RAG/RAPTOR/etc).
 
 ## 🔬 Scientific Foundation (State-of-the-Art)
 
@@ -12,75 +55,75 @@ Este documento define o caminho crítico para o lançamento da **Janus V1**, pri
 
 ### 🧠 Reasoning & Planning (O Cérebro)
 
-1. **LATS (Language Agent Tree Search)** - *Zhou et al., 2023*
-    * **Conceito**: Combina LLM com Monte Carlo Tree Search (MCTS) para explorar múltiplos caminhos de solução.
-    * **No Janus**: Nó `Planner` que simula cenários antes de executar ações críticas (ex: deploy).
-2. **Reflexion** - *Shinn et al., 2023*
-    * **Conceito**: Agentes que verbalizam erros e guardam lições em memória de curto prazo.
-    * **No Janus**: Loop de auto-correção no `CoderAgent` para erros de compilação.
-3. **Graph of Thoughts (GoT)** - *Besta et al., 2023*
-    * **Conceito**: Modela o pensamento como um grafo (DAG), permitindo combinar e refinar ideias.
-    * **No Janus**: Orquestração não-linear no LangGraph (Supervisor Node).
-4. **Tree of Thoughts (ToT)** - *Yao et al., 2023*
-    * **Conceito**: Exploração deliberada de múltiplos ramos de raciocínio.
-    * **No Janus**: Base para o processo de decisão do `Meta-Agent`.
-5. **Chain of Thought (CoT)** - *Wei et al., 2022*
-    * **Conceito**: "Let's think step by step".
-    * **No Janus**: Padrão obrigatório em todos os prompts de sistema.
+* [ ] **LATS (Language Agent Tree Search)** - *Zhou et al., 2023*
+  * **Conceito**: Combina LLM com Monte Carlo Tree Search (MCTS) para explorar múltiplos caminhos de solução.
+  * **No Janus**: Nó `Planner` que simula cenários antes de executar ações críticas (ex: deploy).
+* [x] **Reflexion** - *Shinn et al., 2023*
+  * **Conceito**: Agentes que verbalizam erros e guardam lições em memória de curto prazo.
+  * **No Janus**: Loop de auto-correção no `CoderAgent` para erros de compilação.
+* [x] **Graph of Thoughts (GoT)** - *Besta et al., 2023*
+  * **Conceito**: Modela o pensamento como um grafo (DAG), permitindo combinar e refinar ideias.
+  * **No Janus**: Orquestração não-linear no LangGraph (Supervisor Node).
+* [ ] **Tree of Thoughts (ToT)** - *Yao et al., 2023*
+  * **Conceito**: Exploração deliberada de múltiplos ramos de raciocínio.
+  * **No Janus**: Base para o processo de decisão do `Meta-Agent`.
+* [ ] **Chain of Thought (CoT)** - *Wei et al., 2022*
+  * **Conceito**: "Let's think step by step".
+  * **No Janus**: Padrão obrigatório em todos os prompts de sistema.
 
 ### 💾 Memory & Learning (A Alma)
 
-1. **Generative Agents** - *Park et al., 2023*
-    * **Conceito**: Memória com Recência, Importância e Relevância + "Sonho" (Consolidação).
-    * **No Janus**: Arquitetura do `MemoryService` e worker noturno de consolidação no Neo4j.
-2. **MemGPT** - *Packer et al., 2023*
-    * **Conceito**: Gestão de contexto infinito via paginação (OS-like memory management).
-    * **No Janus**: Estratégia de paginação de contexto para conversas longas.
-3. **Voyager** - *Wang et al., 2023*
-    * **Conceito**: Aprendizado contínuo via biblioteca de habilidades (Skill Library).
-    * **No Janus**: Persistência de ferramentas e scripts de sucesso para reuso.
+* [ ] **Generative Agents** - *Park et al., 2023*
+  * **Conceito**: Memória com Recência, Importância e Relevância + "Sonho" (Consolidação).
+  * **No Janus**: Arquitetura do `MemoryService` e worker noturno de consolidação no Neo4j.
+* [ ] **MemGPT** - *Packer et al., 2023*
+  * **Conceito**: Gestão de contexto infinito via paginação (OS-like memory management).
+  * **No Janus**: Estratégia de paginação de contexto para conversas longas.
+* [ ] **Voyager** - *Wang et al., 2023*
+  * **Conceito**: Aprendizado contínuo via biblioteca de habilidades (Skill Library).
+  * **No Janus**: Persistência de ferramentas e scripts de sucesso para reuso.
 
 ### 🔍 Retrieval & RAG (O Conhecimento)
 
-1. **Self-RAG** - *Asai et al., 2023*
-    * **Conceito**: O modelo critica sua própria recuperação (`[IsREL]`, `[IsSUP]`).
-    * **No Janus**: Pipeline de `NativeGraphRAG` com etapa de verificação.
-2. **HyDE (Hypothetical Document Embeddings)** - *Gao et al., 2022*
-    * **Conceito**: Gerar resposta ideal hipótetica para buscar documentos similares.
-    * **No Janus**: Melhoria na busca vetorial do Qdrant.
-3. **RAPTOR** - *Sarthi et al., 2024*
-    * **Conceito**: Indexação recursiva em árvore (resumos de resumos).
-    * **No Janus**: Estrutura hierárquica de conhecimento no Neo4j.
+* [ ] **Self-RAG** - *Asai et al., 2023*
+  * **Conceito**: O modelo critica sua própria recuperação (`[IsREL]`, `[IsSUP]`).
+  * **No Janus**: Pipeline de `NativeGraphRAG` com etapa de verificação.
+* [x] **HyDE (Hypothetical Document Embeddings)** - *Gao et al., 2022*
+  * **Conceito**: Gerar resposta ideal hipótetica para buscar documentos similares.
+  * **No Janus**: Melhoria na busca vetorial do Qdrant.
+* [ ] **RAPTOR** - *Sarthi et al., 2024*
+  * **Conceito**: Indexação recursiva em árvore (resumos de resumos).
+  * **No Janus**: Estrutura hierárquica de conhecimento no Neo4j.
 
 ### 🤖 Multi-Agent (O Corpo)
 
-1. **MetaGPT** - *Hong et al., 2023*
-    * **Conceito**: SOPs (Standard Operating Procedures) codificados para agentes.
-    * **No Janus**: Definição rígida de papéis (Product Manager, Architect, Engineer).
-2. **CAMEL** - *Li et al., 2023*
-    * **Conceito**: Arquitetura de "Role-Playing" para comunicação comunicativa.
-    * **No Janus**: Protocolo de comunicação entre Supervisor e Workers.
+* [ ] **MetaGPT** - *Hong et al., 2023*
+  * **Conceito**: SOPs (Standard Operating Procedures) codificados para agentes.
+  * **No Janus**: Definição rígida de papéis (Product Manager, Architect, Engineer).
+* [ ] **CAMEL** - *Li et al., 2023*
+  * **Conceito**: Arquitetura de "Role-Playing" para comunicação comunicativa.
+  * **No Janus**: Protocolo de comunicação entre Supervisor e Workers.
 
 ### 🛡️ Safety & Alignment (A Consciência)
 
-1. **Constitutional AI** - *Bai et al., 2022 (Anthropic)*
-    * **Conceito**: Controle de comportamento através de uma "Constituição" (regras naturais) em vez de RLHF manual extensivo.
-    * **No Janus**: Extensão do `ReflectorAgent` para validar outputs contra regras de segurança (`security.yaml`) antes da entrega.
+* [ ] **Constitutional AI** - *Bai et al., 2022 (Anthropic)*
+  * **Conceito**: Controle de comportamento através de uma "Constituição" (regras naturais) em vez de RLHF manual extensivo.
+  * **No Janus**: Extensão do `ReflectorAgent` para validar outputs contra regras de segurança (`security.yaml`) antes da entrega.
 
 ### ⚡ Optimization & Economy (A Eficiência)
 
-1. **FrugalGPT (LLM Cascades)** - *Chen et al., 2023*
-    * **Conceito**: Chamar modelos menores/baratos primeiro; escalar para modelos SOTA apenas se a confiança for baixa.
-    * **No Janus**: `ModelRouter` na infraestrutura que tenta resolver com Llama-3-Locall/Mini antes de chamar DeepSeek/GPT-4.
-2. **DSPy (Programming with Prompts)** - *Khattab et al., 2023*
-    * **Conceito**: Abstrair prompts como parâmetros otimizáveis. O sistema "compila" e melhora seus próprios prompts baseado em métricas.
-    * **No Janus**: Pipeline de auto-ajuste dos prompts dos Workers baseado no feedback de erro/sucesso.
+* [ ] **FrugalGPT (LLM Cascades)** - *Chen et al., 2023*
+  * **Conceito**: Chamar modelos menores/baratos primeiro; escalar para modelos SOTA apenas se a confiança for baixa.
+  * **No Janus**: `ModelRouter` na infraestrutura que tenta resolver com Llama-3-Locall/Mini antes de chamar DeepSeek/GPT-4.
+* [ ] **DSPy (Programming with Prompts)** - *Khattab et al., 2023*
+  * **Conceito**: Abstrair prompts como parâmetros otimizáveis. O sistema "compila" e melhora seus próprios prompts baseado em métricas.
+  * **No Janus**: Pipeline de auto-ajuste dos prompts dos Workers baseado no feedback de erro/sucesso.
 
 ### 🎨 HCI & Experience (A Interface)
 
-1. **Generative UI** - *Vercel AI SDK v5 / Dynaboard*
-    * **Conceito**: A UI é gerada dinamicamente pelo LLM para se adaptar à intenção do usuário (tabelas, gráficos, formulários on-the-fly).
-    * **No Janus**: Utilização de `Angular Dynamic Components` + `ViewContainerRef` para renderizar componentes visuais baseados em tool-calls.
+* [ ] **Generative UI** - *Vercel AI SDK v5 / Dynaboard*
+  * **Conceito**: A UI é gerada dinamicamente pelo LLM para se adaptar à intenção do usuário (tabelas, gráficos, formulários on-the-fly).
+  * **No Janus**: Utilização de `Angular Dynamic Components` + `ViewContainerRef` para renderizar componentes visuais baseados em tool-calls.
 
 ---
 
@@ -123,11 +166,6 @@ Este documento define o caminho crítico para o lançamento da **Janus V1**, pri
 ## 🏛️ Infrastructure Strategy (Phase 3)
 
 ### 🧠 Model Routing Strategy (The "Brains")
-
-* **DeepSeek V3/R1** (The Workhorse):
-  * *Uso*: Coding pesado, refatoração, generation.
-  * *Por que*: Melhor custo-benefício para código (bate GPT-4 em benchmarks de dev).
-  * *Custo*: ~$0.14/1M input | ~$0.28/1M output.
 
 * **DeepSeek V3/R1** (The Workhorse):
   * *Uso*: Coding pesado, refatoração, generation.
@@ -193,43 +231,100 @@ As melhores quotas gratuitas *reais* de 2026 (Sem custo de privacidade):
 
 ### 🛡️ Security & Enterprise Ready
 
-* [ ] **Security Headers Middleware**: Implementar CSP, HSTS, X-Frame-Options e X-Content-Type-Options.
+* [x] **Security Headers Middleware**: Implementar CSP, HSTS, X-Frame-Options e X-Content-Type-Options.
+  - [x] Middleware criado (`SecurityHeadersMiddleware`).
+  - [x] Registrado no FastAPI (`app.add_middleware(SecurityHeadersMiddleware)`).
+  - [x] Headers aplicados na resposta (CSP, HSTS, XFO, X-CTO, Referrer/Permissions).
+  - [ ] Ajustar CSP para produção (reduzir/evitar `unsafe-inline` e `unsafe-eval` quando possível).
 
 * [ ] **Input Sanitization**: Validar e sanitizar todos os inputs da API (prevenção de injeção).
+  - [ ] Definir política de sanitização por endpoint (query/body/path).
+  - [ ] Aplicar validação extra para payloads livres (ex.: prompts, URLs, markdown).
+  - [ ] Padronizar erros de validação (Problem+JSON) e métricas.
 * [ ] **Rate Limiting (Cost-Based)**: Limitar usuários por **gasto em dólares**, não apenas requisições.
+  - [x] Orçamento diário por usuário/projeto aplicado nas chamadas de LLM (corte de `max_tokens` por USD).
+  - [x] Tracking de gasto por tenant/provedor em Redis (spend USD).
+  - [ ] Propagar enforcement para o gateway HTTP (bloqueio por orçamento por endpoint/usuário).
 * [ ] **Audit Log Imutável**: Garantir que logs de ações críticas não possam ser alterados.
+  - [ ] Definir formato de evento (append-only) e categorias de ação crítica.
+  - [ ] Persistir eventos com hash encadeado (tamper-evident).
+  - [ ] Expor auditoria/consulta com controle de acesso.
 
 ### 🖥️ Frontend V1 (Refactor & Finish)
 
 * [ ] **UI Overhaul (Clean/Professional)**: Migrar de "Magicpunk" para uma estética SaaS profissional/minimalista (Shadcn/UI + Tailwind).
+  - [ ] Consolidar tokens (cores/spacing/typography) e remover estilos legacy.
+  - [ ] Substituir componentes principais por equivalents no design system novo.
+  - [ ] Definir layout base (header/sidebar/cards/tables) consistente.
 * [ ] **Complete UI Coverage**: Implementar telas faltantes (80%+) seguindo o novo Design System (Tools, Workers, RAG).
+  - [ ] Mapear páginas/telas faltantes e priorizar por uso.
+  - [ ] Implementar rotas e estados vazios (empty/error/loading).
+  - [ ] Garantir consistência visual e de interação (botões, tabelas, dialogs).
 
 * [ ] **UX Improvements**:
   * Real-time Feedback (Toasts globais).
   * Onboarding Flow (Wizard de setup).
   * Tratamento de erros amigável.
+  - [x] Infra de Toast global disponível (UiToastService/UiToasterComponent).
+  - [ ] Padronizar toasts para sucesso/erro/warn em fluxos críticos.
+  - [ ] Criar wizard de onboarding (primeiro acesso / setup).
+  - [ ] Normalizar mensagens de erro vindas da API (Problem+JSON) para UI.
 
 #### 🐛 Critical Bugs & Failures (Prioridade Alta)
 
 * [ ] **Broken Thought Stream**: O stream de pensamentos do agente (SSE) não está recebendo eventos do RabbitMQ (Tela de Chat).
+  - [ ] Confirmar consumo de eventos (RabbitMQ) no backend e fanout para SSE.
+  - [ ] Validar contrato de eventos (tipos/payload) e ordenação.
+  - [ ] Testar E2E: publicar evento -> UI recebe e renderiza.
 * [ ] **Autonomy 500 Error**: Erro interno de servidor (500) impossibilita criação de Objetivos Estratégicos.
+  - [ ] Reproduzir erro e capturar stacktrace.
+  - [ ] Corrigir validação/DI/repos e adicionar teste.
+  - [ ] Garantir retorno com Problem+JSON para erro controlado.
 * [ ] **State Desync**: Falta de reatividade entre Backend (Redis) e Frontend (NgRx/Signals).
+  - [ ] Identificar fontes de verdade duplicadas (store/local state/cache).
+  - [ ] Definir estratégia única de estado (SignalStore/Elf/NgRx) e migração.
+  - [ ] Adicionar testes de reatividade (component/store).
 
 #### 🏚️ Technical Debt & Clean Code
 
 * [ ] **Linter Bankruptcy**: `eslint-report.json` gigante (>400KB). Necessário correção massiva e regras mais estritas.
+  - [ ] Reduzir violações críticas primeiro (rules de segurança/bug-prone).
+  - [ ] Garantir lint no CI e bloquear regressões.
+  - [ ] Remover/gerar `eslint-report.json` apenas sob demanda.
 * [ ] **Hardcoded Settings**: Remover chaves e URLs hardcoded; mover para `environment.ts`.
+  - [ ] Varredura por URLs/chaves fixas no frontend.
+  - [ ] Centralizar em `environment.ts` + `api.config.ts`.
+  - [ ] Garantir fallback por ambiente (dev/prod/tailscale).
 * [ ] **Test Coverage Zero**: Não há testes de unidade ou e2e rodando no frontend atualmente.
+  - [ ] Garantir suite mínima rodando no CI (unit).
+  - [ ] Adicionar smoke e2e (login + chat).
+  - [ ] Definir meta de cobertura (por módulo crítico).
 * [x] **Legacy Testing Stack**: Atualizar de Karma/Jasmine para Vitest/Jest + Testing Library (Padrão 2026).
+  - [x] Vitest configurado no frontend (`vitest.config.ts` / script `npm test`).
+  - [x] Testing Library presente (`@testing-library/angular`).
 * [ ] **Ad-hoc State Management**: Substituir `GlobalStateStore` (Signals manuais com high cognitive load) por uma lib robusta (NgRx SignalStore ou Elf) para evitar "State Desync".
+  - [ ] Definir alvo (NgRx SignalStore vs Elf) e guideline.
+  - [ ] Migrar módulos críticos (Chat, Goals, Autonomy) primeiro.
+  - [ ] Remover padrões manuais redundantes após migração.
 * [ ] **Design System Conflict**: Remover Angular Material gradual e unificar no Shadcn/UI (Tailwind) para reduzir bundle size e inconsistências visuais.
+  - [ ] Mapear pontos de uso do Angular Material e priorizar substituições.
+  - [ ] Remover dependências/estilos quando a migração atingir massa crítica.
 
 ### ⚙️ Stability & Ops
 
 * [ ] **Database Migration Pipeline**: Finalizar transição para Alembic (abandonar scripts manuais).
+  - [ ] Introduzir Alembic (config + env) e primeira migração.
+  - [ ] Integrar migrações no deploy/CI.
+  - [ ] Documentar fluxo de upgrade/downgrade operacional.
 
 * [ ] **Smart Model Routing**: Router que escolhe entre Local/API baseado na complexidade da task (Economia).
+  - [x] Roteamento por papel/prioridade disponível (Local vs Cloud).
+  - [x] Guardrails de orçamento e fallback de custo no pipeline de LLM.
+  - [ ] Classificar complexidade automaticamente (heurística/embedding) e ajustar prioridade.
 * [ ] **Graceful Degradation**: Fallbacks claros quando serviços (ex: Redis, Neo4j) caem.
+  - [ ] Definir matriz de degradação por dependência (Redis/Neo4j/Qdrant/RabbitMQ).
+  - [ ] Garantir comportamento fail-open/fail-closed por endpoint conforme criticidade.
+  - [ ] Expor status e alertas (health checks + métricas) para cada modo degradado.
 
 ---
 
@@ -250,7 +345,18 @@ As melhores quotas gratuitas *reais* de 2026 (Sem custo de privacidade):
 
 ---
 
-## 🧱 Levantamento em Lotes (Arquitetura e Melhorias)
+## 🧱 Levantamentos (Tasks)
+
+* [x] **Lote 1 — Boot & Kernel** (levantamento fechado)
+* [x] **Lote 2 — API & Endpoints** (levantamento fechado)
+* [ ] **Lote 3 — Serviços (LLM, Chat, RAG, Observabilidade, Autonomia)** (levantamento + correções)
+* [ ] **Lote 4 — Repositórios e persistência** (levantamento + correções)
+* [ ] **Lote 5 — Agentes, Ferramentas e Sandbox** (levantamento + correções)
+* [ ] **Lote 6 — TBD** (definir escopo)
+
+---
+
+## 📎 Anexos — Levantamentos detalhados
 
 ### ✅ Lote 1 — Boot & Kernel (FECHADO)
 
@@ -281,10 +387,10 @@ As melhores quotas gratuitas *reais* de 2026 (Sem custo de privacidade):
 
 **Recomendações técnicas (com foco em custo e desempenho)**
 
-- **Paralelizar carga de prompts** (reduz latência de cold start).
-- **Indexação incremental** baseada em hash/commit (evita O(N) desnecessário).
-- **Feature flags para workers** por ambiente (reduz custo operacional).
-- **Container de DI leve** para reduzir acoplamento e melhorar testabilidade.
+- [ ] Paralelizar carga de prompts (reduz latência de cold start).
+- [ ] Indexação incremental baseada em hash/commit (evita O(N) desnecessário).
+- [ ] Criar feature flags para workers por ambiente (reduz custo operacional).
+- [ ] Introduzir container de DI leve (reduz acoplamento e melhora testabilidade).
 
 ---
 
@@ -683,98 +789,71 @@ Observacao: caminhos listados ja incluem o prefixo `/api/v1`.
    - Chat/Assistant/Agent usam caminho LLM; precisam herdar identidade autenticada para custo real.
    - /llm/budget/summary e /llm/pricing/providers expostos; ideal restringir a admin.
 
+#### Tasks
+
+* [ ] Remover duplicidades de rotas (/optimization/* e /productivity/*)
+* [ ] Decidir destino de rotas não expostas no router v1 (admin_graph/meta/resources)
+* [ ] Padronizar naming de rotas e estabilizar compatibilidade (ex: /rag/user-chat → /rag/user_chat)
+* [ ] Definir limites de tamanho para inputs livres (prompt/message/code/query) por endpoint
+* [ ] Validar URL/headers em /tools/create/from-api e impor limites em /tools/create/from-function
+* [ ] Hard gate de endpoints críticos com JWT/role (admin) e remover fallback X-User-Id
+* [ ] Tornar X-API-Key obrigatória quando não houver JWT (remover modo exposto por padrão)
+* [ ] Restringir endpoints administrativos de custo e cache (/llm/budget/summary, /llm/pricing/providers, /llm/*cache*)
+* [ ] Adicionar allowlist MIME/extensão e varredura em /documents/upload
+* [ ] Paralelizar chamadas em /system/overview e /system/health/services
+* [ ] Propagar enforcement de budget (USD) para o gateway HTTP por usuário/tenant
+
 ### Lote 3 - Servicos (LLM, Chat, RAG, Observabilidade, Autonomia) (EM ANDAMENTO)
 
 **Objetivo**: mapear a camada de servicos e explicitar pendencias criticas no fluxo do coracao do Janus.
 
-#### Pontas a resolver
+#### Tasks
 
-1) **Guardrails de input e custo**
-   - LLMService nao imp?e limite de tamanho de prompt; depende do endpoint/prompt_builder -> risco de custo/abuso.
-   - ChatService (send_message) nao valida max_bytes; apenas o fluxo SSE aplica limite.
-   - ChatService estima custo com _provider_pricing (best-effort) e pode divergir do custo real registrado no core LLM.
-
-2) **Identidade e RBAC**
-   - send_message/get_history usam get_conversation sem validar ownership; dependem do endpoint para RBAC.
-   - ChatRepositorySQL nao valida ownership no get_conversation; se conversation_id vazar, acesso e possivel.
-   - RAG indexa/recupera apenas com user_id; sem user_id o comportamento fica inconsistente (sem contexto e sem indexacao).
-
-3) **Observabilidade e resiliencia**
-   - ChatEventPublisher inicia com db_logger=None; eventos nao persistem e perdem rastreabilidade.
-   - RAG e sumarizacao sao best-effort e silenciam falhas; falta telemetria explicita de degrados.
-   - AutonomyLoop nao tem backoff/limites por falha; pode gerar ciclos ruidosos e custos indesejados.
-
-4) **Consistencia entre servicos**
-   - ChatService usa ChatRepositorySQL, mas RAGService recebe ChatRepository (interface diferente) e depende de adaptacao implicita.
-   - Identidade do usuario (user_id/project_id) e passada pelo payload; falta validacao server-side consistente entre servicos.
-
-5) **Acoes recomendadas**
-   - Unificar limites de tamanho (chat e LLM) e aplicar validacao no servico, nao apenas no endpoint.
-   - Reforcar RBAC no servico (ChatService) e garantir ownership no repositorio.
-   - Persistir eventos de chat e expor metricas de falhas RAG/sumarizacao.
-   - Centralizar resolucao de identidade do usuario (token -> user_id) antes de chamar LLM/RAG/Autonomy.
+* [ ] Impor limites de tamanho no LLMService (prompt + output)
+* [ ] Impor limites de tamanho no ChatService (message + attachments)
+* [ ] Padronizar registro/estimativa de custo no caminho Chat → LLM
+* [ ] Validar ownership de conversas no serviço e no repositório SQL
+* [ ] Tornar user_id/project_id obrigatórios e server-side antes de RAG/LLM
+* [ ] Persistir eventos do ChatEventPublisher (evitar db_logger=None silencioso)
+* [ ] Expor telemetria de degradação em RAG e sumarização (falha explícita)
+* [ ] Implementar backoff, limites e cancelamento no AutonomyLoop
+* [ ] Unificar interfaces de repositórios usadas por ChatService e RAGService
+* [ ] Centralizar resolução de identidade antes de chamar LLM/RAG/Autonomy
 
 ### Lote 4 - Repositorios e persistencia (EM ANDAMENTO)
 
 **Objetivo**: mapear repositorios, fontes de dados e contratos de persistencia, destacando inconsistencias e dividas tecnicas.
 
-#### Pontas a resolver
+#### Tasks
 
-1) **Sessao/DI quebrado no Postgres**
-   - db alias aponta para PostgresDatabase async, mas repositorios sync chamam db.get_session_direct (metodo inexistente).
-   - ChatRepositorySQL usa Session sync enquanto a infra principal e async; risco de conexoes e locks inconsistentes.
-   - PromptRepository mistura metodos async e sync: _get_session e async mas e chamado em metodos sync.
-
-2) **Persistencia fragmentada**
-   - collaboration_repository, tool_repository, optimization_repository, context_repository e sandbox_repository sao volateis (perda total em restart).
-   - learning_repository guarda stats/experimentos em memoria e apenas modelos no filesystem -> perda parcial.
-   - chat_repository file-based existe mas Kernel usa ChatRepositorySQL; risco de dados divergentes/abandonados.
-
-3) **Consistencia cross-store**
-   - Nao ha unidade de trabalho entre SQL, Qdrant e Neo4j; exclusoes usam sync_events best-effort sem retry/confirmacao.
-   - ObservabilityRepository mistura SQL e Qdrant em chamadas sem timeouts dedicados.
-   - Memory/Knowledge repos retornam dicts sem tipagem forte; erros propagam sem estrategia de retry no nivel repo.
-
-4) **Migrations e schema**
-   - ModelDeployment e outros modelos novos nao tem garantia de migration (Alembic nao finalizado).
-   - db.create_tables no startup cria tabelas dinamicamente, mas repositorios usam sessao sync (incompatibilidade).
-
-5) **Acoes recomendadas**
-   - Padronizar sessao: ou 100% async (AsyncSession) ou criar engine sync dedicado com get_session_direct real.
-   - Reescrever PromptRepository para fluxo 100% async (ou separar repos sync/async).
-   - Persistir workspace/multi-agent e tool registry em DB/Redis para sobreviver a restart.
-   - Formalizar migrations (Alembic) para modelos novos e remover create_tables do boot em prod.
+* [ ] Padronizar sessão do Postgres (100% async ou engine sync dedicado)
+* [ ] Corrigir chamadas a db.get_session_direct (método inexistente) nos repositórios
+* [ ] Alinhar ChatRepositorySQL com a infra de banco (evitar Session sync incompatível)
+* [ ] Reescrever PromptRepository para fluxo coerente (async) ou separar sync/async
+* [ ] Persistir collaboration/tool/optimization/context/sandbox repositories (evitar perda em restart)
+* [ ] Persistir learning stats/experimentos (evitar perda parcial)
+* [ ] Remover ou arquivar chat_repository file-based se não for usado
+* [ ] Definir estratégia de consistência entre SQL, Qdrant e Neo4j (sem UoW)
+* [ ] Adicionar retries/timeouts e confirmação em exclusões cross-store
+* [ ] Tipar retornos de Memory/Knowledge repos e padronizar erros no nível repo
+* [ ] Finalizar Alembic e garantir migrations para modelos novos (ex: ModelDeployment)
+* [ ] Remover db.create_tables do boot em produção
 
 ### Lote 5 - Agentes, Ferramentas e Sandbox (EM ANDAMENTO)
 
 **Objetivo**: mapear orquestracao de agentes, tool-calls e sandbox, destacando falhas de policy, execucao e isolamento.
 
-#### Pontas a resolver
+#### Tasks
 
-1) **Tool-calls sem policy no fluxo de chat**
-   - ToolExecutorService executa tools sem PolicyEngine, sem check_rate_limit e sem requires_confirmation.
-   - ChatAgentLoop usa ToolExecutorService diretamente; tool calls do LLM bypassam RBAC e confirmacao.
-   - action_registry.record_call nao e chamado nesse fluxo; telemetria e rate limit ficam incompletos (por processo, nao por usuario).
-
-2) **Fallback quebrado e execucao sem guardrails**
-   - ChatAgentLoop._execute_tools_with_fallback chama execute_tool_calls(..., strict=False), mas o metodo nao aceita strict -> erro no fallback.
-   - ToolExecutorService nao aplica timeout nem limite de concorrencia por tool; risco de bloqueio e custos.
-
-3) **Planner/Replanner com awaits ausentes**
-   - core/autonomy/planner.py chama llm_service.invoke_llm sem await (draft/critique/refine/replan/verify), retornando coroutine.
-   - Resultado: build_plan_for_goal tende a cair em fallback e a verificacao semantica perde efeito.
-
-4) **Sandbox divergente e limites nao enforceados**
-   - APIs e tools usam python_sandbox in-process; nao ha timeout/CPU/mem limit real (apenas truncamento de output).
-   - Existe SandboxExecutor com Docker (isolamento real), mas nao esta integrado ao fluxo de service/repo.
-   - SandboxService.get_capabilities informa timeout/max_output_length fixos que nao batem com enforcement real.
-
-5) **Acoes recomendadas**
-   - Centralizar execucao de tools em um executor unico que aplique PolicyEngine, rate limit, confirmacao e telemetria.
-   - Corrigir assinatura de execute_tool_calls e adicionar timeout/concorrencia por tool.
-   - Ajustar planner.py para await em invoke_llm e cobrir com testes de regressao.
-   - Unificar sandbox (preferir Docker) e alinhar get_capabilities com limites reais.
-   - Persistir rate limit e stats por usuario/tenant (Redis/DB) e padronizar fluxo HITL.
+* [ ] Aplicar PolicyEngine, rate limit e confirmação em todas tool-calls do chat
+* [ ] Garantir action_registry.record_call no fluxo de tool-calls (telemetria completa)
+* [ ] Corrigir fallback do ChatAgentLoop (execute_tool_calls não aceita strict)
+* [ ] Adicionar timeout e limite de concorrência por tool no ToolExecutorService
+* [ ] Corrigir awaits ausentes em core/autonomy/planner.py (draft/critique/refine/replan/verify)
+* [ ] Cobrir planner/autonomia com teste de regressão (coroutine/await)
+* [ ] Unificar sandbox e integrar executor Docker ao fluxo de serviços
+* [ ] Alinhar SandboxService.get_capabilities com enforcement real (timeout/CPU/mem/output)
+* [ ] Persistir rate limit e stats por usuário/tenant (Redis/DB) e padronizar fluxo HITL
 
 ### Proximo passo apos Lote 5
 - Lote 6: TBD (definir escopo).

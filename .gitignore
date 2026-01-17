@@ -1,108 +1,48 @@
-/.idea/
-/.vscode/
-*.iml
-.gradle/
+# Sync .project/sourceTexts/ folder (source text files)
 
-# Environment
-.env
-.env.*
-*.env
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.python-version
-.venv/
-venv/
-ENV/
-Pipfile.lock
-poetry.lock
-site/
-
-# Build & dist
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# Byte-compiled / optimized / DLL files
-*.so
-*.dll
-
-# Test, coverage, logs
-.pytest_cache/
-.coverage*
-htmlcov/
-.tox/
-.nox/
-.mypy_cache/
-.dmypy.json
-.pyre/
-pytestdebug.log
-logs/
-*.log
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Project data & workspaces
-/data/
-/workspace/
-/out/
-/out/**
-/out/production/
-/out/test/
-
+# Don't sync user-specific SQLite databases
 .project/*.sqlite
+
+# Don't sync SQLite auxiliary files
 .project/*.sqlite-wal
 .project/*.sqlite-shm
-.project/comments.json
+
+# Don't sync user-specific files
 .project/complete_drafts.txt
 .project/localProjectSettings.json
+copilot-messages.log
 
-metadata.json
-docs/archive/logs/
-files/
+# Archive formats
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
 
-# IDE project files
-/janus-1.0.iml
-*.ipr
-*.iws
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/dictionaries
-.idea/**/shelf
-.idea/**/dataSources/
-.idea/**/dataSources.ids
-.idea/**/sqlDataSources.xml
-.idea/**/dynamic.xml
-.idea/**/uiDesigner.xml
-.idea/**/libraries
+# Windows executables and installers
+*.exe
+*.msi
+*.bat
+*.cmd
+*.com
+*.scr
+*.dll
 
-# Node/Front-end (if any future additions)
-node_modules/
-yarn.lock
-package-lock.json
+# macOS executables and disk images
+*.dmg
+*.pkg
 
-# Docker
-*.pid
-.dump
-/docker/*.local*
+# Disk images and virtual machine files
+*.iso
+*.img
+*.vhd
+*.vmdk
 
-# HTTP client scratch files
-http/*.http.cookies
-http/*.http.environment
-
-# Janus runtime data (containers)
-janus/data/
-janus/workspace/
-
-# Front-end build output
-front/dist/
-
-# Firebase Credentials
-**/serviceAccountKey.json
-janus/app/serviceAccountKey.json
-.agent
+# System files
+.DS_Store
+.project/attachments/files/**

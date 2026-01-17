@@ -1,21 +1,28 @@
+name: janus-completo
+
 services:
   janus-api:
     build:
       context: ./janus
       dockerfile: docker/Dockerfile
+    image: janus-completo-janus-api:latest
     container_name: janus_api
     env_file:
       - ./janus/app/.env
+    init: true
     ports:
       - "8000:8000"
     volumes:
       - ./janus/app:/app/app
       - ./janus/workspace:/app/workspace
+      - ./janus/scripts:/app/scripts
       - ./janus/tests:/app/tests
       - ./janus/data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
       - ./janus/app/serviceAccountKey.json:/app/app/serviceAccountKey.json:ro
-    command: [ "sh", "-lc", "/opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: [ "sh", "-lc", "/opt/venv/bin/python /app/scripts/sync_prompts.py && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
     depends_on:
       neo4j:
         condition: service_healthy
@@ -29,13 +36,6 @@ services:
         condition: service_healthy
     networks:
       - janus-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -123,9 +123,9 @@ services:
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
-      - NEO4J_server_memory_heap_initial__size=4G
-      - NEO4J_server_memory_heap_max__size=16G
-      - NEO4J_server_memory_pagecache_size=8G
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-512M}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX:-2G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE:-1G}
     networks:
       - janus-net
     healthcheck:
@@ -186,13 +186,6 @@ services:
     networks:
       - janus-net
     entrypoint: [ "/bin/sh", "-lc", "tr -d '\r' < /init-ollama.sh > /tmp/init.sh && /bin/sh /tmp/init.sh" ]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /tmp/tags.json && grep -q '\"model\":\"qwen2.5:14b\"' /tmp/tags.json && grep -q '\"model\":\"qwen2.5-coder:14b\"' /tmp/tags.json" ]
       interval: 15s
