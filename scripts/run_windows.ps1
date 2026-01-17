@@ -13,6 +13,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $JanusDir = Join-Path $ProjectRoot "janus"
 $VenvDir = Join-Path $JanusDir ".venv"
+$PyprojectPath = Join-Path $JanusDir "pyproject.toml"
 
 # Suppress uv hardlink warnings on Windows
 $Env:UV_LINK_MODE = "copy"
@@ -25,10 +26,47 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Error "Python not found. Please install Python 3.11+ and add to PATH."
 }
 
+# Validate project layout
+if (-not (Test-Path $JanusDir)) {
+    Write-Error "Janus directory not found: $JanusDir"
+}
+
+if (-not (Test-Path $PyprojectPath)) {
+    Write-Error "pyproject.toml not found in: $JanusDir"
+}
+
+# Validate Python version
+try {
+    $pythonVersion = & python -c "import sys; print('%d.%d.%d' % sys.version_info[:3])"
+    $versionParts = $pythonVersion.Trim().Split('.')
+    if ($versionParts.Count -lt 2) {
+        Write-Error "Unable to parse Python version: $pythonVersion"
+    }
+    $major = [int]$versionParts[0]
+    $minor = [int]$versionParts[1]
+    if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 11)) {
+        Write-Error "Python 3.11+ required. Found $pythonVersion."
+    }
+} catch {
+    Write-Error "Failed to validate Python version. Ensure Python 3.11+ is installed."
+}
+
 # 2. Check/Install uv
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    Write-Host "[*] 'uv' not found. Installing via pip..." -ForegroundColor Yellow
-    python -m pip install uv
+    Write-Host "[*] 'uv' not found. Installing via pip (user scope)..." -ForegroundColor Yellow
+    python -m pip install --user uv
+
+    $userBase = & python -c "import site; print(site.USER_BASE)" 2>$null
+    if ($userBase) {
+        $userScripts = Join-Path $userBase "Scripts"
+        if ($Env:PATH -notlike "*$userScripts*") {
+            $Env:PATH = "$userScripts;$Env:PATH"
+        }
+    }
+}
+
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "uv not found on PATH after install. Restart PowerShell or add Python Scripts to PATH."
 }
 
 Set-Location $JanusDir
@@ -51,38 +89,14 @@ if (Test-Path $VenvActivate) {
 # 4. Install Dependencies
 Write-Host "[*] Checking dependencies..." -ForegroundColor Cyan
 
-# Force install key binaries for Windows compatibility
-Write-Host "[*] Ensuring Windows-compatible binaries..." -ForegroundColor Yellow
-uv pip install "psycopg[binary]" "asyncpg"
-
-# Always update requirements.txt to ensure it matches pyproject.toml state
-Write-Host "[*] Updating requirements from Poetry..." -ForegroundColor Yellow
-uv pip install poetry poetry-plugin-export
-# Try to export, but if lock file is inconsistent, just proceed to install what we can
-try {
-    poetry export -f requirements.txt --output requirements.txt --without-hashes 2>$null
-} catch {
-    Write-Host "[!] Poetry lock file might be out of sync. Proceeding with best effort..." -ForegroundColor DarkGray
-}
-
 Write-Host "[*] Installing/Syncing packages..." -ForegroundColor Cyan
-# Install from requirements if available
-if (Test-Path "requirements.txt") {
-    uv pip install -r requirements.txt
-}
-# Install project in editable mode (SKIP on failure to avoid poetry build issues)
-try {
-    uv pip install --no-deps -e . 2>$null
-} catch {
-    Write-Host "[!] Editable install failed. Continuing as standard script..." -ForegroundColor DarkGray
-}
+uv pip install -e .
 
 # Audio Handling
 try {
     python -c "import pyaudio" 2>$null
 } catch {
-    Write-Host "[*] PyAudio missing. Installing..." -ForegroundColor Yellow
-    uv pip install pyaudio
+    Write-Host "[!] PyAudio not available. Audio features may be disabled." -ForegroundColor Yellow
 }
 
 # 5. Load Environment Variables
@@ -91,14 +105,22 @@ Write-Host "[*] Loading environment variables..." -ForegroundColor Cyan
 function Set-EnvFromFile($Path) {
     if (Test-Path $Path) {
         Write-Host "    Loading $Path" -ForegroundColor DarkGray
-        Get-Content $Path | Where-Object { $_ -match "^[^#].*=" } | ForEach-Object {
-            $line = $_.ToString()
-            $idx = $line.IndexOf("=")
-            if ($idx -gt 0) {
-                $key = $line.Substring(0, $idx).Trim()
-                $value = $line.Substring($idx + 1).Trim()
-                [Environment]::SetEnvironmentVariable($key, $value, "Process")
+        Get-Content $Path | ForEach-Object {
+            $line = $_.ToString().Trim()
+            if (-not $line -or $line.StartsWith('#')) { return }
+            if ($line.StartsWith('export ')) { $line = $line.Substring(7).Trim() }
+
+            $idx = $line.IndexOf('=')
+            if ($idx -le 0) { return }
+
+            $key = $line.Substring(0, $idx).Trim()
+            $value = $line.Substring($idx + 1).Trim()
+
+            if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+                $value = $value.Substring(1, $value.Length - 2)
             }
+
+            [Environment]::SetEnvironmentVariable($key, $value, "Process")
         }
     }
 }
@@ -112,6 +134,10 @@ Write-Host "    API: http://127.0.0.1:8000" -ForegroundColor Green
 Write-Host "    Docs: http://127.0.0.1:8000/docs" -ForegroundColor Green
 
 # Ensure PYTHONPATH includes the janus directory
-$Env:PYTHONPATH = $JanusDir
+if ($Env:PYTHONPATH) {
+    $Env:PYTHONPATH = "$JanusDir;$Env:PYTHONPATH"
+} else {
+    $Env:PYTHONPATH = $JanusDir
+}
 
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
