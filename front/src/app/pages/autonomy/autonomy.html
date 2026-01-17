@@ -64,7 +64,7 @@
                     </p>
                 </div>
 
-                <div class="actions">
+                <div class="actions flex flex-col gap-3">
                     <button
                         class="px-6 py-4 rounded-xl font-bold text-lg flex items-center gap-3 transition-all transform hover:scale-105 shadow-xl"
                         [class.bg-red-500]="status?.active" [class.hover:bg-red-600]="status?.active"
@@ -73,8 +73,41 @@
                         <ui-icon class="text-2xl">{{ status?.active ? 'stop' : 'play_arrow' }}</ui-icon>
                         {{ status?.active ? 'Parar Autonomia' : 'Iniciar Autonomia' }}
                     </button>
+                    <button
+                        class="px-4 py-2 rounded-lg text-xs uppercase tracking-wider bg-slate-800 border border-slate-600 text-slate-200 hover:text-white"
+                        (click)="refreshStatus()" [disabled]="isLoading">
+                        Atualizar status
+                    </button>
                 </div>
             </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Risco</div>
+                    <ui-badge [variant]="getRiskBadge(getEffectiveRisk())">
+                        {{ getRiskLabel(getEffectiveRisk()) }}
+                    </ui-badge>
+                </div>
+                <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Intervalo</div>
+                    <div class="text-2xl font-bold text-white">{{ getEffectiveInterval() }}s</div>
+                    <div class="text-xs text-slate-500">entre ciclos</div>
+                </div>
+                <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Auto confirm</div>
+                    <div class="text-2xl font-bold text-white">{{ getAutoConfirmLabel() }}</div>
+                    <div class="text-xs text-slate-500">acao automatica</div>
+                </div>
+                <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Ultimo ciclo</div>
+                    <div class="text-sm font-semibold text-white">{{ formatLastCycle(status?.last_cycle_at) }}</div>
+                    <div class="text-xs text-slate-500">contador: {{ status?.cycle_count || 0 }}</div>
+                </div>
+            </div>
+
+            <div *ngIf="statusError" class="mb-4 text-xs text-red-400">
+                {{ statusError }}
+            </div>
 
             <section
                 class="help-summary bg-slate-800/50 p-4 rounded-lg border border-slate-700 mb-6 text-sm text-slate-300">
@@ -87,22 +120,40 @@
                 </ul>
             </section>
 
-            <section class="config-deck mb-6" *ngIf="!status?.active">
+            <section class="config-deck mb-6">
                 <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-                    <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
-                        <ui-icon class="text-purple-400">tune</ui-icon>
-                        <h3 class="font-bold text-white">Parâmetros da Autonomia</h3>
+                    <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <ui-icon class="text-purple-400">tune</ui-icon>
+                            <h3 class="font-bold text-white">Parametros da Autonomia</h3>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button
+                                class="px-3 py-1.5 text-xs uppercase tracking-wider rounded-lg border border-slate-600 text-slate-200 hover:text-white"
+                                (click)="resetPolicyForm()" [disabled]="policyLoading">
+                                Recarregar
+                            </button>
+                            <button
+                                class="px-3 py-1.5 text-xs uppercase tracking-wider rounded-lg bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+                                (click)="updatePolicy()" [disabled]="policyLoading || status?.active">
+                                <span class="flex items-center gap-2">
+                                    <ui-spinner size="sm" *ngIf="policyLoading"></ui-spinner>
+                                    Salvar politica
+                                </span>
+                            </button>
+                        </div>
                     </div>
                     <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
                         <div class="form-group flex flex-col gap-2">
-                            <label class="text-sm font-medium text-slate-400">Perfil de Risco</label>
+                            <label class="text-sm font-medium text-slate-400">Perfil de risco</label>
                             <div class="relative">
-                                <select [(ngModel)]="selectedRisk"
+                                <select [(ngModel)]="selectedRisk" (ngModelChange)="markPolicyDirty()"
+                                    [disabled]="status?.active || policyLoading"
                                     class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 appearance-none focus:outline-none focus:border-purple-500">
-                                    <option value="conservative">🛡️ Conservador (somente leitura)</option>
-                                    <option value="balanced">⚖️ Balanceado (edições seguras)</option>
-                                    <option value="aggressive">🔥 Agressivo (acesso amplo)</option>
+                                    <option value="conservative">Conservador (somente leitura)</option>
+                                    <option value="balanced">Balanceado (edicoes seguras)</option>
+                                    <option value="aggressive">Agressivo (acesso amplo)</option>
                                 </select>
                                 <ui-icon
                                     class="absolute right-3 top-2.5 pointer-events-none text-slate-500">expand_more</ui-icon>
@@ -111,10 +162,112 @@
 
                         <div class="form-group flex flex-col gap-2">
                             <label class="text-sm font-medium text-slate-400">Intervalo entre ciclos (segundos)</label>
-                            <input type="number" [(ngModel)]="cycleInterval" min="10" max="3600"
+                            <input type="number" [(ngModel)]="cycleInterval" (ngModelChange)="markPolicyDirty()"
+                                [disabled]="status?.active || policyLoading" min="10" max="3600"
                                 class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500">
                         </div>
 
+                        <div class="form-group flex flex-col gap-2">
+                            <label class="text-sm font-medium text-slate-400">Auto confirm</label>
+                            <div class="relative">
+                                <select [(ngModel)]="autoConfirm" (ngModelChange)="markPolicyDirty()"
+                                    [disabled]="status?.active || policyLoading"
+                                    class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 appearance-none focus:outline-none focus:border-purple-500">
+                                    <option [ngValue]="true">Ativo</option>
+                                    <option [ngValue]="false">Inativo</option>
+                                </select>
+                                <ui-icon
+                                    class="absolute right-3 top-2.5 pointer-events-none text-slate-500">expand_more</ui-icon>
+                            </div>
+                        </div>
+
+                        <div class="form-group flex flex-col gap-2">
+                            <label class="text-sm font-medium text-slate-400">Maximo de acoes por ciclo</label>
+                            <input type="number" [(ngModel)]="maxActionsPerCycle" (ngModelChange)="markPolicyDirty()"
+                                [disabled]="status?.active || policyLoading" min="1" max="100"
+                                placeholder="Ex: 5"
+                                class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500">
+                        </div>
+
+                        <div class="form-group flex flex-col gap-2 md:col-span-2">
+                            <label class="text-sm font-medium text-slate-400">Allowlist de ferramentas</label>
+                            <textarea rows="2" [(ngModel)]="allowlistText" (ngModelChange)="markPolicyDirty()"
+                                [disabled]="status?.active || policyLoading"
+                                placeholder="tool_a, tool_b, tool_c"
+                                class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500"></textarea>
+                        </div>
+
+                        <div class="form-group flex flex-col gap-2 md:col-span-2">
+                            <label class="text-sm font-medium text-slate-400">Blocklist de ferramentas</label>
+                            <textarea rows="2" [(ngModel)]="blocklistText" (ngModelChange)="markPolicyDirty()"
+                                [disabled]="status?.active || policyLoading"
+                                placeholder="tool_x, tool_y"
+                                class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500"></textarea>
+                        </div>
+
+                        <div class="form-group flex flex-col gap-2">
+                            <label class="text-sm font-medium text-slate-400">Maximo de segundos por ciclo</label>
+                            <input type="number" [(ngModel)]="maxSecondsPerCycle" (ngModelChange)="markPolicyDirty()"
+                                [disabled]="status?.active || policyLoading" min="10" max="3600"
+                                placeholder="Ex: 120"
+                                class="w-full bg-slate-950 border border-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:border-purple-500">
+                        </div>
+
+                    </div>
+                    <div *ngIf="status?.active" class="px-6 pb-6 text-xs text-slate-500">
+                        Para ajustar a politica, pare a autonomia.
+                    </div>
+                    <div *ngIf="policyError" class="px-6 pb-6 text-xs text-red-400">
+                        {{ policyError }}
+                    </div>
+                    <div *ngIf="policyMessage" class="px-6 pb-6 text-xs text-emerald-400">
+                        {{ policyMessage }}
+                    </div>
+                </div>
+            </section>
+
+            <section class="plan-deck mb-6">
+                <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <ui-icon class="text-cyan-400">list</ui-icon>
+                            <h3 class="font-bold text-white">Plano atual</h3>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs text-slate-400">
+                            <ui-badge [variant]="plan?.active ? 'success' : 'neutral'">
+                                {{ plan?.active ? 'Ativo' : 'Inativo' }}
+                            </ui-badge>
+                            <span>{{ plan?.steps_count || 0 }} etapas</span>
+                            <button
+                                class="px-3 py-1.5 text-xs uppercase tracking-wider rounded-lg border border-slate-600 text-slate-200 hover:text-white"
+                                (click)="refreshPlan()" [disabled]="planLoading">
+                                Atualizar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div *ngIf="planLoading" class="flex items-center gap-2 text-xs text-slate-400">
+                            <ui-spinner size="sm"></ui-spinner>
+                            Carregando plano...
+                        </div>
+                        <div *ngIf="planError" class="text-xs text-red-400">
+                            {{ planError }}
+                        </div>
+                        <ng-container *ngIf="plan?.plan as steps; else planEmpty">
+                            <div *ngIf="steps.length; else planEmpty" class="space-y-3">
+                                <div *ngFor="let step of steps; let idx = index"
+                                    class="bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-sm font-semibold text-white">{{ step.tool }}</div>
+                                        <div class="text-xs text-slate-500">#{{ idx + 1 }}</div>
+                                    </div>
+                                    <div class="text-xs text-slate-400 mt-1">{{ formatPlanArgs(step.args) }}</div>
+                                </div>
+                            </div>
+                        </ng-container>
+                        <ng-template #planEmpty>
+                            <div class="text-xs text-slate-500">Nenhum passo planejado.</div>
+                        </ng-template>
                     </div>
                 </div>
             </section>

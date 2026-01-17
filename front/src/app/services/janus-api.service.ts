@@ -88,6 +88,11 @@ export interface ReviewerMetricsResponse { user_id: number; decisions_total: num
 export interface PeriodReportResponse { period: string; buckets: { bucket: string; total: number; promote: number; reject: number; synonym: number }[] }
 export interface ConsentItem { scope: string; granted: boolean; expires_at?: string | null }
 export interface ConsentsListResponse { user_id: number; consents: ConsentItem[] }
+export interface PendingAction {
+  thread_id: string;
+  status: string;
+  message?: string | null;
+}
 
 // Poison pill stats
 export interface PoisonPillStats {
@@ -671,6 +676,19 @@ export class JanusApiService {
     qs.set('limit', String(params.limit ?? 100))
     qs.set('offset', String(params.offset ?? 0))
     return this.http.get<AuditEventsResponse>(this.buildUrl(`/api/v1/observability/audit/events?${qs.toString()}`))
+  }
+
+  // Pending actions (human approvals)
+  listPendingActions(): Observable<PendingAction[]> {
+    return this.http.get<PendingAction[]>(this.buildUrl(`/api/v1/pending_actions`))
+  }
+
+  approvePendingAction(thread_id: string): Observable<PendingAction> {
+    return this.http.post<PendingAction>(this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(thread_id)}/approve`), {})
+  }
+
+  rejectPendingAction(thread_id: string): Observable<PendingAction> {
+    return this.http.post<PendingAction>(this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(thread_id)}/reject`), {})
   }
 
   getReviewerMetrics(user_id: number, start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {

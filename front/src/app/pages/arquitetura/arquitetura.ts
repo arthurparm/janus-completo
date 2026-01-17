@@ -3,11 +3,11 @@ import { DemoService } from '../../core/services/demo.service'
 import { JanusApiService, SystemStatus, ServiceHealthItem, WorkersStatusItem, CircuitBreakerStatus, MetricsSummary, QuarantinedMessagesResponse } from '../../services/janus-api.service';
 
 import { CommonModule } from '@angular/common';
-import { MatIconModule } from '@angular/material/icon';
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
 
 @Component({
   selector: 'app-arquitetura',
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule, UiIconComponent],
   templateUrl: './arquitetura.html',
   styleUrl: './arquitetura.scss'
 })

@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { AgentEventsService, AgentEvent } from '../../core/services/agent-events.service';
 import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
-import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
 
 interface AgentEventDisplay extends AgentEvent {
     formattedTime: string;
@@ -17,8 +16,7 @@ interface AgentEventDisplay extends AgentEvent {
     imports: [
         CommonModule,
         FormsModule,
-        UiIconComponent,
-        UiButtonComponent
+        UiIconComponent
     ],
     templateUrl: './agent-events.html',
     styleUrl: './agent-events.scss'
@@ -82,13 +80,13 @@ export class AgentEventsComponent implements OnInit, OnDestroy {
 
     // Agent colors for visual distinction
     private agentColors: Record<string, string> = {
-        'orchestrator': '#00d4ff',
-        'coder': '#7c3aed',
-        'professor': '#ec4899',
-        'sandbox': '#00ff88',
-        'router': '#ffb800',
-        'planner': '#ff6b6b',
-        'default': '#9ec8d6'
+        'orchestrator': 'var(--janus-secondary)',
+        'coder': 'var(--janus-primary)',
+        'professor': 'var(--janus-accent)',
+        'sandbox': 'var(--success)',
+        'router': 'var(--warning)',
+        'planner': 'var(--error)',
+        'default': 'var(--janus-text-muted)'
     };
 
     constructor(private agentEventsService: AgentEventsService) { }

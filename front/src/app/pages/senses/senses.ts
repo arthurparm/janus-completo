@@ -4,6 +4,10 @@ import { UiButtonComponent } from '../../shared/components/ui/button/button.comp
 import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
 import { FormsModule } from '@angular/forms';
 import { JanusApiService } from '../../services/janus-api.service';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 
 @Component({
     selector: 'app-senses',
@@ -12,7 +16,11 @@ import { JanusApiService } from '../../services/janus-api.service';
         CommonModule,
         UiButtonComponent,
         UiIconComponent,
-        FormsModule
+        FormsModule,
+        MatTabsModule,
+        MatProgressBarModule,
+        MatFormFieldModule,
+        MatInputModule
     ],
     templateUrl: './senses.html',
     styleUrl: './senses.scss'

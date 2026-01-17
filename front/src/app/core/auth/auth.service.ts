@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { Injectable, inject, signal, computed } from '@angular/core'
 import { HttpClient } from '@angular/common/http'
-import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
+import { API_BASE_URL, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
 import { firstValueFrom, Observable } from 'rxjs'
 import { Auth, signInAnonymously, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut, User as FirebaseUser } from '@angular/fire/auth'
 import { toObservable } from '@angular/core/rxjs-interop'
@@ -29,16 +29,19 @@ export class AuthService {
   private readonly _isAuthenticated = signal<boolean>(false)
   private readonly _user = signal<User | null>(null)
   private readonly _firebaseAuthReady = signal<boolean>(false)
+  private readonly _authReady = signal<boolean>(false)
 
   // Readonly signal accessors
   readonly isAuthenticated = this._isAuthenticated.asReadonly()
   readonly user = this._user.asReadonly()
   readonly firebaseAuthReady = this._firebaseAuthReady.asReadonly()
+  readonly authReady = this._authReady.asReadonly()
 
   // 🔄 Backward compatibility: Expose Observables for existing consumers
   readonly isAuthenticated$ = toObservable(this._isAuthenticated)
   readonly user$ = toObservable(this._user)
   readonly firebaseAuthReady$ = toObservable(this._firebaseAuthReady)
+  readonly authReady$ = toObservable(this._authReady)
 
   // Computed signals
   readonly isAdmin = computed(() => this._user()?.roles?.includes('admin') ?? false)
@@ -58,6 +61,7 @@ export class AuthService {
   private initializeAuth(): void {
     // Listen to Firebase Auth State
     this.auth.onAuthStateChanged(async (firebaseUser) => {
+      this._authReady.set(false)
       console.log('[AuthService] onAuthStateChanged:', firebaseUser?.uid)
 
       if (firebaseUser) {
@@ -85,6 +89,8 @@ export class AuthService {
         // Original code did signInAnonymously. We can keep that for "public" access if desired.
         signInAnonymously(this.auth).catch(err => console.error('Anon auth failed', err));
       }
+
+      this._authReady.set(true)
     })
 
     // Check if we have a Janus token already? 
@@ -136,6 +142,7 @@ export class AuthService {
       const janus = String(out?.token || '')
       if (janus) {
         localStorage.setItem(AUTH_TOKEN_KEY, janus)
+        localStorage.removeItem(VISITOR_MODE_KEY)
 
         this._isAuthenticated.set(true)
         this._user.set({

@@ -26,7 +26,43 @@ class MockNotificationService {
   notify(_n: { type: string; message: string }) {}
 }
 
-class MockJanusApiService {}
+class MockJanusApiService {
+  getAutonomyPlan() {
+    return of({ status: 'ok', active: false, steps_count: 0, plan: [] });
+  }
+
+  getAutonomyStatus() {
+    return of({ active: false, cycle_count: 0, config: {} });
+  }
+
+  listAuditEvents(_params?: { limit?: number }) {
+    return of({ total: 0, events: [] });
+  }
+
+  getCurrentContext() {
+    return of(null);
+  }
+
+  getQuarantinedMessages() {
+    return of({ total_quarantined: 0, messages: [] });
+  }
+
+  listPendingActions() {
+    return of([]);
+  }
+
+  approvePendingAction(thread_id: string) {
+    return of({ thread_id, status: 'approved' });
+  }
+
+  rejectPendingAction(thread_id: string) {
+    return of({ thread_id, status: 'rejected' });
+  }
+
+  runAutoAnalysis() {
+    return of({ timestamp: '', overall_health: 'ok', insights: [], fun_fact: '' });
+  }
+}
 
 class MockUiService {
   showSuccess(_message: string) {}

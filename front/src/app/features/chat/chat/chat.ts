@@ -2,8 +2,6 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, ChangeDete
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatIconModule } from '@angular/material/icon';
 import { Subscription, forkJoin } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
@@ -19,6 +17,7 @@ import { TypingIndicatorComponent } from '../../../shared/components/typing-indi
 import { VoiceOrbComponent } from '../../../shared/components/voice-orb/voice-orb.component';
 import { HudPanelComponent, HudSection, HudItem, ThoughtEvent } from '../../../shared/components/hud-panel/hud-panel.component';
 import { UiCitationCardComponent } from '../../../shared/components/ui/ui-citation-card/ui-citation-card.component';
+import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component';
 import { MarkdownPipe } from '../../../shared/pipes/markdown.pipe';
 import { DynamicHostComponent } from '../generative-ui/dynamic-host.component';
 
@@ -31,13 +30,12 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
     imports: [
         CommonModule,
         FormsModule,
-        MatProgressSpinnerModule,
-        MatIconModule,
         JarvisAvatarComponent,
         TypingIndicatorComponent,
         VoiceOrbComponent,
         HudPanelComponent,
         UiCitationCardComponent,
+        UiIconComponent,
         MarkdownPipe,
         DynamicHostComponent
     ],

@@ -40,7 +40,7 @@
                         <input #fileInput type="file" hidden (change)="onFileSelected($event)" accept="image/*">
 
                         <div *ngIf="!analyzing && !uploadProgress">
-                            <ui-icon class="text-6xl text-cyan-400 mb-4" size="xl">add_a_photo</ui-icon>
+                            <ui-icon class="text-6xl text-cyan-400 mb-4">add_a_photo</ui-icon>
                             <h3>Drop Image Here</h3>
                             <p>or click to browse</p>
                         </div>
@@ -51,7 +51,7 @@
                         </div>
 
                         <div *ngIf="analyzing" class="animate-pulse">
-                            <ui-icon class="text-6xl text-green-400 mb-4 animate-spin" size="xl">smart_toy</ui-icon>
+                            <ui-icon class="text-6xl text-green-400 mb-4 animate-spin">smart_toy</ui-icon>
                             <h3>Analyzing...</h3>
                         </div>
 
@@ -92,7 +92,7 @@
                 <div class="audio-visualizer">
                     <div class="ripple" [class.active]="isListening"
                         [style.transform]="'scale(' + (1 + volumeLevel/50) + ')'"></div>
-                    <ui-icon class="text-6xl relative z-10" [class.text-cyan-400]="isListening" size="xl">mic</ui-icon>
+                    <ui-icon class="text-6xl relative z-10" [class.text-cyan-400]="isListening">mic</ui-icon>
                 </div>
 
                 <div class="flex justify-center gap-4">

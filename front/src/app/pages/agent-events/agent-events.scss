@@ -28,9 +28,9 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--janus-font-display);
     font-size: 1.75rem;
-    color: var(--cyan, #00d4ff);
+    color: var(--cyan, #5b8dff);
     margin: 0 0 0.5rem 0;
     text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 
@@ -84,8 +84,8 @@
         border-color: rgba(0, 255, 136, 0.3);
 
         .status-dot {
-            background: var(--success, #00ff88);
-            box-shadow: 0 0 8px var(--success, #00ff88);
+            background: var(--success, #2dd4a7);
+            box-shadow: 0 0 8px var(--success, #2dd4a7);
         }
     }
 
@@ -129,7 +129,7 @@
     white-space: nowrap;
 
     mat-icon {
-        color: var(--cyan, #00d4ff);
+        color: var(--cyan, #5b8dff);
         font-size: 1.25rem;
         width: 1.25rem;
         height: 1.25rem;
@@ -154,8 +154,8 @@
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: var(--agent-color, #00d4ff);
-            box-shadow: 0 0 6px var(--agent-color, #00d4ff);
+            background: var(--agent-color, var(--cyan, #5b8dff));
+            box-shadow: 0 0 6px var(--agent-color, var(--cyan, #5b8dff));
         }
     }
 }
@@ -248,15 +248,15 @@
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        background: var(--agent-color, #00d4ff);
-        box-shadow: 0 0 8px var(--agent-color, #00d4ff);
+        background: var(--agent-color, var(--cyan, #5b8dff));
+        box-shadow: 0 0 8px var(--agent-color, var(--cyan, #5b8dff));
         z-index: 1;
     }
 
     .marker-line {
         flex: 1;
         width: 2px;
-        background: linear-gradient(to bottom, var(--agent-color, #00d4ff), transparent);
+        background: linear-gradient(to bottom, var(--agent-color, var(--cyan, #5b8dff)), transparent);
         margin-top: 4px;
         min-height: 20px;
     }
@@ -303,7 +303,7 @@
 
 .agent-chip {
     --mdc-chip-elevated-container-color: var(--chip-color, rgba(0, 212, 255, 0.15)) !important;
-    --mdc-chip-label-text-color: var(--chip-color, #00d4ff) !important;
+    --mdc-chip-label-text-color: var(--chip-color, var(--cyan, #5b8dff)) !important;
     font-size: 0.75rem !important;
     height: 24px !important;
     border: 1px solid var(--chip-color, rgba(0, 212, 255, 0.3)) !important;
@@ -362,8 +362,8 @@
 
     &.event-complete {
         .marker-dot {
-            background: var(--success, #00ff88) !important;
-            box-shadow: 0 0 8px var(--success, #00ff88) !important;
+            background: var(--success, #2dd4a7) !important;
+            box-shadow: 0 0 8px var(--success, #2dd4a7) !important;
         }
     }
 

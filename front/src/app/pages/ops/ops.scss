@@ -18,7 +18,7 @@
     border-radius: var(--janus-radius-lg);
 
     mat-card-title {
-        font-family: 'Orbitron', sans-serif;
+        font-family: var(--janus-font-display);
         color: var(--janus-text-primary);
         display: flex;
         align-items: center;

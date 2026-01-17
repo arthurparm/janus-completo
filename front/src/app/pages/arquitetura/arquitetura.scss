@@ -1557,13 +1557,13 @@ pre code {
   svg {
     .blk {
       fill: rgba(10, 15, 26, 0.8);
-      stroke: #00d4ff;
+      stroke: var(--janus-secondary);
       stroke-width: 1.5;
     }
 
     .ext {
       fill: rgba(10, 15, 26, 0.6);
-      stroke: #7c3aed;
+      stroke: var(--accent-purple);
       stroke-width: 1.5;
       stroke-dasharray: 4;
     }
@@ -1585,13 +1585,13 @@ pre code {
 
     .sub-label {
       fill: #9ec8d6;
-      font-family: 'Inter', sans-serif;
+      font-family: var(--janus-font-body);
       font-size: 10px;
       text-anchor: middle;
     }
 
     .arrow {
-      stroke: #00d4ff;
+      stroke: var(--janus-secondary);
       stroke-width: 2;
       marker-end: url(#arr);
       animation: flow 3s infinite linear;
@@ -1606,7 +1606,7 @@ pre code {
     }
 
     .arrow-rev {
-      stroke: #7c3aed;
+      stroke: var(--accent-purple);
       stroke-width: 2;
       marker-end: url(#arr-p);
       stroke-dasharray: 4;
@@ -1614,7 +1614,7 @@ pre code {
     }
 
     .user-node {
-      stroke: #ec4899;
+      stroke: var(--janus-accent);
     }
 
     .core-node {
@@ -1628,7 +1628,7 @@ pre code {
 
     .conn-files {
       fill: none;
-      stroke: #ec4899;
+      stroke: var(--janus-accent);
     }
 
     @keyframes flow {

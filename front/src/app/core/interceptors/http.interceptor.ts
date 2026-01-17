@@ -10,6 +10,7 @@ import { LoadingStateService } from '../services/loading-state.service';
 import { NotificationService } from '../notifications/notification.service';
 
 import { Router } from '@angular/router';
+import { AUTH_OPTIONAL, VISITOR_MODE_KEY } from '../../services/api.config';
 
 @Injectable()
 export class LoadingInterceptor implements HttpInterceptor {
@@ -54,6 +55,13 @@ export class ErrorInterceptor implements HttpInterceptor {
   private notificationService = inject(NotificationService);
 
   private router = inject(Router);
+  private isVisitorMode(): boolean {
+    try {
+      return localStorage.getItem(VISITOR_MODE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     return next.handle(req).pipe(
@@ -132,6 +140,9 @@ export class ErrorInterceptor implements HttpInterceptor {
   }
 
   private handleUnauthorized(): void {
+    if (AUTH_OPTIONAL || this.isVisitorMode()) {
+      return;
+    }
     // Limpar dados de autenticação
     // Limpar autenticação local
     localStorage.removeItem('token');

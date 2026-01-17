@@ -23,19 +23,28 @@
       <span class="bar"></span>
     </button>
 
-    <nav class="nav" id="primary-navigation" aria-label="Navegação principal" [class.open]="isMenuOpen">
+    <nav class="nav" id="primary-navigation" aria-label="Navegacao principal" [class.open]="isMenuOpen">
       <!-- Primary Navigation is now handled by the Sidebar -->
       <!-- Mobile Navigation Links (Hidden on Desktop) -->
       <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMenu()"
-        class="mobile-link">Início</a>
+        class="mobile-link">Inicio</a>
       <a routerLink="/conversations" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Conversas</a>
+      <a routerLink="/autonomy" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Autonomia</a>
       <a routerLink="/goals" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Metas</a>
+      <a routerLink="/sprints" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Sprints</a>
+      <a routerLink="/auto-analysis" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Auto-Analise</a>
+      <a routerLink="/agent-events" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Agent Events</a>
+      <a routerLink="/hitl" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">HITL</a>
+      <a routerLink="/poison-pills" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Poison Pills</a>
+      <a routerLink="/ops" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">LLMOps</a>
+      <a routerLink="/budget" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Budget</a>
       <a routerLink="/tools" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Ferramentas</a>
-      <a routerLink="/arquitetura" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Arquitetura</a>
-      <a routerLink="/memory" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Memória</a>
+      <a routerLink="/brain" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Memoria</a>
+      <a routerLink="/knowledge-graph" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Knowledge Graph</a>
       <a routerLink="/documents" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Documentos</a>
-      <a routerLink="/auto-analysis" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Diagnóstico</a>
-      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Documentação</a>
+      <a routerLink="/documentacao" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Documentacao</a>
+      <a routerLink="/senses" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">Senses</a>
+      <a routerLink="/ux" routerLinkActive="active" (click)="closeMenu()" class="mobile-link">UX Dashboard</a>
 
       @if (isAuthenticated$ | async) {
       <button class="logout-btn" (click)="logout(); closeMenu()">Disconnect</button>

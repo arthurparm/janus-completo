@@ -1,9 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
-import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
 import { UiSpinnerComponent } from '../../shared/components/ui/spinner/spinner.component';
 
 import { JanusApiService, KnowledgeStats, EntityRelationshipItem, ReflexionLesson } from '../../services/janus-api.service';
@@ -17,7 +15,6 @@ import { MemoryComponent } from '../memory/memory';
         FormsModule,
         MemoryComponent,
         UiIconComponent,
-        UiButtonComponent,
         UiSpinnerComponent
     ],
     templateUrl: './brain.html',

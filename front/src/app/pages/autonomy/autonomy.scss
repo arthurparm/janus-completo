@@ -27,7 +27,7 @@
     background: rgba(15, 23, 42, 1);
     color: var(--muted);
 
-    mat-icon {
+    ui-icon {
         font-size: 40px;
         width: 40px;
         height: 40px;
@@ -75,12 +75,12 @@
     height: 56px;
     padding: 0 2.5rem;
     font-size: 0.95rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--janus-font-body);
     font-weight: 600;
     letter-spacing: 0.08em;
     border-radius: 999px;
 
-    mat-icon {
+    ui-icon {
         margin-right: 12px;
     }
 }

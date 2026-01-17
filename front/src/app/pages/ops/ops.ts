@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { UiButtonComponent } from '../../shared/components/ui/button/button.component';
 import { UiIconComponent } from '../../shared/components/ui/icon/icon.component';
 import { FormsModule } from '@angular/forms';
 import { JanusApiService, DeploymentStageResponse } from '../../services/janus-api.service';
@@ -10,7 +9,6 @@ import { JanusApiService, DeploymentStageResponse } from '../../services/janus-a
     standalone: true,
     imports: [
         CommonModule,
-        UiButtonComponent,
         UiIconComponent,
         FormsModule
     ],

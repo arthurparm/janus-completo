@@ -1,89 +1,87 @@
-<section class="login flex items-center justify-center min-h-screen bg-transparent">
-  <div
-    class="glass-panel p-8 w-full max-w-md relative overflow-hidden backdrop-blur-xl border border-cyan/30 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-    <!-- Cosmetic decoration -->
-    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan to-transparent opacity-50">
-    </div>
-    <div class="absolute -top-10 -right-10 w-40 h-40 bg-purple/20 blur-3xl rounded-full"></div>
-    <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-cyan/20 blur-3xl rounded-full"></div>
+<section class="login">
+  <div class="glass-panel">
+    <div class="panel-glow" aria-hidden="true"></div>
 
-    <div class="brand text-center mb-8 relative z-10">
-      <div class="w-16 h-16 mx-auto mb-4 relative">
-        <div class="absolute inset-0 border-2 border-cyan/50 rounded-full animate-spin-slow"></div>
-        <div class="absolute inset-2 border-2 border-purple/50 rounded-full animate-reverse-spin"></div>
-        <div
-          class="absolute inset-center w-2 h-2 bg-white rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-[0_0_10px_white]">
-        </div>
+    <div class="brand">
+      <div class="signal-orb" aria-hidden="true">
+        <span class="signal-core"></span>
+        <span class="signal-ring"></span>
+        <span class="signal-ring ring-two"></span>
       </div>
-      <h1 class="text-2xl font-bold tracking-widest text-white mb-1">IDENTITY VERIFICATION</h1>
-      <p class="text-xs font-mono text-cyan">SECURE ACCESS GATEWAY v2.0</p>
+      <p class="eyebrow">JANUS // PORTAL SEGURO</p>
+      <h1>VERIFICACAO DE ACESSO</h1>
+      <p class="sub">Entrada segura para o nucleo operacional do Janus.</p>
+      <div class="status-chip">
+        <span class="status-dot"></span>
+        CANAL CRIPTOGRAFADO ATIVO
+      </div>
     </div>
 
-    <form [formGroup]="form" (ngSubmit)="loginEmailPassword()" class="space-y-6 relative z-10" aria-label="Login">
+    <form [formGroup]="form" (ngSubmit)="loginEmailPassword()" aria-label="Login">
 
       <!-- Email -->
-      <div class="space-y-1">
-        <label for="email" class="text-xs font-mono text-muted uppercase">User Identifier</label>
-        <input id="email" type="email" formControlName="email" class="glass-input" placeholder="user@janus.ai"
+      <div class="field">
+        <label for="email">Email de acesso</label>
+        <input id="email" type="email" formControlName="email" class="glass-input" placeholder="voce@janus.ai"
           [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched" />
-        <div class="text-red-400 text-xs mt-1" *ngIf="form.controls.email.invalid && form.controls.email.touched">
-          > INVALID IDENTIFIER
+        <div class="field-error" *ngIf="form.controls.email.invalid && form.controls.email.touched">
+          > IDENTIFICADOR INVALIDO
         </div>
       </div>
 
       <!-- Password -->
-      <div class="space-y-1">
-        <label for="password" class="text-xs font-mono text-muted uppercase">Access Code</label>
-        <div class="relative">
+      <div class="field">
+        <label for="password">Senha de acesso</label>
+        <div class="password-wrap">
           <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password"
-            class="glass-input pr-20" placeholder="••••••••" />
-          <button type="button"
-            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-cyan hover:text-white uppercase font-mono"
-            (click)="togglePassword()" [attr.aria-pressed]="showPassword">
-            {{ showPassword ? 'HIDE' : 'SHOW' }}
+            class="glass-input has-toggle" placeholder="********" />
+          <button type="button" class="toggle-password" (click)="togglePassword()"
+            [attr.aria-pressed]="showPassword">
+            {{ showPassword ? 'OCULTAR' : 'MOSTRAR' }}
           </button>
         </div>
-        <div class="text-red-400 text-xs mt-1" *ngIf="form.controls.password.invalid && form.controls.password.touched">
-          > MINIMUM LENGTH: 6 CHARS
+        <div class="field-error" *ngIf="form.controls.password.invalid && form.controls.password.touched">
+          > MINIMO 6 CARACTERES
         </div>
       </div>
 
       <!-- Extras -->
-      <div class="flex items-center justify-between text-xs text-muted">
-        <label class="flex items-center gap-2 cursor-pointer hover:text-white">
-          <input type="checkbox" formControlName="remember" class="accent-cyan" />
-          <span>MAINTAIN SESSION</span>
+      <div class="extras">
+        <label class="remember">
+          <input type="checkbox" formControlName="remember" />
+          <span>Manter sessao</span>
         </label>
-        <a class="hover:text-cyan transition-colors no-underline" href="#">RECOVER ACCESS?</a>
+        <a class="recover" href="#">Recuperar acesso</a>
       </div>
 
       <!-- Submit -->
-      <button class="w-full glass-button justify-center py-3 bg-cyan/10 hover:bg-cyan/20 text-cyan border-cyan/50"
-        type="submit" [disabled]="form.invalid || loading">
-        <span class="tracking-widest font-bold">{{ loading ? 'AUTHENTICATING...' : 'INITIATE SESSION' }}</span>
-        <span class="material-icons text-sm" *ngIf="!loading">login</span>
+      <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading">
+        <span>{{ loading ? 'ENTRANDO...' : 'ENTRAR NO JANUS' }}</span>
+        <span class="material-icons" *ngIf="!loading">login</span>
       </button>
 
       <!-- SSO Alt -->
-      <div class="grid grid-cols-2 gap-4 mt-6">
-        <button type="button" class="glass-button secondary justify-center text-xs" (click)="loginWithGoogle()"
-          [disabled]="loading">
-          GOOGLE_AUTH
+      <div class="sso">
+        <button type="button" class="glass-button secondary" (click)="loginWithGoogle()" [disabled]="loading">
+          Entrar com Google
         </button>
-        <button type="button" class="glass-button secondary justify-center text-xs" (click)="loginWithGithub()"
-          [disabled]="loading">
-          GITHUB_AUTH
+        <button type="button" class="glass-button secondary" (click)="loginWithGithub()" [disabled]="loading">
+          Entrar com GitHub
         </button>
       </div>
 
       <!-- Sign Up -->
-      <div class="text-center mt-6 text-xs text-muted">
-        <span>NO CREDENTIALS FOUND?</span>
-        <a class="text-cyan hover:text-white ml-2 cursor-pointer no-underline" href="#">[ REQUEST ACCESS ]</a>
+      <div class="signup">
+        <span>Sem credenciais?</span>
+        <a routerLink="/solicitar-acesso">Solicitar acesso</a>
+      </div>
+      <div class="signup">
+        <span>Quer apenas explorar?</span>
+        <a routerLink="/visitante">Entrar como visitante</a>
       </div>
 
-      <div class="mt-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono" *ngIf="error">
-        > ERROR: {{ error }}
+      <div class="error-box" *ngIf="error">
+        > {{ error }}
       </div>
     </form>
   </div>

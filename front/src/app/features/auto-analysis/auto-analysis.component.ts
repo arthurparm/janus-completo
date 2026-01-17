@@ -2,20 +2,16 @@ import { Component, OnInit } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { AutoAnalysisService, AutoAnalysisResponse } from '../../services/auto-analysis.service'
 import { MockAutoAnalysisService } from '../../services/mock-auto-analysis.service'
-import { MatCardModule } from '@angular/material/card'
-import { MatIconModule } from '@angular/material/icon'
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
-import { MatChipsModule } from '@angular/material/chips'
+import { UiIconComponent } from '../../shared/components/ui/icon/icon.component'
+import { UiSpinnerComponent } from '../../shared/components/ui/spinner/spinner.component'
 
 @Component({
   selector: 'app-auto-analysis',
   standalone: true,
   imports: [
     CommonModule,
-    MatCardModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    MatChipsModule
+    UiIconComponent,
+    UiSpinnerComponent
   ],
   templateUrl: './auto-analysis.html',
   styleUrl: './auto-analysis.scss'

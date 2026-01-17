@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component';
+import { GlobalStateStore } from '../../state/global-state.store';
 
 @Component({
   selector: 'app-sidebar',
@@ -11,5 +12,12 @@ import { UiIconComponent } from '../../../shared/components/ui/icon/icon.compone
   styleUrl: './sidebar.scss'
 })
 export class Sidebar {
-  // Can add collapsed state here if needed
+  private store = inject(GlobalStateStore);
+
+  readonly apiHealthy = this.store.apiHealthy;
+  readonly services = this.store.services;
+  readonly workers = this.store.workers;
+  readonly runningWorkers = computed(() =>
+    this.workers().filter((worker) => (worker.status || '').toLowerCase() === 'running').length
+  );
 }

@@ -11,17 +11,18 @@
 @use 'styles/tokens' as *;
 
 @mixin glass-panel {
-    background: rgba(13, 20, 35, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(var(--janus-bg-surface-rgb), 0.76);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border: 1px solid var(--janus-border);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 18px 45px rgba(7, 10, 18, 0.35), 0 0 24px rgba(var(--janus-secondary-rgb), 0.08);
 }
 
 @mixin ambient-background {
-    background: 
-        radial-gradient(circle at 15% 50%, rgba(0, 184, 255, 0.03), transparent 25%), 
-        radial-gradient(circle at 85% 30%, rgba(124, 58, 237, 0.03), transparent 25%);
+    background:
+        radial-gradient(circle at 15% 35%, rgba(var(--janus-secondary-rgb), 0.08), transparent 40%),
+        radial-gradient(circle at 85% 25%, rgba(var(--janus-accent-rgb), 0.06), transparent 45%),
+        radial-gradient(circle at 70% 85%, rgba(var(--janus-primary-rgb), 0.05), transparent 40%);
     background-attachment: fixed;
 }
 
@@ -99,10 +100,10 @@
 @mixin btn-danger {
     @include btn-base;
     background-color: transparent;
-    border-color: var(--janus-accent);
-    color: var(--janus-accent);
+    border-color: var(--destructive);
+    color: var(--destructive);
 
     &:hover {
-         background-color: rgba(255, 0, 85, 0.1);
+         background-color: rgba(var(--error-rgb), 0.12);
     }
 }

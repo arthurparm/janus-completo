@@ -1,10 +1,9 @@
-import { Component, OnInit, inject, ChangeDetectorRef, OnDestroy } from '@angular/core'
+import { Component, OnInit, inject, ChangeDetectorRef, OnDestroy, HostListener } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { JanusApiService, Goal } from '../../services/janus-api.service'
 import { DemoService } from '../../core/services/demo.service'
 import { UiIconComponent } from '../../shared/components/ui/icon/icon.component'
-import { MatMenuModule } from '@angular/material/menu'
 import { Firestore, collection, collectionData, query } from '@angular/fire/firestore';
 import { Subscription, filter, take } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
@@ -12,7 +11,7 @@ import { AuthService } from '../../core/auth/auth.service';
 @Component({
     selector: 'app-goals',
     standalone: true,
-    imports: [CommonModule, FormsModule, UiIconComponent, MatMenuModule],
+    imports: [CommonModule, FormsModule, UiIconComponent],
     templateUrl: './goals.html',
     styleUrl: './goals.scss'
 })
@@ -34,6 +33,7 @@ export class GoalsComponent implements OnInit, OnDestroy {
     searchQuery = ''
     sortBy: 'priority' | 'created_at' | 'deadline_ts' = 'priority'
     sortDir: 'asc' | 'desc' = 'desc'
+    activeMenuGoalId: string | null = null
 
     get isOffline() {
         return this.demoService.isOffline()
@@ -321,5 +321,15 @@ export class GoalsComponent implements OnInit, OnDestroy {
             completed: this.goals.filter(g => g.status === 'completed').length,
             failed: this.goals.filter(g => g.status === 'failed').length
         }
+    }
+
+    toggleMenu(goalId: string, event: Event): void {
+        event.stopPropagation()
+        this.activeMenuGoalId = this.activeMenuGoalId === goalId ? null : goalId
+    }
+
+    @HostListener('document:click')
+    closeMenu(): void {
+        this.activeMenuGoalId = null
     }
 }

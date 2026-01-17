@@ -238,7 +238,7 @@
       border-radius: 50px;
       transition: var(--transition);
       border: 1px solid var(--janus-primary);
-      background: rgba(0, 255, 157, 0.1);
+      background: rgba(var(--janus-primary-rgb), 0.12);
       color: var(--janus-primary);
       cursor: pointer;
 
@@ -252,12 +252,12 @@
       &.secondary {
         border-color: var(--janus-secondary);
         color: var(--janus-secondary);
-        background: rgba(0, 184, 255, 0.1);
+        background: rgba(var(--janus-secondary-rgb), 0.12);
 
         &:hover {
           background: var(--janus-secondary);
           color: var(--janus-bg-dark);
-          box-shadow: 0 0 15px rgba(0, 184, 255, 0.4);
+          box-shadow: 0 0 15px rgba(var(--janus-secondary-rgb), 0.4);
         }
       }
 
@@ -759,7 +759,7 @@
           &.primary {
             background: var(--janus-primary-dim);
             color: var(--janus-primary);
-            border-color: rgba(0, 255, 157, 0.3);
+            border-color: rgba(var(--janus-primary-rgb), 0.3);
           }
 
           &.warning {

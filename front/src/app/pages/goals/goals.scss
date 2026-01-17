@@ -37,7 +37,7 @@
         text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 
         mat-icon {
-            color: var(--cyan, #00d4ff);
+            color: var(--cyan, #5b8dff);
             font-size: 2rem;
             width: 2rem;
             height: 2rem;
@@ -86,11 +86,11 @@
         }
 
         &.in-progress .stat-number {
-            color: #00d4ff;
+            color: var(--cyan, #5b8dff);
         }
 
         &.completed .stat-number {
-            color: #00ff88;
+            color: var(--success, #2dd4a7);
         }
 
         &.failed .stat-number {
@@ -109,7 +109,7 @@
 
         .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, var(--cyan, #00d4ff), var(--purple, #7c3aed));
+            background: linear-gradient(90deg, var(--cyan, #5b8dff), var(--purple, #4c6be0));
             border-radius: 12px;
             transition: width 0.5s ease;
         }
@@ -170,7 +170,7 @@
 
         &:focus {
             outline: none;
-            border-color: var(--cyan, #00d4ff);
+            border-color: var(--cyan, #5b8dff);
             box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
 
@@ -195,7 +195,7 @@
 
         &:focus {
             outline: none;
-            border-color: var(--cyan, #00d4ff);
+            border-color: var(--cyan, #5b8dff);
         }
 
         option {
@@ -236,8 +236,8 @@
 
         &.active {
             background: rgba(0, 212, 255, 0.15);
-            border-color: var(--cyan, #00d4ff);
-            color: var(--cyan, #00d4ff);
+            border-color: var(--cyan, #5b8dff);
+            color: var(--cyan, #5b8dff);
         }
     }
 }
@@ -274,7 +274,7 @@
         margin: 0 0 1.5rem 0;
 
         mat-icon {
-            color: var(--cyan, #00d4ff);
+            color: var(--cyan, #5b8dff);
         }
     }
 
@@ -301,7 +301,7 @@
 
             &:focus {
                 outline: none;
-                border-color: var(--cyan, #00d4ff);
+                border-color: var(--cyan, #5b8dff);
             }
 
             &::placeholder {
@@ -330,7 +330,7 @@
 
         &.priority-low {
             background: rgba(0, 255, 136, 0.15);
-            color: #00ff88;
+            color: var(--success, #2dd4a7);
         }
 
         &.priority-medium {
@@ -379,11 +379,11 @@
     }
 
     &.status-in_progress {
-        border-left: 3px solid #00d4ff;
+        border-left: 3px solid var(--cyan, #5b8dff);
     }
 
     &.status-completed {
-        border-left: 3px solid #00ff88;
+        border-left: 3px solid var(--success, #2dd4a7);
     }
 
     &.status-failed {
@@ -413,7 +413,7 @@
 
             &.priority-low {
                 background: rgba(0, 255, 136, 0.15);
-                color: #00ff88;
+                color: var(--success, #2dd4a7);
             }
 
             &.priority-medium {
@@ -473,7 +473,7 @@
             color: rgba(158, 200, 214, 0.9);
 
             mat-icon {
-                color: #00ff88;
+                color: var(--success, #2dd4a7);
                 font-size: 18px;
                 width: 18px;
                 height: 18px;
@@ -512,12 +512,12 @@
 
             &.status-in_progress {
                 background: rgba(0, 212, 255, 0.15);
-                color: #00d4ff;
+                color: var(--cyan, #5b8dff);
             }
 
             &.status-completed {
                 background: rgba(0, 255, 136, 0.15);
-                color: #00ff88;
+                color: var(--success, #2dd4a7);
             }
 
             &.status-failed {
@@ -552,7 +552,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1.25rem;
-    background: linear-gradient(135deg, var(--cyan, #00d4ff), var(--purple, #7c3aed));
+    background: linear-gradient(135deg, var(--cyan, #5b8dff), var(--purple, #4c6be0));
     border: none;
     border-radius: 8px;
     color: white;
@@ -634,7 +634,7 @@
     width: 48px;
     height: 48px;
     border: 3px solid rgba(0, 212, 255, 0.2);
-    border-top-color: var(--cyan, #00d4ff);
+    border-top-color: var(--cyan, #5b8dff);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 1rem;
@@ -713,7 +713,7 @@
     }
 
     h2 {
-        font-family: 'Orbitron', sans-serif;
+        font-family: var(--janus-font-display);
         color: var(--error, #ff4757);
         font-size: 1.5rem;
         margin-bottom: 1rem;

@@ -7,6 +7,55 @@
     gap: 2rem;
 }
 
+.sidebar-status {
+    border: 1px solid var(--janus-border);
+    border-radius: var(--janus-radius-md);
+    background: rgba(var(--janus-secondary-rgb), 0.06);
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.status-label-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--janus-text-muted);
+    box-shadow: none;
+
+    &.ok {
+        background: var(--janus-secondary);
+        box-shadow: 0 0 6px var(--janus-secondary);
+    }
+}
+
+.status-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--janus-text-muted);
+}
+
+.status-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--janus-text-primary);
+    font-family: var(--janus-font-mono);
+}
+
 .section-title {
     font-size: 0.7rem;
     color: var(--janus-text-muted);
@@ -53,11 +102,11 @@
     }
 
     &:hover {
-        background: rgba(0, 212, 255, 0.05);
+        background: rgba(var(--janus-secondary-rgb), 0.08);
         color: var(--janus-secondary);
         padding-left: 1.25rem;
         /* Slide effect */
-        border-color: rgba(0, 212, 255, 0.1);
+        border-color: rgba(var(--janus-secondary-rgb), 0.2);
 
         .icon {
             filter: grayscale(0%);
@@ -69,7 +118,7 @@
     }
 
     &.active {
-        background: linear-gradient(90deg, rgba(0, 212, 255, 0.1), transparent);
+        background: linear-gradient(90deg, rgba(var(--janus-secondary-rgb), 0.18), transparent);
         color: var(--janus-secondary);
         border-left: 3px solid var(--janus-secondary);
         border-radius: 0 var(--janus-radius-md) var(--janus-radius-md) 0;

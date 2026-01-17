@@ -1,22 +1,43 @@
 import { Routes, CanMatchFn, Router } from '@angular/router';
 import { MainLayout } from './core/layout/main-layout/main-layout';
 import { inject } from '@angular/core'
+import { combineLatest, filter, map, take } from 'rxjs'
 import { DashboardResolver, ChatResolver, UserResolver } from './core/guards'
+import { AuthService } from './core/auth/auth.service'
+import { AUTH_OPTIONAL, VISITOR_MODE_KEY } from './services/api.config'
+
+const isVisitorMode = (): boolean => {
+  try {
+    return localStorage.getItem(VISITOR_MODE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export const authGuard: CanMatchFn = () => {
-  const _router = inject(Router)
-  // BYPASS: Authentication disabled by user request
-  // eslint-disable-next-line no-console
-  console.log('[AuthGuard] Bypassing auth check (Dev Mode)')
-  return true
+  const router = inject(Router)
+  const auth = inject(AuthService)
+  if (AUTH_OPTIONAL || isVisitorMode()) {
+    return true
+  }
+  return combineLatest([auth.authReady$, auth.isAuthenticated$]).pipe(
+    filter(([ready]) => ready),
+    take(1),
+    map(([, isAuthenticated]) => (isAuthenticated ? true : router.parseUrl('/login')))
+  )
 }
 
 export const loginRedirectGuard: CanMatchFn = () => {
   const router = inject(Router)
-  // BYPASS: Redirect to home as login is disabled
-  // eslint-disable-next-line no-console
-  console.log('[LoginRedirectGuard] Auth disabled, redirecting to home')
-  return router.parseUrl('/')
+  const auth = inject(AuthService)
+  if (AUTH_OPTIONAL || isVisitorMode()) {
+    return true
+  }
+  return combineLatest([auth.authReady$, auth.isAuthenticated$]).pipe(
+    filter(([ready]) => ready),
+    take(1),
+    map(([, isAuthenticated]) => (isAuthenticated ? router.parseUrl('/') : true))
+  )
 }
 
 export const routes: Routes = [
@@ -24,6 +45,15 @@ export const routes: Routes = [
     path: 'login',
     loadComponent: () => import('./features/auth/login/login').then(m => m.LoginComponent),
     canMatch: [loginRedirectGuard]
+  },
+  {
+    path: 'solicitar-acesso',
+    loadComponent: () => import('./features/auth/request-access/request-access').then(m => m.RequestAccessComponent),
+    canMatch: [loginRedirectGuard]
+  },
+  {
+    path: 'visitante',
+    loadComponent: () => import('./features/auth/visitor/visitor').then(m => m.VisitorComponent)
   },
 
   {
@@ -43,11 +73,8 @@ export const routes: Routes = [
       },
       {
         path: 'arquitetura',
-        loadComponent: () => import('./pages/arquitetura/arquitetura').then(m => m.Arquitetura),
-        data: {
-          title: 'Arquitetura',
-          description: 'Visualização da arquitetura do sistema'
-        }
+        redirectTo: 'documentacao',
+        pathMatch: 'full'
       },
       {
         path: 'goals',
@@ -213,3 +240,4 @@ export const routes: Routes = [
     ]
   }
 ];
+

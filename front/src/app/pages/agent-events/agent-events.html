@@ -98,7 +98,7 @@
                 class="bg-slate-950 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 w-40 focus:outline-none focus:border-purple-500 appearance-none cursor-pointer hover:bg-slate-900 transition-colors">
                 <option value="">Todos</option>
                 @for (type of uniqueEventTypes(); track type) {
-                <option [value]="type">{{ type }}</mat-option>
+                <option [value]="type">{{ type }}</option>
                     }
             </select>
             <ui-icon class="absolute right-3 top-2.5 pointer-events-none text-slate-500 text-sm">expand_more</ui-icon>

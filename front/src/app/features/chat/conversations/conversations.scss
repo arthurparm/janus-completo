@@ -12,7 +12,7 @@
   --text-muted: var(--janus-text-muted);
   
   --accent-cyan: var(--janus-secondary);
-  --accent-purple: #7c3aed; // Keeping specific accent for this feature
+  --accent-purple: var(--purple);
   
   --card-bg: var(--janus-bg-card);
   --card-hover: rgba(255, 255, 255, 0.05);
@@ -760,7 +760,7 @@
   }
 
   h2 {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--janus-font-display);
     color: var(--error);
     font-size: 1.8rem;
     margin-bottom: 1rem;

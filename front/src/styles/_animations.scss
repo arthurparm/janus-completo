@@ -89,6 +89,32 @@
     }
 }
 
+// --- Grid Drift (background lattice) ---
+@keyframes gridDrift {
+    from {
+        background-position: 0 0, 0 0;
+    }
+
+    to {
+        background-position: 160px 160px, 160px 160px;
+    }
+}
+
+// --- Plexus Float (subtle dot field) ---
+@keyframes plexusFloat {
+
+    0%,
+    100% {
+        opacity: 0.18;
+        transform: translate3d(0, 0, 0);
+    }
+
+    50% {
+        opacity: 0.28;
+        transform: translate3d(0, -10px, 0);
+    }
+}
+
 // --- Slide Down (dropdowns, menus) ---
 @keyframes slideDown {
     from {
@@ -222,12 +248,15 @@
 
         // Subtle radial gradients for depth
         background:
-            radial-gradient(ellipse 80% 50% at 20% 40%,
-                rgba(88, 166, 255, 0.03) 0%,
-                transparent 50%),
-            radial-gradient(ellipse 60% 40% at 80% 80%,
-                rgba(31, 111, 235, 0.02) 0%,
-                transparent 50%);
+            radial-gradient(ellipse 70% 50% at 12% 20%,
+                rgba(var(--janus-secondary-rgb), 0.1) 0%,
+                transparent 55%),
+            radial-gradient(ellipse 60% 45% at 85% 75%,
+                rgba(var(--janus-accent-rgb), 0.08) 0%,
+                transparent 60%),
+            radial-gradient(ellipse 40% 30% at 40% 85%,
+                rgba(var(--janus-primary-rgb), 0.06) 0%,
+                transparent 55%);
 
         background-size: 200% 200%;
         animation: ambientShift 30s ease-in-out infinite;

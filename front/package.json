@@ -1,6 +1,6 @@
 {
   "name": "janus-angular",
-  "version": "0.4.30",
+  "version": "0.5.44",
   "scripts": {
     "ng": "ng",
     "start": "ng serve -o --proxy-config proxy.conf.json",

@@ -1,0 +1,7 @@
+<section class="visitor">
+  <div class="visitor-card">
+    <p>Entrando como visitante...</p>
+    <a routerLink="/login" *ngIf="error">Voltar ao login</a>
+    <p class="error" *ngIf="error">{{ error }}</p>
+  </div>
+</section>

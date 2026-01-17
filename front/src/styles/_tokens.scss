@@ -4,27 +4,60 @@
 
 // :root definition for CSS Variables (The Source of Truth)
 :root {
-  /* Colors - Cyberpunk/Sci-Fi Palette */
-  --janus-primary: #00ff9d;
-  --janus-primary-hover: #00e68e;
-  --janus-primary-dim: rgba(0, 255, 157, 0.1);
-  --janus-secondary: #00b8ff;
-  --janus-accent: #ff0055;
+  /* Colors - Modern Cinematic Palette */
+  --janus-primary: #36d1b7;
+  --janus-primary-hover: #4be3cb;
+  --janus-primary-dim: rgba(54, 209, 183, 0.15);
+  --janus-primary-rgb: 54, 209, 183;
+  --janus-secondary: #5b8dff;
+  --janus-secondary-rgb: 91, 141, 255;
+  --janus-accent: #ffb454;
+  --janus-accent-rgb: 255, 180, 84;
   
   /* Backgrounds */
-  --janus-bg-dark: #0a0a0a;
-  --janus-bg-card: #121212;
-  --janus-bg-surface: #1a1a1a;
+  --janus-bg-dark: #0b101a;
+  --janus-bg-dark-rgb: 11, 16, 26;
+  --janus-bg-card: #162235;
+  --janus-bg-card-rgb: 22, 34, 53;
+  --janus-bg-surface: #121a2a;
+  --janus-bg-surface-rgb: 18, 26, 42;
   
   /* Text */
-  --janus-text-primary: #ffffff;
-  --janus-text-secondary: #a0a0a0;
-  --janus-text-muted: #505050;
+  --janus-text-primary: #f2f5f9;
+  --janus-text-secondary: #a7b3c5;
+  --janus-text-muted: #6e7a8c;
   
   /* Borders & Effects */
-  --janus-border: #333333;
-  --janus-border-active: var(--janus-primary);
-  --janus-shadow-glow: 0 0 10px var(--janus-primary-dim);
+  --janus-border: #1f2a3d;
+  --janus-border-active: rgba(91, 141, 255, 0.7);
+  --janus-shadow-glow: 0 12px 30px rgba(91, 141, 255, 0.14);
+
+  /* Status */
+  --success: #2dd4a7;
+  --success-rgb: 45, 212, 167;
+  --warning: #f5c26b;
+  --warning-rgb: 245, 194, 107;
+  --error: #ff5b6b;
+  --error-rgb: 255, 91, 107;
+  --info: #5b8dff;
+  --info-rgb: 91, 141, 255;
+
+  /* Legacy aliases */
+  --fg: var(--janus-text-primary);
+  --muted: var(--janus-text-muted);
+  --text-primary: var(--janus-text-primary);
+  --text-secondary: var(--janus-text-secondary);
+  --text-muted: var(--janus-text-muted);
+  --cyan: var(--janus-secondary);
+  --accent-cyan: var(--janus-secondary);
+  --accent-cyan-rgb: var(--janus-secondary-rgb);
+  --accent-purple: #4c6be0;
+  --purple: var(--accent-purple);
+
+  /* Typography */
+  --janus-font-body: 'Sora', 'Space Grotesk', sans-serif;
+  --janus-font-display: 'Space Grotesk', 'Sora', sans-serif;
+  --janus-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
   
   /* Spacing */
   --janus-spacing-xs: 4px;
@@ -50,14 +83,14 @@
   --popover: var(--janus-bg-surface);
   --popover-foreground: var(--janus-text-primary);
   --primary: var(--janus-primary);
-  --primary-foreground: #000000;
+  --primary-foreground: #061118;
   --secondary: var(--janus-secondary);
-  --secondary-foreground: #000000;
-  --muted: var(--janus-bg-surface);
-  --muted-foreground: var(--janus-text-muted);
+  --secondary-foreground: #0a1423;
+  --muted: var(--janus-text-muted);
+  --muted-foreground: var(--janus-text-secondary);
   --accent: var(--janus-bg-surface);
-  --accent-foreground: var(--janus-primary);
-  --destructive: var(--janus-accent);
+  --accent-foreground: var(--janus-accent);
+  --destructive: var(--error);
   --destructive-foreground: #ffffff;
   --border: var(--janus-border);
   --input: var(--janus-border);
@@ -95,23 +128,24 @@ $color-border-emphasis: var(--janus-text-secondary);
 $color-accent-primary: var(--janus-primary);
 $color-accent-primary-hover: var(--janus-primary-hover);
 
-$color-success: #00ff9d;
-$color-warning: #ffb020;
-$color-error: #ff3333;
-$color-info: #00b8ff;
+$color-success: #2dd4a7;
+$color-warning: #f5c26b;
+$color-error: #ff5b6b;
+$color-info: #5b8dff;
 
-$color-success-bg: rgba(0, 255, 157, 0.1);
-$color-warning-bg: rgba(255, 176, 32, 0.1);
-$color-error-bg: rgba(255, 51, 51, 0.1);
-$color-info-bg: rgba(0, 184, 255, 0.1);
+$color-success-bg: rgba(45, 212, 167, 0.12);
+$color-warning-bg: rgba(245, 194, 107, 0.12);
+$color-error-bg: rgba(255, 91, 107, 0.12);
+$color-info-bg: rgba(91, 141, 255, 0.12);
 
 // Added variables for Markdown and other components
-$color-accent-purple: #7c3aed;
-$color-accent-cyan: #00b8ff;
+$color-accent-purple: #4c6be0;
+$color-accent-cyan: #36d1b7;
 
 // Typography
-$font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+$font-body: var(--janus-font-body);
+$font-display: var(--janus-font-display);
+$font-mono: var(--janus-font-mono);
 
 $font-size-sm: 0.875rem;
 $font-size-xs: 0.75rem;

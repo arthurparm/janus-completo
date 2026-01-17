@@ -1,7 +1,6 @@
 import { Component, Input, forwardRef } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule, ReactiveFormsModule } from '@angular/forms'
-import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
 import { UiIconComponent } from '../../../shared/components/ui/icon/icon.component'
 
 export interface ValidationRule {
@@ -21,8 +20,7 @@ export interface ValidationRule {
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    UiIconComponent,
-    UiButtonComponent
+    UiIconComponent
   ],
   providers: [
     {

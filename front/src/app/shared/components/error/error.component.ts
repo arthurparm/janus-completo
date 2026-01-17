@@ -22,7 +22,7 @@ export interface ErrorAction {
   template: `
     <div class="error-container" [class.small]="size === 'small'">
       <div class="error-icon">
-        <ui-icon [style.color]="iconColor" [size]="size === 'small' ? 'sm' : 'lg'">{{ icon }}</ui-icon>
+        <ui-icon [style.color]="iconColor" [size]="size === 'small' ? 24 : 48">{{ icon }}</ui-icon>
       </div>
       
       <div class="error-content">

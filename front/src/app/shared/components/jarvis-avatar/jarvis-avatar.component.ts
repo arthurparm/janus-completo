@@ -23,8 +23,8 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         />
         <defs>
           <linearGradient id="gradientOuter" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#00d4ff"/>
-            <stop offset="100%" style="stop-color:#7c3aed"/>
+            <stop offset="0%" style="stop-color:var(--janus-secondary)"/>
+            <stop offset="100%" style="stop-color:var(--janus-primary)"/>
           </linearGradient>
         </defs>
       </svg>
@@ -40,8 +40,8 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         />
         <defs>
           <linearGradient id="gradientMiddle" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#7c3aed"/>
-            <stop offset="100%" style="stop-color:#ec4899"/>
+            <stop offset="0%" style="stop-color:var(--janus-primary)"/>
+            <stop offset="100%" style="stop-color:var(--janus-accent)"/>
           </linearGradient>
         </defs>
       </svg>
@@ -57,8 +57,8 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         />
         <defs>
           <linearGradient id="gradientInner" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#00d4ff"/>
-            <stop offset="100%" style="stop-color:#00ff88"/>
+            <stop offset="0%" style="stop-color:var(--janus-secondary)"/>
+            <stop offset="100%" style="stop-color:var(--success)"/>
           </linearGradient>
         </defs>
       </svg>
@@ -105,7 +105,7 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
       position: absolute;
       inset: -8px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(var(--janus-secondary-rgb), 0.4) 0%, transparent 70%);
       animation: glowPulse 4s ease-in-out infinite;
       filter: blur(4px);
     }
@@ -120,7 +120,7 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
       position: absolute;
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.5));
+      filter: drop-shadow(0 0 4px rgba(var(--janus-secondary-rgb), 0.5));
     }
 
     .ring-outer {
@@ -151,9 +151,9 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
       width: 42%;
       height: 42%;
       border-radius: 50%;
-      background: linear-gradient(135deg, #00fff2, #0066ff);
+      background: linear-gradient(135deg, var(--janus-primary), var(--janus-secondary));
       box-shadow: 
-        0 0 20px rgba(0, 255, 242, 0.8),
+        0 0 20px rgba(var(--janus-primary-rgb), 0.8),
         inset 0 0 10px rgba(255, 255, 255, 0.5);
       display: flex;
       align-items: center;
@@ -165,7 +165,7 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
       width: 60%;
       height: 60%;
       border-radius: 50%;
-      background: radial-gradient(circle, #ffffff 0%, #00d4ff 100%);
+      background: radial-gradient(circle, #ffffff 0%, var(--janus-secondary) 100%);
       animation: corePulse 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
     }
@@ -190,13 +190,13 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
 
     /* State: Thinking */
     .jarvis-avatar.thinking {
-      .ring-outer { animation-duration: 4s; stroke: #ff00ff; }
+      .ring-outer { animation-duration: 4s; stroke: var(--janus-accent); }
       .ring-middle { animation-ration: 3s; }
       .ring-inner { animation-duration: 2s; }
-      .glow-ring { background: radial-gradient(circle, rgba(255, 0, 255, 0.4) 0%, transparent 70%); }
+      .glow-ring { background: radial-gradient(circle, rgba(var(--janus-accent-rgb), 0.4) 0%, transparent 70%); }
       .core { 
-        background: linear-gradient(135deg, #ff00ff, #7c3aed);
-        box-shadow: 0 0 25px rgba(255, 0, 255, 0.6);
+        background: linear-gradient(135deg, var(--janus-accent), var(--janus-secondary));
+        box-shadow: 0 0 25px rgba(var(--janus-accent-rgb), 0.6);
       }
     }
 
@@ -210,8 +210,8 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
         width: 5px;
         height: 5px;
         border-radius: 50%;
-        background: #00fff2;
-        box-shadow: 0 0 5px #00fff2;
+        background: var(--janus-primary);
+        box-shadow: 0 0 5px var(--janus-primary);
         animation: thinkingBounce 1.4s ease-in-out infinite;
         
         &:nth-child(2) { animation-delay: 0.2s; }
@@ -226,28 +226,28 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
 
     /* State: Speaking */
     .jarvis-avatar.speaking {
-      .glow-ring { background: radial-gradient(circle, rgba(0, 255, 136, 0.5) 0%, transparent 70%); }
+      .glow-ring { background: radial-gradient(circle, rgba(var(--success-rgb), 0.5) 0%, transparent 70%); }
       .core { 
-        background: linear-gradient(135deg, #00ff88, #00d4ff);
-        box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+        background: linear-gradient(135deg, var(--success), var(--janus-secondary));
+        box-shadow: 0 0 30px rgba(var(--success-rgb), 0.6);
       }
     }
 
     /* State: Listening */
     .jarvis-avatar.listening {
       .glow-ring { 
-        background: radial-gradient(circle, rgba(255, 50, 50, 0.5) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(var(--error-rgb), 0.5) 0%, transparent 70%);
         animation: glowPulse 0.8s ease-in-out infinite;
       }
       .core { 
-        background: linear-gradient(135deg, #ff3333, #ff0055);
+        background: linear-gradient(135deg, var(--error), var(--janus-accent));
         animation: listeningPulse 0.5s ease-in-out infinite;
       }
     }
 
     @keyframes listeningPulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 50, 50, 0.5); }
-      50% { transform: scale(1.15); box-shadow: 0 0 40px rgba(255, 50, 50, 0.8); }
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(var(--error-rgb), 0.5); }
+      50% { transform: scale(1.15); box-shadow: 0 0 40px rgba(var(--error-rgb), 0.8); }
     }
   `]
 })

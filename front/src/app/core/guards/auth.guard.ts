@@ -8,6 +8,15 @@ import { CanActivate, CanActivateChild, CanLoad, Router, ActivatedRouteSnapshot,
 import { Observable, map, take } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
+import { AUTH_OPTIONAL, VISITOR_MODE_KEY } from '../../services/api.config';
+
+const isVisitorMode = (): boolean => {
+  try {
+    return localStorage.getItem(VISITOR_MODE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 @Injectable({
   providedIn: 'root'
@@ -39,6 +48,12 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuth(route?: ActivatedRouteSnapshot, state?: RouterStateSnapshot): Observable<boolean> {
+    if (AUTH_OPTIONAL || isVisitorMode()) {
+      return new Observable<boolean>((subscriber) => {
+        subscriber.next(true);
+        subscriber.complete();
+      });
+    }
     return this.authService.isAuthenticated$.pipe(
       take(1),
       map(isAuthenticated => {
@@ -48,7 +63,7 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
 
         // Redirecionar para login com URL de retorno
         const returnUrl = state?.url || route?.url?.join('/') || '/';
-        this.router.navigate(['/auth/login'], {
+        this.router.navigate(['/login'], {
           queryParams: { returnUrl },
           replaceUrl: true
         });
@@ -60,6 +75,12 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuthForLoad(): Observable<boolean> {
+    if (AUTH_OPTIONAL || isVisitorMode()) {
+      return new Observable<boolean>((subscriber) => {
+        subscriber.next(true);
+        subscriber.complete();
+      });
+    }
     return this.authService.isAuthenticated$.pipe(
       take(1),
       map(isAuthenticated => {
@@ -91,7 +112,7 @@ export class RoleGuard implements CanActivate {
       take(1),
       map(user => {
         if (!user) {
-          this.router.navigate(['/auth/login']);
+          this.router.navigate(['/login']);
           return false;
         }
 
@@ -128,7 +149,7 @@ export class PermissionGuard implements CanActivate {
       take(1),
       map(user => {
         if (!user) {
-          this.router.navigate(['/auth/login']);
+          this.router.navigate(['/login']);
           return false;
         }
 
@@ -156,6 +177,9 @@ export class NoAuthGuard implements CanActivate {
   private router = inject(Router);
 
   canActivate(): Observable<boolean> | Promise<boolean> | boolean {
+    if (AUTH_OPTIONAL || isVisitorMode()) {
+      return true;
+    }
     return this.authService.isAuthenticated$.pipe(
       take(1),
       map(isAuthenticated => {
