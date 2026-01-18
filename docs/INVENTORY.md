@@ -1,19 +1,21 @@
-# 🗺️ Janus Roadmap & Technical Debt (V1 Launch)
->
-> *Última atualização: 14/01/2026 (Scientific & V1 Focus)*
+# 🗺️ System Inventory & Technical Debt
 
-Este documento define o caminho crítico para o lançamento da **Janus V1**, priorizando robustez, embasamento científico e prontidão para produção.
+> *Source: Originally from `Melhorias possiveis.md` (Updated 14/01/2026)*
+
+This document maintains the detailed lists of technical debt, system inventory (API routes), backlog, and completed tasks for the Janus project.
+
+For high-level architecture and roadmap, see the root [README.md](../README.md).
 
 ## 📌 Índice
 
-- Backlog por Dificuldade (Throughput / Médias / Difíceis)
-- Scientific Foundation (State-of-the-Art)
-- Scientific Frontier (Post-V1 Evolution)
-- Infrastructure Strategy (Phase 3)
-- V1 Critical Path (Launch Blockers)
-- Histórico de Conclusões (Arquivado)
-- Levantamentos (Tasks)
-- Anexos — Levantamentos detalhados
+- [Backlog por Dificuldade](#-backlog-por-dificuldade-throughput--médias--difíceis)
+- [Scientific Foundation (State-of-the-Art)](#-scientific-foundation-state-of-the-art)
+- [Scientific Frontier (Post-V1 Evolution)](#-scientific-frontier-post-v1-evolution)
+- [Infrastructure Strategy (Phase 3)](#-infrastructure-strategy-phase-3)
+- [V1 Critical Path (Launch Blockers)](#-v1-critical-path-launch-blockers)
+- [Histórico de Conclusões (Arquivado)](#-histórico-de-conclusões-arquivado)
+- [Levantamentos (Tasks)](#-levantamentos-tasks)
+- [Anexos — Levantamentos detalhados](#-anexos--levantamentos-detalhados)
 
 ---
 
@@ -48,6 +50,8 @@ Critério prático:
 - Finalizar *Database Migration Pipeline* (Alembic + CI/deploy).
 - Implementar *Graceful Degradation* (matriz de degradação + health/alertas).
 - Scientific Foundation/Frontier: itens pendentes de pesquisa/implementação (LATS/ToT/Self-RAG/RAPTOR/etc).
+
+---
 
 ## 🔬 Scientific Foundation (State-of-the-Art)
 
@@ -407,7 +411,7 @@ As melhores quotas gratuitas *reais* de 2026 (Sem custo de privacidade):
    - Modo PUBLIC_API_MINIMAL exposto: /chat, /users, /profiles, /autonomy, /assistant, /autonomy/history, /consents, /pending_actions, /evaluation, /deployment, /auth, /auto-analysis, /feedback.
 
 #### Inventario completo de rotas (Full API)
-Observacao: caminhos listados ja incluem o prefixo `/api/v1`.
+
 ##### /admin
 | Metodo | Path | Handler | Payload | Resposta | Servicos/Repos | Duplicado |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -747,7 +751,6 @@ Observacao: caminhos listados ja incluem o prefixo `/api/v1`.
 | POST | /api/v1/workers/start-all | workers.start_workers | query/path | raw/dict | - | nao |
 | GET | /api/v1/workers/status | workers.workers_status | query/path | raw/dict | - | nao |
 | POST | /api/v1/workers/stop-all | workers.stop_workers | query/path | raw/dict | - | nao |
-
 
 2) **Contratos e validacoes (Pydantic)**
    - models/schemas.py usado apenas em memory (Experience, ScoredExperience) e tasks (QueueName); o restante define DTOs locais.
