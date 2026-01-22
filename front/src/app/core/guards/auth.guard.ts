@@ -5,18 +5,9 @@
 
 import { Injectable, inject } from '@angular/core';
 import { CanActivate, CanActivateChild, CanLoad, Router, ActivatedRouteSnapshot, RouterStateSnapshot, Route, UrlSegment } from '@angular/router';
-import { Observable, map, take } from 'rxjs';
+import { Observable, combineLatest, filter, map, take } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
-import { AUTH_OPTIONAL, VISITOR_MODE_KEY } from '../../services/api.config';
-
-const isVisitorMode = (): boolean => {
-  try {
-    return localStorage.getItem(VISITOR_MODE_KEY) === '1'
-  } catch {
-    return false
-  }
-}
 
 @Injectable({
   providedIn: 'root'
@@ -48,15 +39,10 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuth(route?: ActivatedRouteSnapshot, state?: RouterStateSnapshot): Observable<boolean> {
-    if (AUTH_OPTIONAL || isVisitorMode()) {
-      return new Observable<boolean>((subscriber) => {
-        subscriber.next(true);
-        subscriber.complete();
-      });
-    }
-    return this.authService.isAuthenticated$.pipe(
+    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
+      filter(([ready]) => ready),
       take(1),
-      map(isAuthenticated => {
+      map(([, isAuthenticated]) => {
         if (isAuthenticated) {
           return true;
         }
@@ -75,15 +61,10 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuthForLoad(): Observable<boolean> {
-    if (AUTH_OPTIONAL || isVisitorMode()) {
-      return new Observable<boolean>((subscriber) => {
-        subscriber.next(true);
-        subscriber.complete();
-      });
-    }
-    return this.authService.isAuthenticated$.pipe(
+    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
+      filter(([ready]) => ready),
       take(1),
-      map(isAuthenticated => {
+      map(([, isAuthenticated]) => {
         if (!isAuthenticated) {
           this.notificationService.notifyWarning('Acesso negado', 'Por favor, faça login para acessar este módulo');
         }
@@ -120,7 +101,7 @@ export class RoleGuard implements CanActivate {
 
         if (!hasRole) {
           this.notificationService.notifyError('Acesso negado', 'Você não tem permissão para acessar esta página');
-          this.router.navigate(['/dashboard']);
+          this.router.navigate(['/']);
           return false;
         }
 
@@ -159,7 +140,7 @@ export class PermissionGuard implements CanActivate {
 
         if (!hasPermission) {
           this.notificationService.notifyError('Acesso negado', 'Você não tem as permissões necessárias para acessar esta página');
-          this.router.navigate(['/dashboard']);
+          this.router.navigate(['/']);
           return false;
         }
 
@@ -177,18 +158,16 @@ export class NoAuthGuard implements CanActivate {
   private router = inject(Router);
 
   canActivate(): Observable<boolean> | Promise<boolean> | boolean {
-    if (AUTH_OPTIONAL || isVisitorMode()) {
-      return true;
-    }
-    return this.authService.isAuthenticated$.pipe(
+    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
+      filter(([ready]) => ready),
       take(1),
-      map(isAuthenticated => {
+      map(([, isAuthenticated]) => {
         if (!isAuthenticated) {
           return true;
         }
 
         // Se já está autenticado, redirecionar para dashboard
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/']);
         return false;
       })
     );

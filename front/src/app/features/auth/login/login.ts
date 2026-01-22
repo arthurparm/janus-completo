@@ -1,6 +1,5 @@
 import { Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
-import { NgIf } from '@angular/common'
 import { Router } from '@angular/router'
 import { RouterLink } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
@@ -8,7 +7,7 @@ import { AuthService } from '../../../core/auth/auth.service'
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, NgIf, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './login.html',
   styleUrls: ['./login.scss']
 })
@@ -24,6 +23,7 @@ export class LoginComponent {
   showPassword = false
   loading = false
   error = ''
+  notice = ''
   attempts = 0
   lockedUntil = 0
 
@@ -36,6 +36,7 @@ export class LoginComponent {
     const now = Date.now()
     if (this.lockedUntil && now < this.lockedUntil) return
     this.error = ''
+    this.notice = ''
     if (this.form.invalid) { this.form.markAllAsTouched(); return }
     this.loading = true
     const v = this.form.value
@@ -63,6 +64,7 @@ export class LoginComponent {
     if (this.loading) return
     this.loading = true
     this.error = ''
+    this.notice = ''
     try {
       const ok = await this.auth.loginWithProvider('google')
       if (ok) {
@@ -81,6 +83,7 @@ export class LoginComponent {
     if (this.loading) return
     this.loading = true
     this.error = ''
+    this.notice = ''
     try {
       const ok = await this.auth.loginWithProvider('github')
       if (ok) {
@@ -101,5 +104,29 @@ export class LoginComponent {
       this.lockedUntil = Date.now() + 60_000
     }
     this.error = 'Falha no login. Verifique seus dados.'
+  }
+
+  async recoverAccess() {
+    if (this.loading) return
+    this.error = ''
+    this.notice = ''
+    const email = String(this.form.value.email || '').trim()
+    if (!email) {
+      this.error = 'Informe seu email para recuperar o acesso.'
+      return
+    }
+    this.loading = true
+    try {
+      const token = await this.auth.requestPasswordReset(email)
+      if (token) {
+        this.notice = `Token de reset: ${token}`
+      } else {
+        this.notice = 'Se o email existir, enviaremos instrucoes.'
+      }
+    } catch {
+      this.error = 'Falha ao solicitar recuperacao.'
+    } finally {
+      this.loading = false
+    }
   }
 }

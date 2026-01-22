@@ -259,9 +259,12 @@ label {
 }
 
 .recover {
+    background: transparent;
+    border: none;
     color: var(--login-cool);
     text-decoration: none;
     font-weight: 600;
+    cursor: pointer;
     transition: color 0.2s ease;
 
     &:hover {
@@ -348,6 +351,18 @@ label {
     border: 1px solid rgba(248, 113, 113, 0.35);
     background: rgba(248, 113, 113, 0.1);
     color: #fca5a5;
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+}
+
+.notice-box {
+    margin-top: 0.5rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 12px;
+    border: 1px solid rgba(69, 195, 255, 0.35);
+    background: rgba(69, 195, 255, 0.1);
+    color: #93c5fd;
     font-family: $font-mono;
     font-size: 0.75rem;
     letter-spacing: 0.08em;

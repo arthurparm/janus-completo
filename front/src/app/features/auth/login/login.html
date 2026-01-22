@@ -24,9 +24,11 @@
         <label for="email">Email de acesso</label>
         <input id="email" type="email" formControlName="email" class="glass-input" placeholder="voce@janus.ai"
           [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched" />
-        <div class="field-error" *ngIf="form.controls.email.invalid && form.controls.email.touched">
-          > IDENTIFICADOR INVALIDO
-        </div>
+        @if (form.controls.email.invalid && form.controls.email.touched) {
+          <div class="field-error">
+            > IDENTIFICADOR INVALIDO
+          </div>
+        }
       </div>
 
       <!-- Password -->
@@ -40,9 +42,11 @@
             {{ showPassword ? 'OCULTAR' : 'MOSTRAR' }}
           </button>
         </div>
-        <div class="field-error" *ngIf="form.controls.password.invalid && form.controls.password.touched">
-          > MINIMO 6 CARACTERES
-        </div>
+        @if (form.controls.password.invalid && form.controls.password.touched) {
+          <div class="field-error">
+            > MINIMO 6 CARACTERES
+          </div>
+        }
       </div>
 
       <!-- Extras -->
@@ -51,13 +55,15 @@
           <input type="checkbox" formControlName="remember" />
           <span>Manter sessao</span>
         </label>
-        <a class="recover" href="#">Recuperar acesso</a>
+        <button type="button" class="recover" (click)="recoverAccess()">Recuperar acesso</button>
       </div>
 
       <!-- Submit -->
       <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading">
         <span>{{ loading ? 'ENTRANDO...' : 'ENTRAR NO JANUS' }}</span>
-        <span class="material-icons" *ngIf="!loading">login</span>
+        @if (!loading) {
+          <span class="material-icons">login</span>
+        }
       </button>
 
       <!-- SSO Alt -->
@@ -73,16 +79,19 @@
       <!-- Sign Up -->
       <div class="signup">
         <span>Sem credenciais?</span>
-        <a routerLink="/solicitar-acesso">Solicitar acesso</a>
-      </div>
-      <div class="signup">
-        <span>Quer apenas explorar?</span>
-        <a routerLink="/visitante">Entrar como visitante</a>
+        <a routerLink="/registro">Criar conta</a>
       </div>
 
-      <div class="error-box" *ngIf="error">
-        > {{ error }}
-      </div>
+      @if (error) {
+        <div class="error-box">
+          > {{ error }}
+        </div>
+      }
+      @if (notice) {
+        <div class="notice-box">
+          > {{ notice }}
+        </div>
+      }
     </form>
   </div>
 </section>

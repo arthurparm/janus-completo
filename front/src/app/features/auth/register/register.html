@@ -1,0 +1,182 @@
+<section class="register">
+  <div class="register-shell">
+    <aside class="register-hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="signal-orb" aria-hidden="true">
+        <span class="signal-core"></span>
+        <span class="signal-ring"></span>
+        <span class="signal-ring ring-two"></span>
+      </div>
+      <p class="eyebrow">JANUS // REGISTRO SEGURO</p>
+      <h1>Criar conta</h1>
+      <p class="sub">Complete o formulario para solicitar acesso e ativar seu perfil.</p>
+      <div class="hero-badges">
+        <span class="badge">Dados protegidos</span>
+        <span class="badge outline">Validacao manual</span>
+      </div>
+      <ul class="hero-list">
+        <li><span class="dot"></span>Analise em ate 24h apos o envio</li>
+        <li><span class="dot"></span>Seguranca reforcada com dupla verificacao</li>
+        <li><span class="dot"></span>Equipe dedicada para onboarding</li>
+      </ul>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-label">Tempo medio</span>
+          <span class="stat-value">2 min</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Resposta</span>
+          <span class="stat-value">ate 24h</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="register-card">
+      <div class="card-header">
+        <p class="eyebrow">Formulario</p>
+        <h2>Informacoes do usuario</h2>
+        <p class="sub">Preencha com dados reais. Todos os campos sao obrigatorios.</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="register()" aria-label="Registro">
+        <div class="form-section">
+          <p class="section-title">Identidade</p>
+          <div class="form-grid">
+            <div class="field span-2" style="--delay: 0.05s">
+              <label for="username">Usuario</label>
+              <input id="username" type="text" formControlName="username" class="glass-input" placeholder="seu_usuario"
+                autocomplete="username" required
+                [attr.aria-invalid]="form.controls.username.invalid && form.controls.username.touched" />
+              @if (form.controls.username.invalid && form.controls.username.touched) {
+                <div class="field-error">
+                  > USUARIO INVALIDO
+                </div>
+              }
+            </div>
+
+            <div class="field span-2" style="--delay: 0.1s">
+              <label for="fullName">Nome completo</label>
+              <input id="fullName" type="text" formControlName="fullName" class="glass-input"
+                placeholder="Nome completo" autocomplete="name" required
+                [attr.aria-invalid]="form.controls.fullName.invalid && form.controls.fullName.touched" />
+              @if (form.controls.fullName.invalid && form.controls.fullName.touched) {
+                <div class="field-error">
+                  > NOME OBRIGATORIO
+                </div>
+              }
+            </div>
+
+            <div class="field span-2" style="--delay: 0.15s">
+              <label for="cpf">CPF</label>
+              <input id="cpf" type="text" formControlName="cpf" class="glass-input" placeholder="000.000.000-00"
+                inputmode="numeric" maxlength="14" autocomplete="off" required (input)="onCpfInput()"
+                [attr.aria-invalid]="form.controls.cpf.invalid && form.controls.cpf.touched" />
+              <div class="field-hint">Use apenas numeros, com ou sem pontos.</div>
+              @if (form.controls.cpf.invalid && form.controls.cpf.touched) {
+                <div class="field-error">
+                  > CPF INVALIDO
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <p class="section-title">Contato</p>
+          <div class="form-grid">
+            <div class="field span-2" style="--delay: 0.2s">
+              <label for="phone">Telefone</label>
+              <input id="phone" type="tel" formControlName="phone" class="glass-input" placeholder="(11) 90000-0000"
+                inputmode="tel" maxlength="15" autocomplete="tel" required (input)="onPhoneInput()"
+                [attr.aria-invalid]="form.controls.phone.invalid && form.controls.phone.touched" />
+              <div class="field-hint">Inclua o DDD.</div>
+              @if (form.controls.phone.invalid && form.controls.phone.touched) {
+                <div class="field-error">
+                  > TELEFONE INVALIDO
+                </div>
+              }
+            </div>
+
+            <div class="field span-2" style="--delay: 0.25s">
+              <label for="email">Email</label>
+              <input id="email" type="email" formControlName="email" class="glass-input" placeholder="voce@janus.ai"
+                autocomplete="email" required
+                [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched" />
+              @if (form.controls.email.invalid && form.controls.email.touched) {
+                <div class="field-error">
+                  > EMAIL INVALIDO
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <p class="section-title">Seguranca</p>
+          <div class="form-grid">
+            <div class="field span-2" style="--delay: 0.3s">
+              <label for="password">Senha</label>
+              <div class="password-wrap">
+                <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password"
+                  class="glass-input has-toggle" placeholder="********" autocomplete="new-password" required />
+                <button type="button" class="toggle-password" (click)="togglePassword()"
+                  [attr.aria-pressed]="showPassword">
+                  {{ showPassword ? 'OCULTAR' : 'MOSTRAR' }}
+                </button>
+              </div>
+              <div class="field-hint">Use letras maiusculas, minusculas, numeros e caracteres especiais.</div>
+              <ul class="password-rules">
+                <li [class.ok]="hasMinLength">Minimo de 8 caracteres</li>
+                <li [class.ok]="hasUppercase">Pelo menos 1 letra maiuscula</li>
+                <li [class.ok]="hasLowercase">Pelo menos 1 letra minuscula</li>
+                <li [class.ok]="hasNumber">Pelo menos 1 numero</li>
+                <li [class.ok]="hasSpecial">Pelo menos 1 caractere especial</li>
+                <li [class.ok]="hasNoPersonalInfo">Nao conter dados pessoais</li>
+              </ul>
+              @if ((form.controls.password.invalid || form.hasError('passwordContainsPersonalInfo')) && form.controls.password.touched) {
+                <div class="field-error">
+                  > SENHA NAO ATENDE OS REQUISITOS
+                </div>
+              }
+            </div>
+          </div>
+
+          <label class="remember terms">
+            <input type="checkbox" formControlName="terms" required />
+            <span>
+              Aceito os <a href="#" class="terms-link">termos de uso</a> e a politica de privacidade
+            </span>
+          </label>
+          @if (form.controls.terms.invalid && form.controls.terms.touched) {
+            <div class="field-error">
+              > ACEITE O TERMO PARA CONTINUAR
+            </div>
+          }
+        </div>
+
+        <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading">
+          <span>{{ loading ? 'ENVIANDO...' : 'CRIAR CONTA' }}</span>
+          @if (!loading) {
+            <span class="material-icons">person_add</span>
+          }
+        </button>
+
+        <div class="signup">
+          <span>Ja tem conta?</span>
+          <a routerLink="/login">Entrar</a>
+        </div>
+
+        @if (success) {
+          <div class="success-box">
+            > {{ success }}
+          </div>
+        }
+        @if (error) {
+          <div class="error-box">
+            > {{ error }}
+          </div>
+        }
+      </form>
+    </div>
+  </div>
+</section>
