@@ -16,6 +16,7 @@ from app.services.chat_service import (
     get_chat_service,
 )
 from app.services.memory_service import MemoryService, get_memory_service
+from app.services.trace_service import TraceService, get_trace_service
 
 router = APIRouter(tags=["Chat"])
 logger = structlog.get_logger(__name__)
@@ -626,6 +627,20 @@ async def stream_message(
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(gen, media_type="text/event-stream", headers=headers)
+
+
+@router.get(
+    "/{conversation_id}/trace", summary="Retorna o rastro de execução (Chain of Thought)"
+)
+async def get_conversation_trace(
+    conversation_id: str,
+    service: TraceService = Depends(get_trace_service),
+):
+    """
+    Retorna o histórico de execução (Chain of Thought) dos agentes para uma conversa.
+    Os eventos são estruturados em 'steps' contendo timestamp, agente, ação e conteúdo.
+    """
+    return service.get_trace_history(conversation_id)
 
 
 @router.get(

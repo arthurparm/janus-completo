@@ -177,6 +177,7 @@ class ObservabilityService:
         status: str | None,
         start_ts: float | None,
         end_ts: float | None,
+        endpoint: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -185,10 +186,11 @@ class ObservabilityService:
             user_id=user_id,
             tool=tool,
             status=status,
+            endpoint=endpoint,
         )
         try:
             return self._repo.get_audit_events(
-                user_id, tool, status, start_ts, end_ts, limit, offset
+                user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
             )
         except ObservabilityRepositoryError as e:
             logger.error("Erro no repositório ao consultar eventos de auditoria", exc_info=e)

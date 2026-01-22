@@ -354,6 +354,7 @@ class ObservabilityRepository:
         status: str | None,
         start_ts: float | None,
         end_ts: float | None,
+        endpoint: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -369,6 +370,8 @@ class ObservabilityRepository:
                 q = q.filter(AuditEvent.tool == str(tool))
             if status is not None:
                 q = q.filter(AuditEvent.status == str(status))
+            if endpoint is not None:
+                q = q.filter(AuditEvent.endpoint == str(endpoint))
             if start_ts is not None:
                 from datetime import datetime
 
