@@ -133,13 +133,8 @@ class RAGService:
                     match=qdrant_models.MatchValue(value=str(user_id)),
                 )
             ]
-            if conversation_id:
-                must.append(
-                    qdrant_models.FieldCondition(
-                        key="metadata.session_id",
-                        match=qdrant_models.MatchValue(value=conversation_id),
-                    )
-                )
+            # Não filtrar por session_id para permitir recuperar documentos/chunks globais do usuário
+            # (documentos ingeridos não têm session_id).
 
             qfilter = qdrant_models.Filter(must=must)
             res = await client.query_points(
@@ -154,8 +149,6 @@ class RAGService:
             memories: list[dict[str, Any]] = []
             for h in hits:
                 score = getattr(h, "score", None)
-                if score is not None and score < 0.3:
-                    continue
                 payload = getattr(h, "payload", {}) or {}
                 meta = payload.get("metadata") or {}
                 memories.append(
