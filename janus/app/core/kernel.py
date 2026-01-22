@@ -166,6 +166,8 @@ class Kernel:
 
             # 4. Agentic Capabilities (OS Tools)
             register_os_tools()
+            from app.core.ui.ui_tools import register_ui_tools
+            register_ui_tools()
 
             # 5. Workers & Observability
             await self._start_background_processes()

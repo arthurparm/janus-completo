@@ -1,7 +1,9 @@
 import json
 import re
+import warnings
 from typing import Any
 
+# Deprecated: Regex-based extraction is legacy. Use 'render_ui_component' tool instead.
 UI_TAG_RE = re.compile(
     r"<janus-ui\\s+type\\s*=\\s*['\"]([^'\"]+)['\"][^>]*>(.*?)</janus-ui>",
     re.IGNORECASE | re.DOTALL,
@@ -12,6 +14,11 @@ MAX_UI_JSON_BYTES = 100_000
 
 
 def extract_ui_block(text: str) -> tuple[str, dict[str, Any] | None]:
+    """
+    Legacy method to extract UI blocks from XML tags.
+    New agents should use tool calls. This is kept for backward compatibility
+    with old prompts or older conversation history.
+    """
     if not text:
         return text, None
 
