@@ -14,6 +14,52 @@ from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 logger = logging.getLogger(__name__)
 
+# Compat: algumas versões usam .index_name e a classe tem __slots__=().
+# Criamos uma property que devolve vector_index_name e aceita setter sem quebrar __slots__.
+try:  # pragma: no cover
+    def _get_index_name(self):
+        try:
+            return getattr(self, "vector_index_name", None)
+        except Exception:
+            return None
+
+    def _set_index_name(self, value):
+        try:
+            object.__setattr__(self, "vector_index_name", value)
+        except Exception:
+            pass
+
+    HybridRetriever.index_name = property(_get_index_name, _set_index_name)  # type: ignore[attr-defined]
+except Exception:
+    pass
+
+
+class HybridRetrieverShim:
+    """
+    Wrapper de composição para contornar bug de atributo ausente (index_name) no HybridRetriever.
+    Expõe .search e .index_name para compatibilidade sem tocar na classe base.
+    """
+
+    def __init__(
+        self,
+        driver,
+        vector_index_name: str,
+        fulltext_index_name: str,
+        embedder=None,
+        return_properties=None,
+    ):
+        self._inner = HybridRetriever(
+            driver=driver,
+            vector_index_name=vector_index_name,
+            fulltext_index_name=fulltext_index_name,
+            embedder=embedder,
+            return_properties=return_properties,
+        )
+        self.index_name = vector_index_name
+
+    def search(self, *args, **kwargs):
+        return self._inner.search(*args, **kwargs)
+
 # Initialize Driver
 try:
     driver = GraphDatabase.driver(
@@ -43,15 +89,23 @@ class NativeGraphRAG:
                 api_key=settings.OPENAI_API_KEY.get_secret_value() if settings.OPENAI_API_KEY else ""
             )
             
-            self.retriever = HybridRetriever(
+            self.retriever = HybridRetrieverShim(
                 driver=self.driver,
-                vector_index_name="janus_vector_index", # Ensure this index exists
-                fulltext_index_name="janus_fulltext_index", # Ensure this index exists
+                vector_index_name="janus_vector_index",
+                fulltext_index_name="janus_fulltext_index",
                 embedder=embedder,
                 return_properties=["name", "description", "content"],
             )
         except Exception as e:
-            logger.warning(f"Could not initialize Native GraphRAG retriever: {e}")
+            msg = str(e)
+            if "No index with name" in msg:
+                logger.info(
+                    "GraphRAG retriever disabled (index missing). "
+                    "Create janus_vector_index/janus_fulltext_index to enable."
+                )
+            else:
+                logger.warning(f"Could not initialize Native GraphRAG retriever: {e}")
+            self.retriever = None
 
     @traceable(name="GraphRAG.query", run_type="retriever")
     async def query(self, question: str, limit: int = 5) -> str:
