@@ -12,18 +12,27 @@ import { LoadingStateService } from '../../../core/services/loading-state.servic
   standalone: true,
   imports: [CommonModule, UiSpinnerComponent],
   template: `
-    <div *ngIf="actualLoading" class="loading-container" [class.overlay]="overlay">
-      <div class="loading-content">
-        <ui-spinner 
-          *ngIf="showSpinner"
-          [diameter]="diameter" 
-          [color]="color">
-        </ui-spinner>
-        <p *ngIf="showMessage && actualMessage" class="loading-message">{{ actualMessage }}</p>
-        <p *ngIf="subMessage" class="loading-submessage">{{ subMessage }}</p>
+    @if (actualLoading) {
+      <div class="loading-container" [class.overlay]="overlay">
+        <div class="loading-content">
+          @if (showSpinner) {
+            <ui-spinner 
+              [diameter]="diameter" 
+              [color]="color">
+            </ui-spinner>
+          }
+          @if (showMessage && actualMessage) {
+            <p class="loading-message">{{ actualMessage }}</p>
+          }
+          @if (subMessage) {
+            <p class="loading-submessage">{{ subMessage }}</p>
+          }
+        </div>
       </div>
-    </div>
-    <ng-content *ngIf="!actualLoading"></ng-content>
+    }
+    @if (!actualLoading) {
+      <ng-content></ng-content>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`

@@ -1,14 +1,20 @@
 <div class="card" [ngClass]="variant">
     <!-- Header Area (Optional) -->
-    <div class="card-header" *ngIf="title || subtitle || hasHeaderActions">
-        <div class="header-content">
-            <h3 *ngIf="title">{{ title }}</h3>
-            <p *ngIf="subtitle" class="subtitle">{{ subtitle }}</p>
+    @if (title || subtitle || hasHeaderActions) {
+        <div class="card-header">
+            <div class="header-content">
+                @if (title) {
+                    <h3>{{ title }}</h3>
+                }
+                @if (subtitle) {
+                    <p class="subtitle">{{ subtitle }}</p>
+                }
+            </div>
+            <div class="header-actions">
+                <ng-content select="[header-actions]"></ng-content>
+            </div>
         </div>
-        <div class="header-actions">
-            <ng-content select="[header-actions]"></ng-content>
-        </div>
-    </div>
+    }
 
     <!-- Body Area -->
     <div class="card-body">
@@ -16,7 +22,9 @@
     </div>
 
     <!-- Footer Area (Optional) -->
-    <div class="card-footer" *ngIf="hasFooter">
-        <ng-content select="[footer]"></ng-content>
-    </div>
+    @if (hasFooter) {
+        <div class="card-footer">
+            <ng-content select="[footer]"></ng-content>
+        </div>
+    }
 </div>

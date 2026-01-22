@@ -22,20 +22,21 @@ export interface SkeletonConfig {
   imports: [CommonModule],
   template: `
     <div class="skeleton-wrapper" [class.animated]="animated">
-      <div 
-        *ngFor="let i of counter" 
-        class="skeleton"
-        [class.skeleton-text]="variant === 'text'"
-        [class.skeleton-rect]="variant === 'rect'"
-        [class.skeleton-circle]="variant === 'circle'"
-        [class.skeleton-avatar]="variant === 'avatar'"
-        [class.skeleton-button]="variant === 'button'"
-        [class.skeleton-card]="variant === 'card'"
-        [class.skeleton-paragraph]="variant === 'paragraph'"
-        [class.rounded]="rounded"
-        [style.width]="getWidth()"
-        [style.height]="getHeight()">
-      </div>
+      @for (i of counter; track i) {
+        <div 
+          class="skeleton"
+          [class.skeleton-text]="variant === 'text'"
+          [class.skeleton-rect]="variant === 'rect'"
+          [class.skeleton-circle]="variant === 'circle'"
+          [class.skeleton-avatar]="variant === 'avatar'"
+          [class.skeleton-button]="variant === 'button'"
+          [class.skeleton-card]="variant === 'card'"
+          [class.skeleton-paragraph]="variant === 'paragraph'"
+          [class.rounded]="rounded"
+          [style.width]="getWidth()"
+          [style.height]="getHeight()">
+        </div>
+      }
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

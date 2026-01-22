@@ -14,16 +14,20 @@ import { animate, style, transition, trigger } from '@angular/animations';
          [class]="getClasses()">
       
       <div class="flex items-center gap-3">
-         <ui-icon *ngIf="getIcon()" [class]="getIconClass()">{{ getIcon() }}</ui-icon>
+         @if (getIcon()) {
+           <ui-icon [class]="getIconClass()">{{ getIcon() }}</ui-icon>
+         }
          <div class="grid gap-1">
             <p class="text-sm font-semibold opacity-90">{{ data.message }}</p>
          </div>
       </div>
 
       <div class="flex items-center gap-2">
-         <button *ngIf="data.action" ui-button variant="outline" size="sm" (click)="onAction()">
-             {{ data.action }}
-         </button>
+         @if (data.action) {
+           <button ui-button variant="outline" size="sm" (click)="onAction()">
+               {{ data.action }}
+           </button>
+         }
          
          <button ui-button variant="ghost" size="icon" class="h-6 w-6 text-foreground/50 hover:text-foreground" (click)="onClose()">
             <ui-icon class="scale-75">close</ui-icon>
