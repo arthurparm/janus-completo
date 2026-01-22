@@ -1438,6 +1438,10 @@ class ChatService:
         yield "event: connected\ndata: {}\n\n"
 
         broker = await get_broker()
+        try:
+            await broker.connect()
+        except Exception as e:  # pragma: no cover - fallback para modo degradado
+            logger.warning("event_stream_broker_connect_failed", error=str(e))
         queue = asyncio.Queue()
 
         async def on_event(payload):
@@ -1480,17 +1484,34 @@ class ChatService:
                     elif not isinstance(payload, dict):
                         payload = {"content": str(payload)}
 
+                    # Filtra por user_id se informado (evita vazamento cross-tenant)
+                    evt_user = payload.get("user_id")
+                    if user_id and evt_user and str(evt_user) != str(user_id):
+                        continue
+
+                    event_type = (
+                        payload.get("event_type")
+                        or payload.get("type")
+                        or "unknown"
+                    )
+                    agent_role = payload.get("agent_role") or payload.get("agent") or "unknown"
+
                     sse_event = {
-                        "type": payload.get("event_type", "unknown"),
-                        "agent": payload.get("agent_role", "unknown"),
+                        # Campos canonicos
+                        "event_type": event_type,
+                        "agent_role": agent_role,
                         "content": payload.get("content", ""),
-                        "timestamp": payload.get("timestamp"),
-                        "task_id": payload.get("task_id"),
+                        "timestamp": payload.get("timestamp") or _time.time(),
+                        "task_id": payload.get("task_id") or conversation_id,
+                        "conversation_id": payload.get("conversation_id") or conversation_id,
+                        # Aliases para compatibilidade legada/Frontend
+                        "type": event_type,
+                        "agent": agent_role,
                     }
 
                     yield f"event: agent_event\ndata: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
 
-                except TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     # Heartbeat
                     yield ": keepalive\n\n"
 
