@@ -9,6 +9,7 @@ e KnowledgeGraphService.
 import asyncio
 import logging
 import time
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -48,6 +49,17 @@ class KnowledgeConsolidator:
     def __init__(self):
         self.qdrant_client = None
         self._initialized = False
+
+    def _normalize_point_id(self, experience_id: str) -> str | int:
+        """
+        Aplica o mesmo mapeamento usado na ingestão do MemoryCore:
+        - tenta converter para int;
+        - caso contrário, UUID5 determinístico baseado na string do ID.
+        """
+        try:
+            return int(experience_id)
+        except Exception:
+            return str(uuid.uuid5(uuid.NAMESPACE_DNS, str(experience_id)))
 
     async def _initialize(self):
         """Inicializa componentes (lazy)."""
@@ -162,7 +174,7 @@ class KnowledgeConsolidator:
             RELATIONSHIPS_CREATED.inc(created_rels)
 
             # 3. Marcar como consolidado (Atualizar Qdrant)
-            await self._mark_as_consolidated(experience_id)
+            await self._mark_as_consolidated(experience_id, metadata)
 
             duration = time.time() - start_time
             CONSOLIDATION_LATENCY.labels(outcome="success").observe(duration)
@@ -182,16 +194,28 @@ class KnowledgeConsolidator:
             logger.error(f"Failed to consolidate experience {experience_id}: {e}", exc_info=True)
             raise  # Re-raise for circuit breaker
 
-    async def _mark_as_consolidated(self, experience_id: str):
+    async def _mark_as_consolidated(self, experience_id: str, metadata: dict[str, Any] | None = None):
         """Atualiza flag no Qdrant para evitar reprocessamento."""
+        point_id = self._normalize_point_id(experience_id)
+        collection = VectorCollection.EPISODIC_MEMORY.value
         try:
             await self.qdrant_client.set_payload(
-                collection_name=VectorCollection.EPISODIC_MEMORY.value,
+                collection_name=collection,
                 payload={"metadata": {"consolidated": True}},
-                points=[experience_id],
+                points=[point_id],
             )
         except Exception as e:
-            logger.warning(f"Failed to mark experience {experience_id} as consolidated: {e}")
+            msg = str(e).lower()
+            if "not found" in msg or "404" in msg:
+                # ExperiÇõÇœa nÇœo estÇü na coleÇõÇœo (chats indexados em coleÇõÇæes user_* usam IDs prÇüprios)
+                logger.info(
+                    "Skipping consolidated flag because point was not found in Qdrant "
+                    f"(experience_id={experience_id}, collection={collection})"
+                )
+                return
+            logger.warning(
+                f"Failed to mark experience {experience_id} as consolidated: {e}", exc_info=True
+            )
 
 
 # Instância global
