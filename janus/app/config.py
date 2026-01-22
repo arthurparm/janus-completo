@@ -113,6 +113,7 @@ class AppSettings(BaseSettings):
     # Limites de geração de tokens
     LLM_MAX_GENERATION_TOKENS_CAP: int = 4096
     LLM_MIN_GENERATION_TOKENS: int = 64
+    LLM_TASK_POLICY: dict[str, Any] = Field(default_factory=dict)
 
     # Auto-tuning de timeouts
     TIMEOUT_AUTO_TUNE_ENABLED: bool = True
@@ -519,6 +520,18 @@ class AppSettings(BaseSettings):
             except Exception:
                 items = [x.strip() for x in s.split(",") if x.strip()]
                 return {"orchestrator": items} if items else {}
+        return v or {}
+
+    @field_validator("LLM_TASK_POLICY", mode="before")
+    def _parse_llm_task_policy(cls, v: Any):
+        # Accept JSON object or dict for task routing policy.
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                obj = json.loads(s)
+                return obj if isinstance(obj, dict) else {}
+            except Exception:
+                return {}
         return v or {}
 
     @field_validator(

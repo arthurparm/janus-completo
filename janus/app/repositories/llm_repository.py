@@ -55,6 +55,7 @@ class LLMRepository:
         timeout_seconds: int | None,
         user_id: str | None = None,
         project_id: str | None = None,
+        llm_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         logger.debug("Invocando LLM via repositório", role=role.value, priority=priority.value)
         client = None
@@ -96,7 +97,16 @@ class LLMRepository:
 
             client = None
             try:
-                if user_id and getattr(settings, "LLM_AB_EXPERIMENT_ID", None):
+                explicit_provider = (
+                    llm_config.get("provider") if isinstance(llm_config, dict) else None
+                )
+                explicit_model = llm_config.get("model") if isinstance(llm_config, dict) else None
+
+                if (
+                    user_id
+                    and getattr(settings, "LLM_AB_EXPERIMENT_ID", None)
+                    and not (explicit_provider or explicit_model)
+                ):
                     from app.repositories.ab_experiment_repository import ABExperimentRepository
 
                     abr = ABExperimentRepository()
@@ -113,11 +123,14 @@ class LLMRepository:
                         arm = s.query(ExperimentArm).filter(ExperimentArm.id == arm_id).first()
                         if arm and arm.model_spec and ":" in arm.model_spec:
                             provider, model = arm.model_spec.split(":", 1)
+                            ab_config = dict(llm_config or {})
+                            ab_config["provider"] = provider
+                            ab_config["model"] = model
                             llm = await get_llm(
                                 role=role,
                                 priority=priority,
                                 cache_key=f"ab_{provider}_{model}_{role.value}",
-                                config={"provider": provider, "model": model},
+                                config=ab_config,
                             )
                             client = LLMClient(
                                 llm,
@@ -135,7 +148,11 @@ class LLMRepository:
                 client = None
             if client is None:
                 client = await get_llm_client(
-                    role=role, priority=priority, user_id=user_id, project_id=project_id
+                    role=role,
+                    priority=priority,
+                    user_id=user_id,
+                    project_id=project_id,
+                    config=llm_config,
                 )
             if _OTEL and span is not None:
                 try:
@@ -200,12 +217,20 @@ class LLMRepository:
             try:
                 failed_provider = getattr(client, "provider", "unknown") if client else None
                 exclude = [failed_provider] if failed_provider else None
+                fb_config = dict(llm_config or {})
+                if "provider" in fb_config:
+                    fb_config.pop("provider", None)
+                if "model" in fb_config:
+                    fb_config.pop("model", None)
+                if not fb_config:
+                    fb_config = None
                 client_fb = await get_llm_client(
                     role=role,
                     priority=priority,
                     user_id=user_id,
                     project_id=project_id,
                     exclude_providers=exclude,
+                    config=fb_config,
                 )
                 # Se não houver mudança de provedor, repropaga
                 if client and getattr(client_fb, "provider", None) == getattr(

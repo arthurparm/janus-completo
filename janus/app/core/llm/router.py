@@ -88,22 +88,59 @@ def _model_supports_temperature(model_name: str) -> bool:
     return True
 
 
-def _create_openai_model(model: str, temperature: float = 0) -> ChatOpenAI:
+def _normalize_provider_key(provider: str | None) -> str | None:
+    if not provider:
+        return None
+    key = str(provider).strip().lower()
+    aliases = {
+        "gemini": "google_gemini",
+        "google": "google_gemini",
+        "google_gemini": "google_gemini",
+        "xai": "xai",
+        "grok": "xai",
+        "ollama": "ollama",
+        "openai": "openai",
+        "deepseek": "deepseek",
+    }
+    return aliases.get(key, key)
+
+
+def _coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _create_openai_model(
+    model: str, temperature: float = 0, max_tokens: int | None = None
+) -> ChatOpenAI:
     """Create OpenAI model with temperature awareness for o1/o3 models."""
     api_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
 
+    kwargs = {
+        "model": model,
+        "openai_api_key": api_key,
+        "http_client": _get_openai_http_client(),
+    }
     if _model_supports_temperature(model):
-        return ChatOpenAI(
-            model=model,
-            temperature=temperature,
-            openai_api_key=api_key,
-            http_client=_get_openai_http_client(),
-        )
+        kwargs["temperature"] = temperature
     else:
         logger.debug(f"Model {model} doesn't support temperature, omitting it")
-        return ChatOpenAI(
-            model=model, openai_api_key=api_key, http_client=_get_openai_http_client()
-        )
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    return ChatOpenAI(**kwargs)
 
 
 async def get_llm(
@@ -117,6 +154,11 @@ async def get_llm(
     Suporta overrides via configuração (provider/model/temperature/exclude_providers/priority).
     """
     # Overrides por configuração dinâmica
+    explicit_provider = None
+    explicit_model = None
+    temperature_override = None
+    max_tokens_override = None
+    ollama_kwargs_override: dict[str, Any] = {}
     try:
         if config:
             if "priority" in config:
@@ -124,7 +166,49 @@ async def get_llm(
             if "role" in config:
                 role = ModelRole(config["role"])
             if "exclude_providers" in config:
-                exclude_providers = config.get("exclude_providers")
+                config_exclude = config.get("exclude_providers")
+                if isinstance(config_exclude, list):
+                    if exclude_providers:
+                        exclude_providers = list({*exclude_providers, *config_exclude})
+                    else:
+                        exclude_providers = config_exclude
+                else:
+                    exclude_providers = config_exclude
+
+            if "provider" in config:
+                explicit_provider = _normalize_provider_key(config.get("provider"))
+            if "model" in config:
+                model_val = config.get("model")
+                if model_val is not None:
+                    explicit_model = str(model_val)
+            if "temperature" in config:
+                temperature_override = _coerce_float(config.get("temperature"))
+            if "max_tokens" in config:
+                max_tokens_override = _coerce_int(config.get("max_tokens"))
+
+            for key in ("num_ctx", "context", "context_window", "context_tokens"):
+                if key in config:
+                    ctx_val = _coerce_int(config.get(key))
+                    if ctx_val is not None:
+                        ollama_kwargs_override["num_ctx"] = ctx_val
+
+            if "num_thread" in config:
+                thread_val = _coerce_int(config.get("num_thread"))
+                if thread_val is not None:
+                    ollama_kwargs_override["num_thread"] = thread_val
+            if "num_batch" in config:
+                batch_val = _coerce_int(config.get("num_batch"))
+                if batch_val is not None:
+                    ollama_kwargs_override["num_batch"] = batch_val
+            if "gpu_layer" in config:
+                gpu_val = _coerce_int(config.get("gpu_layer"))
+                if gpu_val is not None:
+                    ollama_kwargs_override["gpu_layer"] = gpu_val
+            if "keep_alive" in config:
+                keep_alive = config.get("keep_alive")
+                if keep_alive is not None:
+                    ollama_kwargs_override["keep_alive"] = keep_alive
+
     except Exception as e:
         logger.warning(f"Error applying LLM overrides from config: {e}", exc_info=True)
         # Continue to default selection logic
@@ -150,9 +234,148 @@ async def get_llm(
         ModelRole.REASONER: settings.OLLAMA_CODER_MODEL,  # Fallback local para reasoner
     }
     local_model_name = model_map.get(role, settings.OLLAMA_ORCHESTRATOR_MODEL)
+    if explicit_provider == "ollama" and explicit_model:
+        local_model_name = explicit_model
+
+    deepseek_temp_by_role = getattr(settings, "DEEPSEEK_TEMPERATURE_BY_ROLE", {}) or {}
+    deepseek_temperature = float(
+        deepseek_temp_by_role.get(role.value, getattr(settings, "DEEPSEEK_TEMPERATURE", 0.0))
+    )
+    if temperature_override is not None:
+        deepseek_temperature = float(temperature_override)
+
+    pool_allowed = (
+        temperature_override is None and max_tokens_override is None and not ollama_kwargs_override
+    )
+
+    if explicit_model and not explicit_provider:
+        logger.warning("LLM config model override ignored (missing provider).")
+
+    if explicit_provider:
+        if explicit_provider != "ollama" and priority == ModelPriority.LOCAL_ONLY:
+            logger.warning(
+                "Explicit provider override ignored due to LOCAL_ONLY priority.",
+                extra={"provider": explicit_provider},
+            )
+        else:
+            try:
+                if exclude_providers and explicit_provider in exclude_providers:
+                    raise RuntimeError(
+                        f"Explicit provider '{explicit_provider}' is excluded for selection."
+                    )
+
+                if explicit_provider == "ollama":
+                    model_name = explicit_model or local_model_name
+                elif explicit_provider == "openai":
+                    model_name = explicit_model or settings.OPENAI_MODEL_NAME
+                elif explicit_provider == "google_gemini":
+                    model_name = explicit_model or settings.GEMINI_MODEL_NAME
+                elif explicit_provider == "deepseek":
+                    model_name = explicit_model or settings.DEEPSEEK_MODEL_NAME
+                elif explicit_provider == "xai":
+                    model_name = explicit_model or settings.XAI_MODEL_NAME
+                else:
+                    raise RuntimeError(f"Unsupported provider override: {explicit_provider}")
+
+                pooled_explicit = (
+                    _get_from_pool(explicit_provider, model_name) if pool_allowed else None
+                )
+                if pooled_explicit:
+                    return pooled_explicit
+
+                if explicit_provider == "ollama":
+                    llm = create_ollama_llm(
+                        model_name,
+                        temperature=temperature_override,
+                        model_kwargs=ollama_kwargs_override,
+                    )
+                    if not _health_check_ollama(
+                        llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3
+                    ):
+                        raise RuntimeError(f"Health check failed for model '{model_name}'")
+                elif explicit_provider == "deepseek":
+                    if not _validate_deepseek_key(
+                        getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
+                    ):
+                        raise RuntimeError("DeepSeek API key invalid.")
+                    if not _circuit_closed(explicit_provider) or not await _budget_allows(
+                        explicit_provider
+                    ):
+                        raise RuntimeError("DeepSeek provider unavailable.")
+                    max_tokens = max_tokens_override
+                    if max_tokens is None and "reasoner" in model_name:
+                        max_tokens = 8000
+                    llm = ChatOpenAI(
+                        model=model_name,
+                        temperature=deepseek_temperature,
+                        api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
+                        base_url=settings.DEEPSEEK_BASE_URL,
+                        max_tokens=max_tokens,
+                    )
+                elif explicit_provider == "google_gemini":
+                    if not _validate_gemini_key(
+                        getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+                    ):
+                        raise RuntimeError("Gemini API key invalid.")
+                    if not _circuit_closed(explicit_provider) or not await _budget_allows(
+                        explicit_provider
+                    ):
+                        raise RuntimeError("Gemini provider unavailable.")
+                    llm = ChatGoogleGenerativeAI(
+                        model=model_name,
+                        temperature=temperature_override if temperature_override is not None else 0,
+                        google_api_key=(
+                            getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+                            or None
+                        ),
+                    )
+                elif explicit_provider == "openai":
+                    if not _validate_openai_key(
+                        getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
+                    ):
+                        raise RuntimeError("OpenAI API key invalid.")
+                    if not _circuit_closed(explicit_provider) or not await _budget_allows(
+                        explicit_provider
+                    ):
+                        raise RuntimeError("OpenAI provider unavailable.")
+                    llm = _create_openai_model(
+                        model_name,
+                        temperature=temperature_override if temperature_override is not None else 0,
+                        max_tokens=max_tokens_override,
+                    )
+                elif explicit_provider == "xai":
+                    if not _validate_xai_key(
+                        getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
+                    ):
+                        raise RuntimeError("xAI API key invalid.")
+                    if not _circuit_closed(explicit_provider) or not await _budget_allows(
+                        explicit_provider
+                    ):
+                        raise RuntimeError("xAI provider unavailable.")
+                    max_tokens = max_tokens_override if max_tokens_override is not None else 8000
+                    llm = ChatOpenAI(
+                        model=model_name,
+                        temperature=temperature_override if temperature_override is not None else 0,
+                        api_key=getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)(),
+                        base_url=settings.XAI_BASE_URL,
+                        max_tokens=max_tokens,
+                    )
+                else:
+                    raise RuntimeError(f"Unsupported provider override: {explicit_provider}")
+
+                LLM_ROUTER_COUNTER.labels(
+                    role.value, priority.value, model_name, explicit_provider
+                ).inc()
+                if pool_allowed:
+                    _add_to_pool(explicit_provider, model_name, llm)
+                return llm
+            except Exception:
+                logger.warning("Explicit LLM override failed; falling back to selection.", exc_info=True)
 
     pooled_local = (
-        _get_from_pool("ollama", local_model_name) if priority == ModelPriority.LOCAL_ONLY else None
+        _get_from_pool("ollama", local_model_name)
+        if priority == ModelPriority.LOCAL_ONLY and pool_allowed
+        else None
     )
     if pooled_local:
         return pooled_local
@@ -163,14 +386,19 @@ async def get_llm(
             # Bloqueia se provedor local estiver excluído
             if exclude_providers and "ollama" in exclude_providers:
                 raise RuntimeError("Provedor local 'ollama' está excluído para esta seleção.")
-            llm = create_ollama_llm(local_model_name)
+            llm = create_ollama_llm(
+                local_model_name,
+                temperature=temperature_override,
+                model_kwargs=ollama_kwargs_override,
+            )
             # Primeiro uso pode exigir carregar o modelo; aumentamos o timeout para reduzir falsos negativos
             if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
                 raise RuntimeError(f"Health check falhou para modelo '{local_model_name}'")
 
             logger.info(f"Modelo local '{local_model_name}' inicializado com sucesso.")
             LLM_ROUTER_COUNTER.labels(role.value, priority.value, local_model_name, "ollama").inc()
-            _add_to_pool("ollama", local_model_name, llm)
+            if pool_allowed:
+                _add_to_pool("ollama", local_model_name, llm)
             return llm
         except Exception as e:
             logger.error(
@@ -184,19 +412,15 @@ async def get_llm(
 
     # Definir ordem baseada na prioridade
     if priority == ModelPriority.HIGH_QUALITY:
-        # Grok primeiro: 2M context window + reasoning é ideal para Meta Agent
+        # Grok primeiro: 2M context window + reasoning e ideal para Meta Agent
         provider_order = ["xAI", "OpenAI", "Google Gemini", "DeepSeek"]
     else:
         # DeepSeek primeiro para economizar (FAST_AND_CHEAP)
         provider_order = ["DeepSeek", "Google Gemini", "xAI", "OpenAI"]
 
-    # Temperatura DeepSeek por papel (fallback para default se não definido)
-    deepseek_temp_by_role = getattr(settings, "DEEPSEEK_TEMPERATURE_BY_ROLE", {}) or {}
-    deepseek_temperature = float(
-        deepseek_temp_by_role.get(role.value, getattr(settings, "DEEPSEEK_TEMPERATURE", 0.0))
-    )
+    temperature_default = temperature_override if temperature_override is not None else 0
 
-    # Catálogo de provedores (ordem será ajustada abaixo)
+    # Catalogo de provedores (ordem sera ajustada abaixo)
     cloud_providers = {
         "DeepSeek": {
             "name": "DeepSeek",
@@ -205,12 +429,12 @@ async def get_llm(
                 getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
             ),
             # DeepSeek R1 (reasoner) pode ignorar temperature; aplicamos temperatura por papel quando suportado.
-            "initializer_factory": lambda model, _temp=deepseek_temperature: ChatOpenAI(
+            "initializer_factory": lambda model, _temp=deepseek_temperature, _max=max_tokens_override: ChatOpenAI(
                 model=model,
                 temperature=_temp,
                 api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
                 base_url=settings.DEEPSEEK_BASE_URL,
-                max_tokens=8000 if "reasoner" in model else None,  # R1 needs room for thinking
+                max_tokens=_max if _max is not None else (8000 if "reasoner" in model else None),
             ),
             "models": (
                 settings.DEEPSEEK_MODELS
@@ -224,9 +448,9 @@ async def get_llm(
             "enabled": _validate_gemini_key(
                 getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
             ),
-            "initializer_factory": lambda model: ChatGoogleGenerativeAI(
+            "initializer_factory": lambda model, _temp=temperature_default: ChatGoogleGenerativeAI(
                 model=model,
-                temperature=0,
+                temperature=_temp,
                 google_api_key=(
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
                 ),
@@ -243,7 +467,9 @@ async def get_llm(
             "enabled": _validate_openai_key(
                 getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
             ),
-            "initializer_factory": lambda model: _create_openai_model(model),
+            "initializer_factory": lambda model, _temp=temperature_default, _max=max_tokens_override: _create_openai_model(
+                model, temperature=_temp, max_tokens=_max
+            ),
             "models": (
                 settings.OPENAI_MODELS
                 if getattr(settings, "OPENAI_MODELS", None)
@@ -256,12 +482,12 @@ async def get_llm(
             "enabled": _validate_xai_key(
                 getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
             ),
-            "initializer_factory": lambda model: ChatOpenAI(
+            "initializer_factory": lambda model, _temp=temperature_default, _max=max_tokens_override: ChatOpenAI(
                 model=model,
-                temperature=0,
+                temperature=_temp,
                 api_key=getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)(),
                 base_url=settings.XAI_BASE_URL,
-                max_tokens=8000,  # Grok supports large outputs
+                max_tokens=_max if _max is not None else 8000,
             ),
             "models": (
                 settings.XAI_MODELS
@@ -463,7 +689,8 @@ async def get_llm(
                     LLM_ROUTER_COUNTER.labels(
                         role.value, priority.value, cand["model_name"], cand["provider_key"]
                     ).inc()
-                    _add_to_pool(cand["provider_key"], cand["model_name"], llm)
+                    if pool_allowed:
+                        _add_to_pool(cand["provider_key"], cand["model_name"], llm)
                     return llm
                 except Exception as e:
                     logger.warning(
@@ -477,14 +704,19 @@ async def get_llm(
         if exclude_providers and "ollama" in exclude_providers:
             raise RuntimeError("Fallback local desativado: 'ollama' está excluído.")
 
-        llm = create_ollama_llm(local_model_name)
+        llm = create_ollama_llm(
+            local_model_name,
+            temperature=temperature_override,
+            model_kwargs=ollama_kwargs_override,
+        )
         if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
             raise RuntimeError(
                 f"Health check falhou para modelo local '{local_model_name}' no fallback"
             )
 
         LLM_ROUTER_COUNTER.labels(role.value, "fallback", local_model_name, "ollama").inc()
-        _add_to_pool("ollama", local_model_name, llm)
+        if pool_allowed:
+            _add_to_pool("ollama", local_model_name, llm)
         return llm
     except Exception as e:
         logger.critical(

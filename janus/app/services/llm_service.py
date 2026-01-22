@@ -5,6 +5,7 @@ from fastapi import Request
 
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole, get_llm_client
+from app.core.llm.task_policy import resolve_llm_task_policy
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_manager_health
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
@@ -52,9 +53,72 @@ class LLMService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
+        task_type: str | None = None,
+        complexity: str | None = None,
+        policy_overrides: dict[str, Any] | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
+        policy = resolve_llm_task_policy(task_type, complexity, policy_overrides)
+        llm_config: dict[str, Any] | None = None
+
+        if isinstance(policy, dict) and policy:
+            role_override = policy.get("role")
+            if role_override:
+                try:
+                    role = (
+                        role_override
+                        if isinstance(role_override, ModelRole)
+                        else ModelRole(role_override)
+                    )
+                except Exception:
+                    logger.warning("Invalid policy role override ignored", role=str(role_override))
+
+            priority_override = policy.get("priority")
+            if priority_override:
+                try:
+                    priority = (
+                        priority_override
+                        if isinstance(priority_override, ModelPriority)
+                        else ModelPriority(priority_override)
+                    )
+                except Exception:
+                    logger.warning(
+                        "Invalid policy priority override ignored", priority=str(priority_override)
+                    )
+
+            timeout_override = policy.get("timeout_seconds", policy.get("timeout"))
+            if timeout_override is not None:
+                try:
+                    timeout_seconds = int(timeout_override)
+                except Exception:
+                    logger.warning(
+                        "Invalid policy timeout override ignored", timeout=str(timeout_override)
+                    )
+
+            llm_config = {}
+            direct_config = policy.get("llm_config")
+            if isinstance(direct_config, dict):
+                llm_config.update(direct_config)
+
+            for key in (
+                "provider",
+                "model",
+                "temperature",
+                "max_tokens",
+                "exclude_providers",
+                "num_ctx",
+                "num_thread",
+                "num_batch",
+                "gpu_layer",
+                "keep_alive",
+            ):
+                if key in policy:
+                    llm_config[key] = policy[key]
+
+            if not llm_config:
+                llm_config = None
+
         logger.info(
             "Orquestrando invocação de LLM via serviço", role=role.value, priority=priority.value
         )
@@ -82,7 +146,13 @@ class LLMService:
                     prompt = f"{identity_header}\n\n{prompt}"
 
             return await self._repo.invoke_llm(
-                prompt, role, priority, timeout_seconds, user_id=user_id, project_id=project_id
+                prompt,
+                role,
+                priority,
+                timeout_seconds,
+                user_id=user_id,
+                project_id=project_id,
+                llm_config=llm_config,
             )
         except TimeoutError as e:
             logger.error("Timeout no serviço de LLM", exc_info=e)

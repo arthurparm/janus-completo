@@ -22,6 +22,11 @@ class LLMInvokeRequest(BaseModel):
         description="Prioridade de custo/latência (e.g., local_only, fast_and_cheap, high_quality)",
     )
     timeout_seconds: int | None = Field(None, ge=0, description="Timeout máximo para a invocação")
+    task_type: str | None = Field(None, description="Tipo de tarefa para roteamento por politica")
+    complexity: str | None = Field(None, description="Complexidade da tarefa (low/medium/high)")
+    policy_overrides: dict[str, Any] | None = Field(
+        None, description="Overrides de politica/LLM para esta chamada"
+    )
     user_id: str | None = Field(None, description="Identificador do usuário (orçamentação)")
     project_id: str | None = Field(None, description="Identificador do projeto (orçamentação)")
 
@@ -77,6 +82,9 @@ async def invoke_llm(request: LLMInvokeRequest, service: LLMService = Depends(ge
         role=role,
         priority=priority,
         timeout_seconds=request.timeout_seconds,
+        task_type=request.task_type,
+        complexity=request.complexity,
+        policy_overrides=request.policy_overrides,
         user_id=request.user_id,
         project_id=request.project_id,
     )

@@ -141,7 +141,11 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
             executor.shutdown(wait=False, cancel_futures=True)
 
 
-def create_ollama_llm(model_name: str) -> ChatOllama:
+def create_ollama_llm(
+    model_name: str,
+    temperature: float | None = None,
+    model_kwargs: dict[str, Any] | None = None,
+) -> ChatOllama:
     """Creates a configured ChatOllama instance with standard settings."""
     mk: dict[str, Any] = {}
     if settings.OLLAMA_NUM_CTX:
@@ -154,11 +158,15 @@ def create_ollama_llm(model_name: str) -> ChatOllama:
         mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
     if settings.OLLAMA_KEEP_ALIVE:
         mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
+    if model_kwargs:
+        for key, value in model_kwargs.items():
+            if value is not None:
+                mk[key] = value
 
     return ChatOllama(
         base_url=settings.OLLAMA_HOST,
         model=model_name,
-        temperature=0,
+        temperature=temperature if temperature is not None else 0,
         model_kwargs=mk,
     )
 

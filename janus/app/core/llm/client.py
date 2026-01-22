@@ -456,11 +456,16 @@ async def get_llm_client(
     user_id: str | None = None,
     project_id: str | None = None,
     exclude_providers: list[str] | None = None,
+    config: dict[str, Any] | None = None,
 ) -> LLMClient:
     """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
     cache_key = f"{role.value}_{priority.value}"
     llm = await get_llm(
-        role=role, priority=priority, cache_key=cache_key, exclude_providers=exclude_providers
+        role=role,
+        priority=priority,
+        cache_key=cache_key,
+        exclude_providers=exclude_providers,
+        config=config,
     )
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
