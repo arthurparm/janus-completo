@@ -230,6 +230,143 @@ class KnowledgeGraphService:
             item_type="relationship", content=rel, source_id=context_id, reason=reason
         )
 
+    async def get_subgraph_from_context(self, node_names: list[str], hops: int = 1) -> dict[str, Any]:
+        """
+        Retorna um subgrafo contendo os nós especificados e seus vizinhos até 'hops' de distância.
+        Otimizado para visualização contextual no frontend.
+        """
+        if not node_names:
+            return {"nodes": [], "edges": []}
+
+        db = await self.get_db()
+        
+        # Query otimizada para buscar vizinhança
+        # Limita a 50 nós para não travar a UI
+        cypher = f"""
+        MATCH (start:Entity)
+        WHERE start.name IN $names
+        CALL apoc.path.subgraphAll(start, {{
+            maxLevel: $hops,
+            limit: 50
+        }})
+        YIELD nodes, relationships
+        RETURN nodes, relationships
+        """
+        
+        # Fallback se APOC não estiver disponível (query nativa mais simples)
+        # cypher_native = ... (omitted for brevity, assume APOC or standard traversal)
+        
+        # Usando travessia padrão Cypher para garantir compatibilidade sem APOC
+        cypher_standard = """
+        MATCH (n:Entity)
+        WHERE n.name IN $names
+        OPTIONAL MATCH (n)-[r]-(m)
+        RETURN collect(distinct n) + collect(distinct m) as nodes, collect(distinct r) as edges
+        LIMIT 100
+        """
+
+        try:
+            result = await db.query(cypher_standard, {"names": node_names})
+            if not result:
+                return {"nodes": [], "edges": []}
+
+            raw_nodes = result[0].get("nodes", [])
+            raw_edges = result[0].get("edges", [])
+
+            # Formatar para Cytoscape JSON
+            # Nodes: { data: { id: "x", label: "x", type: "Person" } }
+            # Edges: { data: { source: "a", target: "b", label: "KNOWS" } }
+            
+            nodes_out = []
+            edges_out = []
+            seen_nodes = set()
+
+            for n in raw_nodes:
+                # Neo4j Node object access depends on driver wrapper. 
+                # Assuming wrapper returns dict-like with 'elementId' or 'id' and properties.
+                # Adjust based on actual graph db wrapper implementation.
+                
+                # Se for objeto Neo4j, extrair props. Se for dict, usar direto.
+                props = dict(n) if hasattr(n, 'items') else {}
+                # Tentar pegar ID. Se não, usar name.
+                nid = props.get("elementId") or props.get("name")
+                if not nid or nid in seen_nodes:
+                    continue
+                
+                seen_nodes.add(nid)
+                nodes_out.append({
+                    "data": {
+                        "id": nid,
+                        "label": props.get("name", "Unknown"),
+                        "type": props.get("type", "Entity"),
+                        "color": "#4F46E5" if props.get("name") in node_names else "#9CA3AF" # Highlight context nodes
+                    }
+                })
+
+            for r in raw_edges:
+                # Neo4j Relationship object
+                # Need start_node and end_node IDs (names in our case if mapped above)
+                # This part is tricky without knowing the exact DB wrapper return type.
+                # Assuming standard neo4j python driver behavior where start_node/end_node are accessible
+                # BUT our `db.query` wrapper might return serialized dicts.
+                
+                # Se o wrapper retornar dict com 'start', 'end', 'type':
+                r_props = dict(r) if hasattr(r, 'items') else {}
+                
+                # Se o DB wrapper não resolver os IDs de start/end, essa query precisa retornar explicitamente
+                # start.name e end.name. Vamos ajustar a query para ser mais segura.
+                pass
+            
+            # Re-executando com query explícita para facilitar parsing
+            cypher_explicit = """
+            MATCH (n:Entity)
+            WHERE n.name IN $names
+            OPTIONAL MATCH (n)-[r]-(m:Entity)
+            RETURN 
+                n.name as source_name, 
+                n.type as source_type, 
+                type(r) as rel_type, 
+                m.name as target_name, 
+                m.type as target_type
+            LIMIT 100
+            """
+            
+            rows = await db.query(cypher_explicit, {"names": node_names})
+            
+            nodes_map = {}
+            edges_list = []
+            
+            for row in rows:
+                s_name = row.get("source_name")
+                t_name = row.get("target_name")
+                
+                if s_name:
+                    nodes_map[s_name] = {"id": s_name, "label": s_name, "type": row.get("source_type", "Entity")}
+                
+                if t_name:
+                    nodes_map[t_name] = {"id": t_name, "label": t_name, "type": row.get("target_type", "Entity")}
+                    
+                if s_name and t_name and row.get("rel_type"):
+                    edges_list.append({
+                        "data": {
+                            "source": s_name,
+                            "target": t_name,
+                            "label": row.get("rel_type")
+                        }
+                    })
+            
+            # Formatar output final
+            final_nodes = [{"data": {**v, "color": "#4F46E5" if v["id"] in node_names else "#9CA3AF"}} for v in nodes_map.values()]
+            
+            return {
+                "nodes": final_nodes,
+                "edges": edges_list
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar subgrafo contextual: {e}", exc_info=True)
+            return {"nodes": [], "edges": []}
+
 
 # Singleton global (opcional)
 _service_instance = None

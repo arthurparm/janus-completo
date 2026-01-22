@@ -74,16 +74,35 @@ async def purge_incompatible_threads(
     # Assuming we want to clear ALL threads if we can't migrate.
     # Real world: complex migration script.
     
-    async with postgres_db.get_session_async() as session:
-        try:
-            # Checkpoints table cleanup
-            # We don't have a reliable way to filter by schema version in SQL yet without 
-            # serializing it into a separate column or metadata.
-            # RECOMMENDATION: Future improvement -> Save schema_version in checkpoint metadata.
-            
-            # For now, we return 0 and log warning.
-            logger.warning("Purge requested but granular schema inspection is not implemented yet.")
-            return CleanupResult(deleted_threads_count=0, message="Granular purge not available yet.")
-        except Exception as e:
-            logger.error(f"Error purging threads: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+from app.services.knowledge_graph_service import get_knowledge_graph_service
+
+@router.get("/contextual", summary="Retorna subgrafo contextual para visualização")
+async def get_contextual_graph(
+    query: str | None = None,
+    conversation_id: str | None = None,
+    limit: int = 50,
+    hops: int = 1
+):
+    """
+    Retorna um subgrafo otimizado para visualização no frontend.
+    Pode usar uma 'query' (busca por similaridade ou exata de nós)
+    ou 'conversation_id' (busca contexto relevante da conversa).
+    """
+    service = get_knowledge_graph_service()
+    
+    # Simulação de extração de entidades da query
+    # Em produção, usaria NLP/NER ou busca vetorial para encontrar os nós iniciais
+    node_names = []
+    if query:
+        # Divide por espaço e remove pontuação básica (muito simplificado)
+        parts = query.replace(",", "").split()
+        # Filtra palavras pequenas (stopwords fake)
+        node_names = [p for p in parts if len(p) > 3]
+    
+    # Se tiver conversation_id, poderia buscar do contexto (memória de curto prazo)
+    # Por enquanto, focamos na query direta.
+    
+    if not node_names:
+        return {"nodes": [], "edges": []}
+
+    return await service.get_subgraph_from_context(node_names, hops=hops)
