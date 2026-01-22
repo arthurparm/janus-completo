@@ -148,7 +148,10 @@ class Kernel:
 
     async def startup(self):
         """Initializes the entire system in a coordinated sequence."""
-        setup_logging()
+        import os
+
+        log_file = "/app/app/janus.log" if os.path.isdir("/app/app") else os.path.join(os.getcwd(), "janus.log")
+        setup_logging(log_file=log_file)
         logger.info("Kernel startup: Begin phase 1 (Infrastructure)...")
 
         try:

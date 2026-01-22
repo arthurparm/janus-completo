@@ -24,12 +24,11 @@ from app.core.kernel import Kernel
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
 
 # Determine log path
-# In Docker, we want logs to land in the mapped volume /app/app/janus.log
+# Prefer escrever no volume montado /app/app dentro do container; fallback para cwd/janus.log
 if os.path.isdir("/app/app"):
     log_file = "/app/app/janus.log"
-elif os.path.exists("app") and os.path.isdir("app"):
-    log_file = "app/janus.log"
-    log_file = "janus.log"
+else:
+    log_file = os.path.join(os.getcwd(), "janus.log")
 
 print(f"[DEBUG_INIT] Log file selected: {log_file} (CWD: {os.getcwd()})")
 setup_logging(log_file=log_file)
