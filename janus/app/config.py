@@ -341,6 +341,13 @@ class AppSettings(BaseSettings):
 
     AUTH_JWT_SECRET: str | None = None
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
+    AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
+    AUTH_RESET_RETURN_TOKEN: bool = True
+    SYSTEM_USER_EMAIL: str | None = None
+    SYSTEM_USER_USERNAME: str | None = None
+    SYSTEM_USER_DISPLAY_NAME: str | None = "Janus"
+    SYSTEM_USER_PASSWORD: SecretStr | None = None
+    SYSTEM_USER_ROLE: str = "SYSTEM"
 
     # RabbitMQ
     RABBITMQ_HOST: str = "rabbitmq"

@@ -41,15 +41,34 @@ class UserRepository:
                 s.close()
 
     def create_user(
-        self, email: str | None, display_name: str | None, external_id: str | None = None
+        self,
+        email: str | None,
+        display_name: str | None,
+        external_id: str | None = None,
+        username: str | None = None,
+        password_hash: str | None = None,
     ) -> User:
         s = self._get_session()
         try:
-            u = User(email=email, display_name=display_name, external_id=external_id)
+            u = User(
+                email=email,
+                display_name=display_name,
+                external_id=external_id,
+                username=username,
+                password_hash=password_hash,
+            )
             s.add(u)
             s.commit()
             s.refresh(u)
             return u
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_by_username(self, username: str) -> User | None:
+        s = self._get_session()
+        try:
+            return s.query(User).filter(User.username == username).first()
         finally:
             if not self._session:
                 s.close()
@@ -63,6 +82,43 @@ class UserRepository:
             u.external_id = external_id
             s.commit()
             return True
+        finally:
+            if not self._session:
+                s.close()
+
+    def set_password_hash(self, user_id: int, password_hash: str | None) -> bool:
+        s = self._get_session()
+        try:
+            u = s.query(User).filter(User.id == user_id).first()
+            if not u:
+                return False
+            u.password_hash = password_hash
+            s.commit()
+            return True
+        finally:
+            if not self._session:
+                s.close()
+
+    def set_reset_token(
+        self, user_id: int, token_hash: str | None, expires_at: Any | None = None
+    ) -> bool:
+        s = self._get_session()
+        try:
+            u = s.query(User).filter(User.id == user_id).first()
+            if not u:
+                return False
+            u.password_reset_token_hash = token_hash
+            u.password_reset_expires_at = expires_at
+            s.commit()
+            return True
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_by_reset_token(self, token_hash: str) -> User | None:
+        s = self._get_session()
+        try:
+            return s.query(User).filter(User.password_reset_token_hash == token_hash).first()
         finally:
             if not self._session:
                 s.close()

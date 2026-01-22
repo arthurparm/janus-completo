@@ -94,6 +94,17 @@ async def lifespan(app: FastAPI):
     # Store workers in app state if needed by old shutdown logic, but we use kernel.shutdown now
     app.state.workers = kernel.workers
 
+    # 2.5 Ensure system user (optional)
+    try:
+        from app.services.system_user_service import ensure_system_user
+
+        system_user_id = ensure_system_user()
+        app.state.system_user_id = system_user_id
+        if system_user_id:
+            logger.info("System user ready.", user_id=system_user_id)
+    except Exception as e:
+        logger.error("Failed to ensure system user.", exc_info=e)
+
     # 3. Initialize Rate Limits
     from app.core.llm.rate_limiter import configure_rate_limits_from_settings
 

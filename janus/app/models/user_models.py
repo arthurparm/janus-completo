@@ -21,8 +21,12 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, autoincrement=True)
     external_id = Column(String(100), nullable=True)
+    username = Column(String(50), nullable=True)
     email = Column(String(255), nullable=True)
     display_name = Column(String(100), nullable=True)
+    password_hash = Column(Text, nullable=True)
+    password_reset_token_hash = Column(String(128), nullable=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(
@@ -33,6 +37,7 @@ class User(Base):
     __table_args__ = (
         Index("idx_user_lookup", "email", "external_id"),
         UniqueConstraint("email", name="unique_user_email"),
+        UniqueConstraint("username", name="unique_user_username"),
         UniqueConstraint("external_id", name="unique_user_external_id"),
     )
 

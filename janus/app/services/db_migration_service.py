@@ -3,7 +3,7 @@ from typing import Any
 import structlog
 
 
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from app.db import db
 
 logger = structlog.get_logger(__name__)
@@ -15,17 +15,25 @@ class DBMigrationService:
 
     def _index_exists(self, s, table: str, index_name: str) -> bool:
         try:
-            sql = "SELECT COUNT(1) AS cnt FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :idx"
-            r = s.execute(sql, {"table": table, "idx": index_name}).fetchone()
-            return bool(r and int(r[0]) > 0)
+            insp = inspect(s.get_bind())
+            indexes = insp.get_indexes(table) or []
+            return any(idx.get("name") == index_name for idx in indexes)
         except Exception:
             return False
 
     def _constraint_exists(self, s, table: str, constraint_name: str) -> bool:
         try:
-            sql = "SELECT COUNT(1) AS cnt FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND CONSTRAINT_NAME = :cname"
-            r = s.execute(sql, {"table": table, "cname": constraint_name}).fetchone()
-            return bool(r and int(r[0]) > 0)
+            insp = inspect(s.get_bind())
+            uniques = insp.get_unique_constraints(table) or []
+            return any(uq.get("name") == constraint_name for uq in uniques)
+        except Exception:
+            return False
+
+    def _column_exists(self, s, table: str, column: str) -> bool:
+        try:
+            insp = inspect(s.get_bind())
+            cols = insp.get_columns(table) or []
+            return any(col.get("name") == column for col in cols)
         except Exception:
             return False
 
@@ -68,6 +76,48 @@ class DBMigrationService:
                 self._constraint_exists(s, "roles", "unique_role_name"),
             )
             add(
+                "users",
+                "username",
+                "column",
+                self._column_exists(s, "users", "username"),
+            )
+            add(
+                "users",
+                "password_hash",
+                "column",
+                self._column_exists(s, "users", "password_hash"),
+            )
+            add(
+                "users",
+                "password_reset_token_hash",
+                "column",
+                self._column_exists(s, "users", "password_reset_token_hash"),
+            )
+            add(
+                "users",
+                "password_reset_expires_at",
+                "column",
+                self._column_exists(s, "users", "password_reset_expires_at"),
+            )
+            add(
+                "users",
+                "unique_user_username",
+                "constraint",
+                self._constraint_exists(s, "users", "unique_user_username"),
+            )
+            add(
+                "users",
+                "unique_user_email",
+                "constraint",
+                self._constraint_exists(s, "users", "unique_user_email"),
+            )
+            add(
+                "users",
+                "unique_user_external_id",
+                "constraint",
+                self._constraint_exists(s, "users", "unique_user_external_id"),
+            )
+            add(
                 "consents",
                 "unique_user_scope_consent",
                 "constraint",
@@ -89,43 +139,60 @@ class DBMigrationService:
         applied: list[str] = []
         try:
             if not self._index_exists(s, "users", "idx_user_lookup"):
-                s.execute("ALTER TABLE users ADD INDEX idx_user_lookup (email, external_id)")
+                s.execute(text("CREATE INDEX idx_user_lookup ON users (email, external_id)"))
                 applied.append("users.idx_user_lookup")
+            if not self._column_exists(s, "users", "username"):
+                s.execute(text("ALTER TABLE users ADD COLUMN username VARCHAR(50) NULL"))
+                applied.append("users.username")
+            if not self._column_exists(s, "users", "password_hash"):
+                s.execute(text("ALTER TABLE users ADD COLUMN password_hash TEXT NULL"))
+                applied.append("users.password_hash")
+            if not self._column_exists(s, "users", "password_reset_token_hash"):
+                s.execute(text("ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(128) NULL"))
+                applied.append("users.password_reset_token_hash")
+            if not self._column_exists(s, "users", "password_reset_expires_at"):
+                s.execute(text("ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP NULL"))
+                applied.append("users.password_reset_expires_at")
+            if not self._constraint_exists(s, "users", "unique_user_email"):
+                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE KEY (email)"))
+                applied.append("users.unique_user_email")
+            if not self._constraint_exists(s, "users", "unique_user_username"):
+                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_username UNIQUE KEY (username)"))
+                applied.append("users.unique_user_username")
+            if not self._constraint_exists(s, "users", "unique_user_external_id"):
+                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_external_id UNIQUE KEY (external_id)"))
+                applied.append("users.unique_user_external_id")
             if not self._index_exists(s, "profiles", "idx_profile_user"):
-                s.execute("ALTER TABLE profiles ADD INDEX idx_profile_user (user_id)")
+                s.execute(text("CREATE INDEX idx_profile_user ON profiles (user_id)"))
                 applied.append("profiles.idx_profile_user")
             if not self._index_exists(s, "sessions", "idx_session_user"):
-                s.execute("ALTER TABLE sessions ADD INDEX idx_session_user (user_id, updated_at)")
+                s.execute(text("CREATE INDEX idx_session_user ON sessions (user_id, updated_at)"))
                 applied.append("sessions.idx_session_user")
             if not self._index_exists(s, "messages", "idx_message_session_ts"):
-                s.execute(
-                    "ALTER TABLE messages ADD INDEX idx_message_session_ts (session_id, timestamp)"
-                )
+                s.execute(text("CREATE INDEX idx_message_session_ts ON messages (session_id, timestamp)"))
                 applied.append("messages.idx_message_session_ts")
             if not self._constraint_exists(s, "roles", "unique_role_name"):
-                s.execute("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)")
+                s.execute(text("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)"))
                 applied.append("roles.unique_role_name")
             if not self._constraint_exists(s, "consents", "unique_user_scope_consent"):
-                s.execute(
-                    "ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"
-                )
+                s.execute(text("ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"))
                 applied.append("consents.unique_user_scope_consent")
             if not self._index_exists(s, "consents", "idx_consent_user_scope"):
-                s.execute("ALTER TABLE consents ADD INDEX idx_consent_user_scope (user_id, scope)")
+                s.execute(text("CREATE INDEX idx_consent_user_scope ON consents (user_id, scope)"))
                 applied.append("consents.idx_consent_user_scope")
             # AuditEvent evolution
             try:
-                s.execute("ALTER TABLE audit_events ADD COLUMN justification TEXT NULL")
+                s.execute(text("ALTER TABLE audit_events ADD COLUMN justification TEXT NULL"))
                 applied.append("audit_events.add_justification")
             except Exception:
                 pass
             try:
-                s.execute("ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL")
+                s.execute(text("ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL"))
                 applied.append("audit_events.add_details_json")
             except Exception:
                 pass
             try:
-                s.execute("ALTER TABLE audit_events ADD INDEX idx_audit_action (action)")
+                s.execute(text("CREATE INDEX idx_audit_action ON audit_events (action)"))
                 applied.append("audit_events.idx_audit_action")
             except Exception:
                 pass
