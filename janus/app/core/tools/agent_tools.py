@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import subprocess
@@ -20,7 +21,7 @@ from app.core.memory.working_memory import get_working_memory
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 from app.core.tools.faulty_tools import get_faulty_tools
 from app.core.tools.launcher_tools import launch_app
-from app.db.graph import graph_db
+from app.db.graph import graph_db, initialize_graph_db
 from app.repositories.llm_repository import LLMRepository
 from app.repositories.tool_repository import ToolRepository
 from app.services.llm_service import LLMService
@@ -393,7 +394,30 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
 
     Retorna conceitos conectados e seus relacionamentos.
     """
+    def _get_graph():
+        g = graph_db
+        if g:
+            return g
+        # tenta inicializar se estiver fora de um event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except Exception:
+            loop = None
+        if loop and loop.is_running():
+            return None
+        try:
+            (loop or asyncio.new_event_loop()).run_until_complete(initialize_graph_db())
+            return graph_db
+        except Exception:
+            return None
+
     try:
+        g = _get_graph()
+        if not g:
+            return "Neo4j indisponível ou não inicializado (graph_db=None)."
+        if getattr(g, "_offline", False):
+            return "Neo4j está offline; não foi possível buscar conceitos relacionados."
+
         # Consulta Neo4j para encontrar conceitos relacionados
         query = (
             """
@@ -407,7 +431,7 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
             % max_depth
         )
 
-        results = graph_db.query(query, {"concept": concept})
+        results = g.query(query, {"concept": concept})
 
         if not results:
             return f"Nenhum conceito relacionado encontrado para '{concept}'."
