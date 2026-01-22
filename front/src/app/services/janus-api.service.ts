@@ -359,9 +359,58 @@ export interface MemoryItem {
   };
 }
 
+export interface TraceStep {
+  stepId: string;
+  timestamp: number;
+  agent: string;
+  type: string;
+  content: any;
+  metadata?: {
+    task_id?: string;
+    trace_id?: string;
+    model?: string;
+  };
+}
+
+export interface GraphNode {
+  data: {
+    id: string;
+    label: string;
+    type?: string;
+    color?: string;
+  };
+}
+
+export interface GraphEdge {
+  data: {
+    source: string;
+    target: string;
+    label: string;
+  };
+}
+
+export interface ContextualGraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class JanusApiService {
   constructor(private http: HttpClient) { }
+  // ... existing methods ...
+
+  getConversationTrace(conversationId: string): Observable<TraceStep[]> {
+    return this.http.get<TraceStep[]>(this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversationId)}/trace`));
+  }
+
+  getContextualGraph(query?: string, conversationId?: string, hops: number = 1): Observable<ContextualGraphResponse> {
+    const qs = new URLSearchParams();
+    if (query) qs.set('query', query);
+    if (conversationId) qs.set('conversation_id', conversationId);
+    qs.set('hops', String(hops));
+    return this.http.get<ContextualGraphResponse>(this.buildUrl(`/api/v1/admin/graph/contextual?${qs.toString()}`));
+  }
+
   private buildUrl(path: string): string {
     const p = String(path || '')
     if (p === '/healthz') return p
@@ -418,7 +467,9 @@ export class JanusApiService {
     * @returns Observable com SystemStatus contendo uptime e carga.
     */
   getSystemStatus(): Observable<SystemStatus> {
-    return this.http.get<SystemStatus>(this.buildUrl(`/api/v1/system/status`));
+    return this.http.get<SystemStatus>(this.buildUrl(`/api/v1/system/status`), {
+      headers: { 'ngsw-bypass': 'true' }
+    });
   }
 
   // Services health breakdown
@@ -433,7 +484,9 @@ export class JanusApiService {
 
   // Consolidated System Overview
   getSystemOverview(): Observable<SystemOverviewResponse> {
-    return this.http.get<SystemOverviewResponse>(this.buildUrl(`/api/v1/system/overview`));
+    return this.http.get<SystemOverviewResponse>(this.buildUrl(`/api/v1/system/overview`), {
+      headers: { 'ngsw-bypass': 'true' }
+    });
   }
 
   private _webrtcInitialized$ = new BehaviorSubject<{ status: string; error?: string } | null>(null)
@@ -897,7 +950,16 @@ export class JanusApiService {
   // Productivity limits status
   getProductivityLimitsStatus(user_id: number): Observable<ProductivityLimitsStatusResponse> {
     const headers = this.headersFor(user_id)
-    return this.http.get<ProductivityLimitsStatusResponse>(this.buildUrl(`/api/v1/productivity/limits/status?user_id=${encodeURIComponent(String(user_id))}`), { headers })
+    return this.http.get<ProductivityLimitsStatusResponse>(
+      this.buildUrl(`/api/v1/productivity/limits/status?user_id=${encodeURIComponent(String(user_id))}`),
+      { headers }
+    )
+  }
+
+  getProductivityLimitsStatusSelf(): Observable<ProductivityLimitsStatusResponse> {
+    return this.http.get<ProductivityLimitsStatusResponse>(
+      this.buildUrl(`/api/v1/productivity/limits/status`)
+    )
   }
 
   // Google OAuth

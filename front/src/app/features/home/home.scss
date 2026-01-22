@@ -1,0 +1,363 @@
+@use 'styles/tokens' as *;
+@use 'styles/mixins' as *;
+
+.home {
+  position: relative;
+  min-height: calc(100vh - 64px);
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.home-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 40px) 0;
+}
+
+.home-hero {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.hero-copy {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.eyebrow {
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+}
+
+.sub {
+  color: $color-text-secondary;
+  font-size: 1rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hero-panels {
+  display: grid;
+  gap: 16px;
+  min-width: 260px;
+}
+
+.hero-card {
+  @include glass-panel;
+  padding: 16px;
+  border-radius: $radius-md;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 240px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.label {
+  font-family: $font-mono;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $color-text-muted;
+}
+
+.status-body,
+.quota-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: $color-text-secondary;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $color-text-muted;
+
+  &.ok {
+    background: $color-success;
+    box-shadow: 0 0 12px rgba($color-success, 0.4);
+  }
+
+  &.warn {
+    background: $color-warning;
+    box-shadow: 0 0 12px rgba($color-warning, 0.35);
+  }
+
+  &.err {
+    background: $color-error;
+    box-shadow: 0 0 12px rgba($color-error, 0.35);
+  }
+}
+
+.quota-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  strong {
+    font-family: $font-display;
+    font-size: 1.2rem;
+    color: $color-text-primary;
+  }
+}
+
+.quota-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+
+  .bar {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(var(--janus-primary-rgb), 0.9), rgba(var(--janus-accent-rgb), 0.9));
+    box-shadow: 0 0 12px rgba(var(--janus-primary-rgb), 0.45);
+  }
+}
+
+.inline-alert,
+.inline-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: $radius-md;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+}
+
+.inline-alert {
+  background: rgba(var(--error-rgb), 0.16);
+  border: 1px solid rgba(var(--error-rgb), 0.4);
+}
+
+.inline-note {
+  background: rgba(var(--success-rgb), 0.12);
+  border: 1px solid rgba(var(--success-rgb), 0.35);
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.home-card {
+  @include glass-panel;
+  border-radius: var(--janus-radius-lg);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.home-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top right, rgba(var(--janus-secondary-rgb), 0.12), transparent 55%);
+  pointer-events: none;
+}
+
+.col-12 {
+  grid-column: span 12;
+}
+
+.col-8 {
+  grid-column: span 8;
+}
+
+.col-6 {
+  grid-column: span 6;
+}
+
+.col-4 {
+  grid-column: span 4;
+}
+
+.cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-label {
+  font-family: $font-mono;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: $color-text-muted;
+}
+
+.intent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.intent-row input {
+  background: rgba(var(--janus-bg-surface-rgb), 0.9);
+  border: 1px solid var(--janus-border);
+  border-radius: $radius-md;
+  padding: 12px 14px;
+  color: $color-text-primary;
+  font-family: $font-body;
+  outline: none;
+  transition: $transition-fast;
+}
+
+.intent-row input:focus {
+  border-color: var(--janus-border-active);
+  box-shadow: 0 0 0 2px rgba(var(--janus-secondary-rgb), 0.2);
+}
+
+.chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border: 1px solid rgba(var(--janus-secondary-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.02);
+  color: $color-text-secondary;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: $font-mono;
+  transition: $transition-fast;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: rgba(var(--janus-secondary-rgb), 0.7);
+  color: $color-text-primary;
+  transform: translateY(-1px);
+}
+
+.chip.subtle {
+  border-color: rgba(255, 255, 255, 0.08);
+  color: $color-text-muted;
+  cursor: default;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.list-item-button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.item-title {
+  font-family: $font-display;
+  font-size: 0.95rem;
+  color: $color-text-primary;
+  display: block;
+}
+
+.muted {
+  color: $color-text-muted;
+  font-size: 0.8rem;
+}
+
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.memory-card {
+  background: rgba(var(--janus-bg-surface-rgb), 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: $radius-md;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: $color-text-secondary;
+}
+
+@media (max-width: 1100px) {
+  .hero-panels {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .col-8,
+  .col-6,
+  .col-4 {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .intent-row {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-grid {
+    grid-template-columns: 1fr;
+  }
+}

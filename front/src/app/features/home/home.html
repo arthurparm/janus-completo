@@ -1,0 +1,232 @@
+<section class="home">
+  <app-header></app-header>
+
+  <div class="home-shell">
+    <header class="home-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">JANUS // CENTRAL DE COMANDO</p>
+        <h1>Bem-vindo, {{ displayName() }}</h1>
+        <p class="sub">
+          Painel de controle com contexto vivo, limites do test drive e rotas rapidas
+          para iniciar tarefas.
+        </p>
+        <div class="hero-actions">
+          <button ui-button variant="default" size="lg" (click)="startChat()" [disabled]="actionLoading()">
+            <span class="material-icons">bolt</span>
+            Iniciar conversa
+          </button>
+          <button ui-button variant="ghost" size="lg" (click)="refresh()" [disabled]="loading()">
+            Atualizar painel
+          </button>
+        </div>
+      </div>
+
+      <div class="hero-panels">
+        <div class="hero-card status-card">
+          <div class="card-head">
+            <span class="label">Status do sistema</span>
+            <ui-badge [variant]="systemStatus().variant">
+              {{ systemStatus().label }}
+            </ui-badge>
+          </div>
+          <div class="status-body">
+            <div class="status-line">
+              <span class="dot" [class.ok]="systemStatus().variant === 'success'"
+                [class.warn]="systemStatus().variant === 'warning'"
+                [class.err]="systemStatus().variant === 'error'"></span>
+              <span>Ambiente {{ systemStatus().env }}</span>
+            </div>
+            <p class="muted">
+              Uptime {{ formatUptime(uptimeSeconds()) }}
+            </p>
+          </div>
+        </div>
+
+        <div class="hero-card quota-card">
+          <div class="card-head">
+            <span class="label">Limite diario</span>
+            @if (limitSummary()) {
+              <ui-badge variant="info">{{ formatLimitLabel(limitSummary()?.key || '') }}</ui-badge>
+            }
+          </div>
+          @if (limitSummary()) {
+            <div class="quota-body">
+              <div class="quota-stats">
+                <div>
+                  <span class="muted">Usado</span>
+                  <strong>{{ limitSummary()?.used }}</strong>
+                </div>
+                <div>
+                  <span class="muted">Restante</span>
+                  <strong>
+                    @if (limitSummary()?.infinite) {
+                      Infinito
+                    } @else {
+                      {{ limitSummary()?.remaining }}
+                    }
+                  </strong>
+                </div>
+              </div>
+              @if (!limitSummary()?.infinite) {
+                <div class="quota-bar">
+                  <span class="bar" [style.width.%]="limitSummary()?.pct"></span>
+                </div>
+                <p class="muted">{{ limitSummary()?.pct }}% consumido hoje</p>
+              } @else {
+                <p class="muted">Limite diario sem restricoes para este usuario.</p>
+              }
+            </div>
+          } @else {
+            <p class="muted">Sem limites definidos para o usuario.</p>
+          }
+        </div>
+      </div>
+    </header>
+
+    @if (error()) {
+      <div class="inline-alert" role="alert">
+        <span class="material-icons">error_outline</span>
+        {{ error() }}
+      </div>
+    }
+
+    <div class="home-grid">
+      <section class="home-card cta-card col-8" aria-labelledby="cta-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Acoes rapidas</p>
+            <h2 id="cta-title">O que voce quer fazer agora?</h2>
+            <p class="muted">Descreva a tarefa e o Janus cria o contexto.</p>
+          </div>
+        </div>
+        <div class="cta-body">
+          <label class="field-label" for="intent">Descricao da tarefa</label>
+          <div class="intent-row">
+            <input id="intent" type="text" [formControl]="prompt"
+              placeholder="Ex: resumir docs enviados hoje, criar plano de sprints" />
+            <button ui-button variant="default" size="lg" (click)="startChat()" [disabled]="actionLoading()">
+              <span class="material-icons">north_east</span>
+              Iniciar
+            </button>
+          </div>
+          <div class="chips">
+            @for (suggestion of suggestions; track suggestion) {
+              <button type="button" class="chip" (click)="applySuggestion(suggestion)">
+                {{ suggestion }}
+              </button>
+            }
+          </div>
+          @if (notice()) {
+            <div class="inline-note" role="status">
+              <span class="material-icons">check_circle</span>
+              {{ notice() }}
+            </div>
+          }
+        </div>
+      </section>
+
+      <section class="home-card tools-card col-4" aria-labelledby="tools-title">
+        <div class="card-head">
+          <h3 id="tools-title">Ferramentas</h3>
+          <ui-badge variant="neutral">{{ data().tools.length }}</ui-badge>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="paragraph" [count]="3"></app-skeleton>
+        } @else if (tools().length) {
+          <ul class="list">
+            @for (tool of tools(); track tool.name) {
+              <li class="list-item">
+                <div>
+                  <span class="item-title">{{ tool.name }}</span>
+                  <span class="muted">{{ tool.category || 'geral' }}</span>
+                </div>
+                <ui-badge [variant]="tool.enabled ? 'success' : 'warning'">
+                  {{ tool.enabled ? 'ativo' : 'restrito' }}
+                </ui-badge>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">Nenhuma ferramenta cadastrada.</p>
+        }
+      </section>
+
+      <section class="home-card col-6" aria-labelledby="conversations-title">
+        <div class="card-head">
+          <h3 id="conversations-title">Conversas recentes</h3>
+          <button ui-button variant="ghost" size="sm" (click)="startChat()" [disabled]="actionLoading()">
+            Nova conversa
+          </button>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="text" [count]="4"></app-skeleton>
+        } @else if (conversations().length) {
+          <ul class="list">
+            @for (conv of conversations(); track conv.conversation_id) {
+              <li>
+                <button type="button" class="list-item list-item-button" (click)="openConversation(conv.conversation_id)">
+                  <div>
+                    <span class="item-title">{{ conv.title || conv.conversation_id }}</span>
+                    <span class="muted">
+                      {{ conv.last_message?.text || 'Sem mensagens recentes' }}
+                    </span>
+                  </div>
+                  <span class="chip subtle">ID {{ conv.conversation_id }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">Nenhuma conversa encontrada.</p>
+        }
+      </section>
+
+      <section class="home-card col-6" aria-labelledby="documents-title">
+        <div class="card-head">
+          <h3 id="documents-title">Documentos recentes</h3>
+          <ui-badge variant="info">{{ data().documents.length }}</ui-badge>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="text" [count]="4"></app-skeleton>
+        } @else if (documents().length) {
+          <ul class="list">
+            @for (doc of documents(); track doc.doc_id) {
+              <li class="list-item">
+                <div>
+                  <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
+                  <span class="muted">{{ doc.chunks }} blocos indexados</span>
+                </div>
+                <span class="chip subtle">{{ doc.doc_id }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">Nenhum documento indexado.</p>
+        }
+      </section>
+
+      <section class="home-card memory-card col-12" aria-labelledby="memory-title">
+        <div class="card-head">
+          <h3 id="memory-title">Memoria ativa</h3>
+          <ui-badge variant="neutral">{{ data().memory.length }}</ui-badge>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="card" [count]="2"></app-skeleton>
+        } @else if (memory().length) {
+          <div class="memory-grid">
+            @for (item of memory(); track item.ts_ms) {
+              <article class="memory-card">
+                <p>{{ item.content }}</p>
+                <span class="muted">
+                  {{ item.ts_ms | date:'short' }}
+                </span>
+              </article>
+            }
+          </div>
+        } @else {
+          <p class="muted">Nenhuma memoria recente para exibir.</p>
+        }
+      </section>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,276 @@
+<section class="conversations">
+  <app-header></app-header>
+
+  <div class="convo-shell">
+    <header class="convo-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">JANUS // CONVERSAS</p>
+        <h1>Centro de comando do chat</h1>
+        <p class="sub">
+          Fluxo em tempo real, eventos de agentes e contexto vivo no mesmo lugar.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button ui-button variant="default" size="lg" (click)="createConversation()" [disabled]="sending()">
+          <span class="material-icons">add</span>
+          Nova conversa
+        </button>
+        <button ui-button variant="ghost" size="lg" (click)="refresh()" [disabled]="listLoading()">
+          Atualizar
+        </button>
+      </div>
+    </header>
+
+    <div class="convo-grid">
+      <aside class="convo-panel convo-list" aria-label="Lista de conversas">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">HISTORICO</p>
+            <h2>Conversas</h2>
+          </div>
+          <ui-badge variant="neutral">{{ conversations().length }}</ui-badge>
+        </div>
+
+        <div class="search-row">
+          <span class="material-icons">search</span>
+          <input type="text" placeholder="Buscar por titulo ou id" (input)="onSearchChange($event)" />
+          <button ui-button variant="ghost" size="icon" (click)="refresh()" [disabled]="listLoading()">
+            <span class="material-icons">refresh</span>
+          </button>
+        </div>
+
+        @if (listLoading()) {
+          <app-skeleton variant="paragraph" [count]="6"></app-skeleton>
+        } @else if (filteredConversations().length) {
+          <ul class="conversation-list">
+            @for (conv of filteredConversations(); track conv.conversation_id) {
+              <li
+                class="conversation-item"
+                [class.active]="conv.conversation_id === selectedId()"
+                (click)="openConversation(conv)">
+                <div>
+                  <span class="item-title">{{ conv.title || ('Conversa ' + conv.conversation_id.slice(0, 8)) }}</span>
+                  <span class="muted">{{ conv.last_message?.text || 'Sem mensagens ainda' }}</span>
+                </div>
+                <span class="chip">ID {{ conv.conversation_id.slice(0, 6) }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">Nenhuma conversa encontrada.</p>
+        }
+      </aside>
+
+      <section class="convo-panel convo-main" aria-label="Chat">
+        <div class="chat-head">
+          <div class="title-group">
+            <app-jarvis-avatar [state]="avatarState()" [size]="48"></app-jarvis-avatar>
+            <div>
+              <p class="eyebrow">CONVERSA ATIVA</p>
+              <h2>{{ selectedTitle() }}</h2>
+              <p class="muted">ID {{ selectedId() || 'sem selecao' }}</p>
+            </div>
+          </div>
+          <div class="status-group">
+            <ui-badge [variant]="streamBadge().variant">{{ streamBadge().label }}</ui-badge>
+            <ui-badge variant="neutral">{{ messages().length }} msgs</ui-badge>
+          </div>
+        </div>
+
+        @if (error()) {
+          <div class="inline-alert" role="alert">
+            <span class="material-icons">error_outline</span>
+            {{ error() }}
+          </div>
+        }
+
+        <div class="chat-body" #messageList>
+          @if (historyLoading()) {
+            <app-skeleton variant="paragraph" [count]="8"></app-skeleton>
+          } @else if (messages().length) {
+            <div class="message-feed">
+              @for (msg of messages(); track msg.id) {
+                <article class="message"
+                  [class.user]="msg.role === 'user'"
+                  [class.assistant]="msg.role === 'assistant'"
+                  [class.system]="msg.role === 'system'"
+                  [class.error]="msg.error">
+                  <div class="avatar-slot">
+                    @if (msg.role === 'assistant') {
+                      <app-jarvis-avatar [state]="msg.streaming ? 'thinking' : 'idle'" [size]="36"></app-jarvis-avatar>
+                    } @else {
+                      <div class="user-avatar">{{ displayName().slice(0, 1) }}</div>
+                    }
+                  </div>
+                  <div class="bubble">
+                    <div class="message-meta">
+                      <span class="author">{{ authorLabel(msg) }}</span>
+                      <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                      @if (msg.streaming) {
+                        <span class="stream-indicator">streaming</span>
+                      }
+                    </div>
+                    <div class="message-text markdown-content" [innerHTML]="msg.text | markdown"></div>
+                    @if (msg.citations?.length) {
+                      <div class="citation-list">
+                        @for (cite of msg.citations; track cite) {
+                          <span class="citation-chip">
+                            {{ cite.file_path || cite.title || cite.doc_id || 'fonte' }}
+                          </span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">
+              <h3>Nenhuma mensagem ainda</h3>
+              <p class="muted">Envie a primeira pergunta ou crie uma conversa nova.</p>
+            </div>
+          }
+        </div>
+
+        <div class="composer">
+          <div class="composer-toolbar">
+            <label>
+              <span>Role</span>
+              <select [value]="selectedRole()" (change)="selectedRole.set($any($event.target).value)">
+                @for (role of roleOptions; track role.value) {
+                  <option [value]="role.value">{{ role.label }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Prioridade</span>
+              <select [value]="selectedPriority()" (change)="selectedPriority.set($any($event.target).value)">
+                @for (priority of priorityOptions; track priority.value) {
+                  <option [value]="priority.value">{{ priority.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" [checked]="streamingEnabled()" (change)="streamingEnabled.set(!streamingEnabled())" />
+              <span>Streaming</span>
+            </label>
+          </div>
+
+          <textarea
+            [formControl]="prompt"
+            rows="3"
+            placeholder="Descreva a tarefa ou envie uma pergunta..."
+            (keydown)="onComposerKeydown($event)">
+          </textarea>
+
+          <div class="composer-actions">
+            <button ui-button variant="ghost" size="sm" type="button" (click)="clearComposer()">Limpar</button>
+            <button ui-button variant="default" size="lg" type="button" (click)="sendMessage()" [disabled]="sending()">
+              <span class="material-icons">send</span>
+              Enviar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="convo-panel convo-rail" aria-label="Contexto">
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Chain of Thought</h3>
+            <button ui-button variant="ghost" size="sm" (click)="toggleTrace()">
+              {{ showTrace() ? 'Ocultar' : 'Mostrar' }}
+            </button>
+          </div>
+          @if (showTrace()) {
+            @if (traceSteps().length) {
+              <ul class="trace-list">
+                @for (step of traceSteps(); track step.stepId) {
+                  <li class="trace-item">
+                    <div class="trace-header">
+                      <span class="agent-badge">{{ step.agent }}</span>
+                      <span class="trace-time">{{ formatTime(step.timestamp * 1000) }}</span>
+                    </div>
+                    <div class="trace-content">
+                      <strong>{{ step.type }}</strong>
+                      <p>{{ step.content }}</p>
+                    </div>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="muted">Nenhum rastro disponível.</p>
+            }
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Agent events</h3>
+            <ui-badge variant="info">{{ events().length }}</ui-badge>
+          </div>
+          @if (contextLoading()) {
+            <app-skeleton variant="text" [count]="4"></app-skeleton>
+          } @else if (events().length) {
+            <ul class="rail-list">
+              @for (event of events(); track event.timestamp) {
+                <li class="rail-item">
+                  <div class="rail-title">
+                    <span class="chip">{{ event.agent_role }}</span>
+                    <span class="muted">{{ formatTime(event.timestamp) }}</span>
+                  </div>
+                  <p>{{ event.content }}</p>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Sem eventos recentes.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Documentos</h3>
+            <ui-badge variant="neutral">{{ docs().length }}</ui-badge>
+          </div>
+          @if (contextLoading()) {
+            <app-skeleton variant="text" [count]="3"></app-skeleton>
+          } @else if (docs().length) {
+            <ul class="rail-list">
+              @for (doc of docs(); track doc.doc_id) {
+                <li class="rail-item">
+                  <div>
+                    <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
+                    <span class="muted">{{ doc.chunks }} blocos</span>
+                  </div>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Sem documentos vinculados.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Memoria ativa</h3>
+            <ui-badge variant="neutral">{{ memory().length }}</ui-badge>
+          </div>
+          @if (contextLoading()) {
+            <app-skeleton variant="text" [count]="3"></app-skeleton>
+          } @else if (memory().length) {
+            <ul class="rail-list">
+              @for (item of memory(); track item.ts_ms) {
+                <li class="rail-item">
+                  <p>{{ item.content }}</p>
+                  <span class="muted">{{ formatDate(item.ts_ms) }}</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Sem memoria recente.</p>
+          }
+        </section>
+      </aside>
+    </div>
+  </div>
+</section>

@@ -19,6 +19,7 @@ export interface AgentEvent {
 export class AgentEventsService {
     private eventSource?: EventSource;
     private _events$ = new Subject<AgentEvent>();
+    private currentConversationId?: string;
 
     constructor(
         private zone: NgZone,
@@ -33,6 +34,7 @@ export class AgentEventsService {
         if (this.eventSource) {
             this.eventSource.close();
         }
+        this.currentConversationId = conversationId;
 
         // Prepare URL with user_id param for simple auth/tracking
         let url = `${API_BASE_URL}/v1/chat/${conversationId}/events`;
@@ -54,8 +56,8 @@ export class AgentEventsService {
         this.eventSource.onmessage = (event) => {
             this.zone.run(() => {
                 try {
-                    const data = JSON.parse(event.data) as AgentEvent;
-                    this._events$.next(data);
+                    const data = JSON.parse(event.data);
+                    this._events$.next(this.normalizeEvent(data));
                 } catch (e) {
                     console.error('[AgentEvents] Error parsing event', e);
                 }
@@ -76,8 +78,8 @@ export class AgentEventsService {
         this.eventSource.addEventListener('agent_event', (event: MessageEvent) => {
             this.zone.run(() => {
                 try {
-                    const data = JSON.parse(event.data) as AgentEvent;
-                    this._events$.next(data);
+                    const data = JSON.parse(event.data);
+                    this._events$.next(this.normalizeEvent(data));
                 } catch (e) {
                     console.error('[AgentEvents] Error parsing named event', e);
                 }
@@ -91,5 +93,22 @@ export class AgentEventsService {
             this.eventSource.close();
             this.eventSource = undefined;
         }
+        this.currentConversationId = undefined;
+    }
+
+    /**
+     * Normaliza eventos vindos do SSE para o formato esperado pelo HUD.
+     * Backend pode enviar chaves diferentes (type vs event_type, agent vs agent_role).
+     */
+    private normalizeEvent(data: any): AgentEvent {
+        const now = Date.now();
+        return {
+            event_type: data?.event_type || data?.type || 'unknown',
+            agent_role: data?.agent_role || data?.agent || 'unknown',
+            content: data?.content || '',
+            conversation_id: data?.conversation_id || this.currentConversationId || '',
+            task_id: data?.task_id || data?.thread_id || data?.conversation_id || this.currentConversationId || '',
+            timestamp: data?.timestamp ? Number(data.timestamp) : now
+        };
     }
 }
