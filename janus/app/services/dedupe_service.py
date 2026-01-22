@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.graph import GraphDatabase, get_graph_db
 from app.db import db
-from app.db.vector_store import get_async_qdrant_client
+from app.db.vector_store import async_count_points, get_async_qdrant_client
 from app.repositories.knowledge_repository import KnowledgeRepository
 
 logger = structlog.get_logger(__name__)
@@ -203,10 +203,8 @@ class DedupeService:
                 qf = _models.Filter(must=filt)
 
                 try:
-                    cnt = await client.count_points(collection_name=coll, count_filter=qf, exact=True)
-                    summary["collections"].append(
-                        {"name": coll, "with_hash": int(getattr(cnt, "count", 0) or 0)}
-                    )
+                    cnt = await async_count_points(client, coll, qf, exact=True)
+                    summary["collections"].append({"name": coll, "with_hash": cnt})
                 except Exception as e:
                     logger.debug("failed_to_count_qdrant_collection", collection=coll, error=str(e))
                     summary["collections"].append({"name": coll, "with_hash": 0, "error": str(e)})

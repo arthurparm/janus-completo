@@ -27,7 +27,11 @@ from qdrant_client import models
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.protocols import MemoryRepositoryProtocol
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    async_count_points,
+    get_async_qdrant_client,
+)
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -228,10 +232,7 @@ class MemoryService:
                 ]
             )
 
-            cnt = await client.count_points(
-                collection_name=collection_name, count_filter=qfilter, exact=True
-            )
-            current = int(getattr(cnt, "count", 0) or 0)
+            current = await async_count_points(client, collection_name, qfilter, exact=True)
             if current >= max_points:
                 logger.warning("Limite de indexação de chat atingido", user_id=user_id)
                 return

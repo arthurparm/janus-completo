@@ -61,6 +61,7 @@ from app.core.embeddings.embedding_manager import aembed_text
 from app.db.vector_store import (
     aget_collection_info,
     aget_or_create_collection,
+    async_count_points,
     get_async_qdrant_client,
 )
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
@@ -434,8 +435,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
             }
         )
     try:
-        cnt = await client.count_points(collection_name=coll, count_filter=qfilter, exact=True)
-        total = int(getattr(cnt, "count", 0) or 0)
+        total = await async_count_points(client, coll, qfilter, exact=True)
     except Exception:
         total = len(samples)
     try:

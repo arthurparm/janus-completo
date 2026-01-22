@@ -44,6 +44,22 @@ def get_async_qdrant_client() -> AsyncQdrantClient:
     return _async_qdrant_client
 
 
+async def async_count_points(
+    client: AsyncQdrantClient, collection_name: str, qfilter: models.Filter, exact: bool = True
+) -> int:
+    """
+    Conta pontos de forma compatível entre versões do cliente.
+    Alguns releases expõem `count` e outros `count_points`.
+    """
+    if hasattr(client, "count"):
+        resp = await client.count(collection_name=collection_name, count_filter=qfilter, exact=exact)
+    else:  # pragma: no cover - retrocompatibilidade
+        resp = await client.count_points(
+            collection_name=collection_name, count_filter=qfilter, exact=exact
+        )
+    return int(getattr(resp, "count", 0) or 0)
+
+
 def _validate_vector_size(vector_size: int) -> int:
     if not isinstance(vector_size, int) or not (
         _MIN_VECTOR_SIZE <= vector_size <= _MAX_VECTOR_SIZE
