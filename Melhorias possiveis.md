@@ -353,6 +353,18 @@ As melhores quotas gratuitas *reais* de 2026 (Sem custo de privacidade):
 * [ ] **Lote 4 — Repositórios e persistência** (levantamento + correções)
 * [ ] **Lote 5 — Agentes, Ferramentas e Sandbox** (levantamento + correções)
 * [ ] **Lote 6 — TBD** (definir escopo)
+* [ ] **Infra Estrutural — Processos & Resiliência** (novos)
+  * [ ] **Separar planos**: mover workers (Parlamento, meta-agent, consolidator, auto-healer, autonomia) para processos/containers próprios; flags por ambiente para desativar em dev/CI.
+  * [ ] **Mensageria robusta**: garantir DLX/DLQ efetiva e publish fail-fast (retry/backoff + alerta) em vez de drop silencioso quando RabbitMQ estiver offline; health gating nas rotas dependentes.
+  * [ ] **Startup leve**: retirar auto-index/warm-up pesado do boot HTTP; tornar opt-in via job agendado e readiness saudável antes de servir tráfego.
+  * [ ] **Segurança por perfil**: modo produção com CORS restrito, API-Key/Bearer obrigatórios e bloqueio de ferramentas DANGEROUS fora de allowlist; documentar perfil dev vs prod.
+  * [ ] **Supervisão de workers**: adicionar monitor/restart/backoff para tasks criadas via `asyncio.create_task` (atores MAS, loops autonomia/lifecycle), evitando falhas silenciosas.
+  * [ ] **Broker resiliente**: completar configuração de DLX/DLQ (bindings fanout) e substituir drop silencioso por retry + alerta quando `_connection` for None; adicionar dead-letter para todas as filas criticas.
+  * [ ] **Neo4j reconnect**: implementar reconexão/health gating quando o driver entrar em modo offline, evitando ficar preso até restart.
+  * [ ] **Métricas duplicadas**: corrigir counters duplicados em `productivity.py` (declaração repetida de `_PROD_REQUESTS_TOTAL`/noop), garantindo nomes únicos e exports consistentes.
+  * [ ] **Tools perigosas**: reforçar política para `execute_shell`/`write_file .py` (exigir allowlist explícita por ambiente e log/auditoria) para evitar uso inadvertido em produção.
+  * [ ] **Endpoints seguros**: criar perfil “prod” com CORS restrito e autenticação obrigatória (API-Key/Bearer) e sanitização consistente de payloads livres (prompts/URLs/markdown) antes do processamento.
+  * [ ] **Warm-up/index agendados**: mover warm-up de LLM e auto-indexação para jobs assíncronos opt-in (scheduler), mantendo readiness saudável no HTTP.
 
 ---
 
