@@ -20,6 +20,61 @@
     outline-offset: 2px;
 }
 
+/* Animated Ambient Orbs */
+.ambient-orbs {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.ambient-orbs .orb {
+    position: absolute;
+    width: clamp(260px, 30vw, 520px);
+    height: clamp(260px, 30vw, 520px);
+    border-radius: 50%;
+    filter: blur(35px);
+    opacity: 0.32;
+    mix-blend-mode: screen;
+}
+
+.ambient-orbs .orb-1 {
+    top: -12%;
+    left: -6%;
+    background: radial-gradient(circle at 30% 30%, rgba(var(--janus-secondary-rgb), 0.45), transparent 65%);
+    animation: orbFloatA 26s ease-in-out infinite;
+}
+
+.ambient-orbs .orb-2 {
+    top: 10%;
+    right: -8%;
+    background: radial-gradient(circle at 40% 40%, rgba(var(--janus-accent-rgb), 0.35), transparent 70%);
+    animation: orbFloatB 32s ease-in-out infinite;
+}
+
+.ambient-orbs .orb-3 {
+    bottom: -18%;
+    left: 20%;
+    background: radial-gradient(circle at 35% 35%, rgba(var(--janus-primary-rgb), 0.3), transparent 70%);
+    animation: orbFloatC 28s ease-in-out infinite;
+}
+
+@keyframes orbFloatA {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(6%, 8%, 0) scale(1.05); }
+}
+
+@keyframes orbFloatB {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(-8%, 6%, 0) scale(1.08); }
+}
+
+@keyframes orbFloatC {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(4%, -6%, 0) scale(1.04); }
+}
+
 /* Focus Visible for Keyboard Navigation */
 *:focus-visible {
     outline: 2px solid #4a90e2;

@@ -4,43 +4,43 @@
 
 // :root definition for CSS Variables (The Source of Truth)
 :root {
-  /* Colors - Modern Cinematic Palette */
-  --janus-primary: #36d1b7;
-  --janus-primary-hover: #4be3cb;
-  --janus-primary-dim: rgba(54, 209, 183, 0.15);
-  --janus-primary-rgb: 54, 209, 183;
-  --janus-secondary: #5b8dff;
-  --janus-secondary-rgb: 91, 141, 255;
-  --janus-accent: #ffb454;
-  --janus-accent-rgb: 255, 180, 84;
+  /* Colors - Login Palette */
+  --janus-primary: #23d5a1;
+  --janus-primary-hover: #3fe3b5;
+  --janus-primary-dim: rgba(35, 213, 161, 0.15);
+  --janus-primary-rgb: 35, 213, 161;
+  --janus-secondary: #45c3ff;
+  --janus-secondary-rgb: 69, 195, 255;
+  --janus-accent: #f6b348;
+  --janus-accent-rgb: 246, 179, 72;
   
   /* Backgrounds */
-  --janus-bg-dark: #0b101a;
-  --janus-bg-dark-rgb: 11, 16, 26;
-  --janus-bg-card: #162235;
-  --janus-bg-card-rgb: 22, 34, 53;
-  --janus-bg-surface: #121a2a;
-  --janus-bg-surface-rgb: 18, 26, 42;
+  --janus-bg-dark: #0a0f13;
+  --janus-bg-dark-rgb: 10, 15, 19;
+  --janus-bg-card: #131c25;
+  --janus-bg-card-rgb: 19, 28, 37;
+  --janus-bg-surface: #10161c;
+  --janus-bg-surface-rgb: 16, 22, 28;
   
   /* Text */
-  --janus-text-primary: #f2f5f9;
-  --janus-text-secondary: #a7b3c5;
-  --janus-text-muted: #6e7a8c;
+  --janus-text-primary: #eaf2f8;
+  --janus-text-secondary: #b3c1cc;
+  --janus-text-muted: #8ea2b0;
   
   /* Borders & Effects */
-  --janus-border: #1f2a3d;
-  --janus-border-active: rgba(91, 141, 255, 0.7);
-  --janus-shadow-glow: 0 12px 30px rgba(91, 141, 255, 0.14);
+  --janus-border: rgba(255, 255, 255, 0.08);
+  --janus-border-active: rgba(35, 213, 161, 0.65);
+  --janus-shadow-glow: 0 12px 30px rgba(35, 213, 161, 0.18);
 
   /* Status */
-  --success: #2dd4a7;
-  --success-rgb: 45, 212, 167;
-  --warning: #f5c26b;
-  --warning-rgb: 245, 194, 107;
+  --success: #23d5a1;
+  --success-rgb: 35, 213, 161;
+  --warning: #f6b348;
+  --warning-rgb: 246, 179, 72;
   --error: #ff5b6b;
   --error-rgb: 255, 91, 107;
-  --info: #5b8dff;
-  --info-rgb: 91, 141, 255;
+  --info: #45c3ff;
+  --info-rgb: 69, 195, 255;
 
   /* Legacy aliases */
   --fg: var(--janus-text-primary);

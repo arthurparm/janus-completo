@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, HostBinding, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
@@ -8,80 +8,41 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="jarvis-avatar" [class]="state">
-      <!-- Outer glow ring -->
-      <div class="glow-ring"></div>
-      
-      <!-- Rotating outer ring -->
-      <svg class="ring ring-outer" viewBox="0 0 100 100">
-        <circle 
-          cx="50" cy="50" r="46" 
-          fill="none" 
-          stroke="url(#gradientOuter)" 
-          stroke-width="1.5"
-          stroke-dasharray="8 4"
-        />
+    <div class="janus-sigil" [ngClass]="state">
+      <svg class="sigil" viewBox="0 0 120 120" role="img" aria-label="Janus">
         <defs>
-          <linearGradient id="gradientOuter" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:var(--janus-secondary)"/>
-            <stop offset="100%" style="stop-color:var(--janus-primary)"/>
+          <linearGradient id="sigilHalo" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="var(--janus-secondary)" />
+            <stop offset="100%" stop-color="var(--janus-primary)" />
           </linearGradient>
-        </defs>
-      </svg>
-      
-      <!-- Counter-rotating middle ring -->
-      <svg class="ring ring-middle" viewBox="0 0 100 100">
-        <circle 
-          cx="50" cy="50" r="38" 
-          fill="none" 
-          stroke="url(#gradientMiddle)" 
-          stroke-width="2"
-          stroke-dasharray="12 6"
-        />
-        <defs>
-          <linearGradient id="gradientMiddle" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:var(--janus-primary)"/>
-            <stop offset="100%" style="stop-color:var(--janus-accent)"/>
+          <linearGradient id="sigilHex" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="var(--janus-accent)" />
+            <stop offset="100%" stop-color="var(--janus-secondary)" />
           </linearGradient>
+          <radialGradient id="sigilCore" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ffffff" />
+            <stop offset="55%" stop-color="var(--janus-secondary)" />
+            <stop offset="100%" stop-color="var(--janus-primary)" />
+          </radialGradient>
         </defs>
+
+        <circle class="halo" cx="60" cy="60" r="54"></circle>
+        <g class="orbit">
+          <circle class="node" cx="60" cy="10" r="2.2"></circle>
+          <circle class="node" cx="110" cy="60" r="2.2"></circle>
+          <circle class="node" cx="60" cy="110" r="2.2"></circle>
+          <circle class="node" cx="10" cy="60" r="2.2"></circle>
+        </g>
+        <polygon
+          class="hex"
+          points="60,16 94,36 94,84 60,104 26,84 26,36"
+        ></polygon>
+        <circle class="core-glow" cx="60" cy="60" r="26"></circle>
+        <circle class="core" cx="60" cy="60" r="16"></circle>
+        <circle class="pulse" cx="60" cy="60" r="20"></circle>
       </svg>
-      
-      <!-- Inner ring -->
-      <svg class="ring ring-inner" viewBox="0 0 100 100">
-        <circle 
-          cx="50" cy="50" r="30" 
-          fill="none" 
-          stroke="url(#gradientInner)" 
-          stroke-width="1"
-          stroke-dasharray="4 8"
-        />
-        <defs>
-          <linearGradient id="gradientInner" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:var(--janus-secondary)"/>
-            <stop offset="100%" style="stop-color:var(--success)"/>
-          </linearGradient>
-        </defs>
-      </svg>
-      
-      <!-- Core orb -->
-      <div class="core">
-        <div class="core-inner"></div>
-        <div class="core-pulse"></div>
-      </div>
-      
-      <!-- Speaking waves -->
-      <div class="speaking-waves" *ngIf="state === 'speaking'">
-        <div class="wave wave-1"></div>
-        <div class="wave wave-2"></div>
-        <div class="wave wave-3"></div>
-      </div>
-      
-      <!-- Thinking dots -->
-      <div class="thinking-dots" *ngIf="state === 'thinking'">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+
+      <span class="scan-line" aria-hidden="true"></span>
     </div>
   `,
   styles: [`
@@ -91,167 +52,138 @@ type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
       justify-content: center;
     }
 
-    .jarvis-avatar {
+    .janus-sigil {
       position: relative;
       width: var(--avatar-size, 48px);
       height: var(--avatar-size, 48px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: grid;
+      place-items: center;
     }
 
-    /* Glow effect */
-    .glow-ring {
-      position: absolute;
-      inset: -8px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(var(--janus-secondary-rgb), 0.4) 0%, transparent 70%);
-      animation: glowPulse 4s ease-in-out infinite;
-      filter: blur(4px);
-    }
-
-    @keyframes glowPulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.95); }
-      50% { opacity: 0.8; transform: scale(1.1); }
-    }
-
-    /* Rings */
-    .ring {
-      position: absolute;
+    .sigil {
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0 0 4px rgba(var(--janus-secondary-rgb), 0.5));
+      filter: drop-shadow(0 0 10px rgba(var(--janus-secondary-rgb), 0.35));
     }
 
-    .ring-outer {
-      animation: rotateClockwise 20s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    .halo {
+      fill: none;
+      stroke: url(#sigilHalo);
+      stroke-width: 2;
+      stroke-dasharray: 6 8;
+      opacity: 0.65;
+      transform-origin: 50% 50%;
+      animation: sigilSpin 18s linear infinite;
     }
 
-    .ring-middle {
-      animation: rotateCounterClockwise 15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    .orbit {
+      transform-origin: 50% 50%;
+      transform-box: fill-box;
+      animation: sigilSpinReverse 24s linear infinite;
     }
 
-    .ring-inner {
-      animation: rotateClockwise 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    .node {
+      fill: var(--janus-secondary);
+      opacity: 0.85;
+      filter: drop-shadow(0 0 6px rgba(var(--janus-secondary-rgb), 0.6));
     }
 
-    @keyframes rotateClockwise {
+    .hex {
+      fill: none;
+      stroke: url(#sigilHex);
+      stroke-width: 2;
+      opacity: 0.9;
+    }
+
+    .core-glow {
+      fill: none;
+      stroke: rgba(var(--janus-secondary-rgb), 0.5);
+      stroke-width: 2;
+      filter: drop-shadow(0 0 12px rgba(var(--janus-secondary-rgb), 0.6));
+    }
+
+    .core {
+      fill: url(#sigilCore);
+    }
+
+    .pulse {
+      fill: none;
+      stroke: rgba(var(--janus-primary-rgb), 0.45);
+      stroke-width: 1.5;
+      transform-origin: 50% 50%;
+      animation: sigilPulse 2.6s ease-in-out infinite;
+    }
+
+    .scan-line {
+      position: absolute;
+      width: 120%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(var(--janus-secondary-rgb), 0.7), transparent);
+      animation: scanSweep 3.8s ease-in-out infinite;
+      opacity: 0.7;
+    }
+
+    @keyframes sigilSpin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
 
-    @keyframes rotateCounterClockwise {
+    @keyframes sigilSpinReverse {
       from { transform: rotate(360deg); }
       to { transform: rotate(0deg); }
     }
 
-    /* Core */
-    .core {
-      position: relative;
-      width: 42%;
-      height: 42%;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--janus-primary), var(--janus-secondary));
-      box-shadow: 
-        0 0 20px rgba(var(--janus-primary-rgb), 0.8),
-        inset 0 0 10px rgba(255, 255, 255, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
+    @keyframes sigilPulse {
+      0%, 100% { transform: scale(0.92); opacity: 0.4; }
+      50% { transform: scale(1.08); opacity: 0.8; }
     }
 
-    .core-inner {
-      width: 60%;
-      height: 60%;
-      border-radius: 50%;
-      background: radial-gradient(circle, #ffffff 0%, var(--janus-secondary) 100%);
-      animation: corePulse 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-      box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
-    }
-
-    .core-pulse {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      background: inherit;
-      animation: coreExpand 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-    }
-
-    @keyframes corePulse {
-      0%, 100% { transform: scale(0.9); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 1; }
-    }
-
-    @keyframes coreExpand {
-      0% { transform: scale(1); opacity: 0.6; }
-      100% { transform: scale(2.2); opacity: 0; }
+    @keyframes scanSweep {
+      0%, 100% { transform: translateY(-45%); opacity: 0; }
+      45% { opacity: 0.6; }
+      50% { transform: translateY(45%); opacity: 0.9; }
+      55% { opacity: 0.6; }
     }
 
     /* State: Thinking */
-    .jarvis-avatar.thinking {
-      .ring-outer { animation-duration: 4s; stroke: var(--janus-accent); }
-      .ring-middle { animation-ration: 3s; }
-      .ring-inner { animation-duration: 2s; }
-      .glow-ring { background: radial-gradient(circle, rgba(var(--janus-accent-rgb), 0.4) 0%, transparent 70%); }
-      .core { 
-        background: linear-gradient(135deg, var(--janus-accent), var(--janus-secondary));
-        box-shadow: 0 0 25px rgba(var(--janus-accent-rgb), 0.6);
-      }
+    .janus-sigil.thinking .halo {
+      animation-duration: 8s;
+      stroke: var(--janus-accent);
+      opacity: 0.85;
     }
 
-    .thinking-dots {
-      position: absolute;
-      bottom: -12px;
-      display: flex;
-      gap: 5px;
-      
-      span {
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: var(--janus-primary);
-        box-shadow: 0 0 5px var(--janus-primary);
-        animation: thinkingBounce 1.4s ease-in-out infinite;
-        
-        &:nth-child(2) { animation-delay: 0.2s; }
-        &:nth-child(3) { animation-delay: 0.4s; }
-      }
-    }
-
-    @keyframes thinkingBounce {
-      0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
-      40% { transform: translateY(-4px); opacity: 1; }
+    .janus-sigil.thinking .pulse {
+      stroke: rgba(var(--janus-accent-rgb), 0.6);
     }
 
     /* State: Speaking */
-    .jarvis-avatar.speaking {
-      .glow-ring { background: radial-gradient(circle, rgba(var(--success-rgb), 0.5) 0%, transparent 70%); }
-      .core { 
-        background: linear-gradient(135deg, var(--success), var(--janus-secondary));
-        box-shadow: 0 0 30px rgba(var(--success-rgb), 0.6);
-      }
+    .janus-sigil.speaking .halo {
+      stroke: var(--success);
+      opacity: 0.9;
+    }
+
+    .janus-sigil.speaking .pulse {
+      stroke: rgba(var(--success-rgb), 0.6);
+      animation-duration: 1.6s;
     }
 
     /* State: Listening */
-    .jarvis-avatar.listening {
-      .glow-ring { 
-        background: radial-gradient(circle, rgba(var(--error-rgb), 0.5) 0%, transparent 70%);
-        animation: glowPulse 0.8s ease-in-out infinite;
-      }
-      .core { 
-        background: linear-gradient(135deg, var(--error), var(--janus-accent));
-        animation: listeningPulse 0.5s ease-in-out infinite;
-      }
+    .janus-sigil.listening .halo {
+      stroke: var(--error);
+      opacity: 0.9;
     }
 
-    @keyframes listeningPulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(var(--error-rgb), 0.5); }
-      50% { transform: scale(1.15); box-shadow: 0 0 40px rgba(var(--error-rgb), 0.8); }
+    .janus-sigil.listening .scan-line {
+      background: linear-gradient(90deg, transparent, rgba(var(--error-rgb), 0.8), transparent);
     }
   `]
 })
 export class JarvisAvatarComponent {
   @Input() state: AvatarState = 'idle';
   @Input() size: number = 48;
+
+  @HostBinding('style.--avatar-size.px')
+  get avatarSize(): number {
+    return this.size;
+  }
 }
