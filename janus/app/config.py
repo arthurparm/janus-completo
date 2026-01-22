@@ -423,6 +423,7 @@ class AppSettings(BaseSettings):
         "mail.send": 100,
         "notes.write": 1000,
     }
+    PRODUCTIVITY_UNLIMITED_USERS: list[str] = []
     GOOGLE_OAUTH_CLIENT_ID: SecretStr | None = None
     GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
     GOOGLE_OAUTH_REDIRECT_URI: str | None = None
@@ -491,6 +492,23 @@ class AppSettings(BaseSettings):
                 origins.append(tailscale_origin)
 
         return origins
+
+    @field_validator("PRODUCTIVITY_UNLIMITED_USERS", mode="before")
+    def _parse_productivity_unlimited_users(cls, v: Any):
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return []
+            if s.startswith("["):
+                try:
+                    arr = json.loads(s)
+                    return [str(x).strip().lower() for x in arr if str(x).strip()]
+                except Exception:
+                    pass
+            return [x.strip().lower() for x in s.split(",") if x.strip()]
+        if isinstance(v, list):
+            return [str(x).strip().lower() for x in v if str(x).strip()]
+        return []
 
     # ======= Validadores para variáveis de ambiente complexas =======
 

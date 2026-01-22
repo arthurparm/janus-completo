@@ -100,6 +100,17 @@ class OAuthRefreshRequest(BaseModel):
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
 
+def _is_unlimited_user(user_id: int) -> bool:
+    unlimited = getattr(settings, "PRODUCTIVITY_UNLIMITED_USERS", []) or []
+    if not unlimited:
+        return False
+    try:
+        user = UserRepository().get_user(int(user_id))
+        email = (user.email or "").strip().lower() if user else ""
+        return bool(email) and email in {u.lower() for u in unlimited}
+    except Exception:
+        return False
+
 
 def _ensure_consent(repo: ConsentRepository, user_id: int, scope: str) -> None:
     if not repo.has_consent(user_id, scope):
@@ -136,24 +147,25 @@ async def calendar_add_event(
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        max_per_day = int(
-            getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("calendar.write", 0)
-        )
-        if max_per_day > 0:
-            evts = svc.get_audit_events(
-                str(payload.user_id),
-                tool="calendar_add_event",
-                status="ok",
-                start_ts=start_ts,
-                end_ts=None,
-                limit=1000,
-                offset=0,
+        if not _is_unlimited_user(payload.user_id):
+            max_per_day = int(
+                getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("calendar.write", 0)
             )
-            if len(evts) >= max_per_day:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Daily calendar.write quota exceeded",
+            if max_per_day > 0:
+                evts = svc.get_audit_events(
+                    str(payload.user_id),
+                    tool="calendar_add_event",
+                    status="ok",
+                    start_ts=start_ts,
+                    end_ts=None,
+                    limit=1000,
+                    offset=0,
                 )
+                if len(evts) >= max_per_day:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Daily calendar.write quota exceeded",
+                    )
     except HTTPException:
         raise
     except Exception:
@@ -345,22 +357,23 @@ async def mail_send(
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0))
-        if max_per_day > 0:
-            evts = svc.get_audit_events(
-                str(payload.user_id),
-                tool="mail_send",
-                status="ok",
-                start_ts=start_ts,
-                end_ts=None,
-                limit=1000,
-                offset=0,
-            )
-            if len(evts) >= max_per_day:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Daily mail.send quota exceeded",
+        if not _is_unlimited_user(payload.user_id):
+            max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0))
+            if max_per_day > 0:
+                evts = svc.get_audit_events(
+                    str(payload.user_id),
+                    tool="mail_send",
+                    status="ok",
+                    start_ts=start_ts,
+                    end_ts=None,
+                    limit=1000,
+                    offset=0,
                 )
+                if len(evts) >= max_per_day:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Daily mail.send quota exceeded",
+                    )
     except HTTPException:
         raise
     except Exception:
@@ -442,22 +455,23 @@ async def notes_add(
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0))
-        if max_per_day > 0:
-            evts = svc.get_audit_events(
-                str(payload.user_id),
-                tool="notes_add",
-                status="ok",
-                start_ts=start_ts,
-                end_ts=None,
-                limit=1000,
-                offset=0,
-            )
-            if len(evts) >= max_per_day:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Daily notes.write quota exceeded",
+        if not _is_unlimited_user(payload.user_id):
+            max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0))
+            if max_per_day > 0:
+                evts = svc.get_audit_events(
+                    str(payload.user_id),
+                    tool="notes_add",
+                    status="ok",
+                    start_ts=start_ts,
+                    end_ts=None,
+                    limit=1000,
+                    offset=0,
                 )
+                if len(evts) >= max_per_day:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Daily notes.write quota exceeded",
+                    )
     except HTTPException:
         raise
     except Exception:
@@ -557,13 +571,21 @@ async def notes_list(
 
 
 @router.get("/limits/status")
-async def limits_status(user_id: int, request: Request):
+async def limits_status(request: Request, user_id: int | None = None):
     actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    if not actor:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    try:
+        actor_id = int(actor)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     from app.repositories.user_repository import UserRepository
 
-    ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    target_user_id = int(user_id) if user_id is not None else actor_id
+    if target_user_id != actor_id:
+        ur = UserRepository()
+        if not ur.is_admin(actor_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     svc: ObservabilityService = request.app.state.observability_service
     start_ts = float(__import__("time").time()) - 86400.0
     quotas = getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}) or {}
@@ -573,13 +595,14 @@ async def limits_status(user_id: int, request: Request):
         "notes.write": "notes_add",
     }
     usage: dict[str, Any] = {}
+    unlimited = _is_unlimited_user(target_user_id)
     for scope, max_per_day in quotas.items():
         tool = mapping.get(scope)
         count = 0
         if tool:
             try:
                 evts = svc.get_audit_events(
-                    str(user_id),
+                    str(target_user_id),
                     tool=tool,
                     status="ok",
                     start_ts=start_ts,
@@ -590,12 +613,20 @@ async def limits_status(user_id: int, request: Request):
                 count = len(evts)
             except Exception:
                 count = 0
-        usage[scope] = {
-            "max_per_day": int(max_per_day),
-            "used": int(count),
-            "remaining": max(0, int(max_per_day) - int(count)),
-        }
-    return {"user_id": str(user_id), "limits": usage}
+        if unlimited:
+            usage[scope] = {
+                "max_per_day": 0,
+                "used": int(count),
+                "remaining": 0,
+                "unlimited": True,
+            }
+        else:
+            usage[scope] = {
+                "max_per_day": int(max_per_day),
+                "used": int(count),
+                "remaining": max(0, int(max_per_day) - int(count)),
+            }
+    return {"user_id": str(target_user_id), "limits": usage}
 
 
 @router.get("/oauth/google/start")
