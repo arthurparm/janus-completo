@@ -28,18 +28,19 @@ from typing import Optional
 
 # Check dependencies and install if needed
 def check_dependencies():
-    required = ['fastapi', 'uvicorn', 'pillow']
+    required = ["fastapi", "uvicorn", "pillow"]
     missing = []
 
     for pkg in required:
         try:
-            __import__(pkg.replace('-', '_'))
+            __import__(pkg.replace("-", "_"))
         except ImportError:
             missing.append(pkg)
 
     if missing:
         print(f"Installing missing packages: {missing}")
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install'] + missing + ['--quiet'])
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing + ["--quiet"])
+
 
 check_dependencies()
 
@@ -52,6 +53,7 @@ from pydantic import BaseModel  # noqa: E402
 try:
     import win32con  # noqa: F401
     import win32gui  # noqa: F401
+
     WIN32_AVAILABLE = True
 except ImportError:
     WIN32_AVAILABLE = False
@@ -61,7 +63,7 @@ except ImportError:
 app = FastAPI(
     title="Janus Windows Agent",
     description="Provides OS-level capabilities to Janus Docker container",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Allow CORS from Docker
@@ -78,19 +80,23 @@ app.add_middleware(
 # Models
 # ============================================================================
 
+
 class NotifyRequest(BaseModel):
     title: str
     message: str
     sound: bool = True
 
+
 class SpeakRequest(BaseModel):
     text: str
     rate: int = 150  # Words per minute
+
 
 class ScreenshotRequest(BaseModel):
     mode: str = "active"  # "active" or "full"
     max_width: int = 800
     quality: int = 85
+
 
 class ScreenshotResponse(BaseModel):
     success: bool
@@ -105,6 +111,7 @@ class ScreenshotResponse(BaseModel):
 # Endpoints
 # ============================================================================
 
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
@@ -116,9 +123,10 @@ async def root():
             "screenshot": True,
             "notify": True,
             "speak": True,
-            "active_window": WIN32_AVAILABLE
-        }
+            "active_window": WIN32_AVAILABLE,
+        },
     }
+
 
 @app.get("/health")
 async def health():
@@ -144,7 +152,6 @@ async def capture_screenshot(request: ScreenshotRequest):
         if img is None:
             return ScreenshotResponse(success=False, error="Failed to capture screen")
 
-
         # Resize if needed
         if img.width > request.max_width:
             ratio = request.max_width / img.width
@@ -161,7 +168,7 @@ async def capture_screenshot(request: ScreenshotRequest):
             image_b64=image_b64,
             width=img.width,
             height=img.height,
-            source=request.mode
+            source=request.mode,
         )
 
     except Exception as e:
@@ -199,7 +206,7 @@ async def send_notification(request: NotifyRequest):
         title = request.title.replace('"', '`"').replace("'", "`'")
         message = request.message.replace('"', '`"').replace("'", "`'")
 
-        ps_script = f'''
+        ps_script = f"""
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
         [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
 
@@ -219,14 +226,16 @@ async def send_notification(request: NotifyRequest):
         $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
         $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Janus AI")
         $notifier.Show($toast)
-        '''
+        """
 
         process = await asyncio.create_subprocess_exec(
             "powershell.exe",
-            "-NoProfile", "-NonInteractive",
-            "-Command", ps_script,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            ps_script,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
@@ -234,7 +243,7 @@ async def send_notification(request: NotifyRequest):
         return {
             "success": process.returncode == 0,
             "title": request.title,
-            "message": request.message
+            "message": request.message,
         }
 
     except Exception as e:
@@ -250,27 +259,26 @@ async def speak_text(request: SpeakRequest):
         # PowerShell SAPI TTS
         text = request.text.replace('"', '`"').replace("'", "`'")
 
-        ps_script = f'''
+        ps_script = f"""
         Add-Type -AssemblyName System.Speech
         $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
         $synth.Rate = {(request.rate - 150) // 25}
         $synth.Speak("{text}")
-        '''
+        """
 
         process = await asyncio.create_subprocess_exec(
             "powershell.exe",
-            "-NoProfile", "-NonInteractive",
-            "-Command", ps_script,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            ps_script,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
 
-        return {
-            "success": process.returncode == 0,
-            "text": request.text
-        }
+        return {"success": process.returncode == 0, "text": request.text}
 
     except asyncio.TimeoutError:
         return {"success": False, "error": "Speech timeout"}
@@ -298,13 +306,7 @@ async def get_monitors():
     try:
         # Use PIL to get screen size
         img = ImageGrab.grab()
-        return {
-            "success": True,
-            "primary": {
-                "width": img.width,
-                "height": img.height
-            }
-        }
+        return {"success": True, "primary": {"width": img.width, "height": img.height}}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

@@ -1,4 +1,3 @@
-
 import logging
 
 import httpx
@@ -10,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 # Base URL for Janus API running in Docker (localhost mapped port)
 BASE_URL = "http://localhost:8000/api/v1"
+
 
 @pytest.mark.asyncio
 async def test_meta_agent_activation():
@@ -29,15 +29,19 @@ async def test_meta_agent_activation():
             response = await client.post(url)
 
             if response.status_code == 404:
-                pytest.fail(f"Endpoint não encontrado: {url}. Verifique se 'meta_agent' está habilitado e roteado.")
+                pytest.fail(
+                    f"Endpoint não encontrado: {url}. Verifique se 'meta_agent' está habilitado e roteado."
+                )
 
             if response.status_code != 200 and response.status_code != 202:
                 # Se falhar, tenta imprimir o erro
                 try:
-                     error_detail = response.json()
+                    error_detail = response.json()
                 except Exception:
-                     error_detail = response.text
-                pytest.fail(f"Falha ao ativar Meta-Agente. Status: {response.status_code}. Detalhes: {error_detail}")
+                    error_detail = response.text
+                pytest.fail(
+                    f"Falha ao ativar Meta-Agente. Status: {response.status_code}. Detalhes: {error_detail}"
+                )
 
             # Sucesso
             data = response.json()
@@ -49,26 +53,30 @@ async def test_meta_agent_activation():
             logger.info("✓ Ciclo de análise do Meta-Agente concluído com sucesso!")
 
             # Print report summary nicely
-            print("\n" + "="*60)
+            print("\n" + "=" * 60)
             print(f"RELATÓRIO DE AUTO-APERFEIÇOAMENTO (Ciclo: {report.get('cycle_id')})")
-            print("="*60)
+            print("=" * 60)
             print(f"Status Geral: {report.get('overall_status', 'UNKNOWN')}")
             print(f"Score de Saúde: {report.get('health_score', 0)}/100")
 
-            issues = report.get('issues_detected', [])
-            recommendations = report.get('recommendations', [])
+            issues = report.get("issues_detected", [])
+            recommendations = report.get("recommendations", [])
 
             print(f"\nProblemas Detectados ({len(issues)}):")
             for issue in issues:
-                print(f" - [{issue.get('severity', 'LOW').upper()}] {issue.get('title')}: {issue.get('description')}")
+                print(
+                    f" - [{issue.get('severity', 'LOW').upper()}] {issue.get('title')}: {issue.get('description')}"
+                )
 
             print(f"\nRecomendações ({len(recommendations)}):")
             for rec in recommendations:
-                print(f" - [P{rec.get('priority', 3)}] {rec.get('title')}: {rec.get('description')}")
+                print(
+                    f" - [P{rec.get('priority', 3)}] {rec.get('title')}: {rec.get('description')}"
+                )
 
             print("\nResumo Executivo:")
-            print(report.get('summary'))
-            print("="*60 + "\n")
+            print(report.get("summary"))
+            print("=" * 60 + "\n")
 
             # Validate minimal report structure
             assert "overall_status" in report
@@ -82,6 +90,8 @@ async def test_meta_agent_activation():
     except Exception as e:
         pytest.fail(f"Erro inesperado durante o teste: {e}")
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_meta_agent_activation())

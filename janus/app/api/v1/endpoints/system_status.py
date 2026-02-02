@@ -179,9 +179,6 @@ async def get_user_status(
     return UserStatusResponse(**m)
 
 
-
-
-
 @router.get(
     "/db/validate",
     summary="Valida schema Database (users/sessions/messages/profiles)",
@@ -192,7 +189,9 @@ async def validate_db_schema():
 
 
 @router.post(
-    "/db/migrate", summary="Migra schema Database (cria índices/constraints ausentes)", tags=["System"]
+    "/db/migrate",
+    summary="Migra schema Database (cria índices/constraints ausentes)",
+    tags=["System"],
 )
 async def migrate_db_schema():
     return db_migration_service.migrate_schema()

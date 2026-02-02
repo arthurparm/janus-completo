@@ -23,7 +23,7 @@ Accept: application/json
 
 ###
 # Listar Entidades de Código (opcional: filtrar por arquivo)
-@file_path = 
+@file_path =
 GET {{host}}{{api_v1_prefix}}/knowledge/entities?file_path={{file_path}}
 Accept: application/json
 

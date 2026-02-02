@@ -20,9 +20,9 @@ import { UI_DIALOG_DATA } from '../ui/dialog/dialog.tokens'
       align-items: center;
       padding: 32px;
       gap: 20px;
-      /* Background/border/shadow handled by container? No, container has p-6. 
-         But loading dialog might want cleaner look. 
-         Let's keep these styles as they define the inner layout. 
+      /* Background/border/shadow handled by container? No, container has p-6.
+         But loading dialog might want cleaner look.
+         Let's keep these styles as they define the inner layout.
          But container usually has white bg.
       */
       /* background: var(--janus-bg-card); */

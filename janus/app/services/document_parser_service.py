@@ -5,10 +5,12 @@ Extracts text from various document formats.
 
 import re
 import time
+
 import structlog
+
+from app.core.exceptions.document_exceptions import ExtractionFailedError
 from app.core.infrastructure.fallback_chain import FallbackChain
 from app.core.monitoring.document_metrics import get_metrics_recorder
-from app.core.exceptions.document_exceptions import ExtractionFailedError
 
 logger = structlog.get_logger(__name__)
 
@@ -146,6 +148,7 @@ class DocumentParserService:
     def _parse_pdf_pypdf2(self, data: bytes) -> str:
         """Primary PDF parser using PyPDF2."""
         import io
+
         import PyPDF2
 
         reader = PyPDF2.PdfReader(io.BytesIO(data))

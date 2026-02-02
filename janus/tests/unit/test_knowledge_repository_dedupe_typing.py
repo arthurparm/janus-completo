@@ -60,6 +60,7 @@ class FakeGraphDB:
 @pytest.mark.asyncio
 async def test_dedupe_functions_and_classes_uses_enum_types(monkeypatch):
     calls = []
+
     def _audit(event):
         calls.append(event.get("action"))
 
@@ -83,6 +84,7 @@ async def test_dedupe_functions_and_classes_uses_enum_types(monkeypatch):
 @pytest.mark.asyncio
 async def test_dedupe_concepts_uses_relates_to(monkeypatch):
     calls = []
+
     def _audit(event):
         calls.append(event.get("action"))
 
@@ -103,6 +105,7 @@ async def test_dedupe_concepts_uses_relates_to(monkeypatch):
 @pytest.mark.asyncio
 async def test_dedupe_files_uses_relates_to(monkeypatch):
     calls = []
+
     def _audit(event):
         calls.append(event.get("action"))
 
@@ -123,6 +126,7 @@ async def test_dedupe_files_uses_relates_to(monkeypatch):
 @pytest.mark.asyncio
 async def test_bulk_merge_calls_metrics_and_audit(monkeypatch):
     calls = []
+
     def _audit(event):
         calls.append(event.get("action"))
 
@@ -130,10 +134,12 @@ async def test_bulk_merge_calls_metrics_and_audit(monkeypatch):
 
     db = FakeGraphDB({})
     repo = KnowledgeRepository(db)
-    await repo.bulk_merge_calls([
-        {"caller_name": "a", "callee_name": "b", "file_path": "/p"},
-        {"caller_name": "c", "callee_name": "d", "file_path": "/p"},
-    ])
+    await repo.bulk_merge_calls(
+        [
+            {"caller_name": "a", "callee_name": "b", "file_path": "/p"},
+            {"caller_name": "c", "callee_name": "d", "file_path": "/p"},
+        ]
+    )
     q = "\n".join(db.sink)
     assert GraphRelationship.CALLS.value in q
     assert "bulk_merge_calls" in calls

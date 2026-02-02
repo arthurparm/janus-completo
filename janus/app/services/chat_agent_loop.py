@@ -3,14 +3,14 @@ Chat Agent Loop Service.
 Executes ReAct (Reasoning + Acting) loop with tool execution fallbacks.
 """
 
-import asyncio
 import os
-import structlog
 from typing import Any
+
+import structlog
+
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
-from app.core.llm import ModelRole, ModelPriority
 from app.core.infrastructure.fallback_chain import FallbackChain
-from app.core.exceptions.chat_exceptions import LLMInvocationError, ToolExecutionError
+from app.core.llm import ModelPriority, ModelRole
 
 logger = structlog.get_logger(__name__)
 
@@ -70,14 +70,10 @@ class ChatAgentLoop:
             "on",
         )
         allowlist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",")
-            if name.strip()
+            name.strip() for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",") if name.strip()
         }
         blocklist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",")
-            if name.strip()
+            name.strip() for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",") if name.strip()
         }
         max_actions = int(os.getenv("CHAT_TOOL_MAX_ACTIONS", "20"))
         max_seconds = int(os.getenv("CHAT_TOOL_MAX_SECONDS", "60"))

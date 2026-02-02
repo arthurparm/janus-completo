@@ -451,12 +451,12 @@
 
   .trace-item {
     font-size: 0.85rem;
-    
+
     .trace-header {
       display: flex;
       justify-content: space-between;
       margin-bottom: 0.25rem;
-      
+
       .agent-badge {
         background: var(--surface-2);
         padding: 0.125rem 0.375rem;
@@ -464,13 +464,13 @@
         font-weight: 500;
         color: var(--text-secondary);
       }
-      
+
       .trace-time {
         color: var(--text-tertiary);
         font-size: 0.75rem;
       }
     }
-    
+
     .trace-content {
       strong {
         display: block;

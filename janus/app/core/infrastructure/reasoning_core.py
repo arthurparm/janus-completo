@@ -6,9 +6,9 @@ from langchain.agents import create_react_agent
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 
+from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 from app.core.llm.llm_manager import ModelPriority, ModelRole
 from app.core.memory.memory_core import get_memory_db  # Usar o getter
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 
 logger = logging.getLogger(__name__)
 

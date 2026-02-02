@@ -38,9 +38,8 @@ def _run_in_docker(code: str) -> tuple[str, str]:
     Retorna (stdout, stderr). Em caso de falha estrutural, stderr conterá a causa.
     """
     try:
-        from docker.errors import APIError, ContainerError, ImageNotFound
-
         import docker
+        from docker.errors import APIError, ContainerError, ImageNotFound
 
         client = docker.from_env()
         image = "python:3.11-slim"

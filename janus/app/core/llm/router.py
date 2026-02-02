@@ -4,7 +4,6 @@ from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from prometheus_client import Counter, Gauge
 
@@ -308,7 +307,9 @@ async def get_llm(
                     llm = ChatOpenAI(
                         model=model_name,
                         temperature=deepseek_temperature,
-                        api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
+                        api_key=getattr(
+                            settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None
+                        )(),
                         base_url=settings.DEEPSEEK_BASE_URL,
                         max_tokens=max_tokens,
                     )
@@ -370,7 +371,9 @@ async def get_llm(
                     _add_to_pool(explicit_provider, model_name, llm)
                 return llm
             except Exception:
-                logger.warning("Explicit LLM override failed; falling back to selection.", exc_info=True)
+                logger.warning(
+                    "Explicit LLM override failed; falling back to selection.", exc_info=True
+                )
 
     pooled_local = (
         _get_from_pool("ollama", local_model_name)

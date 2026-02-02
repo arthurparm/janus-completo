@@ -1,16 +1,15 @@
 import json
-import re
 from typing import Any
 
 import structlog
 
+from app.core.agents.utils import parse_json_strict
 from app.core.autonomy.goal_manager import Goal
 from app.core.autonomy.policy_engine import PolicyEngine
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.tools.action_module import PermissionLevel, action_registry
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.services.llm_service import LLMService
-from app.core.agents.utils import parse_json_strict
 
 logger = structlog.get_logger(__name__)
 
@@ -191,7 +190,9 @@ async def build_plan_for_goal(
             return draft_plan
 
         # 3. REFINE
-        refine_prompt = await _build_refine_prompt(goal, draft_plan, critique_text, tools, max_steps)
+        refine_prompt = await _build_refine_prompt(
+            goal, draft_plan, critique_text, tools, max_steps
+        )
         refine_res = await llm_service.invoke_llm(
             prompt=refine_prompt,
             role=ModelRole.ORCHESTRATOR,  # Refiner
@@ -279,7 +280,7 @@ async def replan_goal(
         try:
             return parse_json_strict(text)
         except Exception:
-             if "ABORT" in text:
+            if "ABORT" in text:
                 return {"action": "ABORT"}
 
     except Exception as e:
@@ -332,8 +333,8 @@ async def verify_outcome(
         try:
             return parse_json_strict(text)
         except Exception:
-             # Fallback heuristic: if text contains "success": true
-             if "true" in text.lower() and "success" in text.lower():
+            # Fallback heuristic: if text contains "success": true
+            if "true" in text.lower() and "success" in text.lower():
                 return {"success": True, "reason": "Heuristic validation"}
 
         # Se não conseguiu parsear, assume sucesso para não bloquear demais (False Positive preferred to False Negative here?)

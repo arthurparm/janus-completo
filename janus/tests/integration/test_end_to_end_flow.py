@@ -12,6 +12,7 @@ from app.core.agents.multi_agent_system import (
 
 # --- Mocks ---
 
+
 class MockBroker:
     def __init__(self):
         self.published_messages = []
@@ -29,10 +30,11 @@ class MockBroker:
             callback = self.consumers[queue_name]
             # Wrap in TaskMessage if it's a dict
             from app.models.schemas import TaskMessage
+
             if isinstance(message, dict):
-                 msg_obj = TaskMessage(**message)
+                msg_obj = TaskMessage(**message)
             else:
-                 msg_obj = message
+                msg_obj = message
 
             # Simulate async processing
             print("DEBUG: Calling callback")
@@ -49,6 +51,7 @@ class MockBroker:
 
     async def get_queue_info(self, queue_name):
         return {"messages": 0, "consumers": 1}
+
 
 class ScenarioSpyLLM:
     """A Mock LLM that returns responses based on the Agent Role in the prompt."""
@@ -76,7 +79,7 @@ class ScenarioSpyLLM:
             }
             Observation: File written.
             Final Answer: Script created at hello_world.py
-            """
+            """,
         }
         self.invocations = []
 
@@ -86,11 +89,11 @@ class ScenarioSpyLLM:
 
         # Simple heuristic to detect role from prompt content
         if "Gerente de Projetos" in prompt_str or "Project Manager" in prompt_str:
-             # Logic to return create_task action
-             # In reality, PM creates task via specialized tool or simple memory usage.
-             # Current PM prompt instructions say: "Divide projects", "Assign tasks".
-             # But PM toolset usually includes `add_task` or similar.
-             pass
+            # Logic to return create_task action
+            # In reality, PM creates task via specialized tool or simple memory usage.
+            # Current PM prompt instructions say: "Divide projects", "Assign tasks".
+            # But PM toolset usually includes `add_task` or similar.
+            pass
 
         # Ideally we return a response that triggers the agent's tool.
         # But for this test, we want to simulate the PM *dispatching* logic.
@@ -100,7 +103,8 @@ class ScenarioSpyLLM:
         return "MOCKED RESPONSE"
 
     async def publish_to_exchange(self, *args, **kwargs):
-        pass # Mock exchange publish
+        pass  # Mock exchange publish
+
 
 @pytest.mark.asyncio
 async def test_end_to_end_project_flow(tmp_path):
@@ -129,84 +133,85 @@ async def test_end_to_end_project_flow(tmp_path):
 
     # Mock Tools
 
-    with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
-         patch("app.core.agents.agent_actor.get_broker", new=AsyncMock(return_value=mock_broker)), \
-         patch("app.core.agents.multi_agent_system.get_llm"), \
-         patch("app.config.settings.WORKSPACE_ROOT", str(workspace_dir)):
+    with (
+        patch(
+            "app.core.infrastructure.message_broker.get_broker",
+            new=AsyncMock(return_value=mock_broker),
+        ),
+        patch("app.core.agents.agent_actor.get_broker", new=AsyncMock(return_value=mock_broker)),
+        patch("app.core.agents.multi_agent_system.get_llm"),
+        patch("app.config.settings.WORKSPACE_ROOT", str(workspace_dir)),
+    ):
+        # Setup MAS
+        mas = MultiAgentSystem()
+        coder = mas.create_agent(AgentRole.CODER)
+        # Force ID for predictability
+        coder.agent_id = "coder_1"
+        mas.agents["coder_1"] = coder
 
-         # Setup MAS
-         mas = MultiAgentSystem()
-         coder = mas.create_agent(AgentRole.CODER)
-         # Force ID for predictability
-         coder.agent_id = "coder_1"
-         mas.agents["coder_1"] = coder
+        # Mock Coder LLM
+        mock_llm_coder = MagicMock()
+        mock_llm_coder.invoke.return_value.content = coder_response
 
-         # Mock Coder LLM
-         mock_llm_coder = MagicMock()
-         mock_llm_coder.invoke.return_value.content = coder_response
+        # Mock Router to return specific LLM
+        # We need to distinguish calls.
+        # But simpler: just mock the agent's llm attribute after creation.
 
-         # Mock Router to return specific LLM
-         # We need to distinguish calls.
-         # But simpler: just mock the agent's llm attribute after creation.
+        # Mock Router to return specific LLM
+        # We rely on AgentExecutor.ainvoke patch so we don't need to inject LLM
 
-         # Mock Router to return specific LLM
-         # We rely on AgentExecutor.ainvoke patch so we don't need to inject LLM
+        # Let's patch AgentExecutor.ainvoke
+        with patch(
+            "langchain.agents.AgentExecutor.ainvoke", new_callable=AsyncMock
+        ) as mock_ainvoke:
+            # Configure Coder behavior
+            mock_ainvoke.return_value = {"output": "File created", "intermediate_steps": []}
 
+            # Logic:
+            # 1. We start the Coder's Actor (Listener).
+            # 2. We publish a TaskMessage to 'janus.agent.coder'.
+            # 3. We Verify Coder.executor.ainvoke was called.
 
-         # Let's patch AgentExecutor.ainvoke
-         with patch("langchain.agents.AgentExecutor.ainvoke", new_callable=AsyncMock) as mock_ainvoke:
+            # Start Coder Actor (manually to ensure it attaches to mock broker)
+            from app.core.agents.agent_actor import AgentActor
 
-             # Configure Coder behavior
-             mock_ainvoke.return_value = {
-                 "output": "File created",
-                 "intermediate_steps": []
-             }
+            actor = AgentActor(coder)
+            # Start consumer
+            await actor.start()
 
-             # Logic:
-             # 1. We start the Coder's Actor (Listener).
-             # 2. We publish a TaskMessage to 'janus.agent.coder'.
-             # 3. We Verify Coder.executor.ainvoke was called.
+            # Create a Task
+            task = Task(description="Write hello.py", assigned_to="coder_1")
+            mas.workspace.add_task(task)
 
-             # Start Coder Actor (manually to ensure it attaches to mock broker)
-             from app.core.agents.agent_actor import AgentActor
-             actor = AgentActor(coder)
-             # Start consumer
-             await actor.start()
+            # Dispatch (this calls broker.publish)
+            await mas.dispatch_task(task)
 
-             # Create a Task
-             task = Task(description="Write hello.py", assigned_to="coder_1")
-             mas.workspace.add_task(task)
+            # Broker should have simulated delivery to callback (actor._process_message)
+            # This is async, give it a tick
+            await asyncio.sleep(0.1)
 
-             # Dispatch (this calls broker.publish)
-             await mas.dispatch_task(task)
+            # Verification
+            # Check if Coder LLM (AgentExecutor) was invoked with the task description
+            assert mock_ainvoke.called
+            args, _ = mock_ainvoke.call_args
+            input_data = args[0]
+            assert "Write hello.py" in str(input_data)
 
-             # Broker should have simulated delivery to callback (actor._process_message)
-             # This is async, give it a tick
-             await asyncio.sleep(0.1)
+            print("SUCCESS: Coder Agent received task and invoked LLM.")
 
-             # Verification
-             # Check if Coder LLM (AgentExecutor) was invoked with the task description
-             assert mock_ainvoke.called
-             args, _ = mock_ainvoke.call_args
-             input_data = args[0]
-             assert "Write hello.py" in str(input_data)
+            # Now testing Tool Execution separately (Integration level)
+            # Verify write_file tool works in this environment
+            from app.core.tools.filesystem_tools import write_file
 
-             print("SUCCESS: Coder Agent received task and invoked LLM.")
+            # Test write_file
+            write_file.invoke(
+                {"file_path": "test_env.txt", "content": "Environment Active", "overwrite": True}
+            )
 
-             # Now testing Tool Execution separately (Integration level)
-             # Verify write_file tool works in this environment
-             from app.core.tools.filesystem_tools import write_file
+            assert (workspace_dir / "test_env.txt").exists()
+            assert (workspace_dir / "test_env.txt").read_text() == "Environment Active"
+            print("SUCCESS: Filesystem Tools are working.")
 
-             # Test write_file
-             write_file.invoke({
-                "file_path": "test_env.txt",
-                "content": "Environment Active",
-                "overwrite": True
-             })
-
-             assert (workspace_dir / "test_env.txt").exists()
-             assert (workspace_dir / "test_env.txt").read_text() == "Environment Active"
-             print("SUCCESS: Filesystem Tools are working.")
 
 if __name__ == "__main__":
     asyncio.run(test_end_to_end_project_flow(Path("./tmp_test")))

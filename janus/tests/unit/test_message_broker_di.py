@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -15,6 +14,7 @@ class MockSettings:
     RABBITMQ_QUEUE_CONFIG = {}
     BROKER_USE_MSGPACK = True
 
+
 @pytest.mark.asyncio
 async def test_message_broker_di_connect():
     """
@@ -30,14 +30,19 @@ async def test_message_broker_di_connect():
     expected_url = f"amqp://{mock_settings.RABBITMQ_USER}:{mock_settings.RABBITMQ_PASSWORD}@{mock_settings.RABBITMQ_HOST}:{mock_settings.RABBITMQ_PORT}/"
     mock_factory.assert_called_once()
     call_args = mock_factory.call_args
-    assert call_args[0][0] == expected_url, f"Expected URL {expected_url}, but got {call_args[0][0]}"
+    assert (
+        call_args[0][0] == expected_url
+    ), f"Expected URL {expected_url}, but got {call_args[0][0]}"
+
 
 @pytest.mark.asyncio
 async def test_message_broker_di_defaults():
     """
     Verify that MessageBroker falls back to global settings and default factory if no config is provided.
     """
-    with patch("app.core.infrastructure.message_broker.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+    with patch(
+        "app.core.infrastructure.message_broker.aio_pika.connect_robust", new_callable=AsyncMock
+    ) as mock_connect:
         # Patch global settings to ensure we are testing defaults
         with patch("app.core.infrastructure.message_broker.settings") as global_settings:
             global_settings.RABBITMQ_USER = "global_user"

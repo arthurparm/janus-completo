@@ -8,6 +8,11 @@ from uuid import uuid4
 import structlog
 from fastapi import Request
 
+from app.core.exceptions.chat_exceptions import (
+    ChatServiceError,
+    ConversationNotFoundError,
+    MessageTooLargeError,
+)
 from app.core.infrastructure.message_broker import get_broker
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.llm_manager import _provider_pricing  # type: ignore
@@ -20,24 +25,18 @@ from app.core.monitoring.chat_metrics import (
 )
 from app.core.ui.generative_ui import extract_ui_block
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
-from app.core.exceptions.chat_exceptions import (
-    ChatServiceError,
-    ConversationNotFoundError,
-    MessageTooLargeError,
-    PromptBuildError,
-)
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
-from app.services.llm_service import LLMService, LLMServiceError
+from app.services.chat_agent_loop import ChatAgentLoop
+
+# New modular services
+from app.services.chat_command_handler import ChatCommandHandler
+from app.services.chat_event_publisher import ChatEventPublisher
+from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
-
-# New modular services
-from app.services.chat_command_handler import ChatCommandHandler
-from app.services.chat_event_publisher import ChatEventPublisher
-from app.services.chat_agent_loop import ChatAgentLoop
 
 logger = structlog.get_logger(__name__)
 
@@ -414,7 +413,9 @@ class ChatService:
             return result_with_conv
 
         # Intercepta solicitaÇõÇœes de criaÇõÇœo de ferramentas
-        if self._prompt_service.is_tool_request(message) and self._is_explicit_tool_creation(message):
+        if self._prompt_service.is_tool_request(message) and self._is_explicit_tool_creation(
+            message
+        ):
             start_t = _time.time()
             if not self._tools:
                 assistant_text = "Tool creation is unavailable: tool service is not configured."
@@ -1433,8 +1434,6 @@ class ChatService:
         import json
         import time as _time
 
-        from app.core.infrastructure.message_broker import get_broker
-
         yield "event: connected\ndata: {}\n\n"
 
         broker = await get_broker()
@@ -1489,11 +1488,7 @@ class ChatService:
                     if user_id and evt_user and str(evt_user) != str(user_id):
                         continue
 
-                    event_type = (
-                        payload.get("event_type")
-                        or payload.get("type")
-                        or "unknown"
-                    )
+                    event_type = payload.get("event_type") or payload.get("type") or "unknown"
                     agent_role = payload.get("agent_role") or payload.get("agent") or "unknown"
 
                     sse_event = {

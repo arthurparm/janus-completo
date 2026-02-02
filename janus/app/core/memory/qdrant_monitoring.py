@@ -274,20 +274,22 @@ class QdrantMonitoringService:
                 "total_checks": self._total_checks,
                 "error_count": self._error_count,
                 "recovery_count": self._recovery_count,
-                "last_health_check": self._last_health_check.isoformat()
-                if self._last_health_check
-                else None,
-                "last_recovery_attempt": self._last_recovery_attempt.isoformat()
-                if self._last_recovery_attempt
-                else None,
+                "last_health_check": (
+                    self._last_health_check.isoformat() if self._last_health_check else None
+                ),
+                "last_recovery_attempt": (
+                    self._last_recovery_attempt.isoformat() if self._last_recovery_attempt else None
+                ),
                 "check_interval": self.check_interval,
                 "is_monitoring": self._is_monitoring,
             },
             "response_times": {
                 "recent": self._response_times[-20:],  # Last 20 response times
-                "average": sum(self._response_times) / len(self._response_times)
-                if self._response_times
-                else 0,
+                "average": (
+                    sum(self._response_times) / len(self._response_times)
+                    if self._response_times
+                    else 0
+                ),
                 "min": min(self._response_times) if self._response_times else 0,
                 "max": max(self._response_times) if self._response_times else 0,
             },

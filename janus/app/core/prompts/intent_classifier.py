@@ -4,7 +4,6 @@ Extracted from prompt_builder_service.py to separate logic from prompt content.
 """
 
 import logging
-from typing import Any
 
 from app.core.prompts.types import IntentType
 

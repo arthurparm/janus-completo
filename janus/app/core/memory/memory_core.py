@@ -1,23 +1,21 @@
 import asyncio
-import time
 import uuid
-from typing import Any
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from qdrant_client import models
 
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.infrastructure.resilience import CircuitBreaker
+from app.core.memory.local_cache import MemoryLocalCache
 from app.core.memory.metrics import (
     memory_operations_total,
     memory_quota_rejections_total,
 )
-from app.core.memory.security import redact_pii, encrypt_text, decrypt_text
-from app.core.memory.local_cache import MemoryLocalCache
 from app.core.memory.providers.qdrant_provider import QdrantProvider
+from app.core.memory.security import decrypt_text, encrypt_text, redact_pii
 from app.models.schemas import Experience, ScoredExperience
 
 logger = structlog.get_logger(__name__)

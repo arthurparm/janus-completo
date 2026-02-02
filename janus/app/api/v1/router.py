@@ -4,6 +4,7 @@ from app.api.v1.endpoints.workspace import router as workspace_router
 from app.config import settings  # Added settings for feature flag
 
 from .endpoints import (
+    admin_config,
     agent,
     assistant,
     auth,
@@ -30,7 +31,6 @@ from .endpoints import (
     profiles,
     rag,
     reflexion,
-    admin_config,
     sandbox,
     system_overview,
     system_status,

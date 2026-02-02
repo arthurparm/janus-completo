@@ -7,10 +7,9 @@ import structlog
 from qdrant_client import models
 
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.monitoring.document_metrics import get_metrics_recorder
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.observability_repository import record_audit_event_direct
-from app.core.exceptions.document_exceptions import QuotaExceededError
-from app.core.monitoring.document_metrics import get_metrics_recorder
 from app.services.document_parser_service import DocumentParserService
 
 try:
@@ -140,6 +139,7 @@ class DocumentIngestionService:
         # Check quota
         try:
             from qdrant_client import models as _models
+
             from app.config import settings
 
             max_points_user = int(

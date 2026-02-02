@@ -3,14 +3,15 @@
 Quick benchmark comparing OLD vs NEW prompt systems.
 Run inside Docker: docker exec janus_api python /app/test_benchmark.py
 """
+
 import asyncio
 import sys
 
 sys.path.insert(0, "/app")
 
-from app.services.prompt_builder_service import PromptBuilderService
 from app.core.prompts.context import ConversationContext, Message
 from app.core.prompts.intent_classifier import IntentClassifier
+from app.services.prompt_builder_service import PromptBuilderService
 from app.services.prompt_composer_service import get_prompt_composer
 
 # Sample messages

@@ -13,8 +13,12 @@ async def _create_min_graph(db):
         await tx.run("MERGE (:Concept {name: 'A'})")
         await tx.run("MERGE (:Concept {name: 'B'})")
         await tx.run("MERGE (:Concept {name: 'C'})")
-        await tx.run("MATCH (a:Concept {name:'A'}), (b:Concept {name:'B'}) MERGE (a)-[:RELATES_TO {w:1}]->(b)")
-        await tx.run("MATCH (a:Concept {name:'A'}), (b:Concept {name:'B'}) MERGE (a)-[:RELATES_TO {w:1}]->(b)")
+        await tx.run(
+            "MATCH (a:Concept {name:'A'}), (b:Concept {name:'B'}) MERGE (a)-[:RELATES_TO {w:1}]->(b)"
+        )
+        await tx.run(
+            "MATCH (a:Concept {name:'A'}), (b:Concept {name:'B'}) MERGE (a)-[:RELATES_TO {w:1}]->(b)"
+        )
         await tx.commit()
 
 
@@ -53,8 +57,12 @@ async def test_dedupe_files_functions_classes_integration():
         await tx.run("MERGE (:Function {name:'f', file_path:'/x.py'})")
         await tx.run("MERGE (:Class {name:'C', file_path:'/x.py'})")
         await tx.run("MERGE (:Class {name:'C', file_path:'/x.py'})")
-        await tx.run("MATCH (f:Function {name:'f', file_path:'/x.py'}), (g:Function {name:'f', file_path:'/x.py'}) MERGE (f)-[:CALLS]->(g)")
-        await tx.run("MATCH (c:Class {name:'C', file_path:'/x.py'}), (p:Class {name:'C', file_path:'/x.py'}) MERGE (c)-[:IMPLEMENTS]->(p)")
+        await tx.run(
+            "MATCH (f:Function {name:'f', file_path:'/x.py'}), (g:Function {name:'f', file_path:'/x.py'}) MERGE (f)-[:CALLS]->(g)"
+        )
+        await tx.run(
+            "MATCH (c:Class {name:'C', file_path:'/x.py'}), (p:Class {name:'C', file_path:'/x.py'}) MERGE (c)-[:IMPLEMENTS]->(p)"
+        )
         await tx.commit()
     repo = KnowledgeRepository(db)
     t0 = time.time()
@@ -69,7 +77,9 @@ async def test_dedupe_files_functions_classes_integration():
     assert elapsed_f < 0.5
     files = await db.query("MATCH (f:File) RETURN count(f) as cnt")
     assert files[0]["cnt"] == 1
-    funcs = await db.query("MATCH (f:Function {name:'f', file_path:'/x.py'}) RETURN count(f) as cnt")
+    funcs = await db.query(
+        "MATCH (f:Function {name:'f', file_path:'/x.py'}) RETURN count(f) as cnt"
+    )
     assert funcs[0]["cnt"] == 1
     classes = await db.query("MATCH (c:Class {name:'C', file_path:'/x.py'}) RETURN count(c) as cnt")
     assert classes[0]["cnt"] == 1

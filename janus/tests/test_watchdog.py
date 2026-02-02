@@ -8,17 +8,14 @@ def test_watchdog_logic():
     # Reset singleton interaction
     Watchdog._instance = None
 
-    with patch("threading.Thread"), \
-         patch("app.core.monitoring.watchdog.logger"), \
-         patch("os._exit"):
-
+    with patch("threading.Thread"), patch("app.core.monitoring.watchdog.logger"), patch("os._exit"):
         wd = Watchdog.get_instance()
         wd.register_component("test_component", timeout_seconds=0.1)
         wd._running = True
 
         # 1. Start - assume alive
         time.sleep(0.05)
-        wd._monitor_loop_single_pass = lambda: None # Helper to run body once?
+        wd._monitor_loop_single_pass = lambda: None  # Helper to run body once?
         # Actually _monitor_loop is infinite. We can just call the body logic extracted?
         # Or simpler:
 
@@ -33,21 +30,22 @@ def test_watchdog_logic():
         assert (time.time() - last_time) < 0.1
 
         # Case B: Frozen
-        wd._heartbeats["test_component"] = time.time() - 1.0 # 1s ago (limit 0.1)
+        wd._heartbeats["test_component"] = time.time() - 1.0  # 1s ago (limit 0.1)
 
         # Run one iteration of the loop logic manually
         # Extracted logic for testing:
         for name, last_time in wd._heartbeats.items():
             if time.time() - last_time > wd._thresholds[name]:
-                 # Verify we would log critical
-                 # mock_logger.critical is a MagicMock
-                 pass
+                # Verify we would log critical
+                # mock_logger.critical is a MagicMock
+                pass
 
         # Verify call happened?
         # Note: We didn't actually CALL checking logic in the test, we just iterated manually?
         # Let's call a method if we had one.
         # Since logic is in private _monitor_loop, let's just test state tracking works (beat updates time).
         pass
+
 
 def test_watchdog_beat():
     Watchdog._instance = None

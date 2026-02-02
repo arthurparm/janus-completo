@@ -51,9 +51,9 @@ async def process_thinker_task(task: TaskMessage) -> None:
         # com prioridade máxima, e assumimos que a config do LLM (DeepSeek) está lá.
         result = await llm_service.invoke_llm(
             prompt=prompt,
-            role=ModelRole.ORCHESTRATOR, # Idealmente seria um novo ModelRole.REASONING
+            role=ModelRole.ORCHESTRATOR,  # Idealmente seria um novo ModelRole.REASONING
             priority=ModelPriority.HIGH_QUALITY,
-            timeout_seconds=600, # Raciocínio pode demorar
+            timeout_seconds=600,  # Raciocínio pode demorar
         )
         plan = result.get("response", "")
 
@@ -89,7 +89,7 @@ async def start_thinker_agent_worker():
     consumer_task = broker.start_consumer(
         queue_name=QueueName.TASKS_AGENT_THINKER.value,
         callback=process_thinker_task,
-        prefetch_count=3, # Menor prefetch pois tasks demoram mais
+        prefetch_count=3,  # Menor prefetch pois tasks demoram mais
     )
     logger.info("✓ Thinker Agent Worker iniciado.")
     return consumer_task

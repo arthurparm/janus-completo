@@ -47,4 +47,3 @@ Tratar as saídas como módulos tipados para facilitar o parseamento futuro e ve
    * Confirmar que o modelo utilizado foi DeepSeek (ou o definido como Fast).
 
    * Confirmar que o JSON foi parseado corretamente mesmo se o modelo incluir "textos extras".
-

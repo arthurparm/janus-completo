@@ -9,13 +9,21 @@ class FakeBroker:
     def __init__(self):
         self.published = []
 
-    async def publish(self, queue_name: str, message: str, priority: int | None = None, headers: dict | None = None):
-        self.published.append({
-            "queue": queue_name,
-            "message": message,
-            "priority": priority,
-            "headers": headers,
-        })
+    async def publish(
+        self,
+        queue_name: str,
+        message: str,
+        priority: int | None = None,
+        headers: dict | None = None,
+    ):
+        self.published.append(
+            {
+                "queue": queue_name,
+                "message": message,
+                "priority": priority,
+                "headers": headers,
+            }
+        )
 
 
 @pytest.mark.asyncio
@@ -24,8 +32,10 @@ async def test_router_side_publishes_consolidation(monkeypatch):
     import app.core.workers.router_worker as rw
 
     fake_broker = FakeBroker()
+
     async def fake_get_broker():
         return fake_broker
+
     monkeypatch.setattr(rw, "get_broker", fake_get_broker)
 
     # Build TaskState that should trigger knowledge consolidation
@@ -48,6 +58,7 @@ async def test_router_side_publishes_consolidation(monkeypatch):
     assert len(fake_broker.published) >= 1
     pub = fake_broker.published[0]
     from app.models.schemas import QueueName
+
     assert pub["queue"] == QueueName.KNOWLEDGE_CONSOLIDATION.value
 
     # Assert payload is a TaskMessage JSON with mode single and content present

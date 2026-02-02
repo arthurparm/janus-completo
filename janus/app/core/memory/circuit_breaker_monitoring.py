@@ -308,13 +308,13 @@ class CircuitBreakerAnalytics:
         )
 
         return {
-            "error_rate_trend": "increasing"
-            if recent_avg_error_rate > older_avg_error_rate
-            else "decreasing",
+            "error_rate_trend": (
+                "increasing" if recent_avg_error_rate > older_avg_error_rate else "decreasing"
+            ),
             "error_rate_change": recent_avg_error_rate - older_avg_error_rate,
-            "response_time_trend": "increasing"
-            if recent_avg_response_time > older_avg_response_time
-            else "decreasing",
+            "response_time_trend": (
+                "increasing" if recent_avg_response_time > older_avg_response_time else "decreasing"
+            ),
             "response_time_change": recent_avg_response_time - older_avg_response_time,
             "recent_error_rate": recent_avg_error_rate,
             "older_error_rate": older_avg_error_rate,
@@ -450,11 +450,9 @@ class CircuitBreakerMonitoringService:
         return {
             "circuit_breaker_name": circuit_breaker_name,
             "health_score": health_score,
-            "status": "healthy"
-            if health_score > 70
-            else "degraded"
-            if health_score > 30
-            else "critical",
+            "status": (
+                "healthy" if health_score > 70 else "degraded" if health_score > 30 else "critical"
+            ),
             "failure_analysis": failure_analysis,
             "active_alerts": len(active_alerts),
             "critical_alerts": len(

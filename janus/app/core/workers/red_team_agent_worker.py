@@ -1,7 +1,7 @@
 import logging
 
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.infrastructure.message_broker import get_broker
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState, TaskStateEvent
@@ -12,15 +12,18 @@ from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
+
 async def _build_security_prompt(goal: str, context: str, code_snippets: dict) -> str:
     code_block = "\n".join([f"Arquivo: {k}\n{v}" for k, v in code_snippets.items()])
     if not code_block:
-        code_block = context # Fallback se snippets não estiverem estruturados
+        code_block = context  # Fallback se snippets não estiverem estruturados
 
     return await get_formatted_prompt("security_red_team_audit", goal=goal, code_block=code_block)
 
+
 def _is_vulnerable(text: str) -> bool:
     return "VULNERABLE" in text.upper()
+
 
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_AGENT_RED_TEAM.value,
@@ -44,11 +47,13 @@ async def process_red_team_task(task: TaskMessage) -> None:
         # Se não houver código, passa direto
         if not code_snippets and "def " not in context and "class " not in context:
             logger.info("Nenhum código detectado para auditoria. Aprovando automaticamente.")
-            state.history.append(TaskStateEvent(
-                agent_role="red_team",
-                action="security_audit_passed",
-                notes="Skipped: No code found.",
-            ))
+            state.history.append(
+                TaskStateEvent(
+                    agent_role="red_team",
+                    action="security_audit_passed",
+                    notes="Skipped: No code found.",
+                )
+            )
             state.next_agent_role = "professor"
             await collab_service.pass_task(state)
             return
@@ -63,29 +68,33 @@ async def process_red_team_task(task: TaskMessage) -> None:
                 prompt=prompt,
                 role=ModelRole.SECURITY_AUDITOR,
                 priority=ModelPriority.LOCAL_ONLY,
-                timeout_seconds=120
+                timeout_seconds=120,
             )
             response_text = response_dict.get("response", "")
             reasoning = response_dict.get("reasoning", None)
 
             if _is_vulnerable(response_text):
                 logger.warning(f"VULNERABILIDADE DETECTADA na tarefa {state.task_id}!")
-                state.history.append(TaskStateEvent(
-                    agent_role="red_team",
-                    action="security_audit_failed",
-                    notes=response_text[:1000], # Trucate logs
-                    reasoning=reasoning
-                ))
+                state.history.append(
+                    TaskStateEvent(
+                        agent_role="red_team",
+                        action="security_audit_failed",
+                        notes=response_text[:1000],  # Trucate logs
+                        reasoning=reasoning,
+                    )
+                )
                 state.data_payload.security_feedback = f"[RED TEAM FEEDBACK]\n{response_text}"
                 state.next_agent_role = "coder"
             else:
                 logger.info(f"Código aprovado pelo Red Team na tarefa {state.task_id}.")
-                state.history.append(TaskStateEvent(
-                    agent_role="red_team",
-                    action="security_audit_passed",
-                    notes=response_text[:500],
-                    reasoning=reasoning
-                ))
+                state.history.append(
+                    TaskStateEvent(
+                        agent_role="red_team",
+                        action="security_audit_passed",
+                        notes=response_text[:500],
+                        reasoning=reasoning,
+                    )
+                )
                 state.next_agent_role = "professor"
 
             await collab_service.pass_task(state)
@@ -93,11 +102,13 @@ async def process_red_team_task(task: TaskMessage) -> None:
         except Exception as e:
             logger.error(f"Falha na auditoria de segurança: {e}")
             # Fail closed: reject
-            state.history.append(TaskStateEvent(
-                agent_role="red_team",
-                action="security_audit_failed_error",
-                notes=f"System error: {str(e)}",
-            ))
+            state.history.append(
+                TaskStateEvent(
+                    agent_role="red_team",
+                    action="security_audit_failed_error",
+                    notes=f"System error: {str(e)}",
+                )
+            )
             state.data_payload.security_feedback = f"[SYSTEM ERROR] Security audit failed: {e}"
             state.next_agent_role = "coder"
             await collab_service.pass_task(state)
@@ -105,6 +116,7 @@ async def process_red_team_task(task: TaskMessage) -> None:
     except Exception as e:
         logger.error(f"Erro crítico no RedTeamAgentWorker: {e}", exc_info=True)
         raise
+
 
 async def start_red_team_agent_worker():
     logger.info("Iniciando Red Team Agent Worker...")

@@ -439,7 +439,7 @@ async def rag_user_chat_search_v2(
         res = []
     try:
         _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(res or []))
-        for r in (getattr(res, "points", res) or []):
+        for r in getattr(res, "points", res) or []:
             s = float(getattr(r, "score", 0.0) or 0.0)
             _RAG_SCORES.labels("user_chat_v2").observe(max(0.0, min(1.0, s)))
     except Exception:

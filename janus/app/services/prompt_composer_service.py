@@ -5,10 +5,9 @@ Replaces monolithic prompt_builder_service with efficient, composable architectu
 
 import logging
 from functools import lru_cache
-from typing import Any
 
 from app.core.prompts.base import PromptModule
-from app.core.prompts.context import ConversationContext, Message
+from app.core.prompts.context import ConversationContext
 from app.core.prompts.intent_classifier import IntentClassifier
 from app.core.prompts.modules import (
     ContextCompressionModule,

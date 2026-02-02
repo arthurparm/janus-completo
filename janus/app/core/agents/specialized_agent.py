@@ -6,24 +6,23 @@ from typing import Any
 
 from langchain_core.prompts import PromptTemplate
 
+from app.core.agents.metrics import (
+    ACTIVE_AGENTS_GAUGE,
+    AGENT_TASK_DURATION,
+    AGENT_TASKS_COUNTER,
+)
+from app.core.agents.structures import AgentRole, Task, TaskStatus
+from app.core.agents.utils import (
+    AgentEventCallbackHandler,
+    _clean_json_output,
+    _create_tool_wrapper,
+)
+from app.core.agents.workspace import SharedWorkspace
+from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm
 from app.core.tools import get_all_tools
 from app.core.tools.action_module import PermissionLevel, action_registry
 from app.repositories.agent_config_repository import AgentConfigRepository
-
-from app.core.agents.structures import AgentRole, Task, TaskStatus
-from app.core.agents.workspace import SharedWorkspace
-from app.core.agents.metrics import (
-    AGENT_TASKS_COUNTER,
-    AGENT_TASK_DURATION,
-    ACTIVE_AGENTS_GAUGE,
-)
-from app.core.agents.utils import (
-    _create_tool_wrapper,
-    _clean_json_output,
-    AgentEventCallbackHandler,
-)
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
 
 logger = logging.getLogger(__name__)
 

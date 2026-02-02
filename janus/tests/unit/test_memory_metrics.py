@@ -8,6 +8,7 @@ def test_no_duplicate_metric_registration(monkeypatch):
     Verify that creating multiple MemoryCore instances does not cause
     duplicate Prometheus metric registration errors.
     """
+
     # Patch the Qdrant client to avoid real network calls
     class DummyQdrantClient:
         async def get_collection(self, *args, **kwargs):
@@ -17,6 +18,7 @@ def test_no_duplicate_metric_registration(monkeypatch):
             pass
 
     import app.core.memory.memory_core as memory_module
+
     monkeypatch.setattr(memory_module, "AsyncQdrantClient", lambda *a, **k: DummyQdrantClient())
 
     from app.core.memory.memory_core import MemoryCore

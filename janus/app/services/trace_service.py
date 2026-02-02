@@ -1,17 +1,20 @@
 import json
 from typing import Any, List, Optional
+
 import structlog
-from fastapi import Request, Depends
+from fastapi import Depends
 
 from app.services.observability_service import ObservabilityService, get_observability_service
 
 logger = structlog.get_logger(__name__)
+
 
 class TraceService:
     """
     Service responsible for retrieving and formatting agent execution traces.
     It acts as a layer above ObservabilityService to provide specialized views for the frontend.
     """
+
     def __init__(self, observability_service: ObservabilityService):
         self._obs = observability_service
 
@@ -28,9 +31,9 @@ class TraceService:
             start_ts=None,
             end_ts=None,
             endpoint=endpoint,
-            limit=500
+            limit=500,
         )
-        
+
         # Sort by timestamp ascending to reconstruct the timeline
         events.sort(key=lambda x: x.get("created_at") or 0)
 
@@ -49,7 +52,7 @@ class TraceService:
         details_str = event.get("details_json")
         if not details_str:
             return None
-        
+
         try:
             payload = json.loads(details_str)
         except Exception:
@@ -59,17 +62,18 @@ class TraceService:
         return {
             "stepId": str(event.get("id")),
             "timestamp": event.get("created_at"),
-            "agent": event.get("tool"), # agent_role
-            "type": event.get("action"), # event_type (e.g. AgentThinking, AgentAction)
+            "agent": event.get("tool"),  # agent_role
+            "type": event.get("action"),  # event_type (e.g. AgentThinking, AgentAction)
             "content": payload.get("content"),
             "metadata": {
-                 "task_id": payload.get("task_id"),
-                 "trace_id": event.get("trace_id"),
-                 "model": payload.get("model")
-            }
+                "task_id": payload.get("task_id"),
+                "trace_id": event.get("trace_id"),
+                "model": payload.get("model"),
+            },
         }
 
+
 def get_trace_service(
-    observability_service: ObservabilityService = Depends(get_observability_service)
+    observability_service: ObservabilityService = Depends(get_observability_service),
 ) -> TraceService:
     return TraceService(observability_service)

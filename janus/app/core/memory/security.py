@@ -1,7 +1,8 @@
-import re
-import hashlib
 import base64
+import hashlib
+import re
 from typing import Any
+
 from app.config import settings
 
 # --- PII Patterns ---
@@ -19,9 +20,17 @@ _PII_PATTERNS = [
     (re.compile(r"\b\d{14}\b"), "CNPJ", "[REDACTED_CNPJ]"),
     (re.compile(r"\b(?:\d[ \-]*?){13,16}\b"), "CARD", "[REDACTED_CARD]"),
     # IPv4 (Internal/Private ranges primarily)
-    (re.compile(r"\b(?:192\.168\.|10\.|172\.(?:1[6-9]|2[0-9]|3[0-1]))(?:\.\d{1,3}){2}\b"), "IP_INTERNAL", "[REDACTED_IP]"),
+    (
+        re.compile(r"\b(?:192\.168\.|10\.|172\.(?:1[6-9]|2[0-9]|3[0-1]))(?:\.\d{1,3}){2}\b"),
+        "IP_INTERNAL",
+        "[REDACTED_IP]",
+    ),
     # Private Keys (PEM header)
-    (re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----", re.IGNORECASE), "PRIVATE_KEY", "[REDACTED_KEY]"),
+    (
+        re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----", re.IGNORECASE),
+        "PRIVATE_KEY",
+        "[REDACTED_KEY]",
+    ),
 ]
 
 
@@ -33,7 +42,7 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
     """
     if not text or not isinstance(text, str):
         return text, []
-        
+
     types: list[str] = []
     redacted = text
     for pat, name, repl in _PII_PATTERNS:
@@ -41,6 +50,7 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
             types.append(name)
             redacted = pat.sub(repl, redacted)
     return redacted, types
+
 
 def redact_pii_text_only(text: str) -> str:
     """Wrapper para retornar apenas o texto, útil para logs."""

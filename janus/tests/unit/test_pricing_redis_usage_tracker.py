@@ -11,4 +11,3 @@ def test_register_usage_updates_provider_and_tenant_spend(monkeypatch):
     assert pricing._provider_spend_usd["openai"] == 1.5
     assert pricing._tenant_user_spend_usd["user-1"]["usd"] == 1.5
     assert pricing._tenant_project_spend_usd["project-1"]["usd"] == 1.5
-

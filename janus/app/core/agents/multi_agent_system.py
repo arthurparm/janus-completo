@@ -7,15 +7,14 @@ trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 
 import asyncio
 import logging
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from app.config import settings
-from app.core.tools.os_tools import register_os_tools
-
-from app.core.agents.structures import AgentRole, Task, TaskStatus, TaskPriority
-from app.core.agents.workspace import SharedWorkspace
 from app.core.agents.specialized_agent import SpecializedAgent
+from app.core.agents.structures import AgentRole, Task, TaskPriority, TaskStatus
+from app.core.agents.workspace import SharedWorkspace
+from app.core.tools.os_tools import register_os_tools
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,9 @@ class MultiAgentSystem:
     async def create_agent(self, role: AgentRole) -> SpecializedAgent:
         """Cria um novo agente especializado e seu ator correspondente (ASYNC)."""
         agent = SpecializedAgent(role, self.workspace)
-        await agent._initialize_agent()  # Accessing protected method since we are friend class/system
+        await (
+            agent._initialize_agent()
+        )  # Accessing protected method since we are friend class/system
 
         self.agents[agent.agent_id] = agent
 

@@ -12,8 +12,8 @@ from typing import Any
 
 import structlog
 
-from app.core.llm.router import ModelPriority, ModelRole, get_llm
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.llm.router import ModelPriority, ModelRole, get_llm
 
 logger = structlog.get_logger(__name__)
 

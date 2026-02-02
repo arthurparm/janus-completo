@@ -21,33 +21,31 @@ except ImportError:
 
 from prometheus_client import Counter, Gauge, Histogram
 
-from app.core.agents.meta_agent_module.schemas import (
-    IssueSeverity,
-    IssueCategory,
-    DetectedIssue,
-    Recommendation,
-    StateReport,
-    AgentState,
-    ReflexionAnalysisSchema,
-    DiagnosisSchema,
-    PlanSchema,
-    CritiqueSchema,
-    safe_issue_severity,
-    safe_issue_category,
-)
 from app.core.agents.meta_agent_module.graph_builder import MetaAgentGraphBuilder
-from app.core.memory.working_memory import get_working_memory
+from app.core.agents.meta_agent_module.schemas import (
+    AgentState,
+    CritiqueSchema,
+    DetectedIssue,
+    DiagnosisSchema,
+    IssueCategory,
+    IssueSeverity,
+    PlanSchema,
+    Recommendation,
+    ReflexionAnalysisSchema,
+    StateReport,
+    safe_issue_category,
+    safe_issue_severity,
+)
 from app.core.agents.meta_agent_module.tools import (
     analyze_memory_for_failures,
-    get_system_health_metrics,
     analyze_performance_trends,
     get_resource_usage,
+    get_system_health_metrics,
 )
-
 from app.core.agents.utils import parse_json_strict
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
-from app.core.monitoring.health_monitor import get_health_monitor
+from app.core.memory.working_memory import get_working_memory
 
 logger = logging.getLogger(__name__)
 
@@ -464,48 +462,48 @@ class MetaAgent:
                 analysis_data = await structured_llm.ainvoke(prompt)
                 analysis_dict = (
                     analysis_data.model_dump()
-                    if hasattr(analysis_data, 'model_dump')
+                    if hasattr(analysis_data, "model_dump")
                     else analysis_data
                 )
             else:
                 response = await llm.ainvoke(prompt)
                 raw_text = self._extract_response_text(response)
                 analysis_dict = self._parse_json_response(raw_text)
-            
+
             if not isinstance(analysis_dict, dict):
                 analysis_dict = {}
-            
-            root_cause = str(analysis_dict.get('root_cause') or 'Unknown root cause')
-            error_type = str(analysis_dict.get('error_type') or 'unknown')
-            actionable_insights = analysis_dict.get('actionable_insights')
+
+            root_cause = str(analysis_dict.get("root_cause") or "Unknown root cause")
+            error_type = str(analysis_dict.get("error_type") or "unknown")
+            actionable_insights = analysis_dict.get("actionable_insights")
             if not isinstance(actionable_insights, list):
                 actionable_insights = (
                     [str(actionable_insights)]
-                    if actionable_insights not in (None, '')
-                    else ['Provide structured JSON output for reflexion analysis.']
+                    if actionable_insights not in (None, "")
+                    else ["Provide structured JSON output for reflexion analysis."]
                 )
-            
+
             # 2. Armazenar na Memoria de Trabalho (Curto Prazo)
             wm = get_working_memory()
             wm.add(
-                type='reflexion',
+                type="reflexion",
                 content=f"Failure Analysis: {root_cause}. Insights: {actionable_insights}",
                 metadata={
-                    'error_type': error_type,
-                    'cycle_id': state.get('cycle_id'),
-                    'retry_count': retry_count
-                }
+                    "error_type": error_type,
+                    "cycle_id": state.get("cycle_id"),
+                    "retry_count": retry_count,
+                },
             )
-            
+
             # 3. Atualizar Estado
             return {
-                'error_analysis': {
-                    'root_cause': root_cause,
-                    'error_type': error_type,
-                    'actionable_insights': actionable_insights,
+                "error_analysis": {
+                    "root_cause": root_cause,
+                    "error_type": error_type,
+                    "actionable_insights": actionable_insights,
                 },
-                'status': 'retry',
-                'retry_count': retry_count + 1,
+                "status": "retry",
+                "retry_count": retry_count + 1,
                 # Atualiza o diagnostico para o proximo planejamento considerar os insights
                 "diagnosis": f"Previous Failure: {root_cause}. Fix: {actionable_insights}",
             }
@@ -513,9 +511,9 @@ class MetaAgent:
             logger.error(f"Reflexion failed: {e}")
             # Se a reflexão falhar, apenas incrementa retry e tenta novamente (ou desiste)
             return {
-                "status": "retry", 
+                "status": "retry",
                 "retry_count": retry_count + 1,
-                "execution_error": f"{error_msg} | Reflexion failed: {e}"
+                "execution_error": f"{error_msg} | Reflexion failed: {e}",
             }
 
     # --- Helpers ---

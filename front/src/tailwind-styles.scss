@@ -7,39 +7,39 @@
   .glass {
     @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-xl;
   }
-  
+
   .glass-dark {
     @apply bg-dark-800/40 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl;
   }
-  
+
   .glass-card {
     @apply bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-sm border border-white/10 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300;
   }
-  
+
   .btn-primary {
     @apply bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105;
   }
-  
+
   .btn-secondary {
     @apply bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105;
   }
-  
+
   .metric-card {
     @apply glass-card p-6 hover:scale-105 transition-transform duration-300;
   }
-  
+
   .chart-container {
     @apply glass-card p-4 h-80;
   }
-  
+
   .text-gradient {
     @apply bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent;
   }
-  
+
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
-  
+
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }

@@ -26,6 +26,7 @@ async def test_meta_agent_initialization():
         assert "analyze_performance_trends" in tool_names
         assert "get_resource_usage" in tool_names
 
+
 def test_get_resource_usage_tool():
     """Test the get_resource_usage tool returns valid structure."""
     result_str = get_resource_usage.invoke({})
@@ -40,6 +41,7 @@ def test_get_resource_usage_tool():
     assert "percent_total" in result["cpu"]
     assert "percent_used" in result["memory"]
 
+
 def test_analyze_performance_trends_tool():
     """Test analyze_performance_trends with injected in-memory data."""
     # Inject mock data
@@ -53,6 +55,7 @@ def test_analyze_performance_trends_tool():
     assert result["average"] > 0
     assert "trend" in result
 
+
 @pytest.mark.asyncio
 async def test_meta_agent_run_cycle_structure():
     """Test that run_analysis_cycle executes and handles flow (mocked LLM)."""
@@ -64,7 +67,7 @@ async def test_meta_agent_run_cycle_structure():
             "health_score": 95,
             "issues": [],
             "recommendations": [],
-            "summary": "System is healthy."
+            "summary": "System is healthy.",
         }
         mock_llm.invoke.return_value = json.dumps(report_mock)
         mock_get_llm.return_value = mock_llm

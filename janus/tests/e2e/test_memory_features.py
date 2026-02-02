@@ -1,4 +1,3 @@
-
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -10,12 +9,15 @@ def test_memory_timeline(api_client, active_conversation):
     msg_content = f"Memory Test Message {datetime.now().timestamp()}"
 
     # Send message to generate memory
-    resp = api_client.post("/chat/message", json={
-        "conversation_id": cid,
-        "message": msg_content,
-        "role": "user",
-        "priority": "fast_and_cheap"
-    })
+    resp = api_client.post(
+        "/chat/message",
+        json={
+            "conversation_id": cid,
+            "message": msg_content,
+            "role": "user",
+            "priority": "fast_and_cheap",
+        },
+    )
     assert resp.status_code == 200
 
     # Wait briefly for async indexing (usually fast, but let's be safe)
@@ -27,11 +29,7 @@ def test_memory_timeline(api_client, active_conversation):
     end_date = (now + timedelta(minutes=5)).isoformat()
 
     # Use params for timeline
-    params = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "limit": 10
-    }
+    params = {"start_date": start_date, "end_date": end_date, "limit": 10}
 
     # The endpoint might return empty if the memory is not yet indexed or if "user_id" is mandatory
     # The default_api_client uses "default_user" or configured user.
@@ -54,10 +52,8 @@ def test_memory_timeline(api_client, active_conversation):
 
     pass
 
+
 def test_memory_timeline_invalid_date(api_client):
-    params = {
-        "start_date": "invalid-date",
-        "end_date": "2023-01-01T00:00:00Z"
-    }
+    params = {"start_date": "invalid-date", "end_date": "2023-01-01T00:00:00Z"}
     resp = api_client.get("/memory/timeline", params=params)
     assert resp.status_code == 400

@@ -11,7 +11,9 @@ class DummyLLM(LLMService):
     def __init__(self):
         pass
 
-    def invoke_llm(self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None):
+    def invoke_llm(
+        self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None
+    ):
         return {"response": "ok", "provider": "dummy", "model": "m"}
 
     def select_provider(self, role, priority, user_id=None, project_id=None):
@@ -35,6 +37,7 @@ async def test_stream_message_emits_token_and_done():
 @pytest.mark.asyncio
 async def test_stream_message_rejects_large_message():
     import os
+
     os.environ["CHAT_MAX_MESSAGE_BYTES"] = "10240"
     repo = ChatRepositorySQL()
     svc = ChatService(repo, DummyLLM(), None)

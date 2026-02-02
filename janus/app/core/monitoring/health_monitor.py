@@ -183,9 +183,11 @@ class HealthMonitor:
         try:
             # Executar check com timeout
             result = await asyncio.wait_for(
-                asyncio.to_thread(check_func)
-                if not asyncio.iscoroutinefunction(check_func)
-                else check_func(),
+                (
+                    asyncio.to_thread(check_func)
+                    if not asyncio.iscoroutinefunction(check_func)
+                    else check_func()
+                ),
                 timeout=10.0,
             )
 

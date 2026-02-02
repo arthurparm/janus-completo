@@ -43,7 +43,9 @@ def main():
     print("[OK] /healthz")
 
     # 2. Criar usuário
-    code, body = _req("POST", "/api/v1/users", {"email": "smoke@example.com", "display_name": "Smoke Test"})
+    code, body = _req(
+        "POST", "/api/v1/users", {"email": "smoke@example.com", "display_name": "Smoke Test"}
+    )
     if code != 200 or not isinstance(body, dict) or "id" not in body:
         print(f"[FAIL] /api/v1/users -> {code} {body}")
         sys.exit(1)
@@ -74,14 +76,20 @@ def main():
         },
         "index": False,
     }
-    code, body = _req("POST", "/api/v1/productivity/calendar/events/add", evt, headers={"X-User-Id": str(user_id)})
+    code, body = _req(
+        "POST", "/api/v1/productivity/calendar/events/add", evt, headers={"X-User-Id": str(user_id)}
+    )
     if code != 200 or not (isinstance(body, dict) and body.get("status") == "queued"):
         print(f"[FAIL] calendar add -> {code} {body}")
         sys.exit(1)
     print("[OK] calendar add queued")
 
     # 5. Listar eventos (pode estar vazio, não falha)
-    code, body = _req("GET", f"/api/v1/productivity/calendar/events?user_id={user_id}", headers={"X-User-Id": str(user_id)})
+    code, body = _req(
+        "GET",
+        f"/api/v1/productivity/calendar/events?user_id={user_id}",
+        headers={"X-User-Id": str(user_id)},
+    )
     if code != 200:
         print(f"[WARN] calendar list -> {code} {body}")
     else:

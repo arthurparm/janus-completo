@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 import sys
@@ -11,8 +10,8 @@ sys.path.append("/app")
 logging.basicConfig(level=logging.INFO)
 
 # Mock get_llm BEFORE importing meta_agent to avoid initialization error
-sys.modules['app.core.llm.llm_manager'] = MagicMock()
-mock_llm_manager = sys.modules['app.core.llm.llm_manager']
+sys.modules["app.core.llm.llm_manager"] = MagicMock()
+mock_llm_manager = sys.modules["app.core.llm.llm_manager"]
 mock_llm_manager.get_llm.return_value = MagicMock()
 mock_llm_manager.ModelRole = MagicMock()
 mock_llm_manager.ModelPriority = MagicMock()
@@ -41,6 +40,7 @@ async def verify_meta_agent():
     print("- Testing get_resource_usage...")
     try:
         from app.core.agents.meta_agent import get_resource_usage
+
         result = get_resource_usage.invoke({})
         print(f"  Result: {result[:200]}...")
         assert "cpu" in result
@@ -57,6 +57,7 @@ async def verify_meta_agent():
 
         # Inject mock data into health monitor for testing
         from app.core.monitoring.health_monitor import _latency_windows
+
         _latency_windows["llm"] = deque([0.1, 0.2, 0.5, 0.1, 0.15])
 
         result = analyze_performance_trends.invoke({"metric_name": "llm_latency"})
@@ -66,6 +67,7 @@ async def verify_meta_agent():
         print(f"  Failed: {e}")
 
     print("Success: MetaAgent structure and tools verified.")
+
 
 if __name__ == "__main__":
     asyncio.run(verify_meta_agent())

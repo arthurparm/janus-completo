@@ -15,8 +15,8 @@ async def cleanup_graph_synonyms() -> None:
         sys.path.append(parent_dir)
     os.chdir(parent_dir)
 
-    from app.db.graph import get_graph_db, initialize_graph_db
     from app.core.memory.graph_guardian import ENTITY_PROPERTY_SYNONYMS
+    from app.db.graph import get_graph_db, initialize_graph_db
 
     logger.info("Initializing Graph Database connection for synonym cleanup...")
     try:

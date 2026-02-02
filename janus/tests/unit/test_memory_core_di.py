@@ -24,11 +24,7 @@ async def test_memory_core_dependency_injection():
     mock_settings = MockSettings()
 
     # 2. Instantiate MemoryCore with mocks (DI)
-    memory = MemoryCore(
-        client=mock_client,
-        circuit_breaker=mock_cb,
-        config=mock_settings
-    )
+    memory = MemoryCore(client=mock_client, circuit_breaker=mock_cb, config=mock_settings)
 
     # 3. Verify it uses the injected client
     assert memory.client is mock_client
@@ -38,10 +34,7 @@ async def test_memory_core_dependency_injection():
     # 4. Attempt an operation that would normally require network
     # We expect this to call our mock, not the real network
     exp = Experience(
-        id="test-id",
-        type="episodic",
-        content="Test content",
-        timestamp="2023-01-01T00:00:00Z"
+        id="test-id", type="episodic", content="Test content", timestamp="2023-01-01T00:00:00Z"
     )
 
     # We expect embeddings to fail if not mocked, so let's see if we can bypass or if it fails gracefully
@@ -58,6 +51,8 @@ async def test_memory_core_dependency_injection():
     assert mock_client.upsert.called or mock_client.upsert.await_args is not None
     print("✅ Dependency Injection Test Passed: MemoryCore used mock client!")
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_memory_core_dependency_injection())

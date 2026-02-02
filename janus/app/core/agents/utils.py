@@ -1,9 +1,9 @@
+import inspect
 import json
 import logging
 import re
 from functools import wraps
 from typing import Any, Union
-import inspect
 
 from langchain_core.callbacks import BaseCallbackHandler
 
@@ -96,7 +96,6 @@ def parse_json_strict(content: str) -> Union[dict[str, Any], list[Any]]:
         # Higher level logic determines if a retry is needed (Network/System),
         # but valid JSON failure is final here.
         raise e
-
 
 
 def _create_tool_wrapper(tool):

@@ -44,7 +44,7 @@ class PolicyEngine:
         self.config = config or PolicyConfig()
         self._cycle_started_at: float = time.time()
         self._actions_in_cycle: int = 0
-        
+
         # Padrões suspeitos de Prompt Injection
         self._injection_patterns = [
             "ignore previous instructions",
@@ -123,21 +123,27 @@ class PolicyEngine:
         """
         if not content or not isinstance(content, str):
             return PolicyDecision(allowed=True)
-            
+
         # Normalização básica para dificultar bypass por case/espaços/leetspeak
         content_lower = content.lower()
-        
+
         # Leetspeak normalization (basic)
-        normalized = content_lower.replace("@", "a").replace("$", "s").replace("0", "o").replace("1", "i").replace("!", "i")
-        
+        normalized = (
+            content_lower.replace("@", "a")
+            .replace("$", "s")
+            .replace("0", "o")
+            .replace("1", "i")
+            .replace("!", "i")
+        )
+
         for pattern in self._injection_patterns:
             if pattern in content_lower or pattern in normalized:
                 logger.warning(f"Potential prompt injection detected: '{pattern}'")
                 return PolicyDecision(
-                    allowed=False, 
-                    reason=f"Conteúdo bloqueado por conter padrão suspeito: {pattern}"
+                    allowed=False,
+                    reason=f"Conteúdo bloqueado por conter padrão suspeito: {pattern}",
                 )
-                
+
         return PolicyDecision(allowed=True)
 
     def validate_tool_call(

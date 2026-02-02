@@ -20,15 +20,15 @@ export interface ComplexityFactors {
 export class ResponseTimeEstimatorService {
   private responseHistory: number[] = []
   private maxHistorySize = 50
-  
+
   // Tempos base em milissegundos
   private readonly BASE_TIMES = {
     simple: 2000,      // 2 segundos
-    medium: 5000,      // 5 segundos  
+    medium: 5000,      // 5 segundos
     complex: 10000,    // 10 segundos
     veryComplex: 20000 // 20 segundos
   }
-  
+
   // Fatores de complexidade
   private readonly COMPLEXITY_FACTORS = {
     messageLength: 0.5,        // +0.5s por 100 caracteres
@@ -40,7 +40,7 @@ export class ResponseTimeEstimatorService {
 
   recordResponseTime(timeMs: number): void {
     this.responseHistory.push(timeMs)
-    
+
     // Limitar histórico
     if (this.responseHistory.length > this.maxHistorySize) {
       this.responseHistory.shift()
@@ -80,41 +80,41 @@ export class ResponseTimeEstimatorService {
   estimateResponseTime(message: string): number {
     const complexity = this.analyzeComplexity(message)
     const stats = this.getStats()
-    
+
     // Começar com a média histórica ou tempo base
     let estimatedTime = stats.count > 0 ? stats.avgTime : this.BASE_TIMES.medium
-    
+
     // Ajustar baseado na complexidade da mensagem
     if (complexity.messageLength > 200) {
       estimatedTime += (complexity.messageLength / 100) * this.COMPLEXITY_FACTORS.messageLength
     }
-    
+
     if (complexity.hasCode) {
       estimatedTime += this.COMPLEXITY_FACTORS.hasCode
     }
-    
+
     if (complexity.hasMultipleQuestions) {
       estimatedTime += this.COMPLEXITY_FACTORS.hasMultipleQuestions
     }
-    
+
     if (complexity.hasFileReferences) {
       estimatedTime += this.COMPLEXITY_FACTORS.hasFileReferences
     }
-    
+
     if (complexity.hasComplexTerms) {
       estimatedTime += this.COMPLEXITY_FACTORS.hasComplexTerms
     }
-    
+
     // Limitar entre mínimo e máximo razoáveis
     const minTime = Math.max(this.BASE_TIMES.simple, stats.minTime * 0.5)
     const maxTime = Math.min(60000, Math.max(stats.maxTime * 2, this.BASE_TIMES.veryComplex)) // Máximo 60 segundos
-    
+
     return Math.min(maxTime, Math.max(minTime, estimatedTime))
   }
 
   formatEstimatedTime(milliseconds: number): string {
     const seconds = Math.ceil(milliseconds / 1000)
-    
+
     if (seconds < 5) {
       return 'alguns segundos'
     } else if (seconds < 60) {
@@ -136,7 +136,7 @@ export class ResponseTimeEstimatorService {
       /class\s+\w+/g,           // Class definitions
       /\w+\(.*\)\s*{/g          // Function calls with braces
     ]
-    
+
     return codeIndicators.some(pattern => pattern.test(message))
   }
 
@@ -151,7 +151,7 @@ export class ResponseTimeEstimatorService {
       /\/[\w/.-]+/g,           // /path/to/file
       /\w+:\/\/[^\s]+/g         // URLs
     ]
-    
+
     return filePatterns.some(pattern => pattern.test(message))
   }
 
@@ -162,7 +162,7 @@ export class ResponseTimeEstimatorService {
       'machine learning', 'inteligência artificial', 'algoritmo',
       'complexidade', 'refatoração', 'depuração', 'análise'
     ]
-    
+
     const lowerMessage = message.toLowerCase()
     return complexTerms.some(term => lowerMessage.includes(term))
   }

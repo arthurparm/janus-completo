@@ -1,4 +1,3 @@
-import asyncio
 import structlog
 from fastapi import FastAPI
 

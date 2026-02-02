@@ -159,9 +159,9 @@ class ChatRepository:
                     "title": conv.get("title"),
                     "created_at": conv.get("created_at"),
                     "updated_at": conv.get("updated_at"),
-                    "last_message": (conv.get("messages") or [])[-1]
-                    if conv.get("messages")
-                    else None,
+                    "last_message": (
+                        (conv.get("messages") or [])[-1] if conv.get("messages") else None
+                    ),
                 }
             )
         items.sort(key=lambda x: x.get("updated_at") or 0, reverse=True)

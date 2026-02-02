@@ -8,7 +8,7 @@ if p:
     print(f"Version: {p.prompt_version}")
     print(f"Language: {p.language}")
     print(f"Active: {p.is_active}")
-    print(f"First 300 chars of text:")
+    print("First 300 chars of text:")
     print(p.prompt_text[:300])
     print("\n---")
     print("Checking for unescaped braces in JSON schema section...")

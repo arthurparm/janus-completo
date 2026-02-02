@@ -1,13 +1,13 @@
 import json
 import logging
 import statistics
-import asyncio
-from typing import Any
 from datetime import datetime
+from typing import Any
+
 from langchain_core.tools import tool
 
-from app.core.monitoring.health_monitor import get_health_monitor, _latency_windows
 from app.core.monitoring.error_tracker import GlobalErrorTracker
+from app.core.monitoring.health_monitor import _latency_windows, get_health_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +273,7 @@ def get_resource_usage() -> str:
     """
     try:
         import os
+
         import psutil
 
         # Processo atual

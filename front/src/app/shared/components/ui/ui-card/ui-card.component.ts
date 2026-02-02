@@ -16,7 +16,7 @@ export class UiCardComponent {
     // Helper getters to check content projection populated (simple check, implementation detail might need ElementRef if stricter check needed)
     // For now we assume typical usage triggers layout
     get hasHeaderActions(): boolean {
-        // This is a limitation of simple ng-content, can't easily detect if projected. 
+        // This is a limitation of simple ng-content, can't easily detect if projected.
         // We will assume if title/subtitle missing but header-actions present, user ensures it looks right.
         // Ideally we use ContentChild to check, but let's keep it simple for Sprint 0.
         return true;

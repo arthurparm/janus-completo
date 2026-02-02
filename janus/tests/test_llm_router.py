@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,18 +17,25 @@ def mock_settings():
         mock.OLLAMA_ORCHESTRATOR_MODEL = "llama3"
         yield mock
 
+
 @pytest.fixture
 def mock_pool():
     with patch("app.core.llm.router._get_from_pool", return_value=None):
         with patch("app.core.llm.router._add_to_pool"):
-             yield
+            yield
+
 
 @pytest.fixture
 def mock_pricing():
     # Reset budgets for test
-    with patch.dict(_provider_budgets_usd, {"openai": 100.0, "google_gemini": 100.0, "ollama": 0.0}, clear=True):
-        with patch.dict(_provider_spend_usd, {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}, clear=True):
+    with patch.dict(
+        _provider_budgets_usd, {"openai": 100.0, "google_gemini": 100.0, "ollama": 0.0}, clear=True
+    ):
+        with patch.dict(
+            _provider_spend_usd, {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}, clear=True
+        ):
             yield
+
 
 def test_get_llm_local_only(mock_settings, mock_pool):
     with patch("app.core.llm.router.ChatOllama") as MockOllama:
@@ -42,14 +48,16 @@ def test_get_llm_local_only(mock_settings, mock_pool):
             MockOllama.assert_called()
             # Verify model name used
             args, kwargs = MockOllama.call_args
-            assert kwargs['model'] == "llama3"
+            assert kwargs["model"] == "llama3"
+
 
 def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_pricing):
     # Mock cloud catalog to have valid providers
-    with patch("app.core.llm.router._validate_openai_key", return_value=True), \
-         patch("app.core.llm.router._validate_gemini_key", return_value=True), \
-         patch("app.core.llm.router._circuit_closed", return_value=True):
-
+    with (
+        patch("app.core.llm.router._validate_openai_key", return_value=True),
+        patch("app.core.llm.router._validate_gemini_key", return_value=True),
+        patch("app.core.llm.router._circuit_closed", return_value=True),
+    ):
         # Mock candidates and pricing
         # We need to mock how router gets candidates. It iterates cloud_catalog.
         # We also need to mock _get_model_pricing
@@ -59,15 +67,16 @@ def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_
             # Gemini cheap
             def side_effect(provider, model):
                 if provider == "openai":
-                    return ProviderPricing(10.0, 30.0) # $40 total
-                return ProviderPricing(1.0, 1.0) # $2 total
+                    return ProviderPricing(10.0, 30.0)  # $40 total
+                return ProviderPricing(1.0, 1.0)  # $2 total
 
             mock_get_pricing.side_effect = side_effect
 
             # Mock ChatOpenAI and ChatGoogleGenerativeAI factories
-            with patch("app.core.llm.router.ChatOpenAI") as MockOpenAI, \
-                 patch("app.core.llm.router.ChatGoogleGenerativeAI") as MockGemini:
-
+            with (
+                patch("app.core.llm.router.ChatOpenAI") as MockOpenAI,
+                patch("app.core.llm.router.ChatGoogleGenerativeAI") as MockGemini,
+            ):
                 MockOpenAI.return_value = MagicMock(name="openai_llm")
                 MockGemini.return_value = MagicMock(name="gemini_llm")
 

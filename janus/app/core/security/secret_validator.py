@@ -4,6 +4,7 @@ Secret Management Module - Production Safety.
 This module ensures that the Janus application does not start in 'production' mode
 with insecure default passwords. This is a critical security measure.
 """
+
 import structlog
 from pydantic import SecretStr
 
@@ -14,13 +15,13 @@ logger = structlog.get_logger(__name__)
 # Known insecure defaults that MUST be changed in production
 INSECURE_DEFAULTS = {
     "NEO4J_PASSWORD": "password",
-
     "RABBITMQ_PASSWORD": "janus_pass",
 }
 
 
 class InsecureConfigurationError(Exception):
     """Raised when critical production secrets are left at insecure defaults."""
+
     pass
 
 
@@ -34,8 +35,10 @@ def validate_production_secrets():
             any secret is still set to a known insecure default.
     """
     if settings.ENVIRONMENT.lower() != "production":
-        logger.info("Skipping secret validation (non-production environment).",
-                    environment=settings.ENVIRONMENT)
+        logger.info(
+            "Skipping secret validation (non-production environment).",
+            environment=settings.ENVIRONMENT,
+        )
         return
 
     logger.info("Validating production secrets...")
@@ -50,8 +53,7 @@ def validate_production_secrets():
 
         if current_value == insecure_value:
             insecure_found.append(setting_name)
-            logger.error(f"Insecure default detected for: {setting_name}",
-                         setting=setting_name)
+            logger.error(f"Insecure default detected for: {setting_name}", setting=setting_name)
 
     if insecure_found:
         error_msg = (

@@ -38,7 +38,7 @@ export class TailscaleService {
     if (environment.tailscale?.enabled && environment.tailscale?.apiUrl) {
       return environment.tailscale.apiUrl;
     }
-    
+
     // Fall back to default API URL
     return environment.apiUrl;
   }
@@ -125,7 +125,7 @@ export class TailscaleService {
    * Check if we're currently using Tailscale URLs
    */
   isUsingTailscaleUrls(): boolean {
-    return this.isTailscaleEnabled() && 
+    return this.isTailscaleEnabled() &&
            this.apiUrl.includes('.ts.net');
   }
 }

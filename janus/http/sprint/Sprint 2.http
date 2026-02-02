@@ -209,5 +209,3 @@ Accept: application/json
 # 21. Falhas Recentes (janela padrão de cota)
 GET {{host}}{{api_v1_prefix}}/memory/recall/recent_failures?limit=5&min_score=0.3
 Accept: application/json
-
-

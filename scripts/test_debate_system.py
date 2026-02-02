@@ -11,11 +11,14 @@ sys.path.append(project_root)
 from app.core.agents.debate_orchestrator import debate_graph
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 async def main():
     print(">>> Starting Debate System Test (LangGraph Mode)...")
-    
+
     initial_state = {
         "task_id": "test-debate-001",
         "goal": "Create a Python function to calculate the Fibonacci sequence recursively with memoization. Must handle negative inputs raising ValueError.",
@@ -24,11 +27,11 @@ async def main():
         "history": [],
         "code": None,
         "critique": None,
-        "status": "in_progress"
+        "status": "in_progress",
     }
-    
+
     print(f"Goal: {initial_state['goal']}")
-    
+
     try:
         # Run the graph
         # Note: 'astream' yields dictionaries where keys are node names and values are state updates
@@ -39,20 +42,22 @@ async def main():
                     print(f"[Proponent] Code generated (Length: {len(state_update['code'])})")
                     print(f"Preview: {state_update['code'][:100]}...")
                 if "critique" in state_update:
-                    critique = state_update['critique']
-                    approved = critique.get('approved')
+                    critique = state_update["critique"]
+                    approved = critique.get("approved")
                     print(f"[Critic] Approved: {approved}")
                     if not approved:
                         print(f"Issues: {len(critique.get('issues', []))}")
-                        for issue in critique.get('issues', []):
+                        for issue in critique.get("issues", []):
                             print(f" - {issue.get('severity')}: {issue.get('description')}")
-        
+
         print("\n>>> Test Completed.")
-        
+
     except Exception as e:
         print(f"Test Failed: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

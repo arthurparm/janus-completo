@@ -8,6 +8,7 @@ This test suite covers:
 - Error handling and logging
 - Monitoring and alerting
 """
+
 import asyncio
 import random
 import time
@@ -92,6 +93,7 @@ class TestCircuitBreakerRetryLogic:
 
         # Mock function that fails twice then succeeds
         call_count = 0
+
         async def mock_function():
             nonlocal call_count
             call_count += 1
@@ -101,10 +103,7 @@ class TestCircuitBreakerRetryLogic:
 
         # Apply resilient decorator
         decorated_func = resilient(
-            max_attempts=3,
-            initial_backoff=0.1,
-            max_backoff=1.0,
-            retry_on=(ConnectionError,)
+            max_attempts=3, initial_backoff=0.1, max_backoff=1.0, retry_on=(ConnectionError,)
         )(mock_function)
 
         result = await decorated_func()
@@ -117,15 +116,14 @@ class TestCircuitBreakerRetryLogic:
         from app.core.infrastructure.resilience import resilient
 
         call_count = 0
+
         async def always_failing_function():
             nonlocal call_count
             call_count += 1
             raise ConnectionError("Always fails")
 
         decorated_func = resilient(
-            max_attempts=3,
-            initial_backoff=0.01,
-            retry_on=(ConnectionError,)
+            max_attempts=3, initial_backoff=0.01, retry_on=(ConnectionError,)
         )(always_failing_function)
 
         with pytest.raises(ConnectionError):
@@ -148,11 +146,9 @@ class TestCircuitBreakerWithCircuitBreaker:
         async def mock_function():
             return "should_not_execute"
 
-        decorated_func = resilient(
-            max_attempts=3,
-            initial_backoff=0.01,
-            circuit_breaker=cb
-        )(mock_function)
+        decorated_func = resilient(max_attempts=3, initial_backoff=0.01, circuit_breaker=cb)(
+            mock_function
+        )
 
         # Should fail immediately due to open circuit breaker
         with pytest.raises(CircuitOpenError):
@@ -166,6 +162,7 @@ class TestCircuitBreakerWithCircuitBreaker:
         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=10)
 
         call_count = 0
+
         async def failing_function():
             nonlocal call_count
             call_count += 1
@@ -174,10 +171,7 @@ class TestCircuitBreakerWithCircuitBreaker:
             return "success"
 
         decorated_func = resilient(
-            max_attempts=3,
-            initial_backoff=0.01,
-            circuit_breaker=cb,
-            retry_on=(ConnectionError,)
+            max_attempts=3, initial_backoff=0.01, circuit_breaker=cb, retry_on=(ConnectionError,)
         )(failing_function)
 
         result = await decorated_func()
@@ -199,7 +193,7 @@ class TestCircuitBreakerMonitoring:
             new_state=CircuitBreakerState.OPEN,
             failure_count=3,
             failure_threshold=3,
-            recovery_timeout=30
+            recovery_timeout=30,
         )
 
         assert alert.circuit_breaker_name == "test_cb"
@@ -219,7 +213,7 @@ class TestCircuitBreakerMonitoring:
             new_state=CircuitBreakerState.OPEN,
             failure_count=3,
             failure_threshold=3,
-            recovery_timeout=30
+            recovery_timeout=30,
         )
 
         assert alert_manager.acknowledge_alert(alert.alert_id, "test_user")
@@ -243,7 +237,7 @@ class TestCircuitBreakerMonitoring:
             average_response_time=0.5,
             p95_response_time=1.0,
             error_rate=0.1,
-            success_rate=0.9
+            success_rate=0.9,
         )
 
         analytics.record_metrics("test_cb", metrics)
@@ -272,7 +266,7 @@ class TestCircuitBreakerMonitoring:
             average_response_time=0.5,
             p95_response_time=1.0,
             error_rate=0.05,
-            success_rate=0.95
+            success_rate=0.95,
         )
 
         # Recent metrics with high error rate (5 minutes ago)
@@ -288,7 +282,7 @@ class TestCircuitBreakerMonitoring:
             average_response_time=2.0,
             p95_response_time=5.0,
             error_rate=0.3,
-            success_rate=0.7
+            success_rate=0.7,
         )
 
         analytics.record_metrics("test_cb", old_metrics)
@@ -331,10 +325,12 @@ class TestCircuitBreakerIntegration:
     @pytest.mark.asyncio
     async def test_memory_core_circuit_breaker_integration(self):
         """Test MemoryCore integration with circuit breaker."""
+
         # Create a mock MemoryCore-like class with circuit breaker integration
         class MockMemoryCoreWithCB:
             def __init__(self):
                 from app.core.infrastructure.resilience import CircuitBreaker
+
                 self._cb = CircuitBreaker(failure_threshold=3, recovery_timeout=5)
                 self.search_count = 0
                 self.cache = {}
@@ -458,7 +454,7 @@ class TestCircuitBreakerIntegration:
             average_response_time=0.5,
             p95_response_time=1.0,
             error_rate=0.0,
-            success_rate=1.0
+            success_rate=1.0,
         )
         monitoring_service.record_metrics("test_cb", healthy_metrics)
 
@@ -479,7 +475,7 @@ class TestCircuitBreakerIntegration:
             average_response_time=0.8,
             p95_response_time=1.5,
             error_rate=0.05,
-            success_rate=0.95
+            success_rate=0.95,
         )
         monitoring_service.record_metrics("test_cb", degraded_metrics)
 
@@ -499,13 +495,18 @@ class TestCircuitBreakerIntegration:
             average_response_time=2.0,
             p95_response_time=5.0,
             error_rate=0.5,
-            success_rate=0.5
+            success_rate=0.5,
         )
         monitoring_service.record_metrics("test_cb", unhealthy_metrics)
 
         health_status = monitoring_service.get_health_status("test_cb")
-        assert health_status["health_score"] < 50  # Should be degraded/critical with high error rate
-        assert health_status["status"] in ["degraded", "critical"]  # Status depends on exact thresholds
+        assert (
+            health_status["health_score"] < 50
+        )  # Should be degraded/critical with high error rate
+        assert health_status["status"] in [
+            "degraded",
+            "critical",
+        ]  # Status depends on exact thresholds
 
         # 4. Recovering state (HALF_OPEN)
         recovering_metrics = CircuitBreakerMetricsSnapshot(
@@ -519,13 +520,15 @@ class TestCircuitBreakerIntegration:
             average_response_time=1.0,
             p95_response_time=2.0,
             error_rate=0.1,
-            success_rate=0.9
+            success_rate=0.9,
         )
         monitoring_service.record_metrics("test_cb", recovering_metrics)
 
         health_status = monitoring_service.get_health_status("test_cb")
         # HALF_OPEN should have partial health score
-        assert 50 < health_status["health_score"] < 100  # HALF_OPEN has better metrics than OPEN state
+        assert (
+            50 < health_status["health_score"] < 100
+        )  # HALF_OPEN has better metrics than OPEN state
         assert health_status["status"] == "healthy"  # With 10% error rate, should be healthy
 
         print("Health check test completed:")
@@ -647,10 +650,12 @@ def mock_circuit_breaker():
 @pytest.fixture
 def mock_memory_core():
     """Create a mock memory core for testing."""
+
     # Create a comprehensive mock MemoryCore with circuit breaker integration
     class MockMemoryCore:
         def __init__(self):
             from app.core.infrastructure.resilience import CircuitBreaker
+
             self._cb = CircuitBreaker(failure_threshold=3, recovery_timeout=10)
             self._offline = False
             self.collection_name = "test_collection"
@@ -684,7 +689,7 @@ def mock_memory_core():
                         "id": f"result_{i}",
                         "score": 0.95 - (i * 0.1),
                         "vector": query_vector,
-                        "metadata": {"source": "qdrant", "index": i}
+                        "metadata": {"source": "qdrant", "index": i},
                     }
                     for i in range(limit)
                 ]
@@ -719,7 +724,7 @@ def mock_memory_core():
                 "circuit_breaker_state": self._cb.state.value,
                 "circuit_breaker_failures": self._cb.failure_count,
                 "cache_entries": len(self.cache),
-                "cache_keys": list(self.cache.keys())
+                "cache_keys": list(self.cache.keys()),
             }
 
         def force_circuit_open(self):
@@ -794,7 +799,7 @@ async def test_full_integration_scenario(mock_memory_core):
     cache_key = f"cache_{hash(str(test_vector))}"
     memory_core.cache[cache_key] = [
         {"id": "cached_1", "score": 0.99, "source": "cache"},
-        {"id": "cached_2", "score": 0.98, "source": "cache"}
+        {"id": "cached_2", "score": 0.98, "source": "cache"},
     ]
 
     try:
@@ -824,7 +829,10 @@ async def test_full_integration_scenario(mock_memory_core):
     # Manually set up recovery scenario
     memory_core._cb._open_since = time.time() - recovery_timeout - 1
 
-    if memory_core._cb.state == CircuitBreakerState.OPEN and time.time() - memory_core._cb._open_since >= memory_core._cb.recovery_timeout:
+    if (
+        memory_core._cb.state == CircuitBreakerState.OPEN
+        and time.time() - memory_core._cb._open_since >= memory_core._cb.recovery_timeout
+    ):
         print("  ✓ Circuit breaker ready for recovery attempt")
 
         # First call should transition to HALF_OPEN
@@ -880,9 +888,11 @@ async def test_full_integration_scenario(mock_memory_core):
     print(f"  Cache keys: {stats['cache_keys']}")
 
     # Test assertions - use the statistics before reset
-    assert stats['search_calls'] > 0, "Should have made search calls"
-    assert stats_before_reset['circuit_breaker_failures'] >= 2, "Should have recorded failures before reset"
-    assert stats['cache_entries'] >= 1, "Should have cache entries"
+    assert stats["search_calls"] > 0, "Should have made search calls"
+    assert (
+        stats_before_reset["circuit_breaker_failures"] >= 2
+    ), "Should have recorded failures before reset"
+    assert stats["cache_entries"] >= 1, "Should have cache entries"
 
     print("\n✅ Full integration test completed successfully!")
 

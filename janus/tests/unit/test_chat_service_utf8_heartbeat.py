@@ -11,10 +11,14 @@ class DummyLLM(LLMService):
     def __init__(self):
         pass
 
-    def invoke_llm(self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None):
+    def invoke_llm(
+        self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None
+    ):
         return {"response": "Olá 🌟", "provider": "dummy", "model": "m"}
+
     def select_provider(self, role, priority, user_id=None, project_id=None):
         return {"provider": "dummy", "model": "m"}
+
     def is_provider_open(self, provider: str) -> bool:
         return False
 

@@ -1,4 +1,3 @@
-
 import asyncio
 import random
 import time
@@ -18,6 +17,7 @@ from app.core.memory.memory_core import MemoryCore
 @dataclass
 class ChaosConfig:
     """Configuration for injecting chaos into dependencies."""
+
     latency_ms: int = 0
     latency_jitter_ms: int = 0
     error_rate: float = 0.0  # 0.0 to 1.0
@@ -34,6 +34,7 @@ class ChaosConfig:
                 delay += random.uniform(-self.latency_jitter_ms, self.latency_jitter_ms)
             delay = max(0, delay)
             await asyncio.sleep(delay / 1000.0)
+
 
 class MockQdrantClient:
     def __init__(self, config: ChaosConfig):
@@ -61,21 +62,29 @@ class MockQdrantClient:
         return []
 
     async def get_collection(self, *args, **kwargs):
-         # Used for health check
+        # Used for health check
         await self.config.simulate_latency()
         if self.config.should_fail():
-             raise self.config.error_type or Exception("Qdrant Chaos Error")
+            raise self.config.error_type or Exception("Qdrant Chaos Error")
         return True
 
-    async def scroll(self, collection_name: str, scroll_filter: Any = None, limit: int = 10, with_payload: bool = True, **kwargs):
+    async def scroll(
+        self,
+        collection_name: str,
+        scroll_filter: Any = None,
+        limit: int = 10,
+        with_payload: bool = True,
+        **kwargs,
+    ):
         """Simulates Qdrant scroll method."""
         await self.config.simulate_latency()
         if self.config.should_fail():
-             raise self.config.error_type or Exception("Qdrant Chaos Error")
+            raise self.config.error_type or Exception("Qdrant Chaos Error")
 
         # Return a tuple (points, next_page_offset)
         # For now, return empty list and None (no next page)
         return [], None
+
 
 class MockCircuitBreaker:
     def __init__(self, config: ChaosConfig):
@@ -101,6 +110,7 @@ class MockCircuitBreaker:
     def __call__(self, func):
         def wrapper(*args, **kwargs):
             return self.call(func, *args, **kwargs)
+
         return wrapper
 
     def update_params(self, **kwargs):
@@ -109,13 +119,14 @@ class MockCircuitBreaker:
     def get_health_status(self):
         return {"metrics": {"error_rate": 0.0}}
 
+
 class MockLLMBase:
     def __init__(self, config: ChaosConfig):
         self.config = config
 
     def invoke(self, prompt: str):
-         # Simulate sync latency (time.sleep) or just skip since resilient handles async mostly?
-         # But invoke is sync.
+        # Simulate sync latency (time.sleep) or just skip since resilient handles async mostly?
+        # But invoke is sync.
         if self.config.latency_ms > 0:
             time.sleep(self.config.latency_ms / 1000.0)
 
@@ -124,6 +135,7 @@ class MockLLMBase:
 
         return MagicMock(content="Chaos LLM Response")
 
+
 class MockConnectionFactory:
     def __init__(self, config: ChaosConfig):
         self.config = config
@@ -131,7 +143,7 @@ class MockConnectionFactory:
     async def __call__(self, *args, **kwargs):
         await self.config.simulate_latency()
         if self.config.should_fail():
-             raise self.config.error_type or Exception("Broker Connection Chaos Error")
+            raise self.config.error_type or Exception("Broker Connection Chaos Error")
 
         # Return a Mock Connection
         mock_conn = MagicMock()
@@ -144,13 +156,16 @@ class MockConnectionFactory:
 
         return mock_conn
 
+
 class ChaosHarness:
     """
     Factory for instantiating Core components with predictable Chaos settings.
     """
 
     @staticmethod
-    def create_memory_core(config: ChaosConfig, settings_override: Dict[str, Any] = None) -> MemoryCore:
+    def create_memory_core(
+        config: ChaosConfig, settings_override: Dict[str, Any] = None
+    ) -> MemoryCore:
         """Creates a MemoryCore attached to a Mock Qdrant/CB controlled by config."""
 
         # Mocks
@@ -159,11 +174,11 @@ class ChaosHarness:
 
         # Settings
         class MockSettings:
-             # Add defaults required by MemoryCore
-             MEMORY_VECTOR_SIZE = 1536
-             QDRANT_HOST = "mock"
-             QDRANT_PORT = 6333
-             pass
+            # Add defaults required by MemoryCore
+            MEMORY_VECTOR_SIZE = 1536
+            QDRANT_HOST = "mock"
+            QDRANT_PORT = 6333
+            pass
 
         s = MockSettings()
         if settings_override:
@@ -171,11 +186,7 @@ class ChaosHarness:
                 setattr(s, k, v)
 
         # Instantiate
-        memory = MemoryCore(
-            client=mock_client,
-            circuit_breaker=mock_cb,
-            config=s
-        )
+        memory = MemoryCore(client=mock_client, circuit_breaker=mock_cb, config=s)
         # Force cache/internals init if needed
         memory._cb = mock_cb
         # (Already set in __init__ but to be safe)
@@ -183,8 +194,9 @@ class ChaosHarness:
         return memory
 
     @staticmethod
-    def create_llm_client(config: ChaosConfig, settings_override: Dict[str, Any] = None) -> LLMClient:
-
+    def create_llm_client(
+        config: ChaosConfig, settings_override: Dict[str, Any] = None
+    ) -> LLMClient:
         base = MockLLMBase(config)
         mock_cb = MockCircuitBreaker(config)
 
@@ -208,23 +220,25 @@ class ChaosHarness:
             role=ModelRole.ORCHESTRATOR,
             cache_key="chaos",
             circuit_breaker=mock_cb,
-            config=s
+            config=s,
         )
 
         return client
 
     @staticmethod
-    def create_message_broker(config: ChaosConfig, settings_override: Dict[str, Any] = None) -> MessageBroker:
+    def create_message_broker(
+        config: ChaosConfig, settings_override: Dict[str, Any] = None
+    ) -> MessageBroker:
         mock_factory = MockConnectionFactory(config)
 
         class MockSettings:
-             RABBITMQ_USER = "chaos"
-             RABBITMQ_PASSWORD = "chaos"
-             RABBITMQ_HOST = "chaos_host"
-             RABBITMQ_PORT = 5672
-             RABBITMQ_MANAGEMENT_PORT = 15672
-             RABBITMQ_QUEUE_CONFIG = {}
-             BROKER_USE_MSGPACK = True
+            RABBITMQ_USER = "chaos"
+            RABBITMQ_PASSWORD = "chaos"
+            RABBITMQ_HOST = "chaos_host"
+            RABBITMQ_PORT = 5672
+            RABBITMQ_MANAGEMENT_PORT = 15672
+            RABBITMQ_QUEUE_CONFIG = {}
+            BROKER_USE_MSGPACK = True
 
         s = MockSettings()
         if settings_override:
@@ -232,6 +246,7 @@ class ChaosHarness:
                 setattr(s, k, v)
 
         return MessageBroker(config=s, connection_factory=mock_factory)
+
 
 # Demonstration / Verification script
 async def run_demo():
@@ -245,6 +260,7 @@ async def run_demo():
     start = time.time()
     try:
         from app.models.schemas import Experience
+
         exp = Experience(content="Test", type="episodic")
         await memory.amemorize(exp)
         elapsed = time.time() - start
@@ -281,6 +297,7 @@ async def run_demo():
         print("Result: Success (Broker stayed offline due to Chaos)")
     else:
         print("Result: Failed (Broker connected despite Chaos)")
+
 
 if __name__ == "__main__":
     asyncio.run(run_demo())

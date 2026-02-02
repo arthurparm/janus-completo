@@ -10,6 +10,7 @@ from app.core.agents.multi_agent_system import AgentRole, MultiAgentSystem, Task
 
 # --- Mocks ---
 
+
 class MockBroker:
     def __init__(self):
         self.published_messages = []
@@ -21,8 +22,8 @@ class MockBroker:
         self.published_messages.append({"queue": queue_name, "message": message})
 
     def start_consumer(self, *args, **kwargs):
-         # Mock consumer start
-         return asyncio.create_task(asyncio.sleep(0))
+        # Mock consumer start
+        return asyncio.create_task(asyncio.sleep(0))
 
 
 @pytest.mark.asyncio
@@ -31,10 +32,14 @@ async def test_proactive_remediation_flow():
     mock_broker = MockBroker()
 
     # 2. Patch dependencies
-    with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
-         patch("app.core.agents.meta_agent.get_llm") as mock_get_llm, \
-         patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-
+    with (
+        patch(
+            "app.core.infrastructure.message_broker.get_broker",
+            new=AsyncMock(return_value=mock_broker),
+        ),
+        patch("app.core.agents.meta_agent.get_llm") as mock_get_llm,
+        patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()),
+    ):
         # Mock LLM response to force a specific recommendation
         mock_llm_instance = MagicMock()
         mock_llm_instance.invoke.return_value = """
@@ -76,12 +81,13 @@ async def test_proactive_remediation_flow():
         mas.create_agent(AgentRole.SYSADMIN)
 
         # Patch get_multi_agent_system used by MetaAgent
-        with patch("app.core.agents.multi_agent_system.get_multi_agent_system", return_value=mas), \
-             patch("app.core.agents.meta_agent.analyze_memory_for_failures") as mock_mem, \
-             patch("app.core.agents.meta_agent.get_system_health_metrics") as mock_health, \
-             patch("app.core.agents.meta_agent.analyze_performance_trends") as mock_perf, \
-             patch("app.core.agents.meta_agent.get_resource_usage") as mock_res:
-
+        with (
+            patch("app.core.agents.multi_agent_system.get_multi_agent_system", return_value=mas),
+            patch("app.core.agents.meta_agent.analyze_memory_for_failures") as mock_mem,
+            patch("app.core.agents.meta_agent.get_system_health_metrics") as mock_health,
+            patch("app.core.agents.meta_agent.analyze_performance_trends") as mock_perf,
+            patch("app.core.agents.meta_agent.get_resource_usage") as mock_res,
+        ):
             mock_mem.invoke.return_value = "{}"
             mock_health.invoke.return_value = "{}"
             mock_perf.invoke.return_value = "{}"
@@ -127,6 +133,7 @@ async def test_proactive_remediation_flow():
             assert payload["task_id"] == task.id
             assert payload["task_type"] == "agent_task"
             print("Verified: Task dispatched to Broker queue 'janus.agent.sysadmin'")
+
 
 if __name__ == "__main__":
     # Allow running directly

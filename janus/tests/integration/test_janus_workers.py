@@ -13,6 +13,7 @@ import pytest
 # TEST 1: KnowledgeConsolidatorWorker
 # ============================================================================
 
+
 class TestKnowledgeConsolidatorWorker:
     """Tests for KnowledgeConsolidatorWorker."""
 
@@ -20,6 +21,7 @@ class TestKnowledgeConsolidatorWorker:
         """Test KnowledgeConsolidatorWorker can be imported."""
         try:
             from app.core.workers.knowledge_consolidator_worker import KnowledgeConsolidatorWorker
+
             assert KnowledgeConsolidatorWorker is not None
             print("✓ KnowledgeConsolidatorWorker import available")
         except Exception as e:
@@ -30,6 +32,7 @@ class TestKnowledgeConsolidatorWorker:
 # TEST 2: GoogleProductivityWorker
 # ============================================================================
 
+
 class TestGoogleProductivityWorker:
     """Tests for GoogleProductivityWorker."""
 
@@ -37,6 +40,7 @@ class TestGoogleProductivityWorker:
         """Test GoogleProductivityWorker can be imported."""
         try:
             from app.core.workers.google_productivity_worker import GoogleProductivityWorker
+
             assert GoogleProductivityWorker is not None
             print("✓ GoogleProductivityWorker import available")
         except Exception as e:
@@ -47,6 +51,7 @@ class TestGoogleProductivityWorker:
 # TEST 3: NeuralTrainingSystem
 # ============================================================================
 
+
 class TestNeuralTrainingSystem:
     """Tests for NeuralTrainingSystem."""
 
@@ -54,6 +59,7 @@ class TestNeuralTrainingSystem:
         """Test NeuralTrainingSystem can be imported."""
         try:
             from app.core.workers.neural_training_system import NeuralTrainingSystem
+
             assert NeuralTrainingSystem is not None
             print("✓ NeuralTrainingSystem import available")
         except Exception as e:
@@ -64,6 +70,7 @@ class TestNeuralTrainingSystem:
 # TEST 4: DataHarvester
 # ============================================================================
 
+
 class TestDataHarvester:
     """Tests for DataHarvester."""
 
@@ -71,6 +78,7 @@ class TestDataHarvester:
         """Test DataHarvester can be imported."""
         try:
             from app.core.workers.data_harvester import DataHarvester
+
             assert DataHarvester is not None
             print("✓ DataHarvester import available")
         except Exception as e:
@@ -81,6 +89,7 @@ class TestDataHarvester:
 # TEST 5: AutoScaler
 # ============================================================================
 
+
 class TestAutoScaler:
     """Tests for AutoScaler."""
 
@@ -88,6 +97,7 @@ class TestAutoScaler:
         """Test AutoScaler can be imported."""
         try:
             from app.core.workers.auto_scaler import AutoScaler
+
             assert AutoScaler is not None
             print("✓ AutoScaler import available")
         except Exception as e:
@@ -98,6 +108,7 @@ class TestAutoScaler:
 # TEST 6: AutonomyWorker
 # ============================================================================
 
+
 class TestAutonomyWorker:
     """Tests for AutonomyWorker."""
 
@@ -105,6 +116,7 @@ class TestAutonomyWorker:
         """Test AutonomyWorker can be imported."""
         try:
             from app.core.workers.autonomy_worker import start_autonomy_loop
+
             assert start_autonomy_loop is not None
             print("✓ AutonomyWorker import available")
         except Exception as e:
@@ -115,6 +127,7 @@ class TestAutonomyWorker:
 # TEST 7: KnowledgeConsolidator
 # ============================================================================
 
+
 class TestKnowledgeConsolidator:
     """Tests for KnowledgeConsolidator."""
 
@@ -122,6 +135,7 @@ class TestKnowledgeConsolidator:
         """Test KnowledgeConsolidator can be imported."""
         try:
             from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
+
             assert KnowledgeConsolidator is not None
             print("✓ KnowledgeConsolidator import available")
         except Exception as e:
@@ -132,6 +146,7 @@ class TestKnowledgeConsolidator:
 # TEST 8: MetaAgentWorker
 # ============================================================================
 
+
 class TestMetaAgentWorker:
     """Tests for MetaAgentWorker."""
 
@@ -139,6 +154,7 @@ class TestMetaAgentWorker:
         """Test MetaAgentWorker can be imported."""
         try:
             from app.core.agents.meta_agent_worker import MetaAgentWorker
+
             assert MetaAgentWorker is not None
             print("✓ MetaAgentWorker import available")
         except Exception as e:
@@ -149,6 +165,7 @@ class TestMetaAgentWorker:
 # TEST 9: SandboxAgentWorker
 # ============================================================================
 
+
 class TestSandboxAgentWorker:
     """Tests for SandboxAgentWorker."""
 
@@ -156,6 +173,7 @@ class TestSandboxAgentWorker:
         """Test SandboxAgentWorker can be imported."""
         try:
             from app.core.workers.sandbox_agent_worker import SandboxAgentWorker
+
             assert SandboxAgentWorker is not None
             print("✓ SandboxAgentWorker import available")
         except Exception as e:
@@ -166,6 +184,7 @@ class TestSandboxAgentWorker:
 # TEST 10: RouterWorker
 # ============================================================================
 
+
 class TestRouterWorker:
     """Tests for RouterWorker."""
 
@@ -173,6 +192,7 @@ class TestRouterWorker:
         """Test RouterWorker can be imported."""
         try:
             from app.core.workers.router_worker import RouterWorker
+
             assert RouterWorker is not None
             print("✓ RouterWorker import available")
         except Exception as e:
@@ -183,6 +203,7 @@ class TestRouterWorker:
 # TEST 11: ReflexionWorker
 # ============================================================================
 
+
 class TestReflexionWorker:
     """Tests for ReflexionWorker."""
 
@@ -190,6 +211,7 @@ class TestReflexionWorker:
         """Test ReflexionWorker can be imported."""
         try:
             from app.core.workers.reflexion_worker import publish_reflexion_task
+
             assert publish_reflexion_task is not None
             print("✓ ReflexionWorker import available")
         except Exception as e:
@@ -200,6 +222,7 @@ class TestReflexionWorker:
 # TEST 12: AgentTasksWorker
 # ============================================================================
 
+
 class TestAgentTasksWorker:
     """Tests for AgentTasksWorker."""
 
@@ -207,6 +230,7 @@ class TestAgentTasksWorker:
         """Test AgentTasksWorker can be imported."""
         try:
             from app.core.workers.agent_tasks_worker import AgentTasksWorker
+
             assert AgentTasksWorker is not None
             print("✓ AgentTasksWorker import available")
         except Exception as e:
@@ -217,6 +241,7 @@ class TestAgentTasksWorker:
 # TEST 13: AsyncConsolidationWorker
 # ============================================================================
 
+
 class TestAsyncConsolidationWorker:
     """Tests for AsyncConsolidationWorker."""
 
@@ -224,6 +249,7 @@ class TestAsyncConsolidationWorker:
         """Test async consolidation worker functions."""
         try:
             from app.core.workers.async_consolidation_worker import publish_consolidation_task
+
             assert publish_consolidation_task is not None
             print("✓ AsyncConsolidationWorker import available")
         except Exception as e:
@@ -234,6 +260,7 @@ class TestAsyncConsolidationWorker:
 # TEST 14: ProfessorAgentWorker
 # ============================================================================
 
+
 class TestProfessorAgentWorker:
     """Tests for ProfessorAgentWorker."""
 
@@ -241,6 +268,7 @@ class TestProfessorAgentWorker:
         """Test ProfessorAgentWorker can be imported."""
         try:
             from app.core.workers.professor_agent_worker import ProfessorAgentWorker
+
             assert ProfessorAgentWorker is not None
             print("✓ ProfessorAgentWorker import available")
         except Exception as e:
@@ -251,6 +279,7 @@ class TestProfessorAgentWorker:
 # TEST 15: CodeAgentWorker
 # ============================================================================
 
+
 class TestCodeAgentWorker:
     """Tests for CodeAgentWorker."""
 
@@ -258,6 +287,7 @@ class TestCodeAgentWorker:
         """Test CodeAgentWorker can be imported."""
         try:
             from app.core.workers.code_agent_worker import CodeAgentWorker
+
             assert CodeAgentWorker is not None
             print("✓ CodeAgentWorker import available")
         except Exception as e:
@@ -268,6 +298,7 @@ class TestCodeAgentWorker:
 # TEST 16: LifeCycleWorker
 # ============================================================================
 
+
 class TestLifeCycleWorker:
     """Tests for LifeCycleWorker."""
 
@@ -275,6 +306,7 @@ class TestLifeCycleWorker:
         """Test LifeCycleWorker can be imported."""
         try:
             from app.core.workers.life_cycle_worker import LifeCycleWorker
+
             assert LifeCycleWorker is not None
             print("✓ LifeCycleWorker import available")
         except Exception as e:
@@ -285,6 +317,7 @@ class TestLifeCycleWorker:
 # TEST 17: Orchestrator
 # ============================================================================
 
+
 class TestOrchestrator:
     """Tests for Orchestrator."""
 
@@ -292,6 +325,7 @@ class TestOrchestrator:
         """Test Orchestrator can be imported."""
         try:
             from app.core.workers.orchestrator import Orchestrator
+
             assert Orchestrator is not None
             print("✓ Orchestrator import available")
         except Exception as e:
@@ -302,6 +336,7 @@ class TestOrchestrator:
 # TEST 18: NeuralTrainingWorker
 # ============================================================================
 
+
 class TestNeuralTrainingWorker:
     """Tests for NeuralTrainingWorker."""
 
@@ -309,6 +344,7 @@ class TestNeuralTrainingWorker:
         """Test NeuralTrainingWorker can be imported."""
         try:
             from app.core.workers.neural_training_worker import NeuralTrainingWorker
+
             assert NeuralTrainingWorker is not None
             print("✓ NeuralTrainingWorker import available")
         except Exception as e:
@@ -319,6 +355,7 @@ class TestNeuralTrainingWorker:
 # AUTONOMY CORE TESTS
 # ============================================================================
 
+
 class TestGoalManager:
     """Tests for GoalManager."""
 
@@ -326,6 +363,7 @@ class TestGoalManager:
         """Test GoalManager can be imported."""
         try:
             from app.core.autonomy.goal_manager import GoalManager
+
             assert GoalManager is not None
             print("✓ GoalManager import available")
         except Exception as e:
@@ -353,6 +391,7 @@ class TestPlanner:
         """Test Planner can be imported."""
         try:
             from app.core.autonomy.planner import Planner
+
             assert Planner is not None
             print("✓ Planner import available")
         except Exception as e:
@@ -366,6 +405,7 @@ class TestPolicyEngine:
         """Test PolicyEngine can be imported."""
         try:
             from app.core.autonomy.policy_engine import PolicyEngine
+
             assert PolicyEngine is not None
             print("✓ PolicyEngine import available")
         except Exception as e:
@@ -390,17 +430,14 @@ class TestPolicyEngine:
 # RUNNER
 # ============================================================================
 
+
 async def run_all_tests():
     """Run all tests and report results."""
     print("=" * 60)
     print("JANUS WORKERS TEST SUITE")
     print("=" * 60)
 
-    results = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0
-    }
+    results = {"passed": 0, "failed": 0, "skipped": 0}
 
     test_classes = [
         TestKnowledgeConsolidatorWorker(),
@@ -443,10 +480,13 @@ async def run_all_tests():
                     results["failed"] += 1
 
     print("\n" + "=" * 60)
-    print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
+    print(
+        f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped"
+    )
     print("=" * 60)
 
     return results["failed"] == 0
+
 
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())

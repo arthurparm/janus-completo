@@ -6,6 +6,7 @@ from app.repositories.knowledge_repository import get_knowledge_repository
 
 logger = structlog.get_logger(__name__)
 
+
 class DataRetentionService:
     """
     Service responsible for cleaning up artifacts (Vectors, Graph Nodes)
@@ -46,6 +47,7 @@ class DataRetentionService:
 
             # Since we are in the API (async), there should be a loop.
             import asyncio
+
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(DataRetentionService._async_graph_cleanup(user_id))

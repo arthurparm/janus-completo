@@ -1,7 +1,8 @@
-from typing import Literal
 import logging
-from langgraph.graph import END, START, StateGraph
+from typing import Literal
+
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 
 from app.core.agents.meta_agent_module.schemas import AgentState
 
@@ -48,16 +49,12 @@ class MetaAgentGraphBuilder:
 
         # Execution -> Error Reflexion (if failed) or End
         workflow.add_conditional_edges(
-            "execute",
-            self._check_execution,
-            {"completed": END, "failed": "error_reflexion"}
+            "execute", self._check_execution, {"completed": END, "failed": "error_reflexion"}
         )
 
         # Error Reflexion -> Plan (Retry) or Dead Letter
         workflow.add_conditional_edges(
-            "error_reflexion",
-            self._check_reflexion,
-            {"retry": "plan", "give_up": "dead_letter"}
+            "error_reflexion", self._check_reflexion, {"retry": "plan", "give_up": "dead_letter"}
         )
 
         workflow.add_edge("dead_letter", END)

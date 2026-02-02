@@ -34,9 +34,9 @@ async def execute_code(
         "output": result.output,
         "error": result.error,
         "execution_time": result.execution_time,
-        "variables": {k: str(v) for k, v in (result.variables or {}).items()}
-        if result.variables
-        else {},
+        "variables": (
+            {k: str(v) for k, v in (result.variables or {}).items()} if result.variables else {}
+        ),
     }
 
 

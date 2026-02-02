@@ -138,15 +138,15 @@ export class UiService {
 
   // Utility methods
   dismissAllToasts(): void {
-    // Not implemented in UiToastService yet, strict requirement? 
-    // Usually toasts auto-dismiss. 
+    // Not implemented in UiToastService yet, strict requirement?
+    // Usually toasts auto-dismiss.
     // We can implement clear() in UiToastService if needed.
   }
 
   dismissAllDialogs(): void {
     // UiDialogService doesn't have closeAll yet, but we track loading dialogs.
     // Ideally UiDialogService should track open dialogs.
-    // For now, just clear loading dialogs. To fully replace MatDialog.closeAll(), 
+    // For now, just clear loading dialogs. To fully replace MatDialog.closeAll(),
     // we would need to implement it in UiDialogService.
     this.activeLoadingDialogs.forEach(d => d.close())
     this.activeLoadingDialogs = []

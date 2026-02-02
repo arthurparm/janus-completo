@@ -3,8 +3,9 @@ FallbackChain pattern for executing strategies with hierarchical fallbacks.
 Provides observability, metrics, and circuit breaker integration.
 """
 
-from typing import Any, Callable, TypeVar
 import asyncio
+from typing import Any, Callable, TypeVar
+
 import structlog
 from prometheus_client import Counter
 

@@ -54,7 +54,7 @@ class DistillationService:
 
             logger.info(
                 f"Conhecimento destilado com sucesso: {state.task_id}",
-                extra={"reasoning_len": len(training_example["reasoning"])}
+                extra={"reasoning_len": len(training_example["reasoning"])},
             )
             return True
 
@@ -112,25 +112,25 @@ class DistillationService:
         if state.data_payload.code:
             output_content = state.data_payload.code
         elif state.data_payload.response:
-             output_content = state.data_payload.response
+            output_content = state.data_payload.response
         else:
-             # Fallback: tentar pegar notes do ultimo evento
-             if state.history:
-                 output_content = state.history[-1].notes
+            # Fallback: tentar pegar notes do ultimo evento
+            if state.history:
+                output_content = state.history[-1].notes
 
         output_content = self._sanitize(output_content)
         reasoning = self._sanitize(reasoning)
 
         return {
             "instruction": instruction,
-            "input": input_context[:2000], # Trucando contexto excessivo p/ economizar
+            "input": input_context[:2000],  # Trucando contexto excessivo p/ economizar
             "output": output_content,
             "reasoning": reasoning,
             "metadata": {
                 "task_id": state.task_id,
                 "agent_flow": [e.agent_role for e in state.history],
-                "collected_at": datetime.utcnow().isoformat()
-            }
+                "collected_at": datetime.utcnow().isoformat(),
+            },
         }
 
     def _sanitize(self, text: str) -> str:

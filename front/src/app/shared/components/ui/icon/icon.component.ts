@@ -12,7 +12,7 @@ export function cn(...inputs: ClassValue[]) {
     standalone: true,
     imports: [CommonModule],
     template: `
-    <span 
+    <span
       class="material-icons select-none"
       [class]="classes"
       [style.font-size.px]="size"

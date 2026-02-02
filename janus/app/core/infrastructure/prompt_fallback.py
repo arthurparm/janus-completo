@@ -3,9 +3,8 @@ Prompt Loader modificado para carregar prompts do banco ou de arquivos.
 Fallback: arquivo texto quando muito grande para SQL.
 """
 
-import os
 from pathlib import Path
-from functools import lru_cache
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -51,13 +50,19 @@ async def get_prompt_with_fallback(prompt_name: str, **kwargs) -> str:
                             error=str(db_error),
                         )
                     return _file_prompts_cache[prompt_name]
-                
+
                 content = file_path.read_text(encoding="utf-8")
                 _file_prompts_cache[prompt_name] = content
-                logger.debug("Prompt carregado de arquivo local", prompt_name=prompt_name, path=str(file_path))
+                logger.debug(
+                    "Prompt carregado de arquivo local",
+                    prompt_name=prompt_name,
+                    path=str(file_path),
+                )
                 return content
             except Exception as e:
-                logger.warning("Erro ao ler arquivo de prompt", prompt_name=prompt_name, error=str(e))
+                logger.warning(
+                    "Erro ao ler arquivo de prompt", prompt_name=prompt_name, error=str(e)
+                )
 
     if db_error:
         logger.warning("Falha ao buscar prompt do DB", prompt_name=prompt_name, error=str(db_error))

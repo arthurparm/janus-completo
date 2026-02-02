@@ -12,7 +12,7 @@ import { animate, style, transition, trigger } from '@angular/animations';
     template: `
     <div class="pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all"
          [class]="getClasses()">
-      
+
       <div class="flex items-center gap-3">
          @if (getIcon()) {
            <ui-icon [class]="getIconClass()">{{ getIcon() }}</ui-icon>
@@ -28,7 +28,7 @@ import { animate, style, transition, trigger } from '@angular/animations';
                {{ data.action }}
            </button>
          }
-         
+
          <button ui-button variant="ghost" size="icon" class="h-6 w-6 text-foreground/50 hover:text-foreground" (click)="onClose()">
             <ui-icon class="scale-75">close</ui-icon>
          </button>

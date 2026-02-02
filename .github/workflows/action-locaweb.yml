@@ -40,7 +40,7 @@ jobs:
       - name: Build Angular application (Angular 20)
         run: npm run build -- --configuration production --base-href /
         working-directory: front
-        
+
       - name: FTP Deploy (com sincronização)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:

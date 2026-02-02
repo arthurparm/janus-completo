@@ -3,9 +3,10 @@ Unit tests for FallbackChain pattern.
 Tests hierarchical fallback execution, metrics, and error handling.
 """
 
-import pytest
-import asyncio
 from unittest.mock import Mock, patch
+
+import pytest
+
 from app.core.infrastructure.fallback_chain import FallbackChain
 
 

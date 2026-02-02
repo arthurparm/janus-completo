@@ -22,6 +22,7 @@ CODE_REVIEW_TEMPLATE = ""
 # ## Hypothesis-Driven Problem Solving
 HYPOTHESIS_DRIVEN_DEBUGGING_TEMPLATE = ""
 
+
 async def load_advanced_prompts():
     """Carrega os prompts avançados de forma assíncrona."""
     global CHAIN_OF_THOUGHT_TEMPLATE
@@ -32,6 +33,10 @@ async def load_advanced_prompts():
 
     CHAIN_OF_THOUGHT_TEMPLATE = await get_prompt_with_fallback("capability_chain_of_thought")
     SELF_CORRECTION_TEMPLATE = await get_prompt_with_fallback("capability_self_correction")
-    MULTI_AGENT_COORDINATION_TEMPLATE = await get_prompt_with_fallback("capability_multi_agent_coordination")
+    MULTI_AGENT_COORDINATION_TEMPLATE = await get_prompt_with_fallback(
+        "capability_multi_agent_coordination"
+    )
     CODE_REVIEW_TEMPLATE = await get_prompt_with_fallback("capability_code_review")
-    HYPOTHESIS_DRIVEN_DEBUGGING_TEMPLATE = await get_prompt_with_fallback("capability_hypothesis_debugging")
+    HYPOTHESIS_DRIVEN_DEBUGGING_TEMPLATE = await get_prompt_with_fallback(
+        "capability_hypothesis_debugging"
+    )

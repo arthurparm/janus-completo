@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,6 +13,7 @@ def clean_cache():
     yield
     response_cache.invalidate()
 
+
 def test_llm_client_cache_integration():
     # Mock Base LLM
     mock_base = MagicMock()
@@ -25,7 +25,7 @@ def test_llm_client_cache_integration():
         provider="mock",
         model="mock-gpt",
         role=ModelRole.ORCHESTRATOR,
-        cache_key="orch_high"
+        cache_key="orch_high",
     )
 
     prompt = "What is 2+2?"
@@ -40,9 +40,10 @@ def test_llm_client_cache_integration():
     print("\n[TEST] 2nd Call")
     res2 = client.send(prompt)
     assert res2 == "Cached Response"
-    assert mock_base.invoke.call_count == 1 # Still 1!
+    assert mock_base.invoke.call_count == 1  # Still 1!
 
     print("[SUCCESS] Cache Hit Verified!")
+
 
 if __name__ == "__main__":
     test_llm_client_cache_integration()

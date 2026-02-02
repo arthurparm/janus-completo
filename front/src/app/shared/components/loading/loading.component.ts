@@ -16,8 +16,8 @@ import { LoadingStateService } from '../../../core/services/loading-state.servic
       <div class="loading-container" [class.overlay]="overlay">
         <div class="loading-content">
           @if (showSpinner) {
-            <ui-spinner 
-              [diameter]="diameter" 
+            <ui-spinner
+              [diameter]="diameter"
               [color]="color">
             </ui-spinner>
           }

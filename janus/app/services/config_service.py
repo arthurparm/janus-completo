@@ -1,4 +1,3 @@
-
 import asyncio
 import json
 from typing import Any
@@ -27,7 +26,7 @@ class ConfigService:
         """Starts the background listener task."""
         if self._running:
             return
-        
+
         self._running = True
         self._listener_task = asyncio.create_task(self._listen_loop())
         logger.info("ConfigService listener started.", channel=self.channel_name)
@@ -56,7 +55,7 @@ class ConfigService:
                 async for message in pubsub.listen():
                     if not self._running:
                         break
-                        
+
                     if message["type"] == "message":
                         await self._handle_update(message["data"])
             except asyncio.CancelledError:
@@ -70,13 +69,13 @@ class ConfigService:
         try:
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
-            
+
             payload = json.loads(data)
             logger.info("Received config update event", items=len(payload))
-            
+
             # Apply update to the singleton settings object
             settings.update(payload)
-            
+
         except json.JSONDecodeError:
             logger.error("Received invalid JSON in config update")
         except Exception as e:
@@ -85,7 +84,7 @@ class ConfigService:
     async def update_config(self, updates: dict[str, Any]):
         """
         Updates configuration locally and publishes event to other instances.
-        
+
         Args:
             updates: Dictionary with new configuration values.
         """
@@ -104,6 +103,7 @@ class ConfigService:
 
 
 _config_service: ConfigService | None = None
+
 
 def get_config_service() -> ConfigService:
     global _config_service

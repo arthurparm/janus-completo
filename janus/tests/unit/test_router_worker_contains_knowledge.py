@@ -1,4 +1,3 @@
-
 from app.core.workers.router_worker import _contains_knowledge_payload
 from app.models.schemas import TaskState
 
@@ -41,5 +40,8 @@ def test_contains_knowledge_goal_keywords_pt_en():
 
 def test_contains_knowledge_negative_cases():
     # Short tool output, short sandbox, no goal match
-    state = make_state(original_goal="Implementar função", data_payload={"tool_output": "ok", "sandbox_output": "ok"})
+    state = make_state(
+        original_goal="Implementar função",
+        data_payload={"tool_output": "ok", "sandbox_output": "ok"},
+    )
     assert _contains_knowledge_payload(state) is False

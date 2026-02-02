@@ -47,6 +47,7 @@ def _load_prompt_template(prompt_name: str) -> str:
     _PROMPT_CACHE[prompt_name] = content
     return content
 
+
 # ==================== MÉTRICAS ====================
 
 _TRAINING_JOBS = Counter(

@@ -1,14 +1,13 @@
 import asyncio
 import time
-import uuid
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from qdrant_client import AsyncQdrantClient, models
+
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
-from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.monitoring.health_monitor import get_timeout_recommendation
 from app.models.schemas import VectorCollection
 
 try:
@@ -19,7 +18,6 @@ try:
 except ImportError:
     _OTEL = False
     _tracer = None
-    from contextlib import nullcontext
 
 logger = structlog.get_logger(__name__)
 
@@ -149,8 +147,6 @@ class QdrantProvider:
                 return []
 
         try:
-            import asyncio as _asyncio
-
             # We define wrapper here to capture self._cb correctly in decorators if needed,
             # or we manually handle CB execution.
             # Ideally the @resilient decorator should support `circuit_breaker_getter`.

@@ -1,12 +1,10 @@
 import asyncio
-import os
 import sys
 
 # Adiciona o diretório /app ao path para importar o Janus
 sys.path.append("/app")
 
 from app.core.agents.meta_agent import get_meta_agent
-from app.config import settings
 
 
 async def test_cycle():

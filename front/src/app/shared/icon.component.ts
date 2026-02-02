@@ -7,7 +7,7 @@ import { ICONS, IconName } from './icons';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <span 
+    <span
       class="icon-container"
       [class.spinning]="spin"
       [class.pulse]="pulse"
@@ -22,36 +22,36 @@ import { ICONS, IconName } from './icons';
       align-items: center;
       justify-content: center;
     }
-    
+
     .icon-container {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease-in-out;
     }
-    
+
     .icon-container.spinning {
       animation: spin 1s linear infinite;
     }
-    
+
     .icon-container.pulse {
       animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
-    
+
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-    
+
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
-    
+
     .icon-container :host-context(.button:hover) {
       transform: scale(1.1);
     }
-    
+
     .icon-container :host-context(.button:active) {
       transform: scale(0.95);
     }
@@ -73,7 +73,7 @@ export class IconComponent {
   get iconClass(): string {
     const sizeMap = {
       xs: 'w-3 h-3',
-      sm: 'w-4 h-4', 
+      sm: 'w-4 h-4',
       md: 'w-5 h-5',
       lg: 'w-6 h-6',
       xl: 'w-8 h-8'

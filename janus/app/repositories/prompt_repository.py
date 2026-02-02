@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import and_, desc, select
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.db import db
 from app.models.config_models import Prompt
@@ -59,18 +59,15 @@ class PromptRepository:
     ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
         session = await self._get_session_async()
-        
+
         # Async query
-        stmt = (
-            select(Prompt)
-            .filter(
-                and_(
-                    Prompt.prompt_name == prompt_name,
-                    Prompt.namespace == namespace,
-                    Prompt.language == language,
-                    Prompt.model_target == model_target,
-                    Prompt.is_active,
-                )
+        stmt = select(Prompt).filter(
+            and_(
+                Prompt.prompt_name == prompt_name,
+                Prompt.namespace == namespace,
+                Prompt.language == language,
+                Prompt.model_target == model_target,
+                Prompt.is_active,
             )
         )
         result = await session.execute(stmt)

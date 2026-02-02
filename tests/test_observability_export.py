@@ -26,7 +26,9 @@ def test_export_sanitize_redacts_sensitive_fields(monkeypatch):
             "status": "ok",
             "latency_ms": 10,
             "trace_id": "abc",
-            "details_json": json.dumps({"email": "user@example.com", "token": "secret", "note": "ok"}),
+            "details_json": json.dumps(
+                {"email": "user@example.com", "token": "secret", "note": "ok"}
+            ),
             "created_at": 1730000000,
         }
     ]

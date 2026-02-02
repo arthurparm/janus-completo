@@ -24,6 +24,7 @@ import pytest
 # TEST 1: OS Tools (Phase 7)
 # ============================================================================
 
+
 class TestOSTools:
     """Tests for unrestricted OS tools used by SYSADMIN agent."""
 
@@ -43,16 +44,13 @@ class TestOSTools:
         """Test read/write system file tools."""
         from app.core.tools.os_tools import read_system_file, write_system_file
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
             test_path = f.name
 
         try:
             # Write uses 'path' not 'file_path'
             content = "Janus Test Content\nLine 2"
-            result = write_system_file.invoke({
-                "path": test_path,
-                "content": content
-            })
+            result = write_system_file.invoke({"path": test_path, "content": content})
             assert "sucesso" in result.lower() or "success" in result.lower()
 
             # Read uses 'path' not 'file_path'
@@ -72,12 +70,16 @@ class TestOSTools:
         result = execute_system_command.invoke({"command": "nonexistent_command_xyz123"})
 
         # Should return error message, not crash
-        assert "erro" in result.lower() or "error" in result.lower() or "not found" in result.lower()
+        assert (
+            "erro" in result.lower() or "error" in result.lower() or "not found" in result.lower()
+        )
         print("✓ execute_system_command handles errors gracefully")
+
 
 # ============================================================================
 # TEST 2: MetaAgent Proactive Remediation (Phase 8)
 # ============================================================================
+
 
 class TestMetaAgentRemediation:
     """Tests for MetaAgent auto-remediation loop."""
@@ -85,14 +87,20 @@ class TestMetaAgentRemediation:
     @pytest.fixture
     def mock_broker(self):
         """Create a mock broker for testing."""
+
         class MockBroker:
             def __init__(self):
                 self.published_messages = []
-            async def connect(self): pass
+
+            async def connect(self):
+                pass
+
             async def publish(self, queue_name, message, **kwargs):
                 self.published_messages.append({"queue": queue_name, "message": message})
+
             def start_consumer(self, *args, **kwargs):
                 return asyncio.create_task(asyncio.sleep(0))
+
         return MockBroker()
 
     @pytest.mark.asyncio
@@ -101,14 +109,18 @@ class TestMetaAgentRemediation:
         from app.core.agents.meta_agent import MetaAgent
         from app.core.agents.multi_agent_system import AgentRole, MultiAgentSystem
 
-        with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
-             patch("app.core.agents.meta_agent.get_llm") as mock_llm, \
-             patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()), \
-             patch("app.core.agents.meta_agent.analyze_memory_for_failures") as mock_mem, \
-             patch("app.core.agents.meta_agent.get_system_health_metrics") as mock_health, \
-             patch("app.core.agents.meta_agent.analyze_performance_trends") as mock_perf, \
-             patch("app.core.agents.meta_agent.get_resource_usage") as mock_res:
-
+        with (
+            patch(
+                "app.core.infrastructure.message_broker.get_broker",
+                new=AsyncMock(return_value=mock_broker),
+            ),
+            patch("app.core.agents.meta_agent.get_llm") as mock_llm,
+            patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()),
+            patch("app.core.agents.meta_agent.analyze_memory_for_failures") as mock_mem,
+            patch("app.core.agents.meta_agent.get_system_health_metrics") as mock_health,
+            patch("app.core.agents.meta_agent.analyze_performance_trends") as mock_perf,
+            patch("app.core.agents.meta_agent.get_resource_usage") as mock_res,
+        ):
             # Setup mocks
             mock_mem.invoke.return_value = "{}"
             mock_health.invoke.return_value = "{}"
@@ -116,27 +128,33 @@ class TestMetaAgentRemediation:
             mock_res.invoke.return_value = "{}"
 
             mock_llm_instance = MagicMock()
-            mock_llm_instance.invoke.return_value = json.dumps({
-                "overall_status": "critical",
-                "health_score": 30,
-                "issues": [],
-                "recommendations": [{
-                    "category": "system",
-                    "title": "Restart Service",
-                    "description": "Restart the crashed service",
-                    "rationale": "Service is unresponsive",
-                    "priority": 5,
-                    "suggested_agent": "sysadmin"
-                }],
-                "summary": "Critical issue detected"
-            })
+            mock_llm_instance.invoke.return_value = json.dumps(
+                {
+                    "overall_status": "critical",
+                    "health_score": 30,
+                    "issues": [],
+                    "recommendations": [
+                        {
+                            "category": "system",
+                            "title": "Restart Service",
+                            "description": "Restart the crashed service",
+                            "rationale": "Service is unresponsive",
+                            "priority": 5,
+                            "suggested_agent": "sysadmin",
+                        }
+                    ],
+                    "summary": "Critical issue detected",
+                }
+            )
             mock_llm.return_value = mock_llm_instance
 
             # Initialize MAS with SYSADMIN
             mas = MultiAgentSystem()
             mas.create_agent(AgentRole.SYSADMIN)
 
-            with patch("app.core.agents.multi_agent_system.get_multi_agent_system", return_value=mas):
+            with patch(
+                "app.core.agents.multi_agent_system.get_multi_agent_system", return_value=mas
+            ):
                 meta_agent = MetaAgent()
                 report = await meta_agent.run_analysis_cycle()
 
@@ -151,9 +169,11 @@ class TestMetaAgentRemediation:
 
                 print("✓ MetaAgent proactive remediation working")
 
+
 # ============================================================================
 # TEST 3: Agent Role-Based Tool Filtering (Phase 7)
 # ============================================================================
+
 
 class TestAgentToolFiltering:
     """Tests for role-based tool access control."""
@@ -194,9 +214,11 @@ class TestAgentToolFiltering:
 
             print(f"✓ CODER has {len(tools)} tools (no dangerous ones)")
 
+
 # ============================================================================
 # TEST 4: Memory Core Operations
 # ============================================================================
+
 
 class TestMemoryCore:
     """Tests for MemoryCore storage and retrieval."""
@@ -206,9 +228,8 @@ class TestMemoryCore:
         """Test storing and searching memories."""
         # Skip if Qdrant is not available
         try:
-            from app.core.memory.memory_types import MemoryType
-
             from app.core.memory.memory_core import MemoryCore
+            from app.core.memory.memory_types import MemoryType
         except ImportError:
             pytest.skip("MemoryCore not available")
 
@@ -219,16 +240,13 @@ class TestMemoryCore:
             memory_id = await memory.store(
                 content="Test memory for integration testing",
                 memory_type=MemoryType.EPISODIC,
-                metadata={"test": True}
+                metadata={"test": True},
             )
 
             assert memory_id is not None
 
             # Search for it
-            results = await memory.search(
-                query="integration testing",
-                top_k=5
-            )
+            results = await memory.search(query="integration testing", top_k=5)
 
             assert len(results) > 0
             print(f"✓ MemoryCore store/search working (found {len(results)} results)")
@@ -236,9 +254,11 @@ class TestMemoryCore:
         except Exception as e:
             print(f"⚠ MemoryCore test skipped (Qdrant unavailable): {e}")
 
+
 # ============================================================================
 # TEST 5: Message Broker Operations
 # ============================================================================
+
 
 class TestMessageBroker:
     """Tests for message broker publish/subscribe."""
@@ -250,19 +270,21 @@ class TestMessageBroker:
 
         # Create broker with mock connection factory
         mock_channel = AsyncMock()
-        mock_channel.declare_queue = AsyncMock(return_value=MagicMock(
-            declaration_result=MagicMock(message_count=0, consumer_count=0),
-            name="test_queue"
-        ))
+        mock_channel.declare_queue = AsyncMock(
+            return_value=MagicMock(
+                declaration_result=MagicMock(message_count=0, consumer_count=0), name="test_queue"
+            )
+        )
         mock_channel.default_exchange = AsyncMock()
         mock_channel.default_exchange.publish = AsyncMock()
 
         mock_connection = AsyncMock()
         mock_connection.is_closed = False
-        mock_connection.channel = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_channel),
-            __aexit__=AsyncMock()
-        ))
+        mock_connection.channel = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_channel), __aexit__=AsyncMock()
+            )
+        )
 
         async def mock_connect(*args, **kwargs):
             return mock_connection
@@ -277,9 +299,11 @@ class TestMessageBroker:
         assert mock_channel.default_exchange.publish.called
         print("✓ MessageBroker publish working")
 
+
 # ============================================================================
 # TEST 6: Circuit Breaker Resilience
 # ============================================================================
+
 
 class TestCircuitBreaker:
     """Tests for circuit breaker pattern."""
@@ -349,9 +373,11 @@ class TestCircuitBreaker:
         except Exception as e:
             print(f"⚠ CircuitBreaker recovery: {e}")
 
+
 # ============================================================================
 # TEST 7: LLM Fallback Logic
 # ============================================================================
+
 
 class TestLLMFallback:
     """Tests for LLM fallback mechanism."""
@@ -380,9 +406,11 @@ class TestLLMFallback:
                 # Fallback might not be configured in test env
                 print(f"⚠ LLM fallback test: {e}")
 
+
 # ============================================================================
 # TEST 8: Workspace Task Management
 # ============================================================================
+
 
 class TestWorkspaceTaskManagement:
     """Tests for SharedWorkspace task operations."""
@@ -399,11 +427,7 @@ class TestWorkspaceTaskManagement:
         workspace = SharedWorkspace()
 
         # Create task
-        task = Task(
-            description="Test task",
-            assigned_to="agent_1",
-            priority=TaskPriority.HIGH
-        )
+        task = Task(description="Test task", assigned_to="agent_1", priority=TaskPriority.HIGH)
 
         workspace.add_task(task)
 
@@ -426,9 +450,11 @@ class TestWorkspaceTaskManagement:
 
         print("✓ Workspace task lifecycle working")
 
+
 # ============================================================================
 # TEST 9: Agent Manager
 # ============================================================================
+
 
 class TestAgentManager:
     """Tests for AgentManager operations."""
@@ -470,9 +496,11 @@ class TestAgentManager:
 
             print("✓ AgentType to AgentRole mapping working")
 
+
 # ============================================================================
 # TEST 10: Filesystem Manager (Sandboxed)
 # ============================================================================
+
 
 class TestFilesystemManager:
     """Tests for sandboxed filesystem operations."""
@@ -485,9 +513,7 @@ class TestFilesystemManager:
         try:
             # This should fail because /app/workspace might not exist in test
             result = write_file(
-                file_path="/app/workspace/test_file.txt",
-                content="Test content",
-                overwrite=True
+                file_path="/app/workspace/test_file.txt", content="Test content", overwrite=True
             )
             print(f"✓ write_file validation: {result[:50]}...")
         except Exception as e:
@@ -504,9 +530,11 @@ class TestFilesystemManager:
         assert "erro" in result.lower() or "error" in result.lower() or "não" in result.lower()
         print("✓ read_file handles nonexistent files gracefully")
 
+
 # ============================================================================
 # TEST 11: Prompt Loader
 # ============================================================================
+
 
 class TestPromptLoader:
     """Tests for prompt loading and management."""
@@ -526,9 +554,11 @@ class TestPromptLoader:
         except Exception as e:
             print(f"⚠ PromptLoader test (no DB): {e}")
 
+
 # ============================================================================
 # TEST 12: LLM Router
 # ============================================================================
+
 
 class TestLLMRouter:
     """Tests for LLM routing logic."""
@@ -549,9 +579,11 @@ class TestLLMRouter:
             except Exception as e:
                 print(f"⚠ Ollama creation (no server): {e}")
 
+
 # ============================================================================
 # TEST 13: Action Module Tool Registry
 # ============================================================================
+
 
 class TestActionModule:
     """Tests for centralized tool registry."""
@@ -580,9 +612,11 @@ class TestActionModule:
 
         print("✓ ToolCategory and PermissionLevel enums defined")
 
+
 # ============================================================================
 # TEST 14: Task Dependencies
 # ============================================================================
+
 
 class TestTaskDependencies:
     """Tests for task dependency resolution."""
@@ -622,9 +656,11 @@ class TestTaskDependencies:
 
         print("✓ Task dependency resolution working")
 
+
 # ============================================================================
 # TEST 15: Metrics and Monitoring
 # ============================================================================
+
 
 class TestMetrics:
     """Tests for Prometheus metrics integration."""
@@ -645,9 +681,11 @@ class TestMetrics:
         except ImportError:
             print("⚠ Prometheus client not installed")
 
+
 # ============================================================================
 # TEST 16: Sandbox Service
 # ============================================================================
+
 
 class TestSandboxService:
     """Tests for code execution sandbox."""
@@ -669,9 +707,11 @@ class TestSandboxService:
         except Exception as e:
             print(f"⚠ Sandbox test: {e}")
 
+
 # ============================================================================
 # TEST 17: Knowledge Graph (if available)
 # ============================================================================
+
 
 class TestKnowledgeGraph:
     """Tests for Knowledge Graph operations."""
@@ -685,16 +725,18 @@ class TestKnowledgeGraph:
             graph = GraphDatabase()
 
             # Should have basic attributes
-            assert hasattr(graph, 'connect')
-            assert hasattr(graph, 'query')
+            assert hasattr(graph, "connect")
+            assert hasattr(graph, "query")
 
             print("✓ GraphDatabase class available")
         except ImportError as e:
             print(f"⚠ GraphDatabase not available: {e}")
 
+
 # ============================================================================
 # TEST 18: LLM Client Operations
 # ============================================================================
+
 
 class TestLLMClient:
     """Tests for LLM client operations."""
@@ -719,17 +761,19 @@ class TestLLMClient:
         try:
             from app.core.llm.types import ModelPriority, ModelRole
 
-            assert hasattr(ModelRole, 'ORCHESTRATOR')
-            assert hasattr(ModelRole, 'TOOL_USER')
-            assert hasattr(ModelPriority, 'LOCAL_ONLY')
+            assert hasattr(ModelRole, "ORCHESTRATOR")
+            assert hasattr(ModelRole, "TOOL_USER")
+            assert hasattr(ModelPriority, "LOCAL_ONLY")
 
             print("✓ LLM type enums available")
         except Exception as e:
             print(f"⚠ LLM types test: {e}")
 
+
 # ============================================================================
 # TEST 19: Context Manager
 # ============================================================================
+
 
 class TestContextManager:
     """Tests for context and correlation management."""
@@ -748,15 +792,21 @@ class TestContextManager:
             from app.core.infrastructure.context_manager import context_manager
 
             # Check core methods exist
-            assert hasattr(context_manager, 'get_trace_id') or hasattr(context_manager, 'trace_id') or context_manager is not None
+            assert (
+                hasattr(context_manager, "get_trace_id")
+                or hasattr(context_manager, "trace_id")
+                or context_manager is not None
+            )
 
             print("✓ ContextManager methods available")
         except Exception as e:
             print(f"⚠ ContextManager methods: {e}")
 
+
 # ============================================================================
 # TEST 20: Health Monitor
 # ============================================================================
+
 
 class TestHealthMonitor:
     """Tests for system health monitoring."""
@@ -780,9 +830,11 @@ class TestHealthMonitor:
         except Exception as e:
             print(f"⚠ HealthMonitor test: {e}")
 
+
 # ============================================================================
 # TEST 21: Poison Pill Handler
 # ============================================================================
+
 
 class TestPoisonPillHandler:
     """Tests for poison pill detection."""
@@ -792,10 +844,7 @@ class TestPoisonPillHandler:
         try:
             from app.core.monitoring.poison_pill_handler import PoisonPillHandler
 
-            handler = PoisonPillHandler(
-                failure_threshold=3,
-                consecutive_failure_threshold=5
-            )
+            handler = PoisonPillHandler(failure_threshold=3, consecutive_failure_threshold=5)
 
             assert handler.failure_threshold == 3
             assert handler.consecutive_failure_threshold == 5
@@ -804,9 +853,11 @@ class TestPoisonPillHandler:
         except ImportError:
             print("⚠ PoisonPillHandler not available")
 
+
 # ============================================================================
 # TEST 22: Rate Limit Middleware
 # ============================================================================
+
 
 class TestRateLimitMiddleware:
     """Tests for rate limiting middleware."""
@@ -821,9 +872,11 @@ class TestRateLimitMiddleware:
         except ImportError:
             print("⚠ RateLimitMiddleware not available")
 
+
 # ============================================================================
 # TEST 23: Correlation Middleware
 # ============================================================================
+
 
 class TestCorrelationMiddleware:
     """Tests for correlation ID middleware."""
@@ -838,9 +891,11 @@ class TestCorrelationMiddleware:
         except ImportError:
             print("⚠ CorrelationMiddleware not available")
 
+
 # ============================================================================
 # TEST 24: Document Service
 # ============================================================================
+
 
 class TestDocumentService:
     """Tests for document ingestion service."""
@@ -853,16 +908,18 @@ class TestDocumentService:
 
             service = DocumentIngestionService()
 
-            assert hasattr(service, 'ingest_file')
-            assert hasattr(service, 'ingest_text')
+            assert hasattr(service, "ingest_file")
+            assert hasattr(service, "ingest_text")
 
             print("✓ DocumentIngestionService available")
         except Exception as e:
             print(f"⚠ DocumentIngestionService: {e}")
 
+
 # ============================================================================
 # TEST 25: MetaAgent Tools
 # ============================================================================
+
 
 class TestMetaAgentTools:
     """Tests for MetaAgent analysis tools."""
@@ -884,13 +941,15 @@ class TestMetaAgentTools:
 
         # Tool should exist and be callable
         assert analyze_memory_for_failures is not None
-        assert hasattr(analyze_memory_for_failures, 'invoke')
+        assert hasattr(analyze_memory_for_failures, "invoke")
 
         print("✓ analyze_memory_for_failures tool available")
+
 
 # ============================================================================
 # TEST 26: Unified Tools
 # ============================================================================
+
 
 class TestUnifiedTools:
     """Tests for unified agent tools."""
@@ -910,9 +969,11 @@ class TestUnifiedTools:
 
         print(f"✓ unified_tools has {len(unified_tools)} tools")
 
+
 # ============================================================================
 # TEST 27: Faulty Tools (Reflexion Training)
 # ============================================================================
+
 
 class TestFaultyTools:
     """Tests for intentionally faulty tools used in Reflexion training."""
@@ -928,9 +989,11 @@ class TestFaultyTools:
 
         print(f"✓ {len(tools)} faulty tools available for Reflexion training")
 
+
 # ============================================================================
 # TEST 28: Schemas and Models
 # ============================================================================
+
 
 class TestSchemas:
     """Tests for Pydantic schemas and models."""
@@ -943,7 +1006,7 @@ class TestSchemas:
             task_id="test-123",
             task_type="test_task",
             payload={"key": "value"},
-            timestamp=123456789.0
+            timestamp=123456789.0,
         )
 
         assert msg.task_id == "test-123"
@@ -963,19 +1026,18 @@ class TestSchemas:
         """Test TaskState schema."""
         from app.models.schemas import TaskState
 
-        state = TaskState(
-            original_goal="Test goal",
-            data_payload={"test": True}
-        )
+        state = TaskState(original_goal="Test goal", data_payload={"test": True})
 
         assert state.original_goal == "Test goal"
         assert state.status == "in_progress"  # Default
 
         print("✓ TaskState schema working")
 
+
 # ============================================================================
 # TEST 29: Queue Names
 # ============================================================================
+
 
 class TestQueueNames:
     """Tests for queue name constants."""
@@ -991,9 +1053,11 @@ class TestQueueNames:
 
         print(f"✓ Queue names generated for {len(list(AgentRole))} roles")
 
+
 # ============================================================================
 # TEST 30: Agent Types
 # ============================================================================
+
 
 class TestAgentTypes:
     """Tests for agent type definitions."""
@@ -1003,9 +1067,9 @@ class TestAgentTypes:
         from app.core.infrastructure.enums import AgentType
 
         # Core types should exist
-        assert hasattr(AgentType, 'ORCHESTRATOR')
-        assert hasattr(AgentType, 'TOOL_USER')
-        assert hasattr(AgentType, 'META_AGENT')
+        assert hasattr(AgentType, "ORCHESTRATOR")
+        assert hasattr(AgentType, "TOOL_USER")
+        assert hasattr(AgentType, "META_AGENT")
 
         print("✓ AgentType enum available")
 
@@ -1014,16 +1078,18 @@ class TestAgentTypes:
         from app.core.agents.multi_agent_system import AgentRole
 
         # Core roles should exist
-        assert hasattr(AgentRole, 'PROJECT_MANAGER')
-        assert hasattr(AgentRole, 'CODER')
-        assert hasattr(AgentRole, 'RESEARCHER')
-        assert hasattr(AgentRole, 'SYSADMIN')
+        assert hasattr(AgentRole, "PROJECT_MANAGER")
+        assert hasattr(AgentRole, "CODER")
+        assert hasattr(AgentRole, "RESEARCHER")
+        assert hasattr(AgentRole, "SYSADMIN")
 
         print("✓ AgentRole enum available")
+
 
 # ============================================================================
 # TEST 31: LLM Factory
 # ============================================================================
+
 
 class TestLLMFactory:
     """Tests for LLM factory functions."""
@@ -1033,7 +1099,7 @@ class TestLLMFactory:
         from app.core.llm import factory
 
         # Check factory module has pool functions
-        assert hasattr(factory, 'warm_llm_pool')
+        assert hasattr(factory, "warm_llm_pool")
 
         print("✓ LLM factory module available")
 
@@ -1051,9 +1117,11 @@ class TestLLMFactory:
 
         print("✓ LLM types working")
 
+
 # ============================================================================
 # TEST 32: Resilient Decorator
 # ============================================================================
+
 
 class TestResilientDecorator:
     """Tests for resilient decorator with retry logic."""
@@ -1080,9 +1148,11 @@ class TestResilientDecorator:
 
         print("✓ Resilient decorator retry working")
 
+
 # ============================================================================
 # TEST 33: Multi-Agent System Dispatch
 # ============================================================================
+
 
 class TestMultiAgentSystemDispatch:
     """Tests for MAS task dispatch."""
@@ -1095,17 +1165,25 @@ class TestMultiAgentSystemDispatch:
         class MockBroker:
             def __init__(self):
                 self.messages = []
-            async def connect(self): pass
+
+            async def connect(self):
+                pass
+
             async def publish(self, queue, msg, **kw):
                 self.messages.append({"queue": queue, "message": msg})
+
             def start_consumer(self, *a, **kw):
                 return asyncio.create_task(asyncio.sleep(0))
 
         mock_broker = MockBroker()
 
-        with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
-             patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-
+        with (
+            patch(
+                "app.core.infrastructure.message_broker.get_broker",
+                new=AsyncMock(return_value=mock_broker),
+            ),
+            patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()),
+        ):
             mas = MultiAgentSystem()
             agent = mas.create_agent(AgentRole.CODER)
 
@@ -1119,9 +1197,11 @@ class TestMultiAgentSystemDispatch:
 
             print("✓ MAS dispatch_task working")
 
+
 # ============================================================================
 # TEST 34: Specialized Agent Creation
 # ============================================================================
+
 
 class TestSpecializedAgentCreation:
     """Tests for SpecializedAgent creation."""
@@ -1145,9 +1225,11 @@ class TestSpecializedAgentCreation:
 
             print(f"✓ {roles_tested} agent roles can be created")
 
+
 # ============================================================================
 # TEST 35: Memory Types
 # ============================================================================
+
 
 class TestMemoryTypes:
     """Tests for memory type definitions."""
@@ -1158,17 +1240,19 @@ class TestMemoryTypes:
             from app.core.memory.memory_types import MemoryType
 
             # Core types should exist
-            assert hasattr(MemoryType, 'EPISODIC')
-            assert hasattr(MemoryType, 'SEMANTIC')
-            assert hasattr(MemoryType, 'WORKING')
+            assert hasattr(MemoryType, "EPISODIC")
+            assert hasattr(MemoryType, "SEMANTIC")
+            assert hasattr(MemoryType, "WORKING")
 
             print("✓ MemoryType enum available")
         except ImportError:
             print("⚠ MemoryType not available")
 
+
 # ============================================================================
 # TEST 36: Settings and Configuration
 # ============================================================================
+
 
 class TestSettings:
     """Tests for application settings."""
@@ -1181,15 +1265,17 @@ class TestSettings:
             assert settings is not None
 
             # Check some expected attributes exist
-            assert hasattr(settings, 'DEBUG') or hasattr(settings, 'PROJECT_NAME')
+            assert hasattr(settings, "DEBUG") or hasattr(settings, "PROJECT_NAME")
 
             print("✓ Settings loaded successfully")
         except Exception as e:
             print(f"⚠ Settings test: {e}")
 
+
 # ============================================================================
 # RUNNER
 # ============================================================================
+
 
 async def run_all_tests():
     """Run all tests and report results."""
@@ -1197,11 +1283,7 @@ async def run_all_tests():
     print("JANUS COMPREHENSIVE TEST SUITE")
     print("=" * 60)
 
-    results = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0
-    }
+    results = {"passed": 0, "failed": 0, "skipped": 0}
 
     test_classes = [
         TestOSTools(),
@@ -1254,12 +1336,14 @@ async def run_all_tests():
                     results["failed"] += 1
 
     print("\n" + "=" * 60)
-    print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
+    print(
+        f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped"
+    )
     print("=" * 60)
 
     return results["failed"] == 0
 
+
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())
     exit(0 if success else 1)
-

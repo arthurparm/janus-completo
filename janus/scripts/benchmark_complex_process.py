@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 from uuid import uuid4
 
-
 try:
     import psycopg  # type: ignore
 except Exception as exc:  # pragma: no cover - optional dependency at runtime
@@ -107,9 +106,7 @@ def _get_setting(env: Dict[str, str], key: str, default: Optional[str]) -> Optio
 
 def _require_requests() -> None:
     if requests is None:
-        raise RuntimeError(
-            f"requests is required but not available: {_REQUESTS_IMPORT_ERROR}"
-        )
+        raise RuntimeError(f"requests is required but not available: {_REQUESTS_IMPORT_ERROR}")
 
 
 def _require_psycopg() -> None:
@@ -122,7 +119,9 @@ def _require_psycopg() -> None:
         raise RuntimeError(msg)
 
 
-def _post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: float) -> Dict[str, Any]:
+def _post_json(
+    url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: float
+) -> Dict[str, Any]:
     _require_requests()
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=timeout)  # type: ignore[arg-type]
@@ -210,6 +209,7 @@ def _connect_db(
     dbname: str,
 ) -> Any:
     _require_psycopg()
+
     def _connect(target_host: str):
         if psycopg is not None:
             return psycopg.connect(  # type: ignore[call-arg]
@@ -398,7 +398,10 @@ def main() -> int:
                 timeout=args.timeout,
             )
             calls, in_tokens, out_tokens, cost = _wait_for_tokens(
-                conn, trace_id, args.db_retries, args.db_retry_delay  # type: ignore[arg-type]
+                conn,
+                trace_id,
+                args.db_retries,
+                args.db_retry_delay,  # type: ignore[arg-type]
             )
         else:
             data = _invoke_llm(

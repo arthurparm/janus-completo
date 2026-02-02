@@ -2,13 +2,17 @@
 Configuração do banco de dados PostgreSQL para Configuration-as-Data.
 """
 
-from collections.abc import Generator, AsyncGenerator
-from contextlib import contextmanager, asynccontextmanager
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import QueuePool
 
 from app.config import settings
 from app.models.config_models import Base
@@ -89,7 +93,7 @@ class PostgresDatabase:
         """Cria todas as tabelas definidas nos modelos (assíncrono)."""
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-        
+
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
@@ -97,7 +101,7 @@ class PostgresDatabase:
         """Remove todas as tabelas (usar com cuidado!)."""
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-            
+
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
 
@@ -130,7 +134,7 @@ class PostgresDatabase:
         """Context manager para sessões de banco de dados assíncronas."""
         if self._session_factory is None:
             raise RuntimeError("Session factory not initialized")
-        
+
         session: AsyncSession = self._session_factory()
         try:
             yield session
@@ -140,6 +144,7 @@ class PostgresDatabase:
             raise
         finally:
             await session.close()
+
 
 # Instância singleton
 postgres_db = PostgresDatabase()

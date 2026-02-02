@@ -81,7 +81,9 @@ class GoalManager:
         if not self._memory_service:
             return
         try:
-            event_text = f"Goal {action}: {goal.title} (Priority: {goal.priority}, Status: {goal.status})"
+            event_text = (
+                f"Goal {action}: {goal.title} (Priority: {goal.priority}, Status: {goal.status})"
+            )
             logger.info(f"Goal event: {event_text}", goal_id=goal.id, action=action)
         except Exception as e:
             logger.warning(f"Failed to log goal {goal.id} to memory service: {e}")

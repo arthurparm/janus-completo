@@ -4,10 +4,12 @@ Publishes agent events to RabbitMQ with fallback strategies.
 """
 
 import time
-import structlog
 from typing import Any
-from app.core.infrastructure.message_broker import get_broker
+
+import structlog
+
 from app.core.infrastructure.fallback_chain import FallbackChain
+from app.core.infrastructure.message_broker import get_broker
 
 logger = structlog.get_logger(__name__)
 

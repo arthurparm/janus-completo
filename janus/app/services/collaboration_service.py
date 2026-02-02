@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 from typing import Any
 
@@ -6,16 +5,13 @@ import structlog
 from fastapi import Request
 
 from app.core.agents import AgentRole
-from app.repositories.collaboration_repository import (
-    CollaborationRepository,
-)
-
 from app.core.agents.structures import Task, TaskPriority, TaskStatus
-
-
 from app.core.infrastructure.context_cache import get_context_cache
 from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import QueueName, TaskMessage, TaskState
+from app.repositories.collaboration_repository import (
+    CollaborationRepository,
+)
 
 logger = structlog.get_logger(__name__)
 

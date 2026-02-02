@@ -101,7 +101,7 @@ class DesktopNotifier:
             message_escaped = message.replace('"', '`"').replace("'", "`'")
 
             # PowerShell script for Windows toast notification
-            ps_script = f'''
+            ps_script = f"""
             [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
             [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
 
@@ -121,7 +121,7 @@ class DesktopNotifier:
             $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
             $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{self.app_name}")
             $notifier.Show($toast)
-            '''
+            """
 
             # Run PowerShell asynchronously
             process = await asyncio.create_subprocess_exec(

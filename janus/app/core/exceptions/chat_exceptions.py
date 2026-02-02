@@ -68,9 +68,7 @@ class MessageTooLargeError(ChatServiceError):
     def __init__(self, size_bytes: int, limit_bytes: int):
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes
-        super().__init__(
-            f"Message too large ({size_bytes} bytes > {limit_bytes} bytes)"
-        )
+        super().__init__(f"Message too large ({size_bytes} bytes > {limit_bytes} bytes)")
 
 
 class LLMInvocationError(ChatServiceError):

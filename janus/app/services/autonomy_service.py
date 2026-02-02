@@ -333,6 +333,7 @@ class AutonomyService:
                 if decision.require_confirmation:
                     try:
                         import json as _json
+
                         from app.repositories.pending_action_repository import (
                             PendingActionRepository,
                         )
@@ -471,7 +472,7 @@ class AutonomyService:
                                 if hasattr(fallback_tool, "arun")
                                 else fallback_tool.run(args)
                             )
-                            logger.info(f"[AutonomyLoop] Fallback executado com sucesso")
+                            logger.info("[AutonomyLoop] Fallback executado com sucesso")
                             step_success = True
                         except Exception as e:
                             logger.error(f"[AutonomyLoop] Fallback falhou: {e}")

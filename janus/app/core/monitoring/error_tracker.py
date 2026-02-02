@@ -1,7 +1,7 @@
 import threading
+import time
 from collections import deque
 from datetime import datetime
-import time
 
 
 class GlobalErrorTracker:

@@ -12,6 +12,7 @@ def mock_broker():
     with patch("app.core.infrastructure.message_broker.get_broker", new_callable=AsyncMock) as mock:
         yield mock
 
+
 @pytest.mark.asyncio
 async def test_multi_agent_parallel_dispatch(mock_broker):
     # Avoid initializing the whole system to prevent circular imports during test collection
@@ -29,7 +30,7 @@ async def test_multi_agent_parallel_dispatch(mock_broker):
     task = Task(
         description="Write a simple Hello World in Python",
         assigned_to=coder.agent_id,
-        metadata={"test": True}
+        metadata={"test": True},
     )
     mas.workspace.add_task(task)
 

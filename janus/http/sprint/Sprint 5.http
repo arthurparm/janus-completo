@@ -116,5 +116,3 @@ Content-Type: application/json
   "max_time_seconds": 120,
   "success_threshold": 0.85
 }
-
-

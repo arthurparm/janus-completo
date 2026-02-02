@@ -1,9 +1,9 @@
-import sys
-import os
 import asyncio
-from pathlib import Path
-import structlog
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import structlog
 from sqlalchemy.exc import IntegrityError
 
 # Add project root to path
@@ -15,21 +15,20 @@ from app.repositories.prompt_repository import PromptRepository
 
 # Configure logging
 structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer()
-    ],
+    processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.dev.ConsoleRenderer()],
     logger_factory=structlog.PrintLoggerFactory(),
 )
 logger = structlog.get_logger()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "app" / "prompts"
 
+
 def _ensure_tables() -> None:
     try:
         asyncio.run(db.create_tables())
     except Exception as e:
         logger.warning("Failed to ensure prompt tables exist", error=str(e))
+
 
 def sync_prompts():
     """
@@ -39,14 +38,14 @@ def sync_prompts():
     logger.info("Starting Prompt Synchronization", directory=str(PROMPTS_DIR))
 
     _ensure_tables()
-    
+
     if not PROMPTS_DIR.exists():
         logger.error("Prompts directory not found", path=str(PROMPTS_DIR))
         raise SystemExit(1)
 
     # Engine is initialized on repository creation; ensure tables exist if needed.
     repo = PromptRepository()
-    
+
     files = list(PROMPTS_DIR.glob("*.txt"))
     logger.info(f"Found {len(files)} prompt files")
 
@@ -64,7 +63,7 @@ def sync_prompts():
 
             # Check existing
             existing = repo.get_active_prompt_sync(prompt_name)
-            
+
             if existing and existing.prompt_text.strip() == content:
                 logger.debug("Prompt up to date", name=prompt_name)
                 skipped_count += 1
@@ -79,7 +78,7 @@ def sync_prompts():
                     prompt_text=content,
                     version=version,
                     created_by="sync_script",
-                    activate=True
+                    activate=True,
                 )
                 updated_count += 1
             except IntegrityError as e:
@@ -115,14 +114,10 @@ def sync_prompts():
             logger.error("Failed to sync prompt", name=prompt_name, error=str(e))
             error_count += 1
 
-    logger.info(
-        "Sync Completed", 
-        updated=updated_count, 
-        skipped=skipped_count, 
-        errors=error_count
-    )
+    logger.info("Sync Completed", updated=updated_count, skipped=skipped_count, errors=error_count)
     if error_count > 0:
         raise SystemExit(1)
+
 
 if __name__ == "__main__":
     sync_prompts()

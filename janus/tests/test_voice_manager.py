@@ -11,9 +11,10 @@ async def test_voice_manager_initialization():
     Test that VoiceManager instantiates services correctly.
     We mock the underlying service imports to avoid missing dependency errors.
     """
-    with patch("app.core.senses.audio.manager.STTService") as MockSTT, \
-         patch("app.core.senses.audio.manager.TTSService") as MockTTS:
-
+    with (
+        patch("app.core.senses.audio.manager.STTService") as MockSTT,
+        patch("app.core.senses.audio.manager.TTSService") as MockTTS,
+    ):
         vm = VoiceManager()
         vm.initialize()
 
@@ -21,11 +22,13 @@ async def test_voice_manager_initialization():
         MockSTT.assert_called_once()
         MockTTS.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_voice_manager_speak():
-    with patch("app.core.senses.audio.manager.STTService"), \
-         patch("app.core.senses.audio.manager.TTSService") as MockTTS:
-
+    with (
+        patch("app.core.senses.audio.manager.STTService"),
+        patch("app.core.senses.audio.manager.TTSService") as MockTTS,
+    ):
         vm = VoiceManager()
         vm.initialize()
 
@@ -36,11 +39,13 @@ async def test_voice_manager_speak():
         await vm.speak("Hello")
         tts_instance.speak.assert_awaited_with("Hello")
 
+
 @pytest.mark.asyncio
 async def test_voice_manager_listen():
-    with patch("app.core.senses.audio.manager.STTService") as MockSTT, \
-         patch("app.core.senses.audio.manager.TTSService"):
-
+    with (
+        patch("app.core.senses.audio.manager.STTService") as MockSTT,
+        patch("app.core.senses.audio.manager.TTSService"),
+    ):
         vm = VoiceManager()
         vm.initialize()
 
@@ -50,6 +55,7 @@ async def test_voice_manager_listen():
         result = await vm.listen()
         assert result == "test command"
         stt_instance.listen.assert_awaited_once()
+
 
 @pytest.mark.asyncio
 async def test_voice_manager_wake_word():

@@ -62,14 +62,17 @@ class WriteFileInput(BaseModel):
 
 @tool  # Removido args_schema temporariamente para permitir que o wrapper funcione
 def write_file(
-    file_path: str | None = None, content: str = "", overwrite: bool = False, path: str | None = None
+    file_path: str | None = None,
+    content: str = "",
+    overwrite: bool = False,
+    path: str | None = None,
 ) -> str:
     """
     Writes content to a file within the secure workspace (/app/workspace).
 
     ⚠️ USE CASE: Creating STANDALONE SCRIPTS for users to run manually.
     ⚠️ NOT FOR: Creating SYSTEM TOOLS (use auto-evolution for that)
-    
+
     CRITICAL: If user requested a "tool" or "ferramenta", DO NOT use this function.
     Instead, ask for clarification: SYSTEM TOOL (auto-evolution) vs STANDALONE SCRIPT (write_file)?
 
@@ -294,6 +297,7 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
 
 class EvolveToolInput(BaseModel):
     """Input schema for evolve_tool."""
+
     capability_request: str | None = Field(
         default=None,
         description="Descrição da capacidade desejada para a nova ferramenta.",
@@ -394,6 +398,7 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
 
     Retorna conceitos conectados e seus relacionamentos.
     """
+
     def _get_graph():
         g = graph_db
         if g:

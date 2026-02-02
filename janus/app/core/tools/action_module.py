@@ -162,6 +162,7 @@ class DynamicToolGenerator:
                                 except Exception:
                                     pass
                             return await func(*args, **kwargs)
+
                 else:
 
                     @tool(description=description, args_schema=args_schema)
@@ -184,6 +185,7 @@ class DynamicToolGenerator:
                                 except Exception:
                                     pass
                             return func(*args, **kwargs)
+
             elif is_async:
 
                 @tool(description=description)
@@ -202,6 +204,7 @@ class DynamicToolGenerator:
                             except Exception:
                                 pass
                         return await func(*args, **kwargs)
+
             else:
 
                 @tool(description=description)
@@ -361,7 +364,9 @@ class ActionRegistry:
         self._tools: dict[str, BaseTool] = {}
         self._metadata: dict[str, ToolMetadata] = {}
         self._call_history: list[ToolCall] = []
-        self._rate_limits: dict[tuple[str, str], list[float]] = {}  # (user_id, tool_name) -> timestamps
+        self._rate_limits: dict[tuple[str, str], list[float]] = (
+            {}
+        )  # (user_id, tool_name) -> timestamps
 
     def register(
         self,
@@ -477,9 +482,7 @@ class ActionRegistry:
         if key not in self._rate_limits:
             self._rate_limits[key] = []
 
-        self._rate_limits[key] = [
-            ts for ts in self._rate_limits[key] if ts > one_minute_ago
-        ]
+        self._rate_limits[key] = [ts for ts in self._rate_limits[key] if ts > one_minute_ago]
 
         # Verifica limite
         current_calls = len(self._rate_limits[key])

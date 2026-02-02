@@ -1,9 +1,9 @@
-import logging
 import json
+import logging
 from typing import Any, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.llm_manager import ModelPriority, ModelRole, get_llm

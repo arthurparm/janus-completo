@@ -4,6 +4,7 @@ Context Cache for Stateful Workers.
 This module provides an in-memory cache for storing static context
 from TaskState, enabling workers to send only deltas between hops.
 """
+
 import hashlib
 import time
 from typing import Any
@@ -19,7 +20,7 @@ DEFAULT_TTL_SECONDS = 1800
 class ContextCache:
     """
     In-memory cache for static task context.
-    
+
     Stores the static portions of TaskState (original_goal, meta, etc.)
     so workers can send only dynamic deltas (history updates, new outputs).
     """
@@ -32,11 +33,11 @@ class ContextCache:
     def store(self, task_id: str, static_context: dict[str, Any]) -> str:
         """
         Store static context for a task.
-        
+
         Args:
             task_id: Unique task identifier.
             static_context: Static portions of TaskState to cache.
-            
+
         Returns:
             Hash of the stored context for validation.
         """
@@ -52,10 +53,10 @@ class ContextCache:
     def retrieve(self, task_id: str) -> dict[str, Any] | None:
         """
         Retrieve cached static context for a task.
-        
+
         Args:
             task_id: Unique task identifier.
-            
+
         Returns:
             Cached static context, or None if not found/expired.
         """
@@ -83,10 +84,7 @@ class ContextCache:
     def cleanup_expired(self) -> int:
         """Remove all expired entries. Returns count of removed items."""
         now = time.time()
-        expired = [
-            tid for tid, ts in self._timestamps.items()
-            if now - ts > self._ttl
-        ]
+        expired = [tid for tid, ts in self._timestamps.items() if now - ts > self._ttl]
         for tid in expired:
             self.invalidate(tid)
 
@@ -97,6 +95,7 @@ class ContextCache:
     def _compute_hash(self, data: dict[str, Any]) -> str:
         """Compute a hash of the context for integrity validation."""
         import json
+
         serialized = json.dumps(data, sort_keys=True, default=str)
         return hashlib.sha256(serialized.encode()).hexdigest()
 

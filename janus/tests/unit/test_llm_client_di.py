@@ -10,9 +10,11 @@ from app.core.llm.types import ModelRole
 async def test_llm_client_dependency_injection():
     # 1. Mock dependencies
     mock_base = MagicMock()
+
     def side_effect(*args, **kwargs):
         print(f"DEBUG: invoke called with {args}")
         return MagicMock(content="Mock response")
+
     mock_base.invoke.side_effect = side_effect
 
     mock_cb = MagicMock()
@@ -43,7 +45,7 @@ async def test_llm_client_dependency_injection():
         role=ModelRole.ORCHESTRATOR,
         cache_key="mock_key",
         circuit_breaker=mock_cb,
-        config=mock_settings
+        config=mock_settings,
     )
 
     # 3. Verify internal state
@@ -66,6 +68,7 @@ async def test_llm_client_dependency_injection():
     mock_cb.update_params.assert_called()
 
     print("✅ Dependency Injection Test Passed: LLMClient used injected dependencies!")
+
 
 if __name__ == "__main__":
     test_llm_client_dependency_injection()

@@ -19,7 +19,7 @@ export const baseUrlInterceptor: HttpInterceptorFn = (req, next) => {
     const skipPrefix = ['/assets/'];
     const skipExt = ['.csv'];
     const hasSkipExt = skipExt.some(ext => normalizedUrl.toLowerCase().endsWith(ext));
-    const shouldSkip = skipExact.some((p) => normalizedUrl === p || normalizedUrl.startsWith(p + '?')) 
+    const shouldSkip = skipExact.some((p) => normalizedUrl === p || normalizedUrl.startsWith(p + '?'))
       || skipPrefix.some((p) => normalizedUrl.startsWith(p))
       || hasSkipExt;
 

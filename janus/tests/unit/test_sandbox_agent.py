@@ -10,7 +10,9 @@ class FakeContainers:
     def __init__(self):
         self.last_kwargs = None
 
-    def run(self, image, command, remove, network_mode, mem_limit, nano_cpus, stderr, stdout, detach):
+    def run(
+        self, image, command, remove, network_mode, mem_limit, nano_cpus, stderr, stdout, detach
+    ):
         # Guarda argumentos para validação
         self.last_kwargs = {
             "image": image,

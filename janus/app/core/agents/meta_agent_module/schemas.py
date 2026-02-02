@@ -1,7 +1,8 @@
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from dataclasses import dataclass, field
-from typing import Any, Required, TypedDict, Literal
+from typing import Any, Required, TypedDict
+
 from pydantic import BaseModel, Field
 
 
@@ -200,8 +201,12 @@ class DiagnosisSchema(BaseModel):
 
 class ReflexionAnalysisSchema(BaseModel):
     root_cause: str = Field(..., description="Verbalização clara da causa raiz da falha.")
-    error_type: str = Field(..., description="Classificação do tipo de erro (e.g., Lógica, Ambiente, Timeout).")
-    actionable_insights: list[str] = Field(..., description="Lista de insights acionáveis para a próxima tentativa.")
+    error_type: str = Field(
+        ..., description="Classificação do tipo de erro (e.g., Lógica, Ambiente, Timeout)."
+    )
+    actionable_insights: list[str] = Field(
+        ..., description="Lista de insights acionáveis para a próxima tentativa."
+    )
 
 
 class RecommendationItem(BaseModel):

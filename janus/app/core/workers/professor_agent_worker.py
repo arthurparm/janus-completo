@@ -7,12 +7,11 @@ se retorna ao CodeAgent para correções ou segue para Sandbox.
 
 import json
 import logging
-import re
 from datetime import datetime
 
+from app.core.agents.utils import parse_json_strict
 from app.core.infrastructure.message_broker import get_broker
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
-from app.core.agents.utils import parse_json_strict
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -40,7 +39,7 @@ def _parse_review_json(review_text: str) -> dict[str, Any]:
         return {
             "status": "REJECTED",
             "critical_issues": ["Falha no formato da revisão (JSON inválido)."],
-            "suggestions": []
+            "suggestions": [],
         }
 
 
@@ -99,11 +98,13 @@ async def process_professor_task(task: TaskMessage) -> None:
 
                 logger.info(
                     f"Deep Reflexion: Retrying task ({state.retries}/10)",
-                    extra={"task_id": state.task_id, "attempt": state.retries}
+                    extra={"task_id": state.task_id, "attempt": state.retries},
                 )
             else:
                 logger.warning("Deep Reflexion: Max retries (10) reached. Forcing Sandbox.")
-                state.data_payload.review_notes += "\n[SYSTEM] MAX RETRIES REACHED. PROCEEDING WITH CAUTION."
+                state.data_payload.review_notes += (
+                    "\n[SYSTEM] MAX RETRIES REACHED. PROCEEDING WITH CAUTION."
+                )
                 state.next_agent_role = "sandbox"
         else:
             state.next_agent_role = "sandbox"

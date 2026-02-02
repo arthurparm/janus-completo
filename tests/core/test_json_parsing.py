@@ -1,7 +1,7 @@
-
 import pytest
 import json
 from janus.app.core.agents.utils import parse_json_strict
+
 
 class TestJsonParsing:
     def test_strict_json(self):
@@ -24,7 +24,7 @@ class TestJsonParsing:
 
     def test_json_list(self):
         """Test parsing a JSON list."""
-        content = '[1, 2, 3]'
+        content = "[1, 2, 3]"
         result = parse_json_strict(content)
         assert result == [1, 2, 3]
 

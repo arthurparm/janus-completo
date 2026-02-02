@@ -235,7 +235,7 @@ class PythonSandbox:
             "    _error = None",
             "except Exception as e:",
             "    _success = False",
-            "    _error = f\"{type(e).__name__}: {e}\"",
+            '    _error = f"{type(e).__name__}: {e}"',
             "_elapsed = time.time() - _start",
             "_output = _out_buf.getvalue()",
             "_stderr = _err_buf.getvalue()",
@@ -248,9 +248,9 @@ class PythonSandbox:
             "    _error = _stderr",
             f"_max_len = {max_output_len}",
             "if _output and len(_output) > _max_len:",
-            "    _output = _output[:_max_len] + \"\\n... (output truncated)\"",
+            '    _output = _output[:_max_len] + "\\n... (output truncated)"',
             "if _error and len(_error) > _max_len:",
-            "    _error = _error[:_max_len] + \"\\n... (error truncated)\"",
+            '    _error = _error[:_max_len] + "\\n... (error truncated)"',
             "_vars = {k: str(v) for k, v in _LOCALS.items()}",
             "print(json.dumps({",
             "    'success': bool(_success),",
@@ -266,8 +266,8 @@ class PythonSandbox:
 
     def _run_in_docker(self, wrapper_code: str, timeout_seconds: float) -> tuple[str, bool]:
         try:
-            from docker.errors import APIError, ContainerError, ImageNotFound
             import docker
+            from docker.errors import APIError, ImageNotFound
         except Exception as e:
             raise RuntimeError(f"Docker unavailable: {e}")
 

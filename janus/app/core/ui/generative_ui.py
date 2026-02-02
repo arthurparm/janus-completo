@@ -1,6 +1,5 @@
 import json
 import re
-import warnings
 from typing import Any
 
 # Deprecated: Regex-based extraction is legacy. Use 'render_ui_component' tool instead.

@@ -23,9 +23,7 @@ from app.services.llm_service import LLMService
 logger = logging.getLogger(__name__)
 
 
-async def _build_coding_prompt(
-    state: TaskState, compilation_error: str | None = None
-) -> str:
+async def _build_coding_prompt(state: TaskState, compilation_error: str | None = None) -> str:
     goal = state.original_goal
     review_notes = state.data_payload.review_notes
     context = state.data_payload.context
@@ -65,7 +63,9 @@ async def process_code_task(task: TaskMessage) -> None:
         llm_service = LLMService(LLMRepository())
 
         # Deep Self-Healing: Retry loop for compiler errors
-        max_iterations = settings.CODER_MAX_SELF_HEALING_ITERATIONS if settings.CODER_SELF_HEALING_ENABLED else 1
+        max_iterations = (
+            settings.CODER_MAX_SELF_HEALING_ITERATIONS if settings.CODER_SELF_HEALING_ENABLED else 1
+        )
         code = ""
         compilation_error = None
 
@@ -83,6 +83,7 @@ async def process_code_task(task: TaskMessage) -> None:
 
             # Extract code from markdown block
             import re
+
             match = re.search(r"```python\n(.*?)```", code_response, re.DOTALL)
             if not match:
                 match = re.search(r"```\n(.*?)```", code_response, re.DOTALL)
@@ -146,7 +147,7 @@ async def process_code_task(task: TaskMessage) -> None:
 def _validate_code_syntax(code: str) -> dict[str, Any]:
     """
     Validate Python code syntax using compile().
-    
+
     Returns:
         Dict with 'valid' bool and 'error' string if invalid.
     """

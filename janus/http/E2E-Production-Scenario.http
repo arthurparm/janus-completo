@@ -6,7 +6,7 @@
 
 @host = http://localhost:8000
 @api_v1_prefix = /api/v1
-@token = 
+@token =
 @correlation_id = {{$timestamp}}
 @client_version = 1.0.0
 

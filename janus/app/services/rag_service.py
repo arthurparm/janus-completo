@@ -1,13 +1,13 @@
 import asyncio
 import time
-import structlog
 from typing import Any, Optional
 
+import structlog
 from qdrant_client import models as qdrant_models
 
 from app.core.embeddings.embedding_manager import aembed_text
-from app.core.llm import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.llm import ModelPriority, ModelRole
 from app.core.ui.generative_ui import extract_ui_block
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.chat_repository import ChatRepository
@@ -44,9 +44,7 @@ _RAG_OPS = Counter(
 _RAG_SKIPPED = Counter(
     "rag_service_skipped_total", "Skipped RAG service operations", ["operation", "reason"]
 )
-_RAG_RESULTS = Counter(
-    "rag_service_results_total", "RAG result items", ["operation"]
-)
+_RAG_RESULTS = Counter("rag_service_results_total", "RAG result items", ["operation"])
 
 
 # --- Custom Exceptions ---
@@ -83,11 +81,7 @@ class RAGService:
                     or (m.get("payload") or {}).get("content", "")
                     or m.get("page_content", "")
                 )
-                mem_type = (
-                    m.get("type")
-                    or (m.get("metadata") or {}).get("type")
-                    or "memory"
-                )
+                mem_type = m.get("type") or (m.get("metadata") or {}).get("type") or "memory"
             else:
                 content = getattr(m, "content", "") or ""
                 mem_type = getattr(m, "type", "memory")

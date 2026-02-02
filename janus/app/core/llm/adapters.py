@@ -43,7 +43,6 @@ class OpenAIAdapter(LLMAdapter):
             logger.warning(f"Failed to apply output limit for OpenAI: {e}")
 
 
-
 class GeminiAdapter(LLMAdapter):
     def apply_output_limit(self, max_output_tokens: int) -> None:
         try:

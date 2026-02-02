@@ -17,7 +17,6 @@ except Exception:
             pass
 
     Histogram = Counter = _Noop
-import asyncio
 from typing import Any  # Added Optional
 from uuid import uuid4
 

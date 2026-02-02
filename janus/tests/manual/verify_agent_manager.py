@@ -1,4 +1,3 @@
-
 import asyncio
 import sys
 
@@ -30,7 +29,9 @@ async def verify_import_and_logic():
     from unittest.mock import AsyncMock, MagicMock
 
     mock_agent = MagicMock()
-    mock_agent.execute_task = AsyncMock(return_value={"result": "Mock Answer", "status": "completed"})
+    mock_agent.execute_task = AsyncMock(
+        return_value={"result": "Mock Answer", "status": "completed"}
+    )
 
     manager._system.create_agent = MagicMock(return_value=mock_agent)
     manager._system.workspace.add_task = MagicMock()
@@ -42,6 +43,7 @@ async def verify_import_and_logic():
     assert result["status"] == "completed"
 
     print("Success: arun_agent logic verified.")
+
 
 if __name__ == "__main__":
     asyncio.run(verify_import_and_logic())

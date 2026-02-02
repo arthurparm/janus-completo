@@ -14,6 +14,7 @@ import pytest
 # TEST 1: ChatService
 # ============================================================================
 
+
 class TestChatService:
     """Comprehensive tests for ChatService."""
 
@@ -21,6 +22,7 @@ class TestChatService:
         """Test ChatService can be imported."""
         try:
             from app.services.chat_service import ChatService
+
             assert ChatService is not None
             print("✓ ChatService import available")
         except Exception as e:
@@ -57,9 +59,7 @@ class TestChatService:
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
 
             conv_id = await service.start_conversation(
-                persona="assistant",
-                user_id="user-1",
-                project_id="proj-1"
+                persona="assistant", user_id="user-1", project_id="proj-1"
             )
 
             assert conv_id == "conv-123"
@@ -76,10 +76,12 @@ class TestChatService:
             from app.services.chat_service import ChatService
 
             mock_repo = MagicMock()
-            mock_repo.get_messages = AsyncMock(return_value=[
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"}
-            ])
+            mock_repo.get_messages = AsyncMock(
+                return_value=[
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there!"},
+                ]
+            )
             mock_llm = MagicMock()
 
             service = ChatService(repo=mock_repo, llm_service=mock_llm)
@@ -136,6 +138,7 @@ class TestChatService:
 # TEST 2: AutonomyService
 # ============================================================================
 
+
 class TestAutonomyService:
     """Comprehensive tests for AutonomyService."""
 
@@ -143,6 +146,7 @@ class TestAutonomyService:
         """Test AutonomyService can be imported."""
         try:
             from app.services.autonomy_service import AutonomyConfig, AutonomyService
+
             assert AutonomyService is not None
             assert AutonomyConfig is not None
             print("✓ AutonomyService import available")
@@ -206,6 +210,7 @@ class TestAutonomyService:
 # TEST 3: OptimizationService
 # ============================================================================
 
+
 class TestOptimizationService:
     """Comprehensive tests for OptimizationService."""
 
@@ -213,6 +218,7 @@ class TestOptimizationService:
         """Test OptimizationService can be imported."""
         try:
             from app.services.optimization_service import OptimizationService
+
             assert OptimizationService is not None
             print("✓ OptimizationService import available")
         except Exception as e:
@@ -226,7 +232,7 @@ class TestOptimizationService:
 
             service = OptimizationService()
 
-            if hasattr(service, 'collect_metrics'):
+            if hasattr(service, "collect_metrics"):
                 metrics = await service.collect_metrics()
                 assert isinstance(metrics, dict)
                 print(f"✓ OptimizationService collect_metrics: {len(metrics)} metrics")
@@ -240,6 +246,7 @@ class TestOptimizationService:
 # TEST 4: DocumentService
 # ============================================================================
 
+
 class TestDocumentService:
     """Comprehensive tests for DocumentIngestionService."""
 
@@ -247,6 +254,7 @@ class TestDocumentService:
         """Test DocumentIngestionService can be imported."""
         try:
             from app.services.document_service import DocumentIngestionService
+
             assert DocumentIngestionService is not None
             print("✓ DocumentIngestionService import available")
         except Exception as e:
@@ -257,6 +265,7 @@ class TestDocumentService:
 # TEST 5: FeedbackService
 # ============================================================================
 
+
 class TestFeedbackService:
     """Comprehensive tests for FeedbackService."""
 
@@ -264,6 +273,7 @@ class TestFeedbackService:
         """Test FeedbackService can be imported."""
         try:
             from app.services.feedback_service import FeedbackService
+
             assert FeedbackService is not None
             print("✓ FeedbackService import available")
         except Exception as e:
@@ -274,6 +284,7 @@ class TestFeedbackService:
 # TEST 6: CollaborationService
 # ============================================================================
 
+
 class TestCollaborationService:
     """Comprehensive tests for CollaborationService."""
 
@@ -281,6 +292,7 @@ class TestCollaborationService:
         """Test CollaborationService can be imported."""
         try:
             from app.services.collaboration_service import CollaborationService
+
             assert CollaborationService is not None
             print("✓ CollaborationService import available")
         except Exception as e:
@@ -291,6 +303,7 @@ class TestCollaborationService:
 # TEST 7: ObservabilityService
 # ============================================================================
 
+
 class TestObservabilityService:
     """Comprehensive tests for ObservabilityService."""
 
@@ -298,6 +311,7 @@ class TestObservabilityService:
         """Test ObservabilityService can be imported."""
         try:
             from app.services.observability_service import ObservabilityService
+
             assert ObservabilityService is not None
             print("✓ ObservabilityService import available")
         except Exception as e:
@@ -308,6 +322,7 @@ class TestObservabilityService:
 # TEST 8: ToolService
 # ============================================================================
 
+
 class TestToolService:
     """Comprehensive tests for ToolService."""
 
@@ -315,6 +330,7 @@ class TestToolService:
         """Test ToolService can be imported."""
         try:
             from app.services.tool_service import ToolService
+
             assert ToolService is not None
             print("✓ ToolService import available")
         except Exception as e:
@@ -328,7 +344,7 @@ class TestToolService:
 
             service = ToolService()
 
-            if hasattr(service, 'list_tools'):
+            if hasattr(service, "list_tools"):
                 tools = await service.list_tools()
                 assert isinstance(tools, list)
                 print(f"✓ ToolService list_tools: {len(tools)} tools")
@@ -342,6 +358,7 @@ class TestToolService:
 # TEST 9: KnowledgeService
 # ============================================================================
 
+
 class TestKnowledgeService:
     """Comprehensive tests for KnowledgeService."""
 
@@ -349,6 +366,7 @@ class TestKnowledgeService:
         """Test KnowledgeService can be imported."""
         try:
             from app.services.knowledge_service import KnowledgeService
+
             assert KnowledgeService is not None
             print("✓ KnowledgeService import available")
         except Exception as e:
@@ -359,6 +377,7 @@ class TestKnowledgeService:
 # TEST 10: LearningService
 # ============================================================================
 
+
 class TestLearningService:
     """Comprehensive tests for LearningService."""
 
@@ -366,6 +385,7 @@ class TestLearningService:
         """Test LearningService can be imported."""
         try:
             from app.services.learning_service import LearningService
+
             assert LearningService is not None
             print("✓ LearningService import available")
         except Exception as e:
@@ -376,6 +396,7 @@ class TestLearningService:
 # TEST 11: DedupeService
 # ============================================================================
 
+
 class TestDedupeService:
     """Comprehensive tests for DedupeService."""
 
@@ -383,6 +404,7 @@ class TestDedupeService:
         """Test DedupeService can be imported."""
         try:
             from app.services.dedupe_service import DedupeService
+
             assert DedupeService is not None
             print("✓ DedupeService import available")
         except Exception as e:
@@ -393,6 +415,7 @@ class TestDedupeService:
 # TEST 12: MemoryService
 # ============================================================================
 
+
 class TestMemoryService:
     """Comprehensive tests for MemoryService."""
 
@@ -400,6 +423,7 @@ class TestMemoryService:
         """Test MemoryService can be imported."""
         try:
             from app.services.memory_service import MemoryService
+
             assert MemoryService is not None
             print("✓ MemoryService import available")
         except Exception as e:
@@ -410,6 +434,7 @@ class TestMemoryService:
 # TEST 13: LLMService
 # ============================================================================
 
+
 class TestLLMService:
     """Comprehensive tests for LLMService."""
 
@@ -417,6 +442,7 @@ class TestLLMService:
         """Test LLMService can be imported."""
         try:
             from app.services.llm_service import LLMService
+
             assert LLMService is not None
             print("✓ LLMService import available")
         except Exception as e:
@@ -441,6 +467,7 @@ class TestLLMService:
 # TEST 14: LocalLLMService
 # ============================================================================
 
+
 class TestLocalLLMService:
     """Comprehensive tests for LocalLLMService."""
 
@@ -448,6 +475,7 @@ class TestLocalLLMService:
         """Test LocalLLMService can be imported."""
         try:
             from app.services.local_llm_service import LocalLLMService
+
             assert LocalLLMService is not None
             print("✓ LocalLLMService import available")
         except Exception as e:
@@ -458,6 +486,7 @@ class TestLocalLLMService:
 # TEST 15: AssistantService
 # ============================================================================
 
+
 class TestAssistantService:
     """Comprehensive tests for AssistantService."""
 
@@ -465,6 +494,7 @@ class TestAssistantService:
         """Test AssistantService can be imported."""
         try:
             from app.services.assistant_service import AssistantService
+
             assert AssistantService is not None
             print("✓ AssistantService import available")
         except Exception as e:
@@ -475,6 +505,7 @@ class TestAssistantService:
 # TEST 16: TaskService
 # ============================================================================
 
+
 class TestTaskService:
     """Comprehensive tests for TaskService."""
 
@@ -482,6 +513,7 @@ class TestTaskService:
         """Test TaskService can be imported."""
         try:
             from app.services.task_service import TaskService
+
             assert TaskService is not None
             print("✓ TaskService import available")
         except Exception as e:
@@ -492,6 +524,7 @@ class TestTaskService:
 # TEST 17: ReflexionService
 # ============================================================================
 
+
 class TestReflexionService:
     """Comprehensive tests for ReflexionService."""
 
@@ -499,6 +532,7 @@ class TestReflexionService:
         """Test ReflexionService can be imported."""
         try:
             from app.services.reflexion_service import ReflexionService
+
             assert ReflexionService is not None
             print("✓ ReflexionService import available")
         except Exception as e:
@@ -509,6 +543,7 @@ class TestReflexionService:
 # TEST 18: MetaAgentService
 # ============================================================================
 
+
 class TestMetaAgentService:
     """Comprehensive tests for MetaAgentService."""
 
@@ -516,6 +551,7 @@ class TestMetaAgentService:
         """Test MetaAgentService can be imported."""
         try:
             from app.services.meta_agent_service import MetaAgentService
+
             assert MetaAgentService is not None
             print("✓ MetaAgentService import available")
         except Exception as e:
@@ -526,6 +562,7 @@ class TestMetaAgentService:
 # TEST 19: ContextService
 # ============================================================================
 
+
 class TestContextService:
     """Comprehensive tests for ContextService."""
 
@@ -533,6 +570,7 @@ class TestContextService:
         """Test ContextService can be imported."""
         try:
             from app.services.context_service import ContextService
+
             assert ContextService is not None
             print("✓ ContextService import available")
         except Exception as e:
@@ -543,6 +581,7 @@ class TestContextService:
 # TEST 20: SandboxService (Full)
 # ============================================================================
 
+
 class TestSandboxServiceFull:
     """Comprehensive tests for SandboxService."""
 
@@ -550,6 +589,7 @@ class TestSandboxServiceFull:
         """Test SandboxService can be imported."""
         try:
             from app.services.sandbox_service import SandboxService
+
             assert SandboxService is not None
             print("✓ SandboxService import available")
         except Exception as e:
@@ -560,6 +600,7 @@ class TestSandboxServiceFull:
 # TEST 21: SystemStatusService
 # ============================================================================
 
+
 class TestSystemStatusService:
     """Comprehensive tests for SystemStatusService."""
 
@@ -567,6 +608,7 @@ class TestSystemStatusService:
         """Test SystemStatusService can be imported."""
         try:
             from app.services.system_status_service import SystemStatusService
+
             assert SystemStatusService is not None
             print("✓ SystemStatusService import available")
         except Exception as e:
@@ -580,7 +622,7 @@ class TestSystemStatusService:
 
             service = SystemStatusService()
 
-            if hasattr(service, 'get_status'):
+            if hasattr(service, "get_status"):
                 status = await service.get_status()
                 assert isinstance(status, dict)
                 print("✓ SystemStatusService get_status working")
@@ -594,6 +636,7 @@ class TestSystemStatusService:
 # TEST 22: CodeAnalysisService
 # ============================================================================
 
+
 class TestCodeAnalysisService:
     """Comprehensive tests for CodeAnalysisService."""
 
@@ -601,6 +644,7 @@ class TestCodeAnalysisService:
         """Test CodeAnalysisService can be imported."""
         try:
             from app.services.code_analysis_service import CodeAnalysisService
+
             assert CodeAnalysisService is not None
             print("✓ CodeAnalysisService import available")
         except Exception as e:
@@ -611,6 +655,7 @@ class TestCodeAnalysisService:
 # TEST 23: AgentService
 # ============================================================================
 
+
 class TestAgentService:
     """Comprehensive tests for AgentService."""
 
@@ -618,6 +663,7 @@ class TestAgentService:
         """Test AgentService can be imported."""
         try:
             from app.services.agent_service import AgentService
+
             assert AgentService is not None
             print("✓ AgentService import available")
         except Exception as e:
@@ -628,6 +674,7 @@ class TestAgentService:
 # TEST 24: ABTestingService
 # ============================================================================
 
+
 class TestABTestingService:
     """Comprehensive tests for ABTestingService."""
 
@@ -635,6 +682,7 @@ class TestABTestingService:
         """Test ABTestingService can be imported."""
         try:
             from app.services.ab_testing_service import ABTestingService
+
             assert ABTestingService is not None
             print("✓ ABTestingService import available")
         except Exception as e:
@@ -645,6 +693,7 @@ class TestABTestingService:
 # TEST 25: BiasCheckService
 # ============================================================================
 
+
 class TestBiasCheckService:
     """Comprehensive tests for BiasCheckService."""
 
@@ -652,6 +701,7 @@ class TestBiasCheckService:
         """Test BiasCheckService can be imported."""
         try:
             from app.services.bias_check_service import BiasCheckService
+
             assert BiasCheckService is not None
             print("✓ BiasCheckService import available")
         except Exception as e:
@@ -662,6 +712,7 @@ class TestBiasCheckService:
 # TEST 26: DBMigrationService
 # ============================================================================
 
+
 class TestDBMigrationService:
     """Comprehensive tests for DBMigrationService."""
 
@@ -669,6 +720,7 @@ class TestDBMigrationService:
         """Test DBMigrationService can be imported."""
         try:
             from app.services.db_migration_service import DBMigrationService
+
             assert DBMigrationService is not None
             print("✓ DBMigrationService import available")
         except Exception as e:
@@ -679,17 +731,14 @@ class TestDBMigrationService:
 # RUNNER
 # ============================================================================
 
+
 async def run_all_tests():
     """Run all tests and report results."""
     print("=" * 60)
     print("JANUS SERVICES TEST SUITE")
     print("=" * 60)
 
-    results = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0
-    }
+    results = {"passed": 0, "failed": 0, "skipped": 0}
 
     test_classes = [
         TestChatService(),
@@ -737,10 +786,13 @@ async def run_all_tests():
                     results["failed"] += 1
 
     print("\n" + "=" * 60)
-    print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
+    print(
+        f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped"
+    )
     print("=" * 60)
 
     return results["failed"] == 0
+
 
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())

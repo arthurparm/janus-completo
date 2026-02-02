@@ -47,7 +47,6 @@ class AppSettings(BaseSettings):
     POSTGRES_PASSWORD: SecretStr = "janus_pass"
     POSTGRES_DB: str = "janus_db"
 
-
     # Firebase
     FIREBASE_ENABLED: bool = False
     FIREBASE_CREDENTIALS_PATH: str | None = "/app/app/serviceAccountKey.json"
@@ -270,7 +269,7 @@ class AppSettings(BaseSettings):
             "openrouter:nvidia/nemotron-3-nano-30b-a3b:free",
             # Fallback Local
             "ollama:qwen2.5:14b",
-        ]
+        ],
     }
 
     # Tabelas de preço por modelo (se ausente, usa preço default do provedor)
@@ -319,7 +318,10 @@ class AppSettings(BaseSettings):
     OPENROUTER_MODEL_PRICING: dict[str, dict[str, float]] = {
         "deepseek/deepseek-r1-0528:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
         "qwen/qwen3-coder:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
-        "meta-llama/llama-3.3-70b-instruct:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+        "meta-llama/llama-3.3-70b-instruct:free": {
+            "input_per_1k_usd": 0.0,
+            "output_per_1k_usd": 0.0,
+        },
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)

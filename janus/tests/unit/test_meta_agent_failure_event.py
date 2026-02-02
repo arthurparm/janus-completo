@@ -31,9 +31,11 @@ async def test_process_failure_event_persists_and_triggers_cycle(monkeypatch):
 
     # Capture publish_meta_agent_cycle calls
     capture = Capture()
+
     async def fake_publish(mode: str = "single", priority: int = 5):
         await capture.publish(mode)
         return "task-id"
+
     monkeypatch.setattr(maw, "publish_meta_agent_cycle", fake_publish)
 
     payload = {
@@ -44,10 +46,12 @@ async def test_process_failure_event_persists_and_triggers_cycle(monkeypatch):
         "context": {
             "conversation_id": "conv-1",
             "interaction_id": "int-1",
-            "task": "Run code in sandbox"
+            "task": "Run code in sandbox",
         },
     }
-    task = TaskMessage(task_id="evt-123", task_type="failure_detected", payload=payload, timestamp=0.0)
+    task = TaskMessage(
+        task_id="evt-123", task_type="failure_detected", payload=payload, timestamp=0.0
+    )
 
     await maw.process_failure_event(task)
 

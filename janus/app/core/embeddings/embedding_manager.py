@@ -60,9 +60,13 @@ _DEFAULT_LOCAL_MODEL = getattr(
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 )
 _DEFAULT_OPENAI_MODEL = getattr(settings, "EMBEDDINGS_OPENAI_MODEL_NAME", "text-embedding-3-small")
-_DEFAULT_OPENROUTER_MODEL = getattr(settings, "EMBEDDINGS_OPENROUTER_MODEL_NAME", "qwen/qwen3-embedding-8b")
+_DEFAULT_OPENROUTER_MODEL = getattr(
+    settings, "EMBEDDINGS_OPENROUTER_MODEL_NAME", "qwen/qwen3-embedding-8b"
+)
 _TARGET_VECTOR_SIZE = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
-_PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai" | "openrouter"
+_PROVIDER_PREF = getattr(
+    settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local"
+)  # "local" | "openai" | "openrouter"
 _CACHE_TTL = int(getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600))
 _CACHE_MAX = int(getattr(settings, "MEMORY_SHORT_MAX_ITEMS", 512))
 
@@ -177,7 +181,7 @@ def _load_openrouter_embedder() -> OpenAIEmbeddings:
         return _openrouter_embedder
     if OpenAIEmbeddings is None:
         raise RuntimeError("langchain_openai não está disponível para embeddings")
-    
+
     try:
         or_key = (
             settings.OPENROUTER_API_KEY.get_secret_value()
@@ -186,18 +190,18 @@ def _load_openrouter_embedder() -> OpenAIEmbeddings:
         )
     except Exception:
         or_key = None
-        
+
     if not or_key:
         raise RuntimeError("OPENROUTER_API_KEY não configurada para embeddings OpenRouter")
-        
+
     model_name = _DEFAULT_OPENROUTER_MODEL
     logger.info(f"Inicializando OpenRouterEmbeddings com modelo: {model_name}")
     # OpenRouter usa interface compatível com OpenAI
     _openrouter_embedder = OpenAIEmbeddings(
-        model=model_name, 
+        model=model_name,
         api_key=or_key,
         base_url=settings.OPENROUTER_BASE_URL,
-        check_embedding_ctx_length=False # Evita verificações específicas da OpenAI
+        check_embedding_ctx_length=False,  # Evita verificações específicas da OpenAI
     )
     try:
         _EMB_MODEL_LOADED.labels("openrouter").set(1)
@@ -286,7 +290,7 @@ def embed_text(text: str) -> list[float]:
 
     pref = (_PROVIDER_PREF or "local").lower()
     providers = [pref]
-    
+
     # Ordem de fallback
     available = ["local", "openrouter", "openai"]
     for p in available:
@@ -340,7 +344,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     # Estratégia simples: tentar provider preferido, com fallback; sem cache por-item para lote
     pref = (_PROVIDER_PREF or "local").lower()
     providers = [pref]
-    
+
     # Ordem de fallback
     available = ["local", "openrouter", "openai"]
     for p in available:

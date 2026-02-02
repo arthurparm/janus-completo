@@ -1,10 +1,9 @@
 import os
-import sys
 from datetime import datetime
-from typing import Dict, List, Optional
-from sqlalchemy import and_
+from typing import Optional
+
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+
 from app.db import db
 from app.models.config_models import Prompt
 
@@ -91,7 +90,7 @@ def update_prompts():
 
         except IntegrityError as ie:
             session.rollback()
-            print(f" FAILED (IntegrityError)")
+            print(" FAILED (IntegrityError)")
             print(f"    Details: {ie}")
             errors.append(f"{prompt_name}: IntegrityError")
         except Exception as e:

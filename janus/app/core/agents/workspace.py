@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from app.core.agents.structures import Task, TaskStatus
 from app.core.agents.metrics import AGENT_COLLABORATION_COUNTER
+from app.core.agents.structures import Task, TaskStatus
 
 logger = logging.getLogger(__name__)
 

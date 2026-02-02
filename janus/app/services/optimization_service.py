@@ -123,9 +123,9 @@ class OptimizationService:
             trend = {
                 "avg_response_time_p95": round(percentile(resp_times, 95), 3),
                 "avg_response_time_latest": round(resp_times[-1], 3),
-                "error_rate_avg": round(sum(error_rates) / len(error_rates), 3)
-                if error_rates
-                else 0.0,
+                "error_rate_avg": (
+                    round(sum(error_rates) / len(error_rates), 3) if error_rates else 0.0
+                ),
                 "memory_usage_latest_mb": round(memory_usage[-1], 2),
                 "memory_usage_max_mb": round(max(memory_usage), 2) if memory_usage else 0.0,
             }

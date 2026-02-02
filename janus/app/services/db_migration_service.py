@@ -1,9 +1,8 @@
 from typing import Any
 
 import structlog
+from sqlalchemy import inspect, text
 
-
-from sqlalchemy import text, inspect
 from app.db import db
 
 logger = structlog.get_logger(__name__)
@@ -148,19 +147,33 @@ class DBMigrationService:
                 s.execute(text("ALTER TABLE users ADD COLUMN password_hash TEXT NULL"))
                 applied.append("users.password_hash")
             if not self._column_exists(s, "users", "password_reset_token_hash"):
-                s.execute(text("ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(128) NULL"))
+                s.execute(
+                    text("ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(128) NULL")
+                )
                 applied.append("users.password_reset_token_hash")
             if not self._column_exists(s, "users", "password_reset_expires_at"):
-                s.execute(text("ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP NULL"))
+                s.execute(
+                    text("ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP NULL")
+                )
                 applied.append("users.password_reset_expires_at")
             if not self._constraint_exists(s, "users", "unique_user_email"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE KEY (email)"))
+                s.execute(
+                    text("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE KEY (email)")
+                )
                 applied.append("users.unique_user_email")
             if not self._constraint_exists(s, "users", "unique_user_username"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_username UNIQUE KEY (username)"))
+                s.execute(
+                    text(
+                        "ALTER TABLE users ADD CONSTRAINT unique_user_username UNIQUE KEY (username)"
+                    )
+                )
                 applied.append("users.unique_user_username")
             if not self._constraint_exists(s, "users", "unique_user_external_id"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_external_id UNIQUE KEY (external_id)"))
+                s.execute(
+                    text(
+                        "ALTER TABLE users ADD CONSTRAINT unique_user_external_id UNIQUE KEY (external_id)"
+                    )
+                )
                 applied.append("users.unique_user_external_id")
             if not self._index_exists(s, "profiles", "idx_profile_user"):
                 s.execute(text("CREATE INDEX idx_profile_user ON profiles (user_id)"))
@@ -169,13 +182,21 @@ class DBMigrationService:
                 s.execute(text("CREATE INDEX idx_session_user ON sessions (user_id, updated_at)"))
                 applied.append("sessions.idx_session_user")
             if not self._index_exists(s, "messages", "idx_message_session_ts"):
-                s.execute(text("CREATE INDEX idx_message_session_ts ON messages (session_id, timestamp)"))
+                s.execute(
+                    text("CREATE INDEX idx_message_session_ts ON messages (session_id, timestamp)")
+                )
                 applied.append("messages.idx_message_session_ts")
             if not self._constraint_exists(s, "roles", "unique_role_name"):
-                s.execute(text("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)"))
+                s.execute(
+                    text("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)")
+                )
                 applied.append("roles.unique_role_name")
             if not self._constraint_exists(s, "consents", "unique_user_scope_consent"):
-                s.execute(text("ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"))
+                s.execute(
+                    text(
+                        "ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"
+                    )
+                )
                 applied.append("consents.unique_user_scope_consent")
             if not self._index_exists(s, "consents", "idx_consent_user_scope"):
                 s.execute(text("CREATE INDEX idx_consent_user_scope ON consents (user_id, scope)"))

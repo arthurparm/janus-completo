@@ -32,17 +32,17 @@ function Write-SecureLog {
         [string]$Message,
         [string]$Level = "INFO"
     )
-    
+
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $LogMessage = "[$Timestamp] [$Level] $Message"
-    
+
     switch ($Level) {
         "SUCCESS" { Write-Host $LogMessage -ForegroundColor $Colors.Success }
         "WARNING" { Write-Host $LogMessage -ForegroundColor $Colors.Warning }
         "ERROR" { Write-Host $LogMessage -ForegroundColor $Colors.Error }
         default { Write-Host $LogMessage -ForegroundColor $Colors.Info }
     }
-    
+
     # Log to file if enabled
     if ($EnableLogging) {
         $LogFile = "tailscale-security-setup.log"
@@ -57,11 +57,11 @@ function Test-AdminPrivileges {
 
 function Install-Tailscale {
     Write-SecureLog "Installing Tailscale with latest stable version..." "INFO"
-    
+
     try {
         # Check if Tailscale is already installed
         $tailscaleInstalled = Get-Command tailscale -ErrorAction SilentlyContinue
-        
+
         if ($tailscaleInstalled) {
             Write-SecureLog "Tailscale already installed. Updating to latest version..." "WARNING"
             winget upgrade Tailscale.Tailscale
@@ -69,12 +69,12 @@ function Install-Tailscale {
             Write-SecureLog "Installing Tailscale..." "INFO"
             winget install Tailscale.Tailscale --accept-package-agreements --accept-source-agreements
         }
-        
+
         # Verify installation
         Start-Sleep -Seconds 10
         $tailscaleVersion = tailscale version
         Write-SecureLog "Tailscale installed successfully. Version: $tailscaleVersion" "SUCCESS"
-        
+
         return $true
     }
     catch {
@@ -85,7 +85,7 @@ function Install-Tailscale {
 
 function Configure-TailscaleSecurity {
     Write-SecureLog "Configuring Tailscale with enterprise security policies..." "INFO"
-    
+
     try {
         # Enable multi-factor authentication
         if ($EnableMFA) {
@@ -93,10 +93,10 @@ function Configure-TailscaleSecurity {
             tailscale up --force-reauth --accept-dns=false --shields-up=false
             Write-SecureLog "MFA enabled. Please complete authentication in browser." "SUCCESS"
         }
-        
+
         # Configure strict security policies
         Write-SecureLog "Configuring security policies..." "INFO"
-        
+
         # Set up ACLs for strict access control
         $ACLConfig = @"
 {
@@ -107,7 +107,7 @@ function Configure-TailscaleSecurity {
       "dst": ["autogroup:self:443"]
     },
     {
-      "action": "accept", 
+      "action": "accept",
       "src": ["tag:janus-admin"],
       "dst": ["*:*"]
     }
@@ -130,10 +130,10 @@ function Configure-TailscaleSecurity {
   "disableIPv6": false
 }
 "@
-        
+
         # Apply security settings
         tailscale up --reset --accept-routes=false --advertise-routes= --shields-up=false
-        
+
         Write-SecureLog "Security policies configured successfully" "SUCCESS"
         return $true
     }
@@ -145,22 +145,22 @@ function Configure-TailscaleSecurity {
 
 function Configure-TLS13 {
     Write-SecureLog "Configuring TLS 1.3 encryption..." "INFO"
-    
+
     try {
         if ($EnableTLS13) {
             # Configure Windows to prefer TLS 1.3
             $TLSPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.3\Client"
-            
+
             if (!(Test-Path $TLSPath)) {
                 New-Item -Path $TLSPath -Force | Out-Null
             }
-            
+
             Set-ItemProperty -Path $TLSPath -Name "Enabled" -Value 1
             Set-ItemProperty -Path $TLSPath -Name "DisabledByDefault" -Value 0
-            
+
             Write-SecureLog "TLS 1.3 configured successfully" "SUCCESS"
         }
-        
+
         return $true
     }
     catch {
@@ -171,7 +171,7 @@ function Configure-TLS13 {
 
 function Configure-Monitoring {
     Write-SecureLog "Setting up monitoring and alerting..." "INFO"
-    
+
     try {
         # Create monitoring script
         $MonitorScript = @"
@@ -187,7 +187,7 @@ function Write-SecurityLog {
     `$Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     `$LogMessage = "[`$Timestamp] [`$Level] `$Message"
     Add-Content -Path `$LogFile -Value `$LogMessage
-    
+
     if (`$Level -eq "ALERT") {
         # Send alert notification
         Write-Host "SECURITY ALERT: `$Message" -ForegroundColor Red
@@ -199,19 +199,19 @@ function Test-TailscaleHealth {
     try {
         `$Status = tailscale status --json | ConvertFrom-Json
         `$Health = tailscale health --json | ConvertFrom-Json
-        
+
         # Check for security issues
         if (`$Health.SafeMode) {
             Write-SecurityLog "Tailscale in safe mode - potential security issue" "ALERT"
         }
-        
+
         # Check connection latency
         foreach (`$Peer in `$Status.Peer) {
             if (`$Peer.LatencyMs -gt `$MaxLatencyMs) {
                 Write-SecurityLog "High latency detected: `$Peer.HostName (`$Peer.LatencyMs ms)" "WARNING"
             }
         }
-        
+
         # Check for unauthorized access attempts
         `$Logs = Get-WinEvent -LogName "Tailscale" -MaxEvents 10
         foreach (`$Log in `$Logs) {
@@ -231,10 +231,10 @@ while (`$true) {
     Start-Sleep -Seconds 60  # Check every minute
 }
 "@
-        
+
         # Save monitoring script
         $MonitorScript | Out-File -FilePath "tailscale-security-monitor.ps1" -Encoding UTF8
-        
+
         Write-SecureLog "Monitoring configured successfully" "SUCCESS"
         return $true
     }
@@ -246,7 +246,7 @@ while (`$true) {
 
 function Configure-IncidentResponse {
     Write-SecureLog "Creating incident response plan..." "INFO"
-    
+
     try {
         $IncidentPlan = @"
 # Tailscale Security Incident Response Plan
@@ -306,10 +306,10 @@ function Configure-IncidentResponse {
 - Health Status: tailscale health --json
 - Network Status: tailscale status --json
 "@
-        
+
         # Save incident response plan
         $IncidentPlan | Out-File -FilePath "tailscale-incident-response-plan.md" -Encoding UTF8
-        
+
         Write-SecureLog "Incident response plan created" "SUCCESS"
         return $true
     }
@@ -321,15 +321,15 @@ function Configure-IncidentResponse {
 
 function Test-SecurityConfiguration {
     Write-SecureLog "Testing security configuration..." "INFO"
-    
+
     try {
         # Test Tailscale connectivity
         $Status = tailscale status --json | ConvertFrom-Json
         $Health = tailscale health --json | ConvertFrom-Json
-        
+
         Write-SecureLog "Tailscale Status: $($Status.BackendState)" "INFO"
         Write-SecureLog "Tailscale Health: $($Health.Healthy)" "INFO"
-        
+
         # Test latency
         $MaxLatency = 0
         foreach ($Peer in $Status.Peer) {
@@ -337,23 +337,23 @@ function Test-SecurityConfiguration {
                 $MaxLatency = $Peer.LatencyMs
             }
         }
-        
+
         Write-SecureLog "Maximum peer latency: $MaxLatency ms" "INFO"
-        
+
         if ($MaxLatency -gt $SecurityConfig.MaxLatencyMs) {
             Write-SecureLog "WARNING: Latency exceeds maximum threshold of $($SecurityConfig.MaxLatencyMs) ms" "WARNING"
         }
-        
+
         # Test availability
         $Uptime = (Get-Date) - (Get-Process tailscaled).StartTime
         $Availability = [math]::Round(($Uptime.TotalHours / 24) * 100, 2)
-        
+
         Write-SecureLog "System availability: $Availability%" "INFO"
-        
+
         if ($Availability -lt $SecurityConfig.MinAvailability) {
             Write-SecureLog "WARNING: Availability below minimum threshold of $($SecurityConfig.MinAvailability)%" "WARNING"
         }
-        
+
         Write-SecureLog "Security configuration tests completed" "SUCCESS"
         return $true
     }
@@ -365,11 +365,11 @@ function Test-SecurityConfiguration {
 
 function Start-SecurityMonitoring {
     Write-SecureLog "Starting security monitoring service..." "INFO"
-    
+
     try {
         # Start monitoring script in background
         Start-Process PowerShell -ArgumentList "-ExecutionPolicy Bypass -File tailscale-security-monitor.ps1" -WindowStyle Hidden
-        
+
         Write-SecureLog "Security monitoring started" "SUCCESS"
         return $true
     }

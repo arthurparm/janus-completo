@@ -4,11 +4,11 @@ from typing import Any
 
 import structlog
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
-from app.db.graph import GraphDatabase, get_graph_db
 from app.db import db
+from app.db.graph import GraphDatabase, get_graph_db
 from app.db.vector_store import async_count_points, get_async_qdrant_client
 from app.repositories.knowledge_repository import KnowledgeRepository
 

@@ -1,10 +1,7 @@
-from typing import Any
-import asyncio
 import structlog
 from fastapi import Request
 
 from app.repositories.prompt_repository import PromptRepository
-from app.db import db
 
 logger = structlog.get_logger(__name__)
 
@@ -25,16 +22,16 @@ class PromptService:
         try:
             # We need to inject a session into the repository since it's now async and session-less by default
             from app.db import get_db_session
-            
+
             async for session in get_db_session():
                 # Temporarily attach session to repo (or create a new repo instance with session)
                 repo_with_session = PromptRepository(session)
                 prompt = await repo_with_session.get_active_prompt(prompt_name=prompt_name)
-                
+
                 if prompt and prompt.prompt_text:
                     return prompt.prompt_text
-                
-                break # Ensure we only use one session
+
+                break  # Ensure we only use one session
 
             if fallback_text:
                 logger.warning(f"Prompt '{prompt_name}' not found or inactive. Using fallback.")

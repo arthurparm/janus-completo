@@ -1,4 +1,4 @@
-from app.models.config_models import Base, Prompt, AgentConfiguration, OptimizationHistory
+from app.models.config_models import AgentConfiguration, Base, OptimizationHistory, Prompt
 from app.models.quarantine_models import QuarantineItem
 
 __all__ = [

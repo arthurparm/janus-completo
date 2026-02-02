@@ -20,7 +20,7 @@
 // --- Buttons ---
 .btn {
     @include btn-base;
-    
+
     // Sizes
     &.btn-sm {
         padding: 4px 8px;
@@ -38,7 +38,7 @@
     &.btn-primary {
         @include btn-primary;
     }
-    
+
     &.btn-secondary {
         @include btn-secondary;
     }
@@ -62,13 +62,13 @@
     flex-direction: column;
     gap: var(--janus-spacing-xs);
     margin-bottom: var(--janus-spacing-md);
-    
+
     label {
         font-size: 0.875rem;
         color: var(--janus-text-secondary);
         font-weight: 500;
     }
-    
+
     input, textarea, select {
         background-color: var(--janus-bg-surface);
         border: 1px solid var(--janus-border);
@@ -78,13 +78,13 @@
         transition: var(--janus-transition-fast);
         font-family: inherit;
         font-size: 0.875rem;
-        
+
         &:focus {
             outline: none;
             border-color: var(--janus-primary);
             box-shadow: 0 0 0 1px var(--janus-primary);
         }
-        
+
         &::placeholder {
             color: var(--janus-text-muted);
         }
@@ -139,25 +139,25 @@
     font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
-    
+
     &.badge-success {
         background-color: rgba(var(--success-rgb), 0.15);
         color: var(--success);
         border: 1px solid rgba(var(--success-rgb), 0.3);
     }
-    
+
     &.badge-warning {
         background-color: rgba(var(--warning-rgb), 0.15);
         color: var(--warning);
         border: 1px solid rgba(var(--warning-rgb), 0.3);
     }
-    
+
     &.badge-error {
         background-color: rgba(var(--error-rgb), 0.15);
         color: var(--error);
         border: 1px solid rgba(var(--error-rgb), 0.3);
     }
-    
+
     &.badge-info {
         background-color: rgba(var(--info-rgb), 0.15);
         color: var(--info);
@@ -178,12 +178,12 @@
     border: 1px solid var(--janus-border);
     border-radius: var(--janus-radius-lg);
     background-color: var(--janus-bg-card);
-    
+
     table {
         width: 100%;
         border-collapse: separate;
         border-spacing: 0;
-        
+
         th {
             background-color: var(--janus-bg-surface);
             color: var(--janus-text-secondary);
@@ -199,18 +199,18 @@
                 border-top-left-radius: var(--janus-radius-lg); // Match container radius logic or sm
             }
         }
-        
+
         td {
             padding: var(--janus-spacing-md);
             color: var(--janus-text-primary);
             border-bottom: 1px solid var(--janus-border);
             font-size: 0.875rem;
         }
-        
+
         tr:last-child td {
             border-bottom: none;
         }
-        
+
         tr:hover td {
             background-color: rgba(255, 255, 255, 0.02);
         }

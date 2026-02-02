@@ -23,7 +23,7 @@ export interface SkeletonConfig {
   template: `
     <div class="skeleton-wrapper" [class.animated]="animated">
       @for (i of counter; track i) {
-        <div 
+        <div
           class="skeleton"
           [class.skeleton-text]="variant === 'text'"
           [class.skeleton-rect]="variant === 'rect'"

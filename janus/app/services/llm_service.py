@@ -4,9 +4,9 @@ import structlog
 from fastapi import Request
 
 from app.config import settings
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole, get_llm_client
 from app.core.llm.task_policy import resolve_llm_task_policy
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_manager_health
 from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.services.prompt_service import PromptService

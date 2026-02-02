@@ -22,7 +22,6 @@ try:
     _tracer = trace.get_tracer(__name__)
 except Exception:
     _OTEL = False
-    from contextlib import nullcontext
 
     _tracer = None
 from app.models.schemas import TaskMessage
@@ -98,9 +97,7 @@ class MessageBroker:
 
                             # 2. Declare DLQ
                             dlq_args = self._get_queue_arguments("janus.dlq")
-                            await ch.declare_queue(
-                                "janus.dlq", durable=True, arguments=dlq_args
-                            )
+                            await ch.declare_queue("janus.dlq", durable=True, arguments=dlq_args)
 
                             # 3. Bind DLQ to DLX (routing key 'dead_letter' or default)
                             # RabbitMQ x-dead-letter-routing-key defaults to original routing key if not specified.
@@ -197,7 +194,7 @@ class MessageBroker:
                 expiration=expiration,
                 content_type=content_type,
             )
-            
+
             # Trace setup (Otel)
             if _OTEL and _tracer:
                 with _tracer.start_as_current_span("broker.publish") as span:
@@ -297,7 +294,7 @@ class MessageBroker:
                 else:
                     payload = json.loads(message.body.decode("utf-8"))
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
-                
+
                 # Tracing manual
                 if _OTEL and _tracer:
                     with _tracer.start_as_current_span("broker.consume") as span:
@@ -690,12 +687,13 @@ message_broker = _broker_instance
 class _AgnosticContextManager:
     def __init__(self, coro):
         self._coro = coro
-    
+
     async def __aenter__(self):
         return await self._coro
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
+
 
 def get_broker_context() -> _AgnosticContextManager:
     """

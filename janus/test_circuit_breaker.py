@@ -1,6 +1,7 @@
 """
 Test script for Qdrant circuit breaker and resilience improvements.
 """
+
 import asyncio
 import logging
 import time
@@ -35,13 +36,15 @@ async def test_circuit_breaker_scenarios():
         status = memory_db.get_circuit_breaker_status()
         print(f"System Health: {status['system_health']['is_healthy']}")
         print(f"Health Score: {status['system_health']['health_score']:.1f}/100")
-        print(f"Circuit Breaker: {'🔴 OPEN' if status['system_health']['circuit_breaker_open'] else '🟢 CLOSED'}")
+        print(
+            f"Circuit Breaker: {'🔴 OPEN' if status['system_health']['circuit_breaker_open'] else '🟢 CLOSED'}"
+        )
         print(f"Offline: {'Yes' if status['system_health']['offline'] else 'No'}")
 
         # Test 3: Configuration validation
         print("\n⚙️ Test 3: Configuration Validation")
         print("-" * 30)
-        config = status['configuration']
+        config = status["configuration"]
         print(f"Failure Threshold: {config['failure_threshold']}")
         print(f"Recovery Timeout: {config['recovery_timeout']}s")
         print(f"Search Timeout: {config['search_timeout']}s")
@@ -55,7 +58,7 @@ async def test_circuit_breaker_scenarios():
 
         # Verify reset
         new_status = memory_db.get_circuit_breaker_status()
-        if not new_status['system_health']['circuit_breaker_open']:
+        if not new_status["system_health"]["circuit_breaker_open"]:
             print("✅ Circuit breaker successfully reset to CLOSED")
         else:
             print("⚠️ Circuit breaker still open (may be expected if Qdrant is unavailable)")
@@ -64,6 +67,7 @@ async def test_circuit_breaker_scenarios():
         print("\n📈 Test 5: Monitoring Service")
         print("-" * 30)
         from app.core.memory.qdrant_monitoring import get_qdrant_monitoring_service
+
         monitoring_service = get_qdrant_monitoring_service()
 
         if monitoring_service:
@@ -102,8 +106,12 @@ async def test_circuit_breaker_scenarios():
                 response = await client.get(f"{base_url}/knowledge/health/detailed")
                 if response.status_code == 200:
                     detailed_data = response.json()
-                    print(f"✅ Detailed Health Endpoint: {detailed_data.get('overall_status', 'unknown')}")
-                    print(f"   Health Score: {detailed_data.get('detailed_status', {}).get('system_health', {}).get('health_score', 'N/A')}")
+                    print(
+                        f"✅ Detailed Health Endpoint: {detailed_data.get('overall_status', 'unknown')}"
+                    )
+                    print(
+                        f"   Health Score: {detailed_data.get('detailed_status', {}).get('system_health', {}).get('health_score', 'N/A')}"
+                    )
                 else:
                     print(f"❌ Detailed Health Endpoint: HTTP {response.status_code}")
         except Exception as e:
@@ -175,6 +183,7 @@ async def test_circuit_breaker_scenarios():
     except Exception as e:
         print(f"❌ Test Failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -191,7 +200,9 @@ async def test_failure_scenarios():
 
         print("\n📊 Initial Status:")
         initial_status = memory_db.get_circuit_breaker_status()
-        print(f"Circuit Breaker: {'OPEN' if initial_status['system_health']['circuit_breaker_open'] else 'CLOSED'}")
+        print(
+            f"Circuit Breaker: {'OPEN' if initial_status['system_health']['circuit_breaker_open'] else 'CLOSED'}"
+        )
         print(f"Health Score: {initial_status['system_health']['health_score']:.1f}")
 
         # Test manual circuit breaker manipulation
@@ -207,7 +218,9 @@ async def test_failure_scenarios():
 
         # Verify reset
         reset_status = memory_db.get_circuit_breaker_status()
-        print(f"✅ Circuit breaker reset: {'OPEN' if reset_status['system_health']['circuit_breaker_open'] else 'CLOSED'}")
+        print(
+            f"✅ Circuit breaker reset: {'OPEN' if reset_status['system_health']['circuit_breaker_open'] else 'CLOSED'}"
+        )
 
         # Test health check
         print("\n🏥 Testing Health Check:")
@@ -219,6 +232,7 @@ async def test_failure_scenarios():
     except Exception as e:
         print(f"❌ Failure scenario test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

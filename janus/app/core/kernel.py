@@ -22,10 +22,10 @@ from app.core.workers.data_harvester import DataHarvester, MemoryConnector
 from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
-from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
 
 # from app.core.infrastructure.auth import get_actor_user_id
 from app.db import db
+from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.repositories.collaboration_repository import CollaborationRepository
@@ -37,11 +37,11 @@ from app.repositories.llm_repository import LLMRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.observability_repository import ObservabilityRepository
 from app.repositories.optimization_repository import OptimizationRepository
+from app.repositories.prompt_repository import PromptRepository
 from app.repositories.reflexion_repository import ReflexionRepository
 from app.repositories.sandbox_repository import SandboxRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.tool_repository import ToolRepository
-from app.repositories.prompt_repository import PromptRepository
 
 # Services
 from app.services.agent_service import AgentService
@@ -57,6 +57,7 @@ from app.services.memory_service import MemoryService
 from app.services.observability_service import ObservabilityService
 from app.services.optimization_service import OptimizationService
 from app.services.prompt_builder_service import PromptBuilderService
+from app.services.prompt_service import PromptService
 from app.services.rag_service import RAGService
 from app.services.reflexion_service import ReflexionService
 from app.services.sandbox_service import SandboxService
@@ -64,7 +65,6 @@ from app.services.scheduler_service import get_scheduler, initialize_default_job
 from app.services.task_service import TaskService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
-from app.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -150,7 +150,11 @@ class Kernel:
         """Initializes the entire system in a coordinated sequence."""
         import os
 
-        log_file = "/app/app/janus.log" if os.path.isdir("/app/app") else os.path.join(os.getcwd(), "janus.log")
+        log_file = (
+            "/app/app/janus.log"
+            if os.path.isdir("/app/app")
+            else os.path.join(os.getcwd(), "janus.log")
+        )
         setup_logging(log_file=log_file)
         logger.info("Kernel startup: Begin phase 1 (Infrastructure)...")
 
@@ -167,6 +171,7 @@ class Kernel:
             # 4. Agentic Capabilities (OS Tools)
             register_os_tools()
             from app.core.ui.ui_tools import register_ui_tools
+
             register_ui_tools()
 
             # 5. Workers & Observability
@@ -286,6 +291,7 @@ class Kernel:
     async def _init_mas_actors(self):
         try:
             from app.core.agents.multi_agent_system import AgentRole, get_multi_agent_system
+
             if not getattr(settings, "INIT_MAS_AGENTS_ON_STARTUP", True):
                 logger.info("Multi-Agent System actor init skipped by configuration.")
                 return

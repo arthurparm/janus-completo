@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -36,11 +35,12 @@ async def test_search_recent_failures_uses_scroll():
 
     # Assert scroll was called
     mock_client.scroll.assert_called_once()
-    assert mock_client.scroll.call_args[1]['limit'] == 5
-    assert mock_client.scroll.call_args[1]['with_payload'] is True
+    assert mock_client.scroll.call_args[1]["limit"] == 5
+    assert mock_client.scroll.call_args[1]["with_payload"] is True
 
     # Assert search was NOT called (providing clear proof of refactor)
     mock_client.search.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_search_recent_lessons_uses_scroll():

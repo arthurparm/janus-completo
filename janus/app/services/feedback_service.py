@@ -310,7 +310,9 @@ class FeedbackService:
         async with self._lock:
             negative_feedbacks = [
                 f for f in self._feedbacks if f.rating == FeedbackRating.NEGATIVE
-            ][-50:]  # Últimos 50 negativos
+            ][
+                -50:
+            ]  # Últimos 50 negativos
 
         suggestions = []
 

@@ -11,8 +11,8 @@ from app.core.monitoring.poison_pill_handler import (
     QuarantinedMessage,
     get_poison_pill_handler,
 )
-from app.db.graph import get_graph_db
 from app.db import db
+from app.db.graph import get_graph_db
 from app.db.vector_store import aget_collection_info
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import AuditEvent, Message
@@ -326,9 +326,9 @@ class ObservabilityRepository:
                 action=str(event.get("action")),
                 tool=event.get("tool"),
                 status=str(event.get("status")),
-                latency_ms=int(event.get("latency_ms"))
-                if event.get("latency_ms") is not None
-                else None,
+                latency_ms=(
+                    int(event.get("latency_ms")) if event.get("latency_ms") is not None else None
+                ),
                 trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
                 details_json=(
                     event.get("details_json")
@@ -394,9 +394,9 @@ class ObservabilityRepository:
                     "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
                     "justification": r.justification,
-                    "created_at": r.created_at.timestamp()
-                    if getattr(r, "created_at", None)
-                    else None,
+                    "created_at": (
+                        r.created_at.timestamp() if getattr(r, "created_at", None) else None
+                    ),
                     "details_json": r.details_json,
                 }
                 for r in rows
@@ -471,9 +471,9 @@ def record_audit_event_direct(event: dict[str, Any]) -> None:
             action=str(event.get("action")),
             tool=event.get("tool"),
             status=str(event.get("status")),
-            latency_ms=int(event.get("latency_ms"))
-            if event.get("latency_ms") is not None
-            else None,
+            latency_ms=(
+                int(event.get("latency_ms")) if event.get("latency_ms") is not None else None
+            ),
             trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
             details_json=(
                 event.get("details_json")

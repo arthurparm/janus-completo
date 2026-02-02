@@ -33,13 +33,7 @@ _DEFAULT_INTERVAL: int = 300  # 5 minutos por padrão
 
 
 async def _ensure_services_initialized() -> None:
-    global \
-        _memory_service, \
-        _goal_manager, \
-        _llm_service, \
-        _optimization_service, \
-        _collab_service, \
-        _policy
+    global _memory_service, _goal_manager, _llm_service, _optimization_service, _collab_service, _policy
     if _memory_service is None:
         db = await get_memory_db()
         mem_repo = MemoryRepository(db)

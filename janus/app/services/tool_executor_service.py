@@ -63,14 +63,10 @@ class ToolExecutorService:
             "on",
         )
         allowlist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",")
-            if name.strip()
+            name.strip() for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",") if name.strip()
         }
         blocklist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",")
-            if name.strip()
+            name.strip() for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",") if name.strip()
         }
         max_actions = int(os.getenv("CHAT_TOOL_MAX_ACTIONS", "20"))
         max_seconds = int(os.getenv("CHAT_TOOL_MAX_SECONDS", "60"))
@@ -185,6 +181,7 @@ class ToolExecutorService:
             success = False
             error_msg = None
             try:
+
                 async def _invoke_tool() -> Any:
                     # Suporta async (ainvoke) e sync (invoke/func)
                     if hasattr(tool, "ainvoke"):

@@ -15,7 +15,11 @@ def test_sse_stream_emits_token_done_and_protocol(client):
     assert r.status_code == 200
     cid = r.json()["conversation_id"]
 
-    with client.stream("GET", f"/api/v1/chat/stream/{cid}", params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"}) as s:
+    with client.stream(
+        "GET",
+        f"/api/v1/chat/stream/{cid}",
+        params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
+    ) as s:
         buf = []
         for chunk in s.iter_lines():
             if not chunk:

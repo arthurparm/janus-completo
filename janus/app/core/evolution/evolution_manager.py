@@ -4,7 +4,6 @@ import logging
 import re
 from typing import Any
 
-
 from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService
 from app.services.tool_service import ToolNotFoundError, ToolService

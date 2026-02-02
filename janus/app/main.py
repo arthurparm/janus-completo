@@ -53,10 +53,10 @@ async def lifespan(app: FastAPI):
 
     # 1.1 Load Global Prompts (Async)
     # This ensures that all prompt constants are populated from the DB before the app starts serving requests.
+    from app.core.evolution.prompts import load_evolution_prompts
     from app.core.infrastructure.advanced_prompts import load_advanced_prompts
     from app.core.infrastructure.janus_specialized_prompts import load_specialized_prompts
-    from app.core.evolution.prompts import load_evolution_prompts
-    
+
     logger.info("Loading global prompts from database...")
     try:
         await load_advanced_prompts()
@@ -213,14 +213,16 @@ def health():
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
-        "tailscale": {
-            "enabled": settings.TAILSCALE_SERVE_ENABLED,
-            "host": settings.TAILSCALE_HOST,
-            "backend_url": settings.TAILSCALE_BACKEND_URL,
-            "frontend_url": settings.TAILSCALE_FRONTEND_URL,
-        }
-        if settings.TAILSCALE_SERVE_ENABLED
-        else None,
+        "tailscale": (
+            {
+                "enabled": settings.TAILSCALE_SERVE_ENABLED,
+                "host": settings.TAILSCALE_HOST,
+                "backend_url": settings.TAILSCALE_BACKEND_URL,
+                "frontend_url": settings.TAILSCALE_FRONTEND_URL,
+            }
+            if settings.TAILSCALE_SERVE_ENABLED
+            else None
+        ),
     }
     return health_info
 
@@ -248,5 +250,6 @@ try:
                 except Exception:
                     pass
             return response
+
 except Exception:
     pass

@@ -1,11 +1,13 @@
 import asyncio
 import logging
+
 from app.core.memory.generative_memory import generative_memory_service
 
 logger = logging.getLogger(__name__)
 
+
 class MemoryMaintenanceWorker:
-    def __init__(self, interval_seconds: int = 86400): # Once a day
+    def __init__(self, interval_seconds: int = 86400):  # Once a day
         self.interval = interval_seconds
         self.running = False
         self.task = None
@@ -33,7 +35,8 @@ class MemoryMaintenanceWorker:
                 logger.info("Memory maintenance completed.")
             except Exception as e:
                 logger.error(f"Error in memory maintenance: {e}")
-            
+
             await asyncio.sleep(self.interval)
+
 
 memory_maintenance_worker = MemoryMaintenanceWorker()

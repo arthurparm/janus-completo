@@ -9,6 +9,7 @@ TOOL_GENERATION_PROMPT = ""
 
 tool_validation_prompt = ""
 
+
 async def load_evolution_prompts():
     """Carrega os prompts de evolução de forma assíncrona."""
     global TOOL_SPECIFICATION_PROMPT

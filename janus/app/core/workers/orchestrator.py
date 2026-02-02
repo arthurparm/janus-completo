@@ -22,10 +22,11 @@ async def start_all_workers():
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.workers.autonomy_worker import start_autonomy_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
-    from app.core.workers.distillation_worker import start_distillation_worker
-    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
     from app.core.workers.debate_critic_worker import start_debate_critic_worker
+    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
+    from app.core.workers.distillation_worker import start_distillation_worker
     from app.core.workers.google_productivity_worker import start_google_productivity_consumer
+    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
     from app.core.workers.meta_agent_worker import (
         start_failure_event_consumer,
         start_meta_agent_worker,
@@ -37,7 +38,6 @@ async def start_all_workers():
     from app.core.workers.router_worker import start_router_worker
     from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
     from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
-    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
 
     logger.info("Iniciando orquestrador de workers...")
 

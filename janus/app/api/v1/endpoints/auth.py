@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -186,7 +186,9 @@ async def firebase_exchange(
         user = repo.get_by_email(email)
 
     if not user:
-        user = repo.create_user(email=email or None, display_name=display_name, external_id=uid or None)
+        user = repo.create_user(
+            email=email or None, display_name=display_name, external_id=uid or None
+        )
     elif uid and not user.external_id:
         repo.set_external_id(int(user.id), uid)
 
@@ -221,7 +223,9 @@ async def local_register(
     if repo.get_by_email(email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     if repo.get_by_username(username):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username already registered"
+        )
 
     pw_hash = hash_password(payload.password)
     user = repo.create_user(
@@ -307,7 +311,9 @@ async def local_reset_password(
     user = repo.get_by_reset_token(token_hash)
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
-    if user.password_reset_expires_at and user.password_reset_expires_at < datetime.now(timezone.utc):
+    if user.password_reset_expires_at and user.password_reset_expires_at < datetime.now(
+        timezone.utc
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired")
 
     pw_hash = hash_password(payload.password)

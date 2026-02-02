@@ -58,74 +58,74 @@ export class ChatStreamService {
   private open(url: string): void {
     this.lastUrl = url;    console.log('[ChatStreamService] Abrindo EventSource para URL:', url)
     this.es = new EventSource(url)
-    
-    this.es.onopen = () => { 
+
+    this.es.onopen = () => {
       console.log('[ChatStreamService] EventSource conectado com sucesso')
-      this.status$.next('open') 
+      this.status$.next('open')
     }
-    
-    this.es.onerror = (error) => { 
+
+    this.es.onerror = (error) => {
       console.error('[ChatStreamService] EventSource erro:', error)
-      this.handleError('connection_error') 
+      this.handleError('connection_error')
     }
-    
-    this.es.onmessage = (ev) => { 
+
+    this.es.onmessage = (ev) => {
       console.log('[ChatStreamService] Mensagem recebida:', ev.data)
-      this.handleMessage('message', ev.data) 
+      this.handleMessage('message', ev.data)
     }
-    
-    this.es.addEventListener('start', () => { 
+
+    this.es.addEventListener('start', () => {
       console.log('[ChatStreamService] Evento start recebido')
-      this.status$.next('open') 
+      this.status$.next('open')
     })
-    
-    this.es.addEventListener('ack', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('ack', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Evento ack recebido:', ev.data)
-      this.handleMessage('ack', ev.data) 
+      this.handleMessage('ack', ev.data)
     })
-    
-    this.es.addEventListener('partial', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('partial', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Evento partial recebido:', ev.data)
-      this.handleMessage('partial', ev.data) 
+      this.handleMessage('partial', ev.data)
     })
-    
-    this.es.addEventListener('token', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('token', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Evento token recebido:', ev.data)
-      this.handleMessage('partial', ev.data) 
+      this.handleMessage('partial', ev.data)
     })
-    
-    this.es.addEventListener('done', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('done', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Evento done recebido:', ev.data)
-      this.handleMessage('done', ev.data) 
+      this.handleMessage('done', ev.data)
     })
-    
-    this.es.addEventListener('error', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('error', (ev: MessageEvent) => {
       console.error('[ChatStreamService] Evento error recebido:', ev.data)
-      this.handleMessage('error', ev.data) 
+      this.handleMessage('error', ev.data)
     })
-    
-    this.es.addEventListener('heartbeat', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('heartbeat', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Heartbeat recebido')
-      /* keep-alive noop */ 
+      /* keep-alive noop */
     })
-    
-    this.es.addEventListener('protocol', (ev: MessageEvent) => { 
+
+    this.es.addEventListener('protocol', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Evento protocol recebido:', ev.data)
-      /* future: inspect version */ 
+      /* future: inspect version */
     })
-    
+
     // Adicionar listener genérico para debug
     this.es.addEventListener('message', (ev: MessageEvent) => {
       console.log('[ChatStreamService] Mensagem genérica recebida:', ev.type, ev.data)
     })
-    
+
     // Listener para qualquer mensagem que não tenha event type específico
     this.es.onmessage = (ev) => {
       console.log('[ChatStreamService] onmessage chamado:', ev.data)
     }
-    
+
     console.log('[ChatStreamService] EventSource configurado com listeners')
-    
+
     // Timeout para verificar se está recebendo dados
     setTimeout(() => {
       console.log('[ChatStreamService] Status após 5 segundos:', this.status$.value)

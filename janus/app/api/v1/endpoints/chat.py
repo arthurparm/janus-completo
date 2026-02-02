@@ -164,9 +164,7 @@ async def send_message(
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     except MessageTooLargeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
     except ChatServiceError as e:
         if "Access denied" in str(e):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
@@ -284,9 +282,7 @@ async def chat_history(
 
         else:
             # Modo legado - retorna todo o histórico com RBAC quando disponível
-            hist = service.get_history(
-                conversation_id, user_id=user_id, project_id=project_id
-            )
+            hist = service.get_history(conversation_id, user_id=user_id, project_id=project_id)
             logger.info(
                 f"Retrieved full history for conversation {conversation_id} with {len(hist.get('messages', []))} messages"
             )
@@ -629,9 +625,7 @@ async def stream_message(
     return StreamingResponse(gen, media_type="text/event-stream", headers=headers)
 
 
-@router.get(
-    "/{conversation_id}/trace", summary="Retorna o rastro de execução (Chain of Thought)"
-)
+@router.get("/{conversation_id}/trace", summary="Retorna o rastro de execução (Chain of Thought)")
 async def get_conversation_trace(
     conversation_id: str,
     service: TraceService = Depends(get_trace_service),

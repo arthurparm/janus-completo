@@ -9,17 +9,21 @@ import requests
 BASE_URL = os.getenv("BASE_URL", "http://janus-api:8000/api/v1")
 HEALTH_URL = os.getenv("HEALTH_URL", "http://janus-api:8000/health")
 
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL
+
 
 @pytest.fixture(scope="session")
 def health_url() -> str:
     return HEALTH_URL
 
+
 @pytest.fixture(scope="session")
 def api_client():
     """Simple wrapper around requests to handle base URL"""
+
     class Client:
         def get(self, path, **kwargs):
             url = f"{BASE_URL}{path}"
@@ -30,6 +34,7 @@ def api_client():
             return requests.post(url, **kwargs)
 
     return Client()
+
 
 @pytest.fixture(scope="module")
 def active_conversation(api_client) -> Generator[str, None, None]:

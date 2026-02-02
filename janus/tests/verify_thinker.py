@@ -3,16 +3,19 @@ Teste de verificação para o fluxo do Thinker Agent.
 Simula o roteamento e a execução de uma tarefa de codificação.
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.getcwd())
-sys.path.append('/app')
+sys.path.append("/app")
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from app.core.workers.router_worker import _infer_first_agent
-from app.models.schemas import TaskState
 from app.core.workers.thinker_agent_worker import _build_thinking_prompt
+from app.models.schemas import TaskState
+
 
 class TestThinkerFlow(unittest.TestCase):
     def test_router_infers_thinker_for_coding_tasks(self):
@@ -26,14 +29,14 @@ class TestThinkerFlow(unittest.TestCase):
     def test_thinker_prompt_generation(self):
         print("\n[TEST] Verificando prompt do Thinker...")
         state = TaskState(
-            original_goal="Criar uma API REST",
-            data_payload={"context": "Usar FastAPI"}
+            original_goal="Criar uma API REST", data_payload={"context": "Usar FastAPI"}
         )
         prompt = _build_thinking_prompt(state)
         self.assertIn("ThinkerAgent", prompt)
         self.assertIn("API REST", prompt)
         self.assertIn("FastAPI", prompt)
         print("✓ Prompt do Thinker gerado corretamente.")
+
 
 if __name__ == "__main__":
     unittest.main()

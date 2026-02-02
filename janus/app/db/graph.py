@@ -57,7 +57,7 @@ class GraphDatabase:
             async for record in result:
                 if record["name"]:
                     names.add(record["name"])
-            
+
             # Tenta listar constraints
             result = await session.run("SHOW CONSTRAINTS YIELD name RETURN name")
             async for record in result:
@@ -220,9 +220,7 @@ class GraphDatabase:
                                     """
                                 )
 
-                            logger.info(
-                                "Índices Vetoriais e Full-Text (Universal) verificados."
-                            )
+                            logger.info("Índices Vetoriais e Full-Text (Universal) verificados.")
                         except Exception as e:
                             logger.warning(
                                 f"Falha ao criar índices avançados (Vector/FullText): {e}"
@@ -284,7 +282,7 @@ class GraphDatabase:
                             await session.run(
                                 "CREATE CONSTRAINT class_node_key IF NOT EXISTS FOR (c:Class) REQUIRE (c.name, c.file_path) IS UNIQUE"
                             )
-                        
+
                         # Indexes
                         if "concept_name_idx" not in existing_schema:
                             await session.run(

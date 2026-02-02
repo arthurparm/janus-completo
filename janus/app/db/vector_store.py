@@ -6,7 +6,7 @@ from qdrant_client import AsyncQdrantClient, models
 from qdrant_client.http.models import PayloadSchemaType
 
 from app.config import settings
-from app.core.infrastructure.resilience import CircuitBreaker, resilient
+from app.core.infrastructure.resilience import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,9 @@ async def async_count_points(
     Alguns releases expõem `count` e outros `count_points`.
     """
     if hasattr(client, "count"):
-        resp = await client.count(collection_name=collection_name, count_filter=qfilter, exact=exact)
+        resp = await client.count(
+            collection_name=collection_name, count_filter=qfilter, exact=exact
+        )
     else:  # pragma: no cover - retrocompatibilidade
         resp = await client.count_points(
             collection_name=collection_name, count_filter=qfilter, exact=exact
@@ -179,7 +181,6 @@ async def reset_client() -> None:
     logger.info("Cliente Qdrant async resetado.")
 
 
-
 async def delete_points_by_filter(collection_name: str, filter_conditions: dict) -> None:
     """Deleta pontos que correspondem ao filtro especificado."""
     collection_name = _validate_collection_name(collection_name)
@@ -192,13 +193,13 @@ async def delete_points_by_filter(collection_name: str, filter_conditions: dict)
             ]
         )
         await client.delete(
-            collection_name=collection_name,
-            points_selector=models.FilterSelector(filter=q_filter)
+            collection_name=collection_name, points_selector=models.FilterSelector(filter=q_filter)
         )
         logger.info(f"Pontos deletados de '{collection_name}' com filtro: {filter_conditions}")
     except Exception as e:
         logger.error(f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
         raise
+
 
 async def aget_collection_info(collection_name: str) -> dict:
     """Versão assíncrona para obter informações da coleção."""

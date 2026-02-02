@@ -17,7 +17,9 @@ async def test_audio_pipeline_success_flow():
 
     # Mock Services
     mock_wakeword = MagicMock()
-    mock_wakeword.wait_for_wake_word = AsyncMock(side_effect=[True, False]) # Detect once, then stop loop logic if we were looping
+    mock_wakeword.wait_for_wake_word = AsyncMock(
+        side_effect=[True, False]
+    )  # Detect once, then stop loop logic if we were looping
 
     mock_stt = MagicMock()
     mock_stt.listen = AsyncMock(return_value="Que horas sao?")
@@ -53,13 +55,14 @@ async def test_audio_pipeline_success_flow():
     mock_stt.listen.assert_awaited_once()
     mock_tts.speak.assert_awaited_once_with("Sao 14 horas.")
 
+
 @pytest.mark.asyncio
 async def test_audio_pipeline_graceful_failure():
     """
     Verifies that hardware failures are handled gracefully (Circuit Breaker logic).
     """
     manager = VoiceManager()
-    manager._recovery_timeout = 0.1 # Fast recovery for test
+    manager._recovery_timeout = 0.1  # Fast recovery for test
 
     # Mock WakeWord to fail repeatedly
     mock_wakeword = MagicMock()
@@ -67,7 +70,7 @@ async def test_audio_pipeline_graceful_failure():
 
     manager.wakeword = mock_wakeword
     manager._enabled = True
-    manager._max_failures = 2 # Trip fast
+    manager._max_failures = 2  # Trip fast
 
     # Attempt 1: Fail
     res1 = await manager.wait_for_wake_word()

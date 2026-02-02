@@ -39,7 +39,7 @@ Content-Type: application/json
 
 ###
 # Listar tarefas (opcional: filtrar por status)
-@status = 
+@status =
 GET {{host}}{{api_v1_prefix}}/collaboration/tasks?status={{status}}
 Accept: application/json
 

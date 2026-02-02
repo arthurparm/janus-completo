@@ -2,7 +2,6 @@ import logging
 import string
 import time
 from collections import OrderedDict
-from pathlib import Path
 from typing import Any, Callable
 
 from prometheus_client import Counter
@@ -109,7 +108,7 @@ class PromptLoader:
 
         try:
             from app.db import get_db_session
-            
+
             # Usar gerenciador de sessão para injetar sessão no repositório
             async for session in get_db_session():
                 # Injetar sessão temporariamente
@@ -118,7 +117,7 @@ class PromptLoader:
                     if version:
                         # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
                         # prompt = await self._prompt_repo.get_prompt_version_by_id(int(version))
-                        pass 
+                        pass
                     else:
                         # Buscar versão ativa
                         prompt = await self._prompt_repo.get_active_prompt(
@@ -131,8 +130,8 @@ class PromptLoader:
                             return prompt.prompt_text
                 finally:
                     self._prompt_repo._async_session = None
-                break # Apenas uma sessão necessária
-                
+                break  # Apenas uma sessão necessária
+
         except Exception as e:
             self._logger.error(f"Erro ao buscar prompt '{name}' do banco: {e}")
 

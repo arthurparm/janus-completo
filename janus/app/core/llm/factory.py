@@ -239,7 +239,9 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 llm = ChatOpenAI(
                     model=model,
                     temperature=0,
-                    api_key=getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)(),
+                    api_key=getattr(
+                        settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None
+                    )(),
                     base_url=settings.OPENROUTER_BASE_URL,
                     default_headers={
                         "HTTP-Referer": "https://janus.ai",  # Required by OpenRouter

@@ -7,11 +7,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, desc, select
-# from sqlalchemy.orm import Session # Removido, usando AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import db
+# from sqlalchemy.orm import Session # Removido, usando AsyncSession
 from app.models.config_models import AgentConfiguration, PriorityLevel
 
 
@@ -29,20 +28,19 @@ class AgentConfigRepository:
         # Deve ser injetada via get_db_session() ou passada no construtor.
         raise RuntimeError("AgentConfigRepository requires an injected AsyncSession")
 
-    async def get_active_config(self, agent_name: str, agent_role: str) -> AgentConfiguration | None:
+    async def get_active_config(
+        self, agent_name: str, agent_role: str
+    ) -> AgentConfiguration | None:
         """Obtém a configuração ativa para um agente específico."""
         session = await self._get_session()
         # Nota: Como _get_session agora levanta erro se não houver sessão,
         # assumimos que quem chama injetou a sessão corretamente.
-        
-        stmt = (
-            select(AgentConfiguration)
-            .filter(
-                and_(
-                    AgentConfiguration.agent_name == agent_name,
-                    AgentConfiguration.agent_role == agent_role,
-                    AgentConfiguration.is_active,
-                )
+
+        stmt = select(AgentConfiguration).filter(
+            and_(
+                AgentConfiguration.agent_name == agent_name,
+                AgentConfiguration.agent_role == agent_role,
+                AgentConfiguration.is_active,
             )
         )
         result = await session.execute(stmt)
@@ -60,10 +58,8 @@ class AgentConfigRepository:
     ) -> list[AgentConfiguration]:
         """Obtém todas as configurações para um papel específico."""
         session = await self._get_session()
-        
-        query = select(AgentConfiguration).filter(
-            AgentConfiguration.agent_role == agent_role
-        )
+
+        query = select(AgentConfiguration).filter(AgentConfiguration.agent_role == agent_role)
 
         if active_only:
             query = query.filter(AgentConfiguration.is_active)
@@ -77,10 +73,8 @@ class AgentConfigRepository:
     ) -> list[AgentConfiguration]:
         """Obtém configurações por provedor LLM."""
         session = await self._get_session()
-        
-        query = select(AgentConfiguration).filter(
-            AgentConfiguration.llm_provider == llm_provider
-        )
+
+        query = select(AgentConfiguration).filter(AgentConfiguration.llm_provider == llm_provider)
 
         if active_only:
             query = query.filter(AgentConfiguration.is_active)
@@ -108,7 +102,7 @@ class AgentConfigRepository:
     ) -> AgentConfiguration:
         """Cria uma nova configuração de agente."""
         session = await self._get_session()
-        
+
         # Se ativar, desativar configuração anterior
         if activate:
             await self._deactivate_config(session, agent_name, agent_role)
@@ -140,7 +134,7 @@ class AgentConfigRepository:
     ) -> AgentConfiguration | None:
         """Atualiza uma configuração existente."""
         session = await self._get_session()
-        
+
         stmt = select(AgentConfiguration).filter(AgentConfiguration.id == config_id)
         result = await session.execute(stmt)
         config = result.scalars().first()
@@ -161,7 +155,7 @@ class AgentConfigRepository:
     async def activate_config(self, config_id: int) -> bool:
         """Ativa uma configuração específica."""
         session = await self._get_session()
-        
+
         stmt = select(AgentConfiguration).filter(AgentConfiguration.id == config_id)
         result = await session.execute(stmt)
         config = result.scalars().first()
@@ -180,14 +174,11 @@ class AgentConfigRepository:
 
     async def _deactivate_config(self, session: AsyncSession, agent_name: str, agent_role: str):
         """Desativa configuração ativa atual."""
-        stmt = (
-            select(AgentConfiguration)
-            .filter(
-                and_(
-                    AgentConfiguration.agent_name == agent_name,
-                    AgentConfiguration.agent_role == agent_role,
-                    AgentConfiguration.is_active,
-                )
+        stmt = select(AgentConfiguration).filter(
+            and_(
+                AgentConfiguration.agent_name == agent_name,
+                AgentConfiguration.agent_role == agent_role,
+                AgentConfiguration.is_active,
             )
         )
         result = await session.execute(stmt)
@@ -200,7 +191,7 @@ class AgentConfigRepository:
     async def get_low_performance_configs(self, threshold: float = 0.7) -> list[AgentConfiguration]:
         """Obtém configurações com performance abaixo do limiar."""
         session = await self._get_session()
-        
+
         query = select(AgentConfiguration).filter(
             and_(
                 AgentConfiguration.is_active,
@@ -215,7 +206,7 @@ class AgentConfigRepository:
     ) -> list[AgentConfiguration]:
         """Obtém configurações com custo acima do limite."""
         session = await self._get_session()
-        
+
         query = select(AgentConfiguration).filter(
             and_(
                 AgentConfiguration.is_active,
@@ -228,12 +219,12 @@ class AgentConfigRepository:
     async def get_config_stats(self) -> dict[str, Any]:
         """Obtém estatísticas das configurações."""
         session = await self._get_session()
-        
+
         # Total configs
         result = await session.execute(select(AgentConfiguration))
         all_configs = result.scalars().all()
         total_configs = len(all_configs)
-        
+
         # Active configs
         active_configs_list = [c for c in all_configs if c.is_active]
         active_configs = len(active_configs_list)
@@ -243,7 +234,9 @@ class AgentConfigRepository:
         roles = list({c.agent_role for c in all_configs if c.agent_role})
 
         # Average cost
-        costs = [float(c.cost_budget_usd) for c in active_configs_list if c.cost_budget_usd is not None]
+        costs = [
+            float(c.cost_budget_usd) for c in active_configs_list if c.cost_budget_usd is not None
+        ]
         avg_cost_value = sum(costs) / len(costs) if costs else 0
 
         return {

@@ -1,7 +1,4 @@
-import os
-import sys
 from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
 # Mocking settings if needed, but easier to just use env vars
 XAI_API_KEY = "xai-0bVs7JZBDG2En88eMr0GBkEJhTYFJVgUjdvtw2og2Eic0lwwoE8cP5LSNWoKBye2jepq08Te8n28MsE9"

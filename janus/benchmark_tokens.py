@@ -3,9 +3,11 @@
 Token Reduction Benchmark - Compare modular vs monolithic prompts
 Estimates based on documented OLD system (~2500 tokens) vs NEW measurements
 """
+
 import asyncio
-from app.services.prompt_builder_service import PromptBuilderService
+
 from app.core.prompts.intent_classifier import IntentClassifier
+from app.services.prompt_builder_service import PromptBuilderService
 
 # Test cases covering different intent types
 TEST_CASES = [
@@ -82,11 +84,11 @@ async def main():
     print("=" * 70)
     print("🏆 BENEFITS")
     print("=" * 70)
-    print(f"• Faster responses (less LLM processing)")
+    print("• Faster responses (less LLM processing)")
     print(f"• Lower costs ({avg_reduction:.0f}% reduction in tokens)")
-    print(f"• Modular architecture (easy to extend)")
-    print(f"• Intent-based optimization (smart loading)")
-    print(f"• NO LEGACY CODE (100% modern)")
+    print("• Modular architecture (easy to extend)")
+    print("• Intent-based optimization (smart loading)")
+    print("• NO LEGACY CODE (100% modern)")
 
 
 if __name__ == "__main__":

@@ -1,22 +1,24 @@
 import logging
-import time
-from typing import Any, List
+from typing import List
 
-from neo4j import GraphDatabase
-from neo4j_graphrag.retrievers import HybridRetriever
-from neo4j_graphrag.embeddings import OpenAIEmbeddings # Assuming we use OpenAI or similar compatible interface
-from neo4j_graphrag.types import RetrieverResultItem
 from langsmith import traceable
+from neo4j import GraphDatabase
+from neo4j_graphrag.embeddings import (
+    OpenAIEmbeddings,  # Assuming we use OpenAI or similar compatible interface
+)
+from neo4j_graphrag.retrievers import HybridRetriever
+from neo4j_graphrag.types import RetrieverResultItem
 
 from app.config import settings
-from app.core.llm.llm_manager import ModelRole, get_llm
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.llm.llm_manager import ModelRole, get_llm
 
 logger = logging.getLogger(__name__)
 
 # Compat: algumas versões usam .index_name e a classe tem __slots__=().
 # Criamos uma property que devolve vector_index_name e aceita setter sem quebrar __slots__.
 try:  # pragma: no cover
+
     def _get_index_name(self):
         try:
             return getattr(self, "vector_index_name", None)
@@ -60,15 +62,16 @@ class HybridRetrieverShim:
     def search(self, *args, **kwargs):
         return self._inner.search(*args, **kwargs)
 
+
 # Initialize Driver
 try:
     driver = GraphDatabase.driver(
-        settings.NEO4J_URI,
-        auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value())
+        settings.NEO4J_URI, auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value())
     )
 except Exception as e:
     logger.error(f"Failed to initialize Neo4j driver: {e}")
     driver = None
+
 
 class NativeGraphRAG:
     def __init__(self):
@@ -86,9 +89,11 @@ class NativeGraphRAG:
         # Let's assume we use the library's OpenAIEmbeddings if key is present.
         try:
             embedder = OpenAIEmbeddings(
-                api_key=settings.OPENAI_API_KEY.get_secret_value() if settings.OPENAI_API_KEY else ""
+                api_key=(
+                    settings.OPENAI_API_KEY.get_secret_value() if settings.OPENAI_API_KEY else ""
+                )
             )
-            
+
             self.retriever = HybridRetrieverShim(
                 driver=self.driver,
                 vector_index_name="janus_vector_index",
@@ -119,34 +124,38 @@ class NativeGraphRAG:
                 try:
                     # Import dynamic to avoid circular dependency (Core -> Services)
                     from app.services.reasoning_rag_service import generate_hypothetical_answer
-                    
+
                     logger.info("Generating HyDE answer for query", question=question)
                     hypothetical = await generate_hypothetical_answer(question)
-                    
+
                     # Use hypothetical answer for retrieval if it differs significantly
                     if hypothetical and hypothetical != question:
                         query_text = hypothetical
                         logger.debug("Using HyDE query", hypothetical=hypothetical)
                 except Exception as e:
-                    logger.warning(f"HyDE generation failed: {e}, falling back to original question")
+                    logger.warning(
+                        f"HyDE generation failed: {e}, falling back to original question"
+                    )
 
             # neo4j-graphrag retrievers are typically synchronous or have async methods.
             # Checking library convention: typically sync methods in v1.
             # We wrap in standard async execution if needed, or just call if it's fast.
             # Usually retrieval involves network I/O.
-            
-            results: List[RetrieverResultItem] = self.retriever.search(query_text=query_text, top_k=limit)
-            
+
+            results: List[RetrieverResultItem] = self.retriever.search(
+                query_text=query_text, top_k=limit
+            )
+
             # Format results
             formatted = []
             for item in results:
                 formatted.append(f"Node: {item.content}")
-                
+
             context = "\n".join(formatted)
-            
+
             if not context:
                 return "No context found."
-                
+
             # Synthesis
             # We can use the existing LLM service for synthesis
             llm = await get_llm(role=ModelRole.KNOWLEDGE_CURATOR)
@@ -157,15 +166,17 @@ class NativeGraphRAG:
                 question=question,
             )
             response = await llm.ainvoke(prompt)
-            
+
             return str(response.content)
 
         except Exception as e:
             logger.error(f"Error in Native GraphRAG query: {e}")
             return f"Error retrieving information: {e}"
 
+
 # Global instance
 _native_rag = NativeGraphRAG()
+
 
 async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     """

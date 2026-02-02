@@ -1,11 +1,11 @@
 import logging
-import asyncio
 from typing import Any
 
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
 from app.db.graph import get_graph_db
 
 logger = logging.getLogger(__name__)
+
 
 class GraphEmbeddingsManager:
     """
@@ -57,7 +57,9 @@ class GraphEmbeddingsManager:
             logger.error(f"Erro ao gerar batch embeddings: {e}")
             return []
 
-    async def vector_search(self, query: str, k: int = 10, min_score: float = 0.7, label: str = "Concept") -> list[dict[str, Any]]:
+    async def vector_search(
+        self, query: str, k: int = 10, min_score: float = 0.7, label: str = "Concept"
+    ) -> list[dict[str, Any]]:
         """
         Realiza busca vetorial direta no Neo4j.
         Suporta múltiplos índices por label.
@@ -66,17 +68,17 @@ class GraphEmbeddingsManager:
             vector = await aembed_text(query)
             if not vector:
                 return []
-            
+
             db = await self._db_getter()
             if not db:
                 return []
 
             # Determine index name based on label
             index_name = f"{label.lower()}_embeddings"
-            
+
             # Neo4j 5.11+ syntax
             results = await db.query(
-                f"""
+                """
                 CALL db.index.vector.queryNodes($index_name, $k, $vector)
                 YIELD node, score
                 WHERE score >= $min_score
@@ -97,10 +99,10 @@ class GraphEmbeddingsManager:
             db = await self._db_getter()
             if not db:
                 return []
-            
+
             # Lucene query syntax approximation
             # Adding wildcards or fuzziness could be an enhancement
-            search_query = f"{query}*" 
+            search_query = f"{query}*"
 
             results = await db.query(
                 """
@@ -108,7 +110,7 @@ class GraphEmbeddingsManager:
                 YIELD node, score
                 RETURN node, score, id(node) as id, labels(node) as labels
                 """,
-                {"query": search_query, "k": k}
+                {"query": search_query, "k": k},
             )
             return results
         except Exception as e:
@@ -125,7 +127,7 @@ class GraphEmbeddingsManager:
         # TODO: Expandir para buscar em múltiplos índices vetoriais se necessário (Tech, Tool...)
         # Por enquanto, foca em Concept como entrada semântica principal.
         vec_results = await self.vector_search(query, k=k, label="Concept")
-        
+
         # 2. Key entities from query (Technology/Tool) might be better found via separate vector search?
         # Let's try to search ALL vector indexes? Too slow.
         # Fallback: FullText Search (covers ALL labels)
@@ -134,9 +136,9 @@ class GraphEmbeddingsManager:
         # 3. Merge Strategies
         # Normalizar scores? Vector (0-1), Lucene (unbounded, often > 1)
         # Simplificação: Usar ID para deduplicar e boostar.
-        
+
         merged = {}
-        
+
         # Process Vector Results (Weight 1.0)
         for res in vec_results:
             nid = res["id"]
@@ -145,7 +147,7 @@ class GraphEmbeddingsManager:
                 "score": res["score"],
                 "source": "vector",
                 "labels": res["labels"],
-                "id": nid
+                "id": nid,
             }
 
         # Process FullText Results (Weight 0.5 normalize?)
@@ -154,17 +156,17 @@ class GraphEmbeddingsManager:
             nid = res["id"]
             if nid in merged:
                 # Boost existing
-                merged[nid]["score"] += (res["score"] * 0.2) # Small boost if matching both
+                merged[nid]["score"] += res["score"] * 0.2  # Small boost if matching both
                 merged[nid]["source"] = "hybrid"
             else:
                 merged[nid] = {
                     "node": res["node"],
-                    "score": res["score"] * 0.5, # Penalize lexical only slightly
+                    "score": res["score"] * 0.5,  # Penalize lexical only slightly
                     "source": "text",
                     "labels": res["labels"],
-                    "id": nid
+                    "id": nid,
                 }
-        
+
         # Sort by score desc
         final_list = list(merged.values())
         final_list.sort(key=lambda x: x["score"], reverse=True)
@@ -177,13 +179,13 @@ class GraphEmbeddingsManager:
         """
         target_labels = labels or ["Concept", "Technology", "Tool", "Pattern", "Solution", "Error"]
         logger.info(f"Iniciando reindexação universal para labels: {target_labels}")
-        
+
         db = await self._db_getter()
         if not db:
             return 0
 
         total_updated = 0
-        
+
         for label in target_labels:
             logger.info(f"Processando label: {label}...")
             while True:
@@ -204,10 +206,10 @@ class GraphEmbeddingsManager:
                 updates = []
                 # Prepare batch text list
                 texts = [node["text"] for node in nodes]
-                
+
                 # Batch Embed
                 vectors = await self.embed_batch(texts)
-                
+
                 for i, node in enumerate(nodes):
                     if i < len(vectors) and vectors[i]:
                         updates.append({"id": node["id"], "vector": vectors[i]})
@@ -219,7 +221,7 @@ class GraphEmbeddingsManager:
                         MATCH (n) WHERE id(n) = row.id
                         SET n.embedding = row.vector
                         """,
-                        {"updates": updates}
+                        {"updates": updates},
                     )
                     total_updated += len(updates)
                     logger.info(f"Label {label}: Reindexados {len(updates)} nós...")
@@ -230,6 +232,6 @@ class GraphEmbeddingsManager:
                     # Ideal: marcar n.embedding_failed = true.
                     # MVP: break
                     break
-        
+
         logger.info(f"Reindexação universal concluída. Total: {total_updated}")
         return total_updated

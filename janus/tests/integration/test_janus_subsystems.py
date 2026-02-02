@@ -18,6 +18,7 @@ import pytest
 # TEST 1: Memory Core Configuration
 # ============================================================================
 
+
 class TestMemoryCoreConfig:
     """Tests for MemoryCore configuration and initialization."""
 
@@ -56,6 +57,7 @@ class TestMemoryCoreConfig:
 # TEST 2: Experience and Memory Models
 # ============================================================================
 
+
 class TestMemoryModels:
     """Tests for memory models and data structures."""
 
@@ -65,9 +67,7 @@ class TestMemoryModels:
             from app.core.memory.models import Experience
 
             exp = Experience(
-                content="Test experience content",
-                type="episodic",
-                metadata={"key": "value"}
+                content="Test experience content", type="episodic", metadata={"key": "value"}
             )
 
             assert exp.content == "Test experience content"
@@ -83,11 +83,7 @@ class TestMemoryModels:
             from app.core.memory.models import MemoryResult
 
             result = MemoryResult(
-                id="test-id",
-                content="Test content",
-                score=0.95,
-                type="episodic",
-                metadata={}
+                id="test-id", content="Test content", score=0.95, type="episodic", metadata={}
             )
 
             assert result.id == "test-id"
@@ -102,6 +98,7 @@ class TestMemoryModels:
 # TEST 3: Vector Collection Enum
 # ============================================================================
 
+
 class TestVectorCollection:
     """Tests for VectorCollection enum."""
 
@@ -110,7 +107,7 @@ class TestVectorCollection:
         try:
             from app.core.memory.enums import VectorCollection
 
-            assert hasattr(VectorCollection, 'EPISODIC_MEMORY')
+            assert hasattr(VectorCollection, "EPISODIC_MEMORY")
 
             print(f"✓ VectorCollection enum available: {VectorCollection.EPISODIC_MEMORY.value}")
         except Exception as e:
@@ -120,6 +117,7 @@ class TestVectorCollection:
 # ============================================================================
 # TEST 4: Working Memory
 # ============================================================================
+
 
 class TestWorkingMemory:
     """Tests for working memory operations."""
@@ -131,7 +129,7 @@ class TestWorkingMemory:
 
             wm = WorkingMemory()
 
-            assert hasattr(wm, 'add') or hasattr(wm, 'store')
+            assert hasattr(wm, "add") or hasattr(wm, "store")
 
             print("✓ WorkingMemory available")
         except Exception as e:
@@ -141,6 +139,7 @@ class TestWorkingMemory:
 # ============================================================================
 # TEST 5: GraphRAG Core
 # ============================================================================
+
 
 class TestGraphRAGCore:
     """Tests for GraphRAG integration."""
@@ -160,6 +159,7 @@ class TestGraphRAGCore:
 # ============================================================================
 # TEST 6: API Router Availability
 # ============================================================================
+
 
 class TestAPIRouters:
     """Tests for API route availability."""
@@ -206,6 +206,7 @@ class TestAPIRouters:
 # TEST 7: Sandbox Service
 # ============================================================================
 
+
 class TestSandboxService:
     """Tests for code execution sandbox."""
 
@@ -241,6 +242,7 @@ class TestSandboxService:
 # TEST 8: Knowledge Service
 # ============================================================================
 
+
 class TestKnowledgeService:
     """Tests for knowledge service."""
 
@@ -259,6 +261,7 @@ class TestKnowledgeService:
 # ============================================================================
 # TEST 9: Workers
 # ============================================================================
+
 
 class TestWorkers:
     """Tests for background workers."""
@@ -290,6 +293,7 @@ class TestWorkers:
 # TEST 10: MetaAgent Worker
 # ============================================================================
 
+
 class TestMetaAgentWorker:
     """Tests for MetaAgent worker."""
 
@@ -308,6 +312,7 @@ class TestMetaAgentWorker:
 # ============================================================================
 # TEST 11: Agent Actor
 # ============================================================================
+
 
 class TestAgentActor:
     """Tests for AgentActor."""
@@ -328,6 +333,7 @@ class TestAgentActor:
 # TEST 12: Embedding Functions
 # ============================================================================
 
+
 class TestEmbeddings:
     """Tests for embedding functions."""
 
@@ -347,6 +353,7 @@ class TestEmbeddings:
 # TEST 13: Audit Logging
 # ============================================================================
 
+
 class TestAuditLogging:
     """Tests for audit logging."""
 
@@ -365,6 +372,7 @@ class TestAuditLogging:
 # ============================================================================
 # TEST 14: Bootstrap and Kernel
 # ============================================================================
+
 
 class TestBootstrap:
     """Tests for bootstrap and kernel."""
@@ -396,17 +404,14 @@ class TestBootstrap:
 # RUNNER
 # ============================================================================
 
+
 async def run_all_tests():
     """Run all tests and report results."""
     print("=" * 60)
     print("JANUS SUBSYSTEMS TEST SUITE")
     print("=" * 60)
 
-    results = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0
-    }
+    results = {"passed": 0, "failed": 0, "skipped": 0}
 
     test_classes = [
         TestMemoryCoreConfig(),
@@ -442,10 +447,13 @@ async def run_all_tests():
                     results["failed"] += 1
 
     print("\n" + "=" * 60)
-    print(f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped")
+    print(
+        f"RESULTS: {results['passed']} passed, {results['failed']} failed, {results['skipped']} skipped"
+    )
     print("=" * 60)
 
     return results["failed"] == 0
+
 
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())

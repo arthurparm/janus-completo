@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 
@@ -11,6 +10,7 @@ from app.models.schemas import TaskMessage
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @pytest.mark.asyncio
 async def test_dlx_poison_pill():
@@ -31,14 +31,14 @@ async def test_dlx_poison_pill():
     # 2. Declare Queue with DLX
     async with broker._connection.channel() as channel:
         # Declare DLX/DLQ manually to be sure (though broker code does it now)
-        dlx = await channel.declare_exchange("janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True)
+        dlx = await channel.declare_exchange(
+            "janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True
+        )
         dlq = await channel.declare_queue("janus.dlq", durable=True)
         await dlq.bind(dlx, routing_key="#")
 
         # Declare Test Queue pointing to DLX
-        args = {
-            "x-dead-letter-exchange": "janus.dlx"
-        }
+        args = {"x-dead-letter-exchange": "janus.dlx"}
         test_queue = await channel.declare_queue(queue_name, durable=True, arguments=args)
 
         # Purge to be clean
@@ -58,11 +58,7 @@ async def test_dlx_poison_pill():
     consumer_task = broker.start_consumer(queue_name, poison_consumer, prefetch_count=1)
 
     # 5. Publish Poison Pill
-    poison_msg = TaskMessage(
-        task_id="poison_pill",
-        task_type="test",
-        payload={"data": "killer"}
-    )
+    poison_msg = TaskMessage(task_id="poison_pill", task_type="test", payload={"data": "killer"})
     await broker.publish(queue_name, poison_msg.model_dump())
     print("[PUBLISH] Poison pill sent")
 
@@ -93,6 +89,7 @@ async def test_dlx_poison_pill():
     consumer_task.cancel()
     await broker.close()
     print("[SUCCESS] Poison pill correctly moved to DLQ!")
+
 
 if __name__ == "__main__":
     asyncio.run(test_dlx_poison_pill())

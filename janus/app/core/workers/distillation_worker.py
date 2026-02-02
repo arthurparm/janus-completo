@@ -7,6 +7,7 @@ from app.models.schemas import QueueName, TaskMessage, TaskState
 
 logger = logging.getLogger(__name__)
 
+
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_KNOWLEDGE_DISTILLATION.value,
     extract_message_id=lambda task: task.task_id,
@@ -17,8 +18,8 @@ async def process_distillation_task(task: TaskMessage) -> None:
 
         raw_state = (task.payload or {}).get("task_state", {})
         if not raw_state:
-             logger.warning("Payload vazio ou inválido na tarefa de destilação.")
-             return
+            logger.warning("Payload vazio ou inválido na tarefa de destilação.")
+            return
 
         state = TaskState(**raw_state)
 
@@ -37,6 +38,7 @@ async def process_distillation_task(task: TaskMessage) -> None:
         logger.error(f"Erro no DistillationWorker: {e}", exc_info=True)
         # Não damos raise para evitar retry infinito de tarefa "ruim" (dataset poisoning)
         # Poison pill handler já protege, mas aqui preferimos falhar silenciosamente para não travar fila
+
 
 async def start_distillation_worker():
     logger.info("Iniciando Distillation Worker...")

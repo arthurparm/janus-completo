@@ -3,9 +3,12 @@ Modelos para persistência de itens em quarentena do GraphGuardian.
 """
 
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON
+
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.models.config_models import Base
+
 
 class QuarantineStatus(str, Enum):
     PENDING = "PENDING"
@@ -13,11 +16,13 @@ class QuarantineStatus(str, Enum):
     REJECTED = "REJECTED"
     PROCESSED = "PROCESSED"
 
+
 class QuarantineItem(Base):
     """
     Armazena itens (entidades ou relações) que foram rejeitados pelo GraphGuardian
     para revisão posterior ou auditoria.
     """
+
     __tablename__ = "quarantine_items"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -26,7 +31,7 @@ class QuarantineItem(Base):
     content = Column(JSON, nullable=False)  # O conteúdo original em JSON
     reason = Column(Text, nullable=False)  # Motivo da quarentena
     status = Column(String(20), default=QuarantineStatus.PENDING.value)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     reviewed_at = Column(DateTime(timezone=True), nullable=True)

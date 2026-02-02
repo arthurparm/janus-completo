@@ -3,10 +3,10 @@ System Identity Module - Base personality and behavioral guidelines.
 Migrated from janus_identity_jarvis.txt for consistent, elegant identity.
 """
 
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 
 
 class SystemIdentityModule(PromptModule):

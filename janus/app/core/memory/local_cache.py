@@ -1,19 +1,20 @@
 import asyncio
-import time
 import math
+import time
 from collections import OrderedDict
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
+
 from app.config import settings
-from app.models.schemas import ScoredExperience
-from app.core.memory.security import decrypt_text
 from app.core.memory.metrics import (
     memory_short_cache_hits_total,
     memory_short_cache_misses_total,
     memory_short_cache_size,
 )
+from app.core.memory.security import decrypt_text
+from app.models.schemas import ScoredExperience
 
 logger = structlog.get_logger(__name__)
 

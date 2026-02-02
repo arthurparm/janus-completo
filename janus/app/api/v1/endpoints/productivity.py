@@ -100,6 +100,7 @@ class OAuthRefreshRequest(BaseModel):
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
 
+
 def _is_unlimited_user(user_id: int) -> bool:
     unlimited = getattr(settings, "PRODUCTIVITY_UNLIMITED_USERS", []) or []
     if not unlimited:
@@ -131,6 +132,7 @@ class CalendarAddRequest(BaseModel):
     user_id: int
     event: CalendarEvent
     index: bool | None = False
+
 
 @router.post("/calendar/events/add")
 async def calendar_add_event(
@@ -358,7 +360,9 @@ async def mail_send(
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
         if not _is_unlimited_user(payload.user_id):
-            max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0))
+            max_per_day = int(
+                getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0)
+            )
             if max_per_day > 0:
                 evts = svc.get_audit_events(
                     str(payload.user_id),
@@ -456,7 +460,9 @@ async def notes_add(
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
         if not _is_unlimited_user(payload.user_id):
-            max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0))
+            max_per_day = int(
+                getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0)
+            )
             if max_per_day > 0:
                 evts = svc.get_audit_events(
                     str(payload.user_id),

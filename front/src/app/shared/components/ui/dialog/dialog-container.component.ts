@@ -8,7 +8,7 @@ import { A11yModule } from '@angular/cdk/a11y';
     standalone: true,
     imports: [CommonModule, PortalModule, A11yModule],
     template: `
-    <div 
+    <div
       cdkTrapFocus
       cdkTrapFocusAutoCapture
       class="bg-white dark:bg-zinc-900 text-slate-900 dark:text-slate-50 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg w-full max-w-lg p-6 grid gap-4 animate-in fade-in-0 zoom-in-95 duration-200"
@@ -28,7 +28,7 @@ import { A11yModule } from '@angular/cdk/a11y';
         max-height: 100dvh;
         pointer-events: none; /* Let clicks pass through if we want custom backdrop handling, but here we want blocks */
     }
-    
+
     div[cdkTrapFocus] {
         pointer-events: auto;
     }

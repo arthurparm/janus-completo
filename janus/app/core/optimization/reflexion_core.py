@@ -7,17 +7,15 @@ Implementa o padrão Reflexion de forma assíncrona.
 import json
 import logging
 import time
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from app.config import settings
-from app.core.agents.agent_manager import AgentType, agent_manager
 from app.core.agents.utils import parse_json_strict
+from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.client import get_llm_client
 from app.core.llm.router import ModelPriority, ModelRole
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.services.memory_service import MemoryService
 
 logger = logging.getLogger(__name__)
@@ -104,7 +102,9 @@ class ReflexionSession:
         try:
             return parse_json_strict(response)
         except Exception as e:
-            raise ValueError(f"Não foi possível extrair JSON válido da resposta: {response[:100]}...") from e
+            raise ValueError(
+                f"Não foi possível extrair JSON válido da resposta: {response[:100]}..."
+            ) from e
 
     async def _default_evaluator(self, task: str, result: str) -> dict[str, Any]:
         await self._ensure_llm()
@@ -162,9 +162,7 @@ class ReflexionSession:
 
                 # 2. Executar (Gerar Solução)
                 execution_prompt = await get_formatted_prompt(
-                    "reflexion_execution",
-                    task=self.task,
-                    current_context=current_context
+                    "reflexion_execution", task=self.task, current_context=current_context
                 )
 
                 try:

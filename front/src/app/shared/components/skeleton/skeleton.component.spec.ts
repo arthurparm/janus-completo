@@ -41,7 +41,7 @@ describe('SkeletonComponent', () => {
     it('should return array with correct length', () => {
       component.count = 3
       const counter = component.counter
-      
+
       expect(counter.length).toBe(3)
       expect(counter).toEqual([0, 1, 2])
     })
@@ -49,7 +49,7 @@ describe('SkeletonComponent', () => {
     it('should return empty array when count is 0', () => {
       component.count = 0
       const counter = component.counter
-      
+
       expect(counter.length).toBe(0)
       expect(counter).toEqual([])
     })
@@ -92,11 +92,11 @@ describe('SkeletonComponent', () => {
   describe('CSS classes', () => {
     it('should apply correct CSS classes based on variant', () => {
       const variants = ['text', 'rect', 'circle', 'avatar', 'button', 'card', 'paragraph']
-      
+
       variants.forEach(variant => {
         fixture.componentRef.setInput('variant', variant as any)
         fixture.detectChanges()
-        
+
         const skeletonElement = fixture.nativeElement.querySelector('.skeleton')
         expect(skeletonElement).toHaveClass(`skeleton-${variant}`)
       })
@@ -105,7 +105,7 @@ describe('SkeletonComponent', () => {
     it('should apply rounded class when rounded is true', () => {
       fixture.componentRef.setInput('rounded', true)
       fixture.detectChanges()
-      
+
       const skeletonElement = fixture.nativeElement.querySelector('.skeleton')
       expect(skeletonElement).toHaveClass('rounded')
     })
@@ -113,7 +113,7 @@ describe('SkeletonComponent', () => {
     it('should apply animated class when animated is true', () => {
       fixture.componentRef.setInput('animated', true)
       fixture.detectChanges()
-      
+
       const wrapperElement = fixture.nativeElement.querySelector('.skeleton-wrapper')
       expect(wrapperElement).toHaveClass('animated')
     })
@@ -124,7 +124,7 @@ describe('SkeletonComponent', () => {
       fixture.componentRef.setInput('count', 3)
       fixture.componentRef.setInput('variant', 'card')
       fixture.detectChanges()
-      
+
       const skeletonElements = fixture.nativeElement.querySelectorAll('.skeleton')
       expect(skeletonElements.length).toBe(3)
     })
@@ -133,7 +133,7 @@ describe('SkeletonComponent', () => {
       fixture.componentRef.setInput('width', 200)
       fixture.componentRef.setInput('height', 100)
       fixture.detectChanges()
-      
+
       const skeletonElement = fixture.nativeElement.querySelector('.skeleton')
       expect(skeletonElement.style.width).toBe('200px')
       expect(skeletonElement.style.height).toBe('100px')

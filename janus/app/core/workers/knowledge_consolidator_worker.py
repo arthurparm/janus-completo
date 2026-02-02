@@ -6,11 +6,9 @@ Agora atua como um orquestrador enxuto, delegando para KnowledgeExtractionServic
 e KnowledgeGraphService.
 """
 
-import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 
 from prometheus_client import Counter, Histogram
@@ -194,7 +192,9 @@ class KnowledgeConsolidator:
             logger.error(f"Failed to consolidate experience {experience_id}: {e}", exc_info=True)
             raise  # Re-raise for circuit breaker
 
-    async def _mark_as_consolidated(self, experience_id: str, metadata: dict[str, Any] | None = None):
+    async def _mark_as_consolidated(
+        self, experience_id: str, metadata: dict[str, Any] | None = None
+    ):
         """Atualiza flag no Qdrant para evitar reprocessamento."""
         point_id = self._normalize_point_id(experience_id)
         collection = VectorCollection.EPISODIC_MEMORY.value

@@ -259,9 +259,9 @@ async def detailed_health_check(service: KnowledgeService = Depends(get_knowledg
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "overall_status": "healthy"
-            if detailed_status["system_health"]["is_healthy"]
-            else "degraded",
+            "overall_status": (
+                "healthy" if detailed_status["system_health"]["is_healthy"] else "degraded"
+            ),
             "basic_health": basic_health,
             "detailed_status": detailed_status,
             "monitoring": monitoring_status,
