@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js (with npm cache)
         if: ${{ hashFiles('front/package-lock.json') != '' }}
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -20,7 +20,7 @@ jobs:
 
       - name: Setup Node.js (no cache)
         if: ${{ hashFiles('front/package-lock.json') == '' }}
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Install dependencies (front via npm ci)
