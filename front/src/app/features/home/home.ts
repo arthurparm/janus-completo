@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
+import { RouterLink } from '@angular/router'
 import { FormControl, ReactiveFormsModule } from '@angular/forms'
 import { forkJoin, of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
@@ -10,11 +11,15 @@ import { AuthService } from '../../core/auth/auth.service'
 import {
   ConversationMeta,
   DocListItem,
+  AuditEvent,
   JanusApiService,
   MemoryItem,
+  MetaAgentHeartbeatStatus,
+  MetaAgentReport,
   ProductivityLimitsStatusResponse,
   SystemOverviewResponse,
-  Tool
+  Tool,
+  ToolStats
 } from '../../services/janus-api.service'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
@@ -27,7 +32,11 @@ interface HomeData {
   conversations: ConversationMeta[]
   documents: DocListItem[]
   tools: Tool[]
+  toolStats: ToolStats | null
+  auditEvents: AuditEvent[]
   memory: MemoryItem[]
+  metaReport: MetaAgentReport | null
+  metaHeartbeat: MetaAgentHeartbeatStatus | null
 }
 
 @Component({
@@ -35,6 +44,7 @@ interface HomeData {
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
     ReactiveFormsModule,
     UiBadgeComponent,
     UiButtonComponent,
@@ -62,7 +72,11 @@ export class HomeComponent {
     conversations: [],
     documents: [],
     tools: [],
-    memory: []
+    toolStats: null,
+    auditEvents: [],
+    memory: [],
+    metaReport: null,
+    metaHeartbeat: null
   })
 
   readonly user = this.auth.user
@@ -123,6 +137,75 @@ export class HomeComponent {
   readonly documents = computed(() => this.data().documents.slice(0, 4))
   readonly tools = computed(() => this.data().tools.slice(0, 6))
   readonly memory = computed(() => this.data().memory.slice(0, 4))
+  readonly metaReport = computed(() => this.data().metaReport)
+  readonly metaHeartbeat = computed(() => this.data().metaHeartbeat)
+  readonly metaStatus = computed(() => {
+    const report = this.metaReport()
+    const heartbeat = this.metaHeartbeat()
+    const active = Boolean(heartbeat?.heartbeat_active)
+    const raw = String(report?.overall_status || (active ? 'running' : 'idle')).toLowerCase()
+    if (raw.includes('error') || raw.includes('failed') || raw.includes('dead')) {
+      return { label: 'ATENCAO', variant: 'warning' as const }
+    }
+    if (raw.includes('completed') || raw.includes('healthy') || raw.includes('ok')) {
+      return { label: 'OK', variant: 'success' as const }
+    }
+    if (active) return { label: 'ATIVO', variant: 'neutral' as const }
+    return { label: 'INATIVO', variant: 'warning' as const }
+  })
+  readonly metaTasksDone = computed(() => {
+    const done = this.metaReport()?.execution_results || []
+    return done.slice(0, 4)
+  })
+  readonly metaTasksInProgress = computed(() => {
+    const recs = this.metaReport()?.recommendations || []
+    const doneTitles = new Set(
+      (this.metaReport()?.execution_results || [])
+        .map((item) => String(item?.title || '').trim())
+        .filter(Boolean)
+    )
+    const pending = recs.filter((rec) => !doneTitles.has(String(rec.title || '').trim()))
+    return pending.slice(0, 4)
+  })
+  readonly codexTools = computed(() => this.data().tools.filter((tool) => tool.name?.startsWith('codex_')))
+  readonly codexEvents = computed(() => {
+    const events = this.data().auditEvents || []
+    return events
+      .filter((ev) => String(ev.tool || '').startsWith('codex_'))
+      .slice(0, 5)
+  })
+  readonly codexUsage = computed(() => {
+    const usage = this.data().toolStats?.tool_usage || {}
+    const entries = Object.entries(usage).filter(([name]) => name.startsWith('codex_'))
+    const total = entries.reduce((sum, [, stats]) => sum + (stats?.total || 0), 0)
+    const success = entries.reduce((sum, [, stats]) => sum + (stats?.success || 0), 0)
+    const avgDuration = entries.length
+      ? Math.round(entries.reduce((sum, [, stats]) => sum + (stats?.avg_duration || 0), 0) / entries.length * 1000)
+      : 0
+    const successRate = total > 0 ? Math.round((success / total) * 100) : 0
+    return { total, success, successRate, avgDuration }
+  })
+  readonly codexStatus = computed(() => {
+    const available = this.codexTools().length > 0
+    const last = this.codexEvents()[0]
+    const lastStatus = String(last?.status || '').toLowerCase()
+    if (!available) return { label: 'INATIVO', variant: 'warning' as const }
+    if (lastStatus === 'error' || lastStatus === 'failed') return { label: 'ATENCAO', variant: 'warning' as const }
+    if (lastStatus === 'success') return { label: 'OK', variant: 'success' as const }
+    return { label: 'ATIVO', variant: 'neutral' as const }
+  })
+  readonly codexWorker = computed(() => {
+    const workers = this.data().overview?.workers_status || []
+    return workers.find((worker) => String(worker.id || '').toLowerCase().includes('codex'))
+  })
+  readonly codexWorkerStatus = computed(() => {
+    const worker = this.codexWorker()
+    const status = String(worker?.status || 'unknown').toLowerCase()
+    if (status === 'running') return { label: 'RUNNING', variant: 'success' as const }
+    if (status === 'stopped') return { label: 'STOPPED', variant: 'warning' as const }
+    if (status === 'error') return { label: 'ERROR', variant: 'error' as const }
+    return { label: 'UNKNOWN', variant: 'neutral' as const }
+  })
 
   private loadedOnce = false
 
@@ -195,6 +278,18 @@ export class HomeComponent {
     return `${mins}m`
   }
 
+  formatAuditTimestamp(ts?: number | null): string {
+    if (!ts) return 'n/d'
+    return new Date(ts * 1000).toLocaleString()
+  }
+
+  formatMetaTimestamp(value?: string | null): string {
+    if (!value) return 'n/d'
+    const dt = Date.parse(value)
+    if (Number.isNaN(dt)) return 'n/d'
+    return new Date(dt).toLocaleString()
+  }
+
   private loadHome(options: { silent?: boolean } = {}) {
     const silent = Boolean(options.silent)
     if (!silent || !this.loadedOnce) {
@@ -229,8 +324,22 @@ export class HomeComponent {
         map((resp) => resp.tools || []),
         catchError(() => of([]))
       )
-    const memory$ = this.api.getMemoryTimeline({ limit: 6 })
+    const toolStats$ = this.api.getToolStats()
+      .pipe(catchError(() => of(null)))
+    const auditEvents$ = this.api.listAuditEvents({ limit: 50 })
+      .pipe(
+        map((resp) => resp.events || []),
+        catchError(() => of([]))
+      )
+    const memory$ = this.api.getMemoryTimeline({ limit: 6, user_id: userId })
       .pipe(catchError(() => of([])))
+    const metaReport$ = this.api.getMetaAgentLatestReport()
+      .pipe(
+        map((resp) => resp.report || null),
+        catchError(() => of(null))
+      )
+    const metaHeartbeat$ = this.api.getMetaAgentHeartbeatStatus()
+      .pipe(catchError(() => of(null)))
 
     forkJoin({
       overview: overview$,
@@ -238,7 +347,11 @@ export class HomeComponent {
       conversations: conversations$,
       documents: documents$,
       tools: tools$,
-      memory: memory$
+      toolStats: toolStats$,
+      auditEvents: auditEvents$,
+      memory: memory$,
+      metaReport: metaReport$,
+      metaHeartbeat: metaHeartbeat$
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -249,7 +362,11 @@ export class HomeComponent {
             conversations: result.conversations,
             documents: result.documents,
             tools: result.tools,
-            memory: result.memory
+            toolStats: result.toolStats,
+            auditEvents: result.auditEvents,
+            memory: result.memory,
+            metaReport: result.metaReport,
+            metaHeartbeat: result.metaHeartbeat
           })
           this.loadedOnce = true
           this.loading.set(false)

@@ -45,6 +45,48 @@ export interface SystemOverviewResponse {
   workers_status: WorkerStatusResponse[];
 }
 
+// Meta-Agent
+export interface MetaAgentRecommendation {
+  id: string;
+  category?: string;
+  title: string;
+  description?: string;
+  rationale?: string;
+  estimated_impact?: string;
+  priority?: number;
+  suggested_agent?: string | null;
+  created_at?: string;
+}
+
+export interface MetaAgentExecutionResult {
+  title?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface MetaAgentReport {
+  cycle_id: string;
+  timestamp: string;
+  overall_status: string;
+  health_score: number;
+  issues_detected: Record<string, unknown>[];
+  recommendations: MetaAgentRecommendation[];
+  summary: string;
+  metrics_snapshot: Record<string, unknown>;
+  execution_results?: MetaAgentExecutionResult[];
+}
+
+export interface MetaAgentLatestReportResponse {
+  message: string;
+  report: MetaAgentReport | null;
+}
+
+export interface MetaAgentHeartbeatStatus {
+  heartbeat_active: boolean;
+  total_cycles_executed: number;
+  last_analysis?: string | null;
+}
+
 // LLM providers
 export interface LLMProviderMeta { priority?: number; enabled?: boolean; models?: string[]; type?: string }
 export type LLMProvidersResponse = Record<string, LLMProviderMeta>;
@@ -487,6 +529,15 @@ export class JanusApiService {
     return this.http.get<SystemOverviewResponse>(this.buildUrl(`/api/v1/system/overview`), {
       headers: { 'ngsw-bypass': 'true' }
     });
+  }
+
+  // Meta-Agent
+  getMetaAgentLatestReport(): Observable<MetaAgentLatestReportResponse> {
+    return this.http.get<MetaAgentLatestReportResponse>(this.buildUrl(`/api/v1/meta-agent/report/latest`));
+  }
+
+  getMetaAgentHeartbeatStatus(): Observable<MetaAgentHeartbeatStatus> {
+    return this.http.get<MetaAgentHeartbeatStatus>(this.buildUrl(`/api/v1/meta-agent/heartbeat/status`));
   }
 
   private _webrtcInitialized$ = new BehaviorSubject<{ status: string; error?: string } | null>(null)
@@ -1145,6 +1196,7 @@ export class JanusApiService {
     query?: string
     limit?: number
     min_score?: number
+    user_id?: string
   } = {}): Observable<MemoryItem[]> {
     const qs = new URLSearchParams()
     if (params.start_date) qs.set('start_date', params.start_date)
@@ -1152,7 +1204,12 @@ export class JanusApiService {
     if (params.query) qs.set('query', params.query)
     if (params.limit) qs.set('limit', String(params.limit))
     if (params.min_score !== undefined) qs.set('min_score', String(params.min_score))
-    return this.http.get<MemoryItem[]>(this.buildUrl(`/api/v1/memory/timeline${qs.toString() ? '?' + qs.toString() : ''}`))
+    if (params.user_id) qs.set('user_id', params.user_id)
+    const headers = params.user_id ? this.headersFor(params.user_id) : undefined
+    return this.http.get<MemoryItem[]>(
+      this.buildUrl(`/api/v1/memory/timeline${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
   }
 
   // Documents API
@@ -1215,8 +1272,9 @@ export class JanusApiService {
 export type WorkersStatusItem = WorkerStatusResponse;
 
 export interface ToolStats {
-  total_calls: number;
-  errors: number;
-  last_used?: string;
-  usage_by_tool?: Record<string, number>;
+  total_tools_registered?: number;
+  total_calls?: number;
+  successful_calls?: number;
+  success_rate?: number;
+  tool_usage?: Record<string, { total: number; success: number; avg_duration: number }>;
 }

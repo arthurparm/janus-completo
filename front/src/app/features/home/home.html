@@ -151,6 +151,141 @@
         }
       </section>
 
+      <section class="home-card codex-card col-4" aria-labelledby="codex-title">
+        <div class="card-head">
+          <h3 id="codex-title">Codex</h3>
+          <ui-badge [variant]="codexStatus().variant">{{ codexStatus().label }}</ui-badge>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="text" [count]="3"></app-skeleton>
+        } @else {
+          <div class="codex-body">
+            <div class="codex-worker">
+              <span class="muted">Worker</span>
+              <ui-badge [variant]="codexWorkerStatus().variant">{{ codexWorkerStatus().label }}</ui-badge>
+            </div>
+            <div class="codex-metrics">
+              <div>
+                <span class="muted">Execuções</span>
+                <strong>{{ codexUsage().total }}</strong>
+              </div>
+              <div>
+                <span class="muted">Sucesso</span>
+                <strong>{{ codexUsage().successRate }}%</strong>
+              </div>
+              <div>
+                <span class="muted">Latência média</span>
+                <strong>{{ codexUsage().avgDuration }}ms</strong>
+              </div>
+            </div>
+
+            @if (codexTools().length) {
+              <div class="codex-tools">
+                @for (tool of codexTools(); track tool.name) {
+                  <span class="chip subtle">{{ tool.name }}</span>
+                }
+              </div>
+            } @else {
+              <p class="muted">Ferramentas Codex não registradas.</p>
+            }
+
+            @if (codexEvents().length) {
+              <ul class="list">
+                @for (event of codexEvents(); track event.id) {
+                  <li class="list-item">
+                    <div>
+                      <span class="item-title">{{ event.tool }}</span>
+                      <span class="muted">{{ event.status || 'ok' }} · {{ event.latency_ms || 0 }}ms</span>
+                    </div>
+                    <span class="chip subtle">
+                      {{ formatAuditTimestamp(event.created_at) }}
+                    </span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="muted">Sem execuções recentes.</p>
+            }
+            <button ui-button variant="ghost" size="sm" routerLink="/tools">
+              Ver painel completo
+            </button>
+          </div>
+        }
+      </section>
+
+      <section class="home-card meta-card col-8" aria-labelledby="meta-title">
+        <div class="card-head">
+          <div>
+            <h3 id="meta-title">Meta-Agent</h3>
+            <p class="muted">Tarefas em andamento e ciclos concluÃ­dos.</p>
+          </div>
+          <ui-badge [variant]="metaStatus().variant">{{ metaStatus().label }}</ui-badge>
+        </div>
+        @if (loading()) {
+          <app-skeleton variant="text" [count]="3"></app-skeleton>
+        } @else {
+          <div class="meta-body">
+            <div class="meta-metrics">
+              <div>
+                <span class="muted">Heartbeat</span>
+                <strong>{{ metaHeartbeat()?.heartbeat_active ? 'ATIVO' : 'PAUSADO' }}</strong>
+              </div>
+              <div>
+                <span class="muted">Ciclos</span>
+                <strong>{{ metaHeartbeat()?.total_cycles_executed ?? 0 }}</strong>
+              </div>
+              <div>
+                <span class="muted">Ultima analise</span>
+                <strong>{{ formatMetaTimestamp(metaHeartbeat()?.last_analysis || metaReport()?.timestamp) }}</strong>
+              </div>
+            </div>
+
+            @if (metaReport()?.summary) {
+              <p class="muted">Resumo: {{ metaReport()?.summary }}</p>
+            }
+
+            <div class="meta-lists">
+              <div>
+                <span class="label">Em andamento</span>
+                @if (metaTasksInProgress().length) {
+                  <ul class="list">
+                    @for (rec of metaTasksInProgress(); track rec.id) {
+                      <li class="list-item">
+                        <div>
+                          <span class="item-title">{{ rec.title }}</span>
+                          <span class="muted">{{ rec.description || rec.category || 'Recomendacao' }}</span>
+                        </div>
+                        <span class="chip subtle">P{{ rec.priority || 3 }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="muted">Nenhuma tarefa pendente.</p>
+                }
+              </div>
+              <div>
+                <span class="label">Ja feitas</span>
+                @if (metaTasksDone().length) {
+                  <ul class="list">
+                    @for (item of metaTasksDone(); track (item.title || $index)) {
+                      <li class="list-item">
+                        <div>
+                          <span class="item-title">{{ item.title || 'Tarefa' }}</span>
+                          <span class="muted">{{ item.status || 'despachada' }}</span>
+                        </div>
+                        <span class="chip subtle">feito</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="muted">Nenhuma tarefa executada.</p>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </section>
+
       <section class="home-card col-6" aria-labelledby="conversations-title">
         <div class="card-head">
           <h3 id="conversations-title">Conversas recentes</h3>
@@ -214,7 +349,7 @@
           <app-skeleton variant="card" [count]="2"></app-skeleton>
         } @else if (memory().length) {
           <div class="memory-grid">
-            @for (item of memory(); track item.ts_ms) {
+            @for (item of memory(); track (item.ts_ms || $index)) {
               <article class="memory-card">
                 <p>{{ item.content }}</p>
                 <span class="muted">

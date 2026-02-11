@@ -367,7 +367,7 @@ export class ConversationsComponent {
         map((resp) => resp.items || []),
         catchError(() => of([]))
       ),
-      memory: this.api.getMemoryTimeline({ limit: 6 }).pipe(
+      memory: this.api.getMemoryTimeline({ limit: 6, user_id: userId }).pipe(
         catchError(() => of([] as MemoryItem[]))
       )
     }).subscribe((result) => {
