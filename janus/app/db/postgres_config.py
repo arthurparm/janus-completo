@@ -12,6 +12,7 @@ from sqlalchemy.pool import QueuePool
 
 from app.config import settings
 from app.models.config_models import Base
+import app.models  # noqa: F401  # Ensures all models are registered before create_all
 
 
 class PostgresDatabase:

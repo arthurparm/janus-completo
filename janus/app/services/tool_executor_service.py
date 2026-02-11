@@ -8,8 +8,10 @@ from typing import Any
 
 import structlog
 
+from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
 from app.core.tools import action_registry
+from app.repositories.tool_usage_repository import ToolUsageRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -128,6 +130,7 @@ class ToolExecutorService:
         effective_timeout = self._timeout_seconds if timeout_seconds is None else timeout_seconds
 
         outputs = []
+        daily_limits = getattr(settings, "TOOL_DAILY_QUOTAS", {}) or {}
         for call in calls:
             name = call["name"]
             args = call["args"]
@@ -170,6 +173,32 @@ class ToolExecutorService:
                     }
                 )
                 continue
+
+            # Quota diária por usuário (aplica apenas após aprovação e antes de executar)
+            if user_id and name in daily_limits:
+                limit = int(daily_limits.get(name, 0) or 0)
+                if limit > 0:
+                    try:
+                        repo = ToolUsageRepository()
+                        allowed, count, max_limit = repo.increment_if_within_limit(
+                            user_id=str(user_id), tool_name=name, daily_limit=limit
+                        )
+                        if not allowed:
+                            outputs.append(
+                                {
+                                    "name": name,
+                                    "result": f"Cota diária atingida para '{name}'. "
+                                    f"Uso: {count}/{max_limit}.",
+                                }
+                            )
+                            continue
+                    except Exception as e:
+                        logger.warning(
+                            "tool_usage_quota_check_failed",
+                            tool_name=name,
+                            user_id=str(user_id),
+                            error=str(e),
+                        )
 
             tool = action_registry.get_tool(name)
             if not tool:

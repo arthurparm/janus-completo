@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -21,6 +22,7 @@ from app.core.infrastructure import (
 )
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
+from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
 
 # Determine log path
@@ -118,9 +120,33 @@ async def lifespan(app: FastAPI):
     # Removed from here to avoid race condition with GoalManager
     pass
 
+    # 4.5 Start orchestrator-managed workers (queue consumers) if enabled.
+    if getattr(settings, "START_ORCHESTRATOR_WORKERS_ON_STARTUP", False):
+        try:
+            current = getattr(app.state, "orchestrator_workers", []) or []
+            if not current:
+                workers = await start_all_workers()
+                names = get_orchestrator_worker_names()
+                payload = []
+                for idx, task in enumerate(workers):
+                    name = names[idx] if idx < len(names) else f"worker_{idx}"
+                    payload.append({"name": name, "task": task})
+                app.state.orchestrator_workers = payload
+                logger.info("Orchestrator workers started on startup.", count=len(payload))
+        except Exception as e:
+            logger.error("Failed to start orchestrator workers on startup.", exc_info=e)
+
     yield
 
     # === SHUTDOWN ===
+    try:
+        current = getattr(app.state, "orchestrator_workers", []) or []
+        for worker in current:
+            task = worker.get("task")
+            if isinstance(task, asyncio.Task) and not task.cancelled():
+                task.cancel()
+    except Exception as e:
+        logger.warning("Failed to stop orchestrator workers on shutdown.", exc_info=e)
     await kernel.shutdown()
     logger.info("Application shutdown complete.")
 

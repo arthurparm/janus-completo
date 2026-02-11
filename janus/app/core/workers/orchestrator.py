@@ -9,6 +9,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+WORKER_NAMES: list[str] = [
+    "memory_maintenance",
+    "knowledge_consolidation",
+    "agent_tasks",
+    "neural_training",
+    "reflexion",
+    "meta_agent",
+    "failure_consumer",
+    "auto_scaler",
+    "auto_healer",
+    "router",
+    "code_agent",
+    "red_team_agent",
+    "professor_agent",
+    "sandbox_agent",
+    "thinker_agent",
+    "distillation",
+    "autonomy",
+    "google_productivity",
+    "debate_proponent",
+    "debate_critic",
+    "codex_worker",
+]
+
+
+def get_orchestrator_worker_names() -> list[str]:
+    return list(WORKER_NAMES)
+
 
 async def start_all_workers():
     """
@@ -22,6 +50,7 @@ async def start_all_workers():
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.workers.autonomy_worker import start_autonomy_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
+    from app.core.workers.codex_worker import start_codex_worker
     from app.core.workers.distillation_worker import start_distillation_worker
     from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
     from app.core.workers.debate_critic_worker import start_debate_critic_worker
@@ -114,6 +143,10 @@ async def start_all_workers():
 
     debate_critic = await start_debate_critic_worker()
     workers.append(debate_critic)
+
+    # Codex Worker (CLI Tools)
+    codex_worker = await start_codex_worker()
+    workers.append(codex_worker)
 
     logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

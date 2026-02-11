@@ -240,7 +240,8 @@ class CircuitBreakerAnalytics:
         self.failure_patterns: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
         logger.info(
-            "circuit_breaker_analytics_initialized", max_history_minutes=max_history_minutes
+            "circuit_breaker_analytics_initialized max_history_minutes=%s",
+            max_history_minutes,
         )
 
     def record_metrics(self, circuit_breaker_name: str, metrics: CircuitBreakerMetricsSnapshot):

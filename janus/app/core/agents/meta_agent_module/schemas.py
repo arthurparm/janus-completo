@@ -149,6 +149,7 @@ class StateReport:
     recommendations: list[Recommendation]
     summary: str
     metrics_snapshot: dict[str, Any]
+    execution_results: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -160,6 +161,7 @@ class StateReport:
             "recommendations": [rec.to_dict() for rec in self.recommendations],
             "summary": self.summary,
             "metrics_snapshot": self.metrics_snapshot,
+            "execution_results": self.execution_results,
         }
 
 

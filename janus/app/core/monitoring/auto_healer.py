@@ -67,6 +67,7 @@ async def _reconcile_queue_policies() -> None:
             QueueName.AGENT_TASKS.value,
             QueueName.NEURAL_TRAINING.value,
             QueueName.META_AGENT_CYCLE.value,
+            QueueName.TASKS_CODEX_WORKER.value,
         ]:
             try:
                 res = await broker.reconcile_queue_policy(q, force_delete=True)
@@ -147,6 +148,17 @@ async def _maybe_trigger_meta_agent(system_status: dict[str, Any]) -> None:
         logger.error(f"Auto-Healer: falha ao acionar meta-agente: {e}", exc_info=True)
 
 
+async def _heal_with_codex(system_status: dict[str, Any]) -> None:
+    """
+    Placeholder: Dispara tarefas de correção via Codex quando falhas recorrentes são detectadas.
+    """
+    # Implementação futura:
+    # 1. Checar métricas de erro
+    # 2. Se erro > threshold, montar contexto
+    # 3. Publicar task 'codex_fix' na fila TASKS_CODEX_WORKER
+    pass
+
+
 async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task:
     """
     Inicia a tarefa de auto-healing em background.
@@ -222,6 +234,12 @@ async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task
                 # 5) Meta-Agente em degradação
                 try:
                     await _maybe_trigger_meta_agent(system)
+                except Exception:
+                    pass
+
+                # 6) Codex Auto-Fix (Placeholder)
+                try:
+                    await _heal_with_codex(system)
                 except Exception:
                     pass
 

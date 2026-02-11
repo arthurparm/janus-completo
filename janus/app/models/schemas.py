@@ -29,6 +29,15 @@ class ExperienceMetadata(BaseModel):
     def get(self, key: str, default: Any | None = None) -> Any | None:
         return getattr(self, key, default)
 
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            extra = getattr(self, "__pydantic_extra__", None)
+            if isinstance(extra, dict) and key in extra:
+                return extra[key]
+            raise KeyError(key)
+
 
 class Experience(BaseModel):
     """
@@ -153,6 +162,7 @@ class QueueName(str, Enum):
     # Debate System Queues
     TASKS_AGENT_DEBATE_PROPONENT = "janus.tasks.agent.debate.proponent"
     TASKS_AGENT_DEBATE_CRITIC = "janus.tasks.agent.debate.critic"
+    TASKS_CODEX_WORKER = "janus.tasks.codex"
 
 
 # --- Knowledge Graph Schemas ---

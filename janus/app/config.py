@@ -23,6 +23,7 @@ class AppSettings(BaseSettings):
     PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
     AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
     INIT_MAS_AGENTS_ON_STARTUP: bool = True  # Inicializar agentes do MAS no startup
+    START_ORCHESTRATOR_WORKERS_ON_STARTUP: bool = True  # Iniciar workers de fila no boot do API
 
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
@@ -361,7 +362,7 @@ class AppSettings(BaseSettings):
     REDIS_ENABLED: bool = Field(default=False, env="REDIS_ENABLED")
     REDIS_URL: str = Field(default="redis://redis:6379", env="REDIS_URL")
 
-    RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, int]] = {
+    RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, Any]] = {
         "janus.knowledge.consolidation": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
@@ -373,8 +374,9 @@ class AppSettings(BaseSettings):
             "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.neural.training": {
-            "x-message-ttl": 86400000,
+            "x-message-ttl": 3600000,
             "x-max-length": 10000,
+            "x-max-priority": 5,
             "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.data.harvesting": {
@@ -388,10 +390,22 @@ class AppSettings(BaseSettings):
             "x-max-priority": 10,
             "x-dead-letter-exchange": "janus.dlx",
         },
+        "janus.tasks.codex": {
+            "x-message-ttl": 86400000,
+            "x-max-length": 10000,
+            "x-max-priority": 10,
+            "x-dead-letter-exchange": "janus.dlx",
+        },
         "janus.tasks.reflexion": {
             "x-message-ttl": 86400000,
             "x-max-length": 10000,
             "x-max-priority": 10,
+            "x-dead-letter-exchange": "janus.dlx",
+        },
+        "janus.productivity.google": {
+            "x-message-ttl": 600000,
+            "x-max-length": 10000,
+            "x-max-priority": 5,
             "x-dead-letter-exchange": "janus.dlx",
         },
         "janus.failure.detected": {
@@ -428,9 +442,15 @@ class AppSettings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
     GOOGLE_OAUTH_REDIRECT_URI: str | None = None
     TRAINING_GPU_BUDGET_PER_USER: dict[str, float] = {}
-    RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, int]] = {
-        "janus.neural.training": {"x-max-priority": 5, "x-message-ttl": 3600000},
-        "janus.productivity.google": {"x-max-priority": 5, "x-message-ttl": 600000},
+    # CLI externo (Codex/Jules)
+    EXTERNAL_CLI_ENABLED: bool = True
+    EXTERNAL_CLI_TIMEOUT_SECONDS: int = 600
+    EXTERNAL_CLI_MAX_OUTPUT_CHARS: int = 20000
+    TOOL_DAILY_QUOTAS: dict[str, int] = {
+        "codex_exec": 10,
+        "codex_review": 10,
+        "jules_new": 5,
+        "jules_pull": 10,
     }
     MIN_DEPLOY_ACCURACY: float = 0.7
     LLM_AB_EXPERIMENT_ID: int | None = None
@@ -546,6 +566,42 @@ class AppSettings(BaseSettings):
                 items = [x.strip() for x in s.split(",") if x.strip()]
                 return {"orchestrator": items} if items else {}
         return v or {}
+
+    @field_validator("TOOL_DAILY_QUOTAS", mode="before")
+    def _parse_tool_daily_quotas(cls, v: Any):
+        # Aceita JSON objeto {tool: int} ou string "tool=10,tool2=5"
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                obj = json.loads(s)
+                if isinstance(obj, dict):
+                    parsed: dict[str, int] = {}
+                    for k, val in obj.items():
+                        try:
+                            parsed[str(k)] = int(val)
+                        except Exception:
+                            parsed[str(k)] = 0
+                    return parsed
+            except Exception:
+                parsed: dict[str, int] = {}
+                parts = [x.strip() for x in s.split(",") if x.strip()]
+                for p in parts:
+                    if "=" in p:
+                        k, v_str = p.split("=", 1)
+                        try:
+                            parsed[k.strip()] = int(v_str.strip())
+                        except Exception:
+                            parsed[k.strip()] = 0
+                return parsed
+        if isinstance(v, dict):
+            parsed = {}
+            for k, val in v.items():
+                try:
+                    parsed[str(k)] = int(val)
+                except Exception:
+                    parsed[str(k)] = 0
+            return parsed
+        return {}
 
     @field_validator("LLM_TASK_POLICY", mode="before")
     def _parse_llm_task_policy(cls, v: Any):

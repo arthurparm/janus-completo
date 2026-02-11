@@ -18,7 +18,7 @@ PLANNING PRINCIPLES
 - Each recommendation is a single, concrete action.
 
 OUTPUT REQUIREMENTS
-Return ONLY a raw JSON object:
+Return ONLY a raw JSON object (no prose, no markdown, no code fences):
 {{
   "recommendations": [
     {{

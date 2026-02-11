@@ -18,7 +18,7 @@ REVIEW CRITERIA (priority order)
 5. Executability: specific, actionable steps.
 
 OUTPUT REQUIREMENTS
-Return ONLY a raw JSON object:
+Return ONLY a raw JSON object (no prose, no markdown, no code fences):
 {{
   "approved": true,
   "reason": "Explain approval or rejection with precise fixes required",

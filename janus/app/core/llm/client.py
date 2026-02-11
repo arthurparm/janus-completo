@@ -149,6 +149,21 @@ class LLMClient:
         except Exception as e:
             logger.error(f"Error handling rate limit: {e}", exc_info=True)
 
+    def _run_async(self, coro):
+        import asyncio
+        import concurrent.futures
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        # Loop já está em execução: executa em um thread separado para evitar nested loop.
+        def _runner():
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(_runner).result()
+
     async def asend(self, prompt: str, timeout_s: int | None = None) -> str:
         """Envia um prompt para o LLM de forma assíncrona."""
         import asyncio
@@ -156,7 +171,7 @@ class LLMClient:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.send, prompt, timeout_s)
 
-    async def send(self, prompt: str, timeout_s: int | None = None) -> str:
+    def send(self, prompt: str, timeout_s: int | None = None) -> str:
         """Envia um prompt para o LLM com resiliência, observabilidade e cache."""
         # 1. Check cache first
         # Extract priority from cache_key or just use a derived one.
@@ -204,7 +219,7 @@ class LLMClient:
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
 
-            allowed_out = await self._compute_output_limit(prompt)
+            allowed_out = self._run_async(self._compute_output_limit(prompt))
             if allowed_out < 1:
                 logger.warning(
                     f"Orçamento insuficiente para {self.provider} (tokens={allowed_out}). Acionando fallback."
@@ -224,15 +239,7 @@ class LLMClient:
             # BUT resilient decorator usually handles retry logic.
             # If resilient is sync, we must run it in thread pool.
 
-            import asyncio
-
-            loop = asyncio.get_event_loop()
-
-            if timeout > 0:
-                # Run the sync decorated_invoke in a thread
-                result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
-            else:
-                result = await loop.run_in_executor(None, lambda: decorated_invoke(prompt))
+            result = decorated_invoke(prompt)
 
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(
@@ -260,30 +267,36 @@ class LLMClient:
                 usage_found = False
 
                 # 1. Tenta usage_metadata (LangChain 0.2+)
+                def _safe_int(value, default: int = 0) -> int:
+                    try:
+                        return int(value)
+                    except Exception:
+                        return default
+
                 usage_meta = getattr(result, "usage_metadata", None)
-                if usage_meta:
-                    input_tokens = usage_meta.get("input_tokens", 0)
-                    output_tokens = usage_meta.get("output_tokens", 0)
+                if isinstance(usage_meta, dict):
+                    input_tokens = _safe_int(usage_meta.get("input_tokens", 0))
+                    output_tokens = _safe_int(usage_meta.get("output_tokens", 0))
                     # Verifica detalhes de cache (DeepSeek/OpenAI pattern)
                     # DeepSeek injects directly into openai response object, accessed via response_metadata
                     usage_found = True
 
                 # 2. Se não achou ou quer detalhes extras (cache), olha response_metadata
                 resp_meta = getattr(result, "response_metadata", {})
-                if not usage_found and "token_usage" in resp_meta:
-                    tu = resp_meta["token_usage"]
-                    input_tokens = tu.get("prompt_tokens", 0)
-                    output_tokens = tu.get("completion_tokens", 0)
+                if not usage_found and isinstance(resp_meta, dict) and "token_usage" in resp_meta:
+                    tu = resp_meta["token_usage"] or {}
+                    if isinstance(tu, dict):
+                        input_tokens = _safe_int(tu.get("prompt_tokens", 0))
+                        output_tokens = _safe_int(tu.get("completion_tokens", 0))
                     usage_found = True
 
                 # Tenta extrair cache hits específico do DeepSeek/OpenAI
                 # DeepSeek: usage.prompt_tokens_details.cached_tokens
-                if hasattr(result, "response_metadata"):
-                    # Caminho típico OpenAI/DeepSeek: token_usage -> prompt_tokens_details -> cached_tokens
-                    tu = result.response_metadata.get("token_usage", {})
-                    ptd = tu.get("prompt_tokens_details")
+                if isinstance(resp_meta, dict):
+                    tu = resp_meta.get("token_usage", {})
+                    ptd = tu.get("prompt_tokens_details") if isinstance(tu, dict) else None
                     if isinstance(ptd, dict):
-                        cache_read_tokens = ptd.get("cached_tokens", 0)
+                        cache_read_tokens = _safe_int(ptd.get("cached_tokens", 0))
 
                 # Fallback se não encontrou nada
                 if not usage_found:
@@ -321,7 +334,7 @@ class LLMClient:
                 tokens_in_est = input_tokens
                 tokens_out_est = output_tokens
                 try:
-                    await register_usage(self.provider, self.user_id, self.project_id, cost)
+                    register_usage(self.provider, self.user_id, self.project_id, cost)
                 except Exception as e:
                     logger.warning(f"Failed to register LLM usage cost: {e}")
             except Exception as e:
@@ -416,7 +429,7 @@ class LLMClient:
 
     async def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
         """Versão enriquecida que retorna metadados além da resposta."""
-        text = await self.send(prompt, timeout_s)
+        text = await self.asend(prompt, timeout_s)
 
         # Tenta recuperar o objeto result original do adapter ou cache se possivel
         # Como send() retorna str, precisamos de uma forma de acessar o objeto completo se quisermos reasoning que não está no texto.

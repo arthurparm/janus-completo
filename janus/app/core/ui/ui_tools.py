@@ -1,8 +1,9 @@
 from typing import Any, Literal
 
+from langchain.tools import tool
 from pydantic import BaseModel, Field
 
-from app.core.tools.agent_tools import register_tool
+from app.core.tools.action_module import PermissionLevel, ToolCategory, register_tool
 
 # --- Pydantic Models ---
 
@@ -25,6 +26,7 @@ class UiComponentRequest(BaseModel):
 
 # --- Tool Implementation ---
 
+@tool(args_schema=UiComponentRequest)
 def render_ui_component(
     type: str,
     title: str,
@@ -60,8 +62,8 @@ def render_ui_component(
 def register_ui_tools():
     """Registers the UI tools with the global tool registry."""
     register_tool(
-        name="render_ui_component",
-        func=render_ui_component,
-        description="Renders a rich UI component (table, chart, etc) in the user's chat.",
-        args_schema=UiComponentRequest
+        render_ui_component,
+        category=ToolCategory.SYSTEM,
+        permission_level=PermissionLevel.SAFE,
+        tags=["ui", "frontend", "component"]
     )

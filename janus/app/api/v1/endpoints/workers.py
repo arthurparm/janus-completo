@@ -3,7 +3,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.core.workers.orchestrator import start_all_workers
+from app.core.workers.orchestrator import (
+    get_orchestrator_worker_names,
+    start_all_workers,
+)
 
 router = APIRouter(tags=["Workers"])
 
@@ -45,22 +48,7 @@ async def start_workers(request: Request):
         raise HTTPException(status_code=400, detail="Workers already running. Stop them first.")
 
     workers = await start_all_workers()
-    names = [
-        "knowledge_consolidation",
-        "agent_tasks",
-        "neural_training",
-        "meta_agent",
-        "auto_scaler",
-        "auto_healer",
-        "router",
-        "code_agent",
-        "red_team_agent",
-        "professor_agent",
-        "thinker_agent",
-        "sandbox_agent",
-        "autonomy",
-        "google_productivity",
-    ]
+    names = get_orchestrator_worker_names()
     payload = []
     for idx, task in enumerate(workers):
         name = names[idx] if idx < len(names) else f"worker_{idx}"

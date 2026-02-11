@@ -79,9 +79,6 @@ else:
         reflexion.router, prefix="/reflexion"
     )  # Sprint 5: Reflexion & self-optimization
     api_router.include_router(tools.router, prefix="/tools")  # Sprint 6: Dynamic tool management
-    api_router.include_router(
-        optimization.router, prefix="/optimization"
-    )  # Sprint 7: Proactive self-optimization
     api_router.include_router(llm.router, prefix="/llm")  # Sprint 10: Hybrid Brain & LLM resilience
     api_router.include_router(
         collaboration.router, prefix="/collaboration"
@@ -98,7 +95,6 @@ else:
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
     api_router.include_router(workers.router, prefix="/workers")  # Workers orchestration controls
     api_router.include_router(assistant.router)
-    api_router.include_router(productivity.router)
     api_router.include_router(autonomy_history.router, prefix="/autonomy/history")
     api_router.include_router(consents.router)
     api_router.include_router(pending_actions.router)

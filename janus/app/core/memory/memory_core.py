@@ -5,7 +5,7 @@ from typing import Any
 from datetime import UTC, datetime
 
 import structlog
-from qdrant_client import models
+from qdrant_client import AsyncQdrantClient, models
 
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
@@ -38,8 +38,14 @@ class MemoryCore:
         self.settings = config if config is not None else settings
 
         # Components
+        if client is None:
+            client = AsyncQdrantClient(
+                host=self.settings.QDRANT_HOST, port=self.settings.QDRANT_PORT
+            )
         self.provider = QdrantProvider(client=client, circuit_breaker=circuit_breaker)
         self.cache = MemoryLocalCache()
+        self.collection_name = self.provider.collection_name
+        self._cb = self.provider._cb
 
         # Quota Config
         self._quota: dict[str, dict[str, Any]] = {}
@@ -54,6 +60,10 @@ class MemoryCore:
         # Metrics
         self._quota_rejections = memory_quota_rejections_total
         self._ops_total = memory_operations_total
+        # Cache metrics aliases for legacy tests
+        self._short_hits = self.cache._metric_hits
+        self._short_misses = self.cache._metric_misses
+        self._short_size = self.cache._metric_size
 
     def _get_provider_client(self):
         """Compatibilidade para testes que acessam .client diretamente"""

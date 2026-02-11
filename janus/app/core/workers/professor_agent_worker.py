@@ -9,6 +9,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from typing import Any
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt

@@ -123,7 +123,9 @@ async def start_chat(
     except Exception:
         hdr_uid = None
     user_id = request.user_id or hdr_uid or "default_user"
-    conversation_id = await service.start_conversation(request.persona, user_id, request.project_id)
+    conversation_id = await service.start_conversation_async(
+        request.persona, user_id, request.project_id
+    )
     return ChatStartResponse(conversation_id=conversation_id)
 
 
@@ -504,7 +506,9 @@ async def chat_health(service: ChatService = Depends(get_chat_service)):
     """Verifica se o serviço de chat está funcionando corretamente."""
     try:
         # Testar se conseguimos acessar o repositório
-        test_conv_id = await service.start_conversation("health_check", "1", "health_check")
+        test_conv_id = await service.start_conversation_async(
+            "health_check", "1", "health_check"
+        )
         await asyncio.to_thread(service._repo.get_conversation, test_conv_id)
         await service.delete_conversation(test_conv_id, user_id="1", project_id="health_check")
 

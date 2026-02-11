@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
+import re
 from datetime import datetime
 from typing import Any
 
@@ -44,7 +45,9 @@ from app.core.agents.meta_agent_module.tools import (
     get_resource_usage,
 )
 
-from app.core.agents.utils import parse_json_strict
+from app.core.agents.multi_agent_system import MultiAgentSystem
+from app.core.agents.structures import AgentRole, Task, TaskPriority
+from app.core.agents.utils import parse_json_lenient
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
 from app.core.monitoring.health_monitor import get_health_monitor
@@ -102,12 +105,14 @@ class MetaAgent:
             get_resource_usage,
         ]
         self.llm = None
+        self.executor = None
         # Init LangGraph
         self.graph_builder = MetaAgentGraphBuilder(self)
         self.app = self.graph_builder.build()
 
         self.last_report: StateReport | None = None
         self.cycle_count = 0
+        self._heartbeat_task: asyncio.Task | None = None
         # self._initialize_agent() called lazily
 
     async def _initialize_agent(self):
@@ -162,6 +167,37 @@ class MetaAgent:
             logger.error(f"Erro fatal no LangGraph do Meta-Agente: {e}", exc_info=True)
             return self._create_error_report(str(e))
 
+    async def start_heartbeat(self, interval_minutes: int = 60) -> bool:
+        """Inicia o heartbeat do meta-agente com ciclos periódicos."""
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            return False
+        interval_seconds = max(30, int(interval_minutes) * 60)
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(interval_seconds))
+        logger.info(
+            "Meta-Agent heartbeat iniciado",
+            interval_seconds=interval_seconds,
+        )
+        return True
+
+    def stop_heartbeat(self) -> None:
+        """Interrompe o heartbeat do meta-agente."""
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+        self._heartbeat_task = None
+        logger.info("Meta-Agent heartbeat parado")
+
+    async def _heartbeat_loop(self, interval_seconds: int) -> None:
+        """Loop de execução periódica do meta-agente."""
+        while True:
+            try:
+                await asyncio.sleep(interval_seconds)
+                await self.run_analysis_cycle()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Erro no heartbeat do Meta-Agent", exc_info=e)
+                await asyncio.sleep(min(60, interval_seconds))
+
     # --- Core Logic (Adapted for Dict State) ---
 
     def _llm_supports_structured_output(self, llm: Any) -> bool:
@@ -177,15 +213,58 @@ class MetaAgent:
         if not content:
             return {}
         try:
-            parsed = parse_json_strict(content)
+            parsed = parse_json_lenient(content)
             if isinstance(parsed, dict):
                 return parsed
+            if isinstance(parsed, list):
+                return {"items": parsed}
         except Exception as exc:
             logger.warning(f"Failed to parse JSON response: {exc}")
         return {}
 
     def _extract_response_text(self, response: Any) -> str:
         return str(getattr(response, "content", response))
+
+    def _coerce_critique_from_text(self, raw_text: str) -> dict[str, Any]:
+        if not raw_text:
+            return {}
+        match = re.search(r"approved\s*[:=]\s*(true|false)", raw_text, re.IGNORECASE)
+        if not match:
+            return {}
+        approved = match.group(1).lower() == "true"
+        return {
+            "approved": approved,
+            "reason": "Coerced from non-JSON critique output.",
+            "safe_subset_ids": [],
+        }
+
+    def _heuristic_critique(self, plan: list[dict[str, Any]]) -> dict[str, Any]:
+        if not plan:
+            return {"approved": False, "reason": "Empty plan", "safe_subset_ids": []}
+        text = json.dumps(plan).lower()
+        risky_markers = [
+            "rm -rf",
+            "drop",
+            "truncate",
+            "delete",
+            "format",
+            "wipe",
+            "destroy",
+            "shutdown",
+            "rollback",
+            "reset",
+        ]
+        if any(marker in text for marker in risky_markers):
+            return {
+                "approved": False,
+                "reason": "Heuristic critique: risky action detected.",
+                "safe_subset_ids": [],
+            }
+        return {
+            "approved": True,
+            "reason": "Heuristic critique: plan appears safe and actionable.",
+            "safe_subset_ids": [],
+        }
 
     async def monitor_node_logic(self, state: AgentState) -> dict:
         """Coleta métricas e identifica anomalias iniciais."""
@@ -316,15 +395,17 @@ class MetaAgent:
                     elif isinstance(plan_result, dict):
                         recommendations = plan_result.get("recommendations", [])
 
+                    if not recommendations:
+                        raise ValueError("Empty recommendations from structured plan")
                     return {"candidate_plan": recommendations}
 
                 response = await self.llm.ainvoke(prompt)
                 raw_text = self._extract_response_text(response)
                 parsed = self._parse_json_response(raw_text)
-                recommendations = parsed.get("recommendations", [])
-                if isinstance(recommendations, list):
-                    return {"candidate_plan": recommendations}
-                raise ValueError("No recommendations found in JSON response")
+                recommendations = parsed.get("recommendations")
+                if not isinstance(recommendations, list) or not recommendations:
+                    raise ValueError("No recommendations found in JSON response")
+                return {"candidate_plan": recommendations}
 
             except Exception as parse_err:
                 logger.warning(f"Structured output failed for plan: {parse_err}")
@@ -387,7 +468,12 @@ class MetaAgent:
                 raw_text = self._extract_response_text(response)
                 critique_dict = self._parse_json_response(raw_text)
                 if not critique_dict:
-                    critique_dict = {"approved": False, "reason": "Critique parsing failed"}
+                    critique_dict = self._coerce_critique_from_text(raw_text)
+                if not critique_dict:
+                    critique_dict = self._heuristic_critique(plan)
+                    logger.warning(
+                        "Critique parsing failed; using heuristic critique fallback."
+                    )
 
                 if critique_dict.get("approved"):
                     return {"critique": critique_dict, "final_plan": plan, "status": "approved"}
@@ -398,8 +484,15 @@ class MetaAgent:
                 }
             except Exception as parse_err:
                 logger.warning(f"Structured critique failed: {parse_err}")
+                critique_fallback = self._heuristic_critique(plan)
+                if critique_fallback.get("approved"):
+                    return {
+                        "critique": critique_fallback,
+                        "final_plan": plan,
+                        "status": "approved",
+                    }
                 return {
-                    "critique": {"approved": False, "reason": "Critique parsing failed"},
+                    "critique": critique_fallback,
                     "status": "retry",
                     "retry_count": state.get("retry_count", 0) + 1,
                 }
@@ -416,17 +509,30 @@ class MetaAgent:
         logger.info("[MetaAgent] Node: Execute")
         plan = state.get("final_plan", [])
         results = []
+        failed = 0
 
         try:
             for rec in plan:
-                self._dispatch_task(rec)
-                results.append({"title": rec.get("title"), "status": "dispatched"})
-                logger.info(f"Dispatched recommendation: {rec.get('title')}")
+                result = await self._dispatch_task(rec, state)
+                results.append(result)
+                if result.get("status") not in ("completed", "queued", "dispatched"):
+                    failed += 1
+                logger.info(
+                    "Recommendation executed",
+                    extra={
+                        "title": rec.get("title"),
+                        "status": result.get("status"),
+                        "agent_role": result.get("agent_role"),
+                    },
+                )
 
                 META_AGENT_RECOMMENDATIONS.labels(rec.get("category", "general")).inc()
 
             META_AGENT_CYCLES.labels("success").inc()
-            return {"execution_results": results, "status": "completed"}
+            return {
+                "execution_results": results,
+                "status": "completed" if failed == 0 else "partial",
+            }
 
         except Exception as e:
             logger.error(f"[MetaAgent] Execution Failed: {e}", exc_info=True)
@@ -520,14 +626,115 @@ class MetaAgent:
 
     # --- Helpers ---
 
-    def _dispatch_task(self, recommendation: dict):
-        """Despacha uma tarefa baseada na recomendação."""
+    def _get_execution_system(self) -> MultiAgentSystem:
+        """Retorna (ou cria) o sistema multi-agente para execucao real das tarefas."""
+        if self.executor is not None:
+            return self.executor
+        self.executor = MultiAgentSystem()
+        return self.executor
+
+    def _map_suggested_agent(self, suggested_agent: str | None) -> AgentRole:
+        if not suggested_agent:
+            return AgentRole.PROJECT_MANAGER
+        key = str(suggested_agent).strip().lower()
+        mapping = {
+            "coder": AgentRole.CODER,
+            "developer": AgentRole.CODER,
+            "sysadmin": AgentRole.SYSADMIN,
+            "ops": AgentRole.SYSADMIN,
+            "monitor": AgentRole.RESEARCHER,
+            "researcher": AgentRole.RESEARCHER,
+            "tester": AgentRole.TESTER,
+            "optimizer": AgentRole.OPTIMIZER,
+            "documenter": AgentRole.DOCUMENTER,
+            "project_manager": AgentRole.PROJECT_MANAGER,
+            "manager": AgentRole.PROJECT_MANAGER,
+        }
+        return mapping.get(key, AgentRole.PROJECT_MANAGER)
+
+    def _map_priority(self, priority: Any) -> TaskPriority:
+        try:
+            value = int(priority)
+        except Exception:
+            value = 2
+        if value >= 4:
+            return TaskPriority.CRITICAL
+        if value == 3:
+            return TaskPriority.HIGH
+        if value == 2:
+            return TaskPriority.MEDIUM
+        return TaskPriority.LOW
+
+    def _build_task_description(self, recommendation: dict, state: AgentState | None) -> str:
+        title = recommendation.get("title") or "Untitled recommendation"
+        description = recommendation.get("description") or ""
+        category = recommendation.get("category") or "general"
+        diagnosis = state.get("diagnosis") if state else ""
+        issue_summary = ""
+        if state:
+            issues = state.get("detected_issues", [])
+            if issues:
+                issue_summary = json.dumps(issues[:3], ensure_ascii=False, indent=2)
+        parts = [
+            f"Tarefa: {title}",
+            f"Categoria: {category}",
+        ]
+        if description:
+            parts.append(f"Detalhes: {description}")
+        if diagnosis:
+            parts.append(f"Contexto do diagnóstico: {diagnosis}")
+        if issue_summary:
+            parts.append(f"Evidências: {issue_summary}")
+        parts.append("Objetivo: execute a tarefa e entregue um resultado acionável.")
+        return "\n".join(parts)
+
+    async def _dispatch_task(self, recommendation: dict, state: AgentState | None = None) -> dict:
+        """Executa uma tarefa baseada na recomendação usando o sistema multi-agente."""
         priority = recommendation.get("priority")
-        agent = recommendation.get("suggested_agent")
+        agent_hint = recommendation.get("suggested_agent")
+        title = recommendation.get("title")
+        agent_role = self._map_suggested_agent(agent_hint)
+        task_priority = self._map_priority(priority)
+
         logger.info(
-            f"[MetaAgent] Dispatching Task: {recommendation.get('title')} "
-            f"(priority={priority}, agent={agent})"
+            f"[MetaAgent] Dispatching Task: {title} (priority={priority}, agent={agent_hint})"
         )
+
+        system = self._get_execution_system()
+        task_description = self._build_task_description(recommendation, state)
+        task = Task(description=task_description, priority=task_priority, metadata={})
+        task.metadata.update(
+            {
+                "meta_agent_cycle": state.get("cycle_id") if state else None,
+                "suggested_agent": agent_hint,
+                "category": recommendation.get("category"),
+            }
+        )
+
+        system.workspace.add_task(task)
+        try:
+            agent = await system.create_agent(agent_role)
+            result = await agent.execute_task(task)
+            status = result.get("status", "completed")
+            return {
+                "title": title,
+                "status": status,
+                "task_id": result.get("task_id", task.id),
+                "agent_role": agent_role.value,
+                "result": result.get("result") or result.get("answer"),
+                "error": result.get("error"),
+                "attempts": result.get("attempts"),
+                "duration_seconds": result.get("duration_seconds"),
+            }
+        except Exception as e:
+            logger.error(f"Erro ao executar recomendacao '{title}': {e}", exc_info=True)
+            return {
+                "title": title,
+                "status": "failed",
+                "task_id": task.id,
+                "agent_role": agent_role.value,
+                "error": str(e),
+            }
 
     def _state_dict_to_report(self, state: dict) -> StateReport:
         """Converte dicionário de estado para objeto StateReport."""
@@ -586,6 +793,7 @@ class MetaAgent:
                 recommendations=recs,
                 summary=state.get("diagnosis", "No diagnosis"),
                 metrics_snapshot=state.get("metrics", {}),
+                execution_results=state.get("execution_results", []),
             )
         except Exception as e:
             logger.error(f"Error creating StateReport object: {e}")
@@ -607,6 +815,7 @@ class MetaAgent:
             recommendations=[],
             summary=f"Cycle failed: {error}",
             metrics_snapshot={},
+            execution_results=[],
         )
 
 

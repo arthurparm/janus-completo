@@ -98,6 +98,90 @@ def parse_json_strict(content: str) -> Union[dict[str, Any], list[Any]]:
         raise e
 
 
+def _extract_json_candidates(text: str) -> list[str]:
+    """
+    Extract possible JSON object/array substrings from a larger text.
+
+    This scans for balanced {} or [] blocks while respecting string literals.
+    """
+    if not text:
+        return []
+
+    candidates: list[str] = []
+    stack: list[str] = []
+    start_idx: int | None = None
+    in_string = False
+    escape = False
+
+    for idx, ch in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+
+        if ch in "{[":
+            if not stack:
+                start_idx = idx
+            stack.append(ch)
+            continue
+
+        if ch in "}]":
+            if not stack:
+                continue
+            open_ch = stack[-1]
+            if (open_ch == "{" and ch == "}") or (open_ch == "[" and ch == "]"):
+                stack.pop()
+                if not stack and start_idx is not None:
+                    candidates.append(text[start_idx : idx + 1])
+                    start_idx = None
+            else:
+                # Mismatch: reset stack to avoid cascading errors
+                stack = []
+                start_idx = None
+
+    return candidates
+
+
+def parse_json_lenient(content: str) -> Union[dict[str, Any], list[Any]]:
+    """
+    Parses JSON using a lenient strategy:
+    1) Strict parse
+    2) Strict parse after markdown cleanup
+    3) Extract first balanced JSON object/array substring and parse
+    """
+    if not content:
+        raise json.JSONDecodeError("Empty content", "", 0)
+
+    try:
+        return parse_json_strict(content)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    cleaned = _clean_json_output(content)
+    if cleaned and cleaned != content:
+        try:
+            return parse_json_strict(cleaned)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    for candidate in _extract_json_candidates(cleaned):
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    raise json.JSONDecodeError("No valid JSON found", cleaned[:200], 0)
+
 
 def _create_tool_wrapper(tool):
     """

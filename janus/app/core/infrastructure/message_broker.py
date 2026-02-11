@@ -10,6 +10,12 @@ from urllib.request import Request, urlopen
 import aio_pika
 import msgpack
 from aio_pika.abc import AbstractRobustConnection
+from aiormq.exceptions import (
+    ChannelClosed,
+    ChannelInvalidStateError,
+    ChannelNotFoundEntity,
+    ChannelPreconditionFailed,
+)
 from prometheus_client import Counter
 
 from app.config import settings
@@ -58,6 +64,10 @@ class MessageBroker:
         self.connection_factory = (
             connection_factory if connection_factory is not None else aio_pika.connect_robust
         )
+        self._queue_declare_passive: set[str] = set()
+        self._queue_policy_checked: set[str] = set()
+        self._publish_channel: aio_pika.Channel | None = None
+        self._publish_lock = asyncio.Lock()
 
     async def connect(self):
         """Estabelece a conexão com o RabbitMQ."""
@@ -151,75 +161,108 @@ class MessageBroker:
             # Modo offline: ignora publicação
             logger.debug("Publicação ignorada (broker offline)", extra={"queue": queue_name})
             return
-        async with self._connection.channel() as channel:
-            # Ensure DLX/DLQ setup (idempotent)
-            try:
-                dlx = await channel.declare_exchange(
-                    "janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True
-                )
-                dlq_args = self._get_queue_arguments("janus.dlq")
-                dlq = await channel.declare_queue("janus.dlq", durable=True, arguments=dlq_args)
-                await dlq.bind(dlx, routing_key="#")
-            except Exception:
-                pass
+        fmt_msgpack = (
+            use_msgpack
+            if use_msgpack is not None
+            else getattr(self.settings, "BROKER_USE_MSGPACK", True)
+        )
 
-            arguments = self._get_queue_arguments(queue_name)
-            await channel.declare_queue(queue_name, durable=True, arguments=arguments)
+        merged_headers: dict[str, Any] = {**(headers or {})}
 
-            fmt_msgpack = (
-                use_msgpack
-                if use_msgpack is not None
-                else getattr(self.settings, "BROKER_USE_MSGPACK", True)
-            )
-
-            merged_headers: dict[str, Any] = {**(headers or {})}
-
-            if fmt_msgpack:
-                if isinstance(message, (bytes, bytearray)):
-                    body = bytes(message)
-                else:
-                    body = msgpack.packb(message, use_bin_type=True)
-                content_type = "application/msgpack"
+        if fmt_msgpack:
+            if isinstance(message, (bytes, bytearray)):
+                body = bytes(message)
             else:
+                payload = message
                 if isinstance(message, str):
-                    body = message.encode("utf-8")
-                else:
-                    body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-                content_type = "application/json"
-
-            merged_headers.setdefault("content_type", content_type)
-
-            msg = aio_pika.Message(
-                body=body,
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                priority=priority,
-                headers=merged_headers,
-                expiration=expiration,
-                content_type=content_type,
-            )
-            
-            # Trace setup (Otel)
-            if _OTEL and _tracer:
-                with _tracer.start_as_current_span("broker.publish") as span:
                     try:
-                        tid = TRACE_ID.get()
-                        sid = USER_ID.get()
-                        if tid and tid != "-":
-                            span.set_attribute("janus.trace_id", tid)
-                        if sid and sid != "-":
-                            span.set_attribute("janus.user_id", sid)
-                        span.set_attribute("broker.queue", queue_name)
-                        if priority is not None:
-                            span.set_attribute("broker.priority", int(priority))
-                        span.set_attribute("broker.content_type", content_type)
+                        parsed = json.loads(message)
+                        if isinstance(parsed, dict):
+                            payload = parsed
+                    except json.JSONDecodeError:
+                        pass
+                body = msgpack.packb(payload, use_bin_type=True)
+            content_type = "application/msgpack"
+        else:
+            if isinstance(message, str):
+                body = message.encode("utf-8")
+            else:
+                body = json.dumps(message, ensure_ascii=False).encode("utf-8")
+            content_type = "application/json"
+
+        merged_headers.setdefault("content_type", content_type)
+
+        msg = aio_pika.Message(
+            body=body,
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            priority=priority,
+            headers=merged_headers,
+            expiration=expiration,
+            content_type=content_type,
+        )
+
+        for attempt in range(2):
+            async with self._publish_lock:
+                try:
+                    if self._publish_channel is None or self._publish_channel.is_closed:
+                        self._publish_channel = await self._connection.channel()
+                    channel = self._publish_channel
+
+                    # Ensure DLX/DLQ setup (idempotent)
+                    try:
+                        dlx = await self._ensure_dlx(channel)
+                        dlq = await self._declare_queue_safely(channel, "janus.dlq")
+                        await dlq.bind(dlx, routing_key="#")
                     except Exception:
                         pass
-                    await channel.default_exchange.publish(msg, routing_key=queue_name)
-            else:
-                # No OTEL or tracer, just publish
-                await channel.default_exchange.publish(msg, routing_key=queue_name)
 
-            _MESSAGES_PUBLISHED.labels(queue_name).inc()
+                    await self._declare_queue_safely(channel, queue_name)
+
+                    # Trace setup (Otel)
+                    if _OTEL and _tracer:
+                        with _tracer.start_as_current_span("broker.publish") as span:
+                            try:
+                                tid = TRACE_ID.get()
+                                sid = USER_ID.get()
+                                if tid and tid != "-":
+                                    span.set_attribute("janus.trace_id", tid)
+                                if sid and sid != "-":
+                                    span.set_attribute("janus.user_id", sid)
+                                span.set_attribute("broker.queue", queue_name)
+                                if priority is not None:
+                                    span.set_attribute("broker.priority", int(priority))
+                                span.set_attribute("broker.content_type", content_type)
+                            except Exception:
+                                pass
+                            await channel.default_exchange.publish(
+                                msg, routing_key=queue_name
+                            )
+                    else:
+                        # No OTEL or tracer, just publish
+                        await channel.default_exchange.publish(msg, routing_key=queue_name)
+
+                    _MESSAGES_PUBLISHED.labels(queue_name).inc()
+                    return
+                except (
+                    ChannelInvalidStateError,
+                    ChannelClosed,
+                    ChannelNotFoundEntity,
+                    ChannelPreconditionFailed,
+                ) as exc:
+                    logger.warning(
+                        "Canal inválido ao publicar; tentando recriar canal.",
+                        extra={"queue": queue_name, "attempt": attempt + 1},
+                        exc_info=exc,
+                    )
+                    if self._publish_channel is not None:
+                        try:
+                            await self._publish_channel.close()
+                        except Exception:
+                            pass
+                        self._publish_channel = None
+                    if attempt == 0:
+                        continue
+                    raise
 
     def _get_queue_arguments(self, queue_name: str) -> dict[str, Any]:
         """Obtém argumentos esperados para a fila (TTL, max-length, DLX, prioridade)."""
@@ -243,16 +286,99 @@ class MessageBroker:
             args["x-max-priority"] = int(max_priority)
         return args
 
+    async def _ensure_dlx(self, channel: aio_pika.Channel) -> aio_pika.Exchange:
+        """
+        Garante existência da DLX sem provocar precondition em exchanges já existentes.
+        """
+        try:
+            return await channel.declare_exchange("janus.dlx", passive=True)
+        except ChannelNotFoundEntity:
+            pass
+        except ChannelPreconditionFailed:
+            return await channel.declare_exchange("janus.dlx", passive=True)
+
+        return await channel.declare_exchange(
+            "janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True
+        )
+
+    async def _declare_queue_safely(
+        self, channel: aio_pika.Channel, queue_name: str
+    ) -> aio_pika.Queue:
+        """
+        Declara a fila de forma segura:
+        - Se a fila estiver marcada para uso passive (argumentos divergentes), tenta passive.
+        - Caso contrario, declara ativamente com os argumentos esperados.
+        - Em caso de precondition, volta para passive.
+        """
+        if queue_name in self._queue_declare_passive:
+            try:
+                return await channel.declare_queue(queue_name, passive=True)
+            except ChannelNotFoundEntity as exc:
+                self._queue_declare_passive.discard(queue_name)
+                logger.warning(
+                    "Fila marcada como passive nao existe; tentaremos criar novamente.",
+                    extra={"queue": queue_name},
+                    exc_info=exc,
+                )
+                raise
+            except ChannelPreconditionFailed as exc:
+                logger.warning(
+                    "Precondition ao acessar fila via passive.",
+                    extra={"queue": queue_name},
+                    exc_info=exc,
+                )
+                raise
+
+        if queue_name == "janus.dlq" and queue_name not in self._queue_policy_checked:
+            self._queue_policy_checked.add(queue_name)
+            try:
+                policy = await self.get_queue_policy(queue_name)
+            except Exception:
+                policy = None
+            if policy is not None:
+                actual_args = policy.get("arguments", {}) or {}
+                expected_args = self._get_queue_arguments(queue_name)
+                if any(
+                    actual_args.get(key) != value for key, value in expected_args.items()
+                ):
+                    self._queue_declare_passive.add(queue_name)
+                    return await channel.declare_queue(queue_name, passive=True)
+
+        arguments = self._get_queue_arguments(queue_name)
+        try:
+            return await channel.declare_queue(queue_name, durable=True, arguments=arguments)
+        except ChannelPreconditionFailed as exc:
+            self._queue_declare_passive.add(queue_name)
+            logger.warning(
+                "Fila com argumentos divergentes; usando fila existente (passive). "
+                "Execute a reconciliacao da fila para aplicar TTL/DLX.",
+                extra={"queue": queue_name},
+                exc_info=exc,
+            )
+            return await channel.declare_queue(queue_name, passive=True)
+
     async def get_queue_info(self, queue_name: str) -> dict | None:
         """
-        Obtém informações sobre uma fila.
+        Obtem informacoes sobre uma fila.
         """
         await self.connect()
         if self._connection is None:
             return None
         async with self._connection.channel() as channel:
-            arguments = self._get_queue_arguments(queue_name)
-            queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments)
+            try:
+                queue = await self._declare_queue_safely(channel, queue_name)
+            except (
+                ChannelInvalidStateError,
+                ChannelClosed,
+                ChannelNotFoundEntity,
+                ChannelPreconditionFailed,
+            ) as exc:
+                logger.warning(
+                    "Falha ao obter informacoes da fila.",
+                    extra={"queue": queue_name},
+                    exc_info=exc,
+                )
+                return None
             return {
                 "name": queue.name,
                 "messages": queue.declaration_result.message_count,
@@ -292,10 +418,21 @@ class MessageBroker:
                     "content_type"
                 )
                 use_msgpack_flag = getattr(settings, "BROKER_USE_MSGPACK", True)
-                if ct == "application/msgpack" or use_msgpack_flag:
+                use_msgpack = ct == "application/msgpack" or (ct is None and use_msgpack_flag)
+                if use_msgpack:
                     payload = msgpack.unpackb(message.body, raw=False)
                 else:
                     payload = json.loads(message.body.decode("utf-8"))
+                if isinstance(payload, str):
+                    for _ in range(2):
+                        try:
+                            payload = json.loads(payload)
+                        except json.JSONDecodeError:
+                            break
+                        if not isinstance(payload, str):
+                            break
+                if not isinstance(payload, dict):
+                    raise TypeError("Task payload must be a JSON object")
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
                 
                 # Tracing manual
@@ -316,7 +453,11 @@ class MessageBroker:
                 else:
                     await callback(task)
             except Exception as e:
-                logger.error("Erro ao processar mensagem; reenfileirando", exc_info=e)
+                logger.error(
+                    "Erro ao processar mensagem; reenfileirando",
+                    extra={"queue": queue_name},
+                    exc_info=e,
+                )
                 try:
                     _CONSUME_ERRORS.labels(queue_name).inc()
                 except Exception:
@@ -364,12 +505,7 @@ class MessageBroker:
 
                     async with self._connection.channel() as channel:
                         await channel.set_qos(prefetch_count=prefetch_count)
-                        arguments = self._get_queue_arguments(queue_name)
-                        queue = await channel.declare_queue(
-                            queue_name,
-                            durable=True,
-                            arguments=arguments,
-                        )
+                        queue = await self._declare_queue_safely(channel, queue_name)
                         await queue.consume(_on_message, no_ack=False)
                         logger.info(
                             "Consumidor iniciado",
@@ -640,8 +776,12 @@ class MessageBroker:
             # Validar novamente após tentativa de reconciliação
             validation = await self.validate_queue_policy(queue_name)
 
+        status = validation.get("status", "unknown")
+        if status == "healthy":
+            self._queue_declare_passive.discard(queue_name)
+
         return {
-            "status": validation.get("status", "unknown"),
+            "status": status,
             "message": validation.get("message", ""),
             "details": {**validation.get("details", {}), "actions": actions},
         }

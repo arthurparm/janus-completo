@@ -110,7 +110,7 @@ class ReflexionSession:
         await self._ensure_llm()
         prompt = await get_formatted_prompt("reflexion_evaluate", task=task, result=result)
         try:
-            evaluation_str = await self._llm.send(prompt, timeout_s=30)
+            evaluation_str = await self._llm.asend(prompt, timeout_s=30)
             return self._extract_json(evaluation_str)
         except Exception as e:
             logger.error(f"Erro na avaliação padrão: {e}")
@@ -136,7 +136,7 @@ class ReflexionSession:
             history=history,
         )
         try:
-            resp = await self._llm.send(prompt, timeout_s=30)
+            resp = await self._llm.asend(prompt, timeout_s=30)
             data = self._extract_json(resp)
             return data.get("reflection", ""), data.get("lessons", [])
         except Exception as e:
@@ -169,7 +169,7 @@ class ReflexionSession:
 
                 try:
                     # Aqui usamos o LLM diretamente para simplicidade, mas o ideal é um agente
-                    action_result = await self._llm.send(execution_prompt)
+                    action_result = await self._llm.asend(execution_prompt)
                 except Exception as e:
                     logger.error(f"Erro na execução da tarefa: {e}")
                     action_result = f"Erro de execução: {str(e)}"

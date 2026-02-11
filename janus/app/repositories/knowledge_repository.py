@@ -5,6 +5,7 @@ from fastapi import Depends
 
 from app.db.graph import GraphDatabase, get_graph_db
 from app.models.schemas import GraphLabel, GraphRelationship  # Importa os Enums
+from app.repositories.observability_repository import record_audit_event_direct
 from app.services.code_analysis_service import CodeParser
 
 logger = structlog.get_logger(__name__)
@@ -112,8 +113,170 @@ class KnowledgeRepository:
         query = f"""UNWIND $calls as call
                      MATCH (caller:{GraphLabel.FUNCTION.value} {{name: call.file_path + '::' + call.caller_name}})
                      MATCH (callee:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
-                     MERGE (caller)-[r:{GraphRelationship.CALLS.value}]->(callee)"""
+                     MERGE (caller)-[r:`{GraphRelationship.CALLS.value}`]->(callee)"""
         await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
+        try:
+            record_audit_event_direct({"action": "bulk_merge_calls", "count": len(calls)})
+        except Exception:
+            pass
+
+    async def dedupe_functions_and_classes(self) -> dict[str, int]:
+        """Deduplica nós Function/Class mantendo relacionamentos chave."""
+        functions_fixed = 0
+        classes_fixed = 0
+
+        # Funções duplicadas por (name, file_path)
+        func_scan = f"""
+        MATCH (f:{GraphLabel.FUNCTION.value})
+        WITH f.name as name, f.file_path as fp, collect(elementId(f)) as fs
+        WHERE size(fs) > 1
+        RETURN name, fp, fs
+        """
+        rows = await self._db.query(func_scan, operation="repo_dedupe_functions_scan")
+        for row in rows or []:
+            ids = list(row.get("fs") or [])
+            if len(ids) < 2:
+                continue
+            keep = str(ids[0])
+            for dup_id in ids[1:]:
+                params = {"keep": keep, "dup": str(dup_id)}
+                merge_query = f"""
+                MATCH (keep) WHERE elementId(keep) = $keep
+                MATCH (dup) WHERE elementId(dup) = $dup
+                OPTIONAL MATCH (dup)-[:`{GraphRelationship.CALLS.value}`]->(t)
+                MERGE (keep)-[:`{GraphRelationship.CALLS.value}`]->(t)
+                OPTIONAL MATCH (s)-[:`{GraphRelationship.CALLS.value}`]->(dup)
+                MERGE (s)-[:`{GraphRelationship.CALLS.value}`]->(keep)
+                OPTIONAL MATCH (dup)<-[:`{GraphRelationship.CONTAINS.value}`]-(f)
+                MERGE (f)-[:`{GraphRelationship.CONTAINS.value}`]->(keep)
+                DETACH DELETE dup
+                """
+                await self._db.execute(
+                    merge_query, params, operation="repo_dedupe_functions_merge"
+                )
+                functions_fixed += 1
+
+        # Classes duplicadas por (name, file_path)
+        class_scan = f"""
+        MATCH (c:{GraphLabel.CLASS.value})
+        WITH c.name as name, c.file_path as fp, collect(elementId(c)) as cs
+        WHERE size(cs) > 1
+        RETURN name, fp, cs
+        """
+        rows = await self._db.query(class_scan, operation="repo_dedupe_classes_scan")
+        for row in rows or []:
+            ids = list(row.get("cs") or [])
+            if len(ids) < 2:
+                continue
+            keep = str(ids[0])
+            for dup_id in ids[1:]:
+                params = {"keep": keep, "dup": str(dup_id)}
+                merge_query = f"""
+                MATCH (keep) WHERE elementId(keep) = $keep
+                MATCH (dup) WHERE elementId(dup) = $dup
+                OPTIONAL MATCH (dup)-[:`{GraphRelationship.IMPLEMENTS.value}`]->(t)
+                MERGE (keep)-[:`{GraphRelationship.IMPLEMENTS.value}`]->(t)
+                OPTIONAL MATCH (s)-[:`{GraphRelationship.IMPLEMENTS.value}`]->(dup)
+                MERGE (s)-[:`{GraphRelationship.IMPLEMENTS.value}`]->(keep)
+                OPTIONAL MATCH (dup)<-[:`{GraphRelationship.CONTAINS.value}`]-(f)
+                MERGE (f)-[:`{GraphRelationship.CONTAINS.value}`]->(keep)
+                DETACH DELETE dup
+                """
+                await self._db.execute(
+                    merge_query, params, operation="repo_dedupe_classes_merge"
+                )
+                classes_fixed += 1
+
+        try:
+            record_audit_event_direct(
+                {
+                    "action": "dedupe_functions_and_classes",
+                    "functions_fixed": functions_fixed,
+                    "classes_fixed": classes_fixed,
+                }
+            )
+        except Exception:
+            pass
+
+        return {"functions_fixed": functions_fixed, "classes_fixed": classes_fixed}
+
+    async def dedupe_concepts(self) -> dict[str, int]:
+        """Deduplica conceitos por nome e mantém RELATES_TO."""
+        fixed = 0
+        scan = f"""
+        MATCH (c:{GraphLabel.CONCEPT.value})
+        WITH c.name as name, collect(elementId(c)) as cs
+        WHERE size(cs) > 1
+        RETURN name, cs
+        """
+        rows = await self._db.query(scan, operation="repo_dedupe_concepts_scan")
+        for row in rows or []:
+            ids = list(row.get("cs") or [])
+            if len(ids) < 2:
+                continue
+            keep = str(ids[0])
+            for dup_id in ids[1:]:
+                params = {"keep": keep, "dup": str(dup_id)}
+                merge_query = f"""
+                MATCH (keep) WHERE elementId(keep) = $keep
+                MATCH (dup) WHERE elementId(dup) = $dup
+                OPTIONAL MATCH (dup)-[:`{GraphRelationship.RELATES_TO.value}`]->(t)
+                MERGE (keep)-[:`{GraphRelationship.RELATES_TO.value}`]->(t)
+                OPTIONAL MATCH (s)-[:`{GraphRelationship.RELATES_TO.value}`]->(dup)
+                MERGE (s)-[:`{GraphRelationship.RELATES_TO.value}`]->(keep)
+                DETACH DELETE dup
+                """
+                await self._db.execute(
+                    merge_query, params, operation="repo_dedupe_concepts_merge"
+                )
+                fixed += 1
+
+        try:
+            record_audit_event_direct({"action": "dedupe_concepts", "fixed": fixed})
+        except Exception:
+            pass
+
+        return {"fixed": fixed}
+
+    async def dedupe_files(self) -> dict[str, int]:
+        """Deduplica arquivos por path e mantém RELATES_TO."""
+        files_fixed = 0
+        scan = f"""
+        MATCH (f:{GraphLabel.FILE.value})
+        WITH f.path as p, collect(elementId(f)) as fs
+        WHERE size(fs) > 1
+        RETURN p, fs
+        """
+        rows = await self._db.query(scan, operation="repo_dedupe_files_scan")
+        for row in rows or []:
+            ids = list(row.get("fs") or [])
+            if len(ids) < 2:
+                continue
+            keep = str(ids[0])
+            for dup_id in ids[1:]:
+                params = {"keep": keep, "dup": str(dup_id)}
+                merge_query = f"""
+                MATCH (keep) WHERE elementId(keep) = $keep
+                MATCH (dup) WHERE elementId(dup) = $dup
+                OPTIONAL MATCH (dup)-[:`{GraphRelationship.RELATES_TO.value}`]->(t)
+                MERGE (keep)-[:`{GraphRelationship.RELATES_TO.value}`]->(t)
+                OPTIONAL MATCH (s)-[:`{GraphRelationship.RELATES_TO.value}`]->(dup)
+                MERGE (s)-[:`{GraphRelationship.RELATES_TO.value}`]->(keep)
+                OPTIONAL MATCH (dup)-[:`{GraphRelationship.CONTAINS.value}`]->(t2)
+                MERGE (keep)-[:`{GraphRelationship.CONTAINS.value}`]->(t2)
+                OPTIONAL MATCH (s2)-[:`{GraphRelationship.CONTAINS.value}`]->(dup)
+                MERGE (s2)-[:`{GraphRelationship.CONTAINS.value}`]->(keep)
+                DETACH DELETE dup
+                """
+                await self._db.execute(merge_query, params, operation="repo_dedupe_files_merge")
+                files_fixed += 1
+
+        try:
+            record_audit_event_direct({"action": "dedupe_files", "files_fixed": files_fixed})
+        except Exception:
+            pass
+
+        return {"files_fixed": files_fixed}
 
     # --- Sprint 8: Consultas semânticas ---
 

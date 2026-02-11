@@ -45,6 +45,19 @@ logger = structlog.get_logger(__name__)
 # Exceptions moved to app.core.exceptions.chat_exceptions
 
 
+class _AwaitableStr(str):
+    """String awaitable para compatibilidade com chamadas sync/async."""
+
+    def __new__(cls, value: str):
+        return super().__new__(cls, value)
+
+    def __await__(self):
+        async def _wrap():
+            return str(self)
+
+        return _wrap().__await__()
+
+
 class ChatService:
     """
     Orchestrates chat conversations, composing prompts with persona and history,
@@ -156,16 +169,21 @@ class ChatService:
             user_id=user_id,
         )
 
-    async def start_conversation(
+    def start_conversation(
         self, persona: str | None, user_id: str | None, project_id: str | None
     ) -> str:
-        cid = await asyncio.to_thread(self._repo.start_conversation, persona, user_id, project_id)
+        cid = self._repo.start_conversation(persona, user_id, project_id)
         try:
-            count = await asyncio.to_thread(self._repo.count_conversations)
+            count = self._repo.count_conversations()
             update_active_conversations(count)
         except Exception as e:
             logger.warning(f"Failed to update active conversation metrics: {e}")
-        return cid
+        return _AwaitableStr(cid)
+
+    async def start_conversation_async(
+        self, persona: str | None, user_id: str | None, project_id: str | None
+    ) -> str:
+        return await asyncio.to_thread(self.start_conversation, persona, user_id, project_id)
 
     async def send_message(
         self,
@@ -1152,10 +1170,22 @@ class ChatService:
                     project_id=project_id,
                 )
             )
-            while not task.done():
-                await asyncio.sleep(max(1, heartbeat_interval))
-                hb = json.dumps({"timestamp": int(_time.time() * 1000)}, ensure_ascii=False)
-                yield f"event: heartbeat\ndata: {hb}\n\n"
+            if heartbeat_interval and heartbeat_interval > 0:
+                sent_heartbeat = False
+                while True:
+                    done, _ = await asyncio.wait(
+                        {task}, timeout=max(1, heartbeat_interval)
+                    )
+                    if done:
+                        if not sent_heartbeat:
+                            hb = json.dumps(
+                                {"timestamp": int(_time.time() * 1000)}, ensure_ascii=False
+                            )
+                            yield f"event: heartbeat\ndata: {hb}\n\n"
+                        break
+                    hb = json.dumps({"timestamp": int(_time.time() * 1000)}, ensure_ascii=False)
+                    yield f"event: heartbeat\ndata: {hb}\n\n"
+                    sent_heartbeat = True
             result = await task
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)

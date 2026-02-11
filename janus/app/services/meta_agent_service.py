@@ -85,7 +85,8 @@ class MetaAgentService:
             "Iniciando heartbeat do meta-agente via serviço", interval_minutes=interval_minutes
         )
         agent = self._get_agent()
-        if agent._heartbeat_task and not agent._heartbeat_task.done():
+        heartbeat_task = getattr(agent, "_heartbeat_task", None)
+        if heartbeat_task and not heartbeat_task.done():
             logger.warning("Tentativa de iniciar um heartbeat já ativo.")
             return False  # Indica que já estava ativo
 
@@ -99,7 +100,8 @@ class MetaAgentService:
     def get_heartbeat_status(self) -> dict[str, Any]:
         logger.info("Buscando status do heartbeat do meta-agente.")
         agent = self._get_agent()
-        is_active = agent._heartbeat_task is not None and not agent._heartbeat_task.done()
+        heartbeat_task = getattr(agent, "_heartbeat_task", None)
+        is_active = heartbeat_task is not None and not heartbeat_task.done()
         return {
             "heartbeat_active": is_active,
             "total_cycles_executed": agent.cycle_count,
@@ -112,7 +114,7 @@ class MetaAgentService:
         return {
             "status": "healthy",
             "agent_id": agent.agent_id,
-            "executor_initialized": agent.executor is not None,
+            "executor_initialized": getattr(agent, "executor", None) is not None,
             "tools_count": len(agent.tools),
             "cycles_executed": agent.cycle_count,
         }

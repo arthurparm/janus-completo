@@ -50,6 +50,36 @@ class KnowledgeConsolidator:
         self.qdrant_client = None
         self._initialized = False
 
+    def _chunk_text(
+        self, text: Any, chunk_size: int = 1000, overlap: int = 200
+    ) -> list[str]:
+        """Divide texto em chunks com sobreposição. Retorna lista vazia para inputs inválidos."""
+        if not isinstance(text, str):
+            return []
+        if not text:
+            return []
+        if chunk_size <= 0:
+            return [text]
+
+        if len(text) <= chunk_size:
+            return [text]
+
+        safe_overlap = max(0, min(int(overlap), int(chunk_size) - 1))
+        chunks: list[str] = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            end = min(start + chunk_size, text_len)
+            chunks.append(text[start:end])
+            if end >= text_len:
+                break
+            start = end - safe_overlap
+            if start < 0:
+                start = 0
+
+        return chunks
+
     def _normalize_point_id(self, experience_id: str) -> str | int:
         """
         Aplica o mesmo mapeamento usado na ingestão do MemoryCore:

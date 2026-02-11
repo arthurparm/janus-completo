@@ -30,6 +30,14 @@ from .faulty_tools import (
     unreliable_weather_api,
     validate_tool_output,
 )
+from .external_cli_tools import (
+    codex_exec,
+    codex_review,
+    codex_login,
+    jules_new,
+    jules_pull,
+    register_external_cli_tools,
+)
 
 __all__ = [
     "ActionRegistry",
@@ -54,4 +62,10 @@ __all__ = [
     "unified_tools",
     "unreliable_weather_api",
     "validate_tool_output",
+    "codex_exec",
+    "codex_review",
+    "codex_login",
+    "jules_new",
+    "jules_pull",
+    "register_external_cli_tools",
 ]

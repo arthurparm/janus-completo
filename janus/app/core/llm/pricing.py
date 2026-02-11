@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -129,7 +130,11 @@ def _today_str() -> str:
 
 
 async def _budget_remaining(provider: str) -> float:
+    if provider not in _provider_budgets_usd:
+        return float("inf")
     budget = _provider_budgets_usd.get(provider, 0.0)
+    if budget <= 0.0:
+        return float("inf")
     tracker = None
     try:
         tracker = get_redis_usage_tracker()
@@ -307,7 +312,16 @@ async def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
         )
 
 
-async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    loop.create_task(coro)
+    return None
+
+
+def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
     if not id_:
         return
     today = _today_str()
@@ -323,8 +337,13 @@ async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             _tenant_user_spend_usd[id_] = {"date": today, "usd": 0.0}
         if tracker is not None:
             try:
-                total = await tracker.increment_tenant_spend("user", id_, cost_usd, today)
-                _tenant_user_spend_usd[id_]["usd"] = total
+                total = _run_async(tracker.increment_tenant_spend("user", id_, cost_usd, today))
+                if total is not None:
+                    _tenant_user_spend_usd[id_]["usd"] = total
+                else:
+                    _tenant_user_spend_usd[id_]["usd"] = (
+                        _tenant_user_spend_usd[id_]["usd"] or 0.0
+                    ) + cost_usd
             except Exception:
                 _tenant_user_spend_usd[id_]["usd"] = (
                     _tenant_user_spend_usd[id_]["usd"] or 0.0
@@ -343,8 +362,15 @@ async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             _tenant_project_spend_usd[id_] = {"date": today, "usd": 0.0}
         if tracker is not None:
             try:
-                total = await tracker.increment_tenant_spend("project", id_, cost_usd, today)
-                _tenant_project_spend_usd[id_]["usd"] = total
+                total = _run_async(
+                    tracker.increment_tenant_spend("project", id_, cost_usd, today)
+                )
+                if total is not None:
+                    _tenant_project_spend_usd[id_]["usd"] = total
+                else:
+                    _tenant_project_spend_usd[id_]["usd"] = (
+                        _tenant_project_spend_usd[id_]["usd"] or 0.0
+                    ) + cost_usd
             except Exception:
                 _tenant_project_spend_usd[id_]["usd"] = (
                     _tenant_project_spend_usd[id_]["usd"] or 0.0
@@ -359,7 +385,7 @@ async def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             pass
 
 
-async def register_usage(
+def register_usage(
     provider: str, user_id: str | None, project_id: str | None, cost_usd: float
 ):
     cost = max(0.0, float(cost_usd))
@@ -373,7 +399,9 @@ async def register_usage(
     total_spend = _provider_spend_usd.get(provider, 0.0)
     if tracker is not None:
         try:
-            total_spend = await tracker.increment_provider_spend(provider, cost)
+            total_spend = _run_async(tracker.increment_provider_spend(provider, cost))
+            if total_spend is None:
+                total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
         except Exception:
             total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
     else:
@@ -387,6 +415,6 @@ async def register_usage(
     except Exception:
         pass
     if user_id:
-        await _register_tenant_spend("user", user_id, cost)
+        _register_tenant_spend("user", user_id, cost)
     if project_id:
-        await _register_tenant_spend("project", project_id, cost)
+        _register_tenant_spend("project", project_id, cost)

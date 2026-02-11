@@ -21,6 +21,14 @@ from app.core.memory.working_memory import get_working_memory
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 from app.core.tools.faulty_tools import get_faulty_tools
 from app.core.tools.launcher_tools import launch_app
+from app.core.tools.external_cli_tools import (
+    codex_exec,
+    codex_review,
+    codex_login,
+    jules_new,
+    jules_pull,
+    register_external_cli_tools,
+)
 from app.db.graph import graph_db, initialize_graph_db
 from app.repositories.llm_repository import LLMRepository
 from app.repositories.tool_repository import ToolRepository
@@ -802,6 +810,11 @@ unified_tools: list[BaseTool] = [
     execute_shell,
     launch_app,
     browse_url,
+    codex_exec,
+    codex_review,
+    codex_login,
+    jules_new,
+    jules_pull,
 ]
 
 meta_agent_tools: list[BaseTool] = [
@@ -972,6 +985,9 @@ def _register_all_tools_in_action_module():
             permission_level=PermissionLevel.SAFE,
             tags=["faulty", "training", "reflexion"],
         )
+
+    # Ferramentas externas (Codex/Jules)
+    register_external_cli_tools()
 
 
 # Executa registro automático ao importar o módulo

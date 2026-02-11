@@ -5,6 +5,7 @@ Consome mensagens da fila janus.meta_agent.cycle e dispara ciclos de análise
 pontuais do Meta-Agente.
 """
 
+import inspect
 import logging
 import time
 import uuid
@@ -130,7 +131,9 @@ async def process_failure_event(task: TaskMessage) -> None:
 
     Também persiste um registro resumido na memória episódica para apoiar análises futuras.
     """
-    await _ensure_memory_initialized()
+    init_result = _ensure_memory_initialized()
+    if inspect.isawaitable(init_result):
+        await init_result
     mode = "failure_event"
     start = time.perf_counter()
     try:
