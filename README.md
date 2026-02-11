@@ -1,3 +1,18 @@
+# Janus
+
+Janus is a sophisticated AI Architect system designed to assist users by completing coding tasks, solving bugs, implementing features, and writing tests.
+
+## 🚀 Getting Started
+
+This project is divided into two main components:
+
+- **Frontend (`front/`)**: Angular-based web interface.
+  - [Frontend Setup Guide](front/README.md)
+- **Backend (`janus/`)**: Python/FastAPI backend.
+  - [Backend Setup Guide](janus/README.md)
+
+---
+
 # 🗺️ Janus Roadmap & Technical Debt (V1 Launch)
 >
 > *Última atualização: 14/01/2026 (Scientific & V1 Focus)*
