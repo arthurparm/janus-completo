@@ -5,12 +5,13 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.api.v1.endpoints.workers import _task_status
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.services.llm_service import LLMService, get_llm_service
 from app.services.observability_service import ObservabilityService, get_observability_service
 from app.services.optimization_service import OptimizationService, get_optimization_service
 
-# Importar serviços existentes da camada de domínio
+# Importar serviÃ§os existentes da camada de domÃ­nio
 from app.services.system_status_service import system_status_service
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +65,7 @@ async def get_system_overview(
         system_status_data = system_status_service.get_system_status()
         sys_status = SystemStatus(**system_status_data)
 
-        # 2) Saúde dos serviços (reusa mesma lógica de /system/health/services)
+        # 2) SaÃºde dos serviÃ§os (reusa mesma lÃ³gica de /system/health/services)
         agent_h = await observability.get_multi_agent_system_health()
         agent_status = agent_h.get("status", "unknown")
         active_agents = agent_h.get("details", {}).get("active_agents")
@@ -108,13 +109,13 @@ async def get_system_overview(
                 key="agent",
                 name="Agent Service",
                 status=agent_status,
-                metric_text=f"Agentes: {active_agents if active_agents is not None else '—'}",
+                metric_text=f"Agentes: {active_agents if active_agents is not None else 'N/A'}",
             ),
             ServiceHealthItem(
                 key="knowledge",
                 name="Knowledge Service",
                 status=knowledge_status,
-                metric_text=f"Ontologias: {total_nodes if isinstance(total_nodes, (int, float)) else '—'}",
+                metric_text=f"Ontologias: {total_nodes if isinstance(total_nodes, (int, float)) else 'N/A'}",
             ),
             ServiceHealthItem(
                 key="memory",
@@ -130,22 +131,28 @@ async def get_system_overview(
             ),
         ]
 
-        # 3) Status dos workers (transforma saída do orchestrator em shape esperado pelo frontend)
+        # 3) Status dos workers (transforma saÃ­da do orchestrator em shape esperado pelo frontend)
         current = getattr(request.app.state, "orchestrator_workers", []) or []
         now = datetime.now(UTC)
         workers_status: list[WorkerStatusResponse] = []
         for w in current:
             name = w.get("name") or "worker"
             task = w.get("task")
+            tasks_processed = w.get("tasks_processed", 0)
+            if not isinstance(tasks_processed, int):
+                tasks_processed = 0
             try:
-                running = bool(task and not task.done() and not task.cancelled())
-                exc = None
-                if task and task.done() and not task.cancelled():
-                    try:
-                        exc = task.exception()
-                    except Exception:
-                        exc = None
-                status_str = "running" if running else ("error" if exc else "stopped")
+                status_payload = _task_status(task)
+                if status_payload.get("state") == "disabled":
+                    status_str = "disabled"
+                elif status_payload.get("running"):
+                    status_str = "running"
+                elif status_payload.get("exception"):
+                    status_str = "error"
+                elif status_payload.get("state") == "unknown":
+                    status_str = "unknown"
+                else:
+                    status_str = "stopped"
             except Exception:
                 status_str = "unknown"
             workers_status.append(
@@ -153,7 +160,7 @@ async def get_system_overview(
                     id=name,
                     status=status_str,
                     last_heartbeat=now,
-                    tasks_processed=0,
+                    tasks_processed=tasks_processed,
                 )
             )
 
@@ -163,8 +170,9 @@ async def get_system_overview(
             workers_status=workers_status,
         )
     except Exception as e:
-        logger.error("Falha ao obter visão geral do sistema", exc_info=e)
+        logger.error("Falha ao obter visÃ£o geral do sistema", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Não foi possível obter a visão geral do sistema: {e!s}",
+            detail="System overview unavailable",
         )
+

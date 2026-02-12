@@ -284,14 +284,63 @@ class MemoryCore:
             raise ValueError(f"Content exceeds {max_chars} chars")
 
     def _check_quota(self, experience):
-        origin = str((experience.metadata or {}).get("origin") or "unknown")
-        # Simplified Quota check
-        # ... logic consistent with original ...
-        pass  # Implementation detail condensed for brevity in this view, strictly speaking should be full equivalent
+        if self._quota_max_items <= 0 and self._quota_max_bytes <= 0:
+            return
+
+        metadata = experience.metadata or {}
+        origin = str(metadata.get("origin") or "unknown")
+        now = time.time()
+        entry = self._quota.get(origin)
+        if (
+            entry is None
+            or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s
+        ):
+            entry = {"window_start": now, "items": 0, "bytes": 0}
+            self._quota[origin] = entry
+
+        content_bytes = len(str(experience.content or "").encode("utf-8"))
+        projected_items = int(entry.get("items", 0)) + 1
+        projected_bytes = int(entry.get("bytes", 0)) + content_bytes
+
+        if self._quota_max_items > 0 and projected_items > self._quota_max_items:
+            self._quota_rejections.inc()
+            raise ValueError(
+                f"Memory item quota exceeded for origin '{origin}' "
+                f"({projected_items}/{self._quota_max_items})"
+            )
+
+        if self._quota_max_bytes > 0 and projected_bytes > self._quota_max_bytes:
+            self._quota_rejections.inc()
+            raise ValueError(
+                f"Memory byte quota exceeded for origin '{origin}' "
+                f"({projected_bytes}/{self._quota_max_bytes})"
+            )
 
     def _update_quota(self, experience):
-        # ...
-        pass
+        if self._quota_max_items <= 0 and self._quota_max_bytes <= 0:
+            return
+
+        metadata = experience.metadata or {}
+        origin = str(metadata.get("origin") or "unknown")
+        now = time.time()
+        entry = self._quota.get(origin)
+        if (
+            entry is None
+            or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s
+        ):
+            entry = {"window_start": now, "items": 0, "bytes": 0}
+            self._quota[origin] = entry
+
+        content_bytes = len(str(experience.content or "").encode("utf-8"))
+        entry["items"] = int(entry.get("items", 0)) + 1
+        entry["bytes"] = int(entry.get("bytes", 0)) + content_bytes
+
+        # Best-effort cleanup to avoid unbounded growth of stale origins.
+        if len(self._quota) > 2048:
+            cutoff = now - (self._quota_window_s * 2)
+            for bucket_origin, bucket in list(self._quota.items()):
+                if float(bucket.get("window_start", 0.0)) < cutoff:
+                    self._quota.pop(bucket_origin, None)
 
     def _get_timestamp_ms(self, ts_str):
         try:

@@ -24,6 +24,7 @@ class AppSettings(BaseSettings):
     AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
     INIT_MAS_AGENTS_ON_STARTUP: bool = True  # Inicializar agentes do MAS no startup
     START_ORCHESTRATOR_WORKERS_ON_STARTUP: bool = True  # Iniciar workers de fila no boot do API
+    ENABLE_GOOGLE_PRODUCTIVITY_WORKER: bool = False  # Mantem worker opcional em modo disabled por padrao
 
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
@@ -78,6 +79,13 @@ class AppSettings(BaseSettings):
     META_AGENT_CYCLE_INTERVAL_SECONDS: int = 300
     META_AGENT_MAX_ITERATIONS: int = 3
     META_AGENT_MAX_SECONDS: int = 60
+    META_AGENT_MIN_CYCLE_INTERVAL_SECONDS: int = 30
+    META_AGENT_TRIGGER_COOLDOWN_SECONDS: int = 20
+    META_AGENT_FAILURE_DEBOUNCE_SECONDS: int = 30
+    META_AGENT_SCHEDULED_PRIORITY: int = 2
+    META_AGENT_FAILURE_BASE_PRIORITY: int = 6
+    META_AGENT_SCHEDULER_PUBLISH_TO_QUEUE: bool = True
+    ENABLE_LEGACY_META_AGENT_WORKER: bool = False
 
     # LLM
     LLM_DEFAULT_TIMEOUT_SECONDS: int = 120

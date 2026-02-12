@@ -29,6 +29,10 @@ def api_client():
             url = f"{BASE_URL}{path}"
             return requests.post(url, **kwargs)
 
+        def delete(self, path, **kwargs):
+            url = f"{BASE_URL}{path}"
+            return requests.delete(url, **kwargs)
+
     return Client()
 
 @pytest.fixture(scope="module")
@@ -42,4 +46,4 @@ def active_conversation(api_client) -> Generator[str, None, None]:
     yield conversation_id
 
     # Teardown
-    api_client.post("/chat/end", json={"conversation_id": conversation_id})
+    api_client.delete(f"/chat/{conversation_id}")

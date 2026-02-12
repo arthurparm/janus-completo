@@ -131,9 +131,15 @@ export interface PeriodReportResponse { period: string; buckets: { bucket: strin
 export interface ConsentItem { scope: string; granted: boolean; expires_at?: string | null }
 export interface ConsentsListResponse { user_id: number; consents: ConsentItem[] }
 export interface PendingAction {
-  thread_id: string;
+  source?: 'langgraph' | 'sql' | string;
+  thread_id?: string;
+  action_id?: number;
   status: string;
   message?: string | null;
+  user_id?: string;
+  tool_name?: string;
+  args_json?: string;
+  created_at?: string;
 }
 
 // Poison pill stats
@@ -783,16 +789,53 @@ export class JanusApiService {
   }
 
   // Pending actions (human approvals)
-  listPendingActions(): Observable<PendingAction[]> {
-    return this.http.get<PendingAction[]>(this.buildUrl(`/api/v1/pending_actions`))
+  listPendingActions(params: {
+    include_graph?: boolean;
+    include_sql?: boolean;
+    user_id?: string;
+    pending_status?: string;
+    limit?: number;
+  } = {}): Observable<PendingAction[]> {
+    const qs = new URLSearchParams()
+    if (typeof params.include_graph !== 'undefined') qs.set('include_graph', String(params.include_graph))
+    if (typeof params.include_sql !== 'undefined') qs.set('include_sql', String(params.include_sql))
+    if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.pending_status) qs.set('pending_status', params.pending_status)
+    if (typeof params.limit !== 'undefined') qs.set('limit', String(params.limit))
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return this.http.get<PendingAction[]>(this.buildUrl(`/api/v1/pending_actions${suffix}`))
   }
 
-  approvePendingAction(thread_id: string): Observable<PendingAction> {
-    return this.http.post<PendingAction>(this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(thread_id)}/approve`), {})
+  approvePendingAction(action: PendingAction): Observable<PendingAction> {
+    if (typeof action?.action_id === 'number') {
+      return this.http.post<PendingAction>(
+        this.buildUrl(`/api/v1/pending_actions/action/${encodeURIComponent(String(action.action_id))}/approve`),
+        {}
+      )
+    }
+    if (!action?.thread_id) {
+      throw new Error('Invalid pending action: missing action_id/thread_id')
+    }
+    return this.http.post<PendingAction>(
+      this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(action.thread_id)}/approve`),
+      {}
+    )
   }
 
-  rejectPendingAction(thread_id: string): Observable<PendingAction> {
-    return this.http.post<PendingAction>(this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(thread_id)}/reject`), {})
+  rejectPendingAction(action: PendingAction): Observable<PendingAction> {
+    if (typeof action?.action_id === 'number') {
+      return this.http.post<PendingAction>(
+        this.buildUrl(`/api/v1/pending_actions/action/${encodeURIComponent(String(action.action_id))}/reject`),
+        {}
+      )
+    }
+    if (!action?.thread_id) {
+      throw new Error('Invalid pending action: missing action_id/thread_id')
+    }
+    return this.http.post<PendingAction>(
+      this.buildUrl(`/api/v1/pending_actions/${encodeURIComponent(action.thread_id)}/reject`),
+      {}
+    )
   }
 
   getReviewerMetrics(user_id: number, start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {

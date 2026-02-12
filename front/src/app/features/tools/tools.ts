@@ -93,7 +93,7 @@ export class ToolsComponent {
         map((resp) => resp.events || []),
         catchError(() => of([]))
       )
-    const pendingActions$ = this.api.listPendingActions()
+    const pendingActions$ = this.api.listPendingActions({ include_sql: true, include_graph: false })
       .pipe(catchError(() => of([])))
 
     forkJoin({
@@ -116,9 +116,9 @@ export class ToolsComponent {
   }
 
   approve(action: PendingAction) {
-    if (!action || !action.thread_id || this.actionLoading()) return
+    if (!action || this.actionLoading()) return
     this.actionLoading.set(true)
-    this.api.approvePendingAction(action.thread_id)
+    this.api.approvePendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError(() => {
@@ -134,9 +134,9 @@ export class ToolsComponent {
   }
 
   reject(action: PendingAction) {
-    if (!action || !action.thread_id || this.actionLoading()) return
+    if (!action || this.actionLoading()) return
     this.actionLoading.set(true)
-    this.api.rejectPendingAction(action.thread_id)
+    this.api.rejectPendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError(() => {

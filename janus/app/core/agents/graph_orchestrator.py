@@ -1,6 +1,6 @@
 import logging
 import operator
-from typing import Annotated, Literal, Sequence, TypedDict, Any
+from typing import Annotated, Literal, Sequence, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -9,7 +9,6 @@ from langgraph.graph import END, START, StateGraph
 from app.config import settings
 from app.core.agents.leaf_worker import LeafWorker
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
-from app.db.postgres_config import postgres_db
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +99,8 @@ async def worker_node(state: AgentState):
 
     system_prompt = await get_formatted_prompt(prompt_name)
 
-    worker = LeafWorker(name=worker_name, system_prompt=system_prompt)
-    
     try:
+        worker = LeafWorker(name=worker_name, system_prompt=system_prompt)
         result = await worker.run(prompt)
         return {"worker_output": result.response, "next_step": "supervisor"}
     except Exception as e:
@@ -121,20 +119,16 @@ async def human_approval_node(state: AgentState):
 
 # Graph Construction
 _graph_instance = None
+_checkpointer_ctx = None
+_checkpointer = None
 
-def get_graph():
-    global _graph_instance
-    if _graph_instance:
-        return _graph_instance
 
+def _build_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
-    
     workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("worker", worker_node)
     workflow.add_node("human_approval", human_approval_node)
-    
     workflow.add_edge(START, "supervisor")
-    
     workflow.add_conditional_edges(
         "supervisor",
         lambda x: x["next_step"],
@@ -144,37 +138,79 @@ def get_graph():
             "finish": END
         }
     )
-    
     workflow.add_edge("worker", "supervisor")
     workflow.add_edge("human_approval", "supervisor")
-    
-    # Setup Checkpointer using shared async pool
+    return workflow
+
+
+def _build_postgres_conn_string() -> str:
+    return (
+        f"postgresql://{settings.POSTGRES_USER}:"
+        f"{settings.POSTGRES_PASSWORD.get_secret_value()}@"
+        f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
+        f"{settings.POSTGRES_DB}"
+    )
+
+
+async def init_graph():
+    """
+    Initializes the compiled graph with AsyncPostgresSaver and keeps
+    the checkpointer context open for the app lifetime.
+    """
+    global _graph_instance, _checkpointer_ctx, _checkpointer
+    if _graph_instance is not None:
+        return _graph_instance
+
+    workflow = _build_workflow()
     try:
-        # Initialize checkpointer with shared connection pool
-        # AsyncPostgresSaver accepts an async connection pool
-        checkpointer = AsyncPostgresSaver(postgres_db.engine)
-        
-        # We need to run setup() on the checkpointer to create tables if they don't exist
-        # But setup() is an async method in AsyncPostgresSaver.
-        # Since get_graph is synchronous (called at module level or on demand), 
-        # we can't await here easily without creating a new loop or assuming it's called in async context.
-        # Ideally, checkpointer setup should happen at app startup.
-        # For now, we assume tables are created or will be created by init_database()
-        
+        conn_string = _build_postgres_conn_string()
+        _checkpointer_ctx = AsyncPostgresSaver.from_conn_string(conn_string)
+        _checkpointer = await _checkpointer_ctx.__aenter__()
+        await _checkpointer.setup()
+
         _graph_instance = workflow.compile(
-            checkpointer=checkpointer,
+            checkpointer=_checkpointer,
             interrupt_before=["human_approval"]
         )
-        
-        # Configure recursion limit from settings
-        # Note: compile() returns a CompiledGraph which doesn't expose recursion_limit property directly
-        # The recursion limit is actually passed during invoke(), not compile().
-        # However, we can set a default config here if we wrap invoke, but standard usage is passing config at runtime.
-        # We will document that callers should respect settings.REASONING_MAX_ITERATIONS.
-        
+        logger.info("Graph orchestrator initialized with AsyncPostgresSaver.")
     except Exception as e:
         logger.warning(f"Failed to initialize AsyncPostgresSaver: {e}. Falling back to MemorySaver.")
+        if _checkpointer_ctx is not None:
+            try:
+                await _checkpointer_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+        _checkpointer_ctx = None
+        _checkpointer = None
+
         from langgraph.checkpoint.memory import MemorySaver
-        _graph_instance = workflow.compile(checkpointer=MemorySaver(), interrupt_before=["human_approval"])
-        
+        _graph_instance = workflow.compile(
+            checkpointer=MemorySaver(),
+            interrupt_before=["human_approval"]
+        )
+    return _graph_instance
+
+
+async def close_graph():
+    """Closes graph checkpointer resources on app shutdown."""
+    global _graph_instance, _checkpointer_ctx, _checkpointer
+    if _checkpointer_ctx is not None:
+        try:
+            await _checkpointer_ctx.__aexit__(None, None, None)
+        except Exception as e:
+            logger.warning(f"Failed to close graph checkpointer cleanly: {e}")
+    _graph_instance = None
+    _checkpointer_ctx = None
+    _checkpointer = None
+
+def get_graph():
+    global _graph_instance
+    if _graph_instance:
+        return _graph_instance
+
+    # Fallback for contexts where startup lifecycle did not call init_graph().
+    logger.warning("Graph requested before init_graph(); falling back to MemorySaver for this process.")
+    from langgraph.checkpoint.memory import MemorySaver
+    workflow = _build_workflow()
+    _graph_instance = workflow.compile(checkpointer=MemorySaver(), interrupt_before=["human_approval"])
     return _graph_instance

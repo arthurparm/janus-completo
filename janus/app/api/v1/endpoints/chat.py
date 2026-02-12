@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from typing import Any
 
 import structlog
@@ -108,6 +109,55 @@ def _apply_ui_to_message(message: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _actor_user_id(http: Request | None) -> str | None:
+    if http is None:
+        return None
+    try:
+        actor = getattr(http.state, "actor_user_id", None)
+        return str(actor) if actor else None
+    except Exception:
+        return None
+
+
+def _anonymous_user_id(http: Request | None) -> str | None:
+    if http is None:
+        return None
+    try:
+        client_ip = (
+            (http.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+            or (http.client.host if http.client else "")
+        )
+        ua = http.headers.get("user-agent") or "unknown"
+        if not client_ip:
+            return None
+        digest = hashlib.sha256(f"{client_ip}|{ua}".encode("utf-8")).hexdigest()[:16]
+        return f"anon:{digest}"
+    except Exception:
+        return None
+
+
+def _resolve_user_id(http: Request | None, explicit_user_id: str | None) -> str | None:
+    return explicit_user_id or _actor_user_id(http) or _anonymous_user_id(http)
+
+
+def _ensure_origin_allowed(http: Request | None) -> None:
+    if http is None:
+        return
+    try:
+        from app.config import settings as _settings
+    except Exception:
+        _settings = None
+
+    origin = (http.headers.get("origin") or "").lower()
+    allowed_origins = []
+    try:
+        allowed_origins = list(getattr(_settings, "CORS_ALLOW_ORIGINS", [])) or []
+    except Exception:
+        allowed_origins = []
+    if allowed_origins and origin and origin not in [o.lower() for o in allowed_origins]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
+
+
 # --- Endpoints ---
 
 
@@ -117,12 +167,7 @@ async def start_chat(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    hdr_uid = None
-    try:
-        hdr_uid = getattr(http.state, "actor_user_id", None) if http else None
-    except Exception:
-        hdr_uid = None
-    user_id = request.user_id or hdr_uid or "default_user"
+    user_id = _resolve_user_id(http, request.user_id)
     conversation_id = await service.start_conversation_async(
         request.persona, user_id, request.project_id
     )
@@ -148,11 +193,7 @@ async def send_message(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role or priority"
         )
 
-    hdr_uid = None
-    try:
-        hdr_uid = getattr(http.state, "actor_user_id", None) if http else None
-    except Exception:
-        hdr_uid = None
+    user_id = _resolve_user_id(http, payload.user_id)
     try:
         result: dict[str, Any] = await service.send_message(
             conversation_id=payload.conversation_id,
@@ -160,7 +201,7 @@ async def send_message(
             role=role,
             priority=priority,
             timeout_seconds=payload.timeout_seconds,
-            user_id=payload.user_id or hdr_uid or "default_user",
+            user_id=user_id,
             project_id=payload.project_id,
         )
     except ConversationNotFoundError:
@@ -172,7 +213,10 @@ async def send_message(
     except ChatServiceError as e:
         if "Access denied" in str(e):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error("ChatServiceError on /chat/message", exc_info=e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
     # Build citations via vector search on user documents/chat
     citations: list[dict[str, Any]] = []
@@ -321,7 +365,9 @@ async def chat_history(
             logger.warning(f"Access denied for conversation {conversation_id}: {e}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         logger.error(f"Chat service error for conversation {conversation_id}: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
     except Exception as e:
         logger.error(
             f"Unexpected error getting history for conversation {conversation_id}: {e}",
@@ -423,7 +469,9 @@ async def chat_history_paginated(
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         logger.error(f"Chat service error for conversation {conversation_id}: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
     except Exception as e:
         logger.error(
             f"Unexpected error getting paginated history for conversation {conversation_id}: {e}",
@@ -496,7 +544,8 @@ async def rename_conversation(
         )
         return {"status": "ok"}
     except ChatServiceError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        logger.warning("Access denied renaming conversation", conversation_id=conversation_id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -505,26 +554,18 @@ async def rename_conversation(
 async def chat_health(service: ChatService = Depends(get_chat_service)):
     """Verifica se o serviço de chat está funcionando corretamente."""
     try:
-        # Testar se conseguimos acessar o repositório
-        test_conv_id = await service.start_conversation_async(
-            "health_check", "1", "health_check"
-        )
-        await asyncio.to_thread(service._repo.get_conversation, test_conv_id)
-        await service.delete_conversation(test_conv_id, user_id="1", project_id="health_check")
+        total_conversations = await asyncio.to_thread(service._repo.count_conversations)
+        await service.list_conversations(limit=1)
 
         return {
             "status": "healthy",
             "repository_accessible": True,
-            "can_create_conversation": True,
-            "can_read_conversation": True,
-            "can_delete_conversation": True,
-            "total_conversations": service._repo.count_conversations(),
+            "non_destructive_probe": True,
+            "total_conversations": total_conversations,
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Chat service unhealthy: {e!s}"
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Chat service unhealthy")
 
 
 @router.delete("/{conversation_id}", summary="Apaga uma conversa")
@@ -546,7 +587,8 @@ async def delete_conversation(
         )
         return {"status": "ok"}
     except ChatServiceError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        logger.warning("Access denied deleting conversation", conversation_id=conversation_id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -578,28 +620,18 @@ async def stream_message(
         )
 
     # Valida origem (CORS) para SSE
-    try:
-        from app.config import settings as _settings
-    except Exception:
-        _settings = None
-    if http is not None:
-        origin = (http.headers.get("origin") or "").lower()
-        allowed_origins = []
-        try:
-            allowed_origins = list(getattr(_settings, "CORS_ALLOW_ORIGINS", [])) or []
-        except Exception:
-            allowed_origins = []
-        if allowed_origins and origin and origin not in [o.lower() for o in allowed_origins]:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
+    _ensure_origin_allowed(http)
 
     # Limita tamanho máximo da mensagem (10KB)
-    try:
-        if message and len(message.encode("utf-8")) > 10 * 1024:
+    if message:
+        try:
+            message_size = len(message.encode("utf-8"))
+        except Exception:
+            message_size = len(message)
+        if message_size > 10 * 1024:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Message too large"
             )
-    except Exception:
-        pass
 
     try:
         if not user_id:
@@ -661,11 +693,7 @@ async def stream_agent_events(
     Conecta na fila de eventos do RabbitMQ e retorna 'AgentThinking', 'AgentAction', etc.
     """
     # Valida origem (CORS) para SSE
-    if http is not None:
-        _origin = (http.headers.get("origin") or "").lower()
-        # Lógica simplificada de CORS check (copiada do endpoint acima)
-        # Em produção, middleware CORS já deve tratar isso, mas SSE as vezes precisa de cuidado extra
-        pass
+    _ensure_origin_allowed(http)
 
     try:
         # Recupera user_id do header se não passado
@@ -678,7 +706,9 @@ async def stream_agent_events(
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
     except Exception as e:
         logger.error(f"Error starting event stream: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
     headers = {
         "Content-Type": "text/event-stream; charset=utf-8",

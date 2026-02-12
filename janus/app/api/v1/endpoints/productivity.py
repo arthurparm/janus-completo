@@ -44,22 +44,6 @@ except Exception:
     _PROD_REQUESTS_USER_TOTAL = _Noop()
     _PROD_OAUTH_EVENTS_TOTAL = _Noop()
 try:
-    from prometheus_client import Counter  # type: ignore
-
-    _PROD_REQUESTS_TOTAL = Counter(
-        "productivity_requests_total", "Requests to productivity tools", ["tool", "status"]
-    )  # type: ignore
-except Exception:
-
-    class _Noop:
-        def labels(self, *a, **k):
-            return self
-
-        def inc(self, *a, **k):
-            pass
-
-    _PROD_REQUESTS_TOTAL = _Noop()
-try:
     from opentelemetry import trace  # type: ignore
 
     _OTEL = True
@@ -240,75 +224,46 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
     except Exception:
         pass
-    client_id = str(getattr(settings, "PRODUCTIVITY_GOOGLE_OAUTH_CLIENT_ID", ""))
-    redirect_uri = str(getattr(settings, "PRODUCTIVITY_GOOGLE_OAUTH_REDIRECT_URI", ""))
+    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
+    redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
+    if not client_id or not str(client_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth client not configured"
+        )
     scope = " ".join(payload.scopes or [])
     params = {
-        "client_id": client_id,
+        "client_id": str(client_id),
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": scope,
         "access_type": "offline",
-        "state": str(payload.user_id),
+        "state": f"user:{payload.user_id}:scope:custom",
         "include_granted_scopes": "true",
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return OAuthStartResponse(authorize_url=url, state=str(payload.user_id))
 
 
-@router.post("/oauth/google/callback")
+@router.post("/oauth/google/legacy/callback", deprecated=True)
 async def oauth_google_callback(payload: OAuthCallbackRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    repo = OAuthTokenRepository()
-    from datetime import datetime, timedelta
-
-    expires_at = datetime.utcnow() + timedelta(
-        seconds=int(getattr(settings, "PRODUCTIVITY_OAUTH_DEFAULT_EXP", 3600))
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Legacy endpoint removed. Use POST /api/v1/productivity/oauth/google/callback "
+            "with payload {code, state}."
+        ),
     )
-    repo.upsert(
-        payload.user_id,
-        "google",
-        access_token=payload.code,
-        refresh_token="refresh",
-        expires_at=expires_at,
-    )
-    try:
-        _PROD_OAUTH_EVENTS_TOTAL.labels("google", "callback", "ok").inc()
-    except Exception:
-        pass
-    return {"status": "ok"}
 
 
-@router.post("/oauth/google/refresh")
+@router.post("/oauth/google/legacy/refresh", deprecated=True)
 async def oauth_google_refresh(payload: OAuthRefreshRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    repo = OAuthTokenRepository()
-    tok = repo.get(payload.user_id, payload.provider)
-    if tok is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
-    from datetime import datetime, timedelta
-
-    expires_at = datetime.utcnow() + timedelta(
-        seconds=int(getattr(settings, "PRODUCTIVITY_OAUTH_DEFAULT_EXP", 3600))
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Legacy endpoint removed. Use POST /api/v1/productivity/oauth/google/refresh "
+            "with query param user_id."
+        ),
     )
-    repo.upsert(
-        payload.user_id,
-        payload.provider,
-        access_token=tok.access_token,
-        refresh_token=tok.refresh_token,
-        expires_at=expires_at,
-    )
-    try:
-        _PROD_OAUTH_EVENTS_TOTAL.labels(payload.provider, "refresh", "ok").inc()
-    except Exception:
-        pass
-    return {"status": "ok"}
 
 
 @router.get("/calendar/events")

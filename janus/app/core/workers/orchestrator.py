@@ -6,6 +6,10 @@ usando imports lazy para evitar ciclos de importação.
 """
 
 import logging
+from dataclasses import dataclass
+from typing import Any
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,14 @@ def get_orchestrator_worker_names() -> list[str]:
     return list(WORKER_NAMES)
 
 
+@dataclass(frozen=True)
+class DisabledWorkerHandle:
+    """Representa um worker intencionalmente desativado por configuração."""
+
+    reason: str = "disabled_by_config"
+    detail: str | None = None
+
+
 async def start_all_workers():
     """
     Inicia todos os workers assíncronos do sistema.
@@ -54,7 +66,6 @@ async def start_all_workers():
     from app.core.workers.distillation_worker import start_distillation_worker
     from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
     from app.core.workers.debate_critic_worker import start_debate_critic_worker
-    from app.core.workers.google_productivity_worker import start_google_productivity_consumer
     from app.core.workers.meta_agent_worker import (
         start_failure_event_consumer,
         start_meta_agent_worker,
@@ -70,7 +81,7 @@ async def start_all_workers():
 
     logger.info("Iniciando orquestrador de workers...")
 
-    workers = []
+    workers: list[Any] = []
 
     # Worker de manutenção de memória (Generative Memory)
     await memory_maintenance_worker.start()
@@ -134,8 +145,18 @@ async def start_all_workers():
     autonomy_task = await start_autonomy_worker()
     workers.append(autonomy_task)
 
-    google_productivity_task = await start_google_productivity_consumer()
-    workers.append(google_productivity_task)
+    if getattr(settings, "ENABLE_GOOGLE_PRODUCTIVITY_WORKER", False):
+        from app.core.workers.google_productivity_worker import start_google_productivity_consumer
+
+        google_productivity_task = await start_google_productivity_consumer()
+        workers.append(google_productivity_task)
+    else:
+        workers.append(
+            DisabledWorkerHandle(
+                detail="ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false",
+            )
+        )
+        logger.info("Worker google_productivity desativado por configuracao.")
 
     # Debate System Workers
     debate_proponent = await start_debate_proponent_worker()

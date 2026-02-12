@@ -11,6 +11,7 @@ import structlog
 from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
 from app.core.tools import action_registry
+from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.tool_usage_repository import ToolUsageRepository
 
 logger = structlog.get_logger(__name__)
@@ -116,6 +117,34 @@ class ToolExecutorService:
 
         return calls
 
+    def _audit_pre_execution_event(
+        self,
+        *,
+        tool_name: str,
+        status: str,
+        reason: str,
+        user_id: str | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        try:
+            payload = {
+                "user_id": user_id or "-",
+                "endpoint": "tool_executor",
+                "action": "tool_precheck",
+                "tool": tool_name,
+                "status": status,
+                "detail": {"reason": reason, **(detail or {})},
+            }
+            record_audit_event_direct(payload)
+        except Exception as e:
+            logger.warning(
+                "tool_precheck_audit_failed",
+                tool_name=tool_name,
+                status=status,
+                reason=reason,
+                error=str(e),
+            )
+
     async def execute_tool_calls(
         self,
         calls: list[dict[str, Any]],
@@ -136,7 +165,36 @@ class ToolExecutorService:
             args = call["args"]
 
             if not effective_policy.can_continue_cycle():
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="blocked",
+                    reason="policy_cycle_limit",
+                    user_id=user_id,
+                )
                 outputs.append({"name": name, "result": "Policy limit reached for this cycle."})
+                continue
+
+            args_text = ""
+            try:
+                args_text = json.dumps(args, ensure_ascii=False, default=str)
+            except Exception:
+                args_text = str(args)
+
+            content_safety = effective_policy.validate_content_safety(args_text)
+            if not content_safety.allowed:
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="blocked",
+                    reason="content_safety",
+                    user_id=user_id,
+                    detail={"policy_reason": content_safety.reason},
+                )
+                outputs.append(
+                    {
+                        "name": name,
+                        "result": f"Tool blocked by content safety: {content_safety.reason or 'unsafe content'}",
+                    }
+                )
                 continue
 
             decision = effective_policy.validate_tool_call(name, args, user_id=user_id)
@@ -162,10 +220,23 @@ class ToolExecutorService:
                 msg = "Tool requires confirmation before execution."
                 if pending_id:
                     msg += f" Pending action id: {pending_id}."
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="pending_confirmation",
+                    reason=decision.reason or "requires_confirmation",
+                    user_id=user_id,
+                    detail={"pending_id": pending_id},
+                )
                 outputs.append({"name": name, "result": msg})
                 continue
 
             if not decision.allowed:
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="blocked",
+                    reason=decision.reason or "policy_block",
+                    user_id=user_id,
+                )
                 outputs.append(
                     {
                         "name": name,
@@ -184,6 +255,13 @@ class ToolExecutorService:
                             user_id=str(user_id), tool_name=name, daily_limit=limit
                         )
                         if not allowed:
+                            self._audit_pre_execution_event(
+                                tool_name=name,
+                                status="quota_exceeded",
+                                reason="daily_quota",
+                                user_id=user_id,
+                                detail={"count": count, "limit": max_limit},
+                            )
                             outputs.append(
                                 {
                                     "name": name,
@@ -202,6 +280,12 @@ class ToolExecutorService:
 
             tool = action_registry.get_tool(name)
             if not tool:
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="not_found",
+                    reason="tool_not_registered",
+                    user_id=user_id,
+                )
                 if strict:
                     outputs.append({"name": name, "result": f"Error: Tool '{name}' not found."})
                 else:

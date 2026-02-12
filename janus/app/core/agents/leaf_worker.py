@@ -1,5 +1,5 @@
 from typing import Any, Callable, List, Type
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 import logging
 import inspect
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class WorkerResult(BaseModel):
     response: str
-    tool_calls: List[str] = []
+    tool_calls: List[str] = Field(default_factory=list)
 
 class LeafWorker:
     """
@@ -33,7 +33,7 @@ class LeafWorker:
         self.agent = Agent(
             model,
             system_prompt=system_prompt,
-            result_type=WorkerResult
+            output_type=WorkerResult
         )
         self._register_tools(tools or [])
         
@@ -104,7 +104,12 @@ class LeafWorker:
         try:
             # PydanticAI run method
             result = await self.agent.run(prompt)
-            return result.data
+            output = result.output
+            if isinstance(output, WorkerResult):
+                return output
+            if isinstance(output, dict):
+                return WorkerResult(**output)
+            return WorkerResult(response=str(output))
         except Exception as e:
             logger.error(f"Worker {self.name} failed: {e}")
             raise

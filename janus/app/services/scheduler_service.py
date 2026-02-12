@@ -15,6 +15,8 @@ from typing import Any
 import structlog
 from prometheus_client import Counter, Gauge
 
+from app.config import settings
+
 logger = structlog.get_logger(__name__)
 
 # Prometheus metrics
@@ -309,14 +311,26 @@ async def initialize_default_jobs(scheduler: SchedulerService):
 
     Chamado durante o startup do Kernel.
     """
-    from app.core.agents.meta_agent import MetaAgent
+    from app.core.agents.meta_agent import get_meta_agent
     from app.core.memory.memory_core import get_memory_db
 
     # Job: MetaAgent Analysis (a cada 5 minutos)
     async def meta_agent_analysis():
         try:
-            agent = MetaAgent()
-            await agent.run_analysis_cycle()
+            if getattr(settings, "META_AGENT_SCHEDULER_PUBLISH_TO_QUEUE", True):
+                from app.core.workers.meta_agent_worker import request_meta_agent_cycle
+
+                queued_task_id = await request_meta_agent_cycle(
+                    mode="scheduled_heartbeat",
+                    payload={"source": "scheduler"},
+                    priority=getattr(settings, "META_AGENT_SCHEDULED_PRIORITY", 2),
+                )
+                if queued_task_id is None:
+                    logger.info("MetaAgent scheduled trigger skipped by cooldown/debounce.")
+                return
+
+            agent = get_meta_agent()
+            await agent.run_analysis_cycle(trigger={"mode": "scheduled_heartbeat", "source": "scheduler"})
         except Exception as e:
             logger.error(f"MetaAgent analysis failed: {e}")
 

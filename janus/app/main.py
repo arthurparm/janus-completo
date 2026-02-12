@@ -14,6 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.exception_handlers import add_exception_handlers
 from app.api.v1.router import api_router
 from app.config import settings
+from app.core.agents.graph_orchestrator import close_graph, init_graph
 from app.core.infrastructure import (
     CorrelationMiddleware,
     RateLimitMiddleware,
@@ -52,6 +53,9 @@ async def lifespan(app: FastAPI):
     # 1. Initialize Kernel (Infrastructure & Dependencies)
     kernel = Kernel.get_instance()
     await kernel.startup()
+
+    # 1.0 Initialize LangGraph orchestrator/checkpointer lifecycle
+    await init_graph()
 
     # 1.1 Load Global Prompts (Async)
     # This ensures that all prompt constants are populated from the DB before the app starts serving requests.
@@ -147,6 +151,7 @@ async def lifespan(app: FastAPI):
                 task.cancel()
     except Exception as e:
         logger.warning("Failed to stop orchestrator workers on shutdown.", exc_info=e)
+    await close_graph()
     await kernel.shutdown()
     logger.info("Application shutdown complete.")
 

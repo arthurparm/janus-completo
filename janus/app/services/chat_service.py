@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import os
 import time as _time
@@ -1130,9 +1131,18 @@ class ChatService:
 
         try:
             # Seleção antecipada de provider/modelo e CB early-block
-            pre = self._llm.select_provider(
-                role=role, priority=priority, user_id=user_id, project_id=project_id
-            )
+            if inspect.iscoroutinefunction(self._llm.select_provider):
+                pre = await self._llm.select_provider(
+                    role=role, priority=priority, user_id=user_id, project_id=project_id
+                )
+            else:
+                pre = await asyncio.to_thread(
+                    self._llm.select_provider,
+                    role,
+                    priority,
+                    user_id,
+                    project_id,
+                )
             current_provider = pre.get("provider")
             current_model = pre.get("model")
             if self._llm.is_provider_open(current_provider or ""):
@@ -1159,17 +1169,29 @@ class ChatService:
 
             start_t = _time.time()
             # Executa LLM em thread e emite heartbeats enquanto aguarda
-            task = asyncio.create_task(
-                asyncio.to_thread(
-                    self._llm.invoke_llm,
-                    prompt=prompt,
-                    role=role,
-                    priority=priority,
-                    timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
+            if inspect.iscoroutinefunction(self._llm.invoke_llm):
+                task = asyncio.create_task(
+                    self._llm.invoke_llm(
+                        prompt=prompt,
+                        role=role,
+                        priority=priority,
+                        timeout_seconds=timeout_seconds,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
                 )
-            )
+            else:
+                task = asyncio.create_task(
+                    asyncio.to_thread(
+                        self._llm.invoke_llm,
+                        prompt=prompt,
+                        role=role,
+                        priority=priority,
+                        timeout_seconds=timeout_seconds,
+                        user_id=user_id,
+                        project_id=project_id,
+                    )
+                )
             if heartbeat_interval and heartbeat_interval > 0:
                 sent_heartbeat = False
                 while True:

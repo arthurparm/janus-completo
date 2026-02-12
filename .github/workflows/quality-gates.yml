@@ -1,0 +1,95 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  critical-tests:
+    name: Critical Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            pytest \
+            pytest-asyncio \
+            fastapi \
+            pydantic \
+            pydantic-settings \
+            structlog \
+            sqlalchemy \
+            psycopg2-binary \
+            qdrant-client \
+            prometheus-client \
+            langchain \
+            langchain-core \
+            langgraph \
+            langgraph-checkpoint-postgres
+
+      - name: Run critical suite
+        env:
+          PYTHONPATH: janus
+        run: |
+          pytest -q \
+            tests/test_api_visibility_endpoints.py \
+            tests/test_tool_executor_policy_guards.py \
+            tests/test_chat_agent_loop_content_safety.py \
+            tests/test_memory_quota_enforcement.py \
+            tests/test_generative_memory_llm_role_priority.py
+
+  ops-validation:
+    name: Ops Validation (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait API health
+        run: |
+          for i in {1..90}; do
+            if curl -sf http://localhost:8000/health >/dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy in time"
+          docker compose ps
+          exit 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run async operational validation
+        run: |
+          python scripts/async_ops_validation.py \
+            --base-url http://localhost:8000 \
+            --users 8 \
+            --timeout 45 \
+            --chaos-timeout 90
+
+      - name: Upload ops report
+        uses: actions/upload-artifact@v4
+        with:
+          name: async-ops-validation-report
+          path: artifacts/qa/async_ops_validation_report.json

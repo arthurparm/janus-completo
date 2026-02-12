@@ -141,7 +141,9 @@ async def trigger_harvesting(
         return result
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao coletar dados", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
 
 @router.post(
@@ -166,7 +168,9 @@ async def trigger_training(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao treinar modelo", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
 
 @router.get(
@@ -215,7 +219,9 @@ async def preview_dataset(
         return await learning_service.preview_dataset(limit=limit)
     except LearningServiceError as e:
         logger.error("Erro ao pré-visualizar dataset", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
 
 @router.post(
@@ -232,7 +238,9 @@ async def evaluate_model(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except LearningServiceError as e:
         logger.error("Erro no serviço de aprendizado ao avaliar modelo", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+        )
 
 
 @router.get(

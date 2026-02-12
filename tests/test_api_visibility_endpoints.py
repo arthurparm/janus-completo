@@ -2,6 +2,7 @@ import os
 import sys
 import types
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 import pytest
 from fastapi import FastAPI
@@ -228,6 +229,149 @@ def test_pending_actions_reject(client):
     assert resp.status_code == 202
     data = resp.json()
     assert data["status"] == "rejected"
+
+
+def test_pending_actions_list_sql_source(client, monkeypatch):
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    class DummyPendingRow:
+        id = 101
+        user_id = "u-1"
+        tool_name = "codex_exec"
+        args_json = '{"prompt":"hello"}'
+        status = "pending"
+        created_at = datetime(2026, 2, 12, 10, 30, 0)
+
+    class DummyPendingRepo:
+        def list(self, user_id=None, status="pending", limit=50):
+            assert user_id is None
+            assert status == "pending"
+            assert limit == 50
+            return [DummyPendingRow()]
+
+    monkeypatch.setattr(
+        pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
+    )
+
+    resp = client.get("/api/v1/pending_actions?include_sql=true&include_graph=false")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["source"] == "sql"
+    assert data[0]["action_id"] == 101
+    assert data[0]["tool_name"] == "codex_exec"
+    assert data[0]["status"] == "pending"
+
+
+def test_pending_actions_approve_sql_action(client, monkeypatch):
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    class DummyPendingRow:
+        def __init__(self):
+            self.id = 202
+            self.user_id = "u-2"
+            self.tool_name = "codex_review"
+            self.args_json = '{"commit":"abc123"}'
+            self.status = "pending"
+            self.created_at = datetime(2026, 2, 12, 11, 0, 0)
+
+    row = DummyPendingRow()
+
+    class DummyPendingRepo:
+        def get(self, action_id):
+            if action_id == 202:
+                return row
+            return None
+
+        def set_status(self, action_id, status):
+            if action_id != 202:
+                return None
+            row.status = status
+            return row
+
+    monkeypatch.setattr(
+        pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
+    )
+
+    resp = client.post("/api/v1/pending_actions/action/202/approve")
+    assert resp.status_code == 202
+    data = resp.json()
+    assert data["source"] == "sql"
+    assert data["action_id"] == 202
+    assert data["status"] == "approved"
+
+
+def test_pending_actions_reject_sql_action(client, monkeypatch):
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    class DummyPendingRow:
+        def __init__(self):
+            self.id = 303
+            self.user_id = "u-3"
+            self.tool_name = "codex_exec"
+            self.args_json = '{"prompt":"bye"}'
+            self.status = "pending"
+            self.created_at = datetime(2026, 2, 12, 12, 0, 0)
+
+    row = DummyPendingRow()
+
+    class DummyPendingRepo:
+        def get(self, action_id):
+            if action_id == 303:
+                return row
+            return None
+
+        def set_status(self, action_id, status):
+            if action_id != 303:
+                return None
+            row.status = status
+            return row
+
+    monkeypatch.setattr(
+        pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
+    )
+
+    resp = client.post("/api/v1/pending_actions/action/303/reject")
+    assert resp.status_code == 202
+    data = resp.json()
+    assert data["source"] == "sql"
+    assert data["action_id"] == 303
+    assert data["status"] == "rejected"
+
+
+def test_pending_actions_approve_returns_503_when_state_backend_unavailable(client, monkeypatch):
+    import app.api.v1.endpoints.pending_actions as pending_module
+
+    async def failing_get_state(*args, **kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(pending_module, "_get_state", failing_get_state)
+
+    resp = client.post("/api/v1/pending_actions/thread-1/approve")
+    assert resp.status_code == 503
+    assert "backend is unavailable" in resp.json()["detail"]
+
+
+def test_pending_actions_list_returns_503_when_checkpoint_backend_unavailable(client, monkeypatch):
+    import app.api.v1.endpoints.pending_actions as pending_module
+
+    class BrokenSession:
+        async def execute(self, *args, **kwargs):
+            raise RuntimeError("connection refused")
+
+    @asynccontextmanager
+    async def broken_session_cm():
+        yield BrokenSession()
+
+    monkeypatch.setattr(
+        pending_module,
+        "_get_session_context_manager",
+        lambda *_args, **_kwargs: broken_session_cm(),
+    )
+
+    resp = client.get("/api/v1/pending_actions")
+    assert resp.status_code == 503
+    assert "backend is unavailable" in resp.json()["detail"]
 
 
 def test_system_overview_endpoint(client):

@@ -163,8 +163,12 @@ class ReflexionSession:
                 # 2. Executar (Gerar Solução)
                 execution_prompt = await get_formatted_prompt(
                     "reflexion_execution",
+                    goal=self.task,
+                    trajectory=current_context or "No previous attempts yet.",
+                    error="N/A",
+                    # Compatibilidade com versões antigas do template
                     task=self.task,
-                    current_context=current_context
+                    current_context=current_context,
                 )
 
                 try:
@@ -206,7 +210,7 @@ class ReflexionSession:
                         "success": True,
                         "result": best_result,
                         "score": best_score,
-                        "steps": [s.iteration for s in self._steps],
+                        "steps": list(self._steps),
                         "lessons": self._lessons_learned,
                     }
 
@@ -230,7 +234,7 @@ class ReflexionSession:
                 "success": False,
                 "result": best_result,
                 "score": best_score,
-                "steps": [s.iteration for s in self._steps],
+                "steps": list(self._steps),
                 "lessons": self._lessons_learned,
             }
 

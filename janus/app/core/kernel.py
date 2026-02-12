@@ -411,10 +411,14 @@ class Kernel:
             except Exception as e:
                 logger.error(f"Failed to start async consolidation worker: {e}")
 
-            # Meta Agent
-            meta_agent_interval = int(getattr(settings, "META_AGENT_CYCLE_INTERVAL_SECONDS", 3600))
-            meta_agent_worker = MetaAgentWorker(interval_seconds=meta_agent_interval)
-            await meta_agent_worker.start()
+            meta_agent_worker = None
+            if getattr(settings, "ENABLE_LEGACY_META_AGENT_WORKER", False):
+                # Legacy worker kept behind flag for backward compatibility.
+                # Default flow is orchestrator + queue-based triggers.
+                meta_agent_interval = int(getattr(settings, "META_AGENT_CYCLE_INTERVAL_SECONDS", 3600))
+                meta_agent_worker = MetaAgentWorker(interval_seconds=meta_agent_interval)
+                await meta_agent_worker.start()
+                logger.info("Legacy MetaAgentWorker started (ENABLE_LEGACY_META_AGENT_WORKER=true).")
 
             self._neural_training_task = await start_neural_training_worker()
 
@@ -422,8 +426,9 @@ class Kernel:
                 knowledge_consolidator,
                 data_harvester,
                 life_cycle_worker,
-                meta_agent_worker,
             ]
+            if meta_agent_worker is not None:
+                self.workers.append(meta_agent_worker)
 
             # Scheduler
             self.scheduler = get_scheduler()

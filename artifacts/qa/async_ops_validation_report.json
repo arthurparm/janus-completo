@@ -1,0 +1,834 @@
+{
+  "started_at": "2026-02-12T19:51:54.786841+00:00",
+  "finished_at": "2026-02-12T19:52:25.368196+00:00",
+  "base_url": "http://localhost:8000",
+  "load": {
+    "total_requests": 44,
+    "ok_requests": 44,
+    "error_rate_percent": 0.0,
+    "latency_ms": {
+      "p50": 271.06,
+      "p95": 6887.86,
+      "p99": 7155.51,
+      "avg": 1595.48
+    },
+    "by_endpoint": {
+      "chat.start": {
+        "total": 10,
+        "ok": 10,
+        "error_rate_percent": 0.0,
+        "status_counts": {
+          "200": 10
+        },
+        "latency_ms": {
+          "p50": 220.6,
+          "p95": 272.62,
+          "p99": 272.62,
+          "avg": 190.36
+        }
+      },
+      "chat.message.safe": {
+        "total": 10,
+        "ok": 10,
+        "error_rate_percent": 0.0,
+        "status_counts": {
+          "200": 10
+        },
+        "latency_ms": {
+          "p50": 6195.22,
+          "p95": 7155.51,
+          "p99": 7155.51,
+          "avg": 6420.64
+        }
+      },
+      "chat.message.unsafe": {
+        "total": 10,
+        "ok": 10,
+        "error_rate_percent": 0.0,
+        "status_counts": {
+          "200": 10
+        },
+        "latency_ms": {
+          "p50": 288.05,
+          "p95": 500.76,
+          "p99": 500.76,
+          "avg": 326.81
+        }
+      },
+      "pending.list": {
+        "total": 10,
+        "ok": 10,
+        "error_rate_percent": 0.0,
+        "status_counts": {
+          "200": 10
+        },
+        "latency_ms": {
+          "p50": 10.4,
+          "p95": 58.08,
+          "p99": 58.08,
+          "avg": 22.22
+        }
+      },
+      "meta.analyze": {
+        "total": 4,
+        "ok": 4,
+        "error_rate_percent": 0.0,
+        "status_counts": {
+          "200": 4
+        },
+        "latency_ms": {
+          "p50": 29.94,
+          "p95": 522.78,
+          "p99": 522.78,
+          "avg": 150.17
+        }
+      }
+    },
+    "duration_seconds": 8.22,
+    "raw": [
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 220.59570000055828,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "86"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 5810.176599999977,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou alertas críticos ativos no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "86",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 415.1507999995374,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "86",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 36.794599996937905,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 221.19970000130706,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "85"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 5718.739600000845,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou alertas críticos ativos no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "85",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 500.76220000119065,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "85",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 58.08219999744324,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 68.96300000153133,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "83"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6000.563199999306,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou degradações de desempenho reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "83",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 400.8393000003707,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "83",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 34.01870000016061,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 271.6187000005448,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "91"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6163.385100000596,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou degradações reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "91",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 273.79089999885764,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "91",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 9.579699999449076,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 140.26079999894137,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "84"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6195.220000001427,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou degradações reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "84",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 288.0499000020791,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "84",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 33.12240000013844,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 223.71380000186036,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "87"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6405.192800000805,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços essenciais funcionando normalmente. Não há incidentes ou interrupções reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "87",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 291.8178999971133,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "87",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 10.400999999546912,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 32.68259999822476,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "82"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6803.159300001425,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais. Não há incidentes ou interrupções reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "82",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 271.05780000056257,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "82",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 10.537199999816949,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 272.61619999990216,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "90"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 6887.863200001448,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros normais.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "90",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 293.6721000005491,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "90",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 9.826500001508975,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 255.3695999995398,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "88"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 7066.634799997701,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operando normalmente, com todas as funcionalidades principais disponíveis. Não há incidentes ou interrupções reportadas no momento.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "88",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 274.2755999970541,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "88",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 9.83520000227145,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "chat.start",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 196.60310000108439,
+        "ok": true,
+        "error": null,
+        "details": {
+          "conversation_id": "89"
+        }
+      },
+      {
+        "endpoint": "chat.message.safe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 7155.513800000335,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "O sistema está operacional e estável, com todos os serviços funcionando dentro dos parâmetros esperados.",
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "role": "orchestrator",
+          "conversation_id": "89",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "chat.message.unsafe",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 258.6526999984926,
+        "ok": true,
+        "error": null,
+        "details": {
+          "response": "Nao posso processar esse pedido porque ele contem instrucoes inseguras ou tentativa de bypass de politicas.",
+          "provider": "janus",
+          "model": "policy_guard",
+          "role": "orchestrator",
+          "conversation_id": "89",
+          "citations": [],
+          "ui": null
+        }
+      },
+      {
+        "endpoint": "pending.list",
+        "method": "GET",
+        "status": 200,
+        "latency_ms": 9.957099999155616,
+        "ok": true,
+        "error": null,
+        "details": {
+          "body": []
+        }
+      },
+      {
+        "endpoint": "meta.analyze",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 18.171799998526694,
+        "ok": true,
+        "error": null,
+        "details": {
+          "message": "Análise concluída com sucesso",
+          "report": {
+            "cycle_id": "cycle_0_1770925740",
+            "timestamp": "2026-02-12T19:49:00.714805",
+            "overall_status": "idle",
+            "health_score": 100,
+            "issues_detected": [],
+            "recommendations": [],
+            "summary": "",
+            "metrics_snapshot": {
+              "health": "{\n  \"system_health\": {\n    \"status\": \"healthy\",\n    \"score\": 100,\n    \"message\": \"6/6 componentes saud\\u00e1veis\",\n    \"components\": {\n      \"llm_manager\": {\n        \"component\": \"llm_manager\",\n        \"status\": \"healthy\",\n        \"message\": \"Todos os provedores operacionais\",\n        \"details\": {\n          \"open_circuits\": 0,\n          \"pool_instances\": 0\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800276\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"message_broker\": {\n        \"component\": \"message_broker\",\n        \"status\": \"healthy\",\n        \"message\": \"Conex\\u00e3o com RabbitMQ est\\u00e1 operacional\",\n        \"details\": {},\n        \"checked_at\": \"2026-02-12T19:48:33.800292\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"episodic_memory_qdrant\": {\n        \"component\": \"episodic_memory_qdrant\",\n        \"status\": \"healthy\",\n        \"message\": \"Qdrant operacional\",\n        \"details\": {\n          \"collection\": \"janus_episodic_memory\"\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.802289\",\n        \"duration_seconds\": 0.033,\n        \"error\": null\n      },\n      \"multi_agent_system\": {\n        \"component\": \"multi_agent_system\",\n        \"status\": \"healthy\",\n        \"message\": \"0 agentes ativos\",\n        \"details\": {\n          \"active_agents\": 0,\n          \"workspace_tasks\": 0,\n          \"pm_active\": false\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800299\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"poison_pill_handler\": {\n        \"component\": \"poison_pill_handler\",\n        \"status\": \"healthy\",\n        \"message\": \"0 mensagens em quarentena\",\n        \"details\": {\n          \"status\": \"healthy\",\n          \"total_quarantined\": 0,\n          \"total_tracked_failures\": 0,\n          \"queues_affected\": 1,\n          \"failure_threshold\": 3,\n          \"consecutive_threshold\": 5\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800304\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"rabbitmq_consolidation_queue_policy\": {\n        \"component\": \"rabbitmq_consolidation_queue_policy\",\n        \"status\": \"healthy\",\n        \"message\": \"Argumentos da fila conferem\",\n        \"details\": {\n          \"queue\": \"janus.knowledge.consolidation\",\n          \"expected\": {\n            \"x-message-ttl\": 86400000,\n            \"x-max-length\": 10000,\n            \"x-dead-letter-exchange\": \"janus.dlx\"\n          },\n          \"actual\": {\n            \"x-dead-letter-exchange\": \"janus.dlx\",\n            \"x-max-length\": 10000,\n            \"x-message-ttl\": 86400000\n          },\n          \"mismatches\": {},\n          \"durable\": true,\n          \"messages\": 0,\n          \"consumers\": 2\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.807073\",\n        \"duration_seconds\": 0.038,\n        \"error\": null\n      }\n    },\n    \"last_check\": \"2026-02-12T19:48:33.807073\",\n    \"suggested_timeouts\": {\n      \"llm\": 180.0,\n      \"qdrant_search\": 60.0,\n      \"neo4j_query\": 30.0,\n      \"rabbitmq_management\": 5.0\n    }\n  },\n  \"error_tracking\": {\n    \"total_errors\": 0,\n    \"recent_errors\": [],\n    \"last_error_seconds_ago\": -1,\n    \"errors_per_hour\": 0.0\n  },\n  \"llm_manager\": {\n    \"pool_keys\": 1,\n    \"pool_total_instances\": 1,\n    \"circuit_breakers\": {\n      \"ollama\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"openai\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"google_gemini\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"unknown\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      }\n    }\n  },\n  \"multi_agent_system\": {\n    \"active_agents\": 0,\n    \"workspace_tasks\": 0,\n    \"workspace_artifacts\": 0,\n    \"workspace_messages\": 0,\n    \"task_stats\": {\n      \"pending\": 0,\n      \"in_progress\": 0,\n      \"completed\": 0,\n      \"failed\": 0,\n      \"blocked\": 0\n    },\n    \"recent_failures\": []\n  },\n  \"poison_pills\": {\n    \"status\": \"healthy\",\n    \"total_quarantined\": 0,\n    \"total_tracked_failures\": 0,\n    \"queues_affected\": 1,\n    \"failure_threshold\": 3,\n    \"consecutive_threshold\": 5\n  }\n}",
+              "failures": "{\"status\": \"no_failures\", \"message\": \"Nenhuma falha detectada no per\\u00edodo\", \"time_window_hours\": 24}",
+              "resources": "{\n  \"timestamp\": \"2026-02-12T19:49:00.719799\",\n  \"cpu\": {\n    \"percent_total\": 1.6,\n    \"count\": 32,\n    \"load_avg\": \"N/A\"\n  },\n  \"memory\": {\n    \"total_gb\": 31.22,\n    \"available_gb\": 27.39,\n    \"percent_used\": 12.3,\n    \"swap_used_percent\": 0.0\n  },\n  \"disk\": {\n    \"total_gb\": 1006.85,\n    \"free_gb\": 889.23,\n    \"percent_used\": 6.9\n  },\n  \"process\": {\n    \"cpu_percent\": 0.0,\n    \"memory_info_mb\": 1494.98,\n    \"threads\": 134\n  }\n}"
+            },
+            "execution_results": []
+          }
+        }
+      },
+      {
+        "endpoint": "meta.analyze",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 29.944199999590637,
+        "ok": true,
+        "error": null,
+        "details": {
+          "message": "Análise concluída com sucesso",
+          "report": {
+            "cycle_id": "cycle_0_1770925740",
+            "timestamp": "2026-02-12T19:49:00.714805",
+            "overall_status": "idle",
+            "health_score": 100,
+            "issues_detected": [],
+            "recommendations": [],
+            "summary": "",
+            "metrics_snapshot": {
+              "health": "{\n  \"system_health\": {\n    \"status\": \"healthy\",\n    \"score\": 100,\n    \"message\": \"6/6 componentes saud\\u00e1veis\",\n    \"components\": {\n      \"llm_manager\": {\n        \"component\": \"llm_manager\",\n        \"status\": \"healthy\",\n        \"message\": \"Todos os provedores operacionais\",\n        \"details\": {\n          \"open_circuits\": 0,\n          \"pool_instances\": 0\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800276\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"message_broker\": {\n        \"component\": \"message_broker\",\n        \"status\": \"healthy\",\n        \"message\": \"Conex\\u00e3o com RabbitMQ est\\u00e1 operacional\",\n        \"details\": {},\n        \"checked_at\": \"2026-02-12T19:48:33.800292\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"episodic_memory_qdrant\": {\n        \"component\": \"episodic_memory_qdrant\",\n        \"status\": \"healthy\",\n        \"message\": \"Qdrant operacional\",\n        \"details\": {\n          \"collection\": \"janus_episodic_memory\"\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.802289\",\n        \"duration_seconds\": 0.033,\n        \"error\": null\n      },\n      \"multi_agent_system\": {\n        \"component\": \"multi_agent_system\",\n        \"status\": \"healthy\",\n        \"message\": \"0 agentes ativos\",\n        \"details\": {\n          \"active_agents\": 0,\n          \"workspace_tasks\": 0,\n          \"pm_active\": false\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800299\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"poison_pill_handler\": {\n        \"component\": \"poison_pill_handler\",\n        \"status\": \"healthy\",\n        \"message\": \"0 mensagens em quarentena\",\n        \"details\": {\n          \"status\": \"healthy\",\n          \"total_quarantined\": 0,\n          \"total_tracked_failures\": 0,\n          \"queues_affected\": 1,\n          \"failure_threshold\": 3,\n          \"consecutive_threshold\": 5\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800304\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"rabbitmq_consolidation_queue_policy\": {\n        \"component\": \"rabbitmq_consolidation_queue_policy\",\n        \"status\": \"healthy\",\n        \"message\": \"Argumentos da fila conferem\",\n        \"details\": {\n          \"queue\": \"janus.knowledge.consolidation\",\n          \"expected\": {\n            \"x-message-ttl\": 86400000,\n            \"x-max-length\": 10000,\n            \"x-dead-letter-exchange\": \"janus.dlx\"\n          },\n          \"actual\": {\n            \"x-dead-letter-exchange\": \"janus.dlx\",\n            \"x-max-length\": 10000,\n            \"x-message-ttl\": 86400000\n          },\n          \"mismatches\": {},\n          \"durable\": true,\n          \"messages\": 0,\n          \"consumers\": 2\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.807073\",\n        \"duration_seconds\": 0.038,\n        \"error\": null\n      }\n    },\n    \"last_check\": \"2026-02-12T19:48:33.807073\",\n    \"suggested_timeouts\": {\n      \"llm\": 180.0,\n      \"qdrant_search\": 60.0,\n      \"neo4j_query\": 30.0,\n      \"rabbitmq_management\": 5.0\n    }\n  },\n  \"error_tracking\": {\n    \"total_errors\": 0,\n    \"recent_errors\": [],\n    \"last_error_seconds_ago\": -1,\n    \"errors_per_hour\": 0.0\n  },\n  \"llm_manager\": {\n    \"pool_keys\": 1,\n    \"pool_total_instances\": 1,\n    \"circuit_breakers\": {\n      \"ollama\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"openai\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"google_gemini\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"unknown\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      }\n    }\n  },\n  \"multi_agent_system\": {\n    \"active_agents\": 0,\n    \"workspace_tasks\": 0,\n    \"workspace_artifacts\": 0,\n    \"workspace_messages\": 0,\n    \"task_stats\": {\n      \"pending\": 0,\n      \"in_progress\": 0,\n      \"completed\": 0,\n      \"failed\": 0,\n      \"blocked\": 0\n    },\n    \"recent_failures\": []\n  },\n  \"poison_pills\": {\n    \"status\": \"healthy\",\n    \"total_quarantined\": 0,\n    \"total_tracked_failures\": 0,\n    \"queues_affected\": 1,\n    \"failure_threshold\": 3,\n    \"consecutive_threshold\": 5\n  }\n}",
+              "failures": "{\"status\": \"no_failures\", \"message\": \"Nenhuma falha detectada no per\\u00edodo\", \"time_window_hours\": 24}",
+              "resources": "{\n  \"timestamp\": \"2026-02-12T19:49:00.719799\",\n  \"cpu\": {\n    \"percent_total\": 1.6,\n    \"count\": 32,\n    \"load_avg\": \"N/A\"\n  },\n  \"memory\": {\n    \"total_gb\": 31.22,\n    \"available_gb\": 27.39,\n    \"percent_used\": 12.3,\n    \"swap_used_percent\": 0.0\n  },\n  \"disk\": {\n    \"total_gb\": 1006.85,\n    \"free_gb\": 889.23,\n    \"percent_used\": 6.9\n  },\n  \"process\": {\n    \"cpu_percent\": 0.0,\n    \"memory_info_mb\": 1494.98,\n    \"threads\": 134\n  }\n}"
+            },
+            "execution_results": []
+          }
+        }
+      },
+      {
+        "endpoint": "meta.analyze",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 29.79629999754252,
+        "ok": true,
+        "error": null,
+        "details": {
+          "message": "Análise concluída com sucesso",
+          "report": {
+            "cycle_id": "cycle_0_1770925740",
+            "timestamp": "2026-02-12T19:49:00.714805",
+            "overall_status": "idle",
+            "health_score": 100,
+            "issues_detected": [],
+            "recommendations": [],
+            "summary": "",
+            "metrics_snapshot": {
+              "health": "{\n  \"system_health\": {\n    \"status\": \"healthy\",\n    \"score\": 100,\n    \"message\": \"6/6 componentes saud\\u00e1veis\",\n    \"components\": {\n      \"llm_manager\": {\n        \"component\": \"llm_manager\",\n        \"status\": \"healthy\",\n        \"message\": \"Todos os provedores operacionais\",\n        \"details\": {\n          \"open_circuits\": 0,\n          \"pool_instances\": 0\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800276\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"message_broker\": {\n        \"component\": \"message_broker\",\n        \"status\": \"healthy\",\n        \"message\": \"Conex\\u00e3o com RabbitMQ est\\u00e1 operacional\",\n        \"details\": {},\n        \"checked_at\": \"2026-02-12T19:48:33.800292\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"episodic_memory_qdrant\": {\n        \"component\": \"episodic_memory_qdrant\",\n        \"status\": \"healthy\",\n        \"message\": \"Qdrant operacional\",\n        \"details\": {\n          \"collection\": \"janus_episodic_memory\"\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.802289\",\n        \"duration_seconds\": 0.033,\n        \"error\": null\n      },\n      \"multi_agent_system\": {\n        \"component\": \"multi_agent_system\",\n        \"status\": \"healthy\",\n        \"message\": \"0 agentes ativos\",\n        \"details\": {\n          \"active_agents\": 0,\n          \"workspace_tasks\": 0,\n          \"pm_active\": false\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800299\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"poison_pill_handler\": {\n        \"component\": \"poison_pill_handler\",\n        \"status\": \"healthy\",\n        \"message\": \"0 mensagens em quarentena\",\n        \"details\": {\n          \"status\": \"healthy\",\n          \"total_quarantined\": 0,\n          \"total_tracked_failures\": 0,\n          \"queues_affected\": 1,\n          \"failure_threshold\": 3,\n          \"consecutive_threshold\": 5\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.800304\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"rabbitmq_consolidation_queue_policy\": {\n        \"component\": \"rabbitmq_consolidation_queue_policy\",\n        \"status\": \"healthy\",\n        \"message\": \"Argumentos da fila conferem\",\n        \"details\": {\n          \"queue\": \"janus.knowledge.consolidation\",\n          \"expected\": {\n            \"x-message-ttl\": 86400000,\n            \"x-max-length\": 10000,\n            \"x-dead-letter-exchange\": \"janus.dlx\"\n          },\n          \"actual\": {\n            \"x-dead-letter-exchange\": \"janus.dlx\",\n            \"x-max-length\": 10000,\n            \"x-message-ttl\": 86400000\n          },\n          \"mismatches\": {},\n          \"durable\": true,\n          \"messages\": 0,\n          \"consumers\": 2\n        },\n        \"checked_at\": \"2026-02-12T19:48:33.807073\",\n        \"duration_seconds\": 0.038,\n        \"error\": null\n      }\n    },\n    \"last_check\": \"2026-02-12T19:48:33.807073\",\n    \"suggested_timeouts\": {\n      \"llm\": 180.0,\n      \"qdrant_search\": 60.0,\n      \"neo4j_query\": 30.0,\n      \"rabbitmq_management\": 5.0\n    }\n  },\n  \"error_tracking\": {\n    \"total_errors\": 0,\n    \"recent_errors\": [],\n    \"last_error_seconds_ago\": -1,\n    \"errors_per_hour\": 0.0\n  },\n  \"llm_manager\": {\n    \"pool_keys\": 1,\n    \"pool_total_instances\": 1,\n    \"circuit_breakers\": {\n      \"ollama\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"openai\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"google_gemini\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"unknown\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      }\n    }\n  },\n  \"multi_agent_system\": {\n    \"active_agents\": 0,\n    \"workspace_tasks\": 0,\n    \"workspace_artifacts\": 0,\n    \"workspace_messages\": 0,\n    \"task_stats\": {\n      \"pending\": 0,\n      \"in_progress\": 0,\n      \"completed\": 0,\n      \"failed\": 0,\n      \"blocked\": 0\n    },\n    \"recent_failures\": []\n  },\n  \"poison_pills\": {\n    \"status\": \"healthy\",\n    \"total_quarantined\": 0,\n    \"total_tracked_failures\": 0,\n    \"queues_affected\": 1,\n    \"failure_threshold\": 3,\n    \"consecutive_threshold\": 5\n  }\n}",
+              "failures": "{\"status\": \"no_failures\", \"message\": \"Nenhuma falha detectada no per\\u00edodo\", \"time_window_hours\": 24}",
+              "resources": "{\n  \"timestamp\": \"2026-02-12T19:49:00.719799\",\n  \"cpu\": {\n    \"percent_total\": 1.6,\n    \"count\": 32,\n    \"load_avg\": \"N/A\"\n  },\n  \"memory\": {\n    \"total_gb\": 31.22,\n    \"available_gb\": 27.39,\n    \"percent_used\": 12.3,\n    \"swap_used_percent\": 0.0\n  },\n  \"disk\": {\n    \"total_gb\": 1006.85,\n    \"free_gb\": 889.23,\n    \"percent_used\": 6.9\n  },\n  \"process\": {\n    \"cpu_percent\": 0.0,\n    \"memory_info_mb\": 1494.98,\n    \"threads\": 134\n  }\n}"
+            },
+            "execution_results": []
+          }
+        }
+      },
+      {
+        "endpoint": "meta.analyze",
+        "method": "POST",
+        "status": 200,
+        "latency_ms": 522.7844000000914,
+        "ok": true,
+        "error": null,
+        "details": {
+          "message": "Análise concluída com sucesso",
+          "report": {
+            "cycle_id": "cycle_1_1770925922",
+            "timestamp": "2026-02-12T19:52:02.497276",
+            "overall_status": "idle",
+            "health_score": 100,
+            "issues_detected": [],
+            "recommendations": [],
+            "summary": "",
+            "metrics_snapshot": {
+              "health": "{\n  \"system_health\": {\n    \"status\": \"healthy\",\n    \"score\": 100,\n    \"message\": \"6/6 componentes saud\\u00e1veis\",\n    \"components\": {\n      \"llm_manager\": {\n        \"component\": \"llm_manager\",\n        \"status\": \"healthy\",\n        \"message\": \"Todos os provedores operacionais\",\n        \"details\": {\n          \"open_circuits\": 0,\n          \"pool_instances\": 1\n        },\n        \"checked_at\": \"2026-02-12T19:51:34.041828\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"message_broker\": {\n        \"component\": \"message_broker\",\n        \"status\": \"healthy\",\n        \"message\": \"Conex\\u00e3o com RabbitMQ est\\u00e1 operacional\",\n        \"details\": {},\n        \"checked_at\": \"2026-02-12T19:51:34.041847\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"episodic_memory_qdrant\": {\n        \"component\": \"episodic_memory_qdrant\",\n        \"status\": \"healthy\",\n        \"message\": \"Qdrant operacional\",\n        \"details\": {\n          \"collection\": \"janus_episodic_memory\"\n        },\n        \"checked_at\": \"2026-02-12T19:51:34.043590\",\n        \"duration_seconds\": 0.033,\n        \"error\": null\n      },\n      \"multi_agent_system\": {\n        \"component\": \"multi_agent_system\",\n        \"status\": \"healthy\",\n        \"message\": \"0 agentes ativos\",\n        \"details\": {\n          \"active_agents\": 0,\n          \"workspace_tasks\": 0,\n          \"pm_active\": false\n        },\n        \"checked_at\": \"2026-02-12T19:51:34.041853\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"poison_pill_handler\": {\n        \"component\": \"poison_pill_handler\",\n        \"status\": \"healthy\",\n        \"message\": \"0 mensagens em quarentena\",\n        \"details\": {\n          \"status\": \"healthy\",\n          \"total_quarantined\": 0,\n          \"total_tracked_failures\": 0,\n          \"queues_affected\": 2,\n          \"failure_threshold\": 3,\n          \"consecutive_threshold\": 5\n        },\n        \"checked_at\": \"2026-02-12T19:51:34.041859\",\n        \"duration_seconds\": 0.031,\n        \"error\": null\n      },\n      \"rabbitmq_consolidation_queue_policy\": {\n        \"component\": \"rabbitmq_consolidation_queue_policy\",\n        \"status\": \"healthy\",\n        \"message\": \"Argumentos da fila conferem\",\n        \"details\": {\n          \"queue\": \"janus.knowledge.consolidation\",\n          \"expected\": {\n            \"x-message-ttl\": 86400000,\n            \"x-max-length\": 10000,\n            \"x-dead-letter-exchange\": \"janus.dlx\"\n          },\n          \"actual\": {\n            \"x-dead-letter-exchange\": \"janus.dlx\",\n            \"x-max-length\": 10000,\n            \"x-message-ttl\": 86400000\n          },\n          \"mismatches\": {},\n          \"durable\": true,\n          \"messages\": 0,\n          \"consumers\": 2\n        },\n        \"checked_at\": \"2026-02-12T19:51:34.048712\",\n        \"duration_seconds\": 0.038,\n        \"error\": null\n      }\n    },\n    \"last_check\": \"2026-02-12T19:51:34.048712\",\n    \"suggested_timeouts\": {\n      \"llm\": 180.0,\n      \"qdrant_search\": 60.0,\n      \"neo4j_query\": 30.0,\n      \"rabbitmq_management\": 5.0\n    }\n  },\n  \"error_tracking\": {\n    \"total_errors\": 0,\n    \"recent_errors\": [],\n    \"last_error_seconds_ago\": -1,\n    \"errors_per_hour\": 0.0\n  },\n  \"llm_manager\": {\n    \"pool_keys\": 2,\n    \"pool_total_instances\": 10,\n    \"circuit_breakers\": {\n      \"ollama\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"openai\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"google_gemini\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      },\n      \"unknown\": {\n        \"state\": \"CLOSED\",\n        \"failure_count\": 0\n      }\n    }\n  },\n  \"multi_agent_system\": {\n    \"active_agents\": 0,\n    \"workspace_tasks\": 0,\n    \"workspace_artifacts\": 0,\n    \"workspace_messages\": 0,\n    \"task_stats\": {\n      \"pending\": 0,\n      \"in_progress\": 0,\n      \"completed\": 0,\n      \"failed\": 0,\n      \"blocked\": 0\n    },\n    \"recent_failures\": []\n  },\n  \"poison_pills\": {\n    \"status\": \"healthy\",\n    \"total_quarantined\": 0,\n    \"total_tracked_failures\": 0,\n    \"queues_affected\": 2,\n    \"failure_threshold\": 3,\n    \"consecutive_threshold\": 5\n  }\n}",
+              "failures": "{\"status\": \"no_failures\", \"message\": \"Nenhuma falha detectada no per\\u00edodo\", \"time_window_hours\": 24}",
+              "resources": "{\n  \"timestamp\": \"2026-02-12T19:52:02.503656\",\n  \"cpu\": {\n    \"percent_total\": 6.5,\n    \"count\": 32,\n    \"load_avg\": \"N/A\"\n  },\n  \"memory\": {\n    \"total_gb\": 31.22,\n    \"available_gb\": 27.2,\n    \"percent_used\": 12.9,\n    \"swap_used_percent\": 0.0\n  },\n  \"disk\": {\n    \"total_gb\": 1006.85,\n    \"free_gb\": 889.23,\n    \"percent_used\": 6.9\n  },\n  \"process\": {\n    \"cpu_percent\": 0.0,\n    \"memory_info_mb\": 1528.73,\n    \"threads\": 248\n  }\n}"
+            },
+            "execution_results": []
+          }
+        }
+      }
+    ]
+  },
+  "chaos": {
+    "duration_seconds": 22.36,
+    "recovery_seconds": 0.52,
+    "checks": {
+      "baseline_pending_200": true,
+      "postgres_stop_ok": true,
+      "chaos_pending_list_503": true,
+      "chaos_pending_approve_503": true,
+      "chaos_chat_health_503": true,
+      "postgres_start_ok": true,
+      "postgres_healthy_after_start": true,
+      "recovered_pending_200": true,
+      "recovered_chat_200": true,
+      "recovery_within_timeout": true
+    },
+    "events": [
+      {
+        "label": "baseline.pending",
+        "status": 200,
+        "body": []
+      },
+      {
+        "label": "postgres.stop",
+        "status": 0,
+        "body": "janus_postgres"
+      },
+      {
+        "label": "chaos.pending.list",
+        "status": 503,
+        "body": {
+          "detail": "Pending action backend is unavailable (checkpoint storage inaccessible)."
+        }
+      },
+      {
+        "label": "chaos.pending.approve",
+        "status": 503,
+        "body": {
+          "detail": "Pending action backend is unavailable (checkpoint storage inaccessible)."
+        }
+      },
+      {
+        "label": "chaos.chat.health",
+        "status": 503,
+        "body": {
+          "detail": "Chat service unhealthy: (psycopg2.OperationalError) could not translate host name \"postgres\" to address: Name or service not known\n\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+        }
+      },
+      {
+        "label": "postgres.start",
+        "status": 0,
+        "body": "janus_postgres"
+      }
+    ]
+  },
+  "slo_evaluation": {
+    "slo": {
+      "load_error_rate_max_percent": 5.0,
+      "load_p95_latency_ms_max": 8000.0,
+      "chat_p95_latency_ms_max": 15000.0,
+      "pending_p95_latency_ms_max": 3000.0,
+      "chaos_recovery_seconds_max": 90.0
+    },
+    "observed": {
+      "load_error_rate_percent": 0.0,
+      "load_p95_latency_ms": 6887.86,
+      "chat_p95_latency_ms": 7155.51,
+      "pending_p95_latency_ms": 58.08,
+      "chaos_recovery_seconds": 0.52
+    },
+    "gates": {
+      "load_error_rate": true,
+      "load_p95_latency": true,
+      "chat_p95_latency": true,
+      "pending_p95_latency": true,
+      "chaos_recovery_time": true,
+      "chaos_checks": true
+    },
+    "passed": true
+  }
+}

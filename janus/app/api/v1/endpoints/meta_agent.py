@@ -1,6 +1,6 @@
 import structlog
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services.meta_agent_service import MetaAgentService, get_meta_agent_service
 
@@ -11,7 +11,7 @@ logger = structlog.get_logger(__name__)
 
 
 class StartHeartbeatRequest(BaseModel):
-    interval_minutes: int = 60
+    interval_minutes: int = Field(60, ge=1, le=1440)
 
 
 # --- Endpoints ---

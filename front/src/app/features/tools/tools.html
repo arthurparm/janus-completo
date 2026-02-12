@@ -67,10 +67,10 @@
           <app-skeleton variant="text" [count]="2"></app-skeleton>
         } @else if (pendingCount()) {
           <ul class="list">
-            @for (action of data().pendingActions; track action.thread_id) {
+            @for (action of data().pendingActions; track (action.action_id || action.thread_id || action.message)) {
               <li class="list-item">
                 <div>
-                  <span class="item-title">{{ action.thread_id }}</span>
+                  <span class="item-title">{{ action.action_id ? ('#' + action.action_id + ' (SQL)') : action.thread_id }}</span>
                   <span class="muted">{{ action.message || 'Aguardando decisão' }}</span>
                 </div>
                 <div class="action-row">

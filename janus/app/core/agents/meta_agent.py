@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
+import time
 import re
 from datetime import datetime
 from typing import Any
@@ -48,9 +49,9 @@ from app.core.agents.meta_agent_module.tools import (
 from app.core.agents.multi_agent_system import MultiAgentSystem
 from app.core.agents.structures import AgentRole, Task, TaskPriority
 from app.core.agents.utils import parse_json_lenient
+from app.config import settings
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
-from app.core.monitoring.health_monitor import get_health_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,17 @@ META_AGENT_CYCLE_DURATION = Histogram(
 
 META_AGENT_HEALTH_SCORE = Gauge(
     "meta_agent_perceived_health_score", "Score de saúde percebido pelo Meta-Agente (0-100)"
+)
+
+
+META_AGENT_CYCLE_INFLIGHT = Gauge(
+    "meta_agent_cycle_inflight", "Quantidade de ciclos do Meta-Agente em execucao"
+)
+
+META_AGENT_CYCLE_SKIPPED = Counter(
+    "meta_agent_cycle_skipped_total",
+    "Total de ciclos ignorados por controle de eficiencia",
+    ["reason"],
 )
 
 
@@ -113,6 +125,11 @@ class MetaAgent:
         self.last_report: StateReport | None = None
         self.cycle_count = 0
         self._heartbeat_task: asyncio.Task | None = None
+        self._cycle_lock = asyncio.Lock()
+        self._last_cycle_started_at = 0.0
+        self._min_cycle_interval_seconds = int(
+            getattr(settings, "META_AGENT_MIN_CYCLE_INTERVAL_SECONDS", 30)
+        )
         # self._initialize_agent() called lazily
 
     async def _initialize_agent(self):
@@ -125,47 +142,73 @@ class MetaAgent:
             logger.warning(f"Meta-Agente iniciou sem LLM: {e}")
             self.llm = None
 
-    async def run_analysis_cycle(self) -> StateReport:
-        """Entry point do ciclo (via LangGraph)."""
-        if not self.llm:
-            await self._initialize_agent()
-        if not self.llm:
-            return self._create_error_report("LLM Unavailable")
+    async def run_analysis_cycle(
+        self, trigger: dict[str, Any] | None = None, force: bool = False
+    ) -> StateReport:
+        """Entry point do ciclo (via LangGraph), com controle de concorrencia/cooldown."""
+        trigger = trigger or {}
+        now = time.time()
 
-        cycle_id = f"cycle_{self.cycle_count}_{int(datetime.now().timestamp())}"
-        self.cycle_count += 1
+        if self._cycle_lock.locked() and not force:
+            META_AGENT_CYCLE_SKIPPED.labels("busy").inc()
+            logger.info(f"Meta-Agent cycle skipped: busy (trigger={trigger})")
+            if self.last_report is not None:
+                return self.last_report
+            return self._create_skipped_report("busy")
 
-        # Init State (TypedDict)
-        initial_state: AgentState = {
-            "cycle_id": cycle_id,
-            "timestamp": datetime.now().timestamp(),
-            "metrics": {},
-            "detected_issues": [],
-            "diagnosis": "",
-            "candidate_plan": [],
-            "critique": None,
-            "final_plan": [],
-            "execution_results": [],
-            "status": "idle",
-            "retry_count": 0,
-            "max_retries": 3,
-        }
+        elapsed = now - self._last_cycle_started_at
+        if (not force) and self._last_cycle_started_at and elapsed < self._min_cycle_interval_seconds:
+            META_AGENT_CYCLE_SKIPPED.labels("cooldown").inc()
+            remaining = self._min_cycle_interval_seconds - elapsed
+            logger.info(
+                f"Meta-Agent cycle skipped: cooldown (remaining_seconds={remaining:.2f}, trigger={trigger})"
+            )
+            if self.last_report is not None:
+                return self.last_report
+            return self._create_skipped_report("cooldown")
 
-        # Config for Persistence (Safety/Time Travel)
-        config = {"configurable": {"thread_id": "meta_agent_main_thread"}}
+        async with self._cycle_lock:
+            META_AGENT_CYCLE_INFLIGHT.inc()
+            self._last_cycle_started_at = time.time()
+            cycle_start = time.perf_counter()
+            try:
+                if not self.llm:
+                    await self._initialize_agent()
+                if not self.llm:
+                    return self._create_error_report("LLM Unavailable")
 
-        try:
-            final_state_dict = await self.app.ainvoke(initial_state, config=config)
+                cycle_id = f"cycle_{self.cycle_count}_{int(datetime.now().timestamp())}"
+                self.cycle_count += 1
 
-            # Converte Output Dict para Relatório
-            report = self._state_dict_to_report(final_state_dict)
-            self.last_report = report
-            self._log_report(report)
-            return report
+                initial_state: AgentState = {
+                    "cycle_id": cycle_id,
+                    "timestamp": datetime.now().timestamp(),
+                    "metrics": {},
+                    "detected_issues": [],
+                    "diagnosis": "",
+                    "candidate_plan": [],
+                    "critique": None,
+                    "final_plan": [],
+                    "execution_results": [],
+                    "status": "idle",
+                    "retry_count": 0,
+                    "max_retries": 3,
+                }
 
-        except Exception as e:
-            logger.error(f"Erro fatal no LangGraph do Meta-Agente: {e}", exc_info=True)
-            return self._create_error_report(str(e))
+                config = {"configurable": {"thread_id": "meta_agent_main_thread"}}
+                final_state_dict = await self.app.ainvoke(initial_state, config=config)
+
+                report = self._state_dict_to_report(final_state_dict)
+                self.last_report = report
+                META_AGENT_CYCLES.labels("success").inc()
+                self._log_report(report)
+                return report
+            except Exception as e:
+                logger.error(f"Erro fatal no LangGraph do Meta-Agente: {e}", exc_info=True)
+                return self._create_error_report(str(e))
+            finally:
+                META_AGENT_CYCLE_DURATION.observe(time.perf_counter() - cycle_start)
+                META_AGENT_CYCLE_INFLIGHT.dec()
 
     async def start_heartbeat(self, interval_minutes: int = 60) -> bool:
         """Inicia o heartbeat do meta-agente com ciclos periódicos."""
@@ -173,10 +216,7 @@ class MetaAgent:
             return False
         interval_seconds = max(30, int(interval_minutes) * 60)
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(interval_seconds))
-        logger.info(
-            "Meta-Agent heartbeat iniciado",
-            interval_seconds=interval_seconds,
-        )
+        logger.info(f"Meta-Agent heartbeat iniciado (interval_seconds={interval_seconds})")
         return True
 
     def stop_heartbeat(self) -> None:
@@ -802,6 +842,19 @@ class MetaAgent:
     def _log_report(self, report: StateReport):
         logger.info(
             f"Report Generated: {report.cycle_id} | Status: {report.overall_status} | Issues: {len(report.issues_detected)}"
+        )
+
+    def _create_skipped_report(self, reason: str) -> StateReport:
+        return StateReport(
+            cycle_id=f"skipped_{reason}",
+            timestamp=datetime.now(),
+            overall_status="skipped",
+            health_score=self.last_report.health_score if self.last_report else 0,
+            issues_detected=self.last_report.issues_detected if self.last_report else [],
+            recommendations=self.last_report.recommendations if self.last_report else [],
+            summary=f"Cycle skipped due to {reason}",
+            metrics_snapshot=self.last_report.metrics_snapshot if self.last_report else {},
+            execution_results=self.last_report.execution_results if self.last_report else [],
         )
 
     def _create_error_report(self, error: str) -> StateReport:

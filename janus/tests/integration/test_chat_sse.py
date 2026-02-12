@@ -6,7 +6,8 @@ from app.main import app
 
 @pytest.fixture(scope="module")
 def client():
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 def test_sse_stream_emits_token_done_and_protocol(client):

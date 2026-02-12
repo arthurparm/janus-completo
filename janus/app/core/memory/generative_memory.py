@@ -12,7 +12,6 @@ from app.services.llm_service import LLMService
 from app.repositories.llm_repository import get_llm_repository
 from app.models.schemas import Experience, ScoredExperience
 from app.core.llm import ModelRole, ModelPriority
-from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -143,8 +142,8 @@ class GenerativeMemoryService:
             
             response = await self.llm_service.invoke_llm(
                 prompt=prompt,
-                role=ModelRole.REASONING, # Or fast model
-                priority=ModelPriority.NORMAL,
+                role=ModelRole.REASONER,
+                priority=ModelPriority.FAST_AND_CHEAP,
                 timeout_seconds=10
             )
             

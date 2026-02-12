@@ -132,6 +132,27 @@ class ChatAgentLoop:
         policy = self._build_policy()
         policy.reset_cycle_quota()
 
+        user_content_safety = policy.validate_content_safety(message)
+        if not user_content_safety.allowed:
+            logger.warning(
+                "chat_input_blocked_by_content_safety",
+                conversation_id=conversation_id,
+                reason=user_content_safety.reason,
+            )
+            blocked_response = (
+                "Nao posso processar esse pedido porque ele contem instrucoes inseguras "
+                "ou tentativa de bypass de politicas."
+            )
+            return {
+                "response": blocked_response,
+                "provider": "janus",
+                "model": "policy_guard",
+                "role": role.value,
+                "conversation_id": conversation_id,
+                "total_in_tokens": total_in_tokens,
+                "total_out_tokens": self._estimate_tokens(blocked_response),
+            }
+
         iteration = 0
         while iteration < max_iterations:
             iteration += 1
@@ -177,6 +198,20 @@ class ChatAgentLoop:
 
             response_text = result.get("response", "")
             total_out_tokens += self._estimate_tokens(response_text)
+
+            response_content_safety = policy.validate_content_safety(response_text)
+            if not response_content_safety.allowed:
+                logger.warning(
+                    "chat_model_response_blocked_by_content_safety",
+                    conversation_id=conversation_id,
+                    iteration=iteration,
+                    reason=response_content_safety.reason,
+                )
+                final_response_text = (
+                    "A resposta intermediaria foi bloqueada por politica de seguranca. "
+                    "Reformule o pedido de forma objetiva."
+                )
+                break
 
             # Check for tool calls
             tool_calls = self.tool_executor.parse_tool_calls(response_text)

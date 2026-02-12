@@ -91,7 +91,10 @@ async def reflexion_health(service: ReflexionService = Depends(get_reflexion_ser
     except Exception as e:
         # O handler genérico pode não ser suficiente se quisermos um status 503 específico aqui
         logger.error("Falha no health check do serviço de Reflexion", exc_info=e)
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Reflexion service unavailable",
+        )
 
 
 @router.get(
