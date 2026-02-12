@@ -1,0 +1,49 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Janus UX Color Themes</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0A0F13;color:#E6EDF3;margin:0;padding:24px}
+    .wrap{max-width:980px;margin:0 auto;display:grid;gap:16px}
+    .card{background:#10161C;border:1px solid #243140;border-radius:12px;padding:16px}
+    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+    .sw{border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,.12)}
+    .chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#131C25;border:1px solid #2C3D4E;font-size:12px}
+    h1,h2,p{margin:0}
+    .meta{color:#9BB0C1;font-size:14px}
+    .ok{color:#23D5A1}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Janus Color Foundation</h1>
+      <p class="meta">Base definida no workflow de UX (dark enterprise + confiança operacional).</p>
+    </section>
+    <section class="card">
+      <h2>Core Palette</h2>
+      <div class="row" style="margin-top:12px">
+        <div class="sw" style="background:#23D5A1;color:#07251c"><strong>Primary</strong><br>#23D5A1</div>
+        <div class="sw" style="background:#0A0F13"><strong>Background</strong><br>#0A0F13</div>
+        <div class="sw" style="background:#10161C"><strong>Surface</strong><br>#10161C</div>
+        <div class="sw" style="background:#131C25"><strong>Card</strong><br>#131C25</div>
+        <div class="sw" style="background:#F6B348;color:#2f1d00"><strong>Warning</strong><br>#F6B348</div>
+        <div class="sw" style="background:#FF5B6B;color:#3a060c"><strong>Error</strong><br>#FF5B6B</div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Semantic Use</h2>
+      <p class="meta" style="margin-top:8px">Primary action, risco/impacto, status e evidência seguem semântica consistente. Meta de contraste: <span class="ok">WCAG 2.1 AA</span>.</p>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <span class="chip">pending</span>
+        <span class="chip">running</span>
+        <span class="chip">completed</span>
+        <span class="chip">failed</span>
+        <span class="chip">blocked_policy</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

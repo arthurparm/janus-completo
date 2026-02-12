@@ -1,0 +1,455 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Janus UX Design Directions</title>
+  <style>
+    :root {
+      --bg: #0a0f13;
+      --surface: #10161c;
+      --card: #131c25;
+      --primary: #23d5a1;
+      --warning: #f6b348;
+      --error: #ff5b6b;
+      --text: #e6edf3;
+      --muted: #8ea2b4;
+      --line: #243140;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --radius: 12px;
+      --focus: 0 0 0 2px rgba(35, 213, 161, 0.5);
+      --font-body: "Sora", "Space Grotesk", system-ui, -apple-system, Segoe UI, sans-serif;
+      --font-head: "Space Grotesk", "Sora", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      background: radial-gradient(1200px 500px at 70% -20%, rgba(35,213,161,0.1), transparent), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .header {
+      display: grid;
+      gap: 8px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(16,22,28,0.95), rgba(10,15,19,0.95));
+    }
+
+    .header h1 {
+      margin: 0;
+      font-family: var(--font-head);
+      font-size: 24px;
+      letter-spacing: 0.2px;
+    }
+
+    .header p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #0f141a;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font: 600 13px/1 var(--font-head);
+      transition: 120ms ease;
+    }
+
+    .btn:hover { border-color: #3c4d60; transform: translateY(-1px); }
+    .btn:focus-visible { outline: none; box-shadow: var(--focus); }
+    .btn.active { border-color: var(--primary); color: var(--primary); }
+
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .canvas-wrap {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #0b1117;
+      min-height: 600px;
+    }
+
+    .direction {
+      display: none;
+      padding: 16px;
+      min-height: 600px;
+      gap: 12px;
+    }
+
+    .direction.active { display: grid; }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 12px;
+      color: #c6d6e3;
+      background: #13212b;
+      border: 1px solid #284050;
+      border-radius: 999px;
+      padding: 4px 8px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap: 12px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 12px;
+    }
+
+    .pane {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      min-height: 420px;
+    }
+
+    .pane h3 {
+      margin: 0;
+      font: 700 14px/1.2 var(--font-head);
+      color: #d8e4ee;
+    }
+
+    .list { display: grid; gap: 8px; }
+
+    .item {
+      padding: 10px;
+      border: 1px solid #243140;
+      border-radius: 10px;
+      background: var(--card);
+      display: grid;
+      gap: 6px;
+    }
+
+    .item .title { font-weight: 600; font-size: 13px; }
+    .item .sub { color: var(--muted); font-size: 12px; }
+
+    .status { font-family: var(--font-mono); font-size: 11px; color: #9adbbf; }
+    .status.warn { color: #ffd18f; }
+    .status.err { color: #ff9ca6; }
+
+    .composer {
+      border: 1px solid #2f4455;
+      background: #0f1720;
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .line {
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #1f2a34, #2c3a48);
+    }
+
+    .line.short { width: 38%; }
+    .line.med { width: 62%; }
+    .line.long { width: 84%; }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      border-radius: 10px;
+      border: 1px solid #2a4a3d;
+      color: #0a1914;
+      background: var(--primary);
+      font: 700 12px/1 var(--font-head);
+      padding: 8px 10px;
+    }
+
+    .cta.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: #304457;
+    }
+
+    .risk {
+      border-left: 3px solid var(--warning);
+      background: rgba(246,179,72,0.08);
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .risk.high {
+      border-left-color: var(--error);
+      background: rgba(255,91,107,0.08);
+    }
+
+    .kbar {
+      border: 1px dashed #2b3e4f;
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #9bb0c1;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .legend {
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+
+    .footer {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #0d131a;
+    }
+
+    .footer code { color: #b9f3df; }
+
+    @media (max-width: 1200px) {
+      .grid-3 { grid-template-columns: 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="header">
+      <h1>Janus Design Directions - Visual Exploration</h1>
+      <p>8 directions derived from your core loop, governance model, and dark enterprise foundation.</p>
+      <div class="toolbar" id="toolbar"></div>
+      <div class="meta">
+        <div><strong>Evaluation:</strong> layout intuition, action safety, feedback clarity, density comfort, keyboard flow.</div>
+        <div><strong>Core loop:</strong> converse -> validate -> approve -> execute -> evidence -> next step.</div>
+      </div>
+    </section>
+
+    <section class="canvas-wrap" id="canvas"></section>
+
+    <section class="footer">
+      <div><strong>How to use:</strong> select a direction, inspect structure and state handling, then decide: keep one, combine many, or request iteration.</div>
+      <div><strong>Output target:</strong> <code>_bmad-output/planning-artifacts/ux-design-directions.html</code></div>
+    </section>
+  </div>
+
+  <template id="direction-template">
+    <article class="direction">
+      <div>
+        <h2></h2>
+        <div class="badge-row"></div>
+      </div>
+      <div class="content"></div>
+      <p class="legend"></p>
+    </article>
+  </template>
+
+  <script>
+    const directions = [
+      {
+        id: "D1",
+        name: "Ops Cockpit 3-Pane",
+        tags: ["balanced", "audit-first", "high context"],
+        legend: "Best for operators who need simultaneous visibility of context, execution, and evidence.",
+        layout: `
+          <div class="grid-3">
+            <section class="pane"><h3>Context</h3><div class="list"><div class="item"><div class="title">Tenant Memory</div><div class="sub">Preferences, policy mode, prior outcomes</div></div><div class="item"><div class="title">Current Request</div><div class="sub">Summarized objective + constraints</div></div><div class="kbar">Ctrl+K: open command palette</div></div></section>
+            <section class="pane"><h3>Conversation + Plan</h3><div class="composer"><div class="line long"></div><div class="line med"></div><div class="line short"></div><button class="cta">Approve medium-risk plan</button></div><div class="item"><div class="title">Execution Plan</div><div class="sub">3 steps, 1 confirmation required</div><div class="status">run_id: janus-84531 (pending)</div></div></section>
+            <section class="pane"><h3>Execution Evidence</h3><div class="item"><div class="title">State Timeline</div><div class="sub">pending -> running -> completed</div><div class="status">event stream healthy</div></div><div class="item"><div class="title">Audit Trail</div><div class="sub">who approved, scope, timestamp</div><div class="status">policy: medium-risk explicit confirm</div></div></section>
+          </div>`
+      },
+      {
+        id: "D2",
+        name: "Linear Flowboard",
+        tags: ["keyboard-first", "speed", "dense ops"],
+        legend: "Best for high-throughput teams where rapid triage and execution speed are top priority.",
+        layout: `
+          <div class="grid-2">
+            <section class="pane"><h3>Queue + Shortcuts</h3><div class="kbar">A: approve | R: reject | E: execute | /: focus composer</div><div class="list"><div class="item"><div class="title">Task #3418</div><div class="sub">Sync permissions and notify owner</div><div class="status warn">awaiting confirmation</div></div><div class="item"><div class="title">Task #3421</div><div class="sub">Generate report dry-run</div><div class="status">auto-safe</div></div></div></section>
+            <section class="pane"><h3>Detail Rail</h3><div class="split"><div class="item"><div class="title">Suggested Next Action</div><div class="sub">Proceed with scoped approval</div><button class="cta">Confirm and run</button></div><div class="item"><div class="title">Risk Classifier</div><div class="sub">Medium risk - write on external system</div><button class="cta secondary">Change scope</button></div></div><div class="item"><div class="title">Result</div><div class="sub">Completed with notes, evidence attached</div><div class="status">run_id: janus-84592</div></div></section>
+          </div>`
+      },
+      {
+        id: "D3",
+        name: "Trust Ledger",
+        tags: ["governance", "compliance", "evidence"],
+        legend: "Best for environments where audit and accountability are first-class UX pillars.",
+        layout: `
+          <div class="grid-2">
+            <section class="pane"><h3>Action Composer</h3><div class="composer"><div class="line long"></div><div class="line long"></div><div class="risk high">Sensitive write detected. Explicit approval required.</div><button class="cta">Approve scoped action</button></div><div class="item"><div class="title">Scope Preview</div><div class="sub">Objects: 3 | Policy: high-risk HIL</div></div></section>
+            <section class="pane"><h3>Ledger Timeline</h3><div class="list"><div class="item"><div class="title">Policy Check</div><div class="sub">passed with warning</div><div class="status warn">guardrail triggered</div></div><div class="item"><div class="title">Approval Record</div><div class="sub">Arthur approved at 13:42:20</div><div class="status">signature verified</div></div><div class="item"><div class="title">Execution Record</div><div class="sub">External API write completed</div><div class="status">trace id: trc-1139</div></div></div></section>
+          </div>`
+      },
+      {
+        id: "D4",
+        name: "Guided Assistant Rail",
+        tags: ["clarity", "calm", "coaching"],
+        legend: "Best for mixed-skill teams needing explicit guidance at each stage.",
+        layout: `
+          <div class="grid-3">
+            <section class="pane"><h3>Journey Steps</h3><div class="list"><div class="item"><div class="title">1. Intent</div><div class="sub">define objective</div></div><div class="item"><div class="title">2. Validate</div><div class="sub">review plan and risk</div></div><div class="item"><div class="title">3. Execute</div><div class="sub">monitor progress</div></div><div class="item"><div class="title">4. Confirm</div><div class="sub">evidence + next step</div></div></div></section>
+            <section class="pane"><h3>Assistant Dialog</h3><div class="composer"><div class="line med"></div><div class="line long"></div><div class="line med"></div><button class="cta">Looks good, continue</button></div><div class="risk">System explains impact before action.</div></section>
+            <section class="pane"><h3>Confidence Panel</h3><div class="item"><div class="title">What changed</div><div class="sub">2 records updated, 1 notification sent</div></div><div class="item"><div class="title">Why this was safe</div><div class="sub">scope limited, rollback available</div></div></section>
+          </div>`
+      },
+      {
+        id: "D5",
+        name: "Command Center Minimal",
+        tags: ["minimal", "focus", "low noise"],
+        legend: "Best for reducing cognitive load while keeping critical controls visible.",
+        layout: `
+          <div class="grid-2">
+            <section class="pane"><h3>Single Focus Thread</h3><div class="composer"><div class="line long"></div><div class="line short"></div><button class="cta">Run safe actions</button><button class="cta secondary">Request approval</button></div><div class="item"><div class="title">Now Executing</div><div class="sub">sync tenant policy report</div><div class="status">eta: 18s</div></div></section>
+            <section class="pane"><h3>Essential Evidence</h3><div class="item"><div class="title">Outcome</div><div class="sub">completed with 0 critical issues</div></div><div class="item"><div class="title">Proof</div><div class="sub">run_id, logs, affected objects</div></div><div class="item"><div class="title">Governance</div><div class="sub">approval and scope captured</div></div></section>
+          </div>`
+      },
+      {
+        id: "D6",
+        name: "Evidence-First Timeline",
+        tags: ["timeline", "observability", "incident-ready"],
+        legend: "Best for troubleshooting-heavy scenarios where progress and evidence must stay front-and-center.",
+        layout: `
+          <div class="pane">
+            <h3>Unified Timeline</h3>
+            <div class="list">
+              <div class="item"><div class="title">13:42:20 - Plan validated</div><div class="sub">Risk: medium | approval requested</div></div>
+              <div class="item"><div class="title">13:42:27 - Approved by Arthur</div><div class="sub">Scope unchanged</div></div>
+              <div class="item"><div class="title">13:42:29 - Execution started</div><div class="sub">connector: calendar-api</div><div class="status">stream active</div></div>
+              <div class="item"><div class="title">13:42:39 - First evidence</div><div class="sub">object id: evt_99021</div></div>
+              <div class="item"><div class="title">13:42:52 - Completed</div><div class="sub">next suggestion available</div><div class="status">run_id: janus-99122</div></div>
+            </div>
+            <div class="split">
+              <button class="cta secondary">Open full logs</button>
+              <button class="cta">Apply next action</button>
+            </div>
+          </div>`
+      },
+      {
+        id: "D7",
+        name: "Policy-Aware Workspace",
+        tags: ["risk-adaptive", "enterprise", "safe autonomy"],
+        legend: "Best for organizations with strict policy tiers and adaptive approval workflows.",
+        layout: `
+          <div class="grid-3">
+            <section class="pane"><h3>Policy Matrix</h3><div class="item"><div class="title">Low risk</div><div class="sub">auto-execute enabled</div></div><div class="item"><div class="title">Medium risk</div><div class="sub">explicit confirm</div></div><div class="item"><div class="title">High risk</div><div class="sub">human-in-the-loop required</div></div></section>
+            <section class="pane"><h3>Task Execution</h3><div class="item"><div class="title">Detected risk: High</div><div class="sub">permission change in external system</div><div class="status err">approval blocking</div></div><div class="risk high">Execution blocked until approver confirms with scope token.</div><button class="cta">Request approver now</button></section>
+            <section class="pane"><h3>Assurance</h3><div class="item"><div class="title">What is protected</div><div class="sub">scope control, evidence requirement, rollback policy</div></div><div class="item"><div class="title">What user controls</div><div class="sub">approve, reject, edit scope, defer</div></div></section>
+          </div>`
+      },
+      {
+        id: "D8",
+        name: "Hybrid Adaptive Panels",
+        tags: ["responsive", "adaptive", "MVP ready"],
+        legend: "Best for MVP rollout: same logic adapts between 2-pane and 3-pane by task complexity.",
+        layout: `
+          <div class="pane">
+            <h3>Adaptive Layout Demo</h3>
+            <div class="split">
+              <div class="item"><div class="title">Mode A: 2-pane</div><div class="sub">Used for low/medium complexity tasks</div></div>
+              <div class="item"><div class="title">Mode B: 3-pane</div><div class="sub">Used when evidence rail is required</div></div>
+            </div>
+            <div class="grid-2" style="margin-top:12px;">
+              <section class="pane"><h3>Conversation + Controls</h3><div class="composer"><div class="line long"></div><div class="line med"></div><button class="cta">Execute with policy</button></div></section>
+              <section class="pane"><h3>Context/Evidence Rail</h3><div class="item"><div class="title">Live Status</div><div class="sub">running with checkpoints</div></div><div class="item"><div class="title">Audit Snapshot</div><div class="sub">approver, scope, timestamp</div></div></section>
+            </div>
+          </div>`
+      }
+    ];
+
+    const toolbar = document.getElementById("toolbar");
+    const canvas = document.getElementById("canvas");
+    const tpl = document.getElementById("direction-template");
+
+    function render() {
+      directions.forEach((d, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "btn" + (idx === 0 ? " active" : "");
+        btn.textContent = `${d.id} - ${d.name}`;
+        btn.dataset.target = d.id;
+        toolbar.appendChild(btn);
+
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        node.dataset.id = d.id;
+        if (idx === 0) node.classList.add("active");
+        node.querySelector("h2").textContent = `${d.id}: ${d.name}`;
+
+        const row = node.querySelector(".badge-row");
+        d.tags.forEach(t => {
+          const span = document.createElement("span");
+          span.className = "badge";
+          span.textContent = t;
+          row.appendChild(span);
+        });
+
+        node.querySelector(".content").innerHTML = d.layout;
+        node.querySelector(".legend").textContent = d.legend;
+        canvas.appendChild(node);
+      });
+
+      toolbar.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-target]");
+        if (!btn) return;
+        const target = btn.dataset.target;
+
+        [...toolbar.children].forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        [...canvas.children].forEach(panel => {
+          panel.classList.toggle("active", panel.dataset.id === target);
+        });
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>

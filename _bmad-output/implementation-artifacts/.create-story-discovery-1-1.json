@@ -1,0 +1,30 @@
+{
+  "epics_content": {
+    "mode": "SELECTIVE_LOAD",
+    "files": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\index.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-1-tenant-identidade-e-controle-de-acesso.md"
+    ]
+  },
+  "prd_content": {
+    "mode": "SELECTIVE_LOAD",
+    "files": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\prd.md"
+    ]
+  },
+  "architecture_content": {
+    "mode": "SELECTIVE_LOAD",
+    "files": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\architecture.md"
+    ]
+  },
+  "ux_content": {
+    "mode": "SELECTIVE_LOAD",
+    "files": []
+  },
+  "project_context": {
+    "files": [
+      "E:\\repos\\janus-completo\\docs\\project-overview.md"
+    ]
+  }
+}

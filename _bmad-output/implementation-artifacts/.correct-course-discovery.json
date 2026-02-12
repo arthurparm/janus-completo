@@ -1,0 +1,60 @@
+{
+  "mode": "discover_inputs/FULL_LOAD+INDEX_GUIDED",
+  "summary": {
+    "prd_content": 2,
+    "epics_content": 10,
+    "architecture_content": 1,
+    "ux_design_content": 1,
+    "tech_spec_content": 0,
+    "document_project_content": 22
+  },
+  "files": {
+    "prd_content": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\prd-validation-report.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\prd.md"
+    ],
+    "epics_content": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\index.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-1-tenant-identidade-e-controle-de-acesso.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-2-conversa-contextual-e-assistncia-proativa.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-3-execuo-assistida-com-governana-de-risco.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-4-integraes-externas-e-recuperao-operacional.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-5-auditoria-compliance-e-direitos-de-dados.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-6-contratos-de-produto-e-administrao-operacional.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-list.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\overview.md",
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\requirements-inventory.md"
+    ],
+    "architecture_content": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\architecture.md"
+    ],
+    "ux_design_content": [
+      "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\ux-design-specification.md"
+    ],
+    "tech_spec_content": [],
+    "document_project_content": [
+      "E:\\repos\\janus-completo\\docs\\index.md",
+      "E:\\repos\\janus-completo\\docs\\project-overview.md",
+      "E:\\repos\\janus-completo\\docs\\source-tree-analysis.md",
+      "E:\\repos\\janus-completo\\docs\\integration-architecture.md",
+      "E:\\repos\\janus-completo\\docs\\architecture-front.md",
+      "E:\\repos\\janus-completo\\docs\\api-contracts-front.md",
+      "E:\\repos\\janus-completo\\docs\\data-models-front.md",
+      "E:\\repos\\janus-completo\\docs\\component-inventory-front.md",
+      "E:\\repos\\janus-completo\\docs\\development-guide-front.md",
+      "E:\\repos\\janus-completo\\docs\\architecture-janus.md",
+      "E:\\repos\\janus-completo\\docs\\api-contracts-janus.md",
+      "E:\\repos\\janus-completo\\docs\\data-models-janus.md",
+      "E:\\repos\\janus-completo\\docs\\component-inventory-janus.md",
+      "E:\\repos\\janus-completo\\docs\\development-guide-janus.md",
+      "E:\\repos\\janus-completo\\docs\\deployment-guide.md",
+      "E:\\repos\\janus-completo\\docs\\contribution-guide.md",
+      "E:\\repos\\janus-completo\\front\\README.md",
+      "E:\\repos\\janus-completo\\front\\CONTRIBUTING.md",
+      "E:\\repos\\janus-completo\\front\\src\\app\\core\\README.md",
+      "E:\\repos\\janus-completo\\front\\src\\app\\shared\\README.md",
+      "E:\\repos\\janus-completo\\janus\\docs\\RAG_HYDE.md",
+      "E:\\repos\\janus-completo\\janus\\docs\\qdrant_resilience_improvements.md"
+    ]
+  }
+}

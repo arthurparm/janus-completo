@@ -1,0 +1,86 @@
+# generated: 2026-02-12 10:49
+# project: janus-completo
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-12 10:49
+project: janus-completo
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-set-up-initial-project-from-starter-template: ready-for-dev
+  1-2-gestao-de-configuracoes-base-por-tenant: backlog
+  1-3-politicas-de-acesso-e-rbac-tenant-aware: backlog
+  1-4-autenticacao-por-provedor-externo-com-contexto-de-tenant: backlog
+  1-5-revogacao-de-sessoes-e-acessos-ativos: backlog
+  1-6-isolamento-de-dados-por-tenant-em-fluxos-criticos: backlog
+  epic-1-retrospective: optional
+  epic-2: backlog
+  2-1-composer-conversacional-continuo-no-painel-central: backlog
+  2-2-memoria-contextual-persistente-e-retomada-de-contexto: backlog
+  2-3-sugestoes-proativas-de-proxima-melhor-acao: backlog
+  2-4-ciclo-aceitar-ajustar-ou-rejeitar-sugestao: backlog
+  2-5-registro-auditavel-do-contexto-de-decisao-proativa: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-planejamento-de-execucao-com-classificacao-de-risco-por-acao: backlog
+  3-2-fluxo-de-consentimento-explicito-para-acoes-sensiveis: backlog
+  3-3-aprovacao-humana-obrigatoria-para-alto-risco: backlog
+  3-4-orquestracao-de-execucao-multi-etapas-com-estado-rastreavel: backlog
+  3-5-cancelamento-controlado-recuperacao-e-fallback-operacional: backlog
+  3-6-resultado-final-verificavel-com-evidencias-e-proximos-passos: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-catalogo-de-integracoes-habilitaveis-por-tenant: backlog
+  4-2-fluxo-oauth-de-conexao-de-conta-externa: backlog
+  4-3-deteccao-de-autorizacao-invalida-e-reautorizacao-guiada: backlog
+  4-4-aplicacao-de-quotas-por-usuario-e-por-tenant: backlog
+  4-5-recuperacao-operacional-em-bloqueios-de-integracao: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-trilha-de-auditoria-imutavel-para-acoes-e-decisoes: backlog
+  5-2-painel-de-auditoria-com-filtros-e-detalhe-de-evidencias: backlog
+  5-3-evidencia-explicavel-de-decisoes-automaticas: backlog
+  5-4-solicitacao-de-direitos-de-dados-com-validacao-de-autorizacao: backlog
+  5-5-fluxo-de-acesso-exportacao-com-sla-e-rastreabilidade: backlog
+  5-6-fluxo-de-exclusao-conforme-politica-aplicavel: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  6-1-registro-versionado-de-contratos-rest-e-eventos: backlog
+  6-2-portal-de-mudancas-e-depreciacao-de-contratos: backlog
+  6-3-paineis-administrativos-de-uso-e-auditoria-por-tenant: backlog
+  6-4-gestao-de-incidentes-operacionais-vinculados-as-capacidades: backlog
+  epic-6-retrospective: optional

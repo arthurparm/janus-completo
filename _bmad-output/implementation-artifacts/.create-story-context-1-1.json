@@ -1,0 +1,149 @@
+{
+  "story_key": "1-1-set-up-initial-project-from-starter-template",
+  "story_id": "1.1",
+  "epic_num": 1,
+  "story_num": 1,
+  "epic_title": "Tenant, Identidade e Controle de Acesso",
+  "epic_objective": "Permitir operação segura por tenant com autenticação, segregação e políticas de acesso como base funcional independente.",
+  "all_story_titles": [
+    "1.1 Set up initial project from starter template",
+    "1.2 Gestão de configurações base por tenant",
+    "1.3 Políticas de acesso e RBAC tenant-aware",
+    "1.4 Autenticação por provedor externo com contexto de tenant",
+    "1.5 Revogação de sessões e acessos ativos",
+    "1.6 Isolamento de dados por tenant em fluxos críticos"
+  ],
+  "story_title": "Set up initial project from starter template",
+  "role": "engenheiro de plataforma",
+  "action": "inicializar o monorepo com Nx incremental sobre a base atual e preparar o módulo inicial de tenant",
+  "benefit": "o time tenha fundação técnica e escopo multi-tenant prontos para evoluir com segurança",
+  "frs": [
+    "FR1",
+    "FR2",
+    "FR3",
+    "FR4",
+    "FR5",
+    "FR6"
+  ],
+  "fr_detail": {
+    "FR1": "Usuários podem pertencer a um tenant específico para operar o produto.",
+    "FR2": "Administradores podem criar e manter configurações de tenant.",
+    "FR3": "Administradores podem definir políticas de acesso por tenant.",
+    "FR4": "Usuários podem autenticar-se por provedores externos suportados.",
+    "FR5": "Administradores podem revogar sessões e acessos ativos de usuários.",
+    "FR6": "Sistema pode aplicar segregação de dados por tenant em todas as capacidades funcionais."
+  },
+  "acceptance_scenarios": [
+    [
+      "**Given** o repositório atual com frontend e backend existentes",
+      "**When** a inicialização incremental do Nx é executada e validada em CI",
+      "**Then** o workspace fica configurado sem rebootstrap dos apps existentes",
+      "**And** comandos de build/test/lint podem ser executados por projetos afetados."
+    ],
+    [
+      "**Given** a fundação inicial criada",
+      "**When** o módulo base de tenant é provisionado no backend",
+      "**Then** a aplicação passa a operar com contexto explícito de `tenant_id`",
+      "**And** o setup inicial fica registrado com evidência de execução e auditoria."
+    ]
+  ],
+  "nfr_relevant": [
+    {
+      "id": "NFR1",
+      "text": "Fluxos de interação de chat devem apresentar primeira resposta parcial em até 2 segundos (p95) em condições normais de operação, medido continuamente por APM."
+    },
+    {
+      "id": "NFR2",
+      "text": "Ações de produtividade síncronas devem retornar status inicial em até 3 segundos para pelo menos 95% das requisições, medido por tracing de API."
+    },
+    {
+      "id": "NFR3",
+      "text": "Painéis de auditoria por tenant devem carregar filtros principais em até 5 segundos para pelo menos 95% das consultas padrão, medido por monitoramento sintético diário."
+    },
+    {
+      "id": "NFR5",
+      "text": "Dados em repouso devem permanecer criptografados com AES-256 em 100% dos armazenamentos de produção, verificado por varredura automatizada diária e auditoria mensal."
+    },
+    {
+      "id": "NFR6",
+      "text": "Segredos e chaves devem ser rotacionados no máximo a cada 90 dias, com 100% dos segredos catalogados por ambiente e conformidade medida por job diário de inventário."
+    },
+    {
+      "id": "NFR7",
+      "text": "Ações classificadas como alto risco devem exigir aprovação humana em 100% dos casos antes da execução, auditado mensalmente por trilhas de governança."
+    },
+    {
+      "id": "NFR8",
+      "text": "Operações de DSAR (acesso, exportação, exclusão) devem manter trilha auditável completa em 100% dos casos; SLA: acesso/exportação em até 15 dias corridos e exclusão em até 30 dias, medido mensalmente."
+    },
+    {
+      "id": "NFR9",
+      "text": "Quotas, trilhas e políticas devem ser aplicadas com particionamento por tenant em 100% dos fluxos críticos, validado por testes mensais de isolamento."
+    },
+    {
+      "id": "NFR10",
+      "text": "Transferências para provedores externos/LLMs devem aplicar política de residência de dados em 100% das requisições, com bloqueio automático em violações e medição por logs do policy engine."
+    },
+    {
+      "id": "NFR11",
+      "text": "Fluxos críticos (chat stream, execução assistida e auditoria) devem operar com SLO definido e monitoramento ativo."
+    }
+  ],
+  "architecture_extract": [
+    {
+      "line": 96,
+      "text": "A melhor decisao arquitetural de \"starter\" para este projeto ja existente e adotar uma base incremental de orquestracao monorepo sem rebootstrap de frontend/backend. Nx init preserva Angular/FastAPI atuais e melhora governanca de escala (build/test/ci por impacto)."
+    },
+    {
+      "line": 101,
+      "text": "npx nx@latest init"
+    },
+    {
+      "line": 185,
+      "text": "- **CI/CD minimo obrigatorio:**"
+    },
+    {
+      "line": 161,
+      "text": "- **Autorizacao:** RBAC alinhado ao PRD (Owner/Admin/Operator/Auditor/Integration Service) com scoping obrigatorio por `tenant_id`."
+    },
+    {
+      "line": 68,
+      "text": "- Observabilidade operacional com correlacao por tenant/usuario/acao/fluxo"
+    },
+    {
+      "line": 177,
+      "text": "- **Arquitetura de componentes:** manter `core / features / shared` e componentes enxutos."
+    },
+    {
+      "line": 506,
+      "text": "- Backend async path: endpoint/service -> broker -> worker -> persistencia/eventos."
+    },
+    {
+      "line": 44,
+      "text": "Ha 23 NFRs mensuraveis com impacto arquitetural direto: seguranca (TLS 1.2+, AES-256, rotacao de segredos), compliance (DSAR com SLA, LGPD/GDPR-ready, SOC2-ready), confiabilidade (SLO/error budget, RTO/RPO, runbooks), estabilidade de integracao (versionamento semantico REST/SSE + contract tests com gate de CI), escalabilidade (3x carga por tenant), observabilidade correlacionavel (tenant/usuario/acao/fluxo) e acessibilidade (WCAG 2.1 AA)."
+    },
+    {
+      "line": 170,
+      "text": "- **Contrato de erro:** `application/problem+json` como padrao."
+    }
+  ],
+  "project_tech_summary": [
+    "**Arquitetura:** Frontend SPA Angular + Backend FastAPI orientado a servicos e workers",
+    "O repositorio `janus-completo` organiza um sistema agentico de IA com duas partes principais: `front` (Angular 20) e `janus` (API FastAPI com motor de agentes, memoria, observabilidade e automacao). O frontend consome a API via REST e SSE, enquanto o backend integra Redis, RabbitMQ, Neo4j, Qdrant e Postgres para processamento de conversa, memoria e operacao autonoma.",
+    "**Stack:** Angular 20, RxJS, TailwindCSS, Vitest, Firebase SDK",
+    "**Stack:** Python 3.11, FastAPI, SQLAlchemy, LangChain, Redis, RabbitMQ, Neo4j, Qdrant, PostgreSQL",
+    "Fluxo de streaming usa SSE em `GET /api/v1/chat/stream/{conversation_id}`.",
+    "Testes: Vitest + Testing Library",
+    "Framework: FastAPI + Uvicorn",
+    "Dados: SQLAlchemy (Postgres), Neo4j, Qdrant, Redis",
+    "Fila/Eventos: RabbitMQ (`aio-pika`/`pika`)",
+    "Conversa assistida por agentes com streaming SSE.",
+    "**Testes principais:** `cd front && npm run test` e `cd janus && pytest`"
+  ],
+  "files": {
+    "epic_file": "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\epics\\epic-1-tenant-identidade-e-controle-de-acesso.md",
+    "prd_file": "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\prd.md",
+    "architecture_file": "E:\\repos\\janus-completo\\_bmad-output\\planning-artifacts\\architecture.md",
+    "project_overview": "E:\\repos\\janus-completo\\docs\\project-overview.md"
+  }
+}
