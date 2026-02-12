@@ -28,7 +28,14 @@ class GraphDBProtocol(Protocol):
         self, cypher_query: str, params: dict[str, Any] | None = None, operation: str | None = None
     ) -> None: ...
 
-    async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> str: ...
+    async def merge_node(
+        self,
+        tx: AsyncTransaction,
+        label: str,
+        name: str,
+        properties: dict[str, Any] | None = None,
+        merge_keys: list[str] | None = None,
+    ) -> str: ...
 
     async def merge_relationship(
         self, tx: AsyncTransaction, source_id: str, target_id: str, rel_type: str

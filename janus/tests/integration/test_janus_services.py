@@ -158,7 +158,7 @@ class TestAutonomyService:
 
             assert config.interval_seconds == 60
             assert config.risk_profile == "balanced"
-            assert config.auto_confirm
+            assert not config.auto_confirm
             assert config.max_actions_per_cycle == 20
 
             print("✓ AutonomyConfig defaults correct")

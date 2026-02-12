@@ -48,7 +48,7 @@ class AutonomyConfig:
     user_id: str | None = None
     project_id: str | None = None
     risk_profile: str = "balanced"
-    auto_confirm: bool = True
+    auto_confirm: bool = False
     allowlist: list[str] = field(default_factory=list)
     blocklist: list[str] = field(default_factory=list)
     max_actions_per_cycle: int = 20
@@ -70,7 +70,8 @@ class AutonomyService:
         self._llm_service = llm_service
         self._goal_manager = goal_manager
         self._config = AutonomyConfig()
-        self._policy = PolicyEngine(PolicyConfig())
+        # Safe-by-default: require explicit approval before action execution.
+        self._policy = PolicyEngine(PolicyConfig(auto_confirm=False))
         self._autonomy_task: asyncio.Task | None = None
         self._running = False
         self._cycle_count = 0

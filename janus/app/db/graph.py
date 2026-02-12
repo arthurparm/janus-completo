@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import re
+from typing import Any
 
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession, AsyncTransaction
 from prometheus_client import Counter, Histogram
@@ -565,10 +567,37 @@ class GraphDatabase:
                 await tx.close()
         return total_updated
 
-    async def merge_node(self, tx: AsyncTransaction, label: str, name: str) -> str:
-        query = f"MERGE (n:{label} {{name: $name}}) RETURN elementId(n) as node_id"
+    async def merge_node(
+        self,
+        tx: AsyncTransaction,
+        label: str,
+        name: str,
+        properties: dict[str, Any] | None = None,
+        merge_keys: list[str] | None = None,
+    ) -> str:
+        props = dict(properties or {})
+        props.setdefault("name", name)
+        keys = merge_keys or ["name"]
+
+        merge_parts: list[str] = []
+        merge_params: dict[str, Any] = {}
+
+        for key in keys:
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                raise ValueError(f"Invalid merge key for graph node: {key}")
+
+            key_value = props.get(key)
+            if key_value is None:
+                raise ValueError(f"Missing required merge key '{key}' for graph node merge")
+
+            param_name = f"merge_{key}"
+            merge_parts.append(f"{key}: ${param_name}")
+            merge_params[param_name] = key_value
+
+        merge_clause = ", ".join(merge_parts)
+        query = f"MERGE (n:{label} {{{merge_clause}}}) SET n += $props RETURN elementId(n) as node_id"
         start = asyncio.get_event_loop().time()
-        result = await tx.run(query, name=name)
+        result = await tx.run(query, **merge_params, props=props)
         record = await result.single()
         try:
             _DB_QUERIES.labels("merge_node", "success").inc()

@@ -1,4 +1,4 @@
-from typing import Any
+﻿from typing import Any
 
 import structlog
 from fastapi import Depends
@@ -13,7 +13,7 @@ logger = structlog.get_logger(__name__)
 
 class KnowledgeRepository:
     """
-    Camada de Repositório para o Grafo de Conhecimento.
+    Camada de RepositÃ³rio para o Grafo de Conhecimento.
     Usa Enums para todas as constantes do grafo, evitando "magic strings".
     """
 
@@ -65,11 +65,32 @@ class KnowledgeRepository:
                 func_label = f"{GraphLabel.FUNCTION.value}:{GraphLabel.CODE_FUNCTION.value}"
                 cls_label = f"{GraphLabel.CLASS.value}:{GraphLabel.CODE_CLASS.value}"
 
-                file_id = await self._db.merge_node(tx, label=file_label, name=parser.file_path)
+                file_props = {
+                    "name": parser.file_path,
+                    "path": parser.file_path,
+                    "file_path": parser.file_path,
+                }
+                file_id = await self._db.merge_node(
+                    tx,
+                    label=file_label,
+                    name=parser.file_path,
+                    properties=file_props,
+                    merge_keys=["path"],
+                )
                 for func in parser.functions:
-                    func_name_with_path = f"{parser.file_path}::{func['name']}"
+                    func_name = func["name"]
+                    func_props = {
+                        "name": func_name,
+                        "file_path": parser.file_path,
+                        "full_name": f"{parser.file_path}::{func_name}",
+                        "line": func.get("line"),
+                    }
                     func_id = await self._db.merge_node(
-                        tx, label=func_label, name=func_name_with_path
+                        tx,
+                        label=func_label,
+                        name=func_name,
+                        properties=func_props,
+                        merge_keys=["name", "file_path"],
                     )
                     await self._db.merge_relationship(
                         tx,
@@ -78,8 +99,20 @@ class KnowledgeRepository:
                         rel_type=GraphRelationship.CONTAINS.value,
                     )
                 for cls in parser.classes:
-                    cls_name_with_path = f"{parser.file_path}::{cls['name']}"
-                    cls_id = await self._db.merge_node(tx, label=cls_label, name=cls_name_with_path)
+                    cls_name = cls["name"]
+                    cls_props = {
+                        "name": cls_name,
+                        "file_path": parser.file_path,
+                        "full_name": f"{parser.file_path}::{cls_name}",
+                        "line": cls.get("line"),
+                    }
+                    cls_id = await self._db.merge_node(
+                        tx,
+                        label=cls_label,
+                        name=cls_name,
+                        properties=cls_props,
+                        merge_keys=["name", "file_path"],
+                    )
                     await self._db.merge_relationship(
                         tx,
                         source_id=file_id,
@@ -98,7 +131,7 @@ class KnowledgeRepository:
         return count_result[0]["total"] if count_result else 0
 
     async def delete_user_data(self, user_id: int) -> int:
-        """Remove todos os nós associados a um user_id específico."""
+        """Remove todos os nÃ³s associados a um user_id especÃ­fico."""
         query = "MATCH (n {user_id: $user_id}) DETACH DELETE n"
         await self._db.execute(query, {"user_id": user_id}, operation="repo_delete_user_data")
         return 0
@@ -111,8 +144,12 @@ class KnowledgeRepository:
         if not calls:
             return
         query = f"""UNWIND $calls as call
-                     MATCH (caller:{GraphLabel.FUNCTION.value} {{name: call.file_path + '::' + call.caller_name}})
-                     MATCH (callee:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
+                     MATCH (caller:{GraphLabel.FUNCTION.value} {{name: call.caller_name, file_path: call.file_path}})
+                     OPTIONAL MATCH (callee_same:{GraphLabel.FUNCTION.value} {{name: call.callee_name, file_path: call.file_path}})
+                     WITH caller, call, head(collect(callee_same)) as callee_same
+                     OPTIONAL MATCH (callee_any:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
+                     WITH caller, coalesce(callee_same, head(collect(callee_any))) as callee
+                     WHERE callee IS NOT NULL
                      MERGE (caller)-[r:`{GraphRelationship.CALLS.value}`]->(callee)"""
         await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
         try:
@@ -121,11 +158,11 @@ class KnowledgeRepository:
             pass
 
     async def dedupe_functions_and_classes(self) -> dict[str, int]:
-        """Deduplica nós Function/Class mantendo relacionamentos chave."""
+        """Deduplica nÃ³s Function/Class mantendo relacionamentos chave."""
         functions_fixed = 0
         classes_fixed = 0
 
-        # Funções duplicadas por (name, file_path)
+        # FunÃ§Ãµes duplicadas por (name, file_path)
         func_scan = f"""
         MATCH (f:{GraphLabel.FUNCTION.value})
         WITH f.name as name, f.file_path as fp, collect(elementId(f)) as fs
@@ -201,7 +238,7 @@ class KnowledgeRepository:
         return {"functions_fixed": functions_fixed, "classes_fixed": classes_fixed}
 
     async def dedupe_concepts(self) -> dict[str, int]:
-        """Deduplica conceitos por nome e mantém RELATES_TO."""
+        """Deduplica conceitos por nome e mantÃ©m RELATES_TO."""
         fixed = 0
         scan = f"""
         MATCH (c:{GraphLabel.CONCEPT.value})
@@ -239,7 +276,7 @@ class KnowledgeRepository:
         return {"fixed": fixed}
 
     async def dedupe_files(self) -> dict[str, int]:
-        """Deduplica arquivos por path e mantém RELATES_TO."""
+        """Deduplica arquivos por path e mantÃ©m RELATES_TO."""
         files_fixed = 0
         scan = f"""
         MATCH (f:{GraphLabel.FILE.value})
@@ -278,7 +315,7 @@ class KnowledgeRepository:
 
         return {"files_fixed": files_fixed}
 
-    # --- Sprint 8: Consultas semânticas ---
+    # --- Sprint 8: Consultas semÃ¢nticas ---
 
     async def find_related_concepts(
         self, concept: str, max_depth: int = 2, limit: int = 10, skip: int = 0
@@ -305,8 +342,8 @@ class KnowledgeRepository:
         limit: int = 20,
         skip: int = 0,
     ) -> list[dict[str, Any]]:
-        # Navega relacionamentos a partir de uma entidade com direção e profundidade configuráveis
-        # direction: "out" (saída), "in" (entrada), "both" (ambas)
+        # Navega relacionamentos a partir de uma entidade com direÃ§Ã£o e profundidade configurÃ¡veis
+        # direction: "out" (saÃ­da), "in" (entrada), "both" (ambas)
         if direction not in ("out", "in", "both"):
             direction = "both"
         if direction == "out":
@@ -374,7 +411,7 @@ class KnowledgeRepository:
         params = {"protocol": protocol}
         return await self._db.query(query, params, operation="repo_find_classes_implementing")
 
-    # --- Consolidação inicial de conhecimento a partir de experiências ---
+    # --- ConsolidaÃ§Ã£o inicial de conhecimento a partir de experiÃªncias ---
     async def merge_experience_mentions(
         self, experience: dict[str, Any], concepts: list[str]
     ) -> None:
@@ -391,11 +428,11 @@ class KnowledgeRepository:
                     if (experience.get("type") == "reflection")
                     else GraphLabel.ENTITY.value
                 )
-                # Usa Experience como label primário para auditabilidade
+                # Usa Experience como label primÃ¡rio para auditabilidade
                 exp_node_label = f"Experience:{exp_label}"
                 exp_key = exp_id or (content[:64] if content else "exp")
                 exp_node_id = await self._db.merge_node(tx, label=exp_node_label, name=str(exp_key))
-                # Atualiza propriedades básicas
+                # Atualiza propriedades bÃ¡sicas
                 await self._db.execute(
                     """
                     MATCH (e:Experience {name: $name})
@@ -428,6 +465,8 @@ class KnowledgeRepository:
                 await tx.close()
 
 
-# Padrão de Injeção de Dependência: Getter para o repositório
+# PadrÃ£o de InjeÃ§Ã£o de DependÃªncia: Getter para o repositÃ³rio
 def get_knowledge_repository(db: GraphDatabase = Depends(get_graph_db)) -> "KnowledgeRepository":
     return KnowledgeRepository(db)
+
+

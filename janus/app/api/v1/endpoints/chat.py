@@ -55,6 +55,7 @@ class ChatMessageResponse(BaseModel):
     conversation_id: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
     ui: dict[str, Any] | None = None
+    understanding: dict[str, Any] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -63,6 +64,7 @@ class ChatMessage(BaseModel):
     text: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
     ui: dict[str, Any] | None = None
+    understanding: dict[str, Any] | None = None
 
 
 class ChatHistoryResponse(BaseModel):

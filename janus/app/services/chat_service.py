@@ -120,6 +120,118 @@ class ChatService:
     def _split_ui(self, text: str) -> tuple[str, dict[str, Any] | None]:
         return extract_ui_block(text)
 
+    def _build_understanding_payload(self, message: str) -> dict[str, Any] | None:
+        normalized = " ".join((message or "").strip().split())
+        if not normalized:
+            return None
+
+        lowered = normalized.lower()
+        intent = "general"
+        base_confidence = 0.60
+        requires_confirmation = False
+        signals: list[str] = []
+
+        intent_specs: list[tuple[str, tuple[str, ...], float, bool]] = [
+            (
+                "reminder",
+                (
+                    "lembrete",
+                    "lembrar",
+                    "me lembra",
+                    "reminder",
+                    "remind me",
+                    "avisa",
+                    "avisar",
+                ),
+                0.86,
+                True,
+            ),
+            (
+                "documentation_query",
+                (
+                    "documentacao",
+                    "documentação",
+                    "docs",
+                    "readme",
+                    "manual",
+                    "sdk",
+                    "openapi",
+                    "api reference",
+                    "spec",
+                ),
+                0.82,
+                False,
+            ),
+            (
+                "action_request",
+                (
+                    "crie",
+                    "criar",
+                    "implemente",
+                    "implementar",
+                    "faça",
+                    "faca",
+                    "adicione",
+                    "gere",
+                    "executa",
+                    "execute",
+                    "build",
+                ),
+                0.78,
+                True,
+            ),
+        ]
+
+        for candidate_intent, keywords, confidence, needs_confirmation in intent_specs:
+            matched = [kw for kw in keywords if kw in lowered]
+            if matched:
+                intent = candidate_intent
+                base_confidence = confidence
+                requires_confirmation = needs_confirmation
+                signals = matched
+                break
+
+        if intent == "general":
+            question_leads = (
+                "como",
+                "qual",
+                "quais",
+                "quando",
+                "porque",
+                "por que",
+                "what",
+                "how",
+                "why",
+                "can you",
+            )
+            if normalized.endswith("?") or any(lowered.startswith(k) for k in question_leads):
+                intent = "question"
+                base_confidence = 0.72
+
+        summary = normalized
+        if len(summary) > 180:
+            summary = f"{summary[:177].rstrip()}..."
+
+        confidence = min(0.95, base_confidence + (0.03 * min(len(signals), 3)))
+        payload: dict[str, Any] = {
+            "intent": intent,
+            "summary": summary,
+            "confidence": round(confidence, 2),
+            "requires_confirmation": requires_confirmation,
+        }
+        if signals:
+            payload["signals"] = signals[:5]
+        return payload
+
+    def _attach_understanding(
+        self,
+        payload: dict[str, Any],
+        understanding: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if understanding and isinstance(payload, dict) and payload.get("understanding") is None:
+            payload["understanding"] = understanding
+        return payload
+
     def _is_explicit_tool_creation(self, message: str) -> bool:
         if not message:
             return False
@@ -211,6 +323,7 @@ class ChatService:
             size_bytes = len(message) if message else 0
         if message and size_bytes > max_bytes:
             raise MessageTooLargeError(size_bytes, max_bytes)
+        understanding = self._build_understanding_payload(message)
 
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
@@ -267,13 +380,13 @@ class ChatService:
                 }
                 if ui:
                     result["ui"] = ui
-                return result
+                return self._attach_understanding(result, understanding)
 
         # Intercepta fluxo de descoberta interativa de ferramentas/configuração
         if self._prompt_service.is_discovery_query(message):
             start_t = _time.time()
             assistant_text = self._prompt_service.render_discovery_intro(self._tools)
-            _clean_text, ui = self._split_ui(assistant_text)
+            clean_text, ui = self._split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -322,7 +435,7 @@ class ChatService:
                 )
             except Exception:
                 pass
-            return result_with_conv
+            return self._attach_understanding(result_with_conv, understanding)
 
         # Intercepta geração automática de documentação das ferramentas
         if self._prompt_service.is_docs_query(message):
@@ -376,7 +489,7 @@ class ChatService:
                 )
             except Exception:
                 pass
-            return result_with_conv
+            return self._attach_understanding(result_with_conv, understanding)
 
         # Intercepta perguntas sobre capacidades/ferramentas e responde com dados locais
         if self._prompt_service.is_capabilities_query(message):
@@ -430,7 +543,7 @@ class ChatService:
                 )
             except Exception:
                 pass
-            return result_with_conv
+            return self._attach_understanding(result_with_conv, understanding)
 
         # Intercepta solicitaÇõÇœes de criaÇõÇœo de ferramentas
         if self._prompt_service.is_tool_request(message) and self._is_explicit_tool_creation(message):
@@ -492,7 +605,7 @@ class ChatService:
                 )
             except Exception:
                 pass
-            return result_with_conv
+            return self._attach_understanding(result_with_conv, understanding)
 
         # Agent Loop Execution (Phase 2 refactoring - using ChatAgentLoop service)
         try:
@@ -626,7 +739,7 @@ class ChatService:
             )
         except Exception:
             pass
-        return result_with_conv
+        return self._attach_understanding(result_with_conv, understanding)
 
     def get_history(
         self,
@@ -858,6 +971,7 @@ class ChatService:
         except Exception:
             pass
 
+        understanding = self._build_understanding_payload(message)
         conv = None
         try:
             conv = self._repo.get_conversation(conversation_id)
@@ -968,6 +1082,8 @@ class ChatService:
             _, ui = self._split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
+            if understanding:
+                done_payload["understanding"] = understanding
             _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             try:
@@ -1035,6 +1151,8 @@ class ChatService:
             _, ui = self._split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
+            if understanding:
+                done_payload["understanding"] = understanding
             _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             return
@@ -1111,6 +1229,8 @@ class ChatService:
             _, ui = self._split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
+            if understanding:
+                done_payload["understanding"] = understanding
             _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             try:
@@ -1345,6 +1465,9 @@ class ChatService:
             }
             if ui:
                 done_payload["ui"] = ui
+            result_understanding = result.get("understanding") if isinstance(result, dict) else None
+            if result_understanding or understanding:
+                done_payload["understanding"] = result_understanding or understanding
             _done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {_done}\n\n"
             self._cb_on_success(current_provider)
@@ -1583,3 +1706,4 @@ def get_chat_service(request: Request) -> ChatService:
     return request.app.state.chat_service
 
     # --- Helpers ---
+

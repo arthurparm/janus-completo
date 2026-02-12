@@ -20,7 +20,7 @@ class AutonomyStartRequest(BaseModel):
     user_id: str | None = None
     project_id: str | None = None
     risk_profile: str = Field("balanced", description="conservative|balanced|aggressive")
-    auto_confirm: bool = True
+    auto_confirm: bool = False
     allowlist: list[str] = []
     blocklist: list[str] = []
     max_actions_per_cycle: int = Field(20, ge=1, le=1000)
