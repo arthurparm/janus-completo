@@ -2,25 +2,20 @@ import { TestBed } from '@angular/core/testing'
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
 import { AuthService } from './auth.service'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
-import { Auth, signInWithEmailAndPassword } from '@angular/fire/auth'
-import { vi } from 'vitest'
 
 describe('AuthService', () => {
   let svc: AuthService
   let http: HttpTestingController
-  let authStateCallback: ((user: any) => Promise<void>) | null = null
-  const authMock = {
-    onAuthStateChanged: vi.fn((cb: (user: any) => Promise<void>) => {
-      authStateCallback = cb
-      return () => {}
-    })
-  }
 
   beforeEach(() => {
+    // Ensure clean state before service init
+    localStorage.clear()
+
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [{ provide: Auth, useValue: authMock }]
+      providers: [AuthService]
     })
+
     svc = TestBed.inject(AuthService)
     http = TestBed.inject(HttpTestingController)
   })
@@ -28,31 +23,71 @@ describe('AuthService', () => {
   afterEach(() => {
     http.verify()
     localStorage.clear()
-    vi.clearAllMocks()
   })
 
-  it('deve fazer login com senha via Firebase', async () => {
-    vi.mocked(signInWithEmailAndPassword).mockResolvedValueOnce({} as any)
-    const ok = await svc.loginWithPassword('a@b.com', '123456', true)
-    expect(signInWithEmailAndPassword).toHaveBeenCalledWith(authMock, 'a@b.com', '123456')
-    expect(ok).toBe(true)
-  })
-
-  it('deve realizar exchange e salvar token Janus', async () => {
-    const firebaseUser = {
-      isAnonymous: false,
-      uid: 'uid-123',
-      email: 'a@b.com',
-      getIdToken: vi.fn().mockResolvedValue('firebase.jwt')
+  it('deve fazer login com senha via API', async () => {
+    const mockResponse = {
+      token: 'fake-jwt-token',
+      user: {
+        id: '123',
+        email: 'test@example.com',
+        roles: ['user']
+      }
     }
 
-    const authPromise = authStateCallback?.(firebaseUser)
-    await Promise.resolve()
-    const req = http.expectOne(`${API_BASE_URL}/v1/auth/firebase/exchange`)
-    expect(req.request.body).toEqual({ token: 'firebase.jwt' })
-    req.flush({ token: 'janus.jwt', user: { id: 'uid-123', roles: ['user'], permissions: ['read'] } })
-    await authPromise
+    const loginPromise = svc.loginWithPassword('test@example.com', '123456', true)
 
-    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    expect(req.request.method).toBe('POST')
+    expect(req.request.body).toEqual({
+      email: 'test@example.com',
+      password: '123456'
+    })
+
+    req.flush(mockResponse)
+
+    const result = await loginPromise
+    expect(result).toBe(true)
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('fake-jwt-token')
+  })
+
+  it('deve inicializar sem token (sessão limpa)', () => {
+    // initializeAuth is called in constructor.
+    // Since we cleared localStorage in beforeEach, no request should be made.
+    // We just verify the state.
+    expect(svc.isAuthenticated()).toBe(false)
+    expect(svc.currentUserValue).toBeNull()
+  })
+
+  it('deve recuperar sessão se token existir no localStorage', async () => {
+    // We need to re-create the service to trigger constructor with token
+    localStorage.setItem(AUTH_TOKEN_KEY, 'existing-token')
+
+    // Reset the testing module to inject a new instance
+    TestBed.resetTestingModule()
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [AuthService]
+    })
+
+    svc = TestBed.inject(AuthService)
+    http = TestBed.inject(HttpTestingController)
+
+    // Expect the 'me' call
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/me`)
+    expect(req.request.method).toBe('GET')
+
+    req.flush({
+      id: '123',
+      email: 'existing@example.com',
+      roles: ['admin']
+    })
+
+    // Wait for promise resolution (initializeAuth is async but not awaited in constructor)
+    // We can't await the constructor, but we can wait for the http flush to be processed
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(svc.isAuthenticated()).toBe(true)
+    expect(svc.currentUserValue?.email).toBe('existing@example.com')
   })
 })
