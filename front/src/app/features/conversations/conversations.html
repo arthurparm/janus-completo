@@ -111,6 +111,19 @@
                       }
                     </div>
                     <div class="message-text markdown-content" [innerHTML]="msg.text | markdown"></div>
+                    @if (msg.role === 'assistant' && msg.understanding?.summary) {
+                      <div class="understanding-card">
+                        <div class="understanding-head">
+                          <span class="understanding-label">Entendi assim</span>
+                          <span class="understanding-intent">{{ understandingIntentLabel(msg.understanding) }}</span>
+                          <span class="muted">{{ understandingConfidence(msg.understanding) }}</span>
+                        </div>
+                        <p>{{ msg.understanding?.summary }}</p>
+                        @if (msg.understanding?.requires_confirmation) {
+                          <span class="understanding-flag">Ação com confirmação sugerida</span>
+                        }
+                      </div>
+                    }
                     @if (msg.citations?.length) {
                       <div class="citation-list">
                         @for (cite of msg.citations; track cite) {

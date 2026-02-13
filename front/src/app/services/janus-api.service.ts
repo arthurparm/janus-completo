@@ -173,6 +173,13 @@ export interface ChatMessageRequest {
   user_id?: string;
   project_id?: string;
 }
+export interface ChatUnderstanding {
+  intent: string;
+  summary: string;
+  confidence?: number;
+  requires_confirmation?: boolean;
+  signals?: string[];
+}
 export interface ChatMessage {
   role: string;
   text: string;
@@ -180,6 +187,7 @@ export interface ChatMessage {
   citations?: Citation[]
   reasoning?: string;
   ui?: { type: string; data: any };
+  understanding?: ChatUnderstanding;
 }
 
 export interface Tool {
@@ -206,6 +214,7 @@ export interface ChatMessageResponse {
   conversation_id: string;
   citations: Citation[];
   ui?: { type: string; data: any };
+  understanding?: ChatUnderstanding;
 }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ChatListItem {
@@ -933,6 +942,10 @@ export class JanusApiService {
           role: String(m?.role || ''),
           text: String(m?.text || ''),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
+          citations: m?.citations,
+          reasoning: m?.reasoning,
+          ui: m?.ui,
+          understanding: m?.understanding
         }))
         return { conversation_id: String(resp?.conversation_id || conversation_id), messages: mapped } as ChatHistoryResponse
       })
@@ -968,7 +981,10 @@ export class JanusApiService {
           role: String(m?.role || ''),
           text: String(m?.text || ''),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
-          citations: m?.citations
+          citations: m?.citations,
+          reasoning: m?.reasoning,
+          ui: m?.ui,
+          understanding: m?.understanding
         }))
 
         return {
@@ -1005,6 +1021,10 @@ export class JanusApiService {
             role: String(lm?.role || ''),
             text: String(lm?.text || ''),
             timestamp: lm?.timestamp != null ? Number(lm.timestamp) : 0,
+            citations: lm?.citations,
+            reasoning: lm?.reasoning,
+            ui: lm?.ui,
+            understanding: lm?.understanding
           } : undefined
           return {
             conversation_id: String(it?.conversation_id || ''),

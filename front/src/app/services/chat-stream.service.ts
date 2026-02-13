@@ -1,11 +1,17 @@
 import { Injectable } from '@angular/core'
 import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_RETRY_MAX_SECONDS } from './api.config'
-import { Citation } from './janus-api.service'
+import { ChatUnderstanding, Citation } from './janus-api.service'
 
 type StreamStatus = 'idle' | 'connecting' | 'open' | 'streaming' | 'retrying' | 'closed' | 'error'
 
-export interface StreamDone { conversation_id?: string; provider?: string; model?: string; citations?: Citation[] }
+export interface StreamDone {
+  conversation_id?: string;
+  provider?: string;
+  model?: string;
+  citations?: Citation[];
+  understanding?: ChatUnderstanding;
+}
 export interface StreamError { error: string; attempt: number }
 export interface StartParams { conversationId: string; text: string; role?: string; priority?: string; timeoutSeconds?: number }
 
@@ -151,9 +157,21 @@ export class ChatStreamService {
       if (kind === 'done') {
         console.log('[ChatStreamService] Processando done message')
         this.typing$.next(false)
-        const parsed = JSON.parse(data || '{}') as { conversation_id?: string; provider?: string; model?: string; citations?: Citation[] }
+        const parsed = JSON.parse(data || '{}') as {
+          conversation_id?: string;
+          provider?: string;
+          model?: string;
+          citations?: Citation[];
+          understanding?: ChatUnderstanding;
+        }
         console.log('[ChatStreamService] Done parsed:', parsed)
-        this.done$.next({ conversation_id: parsed?.conversation_id, provider: parsed?.provider, model: parsed?.model, citations: parsed?.citations })
+        this.done$.next({
+          conversation_id: parsed?.conversation_id,
+          provider: parsed?.provider,
+          model: parsed?.model,
+          citations: parsed?.citations,
+          understanding: parsed?.understanding
+        })
         this.stop()
         return
       }

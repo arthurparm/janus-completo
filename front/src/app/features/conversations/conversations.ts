@@ -9,7 +9,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { AuthService } from '../../core/auth/auth.service'
 import { AgentEvent, AgentEventsService } from '../../core/services/agent-events.service'
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
-import { JanusApiService, ChatMessage, ConversationMeta, DocListItem, MemoryItem, Citation } from '../../services/janus-api.service'
+import { JanusApiService, ChatMessage, ChatUnderstanding, ConversationMeta, DocListItem, MemoryItem, Citation } from '../../services/janus-api.service'
 import { Header } from '../../core/layout/header/header'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
@@ -25,6 +25,7 @@ interface ChatMessageView {
   text: string
   timestamp: number
   citations?: Citation[]
+  understanding?: ChatUnderstanding
   streaming?: boolean
   error?: boolean
 }
@@ -282,6 +283,21 @@ export class ConversationsComponent {
     return this.displayName()
   }
 
+  understandingIntentLabel(understanding?: ChatUnderstanding): string {
+    const intent = String(understanding?.intent || '')
+    if (intent === 'reminder') return 'Lembrete'
+    if (intent === 'documentation_query') return 'Consulta de documentação'
+    if (intent === 'action_request') return 'Solicitação de ação'
+    if (intent === 'question') return 'Pergunta'
+    return 'Geral'
+  }
+
+  understandingConfidence(understanding?: ChatUnderstanding): string {
+    const confidence = Number(understanding?.confidence ?? 0)
+    if (!Number.isFinite(confidence) || confidence <= 0) return '--'
+    return `${Math.round(confidence * 100)}%`
+  }
+
   readonly traceSteps = signal<any[]>([])
   readonly showTrace = signal(false)
 
@@ -442,7 +458,8 @@ export class ConversationsComponent {
             role: 'assistant',
             text: resp.response,
             timestamp: now,
-            citations: resp.citations || []
+            citations: resp.citations || [],
+            understanding: resp.understanding
           })
           this.updateConversationPreview(conversationId, 'assistant', resp.response, now)
         }
@@ -465,7 +482,8 @@ export class ConversationsComponent {
     if (this.streamingMessageId) {
       this.updateMessage(this.streamingMessageId, {
         streaming: false,
-        citations: done.citations || []
+        citations: done.citations || [],
+        understanding: done.understanding
       })
       this.updateConversationPreview(done.conversation_id || this.selectedId() || '', 'assistant', this.streamingBuffer, Date.now())
     }
@@ -534,7 +552,8 @@ export class ConversationsComponent {
       role: (msg.role as ChatRole) || 'assistant',
       text: msg.text,
       timestamp: msg.timestamp,
-      citations: msg.citations || []
+      citations: msg.citations || [],
+      understanding: msg.understanding
     }
   }
 

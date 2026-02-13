@@ -327,6 +327,50 @@
   line-height: 1.5;
 }
 
+.understanding-card {
+  border-radius: 12px;
+  border: 1px solid rgba(var(--janus-primary-rgb), 0.25);
+  background: rgba(var(--janus-primary-rgb), 0.08);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.understanding-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.understanding-label {
+  font-size: 0.72rem;
+  font-family: $font-mono;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $color-text-muted;
+}
+
+.understanding-intent {
+  border: 1px solid rgba(var(--janus-secondary-rgb), 0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  color: $color-text-secondary;
+}
+
+.understanding-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: $color-text-secondary;
+}
+
+.understanding-flag {
+  font-size: 0.72rem;
+  color: $color-text-muted;
+}
+
 .citation-list {
   display: flex;
   flex-wrap: wrap;
