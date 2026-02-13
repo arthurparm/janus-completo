@@ -9,8 +9,59 @@ on:
   workflow_dispatch:
 
 jobs:
-  critical-tests:
-    name: Critical Tests
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run standardized lint gate
+        run: |
+          ruff check --config janus/pyproject.toml \
+            janus/app/services/db_migration_service.py \
+            tests/test_api_visibility_endpoints.py \
+            tests/test_tool_executor_policy_guards.py \
+            tests/test_chat_endpoint_contract.py \
+            tests/test_observability_request_dashboard.py \
+            tests/test_db_migration_service_contract.py
+
+  backend-type:
+    name: Backend Type
+    needs: backend-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install type dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy
+
+      - name: Run standardized type gate
+        run: |
+          mypy --config-file janus/pyproject.toml --follow-imports=skip \
+            janus/app/services/db_migration_service.py
+
+  backend-tests:
+    name: Backend Critical Tests
+    needs: backend-type
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,6 +86,7 @@ jobs:
             psycopg2-binary \
             qdrant-client \
             prometheus-client \
+            prometheus-fastapi-instrumentator \
             langchain \
             langchain-core \
             langgraph \
@@ -49,7 +101,54 @@ jobs:
             tests/test_tool_executor_policy_guards.py \
             tests/test_chat_agent_loop_content_safety.py \
             tests/test_memory_quota_enforcement.py \
-            tests/test_generative_memory_llm_role_priority.py
+            tests/test_generative_memory_llm_role_priority.py \
+            tests/test_chat_endpoint_contract.py \
+            tests/test_observability_request_dashboard.py \
+            tests/test_db_migration_service_contract.py \
+            tests/test_knowledge_code_query_contract.py
+
+  frontend-quality:
+    name: Frontend Lint/Test/Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js (with npm cache)
+        if: ${{ hashFiles('front/package-lock.json') != '' }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "front/package-lock.json"
+
+      - name: Setup Node.js (no cache)
+        if: ${{ hashFiles('front/package-lock.json') == '' }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      - name: Install dependencies (front via npm ci)
+        if: ${{ hashFiles('front/package-lock.json') != '' }}
+        run: npm ci
+        working-directory: front
+
+      - name: Install dependencies (front via npm install)
+        if: ${{ hashFiles('front/package-lock.json') == '' }}
+        run: npm install
+        working-directory: front
+
+      - name: Lint
+        run: npm run lint
+        working-directory: front
+
+      - name: Test
+        run: npm run test
+        working-directory: front
+
+      - name: Build
+        run: npm run build -- --configuration development
+        working-directory: front
 
   ops-validation:
     name: Ops Validation (manual)
