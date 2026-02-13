@@ -27,6 +27,7 @@ export class ChatStreamService {
   private attempt = 0
   private startTs = 0
   private ttftCaptured = false
+  private streamMode: 'token' | 'partial' | null = null
 
   status(): Observable<StreamStatus> { return this.status$.asObservable() }
   typing(): Observable<boolean> { return this.typing$.asObservable() }
@@ -42,6 +43,7 @@ export class ChatStreamService {
     this.attempt = 0
     this.startTs = Date.now()
     this.ttftCaptured = false
+    this.streamMode = null
     const role = params.role || 'orchestrator'
     const priority = params.priority || 'fast_and_cheap'
     const qs = new URLSearchParams({
@@ -97,7 +99,7 @@ export class ChatStreamService {
     
     this.es.addEventListener('token', (ev: MessageEvent) => { 
       console.log('[ChatStreamService] Evento token recebido:', ev.data)
-      this.handleMessage('partial', ev.data) 
+      this.handleMessage('token', ev.data) 
     })
     
     this.es.addEventListener('done', (ev: MessageEvent) => { 
@@ -142,6 +144,14 @@ export class ChatStreamService {
   private handleMessage(kind: string, data: string): void {
     console.log('[ChatStreamService] Processando mensagem tipo:', kind, 'dados:', data)
     try {
+      if (kind === 'token') {
+        if (this.streamMode && this.streamMode !== 'token') return
+        this.streamMode = 'token'
+        kind = 'partial'
+      } else if (kind === 'partial') {
+        if (this.streamMode && this.streamMode !== 'partial') return
+        this.streamMode = 'partial'
+      }
       if (kind === 'partial') {
         console.log('[ChatStreamService] Processando partial message')
         this.status$.next('streaming')
@@ -149,7 +159,17 @@ export class ChatStreamService {
         const parsed = JSON.parse(data || '{}') as { text?: string }
         console.log('[ChatStreamService] Partial parsed:', parsed)
         if (!this.ttftCaptured) { this.ttftCaptured = true }
-        const text = String(parsed?.text || '')
+        const rawText = parsed?.text
+        let text = ''
+        if (typeof rawText === 'string') {
+          text = rawText
+        } else if (rawText != null) {
+          try {
+            text = JSON.stringify(rawText, null, 2)
+          } catch {
+            text = String(rawText)
+          }
+        }
         console.log('[ChatStreamService] Enviando partial text:', text)
         this.partials$.next({ text: text })
         return

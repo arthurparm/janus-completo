@@ -9,7 +9,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { AuthService } from '../../core/auth/auth.service'
 import { AgentEvent, AgentEventsService } from '../../core/services/agent-events.service'
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
-import { JanusApiService, ChatMessage, ChatUnderstanding, ConversationMeta, DocListItem, MemoryItem, Citation } from '../../services/janus-api.service'
+import {
+  JanusApiService,
+  ChatMessage,
+  ChatUnderstanding,
+  ConversationMeta,
+  DocListItem,
+  MemoryItem,
+  Citation,
+  AutonomyStatusResponse,
+  Goal,
+  Tool
+} from '../../services/janus-api.service'
 import { Header } from '../../core/layout/header/header'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
@@ -26,8 +37,21 @@ interface ChatMessageView {
   timestamp: number
   citations?: Citation[]
   understanding?: ChatUnderstanding
+  latency_ms?: number
+  provider?: string
+  model?: string
   streaming?: boolean
   error?: boolean
+}
+
+type ThoughtKind = 'agent' | 'stream' | 'system'
+
+interface ThoughtStreamItem {
+  id: string
+  kind: ThoughtKind
+  title: string
+  text: string
+  timestamp: number
 }
 
 interface RoleOption {
@@ -39,6 +63,8 @@ interface PriorityOption {
   value: string
   label: string
 }
+
+type GoalStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
 @Component({
   selector: 'app-conversations',
@@ -80,7 +106,7 @@ export class ConversationsComponent {
   readonly messages = signal<ChatMessageView[]>([])
   readonly events = signal<AgentEvent[]>([])
   readonly docs = signal<DocListItem[]>([])
-  readonly memory = signal<MemoryItem[]>([])
+  readonly memoryUser = signal<MemoryItem[]>([])
 
   readonly selectedId = signal<string | null>(null)
   readonly streamStatus = signal('idle')
@@ -89,6 +115,13 @@ export class ConversationsComponent {
   readonly selectedPriority = signal('fast_and_cheap')
   readonly streamingEnabled = signal(true)
   readonly showAdvanced = signal(false)
+  readonly copiedCitation = signal('')
+  readonly autonomyLoading = signal(false)
+  readonly autonomySaving = signal(false)
+  readonly autonomyStatus = signal<AutonomyStatusResponse | null>(null)
+  readonly autonomyGoals = signal<Goal[]>([])
+  readonly autonomyTools = signal<Tool[]>([])
+  readonly autonomyError = signal('')
 
   readonly roleOptions: RoleOption[] = [
     { value: 'orchestrator', label: 'Orchestrator' },
@@ -115,6 +148,8 @@ export class ConversationsComponent {
   readonly filteredConversations = computed(() => {
     const term = this.search().trim().toLowerCase()
     const items = this.conversations()
+      .slice()
+      .sort((a, b) => this.conversationUpdatedAt(b) - this.conversationUpdatedAt(a))
     if (!term) return items
     return items.filter((conv) => {
       const title = String(conv.title || '')
@@ -128,6 +163,29 @@ export class ConversationsComponent {
     if (!id) return null
     return this.conversations().find((conv) => conv.conversation_id === id) || null
   })
+
+  readonly isSimpleMode = computed(() => !this.showAdvanced())
+  readonly latestAssistantMessage = computed(() => {
+    const items = this.messages()
+    for (let idx = items.length - 1; idx >= 0; idx -= 1) {
+      if (items[idx].role === 'assistant') return items[idx]
+    }
+    return null
+  })
+  readonly conversationMemory = computed(() => {
+    const conversationId = this.selectedId()
+    const items = this.memoryUser()
+    if (!conversationId) return []
+    return items.filter((item) => this.isConversationMemory(item, conversationId))
+  })
+  readonly userMemory = computed(() => this.memoryUser())
+  readonly autonomyActiveGoals = computed(() => this.autonomyGoals()
+    .filter((goal) => goal.status === 'pending' || goal.status === 'in_progress')
+    .slice(0, 6))
+  readonly autonomyEnabledTools = computed(() => this.autonomyTools()
+    .filter((tool) => tool.enabled !== false)
+    .slice(0, 8))
+  readonly hasConversationSelected = computed(() => Boolean(this.selectedId()))
 
   readonly selectedTitle = computed(() => {
     const selected = this.selectedConversation()
@@ -156,6 +214,7 @@ export class ConversationsComponent {
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
   private scrollQueued = false
+  private responseStartedAt: number | null = null
   readonly quickPrompts = [
     'Resuma esta conversa em 5 pontos.',
     'Quais sao os proximos passos recomendados para este tema?',
@@ -163,6 +222,7 @@ export class ConversationsComponent {
   ]
 
   constructor() {
+    this.restoreAdvancedModePreference()
     this.loadConversations()
 
     this.route.paramMap
@@ -174,7 +234,7 @@ export class ConversationsComponent {
 
     this.stream.status()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((status) => this.streamStatus.set(status))
+      .subscribe((status) => this.handleStreamStatus(status))
 
     this.stream.typing()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -196,6 +256,7 @@ export class ConversationsComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => {
         this.events.update((items) => [event, ...items].slice(0, 24))
+        this.appendThought('agent', event.agent_role || 'agent', event.content || 'evento sem descricao', event.timestamp)
       })
 
     this.destroyRef.onDestroy(() => {
@@ -228,6 +289,7 @@ export class ConversationsComponent {
     this.updateConversationPreview(conversationId, 'user', message, now)
     this.prompt.setValue('')
     this.queueScroll()
+    this.responseStartedAt = Date.now()
 
     if (this.streamingEnabled()) {
       this.startStreaming(conversationId, message)
@@ -286,6 +348,35 @@ export class ConversationsComponent {
   formatDate(timestamp?: number): string {
     if (!timestamp) return '--'
     return new Date(timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+  }
+
+  formatLatency(latencyMs?: number): string {
+    if (!latencyMs || latencyMs <= 0) return '--'
+    if (latencyMs < 1000) return `${Math.round(latencyMs)} ms`
+    return `${(latencyMs / 1000).toFixed(1)} s`
+  }
+
+  conversationPreviewText(conv: ConversationMeta): string {
+    const text = this.sanitizeChatText(conv.last_message?.text || '')
+    if (!text) return 'Sem mensagens ainda'
+    return text.length > 110 ? `${text.slice(0, 110)}...` : text
+  }
+
+  conversationLastActivity(conv: ConversationMeta): string {
+    const ts = this.conversationUpdatedAt(conv)
+    if (!ts) return '--'
+    const now = Date.now()
+    if (Math.abs(now - ts) < 24 * 60 * 60 * 1000) return this.formatTime(ts)
+    return this.formatDate(ts)
+  }
+
+  assistantRuntimeLabel(message: ChatMessageView): string {
+    const provider = String(message.provider || '').trim()
+    const model = String(message.model || '').trim()
+    if (provider && model) return `${provider} / ${model}`
+    if (provider) return provider
+    if (model) return model
+    return 'motor padrao'
   }
 
   authorLabel(message: ChatMessageView): string {
@@ -347,20 +438,100 @@ export class ConversationsComponent {
     return `${Math.round(score * 100)}%`
   }
 
+  citationReference(cite: Citation): string {
+    const line = this.citationLine(cite)
+    const base = cite.file_path || cite.title || cite.doc_id || 'fonte'
+    if (!line) return base
+    return `${base}:${line}`
+  }
+
+  copyCitation(cite: Citation): void {
+    const reference = this.citationReference(cite)
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : null
+    if (!clipboard?.writeText) return
+    clipboard.writeText(reference).then(() => {
+      this.copiedCitation.set(reference)
+      setTimeout(() => {
+        if (this.copiedCitation() === reference) {
+          this.copiedCitation.set('')
+        }
+      }, 1400)
+    }).catch(() => {
+      this.copiedCitation.set('')
+    })
+  }
+
   confirmLowConfidence(): void {
     this.prompt.setValue('Confirmo. Pode prosseguir com a acao solicitada.')
   }
 
   toggleAdvanced(): void {
-    this.showAdvanced.update((value) => !value)
+    this.showAdvanced.update((value) => {
+      const next = !value
+      this.persistAdvancedModePreference(next)
+      return next
+    })
   }
 
   useQuickPrompt(text: string): void {
     this.prompt.setValue(text)
   }
 
+  refreshAutonomy(): void {
+    this.loadAutonomyContext()
+  }
+
+  toggleAutonomyLoop(): void {
+    if (this.autonomySaving()) return
+    this.autonomySaving.set(true)
+    this.autonomyError.set('')
+    const active = Boolean(this.autonomyStatus()?.active)
+    const request$ = active
+      ? this.api.stopAutonomy()
+      : this.api.startAutonomy({
+        interval_seconds: 60,
+        risk_profile: 'balanced',
+        user_id: this.user()?.id ? String(this.user()?.id) : undefined
+      })
+    request$
+      .pipe(catchError((err) => {
+        this.autonomyError.set(this.extractErrorMessage(err, 'Falha ao atualizar autonomia.'))
+        return of(null)
+      }))
+      .subscribe(() => {
+        this.autonomySaving.set(false)
+        this.loadAutonomyContext()
+      })
+  }
+
+  markGoalStatus(goal: Goal, status: GoalStatus): void {
+    if (!goal?.id || this.autonomySaving()) return
+    this.autonomySaving.set(true)
+    this.autonomyError.set('')
+    this.api.updateGoalStatus(goal.id, status)
+      .pipe(catchError((err) => {
+        this.autonomyError.set(this.extractErrorMessage(err, 'Falha ao atualizar meta.'))
+        return of(null)
+      }))
+      .subscribe((updated) => {
+        if (updated) {
+          this.autonomyGoals.update((items) => items.map((item) => item.id === updated.id ? updated : item))
+        }
+        this.autonomySaving.set(false)
+      })
+  }
+
+  goalStatusLabel(goal: Goal): string {
+    if (goal.status === 'in_progress') return 'Em andamento'
+    if (goal.status === 'completed') return 'Concluida'
+    if (goal.status === 'failed') return 'Falhou'
+    return 'Pendente'
+  }
+
   readonly traceSteps = signal<any[]>([])
   readonly showTrace = signal(false)
+  readonly thoughtStream = signal<ThoughtStreamItem[]>([])
+  private readonly advancedModeStorageKey = 'janus.conversations.show_advanced_mode'
 
   // ... (inside class)
 
@@ -386,10 +557,13 @@ export class ConversationsComponent {
     this.messages.set([])
     this.events.set([])
     this.docs.set([])
-    this.memory.set([])
+    this.memoryUser.set([])
     this.traceSteps.set([]) // Clear trace
+    this.thoughtStream.set([])
+    this.copiedCitation.set('')
     this.stream.stop()
     this.sending.set(false)
+    this.responseStartedAt = null
     this.streamingBuffer = ''
     this.streamingMessageId = null
 
@@ -449,9 +623,10 @@ export class ConversationsComponent {
       )
     }).subscribe((result) => {
       this.docs.set(result.docs)
-      this.memory.set(result.memory)
+      this.memoryUser.set(result.memory)
       this.contextLoading.set(false)
     })
+    this.loadAutonomyContext()
   }
 
   private async ensureConversationId(forceCreate = false): Promise<string | null> {
@@ -504,6 +679,7 @@ export class ConversationsComponent {
     this.api.sendChatMessage(conversationId, message, this.selectedRole(), this.selectedPriority(), undefined, userId)
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
+        const latencyMs = this.consumeResponseLatency()
         if (!resp) {
           this.appendMessage({
             id: this.createId(),
@@ -514,15 +690,19 @@ export class ConversationsComponent {
           })
         } else {
           const now = Date.now()
+          const cleanText = this.sanitizeChatText(resp.response)
           this.appendMessage({
             id: this.createId(),
             role: 'assistant',
-            text: resp.response,
+            text: cleanText,
             timestamp: now,
             citations: resp.citations || [],
-            understanding: resp.understanding
+            understanding: resp.understanding,
+            latency_ms: latencyMs,
+            provider: resp.provider,
+            model: resp.model
           })
-          this.updateConversationPreview(conversationId, 'assistant', resp.response, now)
+          this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
         }
         this.sending.set(false)
         this.queueScroll()
@@ -531,7 +711,10 @@ export class ConversationsComponent {
 
   private handleStreamPartial(chunk: string): void {
     if (!this.streamingMessageId) return
-    this.streamingBuffer += chunk
+    if (!this.streamingBuffer) {
+      this.appendThought('stream', 'Resposta', 'Janus iniciou a geracao da resposta.')
+    }
+    this.streamingBuffer += this.sanitizeChatText(chunk)
     this.updateMessage(this.streamingMessageId, {
       text: this.streamingBuffer,
       streaming: true
@@ -540,22 +723,31 @@ export class ConversationsComponent {
   }
 
   private handleStreamDone(done: StreamDone): void {
+    const latencyMs = this.consumeResponseLatency()
     if (this.streamingMessageId) {
       this.updateMessage(this.streamingMessageId, {
         streaming: false,
         citations: done.citations || [],
-        understanding: done.understanding
+        understanding: done.understanding,
+        latency_ms: latencyMs,
+        provider: done.provider,
+        model: done.model
       })
       this.updateConversationPreview(done.conversation_id || this.selectedId() || '', 'assistant', this.streamingBuffer, Date.now())
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
     this.sending.set(false)
+    const modelParts = [done.provider, done.model].filter(Boolean)
+    const modelLabel = modelParts.length ? ` (${modelParts.join(' / ')})` : ''
+    const citationsCount = done.citations?.length || 0
+    this.appendThought('stream', 'Resposta concluida', `Streaming finalizado${modelLabel}. Citacoes: ${citationsCount}.`)
     this.queueScroll()
     this.loadConversations()
   }
 
   private handleStreamError(reason: string): void {
+    this.consumeResponseLatency()
     const id = this.streamingMessageId || this.createId()
     if (!this.streamingMessageId) {
       this.appendMessage({
@@ -575,6 +767,7 @@ export class ConversationsComponent {
     this.streamingBuffer = ''
     this.streamingMessageId = null
     this.sending.set(false)
+    this.appendThought('system', 'Falha no streaming', reason || 'erro desconhecido')
   }
 
   private appendMessage(message: ChatMessageView): void {
@@ -607,14 +800,29 @@ export class ConversationsComponent {
     }))
   }
 
+  private conversationUpdatedAt(conv: ConversationMeta): number {
+    const updated = Number(conv.updated_at)
+    if (Number.isFinite(updated) && updated > 0) return updated
+    const lastTimestamp = Number(conv.last_message?.timestamp)
+    if (Number.isFinite(lastTimestamp) && lastTimestamp > 0) return lastTimestamp
+    const created = Number(conv.created_at)
+    if (Number.isFinite(created) && created > 0) return created
+    return 0
+  }
+
   private mapMessage(msg: ChatMessage): ChatMessageView {
+    const raw = msg as unknown as Record<string, unknown>
+    const latencyMsRaw = Number(raw['latency_ms'])
     return {
       id: this.createId(),
       role: (msg.role as ChatRole) || 'assistant',
-      text: msg.text,
+      text: this.sanitizeChatText(msg.text),
       timestamp: msg.timestamp,
       citations: msg.citations || [],
-      understanding: msg.understanding
+      understanding: msg.understanding,
+      latency_ms: Number.isFinite(latencyMsRaw) && latencyMsRaw > 0 ? latencyMsRaw : undefined,
+      provider: typeof raw['provider'] === 'string' ? String(raw['provider']) : undefined,
+      model: typeof raw['model'] === 'string' ? String(raw['model']) : undefined
     }
   }
 
@@ -638,5 +846,106 @@ export class ConversationsComponent {
     const el = this.messageList?.nativeElement
     if (!el) return
     el.scrollTop = el.scrollHeight
+  }
+
+  thoughtIcon(item: ThoughtStreamItem): string {
+    if (item.kind === 'agent') return 'smart_toy'
+    if (item.kind === 'stream') return 'bolt'
+    return 'info'
+  }
+
+  private handleStreamStatus(status: string): void {
+    const previous = this.streamStatus()
+    this.streamStatus.set(status)
+    if (status === previous) return
+    if (status === 'connecting') this.appendThought('stream', 'Conexao', 'Conectando ao stream de resposta...')
+    if (status === 'retrying') this.appendThought('system', 'Reconexao', 'Tentando restabelecer o stream...')
+    if (status === 'open') this.appendThought('stream', 'Conectado', 'Canal SSE ativo e pronto.')
+    if (status === 'error') this.appendThought('system', 'Erro de stream', 'Falha de conexao com o stream.')
+  }
+
+  private appendThought(kind: ThoughtKind, title: string, text: string, timestamp?: number): void {
+    const item: ThoughtStreamItem = {
+      id: this.createId(),
+      kind,
+      title,
+      text,
+      timestamp: Number(timestamp || Date.now())
+    }
+    this.thoughtStream.update((items) => [item, ...items].slice(0, 40))
+  }
+
+  private restoreAdvancedModePreference(): void {
+    try {
+      const saved = localStorage.getItem(this.advancedModeStorageKey)
+      if (saved === '1') this.showAdvanced.set(true)
+      if (saved === '0') this.showAdvanced.set(false)
+    } catch {
+      this.showAdvanced.set(false)
+    }
+  }
+
+  private persistAdvancedModePreference(enabled: boolean): void {
+    try {
+      localStorage.setItem(this.advancedModeStorageKey, enabled ? '1' : '0')
+    } catch {
+      // no-op
+    }
+  }
+
+  private consumeResponseLatency(): number | undefined {
+    if (!this.responseStartedAt) return undefined
+    const latencyMs = Math.max(0, Date.now() - this.responseStartedAt)
+    this.responseStartedAt = null
+    return latencyMs
+  }
+
+  private loadAutonomyContext(): void {
+    this.autonomyLoading.set(true)
+    forkJoin({
+      status: this.api.getAutonomyStatus().pipe(catchError(() => of(null))),
+      goals: this.api.listGoals().pipe(catchError(() => of([] as Goal[]))),
+      tools: this.api.getTools().pipe(
+        map((resp) => resp.tools || []),
+        catchError(() => of([] as Tool[]))
+      )
+    }).subscribe((result) => {
+      this.autonomyStatus.set(result.status)
+      this.autonomyGoals.set(result.goals)
+      this.autonomyTools.set(result.tools)
+      this.autonomyLoading.set(false)
+    })
+  }
+
+  private isConversationMemory(item: MemoryItem, conversationId: string): boolean {
+    const metadata = item.metadata || {}
+    const sessionId = String(metadata.session_id || '')
+    const threadId = String(metadata['thread_id'] || '')
+    const convoId = String(metadata['conversation_id'] || '')
+    const taskId = String(metadata['task_id'] || '')
+    const compositeId = String(item.composite_id || '')
+    return [sessionId, threadId, convoId, taskId, compositeId].some((value) => value.includes(conversationId))
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    if (!error || typeof error !== 'object') return fallback
+    const maybe = error as { error?: { detail?: string } }
+    const detail = maybe.error?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    return fallback
+  }
+
+  private sanitizeChatText(value: unknown): string {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'string') {
+      const cleaned = value.replace(/\[object Object\]/g, '').replace(/\n{3,}/g, '\n\n')
+      return cleaned.trim() ? cleaned : ''
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    try {
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return String(value)
+    }
   }
 }

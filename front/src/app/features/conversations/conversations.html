@@ -56,13 +56,17 @@
             @for (conv of filteredConversations(); track conv.conversation_id) {
               <li
                 class="conversation-item"
-                [class.active]="conv.conversation_id === selectedId()"
-                (click)="openConversation(conv)">
-                <div>
-                  <span class="item-title">{{ conv.title || ('Conversa ' + conv.conversation_id.slice(0, 8)) }}</span>
-                  <span class="muted">{{ conv.last_message?.text || 'Sem mensagens ainda' }}</span>
-                </div>
-                <span class="chip">ID {{ conv.conversation_id.slice(0, 6) }}</span>
+                [class.active]="conv.conversation_id === selectedId()">
+                <button class="conversation-trigger" type="button" (click)="openConversation(conv)">
+                  <div class="item-content">
+                    <span class="item-title">{{ conv.title || ('Conversa ' + conv.conversation_id.slice(0, 8)) }}</span>
+                    <span class="muted line-clamp-2">{{ conversationPreviewText(conv) }}</span>
+                  </div>
+                  <div class="item-tags">
+                    <span class="chip">ID {{ conv.conversation_id.slice(0, 6) }}</span>
+                    <span class="chip soft">{{ conversationLastActivity(conv) }}</span>
+                  </div>
+                </button>
               </li>
             }
           </ul>
@@ -84,8 +88,9 @@
           <div class="status-group">
             <ui-badge [variant]="streamBadge().variant">{{ streamBadge().label }}</ui-badge>
             <ui-badge variant="neutral">{{ messages().length }} msgs</ui-badge>
+            <ui-badge [variant]="isSimpleMode() ? 'neutral' : 'info'">{{ isSimpleMode() ? 'Modo simples' : 'Modo avancado' }}</ui-badge>
             <button ui-button variant="ghost" size="sm" type="button" (click)="toggleAdvanced()">
-              {{ showAdvanced() ? 'Modo simples' : 'Modo avancado' }}
+              {{ showAdvanced() ? 'Voltar ao simples' : 'Abrir painel avancado' }}
             </button>
             @if (isAdmin()) {
               <ui-badge variant="info">Modo Admin</ui-badge>
@@ -126,6 +131,14 @@
                         <span class="stream-indicator">streaming</span>
                       }
                     </div>
+                    @if (msg.role === 'assistant' && (msg.provider || msg.model || msg.latency_ms)) {
+                      <div class="message-runtime">
+                        <span class="runtime-chip">{{ assistantRuntimeLabel(msg) }}</span>
+                        @if (msg.latency_ms) {
+                          <span class="runtime-chip">{{ formatLatency(msg.latency_ms) }}</span>
+                        }
+                      </div>
+                    }
                     <div class="message-text markdown-content" [innerHTML]="msg.text | markdown"></div>
                     @if (msg.role === 'assistant' && msg.understanding?.summary) {
                       <div class="understanding-card">
@@ -158,11 +171,16 @@
                               {{ citationTitle(cite) }}
                             </summary>
                             <div class="citation-detail">
-                              @if (cite.url) {
-                                <a [href]="cite.url" target="_blank" rel="noopener noreferrer">Abrir fonte</a>
-                              } @else {
-                                <span class="muted">Fonte local sem URL publica</span>
-                              }
+                              <div class="citation-actions">
+                                @if (cite.url) {
+                                  <a [href]="cite.url" target="_blank" rel="noopener noreferrer">Abrir fonte</a>
+                                } @else {
+                                  <span class="muted">Fonte local sem URL publica</span>
+                                }
+                                <button ui-button variant="ghost" size="sm" type="button" (click)="copyCitation(cite)">
+                                  {{ copiedCitation() === citationReference(cite) ? 'Copiado' : 'Copiar referencia' }}
+                                </button>
+                              </div>
                               <span class="muted">Score: {{ citationScore(cite) }}</span>
                               @if (cite.snippet) {
                                 <pre>{{ cite.snippet }}</pre>
@@ -178,20 +196,25 @@
             </div>
           } @else {
             <div class="empty-state">
-              <h3>Nenhuma mensagem ainda</h3>
-              <p class="muted">Envie a primeira pergunta ou crie uma conversa nova.</p>
-              <div class="empty-actions">
-                <button ui-button variant="default" size="sm" type="button" (click)="createConversation()">
-                  Iniciar conversa
-                </button>
-              </div>
-              <div class="quick-prompts">
-                @for (item of quickPrompts; track item) {
-                  <button ui-button variant="ghost" size="sm" type="button" (click)="useQuickPrompt(item)">
-                    {{ item }}
+              @if (!hasConversationSelected()) {
+                <h3>Selecione uma conversa</h3>
+                <p class="muted">Escolha uma conversa na coluna lateral ou crie uma nova para comecar.</p>
+                <div class="empty-actions">
+                  <button ui-button variant="default" size="sm" type="button" (click)="createConversation()">
+                    Nova conversa
                   </button>
-                }
-              </div>
+                </div>
+              } @else {
+                <h3>Nenhuma mensagem ainda</h3>
+                <p class="muted">Envie a primeira pergunta para iniciar esta conversa.</p>
+                <div class="quick-prompts">
+                  @for (item of quickPrompts; track item) {
+                    <button ui-button variant="ghost" size="sm" type="button" (click)="useQuickPrompt(item)">
+                      {{ item }}
+                    </button>
+                  }
+                </div>
+              }
             </div>
           }
         </div>
@@ -225,7 +248,7 @@
             </p>
           } @else {
             <p class="composer-helper muted">
-              Modo simples ativo: o Janus escolhe automaticamente a melhor estrategia para responder.
+              Modo simples ativo: foco na conversa. O Janus escolhe automaticamente a melhor estrategia.
             </p>
           }
 
@@ -250,9 +273,55 @@
       <aside class="convo-panel convo-rail" aria-label="Contexto">
         <section class="rail-section">
           <div class="panel-head">
-            <h3>Chain of Thought</h3>
+            <h3>Explicacao da resposta</h3>
+          </div>
+          @if (latestAssistantMessage(); as latest) {
+            <div class="explain-card">
+              <div class="explain-grid">
+                <span class="metric-pill">Fontes: {{ latest.citations?.length || 0 }}</span>
+                <span class="metric-pill">Confianca: {{ understandingConfidence(latest.understanding) }}</span>
+                <span class="metric-pill">Latencia: {{ formatLatency(latest.latency_ms) }}</span>
+              </div>
+              @if (latest.provider || latest.model) {
+                <p class="muted">Modelo: {{ latest.provider || '--' }} / {{ latest.model || '--' }}</p>
+              }
+              @if (latest.understanding?.summary) {
+                <p class="muted">{{ latest.understanding?.summary }}</p>
+              }
+            </div>
+          } @else {
+            <p class="muted">Envie uma mensagem para visualizar fontes, confianca e latencia.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Thought stream</h3>
+            <ui-badge variant="info">{{ thoughtStream().length }}</ui-badge>
+          </div>
+          @if (thoughtStream().length) {
+            <ul class="thought-list">
+              @for (item of thoughtStream(); track item.id) {
+                <li class="thought-item" [class.agent]="item.kind === 'agent'" [class.stream]="item.kind === 'stream'" [class.system]="item.kind === 'system'">
+                  <div class="thought-head">
+                    <span class="thought-icon material-icons">{{ thoughtIcon(item) }}</span>
+                    <strong>{{ item.title }}</strong>
+                    <span class="muted">{{ formatTime(item.timestamp) }}</span>
+                  </div>
+                  <p>{{ item.text }}</p>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Ainda sem atividade em tempo real.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Trace tecnico</h3>
             <button ui-button variant="ghost" size="sm" (click)="toggleTrace()">
-              {{ showTrace() ? 'Ocultar' : 'Mostrar' }}
+              {{ showTrace() ? 'Ocultar' : 'Carregar' }}
             </button>
           </div>
           @if (showTrace()) {
@@ -272,32 +341,10 @@
                 }
               </ul>
             } @else {
-              <p class="muted">Nenhum rastro disponÃ­vel.</p>
+              <p class="muted">Nenhum rastro tecnico disponivel.</p>
             }
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Agent events</h3>
-            <ui-badge variant="info">{{ events().length }}</ui-badge>
-          </div>
-          @if (contextLoading()) {
-            <app-skeleton variant="text" [count]="4"></app-skeleton>
-          } @else if (events().length) {
-            <ul class="rail-list">
-              @for (event of events(); track event.timestamp) {
-                <li class="rail-item">
-                  <div class="rail-title">
-                    <span class="chip">{{ event.agent_role }}</span>
-                    <span class="muted">{{ formatTime(event.timestamp) }}</span>
-                  </div>
-                  <p>{{ event.content }}</p>
-                </li>
-              }
-            </ul>
           } @else {
-            <p class="muted">Sem eventos recentes.</p>
+            <p class="muted">Ative para carregar a trilha detalhada por etapa.</p>
           }
         </section>
 
@@ -326,14 +373,14 @@
 
         <section class="rail-section">
           <div class="panel-head">
-            <h3>Memoria ativa</h3>
-            <ui-badge variant="neutral">{{ memory().length }}</ui-badge>
+            <h3>Memoria da conversa</h3>
+            <ui-badge variant="neutral">{{ conversationMemory().length }}</ui-badge>
           </div>
           @if (contextLoading()) {
             <app-skeleton variant="text" [count]="3"></app-skeleton>
-          } @else if (memory().length) {
+          } @else if (conversationMemory().length) {
             <ul class="rail-list">
-              @for (item of memory(); track item.ts_ms) {
+              @for (item of conversationMemory(); track item.ts_ms) {
                 <li class="rail-item">
                   <p>{{ item.content }}</p>
                   <span class="muted">{{ formatDate(item.ts_ms) }}</span>
@@ -341,7 +388,96 @@
               }
             </ul>
           } @else {
-            <p class="muted">Sem memoria recente.</p>
+            <p class="muted">Sem memoria vinculada a esta conversa.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Memoria do usuario</h3>
+            <ui-badge variant="neutral">{{ userMemory().length }}</ui-badge>
+          </div>
+          @if (contextLoading()) {
+            <app-skeleton variant="text" [count]="3"></app-skeleton>
+          } @else if (userMemory().length) {
+            <ul class="rail-list">
+              @for (item of userMemory(); track item.ts_ms) {
+                <li class="rail-item">
+                  <p>{{ item.content }}</p>
+                  <span class="muted">{{ formatDate(item.ts_ms) }}</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Sem memoria de usuario recente.</p>
+          }
+        </section>
+
+        <section class="rail-section">
+          <div class="panel-head">
+            <h3>Autonomia</h3>
+            <button ui-button variant="ghost" size="sm" type="button" (click)="refreshAutonomy()" [disabled]="autonomyLoading() || autonomySaving()">
+              Atualizar
+            </button>
+          </div>
+          @if (autonomyError()) {
+            <div class="inline-alert" role="alert">
+              <span class="material-icons">error_outline</span>
+              {{ autonomyError() }}
+            </div>
+          }
+          @if (autonomyLoading()) {
+            <app-skeleton variant="text" [count]="4"></app-skeleton>
+          } @else {
+            <div class="autonomy-status">
+              <span class="metric-pill">Loop: {{ autonomyStatus()?.active ? 'Ativo' : 'Inativo' }}</span>
+              <span class="metric-pill">Ciclos: {{ autonomyStatus()?.cycle_count ?? 0 }}</span>
+              <span class="metric-pill">Risco: {{ autonomyStatus()?.config?.risk_profile || 'balanced' }}</span>
+            </div>
+            <div class="autonomy-actions">
+              <button ui-button variant="default" size="sm" type="button" (click)="toggleAutonomyLoop()" [disabled]="autonomySaving()">
+                {{ autonomyStatus()?.active ? 'Parar loop' : 'Iniciar loop' }}
+              </button>
+            </div>
+            <div class="autonomy-split">
+              <div>
+                <div class="panel-head">
+                  <h4>Metas estrategicas</h4>
+                  <ui-badge variant="neutral">{{ autonomyActiveGoals().length }}</ui-badge>
+                </div>
+                @if (autonomyActiveGoals().length) {
+                  <ul class="rail-list compact">
+                    @for (goal of autonomyActiveGoals(); track goal.id) {
+                      <li class="rail-item">
+                        <p class="item-title">{{ goal.title }}</p>
+                        <span class="muted">{{ goalStatusLabel(goal) }}</span>
+                        <div class="goal-actions">
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'completed')" [disabled]="autonomySaving()">Concluir</button>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="muted">Sem metas ativas.</p>
+                }
+              </div>
+              <div>
+                <div class="panel-head">
+                  <h4>Ferramentas ativas</h4>
+                  <ui-badge variant="neutral">{{ autonomyEnabledTools().length }}</ui-badge>
+                </div>
+                @if (autonomyEnabledTools().length) {
+                  <div class="tool-chips">
+                    @for (tool of autonomyEnabledTools(); track tool.name) {
+                      <span class="chip">{{ tool.name }}</span>
+                    }
+                  </div>
+                } @else {
+                  <p class="muted">Nenhuma ferramenta ativa encontrada.</p>
+                }
+              </div>
+            </div>
           }
         </section>
       </aside>
@@ -349,4 +485,5 @@
     </div>
   </div>
 </section>
+
 

@@ -1002,7 +1002,7 @@ export class JanusApiService {
         const msgs = Array.isArray(resp?.messages) ? resp.messages : []
         const mapped = msgs.map((m) => ({
           role: String(m?.role || ''),
-          text: String(m?.text || ''),
+          text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
           reasoning: m?.reasoning,
@@ -1041,7 +1041,7 @@ export class JanusApiService {
         const msgs = Array.isArray(resp?.messages) ? resp.messages : []
         const mapped = msgs.map((m) => ({
           role: String(m?.role || ''),
-          text: String(m?.text || ''),
+          text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
           reasoning: m?.reasoning,
@@ -1081,7 +1081,7 @@ export class JanusApiService {
           const lm = it?.last_message
           const last_message: ChatMessage | undefined = lm && typeof lm === 'object' ? {
             role: String(lm?.role || ''),
-            text: String(lm?.text || ''),
+            text: this.normalizeChatText(lm?.text),
             timestamp: lm?.timestamp != null ? Number(lm.timestamp) : 0,
             citations: lm?.citations,
             reasoning: lm?.reasoning,
@@ -1110,6 +1110,17 @@ export class JanusApiService {
 
   deleteConversation(conversation_id: string): Observable<{ status: string }> {
     return this.http.delete<{ status: string }>(this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}`))
+  }
+
+  private normalizeChatText(value: unknown): string {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    try {
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return String(value)
+    }
   }
 
   // Users
