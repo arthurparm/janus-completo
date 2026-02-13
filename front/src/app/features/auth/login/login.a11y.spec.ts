@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing'
-import { Router } from '@angular/router'
+import { Router, ActivatedRoute } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
 import { LoginComponent } from './login'
+import { of } from 'rxjs'
 
 describe('LoginComponent A11y', () => {
   it('deve ter labels associados aos inputs', () => {
@@ -9,7 +10,8 @@ describe('LoginComponent A11y', () => {
       imports: [LoginComponent],
       providers: [
         { provide: AuthService, useValue: { loginWithPassword: () => Promise.resolve(true), loginWithProvider: () => Promise.resolve(true) } },
-        { provide: Router, useValue: { navigate: () => Promise.resolve(true), navigateByUrl: () => Promise.resolve(true) } }
+        { provide: Router, useValue: { navigate: () => Promise.resolve(true), navigateByUrl: () => Promise.resolve(true) } },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } }
       ]
     }).createComponent(LoginComponent)
     fixture.detectChanges()
