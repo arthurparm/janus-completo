@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing'
 import { LoginComponent } from './login'
 import { AuthService } from '../../../core/auth/auth.service'
-import { Router } from '@angular/router'
+import { Router, ActivatedRoute } from '@angular/router'
 import { vi } from 'vitest'
+import { of } from 'rxjs'
 
 describe('LoginComponent', () => {
   let comp: LoginComponent
@@ -23,6 +24,7 @@ describe('LoginComponent', () => {
       providers: [
         { provide: AuthService, useValue: authSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } }
       ]
     })
     const fixture = TestBed.createComponent(LoginComponent)
