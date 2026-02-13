@@ -9,7 +9,20 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from prometheus_fastapi_instrumentator import Instrumentator
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+
+    PROMETHEUS_INSTRUMENTATOR_AVAILABLE = True
+except Exception:
+    PROMETHEUS_INSTRUMENTATOR_AVAILABLE = False
+
+    class Instrumentator:  # type: ignore[override]
+        def instrument(self, _app: FastAPI):
+            return self
+
+        def expose(self, _app: FastAPI):
+            return self
 
 from app.api.exception_handlers import add_exception_handlers
 from app.api.v1.router import api_router
@@ -23,8 +36,8 @@ from app.core.infrastructure import (
 )
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
-from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
+from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 
 # Determine log path
 # Prefer escrever no volume montado /app/app dentro do container; fallback para cwd/janus.log
@@ -59,10 +72,10 @@ async def lifespan(app: FastAPI):
 
     # 1.1 Load Global Prompts (Async)
     # This ensures that all prompt constants are populated from the DB before the app starts serving requests.
+    from app.core.evolution.prompts import load_evolution_prompts
     from app.core.infrastructure.advanced_prompts import load_advanced_prompts
     from app.core.infrastructure.janus_specialized_prompts import load_specialized_prompts
-    from app.core.evolution.prompts import load_evolution_prompts
-    
+
     logger.info("Loading global prompts from database...")
     try:
         await load_advanced_prompts()
@@ -165,7 +178,16 @@ app = FastAPI(
 setup_tracing(app)
 
 # --- Configuração da Aplicação ---
-Instrumentator().instrument(app).expose(app)
+if PROMETHEUS_INSTRUMENTATOR_AVAILABLE:
+    Instrumentator().instrument(app).expose(app)
+else:
+    logger.warning(
+        "prometheus_instrumentator_unavailable",
+        detail=(
+            "prometheus_fastapi_instrumentator not installed in this Python environment. "
+            "Running without HTTP metrics instrumentation."
+        ),
+    )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationMiddleware)
 app.add_middleware(RateLimitMiddleware)

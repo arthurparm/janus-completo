@@ -1,9 +1,10 @@
 import logging
-import subprocess
 from pathlib import Path
 
 from langchain.tools import tool
 
+from app.config import settings
+from app.core.tools.command_sandbox import run_restricted_command
 from app.core.tools.action_module import PermissionLevel, ToolCategory, register_tool
 
 logger = logging.getLogger(__name__)
@@ -29,19 +30,12 @@ def execute_system_command(command: str) -> str:
     Returns:
         Stdout combinado com Stderr ou mensagem de erro.
     """
-    logger.warning(f"⚠️ EXECUTANDO COMANDO DO SISTEMA SEM RESTRIÇÕES: {command}")
-    try:
-        # Timeout maior para operações de SO (ex: instalações)
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=300)
-        output = result.stdout
-        if result.stderr:
-            output += f"\n[STDERR]: {result.stderr}"
-        return output
-    except subprocess.TimeoutExpired:
-        return "Erro: Comando excedeu 300 segundos (Timeout)."
-    except Exception as e:
-        logger.error(f"Erro na execução do sistema: {e}", exc_info=True)
-        return f"Erro fatal: {e!s}"
+    logger.warning("Executando comando do sistema em modo restrito", extra={"command": command})
+    return run_restricted_command(
+        command,
+        timeout_seconds=300,
+        cwd=Path(getattr(settings, "WORKSPACE_ROOT", "/app/workspace")).resolve(),
+    )
 
 
 @tool

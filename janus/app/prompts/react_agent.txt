@@ -14,13 +14,21 @@ TOOL NAMES
 INPUT
 {input}
 
-OUTPUT FORMAT (ReAct)
+OUTPUT FORMAT
 Thought: [Brief rationale, no hidden chain-of-thought]
-Action: [Tool Name]
-Action Input: {{JSON payload on a single line}}
-Observation: [Tool Output]
-... (repeat as needed) ...
-Thought: Do I need to use a tool? No.
+
+If a tool is needed, output ONLY:
+```json
+{{
+  "type": "tool_call_envelope",
+  "version": "1.0",
+  "calls": [
+    {{"name": "tool_name", "args": {{"param": "value"}}}}
+  ]
+}}
+```
+
+If no tool is needed:
 Final Answer: [Your response]
 
 SCRATCHPAD

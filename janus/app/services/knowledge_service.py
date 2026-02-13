@@ -1,8 +1,11 @@
+import re
+import time
 from typing import Any
 
 import structlog
 from fastapi import Request
 
+from app.core.memory.rag_telemetry import emit_step_telemetry
 from app.core.memory.graph_rag_core import query_knowledge_graph
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.repositories.knowledge_repository import KnowledgeRepository
@@ -33,13 +36,23 @@ class KnowledgeService:
         self._repo = repo
 
     async def get_stats(self) -> dict[str, Any]:
-        stats = await self._repo.get_node_and_relationship_stats()
-        return {
-            "total_nodes": sum(i.get("count", 0) for i in stats["nodes"]),
-            "total_relationships": sum(i.get("count", 0) for i in stats["relationships"]),
-            "node_types": stats["nodes"],
-            "relationship_types": stats["relationships"],
-        }
+        try:
+            stats = await self._repo.get_node_and_relationship_stats()
+            return {
+                "total_nodes": sum(i.get("count", 0) for i in stats["nodes"]),
+                "total_relationships": sum(i.get("count", 0) for i in stats["relationships"]),
+                "node_types": stats["nodes"],
+                "relationship_types": stats["relationships"],
+            }
+        except Exception as e:
+            logger.error("Error retrieving knowledge stats", exc_info=e)
+            return {
+                "total_nodes": 0,
+                "total_relationships": 0,
+                "node_types": [],
+                "relationship_types": [],
+                "error": str(e),
+            }
 
     async def get_code_entities(self, file_path: str | None = None) -> list[dict[str, Any]]:
         return await self._repo.find_code_entities(file_path)
@@ -97,7 +110,9 @@ class KnowledgeService:
                     all_calls.append(
                         {
                             "caller_name": call["caller"],
+                            "caller_qualified": call.get("caller_qualified"),
                             "callee_name": call["callee"],
+                            "callee_qualified": call.get("callee_qualified"),
                             "file_path": file_path,
                         }
                     )
@@ -116,7 +131,126 @@ class KnowledgeService:
     # --- Sprint 8 Operations ---
 
     async def semantic_query(self, question: str, limit: int = 10) -> str:
-        return await query_knowledge_graph(question, limit=limit)
+        started_at = time.perf_counter()
+        try:
+            answer = await query_knowledge_graph(question, limit=limit)
+            normalized = str(answer or "").strip().lower()
+            has_error_prefix = normalized.startswith("error")
+            no_context = normalized in {"", "no context found.", "graph rag not initialized."}
+            confidence = 0.0 if has_error_prefix or no_context else 1.0
+            emit_step_telemetry(
+                endpoint="/knowledge/query",
+                step="semantic_query",
+                source="graph_rag",
+                db="neo4j",
+                latency_ms=(time.perf_counter() - started_at) * 1000,
+                confidence=confidence,
+                error_code=None,
+                extra={"limit": int(limit)},
+            )
+            return answer
+        except Exception as e:
+            emit_step_telemetry(
+                endpoint="/knowledge/query",
+                step="semantic_query",
+                source="graph_rag",
+                db="neo4j",
+                latency_ms=(time.perf_counter() - started_at) * 1000,
+                confidence=0.0,
+                error_code=type(e).__name__,
+                extra={"limit": int(limit)},
+            )
+            raise
+
+    @staticmethod
+    def _extract_code_tokens(question: str) -> list[str]:
+        raw_tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_./:-]*", question.lower())
+        stopwords = {
+            "de",
+            "da",
+            "do",
+            "das",
+            "dos",
+            "e",
+            "em",
+            "no",
+            "na",
+            "nos",
+            "nas",
+            "o",
+            "a",
+            "os",
+            "as",
+            "um",
+            "uma",
+            "sobre",
+            "para",
+            "com",
+            "por",
+            "how",
+            "what",
+            "where",
+            "when",
+            "which",
+            "the",
+            "and",
+            "or",
+            "to",
+            "in",
+            "on",
+        }
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for token in raw_tokens:
+            if len(token) < 2 or token in stopwords:
+                continue
+            if token not in seen:
+                deduped.append(token)
+                seen.add(token)
+        return deduped[:20]
+
+    async def ask_code_with_citations(
+        self, question: str, limit: int = 10, citation_limit: int = 8
+    ) -> dict[str, Any]:
+        started_at = time.perf_counter()
+        try:
+            answer = await self.semantic_query(question, limit=limit)
+            tokens = self._extract_code_tokens(question)
+            citations = await self._repo.find_code_citations(tokens=tokens, limit=citation_limit)
+            if not citations:
+                answer = (
+                    "Nao encontrei citacoes rastreaveis para responder com seguranca sobre codigo. "
+                    "Reformule a pergunta ou indexe/reindexe a base."
+                )
+            confidence = 1.0 if citations else 0.0
+            emit_step_telemetry(
+                endpoint="/knowledge/query/code",
+                step="code_citations",
+                source="knowledge_service",
+                db="neo4j",
+                latency_ms=(time.perf_counter() - started_at) * 1000,
+                confidence=confidence,
+                error_code=None,
+                extra={
+                    "citation_count": len(citations),
+                    "token_count": len(tokens),
+                    "limit": int(limit),
+                    "citation_limit": int(citation_limit),
+                },
+            )
+            return {"answer": answer, "citations": citations}
+        except Exception as e:
+            emit_step_telemetry(
+                endpoint="/knowledge/query/code",
+                step="code_citations",
+                source="knowledge_service",
+                db="neo4j",
+                latency_ms=(time.perf_counter() - started_at) * 1000,
+                confidence=0.0,
+                error_code=type(e).__name__,
+                extra={"limit": int(limit), "citation_limit": int(citation_limit)},
+            )
+            raise
 
     async def consolidate_document(
         self, user_id: str, doc_id: str, limit: int = 50

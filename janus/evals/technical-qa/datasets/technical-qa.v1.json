@@ -1,0 +1,191 @@
+{
+  "dataset_id": "technical-qa",
+  "version": "v1",
+  "description": "Technical product questions used to evaluate Janus code QA quality with citations.",
+  "cases": [
+    {
+      "id": "TQ-001",
+      "category": "code-intelligence",
+      "question": "How does Janus resolve CALLS relationships in the knowledge graph?",
+      "expected_keywords": ["calls", "caller", "callee", "full_name", "file_path"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/repositories/knowledge_repository.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-002",
+      "category": "code-intelligence",
+      "question": "Where are caller_qualified and callee_qualified extracted from Python source?",
+      "expected_keywords": ["caller_qualified", "callee_qualified", "codeparser", "ast", "visit_call"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/services/code_analysis_service.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-003",
+      "category": "api",
+      "question": "Which endpoint answers code questions with file and line citations?",
+      "expected_keywords": ["query/code", "citations", "knowledge", "endpoint"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/api/v1/endpoints/knowledge.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-004",
+      "category": "api",
+      "question": "How is /api/v1/knowledge/query/code implemented in the backend?",
+      "expected_keywords": ["codequestionrequest", "codequestionresponse", "ask_code_with_citations"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/api/v1/endpoints/knowledge.py",
+          "line_min": 1
+        },
+        {
+          "file_path_contains": "janus/app/services/knowledge_service.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-005",
+      "category": "knowledge-service",
+      "question": "How does KnowledgeService build token candidates for code citation search?",
+      "expected_keywords": ["extract", "tokens", "stopwords", "knowledge", "citation"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/services/knowledge_service.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-006",
+      "category": "knowledge-service",
+      "question": "Where does Janus orchestrate answer plus citations for code questions?",
+      "expected_keywords": ["answer", "citations", "ask_code_with_citations", "semantic_query"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/services/knowledge_service.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-007",
+      "category": "graph-rag",
+      "question": "How does GraphRAG query synthesis work in Janus?",
+      "expected_keywords": ["graphrag", "retriever", "context", "synthesis"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/core/memory/graph_rag_core.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-008",
+      "category": "graph-rag",
+      "question": "Where is HybridRetriever shimmed for compatibility in Janus?",
+      "expected_keywords": ["hybridretriever", "shim", "index_name", "search"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/core/memory/graph_rag_core.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-009",
+      "category": "legacy-path",
+      "question": "Where is legacy codebase indexing in knowledge_graph_manager implemented?",
+      "expected_keywords": ["index_codebase", "knowledge_graph_manager", "merge_calls", "codefunction"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/core/memory/knowledge_graph_manager.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-010",
+      "category": "router",
+      "question": "How are API routers mounted for knowledge and evaluation endpoints?",
+      "expected_keywords": ["include_router", "knowledge", "evaluation", "api_router"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/api/v1/router.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-011",
+      "category": "evaluation",
+      "question": "What does the evaluation endpoint currently expose for experiments?",
+      "expected_keywords": ["experiments", "arms", "results", "winner"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/api/v1/endpoints/evaluation.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-012",
+      "category": "evaluation",
+      "question": "Where is the technical QA evaluator service implemented?",
+      "expected_keywords": ["technical", "qa", "evaluator", "dataset", "baseline"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/app/services/technical_qa_eval_service.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-013",
+      "category": "evaluation",
+      "question": "How can technical QA evaluation be executed from the command line?",
+      "expected_keywords": ["eval_technical_qa.py", "dataset", "publish-baseline", "score.json"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/scripts/eval_technical_qa.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-014",
+      "category": "quality",
+      "question": "Which tests validate code citation query contract?",
+      "expected_keywords": ["test", "contract", "query", "citations"],
+      "expected_citations": [
+        {
+          "file_path_contains": "tests/test_knowledge_code_query_contract.py",
+          "line_min": 1
+        }
+      ]
+    },
+    {
+      "id": "TQ-015",
+      "category": "quality",
+      "question": "Which tests validate technical QA baseline service behavior?",
+      "expected_keywords": ["technical", "qa", "baseline", "service", "tests"],
+      "expected_citations": [
+        {
+          "file_path_contains": "janus/tests/unit/test_technical_qa_eval_service.py",
+          "line_min": 1
+        }
+      ]
+    }
+  ]
+}

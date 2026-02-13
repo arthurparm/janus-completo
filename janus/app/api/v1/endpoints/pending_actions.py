@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import json
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
@@ -9,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
 from app.core.agents.graph_orchestrator import get_graph
+from app.core.security.redaction import redact_sensitive_payload
 
 router = APIRouter(tags=["PendingActions"], prefix="/pending_actions")
 logger = logging.getLogger(__name__)
@@ -23,6 +25,84 @@ class PendingActionDTO(BaseModel):
     tool_name: str | None = None
     args_json: str | None = None
     created_at: str | None = None
+    risk_level: str | None = None
+    risk_summary: str | None = None
+
+
+_HIGH_RISK_KEYWORDS = (
+    "delete",
+    "drop",
+    "truncate",
+    "remove",
+    "rm ",
+    "shutdown",
+    "reboot",
+    "kill",
+    "reset",
+    "wipe",
+    "format",
+    "powershell",
+    "bash",
+    "cmd ",
+)
+_MEDIUM_RISK_KEYWORDS = (
+    "write",
+    "create",
+    "update",
+    "patch",
+    "edit",
+    "modify",
+    "insert",
+    "exec",
+    "run",
+    "deploy",
+)
+_LOW_RISK_TOOL_PREFIXES = (
+    "list_",
+    "read_",
+    "get_",
+    "query_",
+    "recall_",
+    "search_",
+)
+
+
+def _summarize_action_risk(tool_name: str | None, args_json: str | None) -> tuple[str, str]:
+    tool = str(tool_name or "").strip()
+    args_text = str(args_json or "")
+    text = f"{tool} {args_text}".lower()
+
+    if any(keyword in text for keyword in _HIGH_RISK_KEYWORDS):
+        return ("high", "Alto risco: pode alterar ou remover dados/sistema.")
+    if any(keyword in text for keyword in _MEDIUM_RISK_KEYWORDS):
+        return ("medium", "Risco moderado: pode modificar estado do sistema.")
+
+    if tool and any(tool.lower().startswith(prefix) for prefix in _LOW_RISK_TOOL_PREFIXES):
+        return ("low", "Baixo risco: ferramenta de leitura/consulta.")
+
+    if args_json:
+        try:
+            parsed = json.loads(args_json)
+            if isinstance(parsed, dict) and parsed:
+                return ("medium", "Acao com parametros: revise os argumentos antes de aprovar.")
+        except Exception:
+            pass
+
+    return ("low", "Baixo risco: leitura/consulta sem alteracao relevante esperada.")
+
+
+def _sanitize_pending_args_json(args_json: str | None) -> str | None:
+    if args_json is None:
+        return None
+    raw_text = str(args_json)
+    if not raw_text.strip():
+        return raw_text
+
+    try:
+        parsed = json.loads(raw_text)
+        return json.dumps(redact_sensitive_payload(parsed), ensure_ascii=False)
+    except Exception:
+        return str(redact_sensitive_payload(raw_text))
 
 
 def _is_backend_unavailable_error(error: Exception) -> bool:
@@ -174,6 +254,10 @@ async def list_pending(
             repo = PendingActionRepository()
             sql_pending = repo.list(user_id=user_id, status=pending_status, limit=limit)
             for item in sql_pending:
+                safe_args_json = _sanitize_pending_args_json(getattr(item, "args_json", None))
+                risk_level, risk_summary = _summarize_action_risk(
+                    getattr(item, "tool_name", None), safe_args_json
+                )
                 items.append(
                     PendingActionDTO(
                         source="sql",
@@ -182,12 +266,14 @@ async def list_pending(
                         message=f"Waiting approval for tool: {getattr(item, 'tool_name', '-')}",
                         user_id=getattr(item, "user_id", None),
                         tool_name=getattr(item, "tool_name", None),
-                        args_json=getattr(item, "args_json", None),
+                        args_json=safe_args_json,
                         created_at=(
                             getattr(item, "created_at", None).isoformat()
                             if getattr(item, "created_at", None)
                             else None
                         ),
+                        risk_level=risk_level,
+                        risk_summary=risk_summary,
                     )
                 )
         except Exception as e:
@@ -227,6 +313,8 @@ async def list_pending(
                     thread_id=tid,
                     status="pending",
                     message="Waiting for approval",
+                    risk_level="medium",
+                    risk_summary="Risco moderado: acao aguardando aprovacao humana.",
                 )
                 for tid, waiting in checks
                 if waiting
@@ -271,7 +359,9 @@ async def approve(thread_id: str, background_tasks: BackgroundTasks):
             source="langgraph",
             thread_id=thread_id,
             status="approved",
-            message="Action approved. Execution resuming in background."
+            message="Action approved. Execution resuming in background.",
+            risk_level="medium",
+            risk_summary="Acao aprovada e retomada em background.",
         )
     except HTTPException:
         raise
@@ -305,6 +395,10 @@ async def approve_sql_action(action_id: int):
         if not updated:
             raise HTTPException(status_code=404, detail="Pending action not found")
 
+        safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
+        risk_level, risk_summary = _summarize_action_risk(
+            getattr(updated, "tool_name", None), safe_args_json
+        )
         return PendingActionDTO(
             source="sql",
             action_id=getattr(updated, "id", None),
@@ -312,12 +406,14 @@ async def approve_sql_action(action_id: int):
             message="Action approved.",
             user_id=getattr(updated, "user_id", None),
             tool_name=getattr(updated, "tool_name", None),
-            args_json=getattr(updated, "args_json", None),
+            args_json=safe_args_json,
             created_at=(
                 getattr(updated, "created_at", None).isoformat()
                 if getattr(updated, "created_at", None)
                 else None
             ),
+            risk_level=risk_level,
+            risk_summary=risk_summary,
         )
     except HTTPException:
         raise
@@ -351,6 +447,10 @@ async def reject_sql_action(action_id: int):
         if not updated:
             raise HTTPException(status_code=404, detail="Pending action not found")
 
+        safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
+        risk_level, risk_summary = _summarize_action_risk(
+            getattr(updated, "tool_name", None), safe_args_json
+        )
         return PendingActionDTO(
             source="sql",
             action_id=getattr(updated, "id", None),
@@ -358,12 +458,14 @@ async def reject_sql_action(action_id: int):
             message="Action rejected.",
             user_id=getattr(updated, "user_id", None),
             tool_name=getattr(updated, "tool_name", None),
-            args_json=getattr(updated, "args_json", None),
+            args_json=safe_args_json,
             created_at=(
                 getattr(updated, "created_at", None).isoformat()
                 if getattr(updated, "created_at", None)
                 else None
             ),
+            risk_level=risk_level,
+            risk_summary=risk_summary,
         )
     except HTTPException:
         raise
@@ -406,7 +508,9 @@ async def reject(thread_id: str, background_tasks: BackgroundTasks):
             source="langgraph",
             thread_id=thread_id,
             status="rejected",
-            message="Action rejected. Cleanup running in background."
+            message="Action rejected. Cleanup running in background.",
+            risk_level="medium",
+            risk_summary="Acao rejeitada e cleanup em background.",
         )
     except HTTPException:
         raise

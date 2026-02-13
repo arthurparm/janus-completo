@@ -1,19 +1,19 @@
 from typing import Any
 
 import structlog
-
-
-from sqlalchemy import text, inspect
 from app.db import db
+from app.models.user_models import Consent
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import Session
 
 logger = structlog.get_logger(__name__)
 
 
 class DBMigrationService:
-    def _get_session(self):
+    def _get_session(self) -> Session:
         return db.get_session_direct()
 
-    def _index_exists(self, s, table: str, index_name: str) -> bool:
+    def _index_exists(self, s: Session, table: str, index_name: str) -> bool:
         try:
             insp = inspect(s.get_bind())
             indexes = insp.get_indexes(table) or []
@@ -21,7 +21,7 @@ class DBMigrationService:
         except Exception:
             return False
 
-    def _constraint_exists(self, s, table: str, constraint_name: str) -> bool:
+    def _constraint_exists(self, s: Session, table: str, constraint_name: str) -> bool:
         try:
             insp = inspect(s.get_bind())
             uniques = insp.get_unique_constraints(table) or []
@@ -29,7 +29,7 @@ class DBMigrationService:
         except Exception:
             return False
 
-    def _column_exists(self, s, table: str, column: str) -> bool:
+    def _column_exists(self, s: Session, table: str, column: str) -> bool:
         try:
             insp = inspect(s.get_bind())
             cols = insp.get_columns(table) or []
@@ -37,12 +37,33 @@ class DBMigrationService:
         except Exception:
             return False
 
+    def _dialect_name(self, s: Session) -> str:
+        try:
+            bind = s.get_bind()
+            name = (bind.dialect.name if bind and bind.dialect else "") or ""
+            return str(name).lower()
+        except Exception:
+            return ""
+
+    def _unique_constraint_sql(
+        self, *, dialect: str, table: str, constraint: str, columns_csv: str
+    ) -> str:
+        if dialect in ("mysql", "mariadb"):
+            return f"ALTER TABLE {table} ADD CONSTRAINT {constraint} UNIQUE KEY ({columns_csv})"
+        return f"ALTER TABLE {table} ADD CONSTRAINT {constraint} UNIQUE ({columns_csv})"
+
+    def _details_json_column_sql(self, *, dialect: str) -> str:
+        if dialect in ("postgresql", "postgres"):
+            return "ALTER TABLE audit_events ADD COLUMN details_json JSONB NULL"
+        return "ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL"
+
     def validate_schema(self) -> dict[str, Any]:
         s = self._get_session()
         try:
             checks: list[dict[str, Any]] = []
+            consent_table = Consent.__tablename__
 
-            def add(table: str, name: str, kind: str, exists: bool):
+            def add(table: str, name: str, kind: str, exists: bool) -> None:
                 checks.append({"table": table, "name": name, "kind": kind, "exists": exists})
 
             add(
@@ -118,16 +139,16 @@ class DBMigrationService:
                 self._constraint_exists(s, "users", "unique_user_external_id"),
             )
             add(
-                "consents",
-                "unique_user_scope_consent",
+                consent_table,
+                "unique_user_privacy_scope_consent",
                 "constraint",
-                self._constraint_exists(s, "consents", "unique_user_scope_consent"),
+                self._constraint_exists(s, consent_table, "unique_user_privacy_scope_consent"),
             )
             add(
-                "consents",
-                "idx_consent_user_scope",
+                consent_table,
+                "idx_privacy_consent_user_scope",
                 "index",
-                self._index_exists(s, "consents", "idx_consent_user_scope"),
+                self._index_exists(s, consent_table, "idx_privacy_consent_user_scope"),
             )
             ok = all(c["exists"] for c in checks)
             return {"status": "ok" if ok else "missing", "checks": checks}
@@ -138,6 +159,8 @@ class DBMigrationService:
         s = self._get_session()
         applied: list[str] = []
         try:
+            dialect = self._dialect_name(s)
+            consent_table = Consent.__tablename__
             if not self._index_exists(s, "users", "idx_user_lookup"):
                 s.execute(text("CREATE INDEX idx_user_lookup ON users (email, external_id)"))
                 applied.append("users.idx_user_lookup")
@@ -154,13 +177,40 @@ class DBMigrationService:
                 s.execute(text("ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP NULL"))
                 applied.append("users.password_reset_expires_at")
             if not self._constraint_exists(s, "users", "unique_user_email"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE KEY (email)"))
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table="users",
+                            constraint="unique_user_email",
+                            columns_csv="email",
+                        )
+                    )
+                )
                 applied.append("users.unique_user_email")
             if not self._constraint_exists(s, "users", "unique_user_username"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_username UNIQUE KEY (username)"))
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table="users",
+                            constraint="unique_user_username",
+                            columns_csv="username",
+                        )
+                    )
+                )
                 applied.append("users.unique_user_username")
             if not self._constraint_exists(s, "users", "unique_user_external_id"):
-                s.execute(text("ALTER TABLE users ADD CONSTRAINT unique_user_external_id UNIQUE KEY (external_id)"))
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table="users",
+                            constraint="unique_user_external_id",
+                            columns_csv="external_id",
+                        )
+                    )
+                )
                 applied.append("users.unique_user_external_id")
             if not self._index_exists(s, "profiles", "idx_profile_user"):
                 s.execute(text("CREATE INDEX idx_profile_user ON profiles (user_id)"))
@@ -172,14 +222,36 @@ class DBMigrationService:
                 s.execute(text("CREATE INDEX idx_message_session_ts ON messages (session_id, timestamp)"))
                 applied.append("messages.idx_message_session_ts")
             if not self._constraint_exists(s, "roles", "unique_role_name"):
-                s.execute(text("ALTER TABLE roles ADD CONSTRAINT unique_role_name UNIQUE KEY (name)"))
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table="roles",
+                            constraint="unique_role_name",
+                            columns_csv="name",
+                        )
+                    )
+                )
                 applied.append("roles.unique_role_name")
-            if not self._constraint_exists(s, "consents", "unique_user_scope_consent"):
-                s.execute(text("ALTER TABLE consents ADD CONSTRAINT unique_user_scope_consent UNIQUE KEY (user_id, scope)"))
-                applied.append("consents.unique_user_scope_consent")
-            if not self._index_exists(s, "consents", "idx_consent_user_scope"):
-                s.execute(text("CREATE INDEX idx_consent_user_scope ON consents (user_id, scope)"))
-                applied.append("consents.idx_consent_user_scope")
+            if not self._constraint_exists(s, consent_table, "unique_user_privacy_scope_consent"):
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table=consent_table,
+                            constraint="unique_user_privacy_scope_consent",
+                            columns_csv="user_id, scope",
+                        )
+                    )
+                )
+                applied.append(f"{consent_table}.unique_user_privacy_scope_consent")
+            if not self._index_exists(s, consent_table, "idx_privacy_consent_user_scope"):
+                s.execute(
+                    text(
+                        f"CREATE INDEX idx_privacy_consent_user_scope ON {consent_table} (user_id, scope)"
+                    )
+                )
+                applied.append(f"{consent_table}.idx_privacy_consent_user_scope")
             # AuditEvent evolution
             try:
                 s.execute(text("ALTER TABLE audit_events ADD COLUMN justification TEXT NULL"))
@@ -187,7 +259,7 @@ class DBMigrationService:
             except Exception:
                 pass
             try:
-                s.execute(text("ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL"))
+                s.execute(text(self._details_json_column_sql(dialect=dialect)))
                 applied.append("audit_events.add_details_json")
             except Exception:
                 pass

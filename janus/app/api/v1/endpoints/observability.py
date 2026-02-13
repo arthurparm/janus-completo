@@ -7,6 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
+from app.api.exception_handlers import get_error_taxonomy_catalog
 from app.services.observability_service import ObservabilityService, get_observability_service
 
 router = APIRouter(tags=["Observability"])
@@ -218,6 +219,28 @@ async def audit_events(
     events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
     total = service.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
     return {"total": total, "events": events}
+
+
+@router.get("/errors/taxonomy", summary="Catalogo padronizado de erros")
+async def error_taxonomy():
+    return {"items": get_error_taxonomy_catalog()}
+
+
+@router.get(
+    "/requests/{request_id}/dashboard",
+    summary="Dashboard de pipeline por request_id",
+)
+async def request_pipeline_dashboard(
+    request_id: str,
+    limit: int = 2000,
+    include_details: bool = False,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    return service.get_request_pipeline_dashboard(
+        request_id=request_id,
+        limit=limit,
+        include_details=include_details,
+    )
 
 
 @router.get("/audit/export", summary="Exporta eventos de auditoria")

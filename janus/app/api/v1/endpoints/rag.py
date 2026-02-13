@@ -1,8 +1,10 @@
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
+from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.services.memory_service import MemoryService, get_memory_service
 
 try:
@@ -51,6 +53,31 @@ except Exception:
 router = APIRouter(tags=["RAG"])
 
 
+def _emit_rag_step(
+    *,
+    endpoint: str,
+    step: str,
+    source: str,
+    db: str,
+    started_at: float,
+    scores: list[Any] | None = None,
+    confidence: float | None = None,
+    error_code: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    derived_confidence = confidence if confidence is not None else confidence_from_scores(scores or [])
+    emit_step_telemetry(
+        endpoint=endpoint,
+        step=step,
+        source=source,
+        db=db,
+        latency_ms=(time.perf_counter() - started_at) * 1000,
+        confidence=derived_confidence,
+        error_code=error_code,
+        extra=extra,
+    )
+
+
 class RAGSearchResponse(BaseModel):
     answer: str
     citations: list[dict[str, Any]]
@@ -86,6 +113,7 @@ async def rag_search(
     import time as _t
 
     _start = _t.perf_counter()
+    error_code: str | None = None
     cm = _tracer.start_as_current_span("rag.search") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
@@ -94,9 +122,10 @@ async def rag_search(
             )
         _RAG_REQ.labels("search", "success").inc()
         _RAG_LAT.labels("search", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception:
+    except Exception as e:
         _RAG_REQ.labels("search", "error").inc()
         _RAG_LAT.labels("search", "error").observe(max(0.0, _t.perf_counter() - _start))
+        error_code = type(e).__name__
         results = []
     try:
         _RAG_RESULTS_TOTAL.labels("search").inc(len(results))
@@ -133,6 +162,16 @@ async def rag_search(
         answer = "Nenhum trecho relevante encontrado para a consulta."
     else:
         answer = "\n\n".join(snippets)
+    _emit_rag_step(
+        endpoint="/rag/search",
+        step="retrieval",
+        source="vector",
+        db="qdrant",
+        started_at=_start,
+        scores=[r.get("score") for r in results if isinstance(r, dict)],
+        error_code=error_code,
+        extra={"result_count": len(results)},
+    )
 
     return RAGSearchResponse(answer=answer, citations=citations)
 
@@ -157,12 +196,22 @@ async def rag_user_chat_search(
 ):
     from qdrant_client import models
 
+    started_at = time.perf_counter()
     # Async
     try:
         collection_name = await aget_or_create_collection(f"user_{user_id}")
         vec = await aembed_text(query)
-    except Exception:
+    except Exception as e:
         # Fallback se falhar
+        _emit_rag_step(
+            endpoint="/rag/user-chat",
+            step="retrieval",
+            source="vector",
+            db="qdrant",
+            started_at=started_at,
+            confidence=0.0,
+            error_code=type(e).__name__,
+        )
         return RAGUserChatResponse(answer="Erro na busca.", citations=[])
 
     must: list[models.FieldCondition] = []
@@ -180,6 +229,7 @@ async def rag_user_chat_search(
     import time as _t
 
     _start = _t.perf_counter()
+    error_code: str | None = None
     cm = _tracer.start_as_current_span("rag.user_chat") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
@@ -193,9 +243,10 @@ async def rag_user_chat_search(
         hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception:
+    except Exception as e:
         _RAG_REQ.labels("user_chat", "error").inc()
         _RAG_LAT.labels("user_chat", "error").observe(max(0.0, _t.perf_counter() - _start))
+        error_code = type(e).__name__
         hits = []
     try:
         _RAG_RESULTS_TOTAL.labels("user_chat").inc(len(hits or []))
@@ -245,6 +296,16 @@ async def rag_user_chat_search(
             break
 
     answer = "Nenhum trecho relevante encontrado." if not snippets else "\n\n".join(snippets)
+    _emit_rag_step(
+        endpoint="/rag/user-chat",
+        step="retrieval",
+        source="vector",
+        db="qdrant",
+        started_at=_start,
+        scores=[r.get("score") for r in items if isinstance(r, dict)],
+        error_code=error_code,
+        extra={"result_count": len(items)},
+    )
     return RAGUserChatResponse(answer=answer, citations=citations)
 
 
@@ -267,10 +328,20 @@ async def rag_productivity_search(
 ):
     from qdrant_client import models
 
+    started_at = time.perf_counter()
     try:
         coll = await aget_or_create_collection(f"user_{user_id}")
         vec = await aembed_text(query)
-    except Exception:
+    except Exception as e:
+        _emit_rag_step(
+            endpoint="/rag/productivity",
+            step="retrieval",
+            source="vector",
+            db="qdrant",
+            started_at=started_at,
+            confidence=0.0,
+            error_code=type(e).__name__,
+        )
         return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
 
     must: list[models.FieldCondition] = [
@@ -290,6 +361,7 @@ async def rag_productivity_search(
     import time as _t
 
     _start = _t.perf_counter()
+    error_code: str | None = None
     cm = _tracer.start_as_current_span("rag.productivity") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
@@ -303,9 +375,10 @@ async def rag_productivity_search(
         hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("productivity", "success").inc()
         _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception:
+    except Exception as e:
         _RAG_REQ.labels("productivity", "error").inc()
         _RAG_LAT.labels("productivity", "error").observe(max(0.0, _t.perf_counter() - _start))
+        error_code = type(e).__name__
         hits = []
     try:
         _RAG_RESULTS_TOTAL.labels("productivity").inc(len(hits or []))
@@ -354,6 +427,16 @@ async def rag_productivity_search(
             break
 
     answer = "Nenhum item relevante encontrado." if not snippets else "\n\n".join(snippets)
+    _emit_rag_step(
+        endpoint="/rag/productivity",
+        step="retrieval",
+        source="vector",
+        db="qdrant",
+        started_at=_start,
+        scores=[r.get("score") for r in items if isinstance(r, dict)],
+        error_code=error_code,
+        extra={"result_count": len(items)},
+    )
     return RAGProductivityResponse(answer=answer, citations=citations)
 
 
@@ -377,19 +460,38 @@ async def rag_user_chat_search_v2(
     min_score: float | None = None,
     http: Request = None,
 ):
+    started_at = time.perf_counter()
     if not user_id:
         try:
             user_id = http.headers.get("X-User-Id") if http else None
         except Exception:
             user_id = None
     if not user_id:
+        _emit_rag_step(
+            endpoint="/rag/user_chat",
+            step="retrieval",
+            source="vector",
+            db="qdrant",
+            started_at=started_at,
+            confidence=0.0,
+            error_code="SKIPPED_MISSING_USER_ID",
+        )
         return RAGUserChatResponseV2(results=[])
 
     try:
         vec = await aembed_text(query)
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(f"user_{user_id}")
-    except Exception:
+    except Exception as e:
+        _emit_rag_step(
+            endpoint="/rag/user_chat",
+            step="retrieval",
+            source="vector",
+            db="qdrant",
+            started_at=started_at,
+            confidence=0.0,
+            error_code=type(e).__name__,
+        )
         return RAGUserChatResponseV2(results=[])
 
     # Filtro por payload
@@ -420,6 +522,7 @@ async def rag_user_chat_search_v2(
     import time as _t
 
     _start = _t.perf_counter()
+    error_code: str | None = None
     cm = _tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
@@ -433,9 +536,10 @@ async def rag_user_chat_search_v2(
             )
         _RAG_REQ.labels("user_chat_v2", "success").inc()
         _RAG_LAT.labels("user_chat_v2", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception:
+    except Exception as e:
         _RAG_REQ.labels("user_chat_v2", "error").inc()
         _RAG_LAT.labels("user_chat_v2", "error").observe(max(0.0, _t.perf_counter() - _start))
+        error_code = type(e).__name__
         res = []
     try:
         _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(res or []))
@@ -458,6 +562,16 @@ async def rag_user_chat_search_v2(
                 "timestamp": meta.get("timestamp"),
             }
         )
+    _emit_rag_step(
+        endpoint="/rag/user_chat",
+        step="retrieval",
+        source="vector",
+        db="qdrant",
+        started_at=_start,
+        scores=[r.get("score") for r in results if isinstance(r, dict)],
+        error_code=error_code,
+        extra={"result_count": len(results)},
+    )
     return RAGUserChatResponseV2(results=results)
 
 
@@ -479,17 +593,28 @@ async def rag_hybrid_search(
     http: Request = None,
     service: MemoryService = Depends(get_memory_service),
 ):
+    started_at = time.perf_counter()
     try:
         hdr_uid = http.headers.get("X-User-Id") if http else None
     except Exception:
         hdr_uid = None
     uid = user_id or hdr_uid
     if not uid:
+        _emit_rag_step(
+            endpoint="/rag/hybrid_search",
+            step="vector_retrieval",
+            source="hybrid",
+            db="qdrant+neo4j",
+            started_at=started_at,
+            confidence=0.0,
+            error_code="SKIPPED_MISSING_USER_ID",
+        )
         return RAGHybridResponse(answer="", citations=[])
 
     import time as _t
 
     _start = _t.perf_counter()
+    vector_error_code: str | None = None
     cm = _tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext()
     try:
         with cm:  # type: ignore
@@ -502,9 +627,10 @@ async def rag_hybrid_search(
             )
         _RAG_REQ.labels("hybrid", "success").inc()
         _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception:
+    except Exception as e:
         _RAG_REQ.labels("hybrid", "error").inc()
         _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
+        vector_error_code = type(e).__name__
         results_vec = []
     try:
         _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(results_vec))
@@ -513,11 +639,43 @@ async def rag_hybrid_search(
             _RAG_SCORES.labels("hybrid").observe(max(0.0, min(1.0, s)))
     except Exception:
         pass
+    _emit_rag_step(
+        endpoint="/rag/hybrid_search",
+        step="vector_retrieval",
+        source="vector",
+        db="qdrant",
+        started_at=_start,
+        scores=[r.get("score") for r in results_vec if isinstance(r, dict)],
+        error_code=vector_error_code,
+        extra={"result_count": len(results_vec)},
+    )
     from app.db.graph import get_graph_db
     from app.repositories.knowledge_repository import KnowledgeRepository
 
-    kr = KnowledgeRepository(await get_graph_db())
-    concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
+    graph_start = time.perf_counter()
+    graph_error_code: str | None = None
+    try:
+        kr = KnowledgeRepository(await get_graph_db())
+        concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
+    except Exception as e:
+        graph_error_code = type(e).__name__
+        concepts = []
+    graph_scores: list[float] = []
+    for c in concepts:
+        try:
+            graph_scores.append(1.0 / (1.0 + float(c.get("distance") or 1.0)))
+        except Exception:
+            continue
+    _emit_rag_step(
+        endpoint="/rag/hybrid_search",
+        step="graph_retrieval",
+        source="graph",
+        db="neo4j",
+        started_at=graph_start,
+        scores=graph_scores,
+        error_code=graph_error_code,
+        extra={"result_count": len(concepts)},
+    )
     citations: list[dict[str, Any]] = []
     for r in results_vec:
         meta = r.get("metadata") or {}
@@ -581,3 +739,4 @@ async def rag_hybrid_search(
             snippets.append(t[:300])
     answer = "\n\n".join(snippets) if snippets else "Nenhum trecho relevante encontrado."
     return RAGHybridResponse(answer=answer, citations=citations)
+

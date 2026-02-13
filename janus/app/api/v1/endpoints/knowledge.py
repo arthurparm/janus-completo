@@ -21,6 +21,26 @@ class KnowledgeQueryResponse(BaseModel):
     answer: str
 
 
+class CodeCitation(BaseModel):
+    type: str
+    name: str
+    file_path: str
+    line: int
+    full_name: str
+    relevance: int
+
+
+class CodeQuestionRequest(BaseModel):
+    question: str
+    limit: int | None = 10
+    citation_limit: int | None = 8
+
+
+class CodeQuestionResponse(BaseModel):
+    answer: str
+    citations: list[CodeCitation]
+
+
 class RelatedConceptsRequest(BaseModel):
     concept: str
     max_depth: int = 2
@@ -171,6 +191,27 @@ async def query_knowledge(
 
 
 @router.post(
+    "/query/code",
+    response_model=CodeQuestionResponse,
+    summary="Pergunta sobre codigo com citacoes de arquivo e linha",
+)
+async def query_code_with_citations(
+    request: CodeQuestionRequest, service: KnowledgeService = Depends(get_knowledge_service)
+):
+    result = await service.ask_code_with_citations(
+        question=request.question, limit=request.limit, citation_limit=request.citation_limit
+    )
+    citations = [CodeCitation(**row) for row in result.get("citations", [])]
+    answer = result.get("answer", "")
+    if not citations:
+        answer = (
+            "Nao encontrei citacoes rastreaveis para responder com seguranca sobre codigo. "
+            "Reformule a pergunta ou indexe/reindexe a base."
+        )
+    return CodeQuestionResponse(answer=answer, citations=citations)
+
+
+@router.post(
     "/concepts/related",
     response_model=RelatedConceptsResponse,
     summary="Busca conceitos relacionados",
@@ -260,7 +301,7 @@ async def detailed_health_check(service: KnowledgeService = Depends(get_knowledg
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_status": "healthy"
-            if detailed_status["system_health"]["is_healthy"]
+            if not detailed_status.get("circuit_breaker_open", False) and not detailed_status.get("offline", False)
             else "degraded",
             "basic_health": basic_health,
             "detailed_status": detailed_status,

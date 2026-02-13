@@ -80,8 +80,8 @@ async def test_save_code_structure_uses_consistent_graph_keys():
     repo = KnowledgeRepository(db)
     parser = SimpleNamespace(
         file_path="/repo/app/example.py",
-        functions=[{"name": "run", "line": 10}],
-        classes=[{"name": "Engine", "line": 30}],
+        functions=[{"name": "run", "qualified_name": "Engine.run", "line": 10}],
+        classes=[{"name": "Engine", "qualified_name": "Engine", "line": 30}],
     )
 
     await repo.save_code_structure(parser)
@@ -99,7 +99,7 @@ async def test_save_code_structure_uses_consistent_graph_keys():
     assert function_call["merge_keys"] == ["name", "file_path"]
     assert function_call["properties"]["name"] == "run"
     assert function_call["properties"]["file_path"] == "/repo/app/example.py"
-    assert function_call["properties"]["full_name"].endswith("::run")
+    assert function_call["properties"]["full_name"].endswith("::Engine.run")
 
     class_call = db.merge_node_calls[2]
     assert class_call["merge_keys"] == ["name", "file_path"]
@@ -114,15 +114,24 @@ async def test_save_code_structure_uses_consistent_graph_keys():
 async def test_bulk_merge_calls_prefers_same_file_and_fallback():
     db = FakeGraphDB()
     repo = KnowledgeRepository(db)
-    calls = [{"caller_name": "run", "callee_name": "helper", "file_path": "/repo/app/example.py"}]
+    calls = [
+        {
+            "caller_name": "run",
+            "caller_qualified": "Engine.run",
+            "callee_name": "helper",
+            "callee_qualified": "Engine.helper",
+            "file_path": "/repo/app/example.py",
+        }
+    ]
 
     await repo.bulk_merge_calls(calls)
 
     assert len(db.execute_calls) == 1
     execution = db.execute_calls[0]
     query = execution["query"]
-    assert "name: call.caller_name, file_path: call.file_path" in query
-    assert "OPTIONAL MATCH (callee_same" in query
-    assert "coalesce(callee_same, head(collect(callee_any)))" in query
+    assert "caller.full_name = call.file_path + \"::\" + call.caller_qualified" in query
+    assert "OPTIONAL MATCH (callee_same_full" in query
+    assert "OPTIONAL MATCH (callee_any_full" in query
+    assert "coalesce(callee_same_full, callee_same_name, callee_any_full" in query
     assert execution["params"]["calls"] == calls
     assert execution["operation"] == "repo_bulk_merge_calls"

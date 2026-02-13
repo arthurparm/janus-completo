@@ -1,5 +1,7 @@
+import os
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import structlog
 
@@ -20,8 +22,57 @@ class PolicyConfig:
     auto_confirm: bool = True
     allowlist: set[str] = field(default_factory=set)
     blocklist: set[str] = field(default_factory=set)
+    capability_allowlist: set[str] = field(default_factory=set)
+    command_allowlist: set[str] = field(default_factory=set)
+    restricted_command_tools: set[str] = field(default_factory=set)
+    command_blocklist_tokens: set[str] = field(default_factory=set)
     max_actions_per_cycle: int = 20
     max_seconds_per_cycle: int = 60
+
+    def __post_init__(self):
+        def _parse_csv_set(raw: str) -> set[str]:
+            return {item.strip().lower() for item in str(raw or "").split(",") if item.strip()}
+
+        if not self.capability_allowlist:
+            self.capability_allowlist = _parse_csv_set(
+                os.getenv("CHAT_TOOL_CAPABILITY_ALLOWLIST", "")
+            )
+
+        if not self.command_allowlist:
+            self.command_allowlist = _parse_csv_set(os.getenv("CHAT_TOOL_COMMAND_ALLOWLIST", ""))
+
+        if not self.restricted_command_tools:
+            self.restricted_command_tools = _parse_csv_set(
+                os.getenv(
+                    "CHAT_TOOL_RESTRICTED_COMMAND_TOOLS",
+                    "execute_shell,execute_system_command",
+                )
+            )
+
+        # Enhanced blocklist tokens (space-agnostic checks)
+        self.command_blocklist_tokens = _parse_csv_set(
+            os.getenv(
+                "CHAT_TOOL_COMMAND_BLOCKLIST",
+                "rm -rf,del /f,format ,shutdown,reboot,powershell -enc,curl |,wget |,nc ,netcat ,chmod 777,chmod -R 777,dd if=",
+            )
+        )
+
+        self.allowlist = {str(item).strip().lower() for item in self.allowlist if str(item).strip()}
+        self.blocklist = {str(item).strip().lower() for item in self.blocklist if str(item).strip()}
+        self.capability_allowlist = {
+            str(item).strip().lower() for item in self.capability_allowlist if str(item).strip()
+        }
+        self.command_allowlist = {
+            str(item).strip().lower() for item in self.command_allowlist if str(item).strip()
+        }
+        self.restricted_command_tools = {
+            str(item).strip().lower()
+            for item in self.restricted_command_tools
+            if str(item).strip()
+        }
+        self.command_blocklist_tokens = {
+            str(item).strip().lower() for item in self.command_blocklist_tokens if str(item).strip()
+        }
 
 
 @dataclass
@@ -32,20 +83,13 @@ class PolicyDecision:
 
 
 class PolicyEngine:
-    """Validações mínimas antes de executar ferramentas.
-
-    - Verifica nível de permissão vs. perfil de risco
-    - Aplica listas de bloqueio/permitidos
-    - Respeita rate limits do ActionRegistry
-    - Exige confirmação quando aplicável
-    """
+    """Basic pre-execution validations for tools."""
 
     def __init__(self, config: PolicyConfig | None = None):
         self.config = config or PolicyConfig()
         self._cycle_started_at: float = time.time()
         self._actions_in_cycle: int = 0
-        
-        # Padrões suspeitos de Prompt Injection
+
         self._injection_patterns = [
             "ignore previous instructions",
             "ignore all instructions",
@@ -63,25 +107,25 @@ class PolicyEngine:
         ]
 
     def reset_cycle_quota(self):
+        # Reset atômico não é garantido sem lock, mas reduz race condition em uso típico
         self._cycle_started_at = time.time()
         self._actions_in_cycle = 0
 
     def can_continue_cycle(self) -> bool:
+        # Check quota first (atomic read)
+        if self.config.max_actions_per_cycle and self._actions_in_cycle >= self.config.max_actions_per_cycle:
+             return False
+
         elapsed = time.time() - self._cycle_started_at
         if self.config.max_seconds_per_cycle and elapsed > self.config.max_seconds_per_cycle:
             return False
-        if (
-            self.config.max_actions_per_cycle
-            and self._actions_in_cycle >= self.config.max_actions_per_cycle
-        ):
-            return False
+            
         return True
 
     def _check_permission_vs_risk(self, meta: ToolMetadata) -> PolicyDecision:
         rp = (self.config.risk_profile or RiskProfile.BALANCED).lower()
         pl = meta.permission_level
 
-        # Conservative: somente READ_ONLY e SAFE; WRITE requer confirmação; DANGEROUS bloqueado
         if rp == RiskProfile.CONSERVATIVE:
             if pl in [PermissionLevel.READ_ONLY, PermissionLevel.SAFE]:
                 return PolicyDecision(allowed=True)
@@ -89,55 +133,121 @@ class PolicyEngine:
                 return PolicyDecision(
                     allowed=self.config.auto_confirm,
                     require_confirmation=not self.config.auto_confirm,
-                    reason="WRITE requer confirmação em modo conservador",
+                    reason="WRITE requires confirmation in conservative mode",
                 )
-            return PolicyDecision(
-                allowed=False, reason="Ferramenta perigosa bloqueada em modo conservador"
-            )
+            return PolicyDecision(allowed=False, reason="Dangerous tool blocked in conservative mode")
 
-        # Balanced: SAFE e WRITE permitidos; DANGEROUS somente se na allowlist
         if rp == RiskProfile.BALANCED:
             if pl in [PermissionLevel.READ_ONLY, PermissionLevel.SAFE, PermissionLevel.WRITE]:
                 return PolicyDecision(allowed=True)
-            # DANGEROUS
             return PolicyDecision(
-                allowed=meta.name in self.config.allowlist,
-                reason="Ferramenta perigosa fora da allowlist em modo balanceado",
+                allowed=str(meta.name).lower() in self.config.allowlist,
+                reason="Dangerous tool outside allowlist in balanced mode",
             )
 
-        # Aggressive: permite tudo exceto DANGEROUS fora da allowlist; sempre auto-confirma
         if rp == RiskProfile.AGGRESSIVE:
             if pl == PermissionLevel.DANGEROUS:
                 return PolicyDecision(
-                    allowed=meta.name in self.config.allowlist,
-                    reason="Ferramenta perigosa fora da allowlist em modo agressivo",
+                    allowed=str(meta.name).lower() in self.config.allowlist,
+                    reason="Dangerous tool outside allowlist in aggressive mode",
                 )
             return PolicyDecision(allowed=True)
 
-        # Fallback
         return PolicyDecision(allowed=True)
 
+    def _check_capability_allowlist(self, meta: ToolMetadata) -> PolicyDecision:
+        if not self.config.capability_allowlist:
+            return PolicyDecision(allowed=True)
+
+        category = str(getattr(meta.category, "value", "") or "").strip().lower()
+        if category in self.config.capability_allowlist:
+            return PolicyDecision(allowed=True)
+
+        return PolicyDecision(
+            allowed=False,
+            reason=f"Capability '{category or 'unknown'}' outside allowlist",
+        )
+
+    def _extract_command_text(self, input_args: dict[str, Any] | None) -> str | None:
+        if not isinstance(input_args, dict):
+            return None
+
+        for key in ("command", "cmd", "shell_command", "script", "powershell", "bash"):
+            value = input_args.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, list):
+                joined = " ".join(str(part) for part in value if str(part).strip()).strip()
+                if joined:
+                    return joined
+
+        return None
+
+    def _check_command_allowlist(
+        self, *, meta: ToolMetadata, input_args: dict[str, Any] | None
+    ) -> PolicyDecision:
+        tool_name = str(meta.name or "").strip().lower()
+        is_restricted_tool = (
+            tool_name in self.config.restricted_command_tools
+            or meta.permission_level == PermissionLevel.DANGEROUS
+        )
+        if not is_restricted_tool:
+            return PolicyDecision(allowed=True)
+
+        command_text = self._extract_command_text(input_args)
+        if not command_text:
+            return PolicyDecision(allowed=True)
+
+        normalized = command_text.lower().strip()
+        # Remove multiple spaces to avoid bypass like "rm   -rf"
+        normalized_tight = " ".join(normalized.split())
+
+        for token in self.config.command_blocklist_tokens:
+            if token and (token in normalized or token in normalized_tight):
+                logger.warning("policy_blocked_command_token", tool=meta.name, token=token)
+                return PolicyDecision(
+                    allowed=False,
+                    reason=f"Command blocked by token: {token}",
+                )
+
+        if self.config.command_allowlist:
+            if any(normalized.startswith(prefix) for prefix in self.config.command_allowlist):
+                return PolicyDecision(allowed=True)
+            return PolicyDecision(allowed=False, reason="Command outside allowlist")
+
+        if not self.config.auto_confirm:
+            return PolicyDecision(
+                allowed=False,
+                require_confirmation=True,
+                reason="Sensitive command requires manual approval",
+            )
+
+        return PolicyDecision(
+            allowed=False,
+            reason="Sensitive command blocked because command allowlist is not configured",
+        )
+
     def validate_content_safety(self, content: str) -> PolicyDecision:
-        """
-        Verifica se o conteúdo do prompt contém tentativas de injeção ou violações de segurança.
-        """
         if not content or not isinstance(content, str):
             return PolicyDecision(allowed=True)
-            
-        # Normalização básica para dificultar bypass por case/espaços/leetspeak
+
         content_lower = content.lower()
-        
-        # Leetspeak normalization (basic)
-        normalized = content_lower.replace("@", "a").replace("$", "s").replace("0", "o").replace("1", "i").replace("!", "i")
-        
+        normalized = (
+            content_lower.replace("@", "a")
+            .replace("$", "s")
+            .replace("0", "o")
+            .replace("1", "i")
+            .replace("!", "i")
+        )
+
         for pattern in self._injection_patterns:
             if pattern in content_lower or pattern in normalized:
-                logger.warning(f"Potential prompt injection detected: '{pattern}'")
+                logger.warning("potential_prompt_injection_detected", pattern=pattern)
                 return PolicyDecision(
-                    allowed=False, 
-                    reason=f"Conteúdo bloqueado por conter padrão suspeito: {pattern}"
+                    allowed=False,
+                    reason=f"Blocked by suspicious content pattern: {pattern}",
                 )
-                
+
         return PolicyDecision(allowed=True)
 
     def validate_tool_call(
@@ -146,28 +256,34 @@ class PolicyEngine:
         input_args: dict | None = None,
         user_id: str | None = None,
     ) -> PolicyDecision:
-        # Blocklist global
-        if tool_name in self.config.blocklist:
-            return PolicyDecision(allowed=False, reason="Ferramenta na blocklist")
+        if str(tool_name).lower() in self.config.blocklist:
+            return PolicyDecision(allowed=False, reason="Tool in blocklist")
 
         tool = action_registry.get_tool(tool_name)
         meta = action_registry.get_metadata(tool_name) if tool else None
         if not tool or not meta:
-            return PolicyDecision(allowed=False, reason="Ferramenta não registrada")
+            return PolicyDecision(allowed=False, reason="Tool not registered")
 
-        # Rate limit
         if not action_registry.check_rate_limit(tool_name, user_id=user_id):
-            return PolicyDecision(allowed=False, reason="Rate limit atingido")
+            return PolicyDecision(allowed=False, reason="Rate limit reached")
 
-        # Permissões vs risco
         decision = self._check_permission_vs_risk(meta)
         if not decision.allowed:
             return decision
 
-        # Confirmação obrigatória
+        capability_decision = self._check_capability_allowlist(meta)
+        if not capability_decision.allowed:
+            return capability_decision
+
+        command_decision = self._check_command_allowlist(meta=meta, input_args=input_args)
+        if not command_decision.allowed:
+            return command_decision
+
         if meta.requires_confirmation and not self.config.auto_confirm:
             return PolicyDecision(
-                allowed=False, require_confirmation=True, reason="Requer confirmação manual"
+                allowed=False,
+                require_confirmation=True,
+                reason="Requires manual confirmation",
             )
 
         self._actions_in_cycle += 1

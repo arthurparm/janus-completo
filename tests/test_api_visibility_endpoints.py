@@ -12,11 +12,11 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.join(os.getcwd(), "janus"))
 
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
-from app.services.tool_service import get_tool_service
-from app.services.observability_service import get_observability_service
 from app.services.knowledge_service import get_knowledge_service
 from app.services.llm_service import get_llm_service
+from app.services.observability_service import get_observability_service
 from app.services.optimization_service import get_optimization_service
+from app.services.tool_service import get_tool_service
 
 
 class DummyToolService:
@@ -84,6 +84,38 @@ class DummyObservabilityService:
 
     def get_audit_events_count(self, *args, **kwargs):
         return 1
+
+    def get_request_pipeline_dashboard(self, request_id: str, limit: int = 2000, include_details: bool = False):
+        timeline = [
+            {
+                "id": 1,
+                "timestamp": 1710000000.0,
+                "offset_ms": 0,
+                "endpoint": "tool:codex_exec",
+                "action": "tool_call",
+                "tool": "codex_exec",
+                "status": "success",
+                "latency_ms": 123,
+                "stage": "tool_call",
+            }
+        ]
+        if include_details:
+            timeline[0]["details"] = {"stage": "tool_call", "source": "test"}
+        return {
+            "request_id": request_id,
+            "found": True,
+            "summary": {
+                "total_events": 1,
+                "start_ts": 1710000000.0,
+                "end_ts": 1710000000.0,
+                "duration_ms": 0,
+                "status_counts": {"success": 1},
+                "endpoint_counts": {"tool:codex_exec": 1},
+                "action_counts": {"tool_call": 1},
+                "tool_counts": {"codex_exec": 1},
+            },
+            "timeline": timeline,
+        }
 
     async def get_multi_agent_system_health(self):
         return {"status": "ok", "details": {"active_agents": 1}}
@@ -153,10 +185,10 @@ def client(monkeypatch):
     stub_graph_module.get_graph = lambda: DummyGraph()
     sys.modules["app.core.agents.graph_orchestrator"] = stub_graph_module
 
-    from app.api.v1.endpoints.tools import router as tools_router
     from app.api.v1.endpoints.observability import router as observability_router
     from app.api.v1.endpoints.pending_actions import router as pending_router
     from app.api.v1.endpoints.system_overview import router as system_overview_router
+    from app.api.v1.endpoints.tools import router as tools_router
 
     app.include_router(tools_router, prefix="/api/v1/tools")
     app.include_router(observability_router, prefix="/api/v1/observability")
@@ -211,6 +243,16 @@ def test_audit_events_endpoint(client):
     assert data["events"][0]["tool"] == "codex_exec"
 
 
+def test_request_pipeline_dashboard_endpoint(client):
+    resp = client.get("/api/v1/observability/requests/t1/dashboard?include_details=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["request_id"] == "t1"
+    assert data["found"] is True
+    assert data["summary"]["total_events"] == 1
+    assert data["timeline"][0]["details"]["source"] == "test"
+
+
 def test_pending_actions_list(client):
     resp = client.get("/api/v1/pending_actions")
     assert resp.status_code == 200
@@ -261,6 +303,34 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
     assert data[0]["action_id"] == 101
     assert data[0]["tool_name"] == "codex_exec"
     assert data[0]["status"] == "pending"
+
+
+def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    class DummyPendingRow:
+        id = 111
+        user_id = "u-redact"
+        tool_name = "execute_shell"
+        args_json = '{"password":"super-secret-password","email":"person@example.com","command":"echo ok"}'
+        status = "pending"
+        created_at = datetime(2026, 2, 12, 10, 45, 0)
+
+    class DummyPendingRepo:
+        def list(self, user_id=None, status="pending", limit=50):
+            return [DummyPendingRow()]
+
+    monkeypatch.setattr(
+        pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
+    )
+
+    resp = client.get("/api/v1/pending_actions?include_sql=true&include_graph=false")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    safe_args = str(data[0]["args_json"])
+    assert "super-secret-password" not in safe_args
+    assert "person@example.com" not in safe_args
 
 
 def test_pending_actions_approve_sql_action(client, monkeypatch):

@@ -1,3 +1,5 @@
+import json
+from collections import Counter
 from typing import Any
 
 import structlog
@@ -250,6 +252,126 @@ class ObservabilityService:
             "gemini": a_g,
             "total_calls": a_o["calls"] + a_g["calls"],
             "window": {"start_ts": start_ts, "end_ts": end_ts},
+        }
+
+    @staticmethod
+    def _normalize_counter_key(value: Any) -> str:
+        if value is None:
+            return "unknown"
+        text = str(value).strip()
+        return text if text else "unknown"
+
+    @staticmethod
+    def _parse_details_payload(details_json: Any) -> dict[str, Any] | None:
+        if details_json is None:
+            return None
+        if isinstance(details_json, dict):
+            return details_json
+        if isinstance(details_json, str):
+            raw = details_json.strip()
+            if not raw:
+                return None
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                return {"raw": raw}
+            if isinstance(parsed, dict):
+                return parsed
+            return {"value": parsed}
+        return {"raw": str(details_json)}
+
+    def get_request_pipeline_dashboard(
+        self, request_id: str, limit: int = 2000, include_details: bool = False
+    ) -> dict[str, Any]:
+        request_id = str(request_id or "").strip()
+        if not request_id:
+            raise ObservabilityServiceError("request_id cannot be empty.")
+
+        try:
+            events = self._repo.get_audit_events_by_trace_id(
+                trace_id=request_id, limit=limit, offset=0
+            )
+        except ObservabilityRepositoryError as e:
+            logger.error(
+                "Erro no repositório ao montar dashboard por request_id",
+                request_id=request_id,
+                exc_info=e,
+            )
+            raise ObservabilityServiceError("Falha ao montar dashboard por request_id.") from e
+
+        if not events:
+            return {
+                "request_id": request_id,
+                "found": False,
+                "summary": {
+                    "total_events": 0,
+                    "start_ts": None,
+                    "end_ts": None,
+                    "duration_ms": 0,
+                    "status_counts": {},
+                    "endpoint_counts": {},
+                    "action_counts": {},
+                    "tool_counts": {},
+                },
+                "timeline": [],
+            }
+
+        events_sorted = sorted(events, key=lambda ev: float(ev.get("created_at") or 0.0))
+        start_ts = float(events_sorted[0].get("created_at") or 0.0)
+        end_ts = float(events_sorted[-1].get("created_at") or 0.0)
+        duration_ms = int(round(max(0.0, (end_ts - start_ts) * 1000.0)))
+
+        status_counts: Counter[str] = Counter()
+        endpoint_counts: Counter[str] = Counter()
+        action_counts: Counter[str] = Counter()
+        tool_counts: Counter[str] = Counter()
+        timeline: list[dict[str, Any]] = []
+
+        for ev in events_sorted:
+            status_key = self._normalize_counter_key(ev.get("status"))
+            endpoint_key = self._normalize_counter_key(ev.get("endpoint"))
+            action_key = self._normalize_counter_key(ev.get("action"))
+            tool_key = self._normalize_counter_key(ev.get("tool"))
+            status_counts[status_key] += 1
+            endpoint_counts[endpoint_key] += 1
+            action_counts[action_key] += 1
+            tool_counts[tool_key] += 1
+
+            ts = float(ev.get("created_at") or 0.0)
+            details = self._parse_details_payload(ev.get("details_json"))
+            stage = None
+            if isinstance(details, dict):
+                stage = details.get("stage") or details.get("event_type") or details.get("step")
+
+            item = {
+                "id": ev.get("id"),
+                "timestamp": ts if ts > 0 else None,
+                "offset_ms": int(round(max(0.0, (ts - start_ts) * 1000.0))),
+                "endpoint": ev.get("endpoint"),
+                "action": ev.get("action"),
+                "tool": ev.get("tool"),
+                "status": ev.get("status"),
+                "latency_ms": ev.get("latency_ms"),
+                "stage": stage,
+            }
+            if include_details and details is not None:
+                item["details"] = details
+            timeline.append(item)
+
+        return {
+            "request_id": request_id,
+            "found": True,
+            "summary": {
+                "total_events": len(events_sorted),
+                "start_ts": start_ts if start_ts > 0 else None,
+                "end_ts": end_ts if end_ts > 0 else None,
+                "duration_ms": duration_ms,
+                "status_counts": dict(sorted(status_counts.items())),
+                "endpoint_counts": dict(sorted(endpoint_counts.items())),
+                "action_counts": dict(sorted(action_counts.items())),
+                "tool_counts": dict(sorted(tool_counts.items())),
+            },
+            "timeline": timeline,
         }
 
 

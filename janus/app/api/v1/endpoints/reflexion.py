@@ -104,8 +104,11 @@ async def reflexion_health(service: ReflexionService = Depends(get_reflexion_ser
 )
 async def get_post_sprint_summary(
     limit: int = Query(10, ge=1, le=100, description="Limite de lições recentes"),
-    timeframe_seconds: int | None = Query(
-        None, description="Janela de tempo em segundos para lições"
+    timeframe_seconds: int = Query(
+        3600,
+        ge=60,
+        le=86400,
+        description="Janela de tempo em segundos para lições (padrão: 1 hora)",
     ),
     min_score: float | None = Query(None, ge=0.0, description="Score mínimo das lições"),
     memory: MemoryService = Depends(get_memory_service),

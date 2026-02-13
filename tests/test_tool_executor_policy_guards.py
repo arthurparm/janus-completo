@@ -3,12 +3,13 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.getcwd(), "janus"))
 
+import app.services.tool_executor_service as tool_module
 from app.core.autonomy.policy_engine import PolicyDecision
 from app.services.tool_executor_service import ToolExecutorService
-import app.services.tool_executor_service as tool_module
 
 
 class DummyPolicy:
@@ -41,6 +42,221 @@ class DummyPolicy:
             require_confirmation=self._require_confirmation,
             reason=self._tool_reason,
         )
+
+
+def test_parse_tool_calls_accepts_strict_json_envelope():
+    service = ToolExecutorService()
+    text = """
+    {
+      "type": "tool_call_envelope",
+      "version": "1.0",
+      "calls": [
+        {"name": "read_file", "args": {"file_path": "README.md"}},
+        {"name": "list_directory", "args": {"path": "."}}
+      ]
+    }
+    """
+
+    calls = service.parse_tool_calls(text)
+
+    assert calls == [
+        {"name": "read_file", "args": {"file_path": "README.md"}},
+        {"name": "list_directory", "args": {"path": "."}},
+    ]
+
+
+def test_parse_tool_calls_rejects_invalid_envelope_item():
+    service = ToolExecutorService()
+    text = """
+    {
+      "type": "tool_call_envelope",
+      "version": "1.0",
+      "calls": [
+        {"name": "read_file", "args": "README.md"}
+      ]
+    }
+    """
+
+    calls = service.parse_tool_calls(text)
+
+    assert calls == []
+
+
+def test_parse_tool_calls_does_not_parse_legacy_xml_by_default():
+    service = ToolExecutorService()
+    text = "<tool_use><name>read_file</name><args>{\"file_path\":\"README.md\"}</args></tool_use>"
+
+    calls = service.parse_tool_calls(text)
+
+    assert calls == []
+
+
+def test_parse_tool_calls_supports_legacy_xml_with_flag(monkeypatch):
+    service = ToolExecutorService()
+    monkeypatch.setenv("TOOL_CALL_ENABLE_LEGACY_XML_FALLBACK", "true")
+    text = "<tool_use><name>read_file</name><args>{\"file_path\":\"README.md\"}</args></tool_use>"
+
+    calls = service.parse_tool_calls(text)
+
+    assert calls == [{"name": "read_file", "args": {"file_path": "README.md"}}]
+
+
+class _ArgsSchema(BaseModel):
+    value: int
+
+
+class _SchemaTool:
+    args_schema = _ArgsSchema
+
+    def __init__(self):
+        self.invoked_with = None
+        self.func = None
+
+    def invoke(self, payload):
+        self.invoked_with = payload
+        return f"ok:{payload.get('value')}"
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_blocks_invalid_args_by_schema(monkeypatch):
+    events = []
+    tool = _SchemaTool()
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: tool,
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy()
+
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "schema_tool", "args": {"value": "not-an-int"}}],
+        policy=policy,
+        user_id="u-4",
+    )
+
+    assert len(outputs) == 1
+    assert outputs[0]["name"] == "schema_tool"
+    assert "Invalid arguments for tool schema" in outputs[0]["result"]
+    assert tool.invoked_with is None
+    assert any(ev.get("detail", {}).get("reason") == "invalid_args_schema" for ev in events)
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_normalizes_args_by_schema(monkeypatch):
+    tool = _SchemaTool()
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: tool,
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy()
+
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "schema_tool", "args": {"value": "7"}}],
+        policy=policy,
+        user_id="u-5",
+    )
+
+    assert outputs == [{"name": "schema_tool", "result": "ok:7"}]
+    assert tool.invoked_with == {"value": 7}
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persistence(monkeypatch):
+    events = []
+    created = {}
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            return "ok"
+
+    class DummyPendingRepo:
+        def create(self, **kwargs):
+            created.update(kwargs)
+            return SimpleNamespace(id=999)
+
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy(require_confirmation=True, tool_allowed=True)
+
+    outputs = await service.execute_tool_calls(
+        calls=[
+            {
+                "name": "schema_tool",
+                "args": {
+                    "value": 1,
+                    "password": "super-secret-password",
+                    "email": "person@example.com",
+                },
+            }
+        ],
+        policy=policy,
+        user_id="u-77",
+    )
+
+    assert outputs[0]["name"] == "schema_tool"
+    assert "Pending action id: 999" in outputs[0]["result"]
+    stored = created.get("args_json", "")
+    assert "super-secret-password" not in stored
+    assert "person@example.com" not in stored
+    assert "[REDACTED_EMAIL]" in stored
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_records_redacted_args_in_telemetry(monkeypatch):
+    captured = {}
+    tool = _SchemaTool()
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: tool,
+            record_call=lambda **kwargs: captured.update(kwargs),
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy()
+
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "schema_tool", "args": {"value": 2, "token": "abc123-super-secret-token"}}],
+        policy=policy,
+        user_id="u-99",
+    )
+
+    assert outputs == [{"name": "schema_tool", "result": "ok:2"}]
+    input_args = captured.get("input_args", {})
+    assert isinstance(input_args, dict)
+    assert input_args.get("token") != "abc123-super-secret-token"
 
 
 @pytest.mark.asyncio

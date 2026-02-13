@@ -330,16 +330,22 @@ async def verify_outcome(
         )
         text = res.get("response", "")
         try:
-            return parse_json_strict(text)
+            result = parse_json_strict(text)
+            if isinstance(result, dict) and "success" in result:
+                return result
         except Exception:
-             # Fallback heuristic: if text contains "success": true
-             if "true" in text.lower() and "success" in text.lower():
-                return {"success": True, "reason": "Heuristic validation"}
+             # Fallback: Check for clear "SUCCESS" indicator in unstructured text
+             text_upper = text.upper()
+             if "SUCCESS" in text_upper and "TRUE" in text_upper:
+                 # Check for explicit failure markers that might confuse heuristic
+                 if "NOT SUCCESS" in text_upper or "FAILED" in text_upper or "FALSE" in text_upper:
+                     return {"success": False, "reason": "Ambiguous verification result"}
+                 return {"success": True, "reason": "Heuristic validation (strong match)"}
 
-        # Se não conseguiu parsear, assume sucesso para não bloquear demais (False Positive preferred to False Negative here?)
-        # Or better: Assume success unless explicitly failed.
-        return {"success": True, "reason": "Verification inconclusive"}
+        # Se não conseguiu validar com segurança, falha por precaução
+        return {"success": False, "reason": "Verification inconclusive"}
 
     except Exception as e:
         logger.warning("Falha na verificação de resultado", exc_info=e)
-        return {"success": True, "reason": "Verification failed"}
+        # Fallback SEGURO: Em caso de falha na verificação, assume falha para evitar falso-positivo.
+        return {"success": False, "reason": "Verification inconclusive due to parsing error"}

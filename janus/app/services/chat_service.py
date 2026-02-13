@@ -1445,14 +1445,27 @@ class ChatService:
                 for h in hits:
                     payload = getattr(h, "payload", {}) or {}
                     meta = payload.get("metadata") or {}
+                    line_start = (
+                        meta.get("line_start")
+                        or meta.get("start_line")
+                        or meta.get("line")
+                        or meta.get("line_no")
+                    )
+                    line_end = meta.get("line_end") or meta.get("end_line")
                     citations.append(
                         {
                             "id": getattr(h, "id", None),
+                            "title": meta.get("title"),
+                            "url": meta.get("url"),
                             "doc_id": meta.get("doc_id"),
                             "file_path": meta.get("file_path"),
                             "type": meta.get("type"),
                             "origin": meta.get("origin"),
+                            "line_start": line_start,
+                            "line_end": line_end,
+                            "line": line_start,
                             "score": float(getattr(h, "score", 0.0) or 0.0),
+                            "snippet": payload.get("content"),
                         }
                     )
             except Exception:

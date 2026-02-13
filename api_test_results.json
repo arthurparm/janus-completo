@@ -1,0 +1,56 @@
+[
+  {
+    "endpoint": "/system/status",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 496,
+    "has_data": true,
+    "sample": "{'app_name': 'Janus', 'version': '0.1.0', 'environment': 'production', 'status': 'OPERATIONAL', 'timestamp': '2026-02-13T19:14:49.401138+00:00', 'uptime_seconds': 23.77, 'system': {'platform': 'Linux'..."
+  },
+  {
+    "endpoint": "/system/health/services",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 370,
+    "has_data": true,
+    "sample": "{'services': [{'key': 'agent', 'name': 'Agent Service', 'status': 'healthy', 'metric_text': 'Agentes: 0'}, {'key': 'knowledge', 'name': 'Knowledge Service', 'status': 'ok', 'metric_text': 'Ontologias:..."
+  },
+  {
+    "endpoint": "/system/overview",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 3201,
+    "has_data": true,
+    "sample": "{'system_status': {'app_name': 'Janus', 'version': '0.1.0', 'environment': 'production', 'status': 'OPERATIONAL', 'timestamp': '2026-02-13T19:14:49.454161+00:00', 'uptime_seconds': 23.83, 'system': {'..."
+  },
+  {
+    "endpoint": "/system/db/validate",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 1179,
+    "has_data": true,
+    "sample": "{'status': 'missing', 'checks': [{'table': 'users', 'name': 'idx_user_lookup', 'kind': 'index', 'exists': True}, {'table': 'profiles', 'name': 'idx_profile_user', 'kind': 'index', 'exists': True}, {'t..."
+  },
+  {
+    "endpoint": "/knowledge/health",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 137,
+    "has_data": true,
+    "sample": "{'status': 'ok', 'neo4j_connected': True, 'qdrant_connected': True, 'circuit_breaker_open': False, 'total_nodes': 4069, 'total_relationships': 3643}"
+  },
+  {
+    "endpoint": "/knowledge/health/detailed",
+    "method": "GET",
+    "status_code": 200,
+    "success": true,
+    "response_size": 482,
+    "has_data": true,
+    "sample": "{'timestamp': '2026-02-13T19:14:49.594420+00:00', 'overall_status': 'healthy', 'basic_health': {'status': 'ok', 'neo4j_connected': True, 'qdrant_connected': True, 'circuit_breaker_open': False, 'total..."
+  }
+]

@@ -1,5 +1,7 @@
 import asyncio
 import hashlib
+import os
+import re
 from typing import Any
 
 import structlog
@@ -160,6 +162,48 @@ def _ensure_origin_allowed(http: Request | None) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
 
 
+_CITATION_REQUIRED_PATTERNS = (
+    r"\bcodigo\b",
+    r"\bcode\b",
+    r"\bfuncao\b",
+    r"\bfunction\b",
+    r"\bclasse\b",
+    r"\bclass\b",
+    r"\barquivo\b",
+    r"\bfile\b",
+    r"\bdocumentacao\b",
+    r"\bdocumentation\b",
+    r"\bdocs?\b",
+    r"\breadme\b",
+    r"\bapi\b",
+    r"\bendpoint\b",
+    r"\.py\b",
+    r"\.ts\b",
+    r"\.js\b",
+)
+
+
+def _requires_mandatory_citations(message: str) -> bool:
+    text = (message or "").lower()
+    return any(re.search(pattern, text) for pattern in _CITATION_REQUIRED_PATTERNS)
+
+
+def _confidence_confirmation_threshold() -> float:
+    raw = os.getenv("CHAT_CONFIDENCE_CONFIRMATION_THRESHOLD", "0.65").strip()
+    try:
+        return max(0.0, min(1.0, float(raw)))
+    except ValueError:
+        return 0.65
+
+
+def _confidence_band(confidence: float) -> str:
+    if confidence >= 0.80:
+        return "high"
+    if confidence >= 0.60:
+        return "medium"
+    return "low"
+
+
 # --- Endpoints ---
 
 
@@ -226,8 +270,8 @@ async def send_message(
         filters: dict[str, Any] = {"status_not": "duplicate"}
         if result.get("conversation_id"):
             filters["metadata.session_id"] = result.get("conversation_id")
-        if payload.user_id:
-            filters["metadata.user_id"] = str(payload.user_id)
+        if user_id:
+            filters["metadata.user_id"] = str(user_id)
         vec_results = await memory.recall_filtered(
             query=payload.message, filters=filters, limit=5, min_score=0.1
         )
@@ -236,13 +280,25 @@ async def send_message(
             content = (
                 r.get("content") or r.get("payload", {}).get("content") or r.get("page_content")
             )
+            line_start = (
+                meta.get("line_start")
+                or meta.get("start_line")
+                or meta.get("line")
+                or meta.get("line_no")
+            )
+            line_end = meta.get("line_end") or meta.get("end_line")
             citations.append(
                 {
                     "id": r.get("id"),
+                    "title": meta.get("title"),
+                    "url": meta.get("url"),
                     "doc_id": meta.get("doc_id"),
                     "file_path": meta.get("file_path"),
                     "type": meta.get("type"),
                     "origin": meta.get("origin"),
+                    "line_start": line_start,
+                    "line_end": line_end,
+                    "line": line_start,
                     "score": r.get("score"),
                     "snippet": content,
                 }
@@ -251,6 +307,35 @@ async def send_message(
         logger.warning(f"Failed to retrieve citations for message: {e}")
         citations = []
     result["citations"] = citations
+
+    understanding = result.get("understanding")
+    if isinstance(understanding, dict):
+        raw_confidence = understanding.get("confidence")
+        try:
+            confidence = max(0.0, min(1.0, float(raw_confidence)))
+        except Exception:
+            confidence = 0.0
+        threshold = _confidence_confirmation_threshold()
+        low_confidence = confidence < threshold
+        intent = str(understanding.get("intent") or "")
+        requires_confirmation = bool(understanding.get("requires_confirmation"))
+        understanding["confidence"] = round(confidence, 2)
+        understanding["confidence_band"] = _confidence_band(confidence)
+        understanding["low_confidence"] = low_confidence
+        if low_confidence and (requires_confirmation or intent in {"action_request", "reminder"}):
+            understanding["requires_confirmation"] = True
+            understanding["confirmation_reason"] = "low_confidence"
+            result["response"] = (
+                f"Estou com baixa confianca ({int(round(confidence * 100))}%). "
+                "Antes de executar essa acao, confirme se devo prosseguir."
+            )
+
+    if _requires_mandatory_citations(payload.message) and not citations:
+        result["response"] = (
+            "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
+            "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
+        )
+
     return ChatMessageResponse(**result)
 
 

@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import inspect
 import json
 import os
@@ -7,9 +7,11 @@ import time
 from typing import Any
 
 import structlog
+from pydantic import ValidationError
 
 from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
+from app.core.security.redaction import redact_sensitive_payload
 from app.core.tools import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.tool_usage_repository import ToolUsageRepository
@@ -18,7 +20,7 @@ logger = structlog.get_logger(__name__)
 
 
 class ToolExecutorError(Exception):
-    """Erro base para execução de ferramentas."""
+    """Erro base para execuÃ§Ã£o de ferramentas."""
 
     pass
 
@@ -89,33 +91,149 @@ class ToolExecutorService:
             )
         )
 
-    def parse_tool_calls(self, text: str) -> list[dict[str, Any]]:
-        """Extrai chamadas de ferramenta XML do texto."""
-        calls = []
-        # Regex para capturar blocos <tool_use>...</tool_use>
+    def _legacy_xml_fallback_enabled(self) -> bool:
+        raw = os.getenv("TOOL_CALL_ENABLE_LEGACY_XML_FALLBACK", "false").strip().lower()
+        return raw in ("1", "true", "yes", "on")
+
+    def _extract_json_envelope_payload(self, text: str) -> str | None:
+        if not isinstance(text, str):
+            return None
+        stripped = text.strip()
+        if not stripped:
+            return None
+
+        fenced = re.fullmatch(r"```(?:json)?\s*(\{.*\})\s*```", stripped, re.DOTALL)
+        if fenced:
+            return fenced.group(1).strip()
+
+        if stripped.startswith("{") and stripped.endswith("}"):
+            return stripped
+        return None
+
+    def _parse_legacy_xml_tool_calls(self, text: str) -> list[dict[str, Any]]:
+        calls: list[dict[str, Any]] = []
         pattern = re.compile(r"<tool_use>(.*?)</tool_use>", re.DOTALL)
-        matches = pattern.findall(text)
+        matches = pattern.findall(text or "")
 
         for content in matches:
             try:
                 name_match = re.search(r"<name>(.*?)</name>", content, re.DOTALL)
                 args_match = re.search(r"<args>(.*?)</args>", content, re.DOTALL)
-
-                if name_match and args_match:
-                    name = name_match.group(1).strip()
-                    args_str = args_match.group(1).strip()
-
-                    try:
-                        args = json.loads(args_str)
-                    except json.JSONDecodeError:
-                        # Fallback se o modelo alucinar formatação
-                        args = {"raw_args": args_str}
-
+                if not name_match or not args_match:
+                    continue
+                name = name_match.group(1).strip()
+                args = json.loads(args_match.group(1).strip())
+                if isinstance(name, str) and name and isinstance(args, dict):
                     calls.append({"name": name, "args": args})
             except Exception as e:
-                logger.warning("tool_call_parse_failed", error=str(e), block_content=content[:100])
-
+                logger.warning(
+                    "legacy_tool_call_parse_failed",
+                    error=str(e),
+                    block_content=redact_sensitive_payload(content[:100]),
+                )
         return calls
+
+    def parse_tool_calls(self, text: str) -> list[dict[str, Any]]:
+        """
+        Extract tool calls using strict JSON envelope.
+
+        Accepted envelope:
+        {
+          "type": "tool_call_envelope",
+          "version": "1.0",
+          "calls": [{"name": "...", "args": {...}}]
+        }
+
+        For migration only, XML parsing can be temporarily enabled with:
+        TOOL_CALL_ENABLE_LEGACY_XML_FALLBACK=true
+        """
+        payload = self._extract_json_envelope_payload(text)
+        if payload is None:
+            if self._legacy_xml_fallback_enabled():
+                legacy_calls = self._parse_legacy_xml_tool_calls(text)
+                if legacy_calls:
+                    logger.warning("legacy_tool_call_parser_used", count=len(legacy_calls))
+                return legacy_calls
+            return []
+
+        try:
+            envelope = json.loads(payload)
+        except json.JSONDecodeError as e:
+            logger.warning("tool_call_envelope_json_invalid", error=str(e))
+            return []
+
+        if not isinstance(envelope, dict):
+            return []
+        if envelope.get("type") != "tool_call_envelope":
+            return []
+
+        version = envelope.get("version")
+        if not isinstance(version, str) or not version.strip():
+            logger.warning("tool_call_envelope_missing_version")
+            return []
+
+        calls_raw = envelope.get("calls")
+        if not isinstance(calls_raw, list):
+            logger.warning("tool_call_envelope_calls_not_list")
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for idx, call in enumerate(calls_raw):
+            if not isinstance(call, dict):
+                logger.warning(
+                    "tool_call_envelope_item_invalid", index=idx, reason="item_not_object"
+                )
+                return []
+
+            name = call.get("name")
+            args = call.get("args")
+            if not isinstance(name, str) or not name.strip():
+                logger.warning("tool_call_envelope_item_invalid", index=idx, reason="invalid_name")
+                return []
+            if not isinstance(args, dict):
+                logger.warning("tool_call_envelope_item_invalid", index=idx, reason="invalid_args")
+                return []
+
+            normalized.append({"name": name.strip(), "args": args})
+
+        return normalized
+
+    def _validate_tool_args(
+        self, *, tool: Any, args: Any
+    ) -> tuple[bool, dict[str, Any] | Any, str | None]:
+        """
+        Validate tool arguments using its Pydantic args_schema when available.
+
+        Returns:
+            (is_valid, normalized_args, error_message)
+        """
+        schema = getattr(tool, "args_schema", None)
+        if schema is None:
+            return True, args, None
+
+        if not isinstance(args, dict):
+            return (
+                False,
+                args,
+                "Invalid arguments: args must be a JSON object for this tool schema.",
+            )
+
+        try:
+            if hasattr(schema, "model_validate"):  # pydantic v2
+                parsed = schema.model_validate(args)
+                normalized = parsed.model_dump(mode="python", exclude_none=True)
+            else:  # pydantic v1 compatibility
+                parsed = schema.parse_obj(args)
+                normalized = parsed.dict(exclude_none=True)
+            return True, normalized, None
+        except ValidationError as e:
+            try:
+                details = e.errors()
+            except Exception:
+                details = str(e)
+            return False, args, f"Invalid arguments for tool schema: {details}"
+        except Exception as e:
+            return False, args, f"Invalid arguments for tool schema: {e}"
 
     def _audit_pre_execution_event(
         self,
@@ -127,13 +245,18 @@ class ToolExecutorService:
         detail: dict[str, Any] | None = None,
     ) -> None:
         try:
+            safe_detail = (
+                redact_sensitive_payload(detail or {})
+                if isinstance(detail, dict)
+                else {"detail": redact_sensitive_payload(detail)}
+            )
             payload = {
                 "user_id": user_id or "-",
                 "endpoint": "tool_executor",
                 "action": "tool_precheck",
                 "tool": tool_name,
                 "status": status,
-                "detail": {"reason": reason, **(detail or {})},
+                "detail": {"reason": redact_sensitive_payload(reason), **safe_detail},
             }
             record_audit_event_direct(payload)
         except Exception as e:
@@ -163,6 +286,7 @@ class ToolExecutorService:
         for call in calls:
             name = call["name"]
             args = call["args"]
+            safe_args: Any = {}
 
             if not effective_policy.can_continue_cycle():
                 self._audit_pre_execution_event(
@@ -197,6 +321,42 @@ class ToolExecutorService:
                 )
                 continue
 
+            tool = action_registry.get_tool(name)
+            if not tool:
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="not_found",
+                    reason="tool_not_registered",
+                    user_id=user_id,
+                )
+                if strict:
+                    outputs.append({"name": name, "result": f"Error: Tool '{name}' not found."})
+                else:
+                    outputs.append(
+                        {"name": name, "result": f"Skipped: Tool '{name}' not available."}
+                    )
+                continue
+
+            args_valid, normalized_args, args_error = self._validate_tool_args(tool=tool, args=args)
+            if not args_valid:
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="blocked",
+                    reason="invalid_args_schema",
+                    user_id=user_id,
+                    detail={"error": args_error},
+                )
+                outputs.append(
+                    {
+                        "name": name,
+                        "result": args_error
+                        or "Invalid arguments for tool schema validation.",
+                    }
+                )
+                continue
+            args = normalized_args
+            safe_args = redact_sensitive_payload(args)
+
             decision = effective_policy.validate_tool_call(name, args, user_id=user_id)
             if decision.require_confirmation:
                 pending_id = None
@@ -210,7 +370,7 @@ class ToolExecutorService:
                         pending = repo.create(
                             user_id=str(user_id),
                             tool_name=name,
-                            args_json=json.dumps(args, ensure_ascii=False),
+                            args_json=json.dumps(safe_args, ensure_ascii=False),
                             run_id=None,
                             cycle=None,
                         )
@@ -245,7 +405,7 @@ class ToolExecutorService:
                 )
                 continue
 
-            # Quota diária por usuário (aplica apenas após aprovação e antes de executar)
+            # Quota diÃ¡ria por usuÃ¡rio (aplica apenas apÃ³s aprovaÃ§Ã£o e antes de executar)
             if user_id and name in daily_limits:
                 limit = int(daily_limits.get(name, 0) or 0)
                 if limit > 0:
@@ -265,7 +425,7 @@ class ToolExecutorService:
                             outputs.append(
                                 {
                                     "name": name,
-                                    "result": f"Cota diária atingida para '{name}'. "
+                                    "result": f"Cota diÃ¡ria atingida para '{name}'. "
                                     f"Uso: {count}/{max_limit}.",
                                 }
                             )
@@ -277,22 +437,6 @@ class ToolExecutorService:
                             user_id=str(user_id),
                             error=str(e),
                         )
-
-            tool = action_registry.get_tool(name)
-            if not tool:
-                self._audit_pre_execution_event(
-                    tool_name=name,
-                    status="not_found",
-                    reason="tool_not_registered",
-                    user_id=user_id,
-                )
-                if strict:
-                    outputs.append({"name": name, "result": f"Error: Tool '{name}' not found."})
-                else:
-                    outputs.append(
-                        {"name": name, "result": f"Skipped: Tool '{name}' not available."}
-                    )
-                continue
 
             start = time.perf_counter()
             success = False
@@ -333,21 +477,24 @@ class ToolExecutorService:
                 )
                 outputs.append({"name": name, "result": timeout_msg})
             except Exception as e:
-                error_msg = str(e)
+                error_msg = str(redact_sensitive_payload(str(e)))
                 logger.error(
                     "tool_execution_failed",
                     tool_name=name,
                     error_type=type(e).__name__,
-                    error=str(e),
+                    error=error_msg,
                     exc_info=True,
                 )
                 # Retorna erro formatado para o LLM tentar corrigir
                 if strict:
                     outputs.append(
-                        {"name": name, "result": f"System: Tool Error (STOP and rethink): {e!s}"}
+                        {
+                            "name": name,
+                            "result": f"System: Tool Error (STOP and rethink): {error_msg}",
+                        }
                     )
                 else:
-                    outputs.append({"name": name, "result": f"Tool Error (non-fatal): {e!s}"})
+                    outputs.append({"name": name, "result": f"Tool Error (non-fatal): {error_msg}"})
             finally:
                 duration = time.perf_counter() - start
                 try:
@@ -356,7 +503,7 @@ class ToolExecutorService:
                         duration=duration,
                         success=success,
                         error=error_msg,
-                        input_args=args,
+                        input_args=safe_args if isinstance(safe_args, dict) else {},
                         user_id=user_id,
                     )
                 except Exception:

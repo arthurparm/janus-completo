@@ -407,6 +407,45 @@ class ObservabilityRepository:
         finally:
             s.close()
 
+    def get_audit_events_by_trace_id(
+        self, trace_id: str, limit: int = 2000, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        s = db.get_session_direct()
+        try:
+            q = (
+                s.query(AuditEvent)
+                .filter(AuditEvent.trace_id == str(trace_id))
+                .order_by(AuditEvent.created_at.asc())
+                .offset(int(offset))
+                .limit(int(limit))
+            )
+            rows = q.all()
+            return [
+                {
+                    "id": r.id,
+                    "user_id": r.user_id,
+                    "endpoint": r.endpoint,
+                    "action": r.action,
+                    "tool": r.tool,
+                    "status": r.status,
+                    "latency_ms": r.latency_ms,
+                    "trace_id": r.trace_id,
+                    "justification": r.justification,
+                    "created_at": r.created_at.timestamp()
+                    if getattr(r, "created_at", None)
+                    else None,
+                    "details_json": r.details_json,
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            logger.error("Erro ao consultar eventos de auditoria por trace_id", exc_info=e)
+            raise ObservabilityRepositoryError(
+                "Falha ao consultar eventos de auditoria por trace_id."
+            ) from e
+        finally:
+            s.close()
+
     def get_audit_events_count(
         self,
         user_id: str | None,

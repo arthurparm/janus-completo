@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import subprocess
 import urllib.error
 import urllib.request
 from html.parser import HTMLParser
@@ -19,6 +18,7 @@ from app.core.infrastructure.python_sandbox import python_sandbox
 from app.core.memory.memory_core import get_memory_db
 from app.core.memory.working_memory import get_working_memory
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
+from app.core.tools.command_sandbox import run_restricted_command
 from app.core.tools.faulty_tools import get_faulty_tools
 from app.core.tools.launcher_tools import launch_app
 from app.core.tools.external_cli_tools import (
@@ -680,24 +680,8 @@ def execute_shell(command: str) -> str:
     Returns:
         A saída padrão (stdout) e erro (stderr) combinados.
     """
-    # Lista de comandos bloqueados por segurança
-    blocked = ["rm", "del", "format", "mv", "shutdown", "reboot"]
-    if any(cmd in command.split() for cmd in blocked):
-        return "Erro: Comando bloqueado por segurança."
-
-    try:
-        logger.info(f"Executando shell command: {command}")
-        # Timeout de 30s
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        output = result.stdout
-        if result.stderr:
-            output += f"\nSTDERR: {result.stderr}"
-        return output
-    except subprocess.TimeoutExpired:
-        return "Erro: O comando excedeu o tempo limite de 30s."
-    except Exception as e:
-        logger.error(f"Erro ao executar shell: {e}", exc_info=True)
-        return f"Erro ao executar comando: {e}"
+    logger.info("Executando shell command em modo restrito", extra={"command": command})
+    return run_restricted_command(command, timeout_seconds=30, cwd=WORKSPACE_ROOT)
 
 
 # --- Helper for HTML Stripping ---

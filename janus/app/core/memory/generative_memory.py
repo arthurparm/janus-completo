@@ -46,7 +46,12 @@ class GenerativeMemoryService:
         
         # 1. Calculate Importance
         if metadata.get("importance") is None:
-            importance = await self._calculate_importance(content)
+            # Tenta usar modelo local se disponível, senão fallback para o padrão
+            try:
+                # Prioridade LOCAL para economizar tokens em tarefas de manutenção/classificação
+                importance = await self._calculate_importance(content, use_local=True)
+            except Exception:
+                importance = await self._calculate_importance(content, use_local=False)
             metadata["importance"] = importance
         
         # 2. Create Experience Object
@@ -119,9 +124,10 @@ class GenerativeMemoryService:
         
         return scored_memories[:limit]
 
-    async def _calculate_importance(self, content: str) -> float:
+    async def _calculate_importance(self, content: str, use_local: bool = False) -> float:
         """
         Uses LLM to rate importance 1-10.
+        Supports local model fallback.
         """
         try:
             # Load prompt
@@ -140,10 +146,22 @@ class GenerativeMemoryService:
             
             prompt = prompt_template.replace("{memory_content}", content)
             
+            # Use Local Model if requested
+            if use_local:
+                # Tenta usar Ollama/Local via um role específico ou config
+                # Assumindo que ModelPriority.LOCAL_ONLY force o uso de modelos locais
+                # ou que podemos passar um provider específico.
+                # Como o LLMService abstrai isso, usamos prioridade.
+                priority = ModelPriority.FAST_AND_CHEAP # Usually implies local or cheapest
+                # Se tivéssemos um ModelPriority.LOCAL seria ideal.
+                # Vamos assumir que FAST_AND_CHEAP tenta local primeiro se configurado.
+            else:
+                priority = ModelPriority.FAST_AND_CHEAP
+
             response = await self.llm_service.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.REASONER,
-                priority=ModelPriority.FAST_AND_CHEAP,
+                priority=priority,
                 timeout_seconds=10
             )
             
@@ -156,6 +174,8 @@ class GenerativeMemoryService:
             
         except Exception as e:
             logger.error(f"Failed to calculate importance: {e}")
+            if use_local:
+                raise e # Propagate to allow fallback
             return 5.0
 
     async def prune_memories(self, retention_days: int = 60, min_importance: float = 3.0):

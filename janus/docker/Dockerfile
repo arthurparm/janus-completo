@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 # --- Stage 1: Builder (with uv) ---
 # Using python:3.11-slim-bookworm for a stable, small base
 FROM python:3.11-slim-bookworm as builder
@@ -15,16 +15,18 @@ ENV PYTHONUNBUFFERED=1 \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # Install system build deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     libstdc++6 \
     libgomp1 \
-    portaudio19-dev \
-    && rm -rf /var/lib/apt/lists/*
+    portaudio19-dev
 
-# Create virtual environment using uv
-RUN uv venv /opt/venv
+# Create virtual environment using uv and seed pip/setuptools.
+# This avoids runtime ensurepip bootstrap in ephemeral test containers.
+RUN uv venv --seed /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
@@ -40,15 +42,17 @@ COPY pyproject.toml poetry.lock* ./
 # OR: just use poetry but with uv as the installer if configured.
 # FASTEST PATH: Export to requirements using a temporary poetry install, then install with uv.
 
-RUN uv pip install poetry poetry-plugin-export && \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    uv pip install poetry poetry-plugin-export && \
     if ! poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --no-ansi; then \
         poetry lock --no-interaction --no-ansi; \
         poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --no-ansi; \
     fi && \
     uv pip install -r requirements.txt
 
-# --- Stage 2: Runtime ---
-FROM python:3.11-slim-bookworm as final
+# --- Stage 2: Runtime Base ---
+FROM python:3.11-slim-bookworm as runtime-base
 
 WORKDIR /app
 
@@ -56,22 +60,16 @@ WORKDIR /app
 RUN groupadd -g 1000 janus && useradd -u 1000 -g janus -m -d /home/janus -s /bin/bash janus
 ENV HOME=/home/janus
 
-# Install runtime system dependencies
-# docker-ce-cli is needed for SysAdmin capabilities (bind mount socket)
-# git is needed for semantic commits and code analysis features
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install runtime system dependencies used by API and tests.
+# Keep this stage minimal so test image builds faster.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgomp1 \
     libasound2 \
     libportaudio2 \
-    curl \
-    gnupg \
-    lsb-release \
-    git \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list \
-    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
-    && rm -rf /var/lib/apt/lists/*
+    git
 
 # Copy virtual environment from builder
 COPY --from=builder --chown=janus:janus /opt/venv /opt/venv
@@ -85,6 +83,31 @@ RUN mkdir -p /app/data /app/workspace /app/logs && \
     chown -R janus:janus /app/data /app/workspace /app/logs
 
 # Use non-root user
+USER janus
+
+# --- Stage 3: Test Image ---
+# Includes test runner dependencies so test execution does not need
+# runtime package bootstrap (pip install/ensurepip) on every invocation.
+FROM runtime-base as test
+
+RUN /opt/venv/bin/python -m pip install --no-cache-dir \
+    pytest \
+    pytest-asyncio
+
+# --- Stage 4: Runtime Final (default target) ---
+FROM runtime-base as final
+
+# SysAdmin capability needs docker-ce-cli only in runtime service image.
+USER root
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    lsb-release && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli
 USER janus
 
 # Expose port

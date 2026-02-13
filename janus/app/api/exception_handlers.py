@@ -2,7 +2,7 @@ import structlog
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
-# Importa as exceções customizadas de cada serviço
+# Importa as excecoes customizadas de cada servico
 from app.services.agent_service import AgentServiceError, AgentTimeoutError
 from app.services.collaboration_service import (
     AgentNotFoundError,
@@ -40,9 +40,37 @@ from app.services.tool_service import (
 
 logger = structlog.get_logger(__name__)
 
-# --- Mapeamento de Exceções para Status HTTP ---
+_ERROR_TAXONOMY: dict[str, dict[str, str | int]] = {
+    "RESOURCE_NOT_FOUND": {
+        "category": "not_found",
+        "http_status": status.HTTP_404_NOT_FOUND,
+        "description": "Requested resource does not exist.",
+    },
+    "INVALID_INPUT": {
+        "category": "validation",
+        "http_status": status.HTTP_400_BAD_REQUEST,
+        "description": "Request payload or parameters are invalid.",
+    },
+    "SERVICE_TIMEOUT": {
+        "category": "timeout",
+        "http_status": status.HTTP_408_REQUEST_TIMEOUT,
+        "description": "Service operation timed out.",
+    },
+    "ACCESS_DENIED": {
+        "category": "authz",
+        "http_status": status.HTTP_403_FORBIDDEN,
+        "description": "Access denied by authorization policy.",
+    },
+    "INTERNAL_SERVICE_ERROR": {
+        "category": "internal",
+        "http_status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "description": "Unexpected internal service failure.",
+    },
+}
 
-# Exceções que indicam que um recurso não foi encontrado (404)
+# --- Mapeamento de Excecoes para Status HTTP ---
+
+# Excecoes que indicam que um recurso nao foi encontrado (404)
 NOT_FOUND_EXCEPTIONS = (
     AgentNotFoundError,
     TaskNotFoundError,
@@ -51,63 +79,120 @@ NOT_FOUND_EXCEPTIONS = (
     ToolNotFoundError,
 )
 
-# Exceções que indicam uma entrada inválida do cliente (400)
+# Excecoes que indicam uma entrada invalida do cliente (400)
 BAD_REQUEST_EXCEPTIONS = (
     InvalidInputError,
     ProtectedToolError,
     ToolCreationError,
     TrainingFailedError,
-    ValueError,  # Captura erros de validação de enum, etc.
+    ValueError,  # Captura erros de validacao de enum, etc.
 )
 
-# Exceções que indicam um timeout (408)
+# Excecoes que indicam timeout (408)
 TIMEOUT_EXCEPTIONS = (
     AgentTimeoutError,
     LLMTimeoutError,
 )
 
 
-# --- Handlers Genéricos ---
+def get_error_taxonomy_catalog() -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+    for code, data in _ERROR_TAXONOMY.items():
+        rows.append({"error_code": code, **data})
+    return rows
+
+
+def _error_payload(
+    request: Request,
+    *,
+    status_code: int,
+    detail: str,
+    error_code: str,
+) -> dict:
+    taxonomy = _ERROR_TAXONOMY.get(error_code, _ERROR_TAXONOMY["INTERNAL_SERVICE_ERROR"])
+    trace_id = getattr(request.state, "correlation_id", None)
+    return {
+        "detail": detail,
+        "error_code": error_code,
+        "error_category": taxonomy.get("category"),
+        "status": status_code,
+        "trace_id": trace_id,
+    }
+
+
+# --- Handlers Genericos ---
 
 
 async def http_404_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("Recurso não encontrado", exc_info=exc, url=request.url.path)
+    logger.warning("Recurso nao encontrado", exc_info=exc, url=request.url.path)
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
-        content={"detail": str(exc)},
+        content=_error_payload(
+            request,
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            error_code="RESOURCE_NOT_FOUND",
+        ),
     )
 
 
 async def http_400_bad_request_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("Requisição inválida", exc_info=exc, url=request.url.path)
+    logger.warning("Requisicao invalida", exc_info=exc, url=request.url.path)
+    detail = str(exc)
+    error_code = "ACCESS_DENIED" if "access denied" in detail.lower() else "INVALID_INPUT"
+    status_code = (
+        status.HTTP_403_FORBIDDEN if error_code == "ACCESS_DENIED" else status.HTTP_400_BAD_REQUEST
+    )
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": str(exc)},
+        status_code=status_code,
+        content=_error_payload(
+            request,
+            status_code=status_code,
+            detail=detail,
+            error_code=error_code,
+        ),
     )
 
 
 async def http_408_timeout_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Timeout na operação do serviço", exc_info=exc, url=request.url.path)
+    logger.error("Timeout na operacao do servico", exc_info=exc, url=request.url.path)
     return JSONResponse(
         status_code=status.HTTP_408_REQUEST_TIMEOUT,
-        content={"detail": str(exc)},
+        content=_error_payload(
+            request,
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail=str(exc),
+            error_code="SERVICE_TIMEOUT",
+        ),
     )
 
 
 async def generic_service_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Erro inesperado no serviço", exc_info=exc, url=request.url.path)
+    logger.error("Erro inesperado no servico", exc_info=exc, url=request.url.path)
+    detail = str(exc)
+    error_code = "ACCESS_DENIED" if "access denied" in detail.lower() else "INTERNAL_SERVICE_ERROR"
+    status_code = (
+        status.HTTP_403_FORBIDDEN
+        if error_code == "ACCESS_DENIED"
+        else status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": f"Ocorreu um erro interno no serviço: {exc}"},
+        status_code=status_code,
+        content=_error_payload(
+            request,
+            status_code=status_code,
+            detail=f"Ocorreu um erro interno no servico: {detail}",
+            error_code=error_code,
+        ),
     )
 
 
-# --- Função para registrar todos os handlers ---
+# --- Funcao para registrar todos os handlers ---
 
 
 def add_exception_handlers(app):
-    """Adiciona todos os manipuladores de exceção customizados à aplicação FastAPI."""
-    logger.info("Registrando manipuladores de exceção customizados.")
+    """Adiciona todos os manipuladores de excecao customizados a aplicacao FastAPI."""
+    logger.info("Registrando manipuladores de excecao customizados.")
 
     exception_map = {
         **{exc: http_404_not_found_handler for exc in NOT_FOUND_EXCEPTIONS},
@@ -118,7 +203,7 @@ def add_exception_handlers(app):
     for exc_type, handler in exception_map.items():
         app.add_exception_handler(exc_type, handler)
 
-    # Handler genérico para todas as outras exceções de serviço
+    # Handler generico para todas as outras excecoes de servico
     all_service_exceptions = (
         AgentServiceError,
         CollaborationServiceError,
@@ -138,5 +223,5 @@ def add_exception_handlers(app):
         if exc_type not in exception_map:
             app.add_exception_handler(exc_type, generic_service_exception_handler)
 
-    # Catch-all for any other unhandled exception (e.g., standard Python exceptions)
+    # Catch-all para qualquer outra excecao nao tratada
     app.add_exception_handler(Exception, generic_service_exception_handler)

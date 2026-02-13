@@ -73,7 +73,9 @@ async def seed_graph():
                     all_calls.append(
                         {
                             "caller_name": call["caller"],
+                            "caller_qualified": call.get("caller_qualified"),
                             "callee_name": call["callee"],
+                            "callee_qualified": call.get("callee_qualified"),
                             "file_path": file_path,
                         }
                     )

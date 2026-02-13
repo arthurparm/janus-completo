@@ -271,15 +271,21 @@ def _emb_openrouter(texts: list[str]) -> list[list[float]]:
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
 
 
+def _emb_ollama(texts: list[str]) -> list[list[float]]:
+    embedder = _load_ollama_embedder()
+    vectors = embedder.embed_documents(texts)
+    return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
+
+
 def embed_text(text: str) -> list[float]:
     """
     Retorna embedding para um único texto, com fallback automático.
 
     - Tenta provedor preferido (local por padrão)
-    - Se falhar, tenta os outros (OpenAI, OpenRouter ou local)
+    - Se falhar, tenta os outros (Ollama, OpenAI, OpenRouter ou local)
     - Em caso de falha total, retorna vetor zero com tamanho alvo
     """
-    key = f"emb:{_TARGET_VECTOR_SIZE}:{_DEFAULT_LOCAL_MODEL}:{_DEFAULT_OPENAI_MODEL}:{_DEFAULT_OPENROUTER_MODEL}:{text.strip()[:4000]}"
+    key = f"emb:{_TARGET_VECTOR_SIZE}:{_DEFAULT_LOCAL_MODEL}:{_DEFAULT_OPENAI_MODEL}:{_DEFAULT_OPENROUTER_MODEL}:{_DEFAULT_OLLAMA_MODEL}:{text.strip()[:4000]}"
     cached = _cache.get(key)
     if cached is not None:
         return cached
@@ -288,7 +294,7 @@ def embed_text(text: str) -> list[float]:
     providers = [pref]
     
     # Ordem de fallback
-    available = ["local", "openrouter", "openai"]
+    available = ["ollama", "local", "openrouter", "openai"]
     for p in available:
         if p != pref:
             providers.append(p)
@@ -304,6 +310,8 @@ def embed_text(text: str) -> list[float]:
                 vec = _emb_openai([text])[0]
             elif p == "openrouter":
                 vec = _emb_openrouter([text])[0]
+            elif p == "ollama":
+                vec = _emb_ollama([text])[0]
             else:
                 continue
             _cache.put(key, vec)
@@ -342,7 +350,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     providers = [pref]
     
     # Ordem de fallback
-    available = ["local", "openrouter", "openai"]
+    available = ["ollama", "local", "openrouter", "openai"]
     for p in available:
         if p != pref:
             providers.append(p)
@@ -358,6 +366,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 res = _emb_openai(texts)
             elif p == "openrouter":
                 res = _emb_openrouter(texts)
+            elif p == "ollama":
+                res = _emb_ollama(texts)
             else:
                 continue
             try:

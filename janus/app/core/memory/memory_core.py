@@ -219,7 +219,9 @@ class MemoryCore:
         """Busca falhas recentes."""
         # Using scroll logic from provider
         now_ms = int(datetime.now(UTC).timestamp() * 1000)
-        start_ms = now_ms - (timeframe_seconds * 1000)
+        # Defensive null-safety: default to 1 hour if None
+        safe_timeframe = timeframe_seconds if timeframe_seconds is not None else 3600
+        start_ms = now_ms - (safe_timeframe * 1000)
 
         qfilter = models.Filter(
             must=[
@@ -239,7 +241,9 @@ class MemoryCore:
     ):
         """Busca lições recentes."""
         now_ms = int(datetime.now(UTC).timestamp() * 1000)
-        start_ms = now_ms - (timeframe_seconds * 1000)
+        # Defensive null-safety: default to 1 hour if None
+        safe_timeframe = timeframe_seconds if timeframe_seconds is not None else 3600
+        start_ms = now_ms - (safe_timeframe * 1000)
 
         qfilter = models.Filter(
             must=[
@@ -291,10 +295,7 @@ class MemoryCore:
         origin = str(metadata.get("origin") or "unknown")
         now = time.time()
         entry = self._quota.get(origin)
-        if (
-            entry is None
-            or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s
-        ):
+        if entry is None or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s:
             entry = {"window_start": now, "items": 0, "bytes": 0}
             self._quota[origin] = entry
 
@@ -324,10 +325,7 @@ class MemoryCore:
         origin = str(metadata.get("origin") or "unknown")
         now = time.time()
         entry = self._quota.get(origin)
-        if (
-            entry is None
-            or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s
-        ):
+        if entry is None or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s:
             entry = {"window_start": now, "items": 0, "bytes": 0}
             self._quota[origin] = entry
 

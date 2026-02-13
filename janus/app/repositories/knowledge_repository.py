@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 import structlog
 from fastapi import Depends
@@ -22,7 +22,7 @@ class KnowledgeRepository:
 
     async def get_node_and_relationship_stats(self) -> dict[str, list]:
         node_stats_query = (
-            "MATCH (n) RETURN labels(n)[0] as type, count(n) as count ORDER BY count DESC"
+            "MATCH (n) RETURN head(labels(n)) as type, count(n) as count ORDER BY count DESC"
         )
         rel_stats_query = (
             "MATCH ()-[r]->() RETURN type(r) as type, count(r) as count ORDER BY count DESC"
@@ -35,29 +35,29 @@ class KnowledgeRepository:
         if file_path:
             query = f"""MATCH (f:{GraphLabel.FILE.value} {{path: $file_path}})-[:{GraphRelationship.CONTAINS.value}]->(e)
                          WHERE e:{GraphLabel.FUNCTION.value} OR e:{GraphLabel.CLASS.value}
-                         RETURN labels(e)[0] as type, e.name as name, e.file_path as file_path ORDER BY type, name"""
+                         RETURN head(labels(e)) as type, e.name as name, e.file_path as file_path ORDER BY type, name"""
             params = {"file_path": file_path}
         else:
             query = f"""MATCH (e) WHERE e:{GraphLabel.FUNCTION.value} OR e:{GraphLabel.CLASS.value}
-                         RETURN labels(e)[0] as type, e.name as name, e.file_path as file_path ORDER BY file_path, type, name"""
+                         RETURN head(labels(e)) as type, e.name as name, e.file_path as file_path ORDER BY file_path, type, name"""
             params = {}
         return await self._db.query(query, params, operation="repo_find_code_entities")
 
     async def find_entity_details(self, entity_name: str) -> dict[str, Any] | None:
-        entity_query = "MATCH (e) WHERE e.name = $name RETURN labels(e)[0] as type, properties(e) as properties LIMIT 1"
+        entity_query = "MATCH (e) WHERE e.name = $name RETURN head(labels(e)) as type, properties(e) as properties LIMIT 1"
         entity = await self._db.query(
             entity_query, {"name": entity_name}, operation="repo_find_entity_properties"
         )
         if not entity:
             return None
-        relationships_query = "MATCH (e {name: $name})-[r]-(related) RETURN type(r) as relationship, related.name as related_entity, labels(related)[0] as related_type LIMIT 20"
+        relationships_query = "MATCH (e {name: $name})-[r]-(related) RETURN type(r) as relationship, related.name as related_entity, head(labels(related)) as related_type LIMIT 20"
         relationships = await self._db.query(
             relationships_query, {"name": entity_name}, operation="repo_find_entity_relationships"
         )
         return {"entity": entity[0], "relationships": relationships}
 
     async def save_code_structure(self, parser: CodeParser):
-        logger.debug("Salvando estrutura de código no repositório", file_path=parser.file_path)
+        logger.debug("Salvando estrutura de codigo no repositorio", file_path=parser.file_path)
         async with await self._db.get_session() as session:
             tx = await session.begin_transaction()
             try:
@@ -79,10 +79,11 @@ class KnowledgeRepository:
                 )
                 for func in parser.functions:
                     func_name = func["name"]
+                    func_qualified = func.get("qualified_name") or func_name
                     func_props = {
                         "name": func_name,
                         "file_path": parser.file_path,
-                        "full_name": f"{parser.file_path}::{func_name}",
+                        "full_name": f"{parser.file_path}::{func_qualified}",
                         "line": func.get("line"),
                     }
                     func_id = await self._db.merge_node(
@@ -100,10 +101,11 @@ class KnowledgeRepository:
                     )
                 for cls in parser.classes:
                     cls_name = cls["name"]
+                    cls_qualified = cls.get("qualified_name") or cls_name
                     cls_props = {
                         "name": cls_name,
                         "file_path": parser.file_path,
-                        "full_name": f"{parser.file_path}::{cls_name}",
+                        "full_name": f"{parser.file_path}::{cls_qualified}",
                         "line": cls.get("line"),
                     }
                     cls_id = await self._db.merge_node(
@@ -144,11 +146,22 @@ class KnowledgeRepository:
         if not calls:
             return
         query = f"""UNWIND $calls as call
-                     MATCH (caller:{GraphLabel.FUNCTION.value} {{name: call.caller_name, file_path: call.file_path}})
-                     OPTIONAL MATCH (callee_same:{GraphLabel.FUNCTION.value} {{name: call.callee_name, file_path: call.file_path}})
-                     WITH caller, call, head(collect(callee_same)) as callee_same
-                     OPTIONAL MATCH (callee_any:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
-                     WITH caller, coalesce(callee_same, head(collect(callee_any))) as callee
+                     MATCH (caller:{GraphLabel.FUNCTION.value} {{file_path: call.file_path}})
+                     WHERE (call.caller_qualified IS NOT NULL AND caller.full_name = call.file_path + "::" + call.caller_qualified)
+                        OR caller.name = call.caller_name
+                     WITH caller, call
+                     OPTIONAL MATCH (callee_same_full:{GraphLabel.FUNCTION.value} {{file_path: call.file_path}})
+                     WHERE call.callee_qualified IS NOT NULL
+                       AND callee_same_full.full_name = call.file_path + "::" + call.callee_qualified
+                     WITH caller, call, head(collect(callee_same_full)) as callee_same_full
+                     OPTIONAL MATCH (callee_same_name:{GraphLabel.FUNCTION.value} {{name: call.callee_name, file_path: call.file_path}})
+                     WITH caller, call, callee_same_full, head(collect(callee_same_name)) as callee_same_name
+                     OPTIONAL MATCH (callee_any_full:{GraphLabel.FUNCTION.value})
+                     WHERE call.callee_qualified IS NOT NULL
+                       AND callee_any_full.full_name ENDS WITH ("::" + call.callee_qualified)
+                     WITH caller, call, callee_same_full, callee_same_name, head(collect(callee_any_full)) as callee_any_full
+                     OPTIONAL MATCH (callee_any_name:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
+                     WITH caller, coalesce(callee_same_full, callee_same_name, callee_any_full, head(collect(callee_any_name))) as callee
                      WHERE callee IS NOT NULL
                      MERGE (caller)-[r:`{GraphRelationship.CALLS.value}`]->(callee)"""
         await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
@@ -359,7 +372,7 @@ class KnowledgeRepository:
           AND coalesce(last(relationships(path)).valid_to, datetime()) >= datetime()
           AND coalesce(related.valid_to, datetime()) >= datetime()
         RETURN related.name as related_entity,
-               labels(related)[0] as related_type,
+               head(labels(related)) as related_type,
                type(last(relationships(path))) as relationship,
                length(path) as distance
         SKIP $skip
@@ -383,7 +396,7 @@ class KnowledgeRepository:
         query = f"""
         MATCH (t) WHERE t.name = $name AND (t:{GraphLabel.FUNCTION.value} OR t:{GraphLabel.CODE_FUNCTION.value})
         MATCH (f)-[:{GraphRelationship.CALLS.value}]->(t)
-        RETURN labels(f)[0] as type, f.name as name, coalesce(f.file_path, f.path, '') as file_path
+        RETURN head(labels(f)) as type, f.name as name, coalesce(f.file_path, f.path, '') as file_path
         ORDER BY name
         """
         params = {"name": function_name}
@@ -394,7 +407,7 @@ class KnowledgeRepository:
         MATCH (f) WHERE (f:{GraphLabel.CODE_FILE.value} OR f:{GraphLabel.FILE.value})
         MATCH (f)-[:{GraphRelationship.IMPORTS.value}]->(m)
         WHERE m.name = $module OR m.path = $module
-        RETURN labels(f)[0] as type, coalesce(f.name, '') as name, coalesce(f.file_path, f.path, '') as file_path
+        RETURN head(labels(f)) as type, coalesce(f.name, '') as name, coalesce(f.file_path, f.path, '') as file_path
         ORDER BY file_path
         """
         params = {"module": module}
@@ -405,11 +418,44 @@ class KnowledgeRepository:
         MATCH (p {{name: $protocol}})
         MATCH (c)-[:{GraphRelationship.IMPLEMENTS.value}]->(p)
         WHERE (c:{GraphLabel.CLASS.value} OR c:{GraphLabel.CODE_CLASS.value})
-        RETURN labels(c)[0] as type, c.name as name, coalesce(c.file_path, '') as file_path
+        RETURN head(labels(c)) as type, c.name as name, coalesce(c.file_path, '') as file_path
         ORDER BY name
         """
         params = {"protocol": protocol}
         return await self._db.query(query, params, operation="repo_find_classes_implementing")
+
+    async def find_code_citations(
+        self, tokens: list[str], limit: int = 10
+    ) -> list[dict[str, Any]]:
+        if not tokens:
+            return []
+
+        query = f"""
+        MATCH (e)
+        WHERE (e:{GraphLabel.FUNCTION.value} OR e:{GraphLabel.CODE_FUNCTION.value}
+            OR e:{GraphLabel.CLASS.value} OR e:{GraphLabel.CODE_CLASS.value})
+          AND any(t IN $tokens
+              WHERE toLower(coalesce(e.name, '')) CONTAINS t
+                 OR toLower(coalesce(e.full_name, '')) CONTAINS t
+                 OR toLower(coalesce(e.file_path, '')) CONTAINS t)
+        WITH e, reduce(score = 0, t IN $tokens |
+            score
+            + CASE WHEN toLower(coalesce(e.name, '')) = t THEN 5 ELSE 0 END
+            + CASE WHEN toLower(coalesce(e.name, '')) CONTAINS t THEN 2 ELSE 0 END
+            + CASE WHEN toLower(coalesce(e.full_name, '')) CONTAINS t THEN 1 ELSE 0 END
+            + CASE WHEN toLower(coalesce(e.file_path, '')) CONTAINS t THEN 1 ELSE 0 END
+          ) AS relevance
+        RETURN head(labels(e)) as type,
+               coalesce(e.name, '') as name,
+               coalesce(e.file_path, e.path, '') as file_path,
+               toInteger(coalesce(e.line, 1)) as line,
+               coalesce(e.full_name, e.name, '') as full_name,
+               relevance
+        ORDER BY relevance DESC, file_path ASC, line ASC, name ASC
+        LIMIT $limit
+        """
+        params = {"tokens": tokens, "limit": int(limit)}
+        return await self._db.query(query, params, operation="repo_find_code_citations")
 
     # --- ConsolidaÃ§Ã£o inicial de conhecimento a partir de experiÃªncias ---
     async def merge_experience_mentions(
@@ -468,5 +514,3 @@ class KnowledgeRepository:
 # PadrÃ£o de InjeÃ§Ã£o de DependÃªncia: Getter para o repositÃ³rio
 def get_knowledge_repository(db: GraphDatabase = Depends(get_graph_db)) -> "KnowledgeRepository":
     return KnowledgeRepository(db)
-
-

@@ -68,31 +68,96 @@ class CodeParser(ast.NodeVisitor):
         self.functions: list[dict[str, Any]] = []
         self.classes: list[dict[str, Any]] = []
         self.calls: list[dict[str, Any]] = []
-        self._current_function: str | None = None
+        self._scope_stack: list[str] = []
+        self._current_class: str | None = None
+        self._current_function_name: str | None = None
+        self._current_function_qualified: str | None = None
+
+    def _qualify_name(self, name: str) -> str:
+        if not self._scope_stack:
+            return name
+        return ".".join([*self._scope_stack, name])
+
+    def _attribute_to_name(self, node: ast.AST) -> str | None:
+        parts: list[str] = []
+        current = node
+
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+
+        if isinstance(current, ast.Name):
+            parts.append(current.id)
+            return ".".join(reversed(parts))
+        return None
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        self.classes.append({"name": node.name, "line": node.lineno})
+        class_qualified = self._qualify_name(node.name)
+        self.classes.append({"name": node.name, "qualified_name": class_qualified, "line": node.lineno})
+        previous_class = self._current_class
+        self._scope_stack.append(node.name)
+        self._current_class = class_qualified
         self.generic_visit(node)
+        self._scope_stack.pop()
+        self._current_class = previous_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.functions.append({"name": node.name, "line": node.lineno})
-        previous_function = self._current_function
-        self._current_function = node.name
+        function_qualified = self._qualify_name(node.name)
+        self.functions.append(
+            {"name": node.name, "qualified_name": function_qualified, "line": node.lineno}
+        )
+        previous_name = self._current_function_name
+        previous_qualified = self._current_function_qualified
+        self._scope_stack.append(node.name)
+        self._current_function_name = node.name
+        self._current_function_qualified = function_qualified
         self.generic_visit(node)
-        self._current_function = previous_function
+        self._scope_stack.pop()
+        self._current_function_name = previous_name
+        self._current_function_qualified = previous_qualified
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        function_qualified = self._qualify_name(node.name)
+        self.functions.append(
+            {"name": node.name, "qualified_name": function_qualified, "line": node.lineno}
+        )
+        previous_name = self._current_function_name
+        previous_qualified = self._current_function_qualified
+        self._scope_stack.append(node.name)
+        self._current_function_name = node.name
+        self._current_function_qualified = function_qualified
+        self.generic_visit(node)
+        self._scope_stack.pop()
+        self._current_function_name = previous_name
+        self._current_function_qualified = previous_qualified
 
     def visit_Call(self, node: ast.Call):
         callee_name = None
+        callee_qualified = None
         if isinstance(node.func, ast.Name):
             callee_name = node.func.id
+            callee_qualified = node.func.id
         elif isinstance(node.func, ast.Attribute):
             callee_name = node.func.attr
+            attribute_name = self._attribute_to_name(node.func)
+            if attribute_name:
+                if (
+                    self._current_class
+                    and (attribute_name.startswith("self.") or attribute_name.startswith("cls."))
+                ):
+                    _, _, suffix = attribute_name.partition(".")
+                    callee_qualified = f"{self._current_class}.{suffix}" if suffix else None
+                else:
+                    callee_qualified = attribute_name
 
-        if self._current_function and callee_name:
+        if self._current_function_name and callee_name:
             self.calls.append(
                 {
-                    "caller": self._current_function,
+                    "caller": self._current_function_name,
+                    "caller_qualified": self._current_function_qualified
+                    or self._current_function_name,
                     "callee": callee_name,
+                    "callee_qualified": callee_qualified or callee_name,
                 }
             )
         self.generic_visit(node)
@@ -116,16 +181,36 @@ def _create_code_entities_in_graph(parser: CodeParser):
     repo.query("merge_file", "MERGE (f:File:CodeFile {path: $path})", params={"path": file_path})
 
     for func in parser.functions:
+        qualified = func.get("qualified_name") or func["name"]
         repo.query(
             "merge_function",
-            "MATCH (f:File:CodeFile {path: $file_path}) MERGE (func:Function:CodeFunction {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(func)",
-            params={"file_path": file_path, "name": func["name"]},
+            """
+            MATCH (f:File:CodeFile {path: $file_path})
+            MERGE (func:Function:CodeFunction {name: $name, file_path: $file_path})
+            SET func.full_name = $full_name
+            MERGE (f)-[:CONTAINS]->(func)
+            """,
+            params={
+                "file_path": file_path,
+                "name": func["name"],
+                "full_name": f"{file_path}::{qualified}",
+            },
         )
     for cls in parser.classes:
+        qualified = cls.get("qualified_name") or cls["name"]
         repo.query(
             "merge_class",
-            "MATCH (f:File:CodeFile {path: $file_path}) MERGE (c:Class:CodeClass {name: $name, file_path: $file_path}) MERGE (f)-[:CONTAINS]->(c)",
-            params={"file_path": file_path, "name": cls["name"]},
+            """
+            MATCH (f:File:CodeFile {path: $file_path})
+            MERGE (c:Class:CodeClass {name: $name, file_path: $file_path})
+            SET c.full_name = $full_name
+            MERGE (f)-[:CONTAINS]->(c)
+            """,
+            params={
+                "file_path": file_path,
+                "name": cls["name"],
+                "full_name": f"{file_path}::{qualified}",
+            },
         )
 
 
@@ -224,7 +309,9 @@ def index_codebase() -> dict:
                         all_calls_to_process.append(
                             {
                                 "caller_name": call["caller"],
+                                "caller_qualified": call.get("caller_qualified"),
                                 "callee_name": call["callee"],
+                                "callee_qualified": call.get("callee_qualified"),
                                 "file_path": file_path,
                             }
                         )
@@ -238,8 +325,22 @@ def index_codebase() -> dict:
         "merge_calls",
         """
         UNWIND $calls as call
-        MATCH (caller:Function:CodeFunction {name: call.caller_name, file_path: call.file_path})
-        MATCH (callee:Function:CodeFunction {name: call.callee_name})
+        MATCH (caller:Function:CodeFunction {file_path: call.file_path})
+        WHERE (call.caller_qualified IS NOT NULL AND caller.full_name = call.file_path + "::" + call.caller_qualified)
+           OR caller.name = call.caller_name
+        OPTIONAL MATCH (callee_same_full:Function:CodeFunction {file_path: call.file_path})
+        WHERE call.callee_qualified IS NOT NULL
+          AND callee_same_full.full_name = call.file_path + "::" + call.callee_qualified
+        WITH caller, call, head(collect(callee_same_full)) as callee_same_full
+        OPTIONAL MATCH (callee_same_name:Function:CodeFunction {name: call.callee_name, file_path: call.file_path})
+        WITH caller, call, callee_same_full, head(collect(callee_same_name)) as callee_same_name
+        OPTIONAL MATCH (callee_any_full:Function:CodeFunction)
+        WHERE call.callee_qualified IS NOT NULL
+          AND callee_any_full.full_name ENDS WITH ("::" + call.callee_qualified)
+        WITH caller, call, callee_same_full, callee_same_name, head(collect(callee_any_full)) as callee_any_full
+        OPTIONAL MATCH (callee_any_name:Function:CodeFunction {name: call.callee_name})
+        WITH caller, coalesce(callee_same_full, callee_same_name, callee_any_full, head(collect(callee_any_name))) as callee
+        WHERE callee IS NOT NULL
         MERGE (caller)-[r:CALLS]->(callee)
         RETURN count(r) as created_relationships
         """,

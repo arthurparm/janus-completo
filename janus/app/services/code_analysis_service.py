@@ -17,33 +17,95 @@ class CodeParser(ast.NodeVisitor):
         self.functions: list[dict[str, Any]] = []
         self.classes: list[dict[str, Any]] = []
         self.calls: list[dict[str, Any]] = []
-        self._current_function: str | None = None
+        self._scope_stack: list[str] = []
+        self._current_class: str | None = None
+        self._current_function_name: str | None = None
+        self._current_function_qualified: str | None = None
+
+    def _qualify_name(self, name: str) -> str:
+        if not self._scope_stack:
+            return name
+        return ".".join([*self._scope_stack, name])
+
+    def _attribute_to_name(self, node: ast.AST) -> str | None:
+        parts: list[str] = []
+        current = node
+
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+
+        if isinstance(current, ast.Name):
+            parts.append(current.id)
+            return ".".join(reversed(parts))
+        return None
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
+        function_qualified = self._qualify_name(node.name)
+        self.functions.append(
+            {"name": node.name, "qualified_name": function_qualified, "line": node.lineno}
+        )
+
+        previous_name = self._current_function_name
+        previous_qualified = self._current_function_qualified
+
+        self._scope_stack.append(node.name)
+        self._current_function_name = node.name
+        self._current_function_qualified = function_qualified
+        self.generic_visit(node)
+        self._scope_stack.pop()
+
+        self._current_function_name = previous_name
+        self._current_function_qualified = previous_qualified
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        self.classes.append({"name": node.name, "line": node.lineno})
-        self.generic_visit(node)  # Visita nós filhos
+        class_qualified = self._qualify_name(node.name)
+        self.classes.append({"name": node.name, "qualified_name": class_qualified, "line": node.lineno})
+
+        previous_class = self._current_class
+        self._scope_stack.append(node.name)
+        self._current_class = class_qualified
+        self.generic_visit(node)
+        self._scope_stack.pop()
+        self._current_class = previous_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.functions.append({"name": node.name, "line": node.lineno})
-        previous_function = self._current_function
-        self._current_function = node.name
-        self.generic_visit(node)
-        self._current_function = previous_function
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        self._visit_function(node)
 
     def visit_Call(self, node: ast.Call):
         callee_name = None
+        callee_qualified = None
+
         if isinstance(node.func, ast.Name):
             callee_name = node.func.id
+            callee_qualified = node.func.id
         elif isinstance(node.func, ast.Attribute):
             callee_name = node.func.attr
+            attribute_name = self._attribute_to_name(node.func)
+            if attribute_name:
+                if (
+                    self._current_class
+                    and (attribute_name.startswith("self.") or attribute_name.startswith("cls."))
+                ):
+                    _, _, suffix = attribute_name.partition(".")
+                    callee_qualified = f"{self._current_class}.{suffix}" if suffix else None
+                else:
+                    callee_qualified = attribute_name
 
-        if self._current_function and callee_name:
+        if self._current_function_name and callee_name:
             self.calls.append(
                 {
-                    "caller": self._current_function,
+                    "caller": self._current_function_name,
+                    "caller_qualified": self._current_function_qualified
+                    or self._current_function_name,
                     "callee": callee_name,
+                    "callee_qualified": callee_qualified or callee_name,
                 }
             )
+
         self.generic_visit(node)
 
 
