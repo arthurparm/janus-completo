@@ -23,6 +23,11 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
+    path: 'observability',
+    loadComponent: () => import('./features/observability/observability').then(m => m.ObservabilityComponent),
+    canActivate: [AuthGuard]
+  },
+  {
     path: '',
     loadComponent: () => import('./features/home/home').then(m => m.HomeComponent),
     canActivate: [AuthGuard]

@@ -1,0 +1,61 @@
+@use '../knowledge-widget/knowledge-widget.scss';
+
+/* Custom Overrides for Autonomy Widget (Purple Theme) */
+.widget-icon {
+  background: rgba(var(--janus-accent-rgb), 0.1);
+  color: var(--janus-accent);
+  box-shadow: 0 0 15px rgba(var(--janus-accent-rgb), 0.15);
+  
+  .group:hover & {
+    background: var(--janus-accent);
+    box-shadow: 0 0 20px rgba(var(--janus-accent-rgb), 0.4);
+  }
+}
+
+.stat-item:hover {
+  border-color: rgba(var(--janus-accent-rgb), 0.3);
+}
+
+.tag {
+  background: rgba(var(--janus-accent-rgb), 0.08);
+  border: 1px solid rgba(var(--janus-accent-rgb), 0.15);
+  color: var(--janus-accent-light);
+}
+
+.widget-footer button:hover {
+  color: var(--janus-accent);
+}
+
+.glow-bg {
+  background: radial-gradient(circle, rgba(var(--janus-accent-rgb), 0.15) 0%, transparent 70%);
+}
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-family: var(--janus-font-mono);
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  
+  &.conservative {
+    background: rgba(var(--janus-success-rgb), 0.1);
+    border-color: rgba(var(--janus-success-rgb), 0.2);
+    color: var(--janus-success);
+  }
+  
+  &.balanced {
+    background: rgba(var(--janus-warning-rgb), 0.1);
+    border-color: rgba(var(--janus-warning-rgb), 0.2);
+    color: var(--janus-warning);
+  }
+  
+  &.aggressive {
+    background: rgba(var(--janus-error-rgb), 0.1);
+    border-color: rgba(var(--janus-error-rgb), 0.2);
+    color: var(--janus-error);
+  }
+}

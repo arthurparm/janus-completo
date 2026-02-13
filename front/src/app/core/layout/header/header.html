@@ -5,23 +5,10 @@
       <span class="brand-text">JANUS<span class="dot">AI</span></span>
     </div>
 
-    <!-- System Metrics (Realtime) -->
-    @if (metrics$ | async; as m) {
-      <div class="system-metrics desktop-only">
-        <div class="metric">
-          <span class="label">CPU</span>
-          <span class="value">
-            @if (m.cpu !== null) { {{ m.cpu | number:'1.0-0' }}% } @else { -- }
-          </span>
-        </div>
-        <div class="metric">
-          <span class="label">MEM</span>
-          <span class="value">
-            @if (m.memory !== null) { {{ m.memory | number:'1.0-0' }}% } @else { -- }
-          </span>
-        </div>
-      </div>
-    }
+    <!-- System HUD (Substitui métricas antigas) -->
+    <div class="system-metrics desktop-only">
+      <app-system-hud></app-system-hud>
+    </div>
 
     <button class="menu-toggle" aria-label="Abrir menu" [attr.aria-expanded]="isMenuOpen" (click)="toggleMenu()">
       <span class="bar"></span>

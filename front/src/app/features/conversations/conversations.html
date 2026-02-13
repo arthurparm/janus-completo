@@ -5,9 +5,9 @@
     <header class="convo-hero">
       <div class="hero-copy">
         <p class="eyebrow">JANUS // CONVERSAS</p>
-        <h1>Centro de comando do chat</h1>
+        <h1>Converse com o Janus sem friccao</h1>
         <p class="sub">
-          Fluxo em tempo real, eventos de agentes e contexto vivo no mesmo lugar.
+          Escolha uma conversa ou envie sua primeira pergunta. O modo avancado fica opcional.
         </p>
       </div>
       <div class="hero-actions">
@@ -21,7 +21,7 @@
       </div>
     </header>
 
-    <div class="convo-grid">
+    <div class="convo-grid" [class.simple]="!showAdvanced()">
       <aside class="convo-panel convo-list" aria-label="Lista de conversas">
         <div class="panel-head">
           <div>
@@ -33,7 +33,17 @@
 
         <div class="search-row">
           <span class="material-icons">search</span>
-          <input type="text" placeholder="Buscar por titulo ou id" (input)="onSearchChange($event)" />
+          <input
+            type="text"
+            aria-label="Buscar conversas"
+            placeholder="Buscar por titulo ou id"
+            [value]="search()"
+            (input)="onSearchChange($event)" />
+          @if (search()) {
+            <button ui-button variant="ghost" size="icon" (click)="clearSearch()" aria-label="Limpar busca">
+              <span class="material-icons">close</span>
+            </button>
+          }
           <button ui-button variant="ghost" size="icon" (click)="refresh()" [disabled]="listLoading()">
             <span class="material-icons">refresh</span>
           </button>
@@ -74,6 +84,12 @@
           <div class="status-group">
             <ui-badge [variant]="streamBadge().variant">{{ streamBadge().label }}</ui-badge>
             <ui-badge variant="neutral">{{ messages().length }} msgs</ui-badge>
+            <button ui-button variant="ghost" size="sm" type="button" (click)="toggleAdvanced()">
+              {{ showAdvanced() ? 'Modo simples' : 'Modo avancado' }}
+            </button>
+            @if (isAdmin()) {
+              <ui-badge variant="info">Modo Admin</ui-badge>
+            }
           </div>
         </div>
 
@@ -116,20 +132,43 @@
                         <div class="understanding-head">
                           <span class="understanding-label">Entendi assim</span>
                           <span class="understanding-intent">{{ understandingIntentLabel(msg.understanding) }}</span>
+                          <span
+                            class="confidence-chip"
+                            [class.high]="understandingConfidenceBand(msg.understanding) === 'high'"
+                            [class.medium]="understandingConfidenceBand(msg.understanding) === 'medium'"
+                            [class.low]="understandingConfidenceBand(msg.understanding) === 'low'">
+                            {{ understandingConfidenceLabel(msg.understanding) }}
+                          </span>
                           <span class="muted">{{ understandingConfidence(msg.understanding) }}</span>
                         </div>
                         <p>{{ msg.understanding?.summary }}</p>
                         @if (msg.understanding?.requires_confirmation) {
-                          <span class="understanding-flag">Ação com confirmação sugerida</span>
+                          <span class="understanding-flag">Acao com confirmacao sugerida</span>
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="confirmLowConfidence()">
+                            Confirmar antes de executar
+                          </button>
                         }
                       </div>
                     }
                     @if (msg.citations?.length) {
                       <div class="citation-list">
-                        @for (cite of msg.citations; track cite) {
-                          <span class="citation-chip">
-                            {{ cite.file_path || cite.title || cite.doc_id || 'fonte' }}
-                          </span>
+                        @for (cite of msg.citations; track $index) {
+                          <details class="citation-item">
+                            <summary class="citation-chip" title="Abrir detalhes da fonte">
+                              {{ citationTitle(cite) }}
+                            </summary>
+                            <div class="citation-detail">
+                              @if (cite.url) {
+                                <a [href]="cite.url" target="_blank" rel="noopener noreferrer">Abrir fonte</a>
+                              } @else {
+                                <span class="muted">Fonte local sem URL publica</span>
+                              }
+                              <span class="muted">Score: {{ citationScore(cite) }}</span>
+                              @if (cite.snippet) {
+                                <pre>{{ cite.snippet }}</pre>
+                              }
+                            </div>
+                          </details>
                         }
                       </div>
                     }
@@ -141,33 +180,54 @@
             <div class="empty-state">
               <h3>Nenhuma mensagem ainda</h3>
               <p class="muted">Envie a primeira pergunta ou crie uma conversa nova.</p>
+              <div class="empty-actions">
+                <button ui-button variant="default" size="sm" type="button" (click)="createConversation()">
+                  Iniciar conversa
+                </button>
+              </div>
+              <div class="quick-prompts">
+                @for (item of quickPrompts; track item) {
+                  <button ui-button variant="ghost" size="sm" type="button" (click)="useQuickPrompt(item)">
+                    {{ item }}
+                  </button>
+                }
+              </div>
             </div>
           }
         </div>
 
         <div class="composer">
-          <div class="composer-toolbar">
-            <label>
-              <span>Role</span>
-              <select [value]="selectedRole()" (change)="selectedRole.set($any($event.target).value)">
-                @for (role of roleOptions; track role.value) {
-                  <option [value]="role.value">{{ role.label }}</option>
-                }
-              </select>
-            </label>
-            <label>
-              <span>Prioridade</span>
-              <select [value]="selectedPriority()" (change)="selectedPriority.set($any($event.target).value)">
-                @for (priority of priorityOptions; track priority.value) {
-                  <option [value]="priority.value">{{ priority.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="toggle">
-              <input type="checkbox" [checked]="streamingEnabled()" (change)="streamingEnabled.set(!streamingEnabled())" />
-              <span>Streaming</span>
-            </label>
-          </div>
+          @if (showAdvanced()) {
+            <div class="composer-toolbar">
+              <label>
+                <span>Role</span>
+                <select [value]="selectedRole()" (change)="selectedRole.set($any($event.target).value)">
+                  @for (role of roleOptions; track role.value) {
+                    <option [value]="role.value">{{ role.label }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Prioridade</span>
+                <select [value]="selectedPriority()" (change)="selectedPriority.set($any($event.target).value)">
+                  @for (priority of priorityOptions; track priority.value) {
+                    <option [value]="priority.value">{{ priority.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" [checked]="streamingEnabled()" (change)="streamingEnabled.set(!streamingEnabled())" />
+                <span>Streaming</span>
+              </label>
+            </div>
+            <p class="composer-helper muted">
+              Role e prioridade ajustam a estrategia de resposta. Se tiver duvida, mantenha o padrao.
+            </p>
+          } @else {
+            <p class="composer-helper muted">
+              Modo simples ativo: o Janus escolhe automaticamente a melhor estrategia para responder.
+            </p>
+          }
 
           <textarea
             [formControl]="prompt"
@@ -186,6 +246,7 @@
         </div>
       </section>
 
+      @if (showAdvanced()) {
       <aside class="convo-panel convo-rail" aria-label="Contexto">
         <section class="rail-section">
           <div class="panel-head">
@@ -211,7 +272,7 @@
                 }
               </ul>
             } @else {
-              <p class="muted">Nenhum rastro disponível.</p>
+              <p class="muted">Nenhum rastro disponÃ­vel.</p>
             }
           }
         </section>
@@ -284,6 +345,8 @@
           }
         </section>
       </aside>
+      }
     </div>
   </div>
 </section>
+

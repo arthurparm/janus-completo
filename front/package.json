@@ -72,11 +72,12 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@analogjs/vite-plugin-angular": "^2.2.2",
+    "@analogjs/vitest-angular": "^2.2.2",
     "@angular/build": "^20.0.0",
     "@angular/cli": "^20.0.0",
     "@angular/compiler-cli": "^20.0.0",
-    "@analogjs/vite-plugin-angular": "^2.2.2",
-    "@analogjs/vitest-angular": "^2.2.2",
+    "@playwright/test": "^1.58.2",
     "@testing-library/angular": "^19.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^25.0.9",

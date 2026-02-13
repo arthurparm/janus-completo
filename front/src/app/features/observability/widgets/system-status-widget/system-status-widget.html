@@ -1,0 +1,58 @@
+<div class="widget">
+    @if (loading()) {
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading system status...</p>
+    </div>
+    } @else if (error()) {
+    <div class="error-state">
+        <span class="material-icons">error_outline</span>
+        <p>{{ error() }}</p>
+    </div>
+    } @else {
+    <!-- Widget Header -->
+    <div class="widget-header">
+        <h3>System Status</h3>
+        <span class="status-badge" [class]="'status-' + getStatusColor(systemStatus()?.status)">
+            {{ systemStatus()?.status || 'UNKNOWN' }}
+        </span>
+    </div>
+
+    <!-- System Info Grid -->
+    <div class="info-grid">
+        <div class="info-card">
+            <span class="label">Version</span>
+            <span class="value">{{ systemStatus()?.app_name }} v{{ systemStatus()?.version }}</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Environment</span>
+            <span class="value env-badge">{{ systemStatus()?.environment }}</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Uptime</span>
+            <span class="value">{{ formatUptime(systemStatus()?.uptime_seconds) }}</span>
+        </div>
+    </div>
+
+    <!-- Services Health -->
+    <div class="services-section">
+        <h4>Services Health</h4>
+        <div class="services-grid">
+            @for (service of services(); track service.key) {
+            <div class="service-card">
+                <div class="service-indicator" [class]="'indicator-' + getStatusColor(service.status)"></div>
+                <div class="service-info">
+                    <span class="service-name">{{ service.name }}</span>
+                    @if (service.metric_text) {
+                    <span class="service-metric">{{ service.metric_text }}</span>
+                    }
+                </div>
+            </div>
+            }
+            @if (services().length === 0) {
+            <p class="no-data">No services data available</p>
+            }
+        </div>
+    </div>
+    }
+</div>

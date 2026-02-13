@@ -1,0 +1,54 @@
+<div class="widget-card group">
+  <!-- Glow Background -->
+  <div class="glow-bg"></div>
+
+  <!-- Header -->
+  <div class="widget-header">
+    <div class="flex items-center">
+      <div class="widget-icon">
+        <span class="material-icons">hub</span>
+      </div>
+      <div class="widget-title">
+        <h3>Grafo de Conhecimento</h3>
+        <span>Memória Semântica</span>
+      </div>
+    </div>
+    
+    <div class="status-indicator" [class.active]="(stats$ | async)"></div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-item">
+      <span class="value">{{ (stats$ | async)?.total_nodes | number:'1.0-0' }}</span>
+      <span class="label">Nós</span>
+    </div>
+    <div class="stat-item">
+      <span class="value">{{ (stats$ | async)?.total_relationships | number:'1.0-0' }}</span>
+      <span class="label">Arestas</span>
+    </div>
+  </div>
+
+  <!-- Tags / Labels -->
+  <div class="tags-area">
+    <h4>Principais Conceitos</h4>
+    <div class="tags-list" *ngIf="(stats$ | async)?.labels; else emptyTags">
+      <span *ngFor="let item of getTopLabels((stats$ | async)!)" class="tag">
+        {{ item.label }} <span class="count">{{ item.count }}</span>
+      </span>
+    </div>
+    <ng-template #emptyTags>
+      <div class="tags-list">
+        <span class="tag empty">Scanning codebase...</span>
+        <span class="tag empty">Analyzing concepts...</span>
+      </div>
+    </ng-template>
+  </div>
+
+  <!-- Footer -->
+  <div class="widget-footer">
+    <button>
+      Explorar Grafo <span class="material-icons text-[14px]">arrow_forward</span>
+    </button>
+  </div>
+</div>

@@ -61,6 +61,10 @@
   align-items: start;
 }
 
+.convo-grid.simple {
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2.2fr);
+}
+
 .convo-panel {
   @include glass-panel;
   border-radius: var(--janus-radius-lg);
@@ -371,24 +375,102 @@
   color: $color-text-muted;
 }
 
+.confidence-chip {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-family: $font-mono;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.confidence-chip.high {
+  border-color: rgba(var(--success-rgb), 0.45);
+  color: rgba(var(--success-rgb), 1);
+}
+
+.confidence-chip.medium {
+  border-color: rgba(var(--warning-rgb), 0.45);
+  color: rgba(var(--warning-rgb), 1);
+}
+
+.confidence-chip.low {
+  border-color: rgba(var(--error-rgb), 0.45);
+  color: rgba(var(--error-rgb), 1);
+}
+
 .citation-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
+.citation-item {
+  border: 1px solid rgba(var(--janus-secondary-rgb), 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.citation-item summary::-webkit-details-marker {
+  display: none;
+}
+
 .citation-chip {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
   padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(var(--janus-secondary-rgb), 0.25);
   font-size: 0.7rem;
   color: $color-text-secondary;
 }
 
+.citation-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.citation-detail a {
+  color: $color-text-primary;
+  text-decoration: underline;
+}
+
+.citation-detail pre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(var(--janus-bg-dark-rgb), 0.45);
+  color: $color-text-secondary;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .empty-state {
   text-align: center;
   padding: 24px 0;
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.quick-prompts {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
 }
 
 .composer {
@@ -397,6 +479,10 @@
   gap: 12px;
   position: relative;
   z-index: 1;
+}
+
+.composer-helper {
+  margin: 0;
 }
 
 .composer-toolbar {
@@ -553,6 +639,10 @@
 
 @media (max-width: 1200px) {
   .convo-grid {
+    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
+  }
+
+  .convo-grid.simple {
     grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
   }
 

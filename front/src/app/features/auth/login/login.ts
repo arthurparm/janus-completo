@@ -17,7 +17,7 @@ export class LoginComponent {
   private router = inject(Router)
   form = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(6)]],
+    password: ['', [Validators.required]],
     remember: [true]
   })
   showPassword = false

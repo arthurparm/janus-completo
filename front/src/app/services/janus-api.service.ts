@@ -45,6 +45,42 @@ export interface SystemOverviewResponse {
   workers_status: WorkerStatusResponse[];
 }
 
+// Database Validation
+export interface DbValidationCheck {
+  table: string;
+  name: string;
+  kind: string;
+  exists: boolean;
+}
+
+export interface DbValidationResponse {
+  status: string;
+  checks: DbValidationCheck[];
+}
+
+// Knowledge Health
+export interface KnowledgeHealthResponse {
+  status: string;
+  neo4j_connected: boolean;
+  qdrant_connected: boolean;
+  circuit_breaker_open: boolean;
+  total_nodes: number;
+  total_relationships: number;
+}
+
+export interface KnowledgeHealthDetailedResponse {
+  timestamp: string;
+  overall_status: string;
+  basic_health: KnowledgeHealthResponse;
+  detailed_status: {
+    offline: boolean;
+    circuit_breaker_open: boolean;
+    metrics: Record<string, unknown>;
+  };
+  monitoring: Record<string, unknown> | null;
+  recommendations: string[];
+}
+
 // Meta-Agent
 export interface MetaAgentRecommendation {
   id: string;
@@ -140,6 +176,8 @@ export interface PendingAction {
   tool_name?: string;
   args_json?: string;
   created_at?: string;
+  risk_level?: 'low' | 'medium' | 'high' | string;
+  risk_summary?: string;
 }
 
 // Poison pill stats
@@ -177,7 +215,10 @@ export interface ChatUnderstanding {
   intent: string;
   summary: string;
   confidence?: number;
+  confidence_band?: 'high' | 'medium' | 'low' | string;
+  low_confidence?: boolean;
   requires_confirmation?: boolean;
+  confirmation_reason?: string;
   signals?: string[];
 }
 export interface ChatMessage {
@@ -280,7 +321,21 @@ export interface UserStatusResponse { user_id: string; conversations: number; me
 export interface UploadResponse { doc_id: string; chunks: number; status: string; consolidation?: Record<string, unknown> | null }
 export interface DocListItem { doc_id: string; file_name?: string; chunks: number; conversation_id?: string; last_index_ts?: number }
 export interface DocListResponse { items: DocListItem[] }
-export interface Citation { id?: string; title?: string; url?: string; snippet?: string; score?: number; source_type?: string; doc_id?: string; file_path?: string; origin?: string }
+export interface Citation {
+  id?: string;
+  title?: string;
+  url?: string;
+  snippet?: string;
+  score?: number;
+  source_type?: string;
+  doc_id?: string;
+  file_path?: string;
+  origin?: string;
+  type?: string;
+  line?: number | string;
+  line_start?: number | string;
+  line_end?: number | string;
+}
 
 export interface DocSearchResultItem {
   id: string;
@@ -333,11 +388,18 @@ export interface AutonomyStartRequest {
   plan?: { tool: string; args: Record<string, unknown> }[]
 }
 
+export interface AutonomyConfig {
+  risk_profile?: string;
+  interval_seconds?: number;
+  max_actions_per_cycle?: number;
+  [key: string]: unknown;
+}
+
 export interface AutonomyStatusResponse {
   active: boolean
   cycle_count: number
   last_cycle_at?: number | null
-  config: Record<string, unknown>
+  config: AutonomyConfig
 }
 
 export interface AutonomyPlanResponse {
@@ -812,7 +874,7 @@ export class JanusApiService {
     if (params.pending_status) qs.set('pending_status', params.pending_status)
     if (typeof params.limit !== 'undefined') qs.set('limit', String(params.limit))
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
-    return this.http.get<PendingAction[]>(this.buildUrl(`/api/v1/pending_actions${suffix}`))
+    return this.http.get<PendingAction[]>(this.buildUrl(`/api/v1/pending_actions/${suffix}`))
   }
 
   approvePendingAction(action: PendingAction): Observable<PendingAction> {
@@ -1329,6 +1391,24 @@ export class JanusApiService {
   getReflexionSummary(limit: number = 10): Observable<PostSprintSummaryResponse> {
     const qs = new URLSearchParams({ limit: String(limit) })
     return this.http.get<PostSprintSummaryResponse>(this.buildUrl(`/api/v1/reflexion/summary/post_sprint?${qs.toString()}`))
+  }
+
+  // System - Database Validation
+  getSystemDbValidate(): Observable<DbValidationResponse> {
+    return this.http.get<DbValidationResponse>(this.buildUrl(`/api/v1/system/db/validate`))
+  }
+
+  // Knowledge - Health Endpoints
+  getKnowledgeHealth(): Observable<KnowledgeHealthResponse> {
+    return this.http.get<KnowledgeHealthResponse>(this.buildUrl(`/api/v1/knowledge/health`))
+  }
+
+  getKnowledgeHealthDetailed(): Observable<KnowledgeHealthDetailedResponse> {
+    return this.http.get<KnowledgeHealthDetailedResponse>(this.buildUrl(`/api/v1/knowledge/health/detailed`))
+  }
+
+  resetKnowledgeCircuitBreaker(): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(this.buildUrl(`/api/v1/knowledge/health/reset-circuit-breaker`), {})
   }
 }
 

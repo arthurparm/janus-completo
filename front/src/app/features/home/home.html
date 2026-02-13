@@ -2,366 +2,112 @@
   <app-header></app-header>
 
   <div class="home-shell">
-    <header class="home-hero">
-      <div class="hero-copy">
-        <p class="eyebrow">JANUS // CENTRAL DE COMANDO</p>
-        <h1>Bem-vindo, {{ displayName() }}</h1>
-        <p class="sub">
-          Painel de controle com contexto vivo, limites do test drive e rotas rapidas
-          para iniciar tarefas.
-        </p>
-        <div class="hero-actions">
-          <button ui-button variant="default" size="lg" (click)="startChat()" [disabled]="actionLoading()">
-            <span class="material-icons">bolt</span>
-            Iniciar conversa
-          </button>
-          <button ui-button variant="ghost" size="lg" (click)="refresh()" [disabled]="loading()">
-            Atualizar painel
-          </button>
-        </div>
+    <!-- HERO SECTION: O Centro de Comando -->
+    <header class="home-hero relative overflow-hidden">
+      <!-- Background Abstract Elements -->
+      <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div class="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px]"></div>
+        <div class="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px]"></div>
       </div>
 
-      <div class="hero-panels">
-        <div class="hero-card status-card">
-          <div class="card-head">
-            <span class="label">Status do sistema</span>
-            <ui-badge [variant]="systemStatus().variant">
-              {{ systemStatus().label }}
-            </ui-badge>
-          </div>
-          <div class="status-body">
-            <div class="status-line">
-              <span class="dot" [class.ok]="systemStatus().variant === 'success'"
-                [class.warn]="systemStatus().variant === 'warning'"
-                [class.err]="systemStatus().variant === 'error'"></span>
-              <span>Ambiente {{ systemStatus().env }}</span>
-            </div>
-            <p class="muted">
-              Uptime {{ formatUptime(uptimeSeconds()) }}
-            </p>
+      <div class="hero-content relative z-10 max-w-4xl mx-auto text-center pt-12 pb-8">
+        <p class="eyebrow mb-4 inline-block px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono tracking-widest text-gray-400">
+          JANUS // COCKPIT
+        </p>
+        
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+          Olá, {{ displayName() }}
+        </h1>
+        
+        <p class="sub text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+          O que vamos criar, analisar ou explorar hoje? O sistema está pronto.
+        </p>
+
+        <!-- Main Input -->
+        <div class="max-w-2xl mx-auto mb-8 relative group">
+          <div class="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+          <div class="relative flex items-center bg-gray-900 rounded-lg border border-gray-700 shadow-2xl">
+            <input 
+              type="text" 
+              [formControl]="prompt"
+              (keyup.enter)="startChat()"
+              placeholder="Descreva sua tarefa... (Ex: 'Criar um novo agente', 'Analisar logs')" 
+              class="w-full bg-transparent border-none text-white px-6 py-4 text-lg focus:ring-0 placeholder-gray-500"
+            />
+            <button 
+              (click)="startChat()"
+              [disabled]="actionLoading()"
+              class="mr-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[44px]"
+            >
+              <span class="material-icons" *ngIf="!actionLoading()">arrow_forward</span>
+              <span class="animate-spin h-5 w-5 border-2 border-white/30 border-t-white rounded-full" *ngIf="actionLoading()"></span>
+            </button>
           </div>
         </div>
 
-        <div class="hero-card quota-card">
-          <div class="card-head">
-            <span class="label">Limite diario</span>
-            @if (limitSummary()) {
-              <ui-badge variant="info">{{ formatLimitLabel(limitSummary()?.key || '') }}</ui-badge>
-            }
-          </div>
-          @if (limitSummary()) {
-            <div class="quota-body">
-              <div class="quota-stats">
-                <div>
-                  <span class="muted">Usado</span>
-                  <strong>{{ limitSummary()?.used }}</strong>
-                </div>
-                <div>
-                  <span class="muted">Restante</span>
-                  <strong>
-                    @if (limitSummary()?.infinite) {
-                      Infinito
-                    } @else {
-                      {{ limitSummary()?.remaining }}
-                    }
-                  </strong>
-                </div>
-              </div>
-              @if (!limitSummary()?.infinite) {
-                <div class="quota-bar">
-                  <span class="bar" [style.width.%]="limitSummary()?.pct"></span>
-                </div>
-                <p class="muted">{{ limitSummary()?.pct }}% consumido hoje</p>
-              } @else {
-                <p class="muted">Limite diario sem restricoes para este usuario.</p>
-              }
-            </div>
-          } @else {
-            <p class="muted">Sem limites definidos para o usuario.</p>
+        <!-- Quick Actions / Suggestions -->
+        <div class="flex flex-wrap justify-center gap-2">
+          @for (suggestion of suggestions; track suggestion) {
+            <button 
+              (click)="applySuggestion(suggestion)"
+              class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-full text-sm text-gray-400 hover:text-white transition-all cursor-pointer"
+            >
+              {{ suggestion }}
+            </button>
           }
         </div>
       </div>
     </header>
 
-    @if (error()) {
-      <div class="inline-alert" role="alert">
-        <span class="material-icons">error_outline</span>
-        {{ error() }}
-      </div>
-    }
-
+    <!-- DASHBOARD GRID: Inteligência Ativa -->
     <div class="home-grid">
-      <section class="home-card cta-card col-8" aria-labelledby="cta-title">
-        <div class="card-head">
-          <div>
-            <p class="eyebrow">Acoes rapidas</p>
-            <h2 id="cta-title">O que voce quer fazer agora?</h2>
-            <p class="muted">Descreva a tarefa e o Janus cria o contexto.</p>
-          </div>
+      <h2 class="section-title">Sistema & Inteligência</h2>
+      
+      <div class="widgets-row">
+        <!-- Widget 1: Conhecimento (Grafo) -->
+        <app-knowledge-widget class="h-full"></app-knowledge-widget>
+
+        <!-- Widget 2: Autonomia (Agentes) -->
+        <app-autonomy-widget class="h-full"></app-autonomy-widget>
+
+        <!-- Widget 3: Aprendizado (Reflexion) -->
+        <app-learning-widget class="h-full"></app-learning-widget>
+      </div>
+
+      <!-- RECENT ACTIVITY SECTION -->
+      <div class="mt-12">
+        <div class="flex items-center justify-between mb-6 px-2">
+           <h2 class="section-title !mb-0">Conversas Recentes</h2>
+           <button routerLink="/conversations" class="text-xs text-blue-400 hover:text-blue-300 font-mono uppercase tracking-wider">Ver todas</button>
         </div>
-        <div class="cta-body">
-          <label class="field-label" for="intent">Descricao da tarefa</label>
-          <div class="intent-row">
-            <input id="intent" type="text" [formControl]="prompt"
-              placeholder="Ex: resumir docs enviados hoje, criar plano de sprints" />
-            <button ui-button variant="default" size="lg" (click)="startChat()" [disabled]="actionLoading()">
-              <span class="material-icons">north_east</span>
-              Iniciar
-            </button>
-          </div>
-          <div class="chips">
-            @for (suggestion of suggestions; track suggestion) {
-              <button type="button" class="chip" (click)="applySuggestion(suggestion)">
-                {{ suggestion }}
-              </button>
+
+        <div class="activity-grid">
+          @if (loading()) {
+            <app-skeleton variant="card" [count]="2"></app-skeleton>
+          } @else if (conversations().length) {
+            @for (conv of conversations(); track conv.conversation_id) {
+              <div 
+                (click)="openConversation(conv.conversation_id)"
+                class="activity-card"
+              >
+                <div class="flex justify-between items-start mb-2">
+                  <h3>
+                    {{ conv.title || 'Conversa sem título' }}
+                  </h3>
+                  <span class="meta">{{ conv.updated_at | date:'short' }}</span>
+                </div>
+                <p>
+                  {{ conv.last_message?.text || 'Iniciar conversa...' }}
+                </p>
+              </div>
             }
-          </div>
-          @if (notice()) {
-            <div class="inline-note" role="status">
-              <span class="material-icons">check_circle</span>
-              {{ notice() }}
+          } @else {
+            <div class="col-span-2 text-center py-8 border border-dashed border-gray-800 rounded-lg">
+              <p class="text-gray-500 text-sm">Nenhuma conversa recente.</p>
             </div>
           }
         </div>
-      </section>
-
-      <section class="home-card tools-card col-4" aria-labelledby="tools-title">
-        <div class="card-head">
-          <h3 id="tools-title">Ferramentas</h3>
-          <ui-badge variant="neutral">{{ data().tools.length }}</ui-badge>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="paragraph" [count]="3"></app-skeleton>
-        } @else if (tools().length) {
-          <ul class="list">
-            @for (tool of tools(); track tool.name) {
-              <li class="list-item">
-                <div>
-                  <span class="item-title">{{ tool.name }}</span>
-                  <span class="muted">{{ tool.category || 'geral' }}</span>
-                </div>
-                <ui-badge [variant]="tool.enabled ? 'success' : 'warning'">
-                  {{ tool.enabled ? 'ativo' : 'restrito' }}
-                </ui-badge>
-              </li>
-            }
-          </ul>
-        } @else {
-          <p class="muted">Nenhuma ferramenta cadastrada.</p>
-        }
-      </section>
-
-      <section class="home-card codex-card col-4" aria-labelledby="codex-title">
-        <div class="card-head">
-          <h3 id="codex-title">Codex</h3>
-          <ui-badge [variant]="codexStatus().variant">{{ codexStatus().label }}</ui-badge>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="text" [count]="3"></app-skeleton>
-        } @else {
-          <div class="codex-body">
-            <div class="codex-worker">
-              <span class="muted">Worker</span>
-              <ui-badge [variant]="codexWorkerStatus().variant">{{ codexWorkerStatus().label }}</ui-badge>
-            </div>
-            <div class="codex-metrics">
-              <div>
-                <span class="muted">Execuções</span>
-                <strong>{{ codexUsage().total }}</strong>
-              </div>
-              <div>
-                <span class="muted">Sucesso</span>
-                <strong>{{ codexUsage().successRate }}%</strong>
-              </div>
-              <div>
-                <span class="muted">Latência média</span>
-                <strong>{{ codexUsage().avgDuration }}ms</strong>
-              </div>
-            </div>
-
-            @if (codexTools().length) {
-              <div class="codex-tools">
-                @for (tool of codexTools(); track tool.name) {
-                  <span class="chip subtle">{{ tool.name }}</span>
-                }
-              </div>
-            } @else {
-              <p class="muted">Ferramentas Codex não registradas.</p>
-            }
-
-            @if (codexEvents().length) {
-              <ul class="list">
-                @for (event of codexEvents(); track event.id) {
-                  <li class="list-item">
-                    <div>
-                      <span class="item-title">{{ event.tool }}</span>
-                      <span class="muted">{{ event.status || 'ok' }} · {{ event.latency_ms || 0 }}ms</span>
-                    </div>
-                    <span class="chip subtle">
-                      {{ formatAuditTimestamp(event.created_at) }}
-                    </span>
-                  </li>
-                }
-              </ul>
-            } @else {
-              <p class="muted">Sem execuções recentes.</p>
-            }
-            <button ui-button variant="ghost" size="sm" routerLink="/tools">
-              Ver painel completo
-            </button>
-          </div>
-        }
-      </section>
-
-      <section class="home-card meta-card col-8" aria-labelledby="meta-title">
-        <div class="card-head">
-          <div>
-            <h3 id="meta-title">Meta-Agent</h3>
-            <p class="muted">Tarefas em andamento e ciclos concluÃ­dos.</p>
-          </div>
-          <ui-badge [variant]="metaStatus().variant">{{ metaStatus().label }}</ui-badge>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="text" [count]="3"></app-skeleton>
-        } @else {
-          <div class="meta-body">
-            <div class="meta-metrics">
-              <div>
-                <span class="muted">Heartbeat</span>
-                <strong>{{ metaHeartbeat()?.heartbeat_active ? 'ATIVO' : 'PAUSADO' }}</strong>
-              </div>
-              <div>
-                <span class="muted">Ciclos</span>
-                <strong>{{ metaHeartbeat()?.total_cycles_executed ?? 0 }}</strong>
-              </div>
-              <div>
-                <span class="muted">Ultima analise</span>
-                <strong>{{ formatMetaTimestamp(metaHeartbeat()?.last_analysis || metaReport()?.timestamp) }}</strong>
-              </div>
-            </div>
-
-            @if (metaReport()?.summary) {
-              <p class="muted">Resumo: {{ metaReport()?.summary }}</p>
-            }
-
-            <div class="meta-lists">
-              <div>
-                <span class="label">Em andamento</span>
-                @if (metaTasksInProgress().length) {
-                  <ul class="list">
-                    @for (rec of metaTasksInProgress(); track rec.id) {
-                      <li class="list-item">
-                        <div>
-                          <span class="item-title">{{ rec.title }}</span>
-                          <span class="muted">{{ rec.description || rec.category || 'Recomendacao' }}</span>
-                        </div>
-                        <span class="chip subtle">P{{ rec.priority || 3 }}</span>
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="muted">Nenhuma tarefa pendente.</p>
-                }
-              </div>
-              <div>
-                <span class="label">Ja feitas</span>
-                @if (metaTasksDone().length) {
-                  <ul class="list">
-                    @for (item of metaTasksDone(); track (item.title || $index)) {
-                      <li class="list-item">
-                        <div>
-                          <span class="item-title">{{ item.title || 'Tarefa' }}</span>
-                          <span class="muted">{{ item.status || 'despachada' }}</span>
-                        </div>
-                        <span class="chip subtle">feito</span>
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="muted">Nenhuma tarefa executada.</p>
-                }
-              </div>
-            </div>
-          </div>
-        }
-      </section>
-
-      <section class="home-card col-6" aria-labelledby="conversations-title">
-        <div class="card-head">
-          <h3 id="conversations-title">Conversas recentes</h3>
-          <button ui-button variant="ghost" size="sm" (click)="startChat()" [disabled]="actionLoading()">
-            Nova conversa
-          </button>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="text" [count]="4"></app-skeleton>
-        } @else if (conversations().length) {
-          <ul class="list">
-            @for (conv of conversations(); track conv.conversation_id) {
-              <li>
-                <button type="button" class="list-item list-item-button" (click)="openConversation(conv.conversation_id)">
-                  <div>
-                    <span class="item-title">{{ conv.title || conv.conversation_id }}</span>
-                    <span class="muted">
-                      {{ conv.last_message?.text || 'Sem mensagens recentes' }}
-                    </span>
-                  </div>
-                  <span class="chip subtle">ID {{ conv.conversation_id }}</span>
-                </button>
-              </li>
-            }
-          </ul>
-        } @else {
-          <p class="muted">Nenhuma conversa encontrada.</p>
-        }
-      </section>
-
-      <section class="home-card col-6" aria-labelledby="documents-title">
-        <div class="card-head">
-          <h3 id="documents-title">Documentos recentes</h3>
-          <ui-badge variant="info">{{ data().documents.length }}</ui-badge>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="text" [count]="4"></app-skeleton>
-        } @else if (documents().length) {
-          <ul class="list">
-            @for (doc of documents(); track doc.doc_id) {
-              <li class="list-item">
-                <div>
-                  <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
-                  <span class="muted">{{ doc.chunks }} blocos indexados</span>
-                </div>
-                <span class="chip subtle">{{ doc.doc_id }}</span>
-              </li>
-            }
-          </ul>
-        } @else {
-          <p class="muted">Nenhum documento indexado.</p>
-        }
-      </section>
-
-      <section class="home-card memory-card col-12" aria-labelledby="memory-title">
-        <div class="card-head">
-          <h3 id="memory-title">Memoria ativa</h3>
-          <ui-badge variant="neutral">{{ data().memory.length }}</ui-badge>
-        </div>
-        @if (loading()) {
-          <app-skeleton variant="card" [count]="2"></app-skeleton>
-        } @else if (memory().length) {
-          <div class="memory-grid">
-            @for (item of memory(); track (item.ts_ms || $index)) {
-              <article class="memory-card">
-                <p>{{ item.content }}</p>
-                <span class="muted">
-                  {{ item.ts_ms | date:'short' }}
-                </span>
-              </article>
-            }
-          </div>
-        } @else {
-          <p class="muted">Nenhuma memoria recente para exibir.</p>
-        }
-      </section>
+      </div>
     </div>
   </div>
 </section>

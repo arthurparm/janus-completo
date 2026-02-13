@@ -88,6 +88,7 @@ export class ConversationsComponent {
   readonly selectedRole = signal('orchestrator')
   readonly selectedPriority = signal('fast_and_cheap')
   readonly streamingEnabled = signal(true)
+  readonly showAdvanced = signal(false)
 
   readonly roleOptions: RoleOption[] = [
     { value: 'orchestrator', label: 'Orchestrator' },
@@ -104,6 +105,7 @@ export class ConversationsComponent {
   ]
 
   readonly user = this.auth.user
+  readonly isAdmin = this.auth.isAdmin
 
   readonly displayName = computed(() => {
     const user = this.user()
@@ -147,13 +149,18 @@ export class ConversationsComponent {
     if (status === 'streaming') return { label: 'Streaming', variant: 'success' as const }
     if (status === 'connecting' || status === 'retrying') return { label: 'Conectando', variant: 'warning' as const }
     if (status === 'error') return { label: 'Erro', variant: 'error' as const }
-    if (status === 'open') return { label: 'Conectado', variant: 'info' as const }
-    return { label: 'Idle', variant: 'neutral' as const }
+    if (status === 'open') return { label: 'Pronto', variant: 'info' as const }
+    return { label: 'Aguardando', variant: 'neutral' as const }
   })
 
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
   private scrollQueued = false
+  readonly quickPrompts = [
+    'Resuma esta conversa em 5 pontos.',
+    'Quais sao os proximos passos recomendados para este tema?',
+    'Me explique de forma simples, sem jargao tecnico.'
+  ]
 
   constructor() {
     this.loadConversations()
@@ -245,6 +252,10 @@ export class ConversationsComponent {
     this.search.set(target?.value || '')
   }
 
+  clearSearch(): void {
+    this.search.set('')
+  }
+
   refresh(): void {
     this.loadConversations()
     const id = this.selectedId()
@@ -296,6 +307,56 @@ export class ConversationsComponent {
     const confidence = Number(understanding?.confidence ?? 0)
     if (!Number.isFinite(confidence) || confidence <= 0) return '--'
     return `${Math.round(confidence * 100)}%`
+  }
+
+  understandingConfidenceBand(understanding?: ChatUnderstanding): 'high' | 'medium' | 'low' {
+    const band = String(understanding?.confidence_band || '').toLowerCase()
+    if (band === 'high' || band === 'medium' || band === 'low') return band
+    const confidence = Number(understanding?.confidence ?? 0)
+    if (confidence >= 0.8) return 'high'
+    if (confidence >= 0.6) return 'medium'
+    return 'low'
+  }
+
+  understandingConfidenceLabel(understanding?: ChatUnderstanding): string {
+    const band = this.understandingConfidenceBand(understanding)
+    if (band === 'high') return 'Confianca alta'
+    if (band === 'medium') return 'Confianca media'
+    return 'Confianca baixa'
+  }
+
+  citationTitle(cite: Citation): string {
+    const base = cite.file_path || cite.title || cite.doc_id || 'fonte'
+    const line = this.citationLine(cite)
+    return line ? `${base}:${line}` : base
+  }
+
+  citationLine(cite: Citation): string {
+    const start = cite.line_start ?? cite.line
+    const end = cite.line_end
+    if (start == null && end == null) return ''
+    if (start != null && end != null && String(start) !== String(end)) {
+      return `${start}-${end}`
+    }
+    return String(start ?? end ?? '')
+  }
+
+  citationScore(cite: Citation): string {
+    const score = Number(cite.score)
+    if (!Number.isFinite(score) || score <= 0) return '--'
+    return `${Math.round(score * 100)}%`
+  }
+
+  confirmLowConfidence(): void {
+    this.prompt.setValue('Confirmo. Pode prosseguir com a acao solicitada.')
+  }
+
+  toggleAdvanced(): void {
+    this.showAdvanced.update((value) => !value)
+  }
+
+  useQuickPrompt(text: string): void {
+    this.prompt.setValue(text)
   }
 
   readonly traceSteps = signal<any[]>([])

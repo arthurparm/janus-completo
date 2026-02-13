@@ -1,0 +1,70 @@
+<div class="relative">
+    <!-- Pulse Indicator (Always Visible) -->
+    <div 
+      #pulseIndicator
+      (click)="toggleHud()"
+      class="flex items-center cursor-pointer p-2 rounded-full hover:bg-white/10 transition-colors"
+      title="Status do Sistema"
+    >
+      <div class="relative flex h-3 w-3">
+        <span 
+          class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+          [ngClass]="(isHealthy$ | async) ? 'bg-green-400' : 'bg-red-500'"
+        ></span>
+        <span 
+          class="relative inline-flex rounded-full h-3 w-3"
+          [ngClass]="(isHealthy$ | async) ? 'bg-green-500' : 'bg-red-600'"
+        ></span>
+      </div>
+      <span class="ml-2 text-xs font-mono text-gray-400 hidden md:block">SYSTEM</span>
+    </div>
+  
+    <!-- HUD Panel (Dropdown) -->
+    <div 
+      *ngIf="isOpen" 
+      #hudPanel
+      class="absolute right-0 top-full mt-2 w-80 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden"
+    >
+      <!-- Header do HUD -->
+      <div class="p-4 border-b border-gray-800 bg-black/40 flex justify-between items-center">
+        <h3 class="text-sm font-bold text-gray-300 tracking-wider">SYSTEM MONITOR</h3>
+        <span class="text-xs text-gray-500 font-mono">{{ (systemStatus$ | async)?.uptime_seconds | number:'1.0-0' }}s UPTIME</span>
+      </div>
+  
+      <!-- Lista de Serviços -->
+      <div class="p-2 space-y-1">
+        <div 
+          *ngFor="let service of (servicesHealth$ | async)?.services"
+          class="hud-item flex items-center justify-between p-3 rounded hover:bg-white/5 transition-colors group"
+        >
+          <div class="flex items-center gap-3">
+            <span class="text-xl filter grayscale group-hover:grayscale-0 transition-all">
+              {{ getIconForService(service.key) }}
+            </span>
+            <div class="flex flex-col">
+              <span class="text-sm font-medium text-gray-200">{{ service.name }}</span>
+              <span class="text-xs text-gray-500">{{ service.metric_text }}</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono uppercase" [ngClass]="{
+              'text-green-400': service.status === 'ok',
+              'text-yellow-400': service.status === 'degraded',
+              'text-red-400': service.status === 'error'
+            }">{{ service.status }}</span>
+            <div class="h-2 w-2 rounded-full" [ngClass]="getStatusColor(service.status)"></div>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Footer com Informações Técnicas -->
+      <div class="p-3 bg-black/60 border-t border-gray-800 text-xs font-mono text-gray-600 flex justify-between">
+        <span>v{{ (systemStatus$ | async)?.version }}</span>
+        <span>{{ (systemStatus$ | async)?.environment }}</span>
+      </div>
+    </div>
+  
+    <!-- Backdrop para fechar ao clicar fora -->
+    <div *ngIf="isOpen" (click)="toggleHud()" class="fixed inset-0 z-40 bg-transparent cursor-default"></div>
+  </div>

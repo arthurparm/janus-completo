@@ -1,0 +1,103 @@
+@use '../knowledge-widget/knowledge-widget.scss';
+
+/* Custom Overrides for Learning Widget (Orange Theme) */
+.widget-icon {
+  background: rgba(var(--janus-warning-rgb), 0.1);
+  color: var(--janus-warning);
+  box-shadow: 0 0 15px rgba(var(--janus-warning-rgb), 0.15);
+  
+  .group:hover & {
+    background: var(--janus-warning);
+    box-shadow: 0 0 20px rgba(var(--janus-warning-rgb), 0.4);
+  }
+}
+
+.widget-footer button:hover {
+  color: var(--janus-warning);
+}
+
+.glow-bg {
+  background: radial-gradient(circle, rgba(var(--janus-warning-rgb), 0.15) 0%, transparent 70%);
+}
+
+.lesson-card {
+  background: rgba(var(--janus-surface-2-rgb), 0.4);
+  border: 1px solid rgba(var(--janus-border-rgb), 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+  cursor: default;
+  
+  &:hover {
+    border-color: rgba(var(--janus-warning-rgb), 0.4);
+    background: rgba(var(--janus-surface-2-rgb), 0.6);
+  }
+  
+  p {
+    font-size: 0.8rem;
+    color: var(--janus-text-secondary);
+    line-height: 1.4;
+    margin: 0 0 8px;
+    
+    // Clamp 2 lines
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+    font-family: var(--janus-font-mono);
+    color: var(--janus-text-muted);
+    
+    .score {
+      color: var(--janus-warning);
+      font-weight: 700;
+    }
+  }
+}
+
+.empty-state {
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  opacity: 0.8;
+  
+  .icon {
+    font-size: 2rem;
+    margin-bottom: 12px;
+    filter: drop-shadow(0 0 10px rgba(var(--janus-warning-rgb), 0.3));
+  }
+  
+  p {
+    font-size: 0.9rem;
+    color: var(--janus-text-secondary);
+    margin-bottom: 12px;
+  }
+
+  .start-btn {
+    background: rgba(var(--janus-warning-rgb), 0.15);
+    border: 1px solid rgba(var(--janus-warning-rgb), 0.3);
+    color: var(--janus-warning);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      background: var(--janus-warning);
+      color: var(--janus-bg-dark);
+      box-shadow: 0 0 15px rgba(var(--janus-warning-rgb), 0.4);
+    }
+  }
+}

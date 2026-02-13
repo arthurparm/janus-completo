@@ -1,0 +1,71 @@
+<div class="widget">
+    @if (loading()) {
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading DB validation...</p>
+    </div>
+    } @else if (error()) {
+    <div class="error-state">
+        <span class="material-icons">error_outline</span>
+        <p>{{ error() }}</p>
+    </div>
+    } @else {
+    <div class="widget-header">
+        <h3>Database Validation</h3>
+        <button class="export-btn" (click)="exportToJSON()" title="Export to JSON">
+            <span class="material-icons">download</span>
+        </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+        <div class="summary-card exists">
+            <span class="count">{{ getStatusSummary().exists }}</span>
+            <span class="label">Exists</span>
+        </div>
+        <div class="summary-card missing">
+            <span class="count">{{ getStatusSummary().missing }}</span>
+            <span class="label">Missing</span>
+        </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="filter-bar">
+        <button [class.active]="filter() === 'all'" (click)="filter.set('all')">All</button>
+        <button [class.active]="filter() === 'exists'" (click)="filter.set('exists')">Exists</button>
+        <button [class.active]="filter() === 'missing'" (click)="filter.set('missing')">Missing</button>
+    </div>
+
+    <!-- Checks Table -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Table</th>
+                    <th>Object</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (check of filteredChecks(); track check.name) {
+                <tr>
+                    <td>{{ check.table }}</td>
+                    <td class="object-name">{{ check.name }}</td>
+                    <td><span class="type-badge">{{ check.kind }}</span></td>
+                    <td>
+                        <span class="status-icon" [class.exists]="check.exists" [class.missing]="!check.exists">
+                            <span class="material-icons">{{ check.exists ? 'check_circle' : 'cancel' }}</span>
+                        </span>
+                    </td>
+                </tr>
+                } @empty {
+                <tr>
+                    <td colspan="4" class="no-data">No checks match current filter</td>
+                </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    }
+</div>

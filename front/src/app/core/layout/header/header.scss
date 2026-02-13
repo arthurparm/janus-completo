@@ -128,30 +128,7 @@
 .system-metrics {
   margin-left: auto;
   margin-right: 2rem;
-  display: flex;
-  gap: 1.5rem;
-  
-  .metric {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    font-family: var(--janus-font-mono);
-    line-height: 1.2;
-    
-    .label {
-      color: var(--janus-text-muted);
-      font-size: 0.65rem;
-      letter-spacing: 1px;
-      font-weight: 500;
-    }
-    
-    .value {
-      color: var(--janus-secondary);
-      font-weight: 600;
-      font-size: 0.9rem;
-      text-shadow: 0 0 8px rgba(var(--janus-secondary-rgb), 0.35);
-    }
-  }
+  /* Removido o estilo de .metric antigo pois agora usamos o HUD */
 }
 
 .menu-toggle {

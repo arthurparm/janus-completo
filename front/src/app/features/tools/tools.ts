@@ -16,6 +16,7 @@ import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.c
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiTableComponent } from '../../shared/components/ui/ui-table/ui-table.component'
 import { Header } from '../../core/layout/header/header'
+import { AuthService } from '../../core/auth/auth.service'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 
 interface ToolsData {
@@ -43,11 +44,17 @@ interface ToolsData {
 })
 export class ToolsComponent {
   private api = inject(JanusApiService)
+  private auth = inject(AuthService)
   private destroyRef = inject(DestroyRef)
 
   readonly loading = signal(true)
   readonly actionLoading = signal(false)
   readonly error = signal('')
+  readonly success = signal('')
+  readonly riskFilter = signal<'all' | 'high' | 'medium' | 'low'>('all')
+  readonly sourceFilter = signal<'all' | 'sql' | 'langgraph'>('all')
+  readonly queryFilter = signal('')
+  readonly isAdmin = this.auth.isAdmin
   readonly data = signal<ToolsData>({
     tools: [],
     toolStats: null,
@@ -72,6 +79,67 @@ export class ToolsComponent {
     return { total, success, successRate, avgDuration }
   })
   readonly pendingCount = computed(() => this.data().pendingActions.length)
+  readonly pendingRiskSummary = computed(() => {
+    const actions = this.data().pendingActions || []
+    let high = 0
+    let medium = 0
+    let low = 0
+    for (const action of actions) {
+      const risk = String(action.risk_level || '').toLowerCase()
+      if (risk === 'high') high += 1
+      else if (risk === 'medium') medium += 1
+      else low += 1
+    }
+    return { total: actions.length, high, medium, low }
+  })
+  readonly hasPendingFilters = computed(
+    () => this.riskFilter() !== 'all' || this.sourceFilter() !== 'all' || !!this.queryFilter().trim()
+  )
+  readonly pendingActionsFiltered = computed(() => {
+    const riskFilter = this.riskFilter()
+    const sourceFilter = this.sourceFilter()
+    const query = this.queryFilter().trim().toLowerCase()
+
+    const riskRank = (action: PendingAction): number => {
+      const risk = String(action.risk_level || '').toLowerCase()
+      if (risk === 'high') return 3
+      if (risk === 'medium') return 2
+      if (risk === 'low') return 1
+      return 0
+    }
+    const actionTime = (action: PendingAction): number => {
+      const raw = String(action.created_at || '').trim()
+      const ts = raw ? Date.parse(raw) : 0
+      return Number.isFinite(ts) ? ts : 0
+    }
+
+    const filtered = (this.data().pendingActions || []).filter((action) => {
+      const risk = String(action.risk_level || '').toLowerCase()
+      const source = String(action.source || '').toLowerCase()
+      if (riskFilter !== 'all' && risk !== riskFilter) return false
+      if (sourceFilter !== 'all' && source !== sourceFilter) return false
+      if (!query) return true
+
+      const haystack = [
+        action.tool_name,
+        action.user_id,
+        action.message,
+        action.args_json,
+        action.thread_id,
+        typeof action.action_id === 'number' ? String(action.action_id) : ''
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ')
+
+      return haystack.includes(query)
+    })
+
+    return filtered.sort((a, b) => {
+      const riskDiff = riskRank(b) - riskRank(a)
+      if (riskDiff !== 0) return riskDiff
+      return actionTime(b) - actionTime(a)
+    })
+  })
 
   constructor() {
     this.refresh()
@@ -108,11 +176,29 @@ export class ToolsComponent {
           this.data.set(result)
           this.loading.set(false)
         },
-        error: () => {
-          this.error.set('Falha ao carregar dados de ferramentas.')
+        error: (err) => {
+          this.error.set(this.extractApiErrorMessage(err, 'Falha ao carregar dados de ferramentas.'))
           this.loading.set(false)
         }
       })
+  }
+
+  setRiskFilter(value: 'all' | 'high' | 'medium' | 'low') {
+    this.riskFilter.set(value)
+  }
+
+  setSourceFilter(value: 'all' | 'sql' | 'langgraph') {
+    this.sourceFilter.set(value)
+  }
+
+  setQueryFilter(value: string) {
+    this.queryFilter.set(String(value || ''))
+  }
+
+  clearPendingFilters() {
+    this.riskFilter.set('all')
+    this.sourceFilter.set('all')
+    this.queryFilter.set('')
   }
 
   approve(action: PendingAction) {
@@ -121,13 +207,16 @@ export class ToolsComponent {
     this.api.approvePendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        catchError(() => {
-          this.error.set('Falha ao aprovar a ação.')
+        catchError((err) => {
+          this.error.set(this.extractApiErrorMessage(err, 'Falha ao aprovar a acao.'))
           this.actionLoading.set(false)
           return of(null)
         })
       )
-      .subscribe(() => {
+      .subscribe((resp) => {
+        if (resp) {
+          this.success.set('Acao aprovada com sucesso. Veja a trilha de auditoria abaixo.')
+        }
         this.actionLoading.set(false)
         this.refresh()
       })
@@ -139,13 +228,16 @@ export class ToolsComponent {
     this.api.rejectPendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        catchError(() => {
-          this.error.set('Falha ao rejeitar a ação.')
+        catchError((err) => {
+          this.error.set(this.extractApiErrorMessage(err, 'Falha ao rejeitar a acao.'))
           this.actionLoading.set(false)
           return of(null)
         })
       )
-      .subscribe(() => {
+      .subscribe((resp) => {
+        if (resp) {
+          this.success.set('Acao rejeitada com sucesso. Veja a trilha de auditoria abaixo.')
+        }
         this.actionLoading.set(false)
         this.refresh()
       })
@@ -159,5 +251,45 @@ export class ToolsComponent {
   formatToolTags(tags?: string[]) {
     if (!tags || !tags.length) return '—'
     return tags.join(', ')
+  }
+
+  riskVariant(action: PendingAction): 'error' | 'warning' | 'success' | 'neutral' {
+    const level = String(action.risk_level || '').toLowerCase()
+    if (level === 'high') return 'error'
+    if (level === 'medium') return 'warning'
+    if (level === 'low') return 'success'
+    return 'neutral'
+  }
+
+  riskLabel(action: PendingAction): string {
+    const level = String(action.risk_level || '').toLowerCase()
+    if (level === 'high') return 'Risco alto'
+    if (level === 'medium') return 'Risco medio'
+    if (level === 'low') return 'Risco baixo'
+    return 'Risco n/d'
+  }
+
+  argsPreview(action: PendingAction): string {
+    const raw = String(action.args_json || '').trim()
+    if (!raw) return ''
+    if (raw.length <= 180) return raw
+    return `${raw.slice(0, 177)}...`
+  }
+
+  sourceLabel(action: PendingAction): string {
+    const source = String(action.source || '').toLowerCase()
+    if (source === 'sql') return 'SQL'
+    if (source === 'langgraph') return 'LangGraph'
+    return 'Origem n/d'
+  }
+
+  private extractApiErrorMessage(err: unknown, fallback: string): string {
+    const body = (err as any)?.error
+    const detail = body?.detail ? String(body.detail) : ''
+    const code = body?.error_code ? String(body.error_code) : ''
+    if (code && detail) return `${fallback} [${code}] ${detail}`
+    if (code) return `${fallback} [${code}]`
+    if (detail) return `${fallback} ${detail}`
+    return fallback
   }
 }

@@ -1,0 +1,53 @@
+<div class="widget-card group">
+  <!-- Glow Background -->
+  <div class="glow-bg"></div>
+
+  <!-- Header -->
+  <div class="widget-header">
+    <div class="flex items-center">
+      <div class="widget-icon">
+        <span class="material-icons">smart_toy</span>
+      </div>
+      <div class="widget-title">
+        <h3>Autonomy Loop</h3>
+        <span>Agent Status</span>
+      </div>
+    </div>
+    
+    <div class="status-indicator" [class.active]="(status$ | async)?.active"></div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-item">
+      <span class="value">{{ (status$ | async)?.cycle_count | number:'1.0-0' }}</span>
+      <span class="label">Ciclos</span>
+    </div>
+    <div class="stat-item">
+      <span class="value text-sm mt-1" [ngClass]="getRiskColor(getRiskProfile((status$ | async)))">
+        {{ getRiskProfile((status$ | async)) | uppercase }}
+      </span>
+      <span class="label">Perfil de Risco</span>
+    </div>
+  </div>
+
+  <!-- Config Summary -->
+  <div class="tags-area">
+    <h4>Configuração</h4>
+    <div class="tags-list">
+      <span class="tag">
+        Intervalo <span class="count">{{ (status$ | async)?.config?.interval_seconds || 0 }}s</span>
+      </span>
+      <span class="tag">
+        Max Ações <span class="count">{{ (status$ | async)?.config?.max_actions_per_cycle || 0 }}</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="widget-footer">
+    <button>
+      Configurar <span class="material-icons text-[14px]">settings</span>
+    </button>
+  </div>
+</div>

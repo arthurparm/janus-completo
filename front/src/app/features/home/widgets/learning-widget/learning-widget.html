@@ -1,0 +1,46 @@
+<div class="widget-card group">
+  <!-- Glow Background -->
+  <div class="glow-bg"></div>
+
+  <!-- Header -->
+  <div class="widget-header">
+    <div class="flex items-center">
+      <div class="widget-icon">
+        <span class="material-icons">lightbulb</span>
+      </div>
+      <div class="widget-title">
+        <h3>Reflexão</h3>
+        <span>Aprendizado Contínuo</span>
+      </div>
+    </div>
+    
+    <div class="status-indicator" [class.active]="(summary$ | async)?.lessons?.length"></div>
+  </div>
+
+  <!-- Content Area -->
+  <div class="flex-1 overflow-hidden flex flex-col">
+    <div *ngIf="(summary$ | async)?.lessons?.length; else emptyState" class="flex-1 overflow-y-auto pr-1 space-y-2">
+      <div *ngFor="let lesson of (summary$ | async)?.lessons" class="lesson-card">
+        <p>"{{ lesson.content }}"</p>
+        <div class="meta">
+          <span>{{ lesson.id }}</span>
+          <span class="score" *ngIf="lesson.score">★ {{ lesson.score }}</span>
+        </div>
+      </div>
+    </div>
+    
+    <ng-template #emptyState>
+      <div class="empty-state">
+        <span class="icon">🧠</span>
+        <p>Ainda estou aprendendo...</p>
+      </div>
+    </ng-template>
+  </div>
+
+  <!-- Footer -->
+  <div class="widget-footer">
+    <button>
+      Ver Todas as Lições <span class="material-icons text-[14px]">arrow_forward</span>
+    </button>
+  </div>
+</div>

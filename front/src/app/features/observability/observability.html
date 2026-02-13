@@ -1,0 +1,31 @@
+<div class="observability-container">
+  <!-- Header with Title and Auto-Refresh Toggle -->
+  <header class="obs-header">
+    <div class="obs-title-section">
+      <h1 class="obs-title">Observability Dashboard</h1>
+      <p class="obs-subtitle">Real-time system monitoring and health checks</p>
+    </div>
+
+    <div class="obs-controls">
+      <button class="auto-refresh-toggle" [class.active]="autoRefreshEnabled()" (click)="toggleAutoRefresh()"
+        title="{{ autoRefreshEnabled() ? 'Auto-refresh: ON (5s)' : 'Auto-refresh: OFF' }}">
+        <span class="material-icons">
+          {{ autoRefreshEnabled() ? 'sync' : 'sync_disabled' }}
+        </span>
+        <span class="toggle-text">Auto-refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Dashboard Grid -->
+  <div class="obs-grid">
+    <!-- System Status Widget (FE1-001) -->
+    <app-system-status-widget />
+
+    <!-- Database Health Widget (FE1-007) -->
+    <app-database-health-widget />
+
+    <!-- Knowledge Health Widget (FE1-008) -->
+    <app-knowledge-health-widget />
+  </div>
+</div>

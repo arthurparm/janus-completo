@@ -1,0 +1,98 @@
+<div class="widget">
+    @if (loading()) {
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading knowledge health...</p>
+    </div>
+    } @else if (error()) {
+    <div class="error-state">
+        <span class="material-icons">error_outline</span>
+        <p>{{ error() }}</p>
+    </div>
+    } @else {
+    <div class="widget-header">
+        <h3>Knowledge Health</h3>
+        <span class="status-badge" [class]="'status-' + getOverallStatus()">
+            {{ getOverallStatus() }}
+        </span>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-grid">
+        <div class="connection-card">
+            <div class="connection-header">
+                <span class="connection-name">Neo4j</span>
+                <span class="connection-status" [class.connected]="health()?.neo4j_connected"
+                    [class.disconnected]="!health()?.neo4j_connected">
+                    {{ getConnectionStatus('neo4j') }}
+                </span>
+            </div>
+            @if (health()?.neo4j_connected) {
+            <div class="connection-metrics">
+                <span>{{ health()?.total_nodes || 0 }} nodes</span>
+                <span>{{ health()?.total_relationships || 0 }} relationships</span>
+            </div>
+            }
+        </div>
+
+        <div class="connection-card">
+            <div class="connection-header">
+                <span class="connection-name">Qdrant</span>
+                <span class="connection-status" [class.connected]="health()?.qdrant_connected"
+                    [class.disconnected]="!health()?.qdrant_connected">
+                    {{ getConnectionStatus('qdrant') }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Circuit Breaker -->
+    <div class="circuit-breaker-section">
+        <div class="circuit-header">
+            <span class="circuit-label">Circuit Breaker</span>
+            <div class="circuit-indicator" [class.open]="health()?.circuit_breaker_open"
+                [class.closed]="!health()?.circuit_breaker_open">
+                <span class="indicator-light"></span>
+                <span>{{ health()?.circuit_breaker_open ? 'OPEN' : 'CLOSED' }}</span>
+            </div>
+        </div>
+        @if (health()?.circuit_breaker_open) {
+        <button class="reset-btn" (click)="resetCircuitBreaker()" [disabled]="resetting()">
+            <span class="material-icons">refresh</span>
+            {{ resetting() ? 'Resetting...' : 'Reset Circuit Breaker' }}
+        </button>
+        }
+    </div>
+
+    <!-- Detailed Metrics (Collapsible) -->
+    @if (detailed()) {
+    <button class="toggle-detailed-btn" (click)="toggleDetailed()">
+        <span>{{ showDetailed() ? 'Hide' : 'Show' }} Detailed Metrics</span>
+        <span class="material-icons">{{ showDetailed() ? 'expand_less' : 'expand_more' }}</span>
+    </button>
+
+    @if (showDetailed()) {
+    <div class="detailed-metrics">
+        <div class="metric-item">
+            <span class="metric-label">Status:</span>
+            <span>{{ detailed()?.overall_status }}</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-label">Timestamp:</span>
+            <span>{{ detailed()?.timestamp }}</span>
+        </div>
+        @if (detailed()?.recommendations && detailed()!.recommendations.length > 0) {
+        <div class="recommendations">
+            <h5>Recommendations:</h5>
+            <ul>
+                @for (rec of detailed()!.recommendations; track rec) {
+                <li>{{ rec }}</li>
+                }
+            </ul>
+        </div>
+        }
+    </div>
+    }
+    }
+    }
+</div>
