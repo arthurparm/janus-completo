@@ -438,3 +438,4 @@ wrapt==1.17.3 ; python_version >= "3.11" and python_version < "3.13"
 xxhash==3.6.0 ; python_version >= "3.11" and python_version < "3.13"
 yarl==1.22.0 ; python_version >= "3.11" and python_version < "3.13"
 zipp==3.23.0 ; python_version >= "3.11" and python_version < "3.13"
+asyncpg==0.29.0

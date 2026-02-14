@@ -1,10 +1,7 @@
-import {ComponentFixture, TestBed} from '@angular/core/testing';
-import {RouterTestingModule} from '@angular/router/testing';
-import {of} from 'rxjs';
-import {AuthService} from '../../auth/auth.service';
-import {Database} from '@angular/fire/database';
-
-import {Header} from './header';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { Header } from './header';
+import { ActivatedRoute } from '@angular/router';
 
 describe('Header', () => {
   let component: Header;
@@ -12,13 +9,12 @@ describe('Header', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Header, RouterTestingModule],
+      imports: [Header, HttpClientTestingModule],
       providers: [
-        { provide: AuthService, useValue: { isAuthenticated$: of(false), logout: () => {} } },
-        { provide: Database, useValue: {} }
+        { provide: ActivatedRoute, useValue: { snapshot: { data: {} } } }
       ]
     })
-      .compileComponents();
+    .compileComponents();
 
     fixture = TestBed.createComponent(Header);
     component = fixture.componentInstance;

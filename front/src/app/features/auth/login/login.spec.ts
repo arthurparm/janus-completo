@@ -1,13 +1,14 @@
 import { TestBed } from '@angular/core/testing'
 import { LoginComponent } from './login'
 import { AuthService } from '../../../core/auth/auth.service'
-import { Router } from '@angular/router'
-import { vi } from 'vitest'
+import { Router, ActivatedRoute, RouterLink } from '@angular/router'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { of } from 'rxjs'
 
 describe('LoginComponent', () => {
   let comp: LoginComponent
-  let authSpy: { loginWithPassword: ReturnType<typeof vi.fn>; loginWithProvider: ReturnType<typeof vi.fn> }
-  let routerSpy: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> }
+  let authSpy: any
+  let routerSpy: any
 
   beforeEach(() => {
     authSpy = {
@@ -16,13 +17,25 @@ describe('LoginComponent', () => {
     }
     routerSpy = {
       navigate: vi.fn(),
-      navigateByUrl: vi.fn()
+      navigateByUrl: vi.fn(),
+      createUrlTree: vi.fn().mockReturnValue({ toString: () => '/' }),
+      serializeUrl: vi.fn(),
+      events: of(null) // Mock events observable for RouterLink
     }
+
     TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
         { provide: AuthService, useValue: authSpy },
         { provide: Router, useValue: routerSpy },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParams: { returnUrl: '/' }
+            }
+          }
+        }
       ]
     })
     const fixture = TestBed.createComponent(LoginComponent)

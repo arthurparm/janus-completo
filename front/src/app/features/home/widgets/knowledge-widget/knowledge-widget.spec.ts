@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { KnowledgeWidget } from './knowledge-widget';
 
 describe('KnowledgeWidget', () => {
@@ -8,7 +8,7 @@ describe('KnowledgeWidget', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [KnowledgeWidget]
+      imports: [KnowledgeWidget, HttpClientTestingModule]
     })
     .compileComponents();
 

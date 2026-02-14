@@ -90,7 +90,19 @@ jobs:
             langchain \
             langchain-core \
             langgraph \
-            langgraph-checkpoint-postgres
+            langgraph-checkpoint-postgres \
+            msgpack \
+            asyncpg \
+            langchain-ollama \
+            langchain-community \
+            aio-pika \
+            redis \
+            neo4j \
+            langchain-google-genai \
+            langchain-openai \
+            langchain-groq \
+            langchain-anthropic \
+            neo4j-graphrag
 
       - name: Run critical suite
         env:

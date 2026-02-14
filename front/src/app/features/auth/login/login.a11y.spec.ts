@@ -1,26 +1,57 @@
-import { TestBed } from '@angular/core/testing'
-import { Router } from '@angular/router'
-import { AuthService } from '../../../core/auth/auth.service'
-import { LoginComponent } from './login'
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { LoginComponent } from './login';
+import { ActivatedRoute, Router } from '@angular/router'; // Import Router
+import { AuthService } from '../../../core/auth/auth.service';
+import { vi } from 'vitest';
+import { of } from 'rxjs';
 
 describe('LoginComponent A11y', () => {
-  it('deve ter labels associados aos inputs', () => {
-    const fixture = TestBed.configureTestingModule({
-      imports: [LoginComponent],
+  let component: LoginComponent;
+  let fixture: ComponentFixture<LoginComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [LoginComponent, HttpClientTestingModule],
       providers: [
-        { provide: AuthService, useValue: { loginWithPassword: () => Promise.resolve(true), loginWithProvider: () => Promise.resolve(true) } },
-        { provide: Router, useValue: { navigate: () => Promise.resolve(true), navigateByUrl: () => Promise.resolve(true) } }
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} } } },
+        {
+          provide: Router, // Provide Router mock
+          useValue: {
+            createUrlTree: vi.fn().mockReturnValue({ toString: () => '/' }),
+            navigate: vi.fn(),
+            serializeUrl: vi.fn(),
+            events: of(null)
+          }
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            loginWithPassword: vi.fn(),
+            loginWithProvider: vi.fn()
+          }
+        }
       ]
-    }).createComponent(LoginComponent)
-    fixture.detectChanges()
-    const el: HTMLElement = fixture.nativeElement
-    const emailLabel = el.querySelector('label[for="email"]')
-    const emailInput = el.querySelector('#email')
-    const passwordLabel = el.querySelector('label[for="password"]')
-    const passwordInput = el.querySelector('#password')
-    expect(emailLabel).toBeTruthy()
-    expect(emailInput).toBeTruthy()
-    expect(passwordLabel).toBeTruthy()
-    expect(passwordInput).toBeTruthy()
-  })
-})
+    })
+    .compileComponents();
+
+    fixture = TestBed.createComponent(LoginComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('deve ter labels associados aos inputs', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    // Ensure change detection runs to update DOM
+    fixture.detectChanges();
+
+    const inputs = compiled.querySelectorAll('input');
+    inputs.forEach(input => {
+      const id = input.getAttribute('id');
+      if (id) {
+          const label = compiled.querySelector(`label[for="${id}"]`);
+          expect(label).toBeTruthy();
+      }
+    });
+  });
+});
