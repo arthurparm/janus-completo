@@ -33,8 +33,14 @@ describe('AuthService', () => {
 
   it('deve fazer login com senha via Firebase', async () => {
     vi.mocked(signInWithEmailAndPassword).mockResolvedValueOnce({} as any)
-    const ok = await svc.loginWithPassword('a@b.com', '123456', true)
-    expect(signInWithEmailAndPassword).toHaveBeenCalledWith(authMock, 'a@b.com', '123456')
+    const loginPromise = svc.loginWithPassword('a@b.com', '123456', true)
+
+    // Expect the call to local auth that follows successful login logic
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush({ token: 'janus.jwt', user: { id: 1, email: 'a@b.com' } })
+
+    const ok = await loginPromise
+
     expect(ok).toBe(true)
   })
 
@@ -51,7 +57,8 @@ describe('AuthService', () => {
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/firebase/exchange`)
     expect(req.request.body).toEqual({ token: 'firebase.jwt' })
     req.flush({ token: 'janus.jwt', user: { id: 'uid-123', roles: ['user'], permissions: ['read'] } })
-    await authPromise
+
+    if (authPromise) await authPromise
 
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
   })

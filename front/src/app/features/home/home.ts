@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core'
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { RouterLink } from '@angular/router'
 import { FormControl, ReactiveFormsModule } from '@angular/forms'
-import { forkJoin, of } from 'rxjs'
+import { of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Router } from '@angular/router'
@@ -129,4 +129,3 @@ export class HomeComponent {
       })
   }
 }
-

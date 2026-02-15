@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { JanusApiService, PostSprintSummaryResponse, ReflexionLesson } from '../../../../services/janus-api.service';
+import { JanusApiService, PostSprintSummaryResponse } from '../../../../services/janus-api.service';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
 

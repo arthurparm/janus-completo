@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import { SystemStatus } from './system-status';
+import { SystemStatus } from './system-status.service';
 
 describe('SystemStatus', () => {
   let service: SystemStatus;

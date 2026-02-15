@@ -41,15 +41,12 @@ export class LoginComponent {
     this.loading = true
     const v = this.form.value
     try {
-      console.log('[LoginComponent] Attempting login with email:', v.email)
       const ok = await this.auth.loginWithPassword(String(v.email), String(v.password), !!v.remember)
       if (ok) {
-        console.log('[LoginComponent] Login successful, navigating to home')
         // Add a small delay to ensure token is properly stored
         await new Promise(resolve => setTimeout(resolve, 100))
         await this.router.navigate(['/'])
       } else {
-        console.log('[LoginComponent] Login failed - invalid credentials')
         this.handleFailure()
       }
     } catch (error) {

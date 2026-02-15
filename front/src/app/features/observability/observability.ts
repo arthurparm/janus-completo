@@ -1,7 +1,6 @@
-import { Component, computed, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { interval, Subscription } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 import { SystemStatusWidgetComponent } from './widgets/system-status-widget/system-status-widget';
 import { DatabaseHealthWidgetComponent } from './widgets/database-health-widget/database-health-widget';
 import { KnowledgeHealthWidgetComponent } from './widgets/knowledge-health-widget/knowledge-health-widget';
@@ -16,7 +15,6 @@ import { KnowledgeHealthWidgetComponent } from './widgets/knowledge-health-widge
 export class ObservabilityComponent implements OnInit, OnDestroy {
     autoRefreshEnabled = signal(true); // Default: ON per user requirement
     private refreshSubscription?: Subscription;
-    private readonly REFRESH_INTERVAL_MS = 5000; // 5 seconds
 
     ngOnInit(): void {
         this.startAutoRefresh();
@@ -39,12 +37,10 @@ export class ObservabilityComponent implements OnInit, OnDestroy {
         if (this.autoRefreshEnabled()) {
             // Auto-refresh logic will be implemented when widgets are ready
             // Widgets will handle their own data fetching via services
-            console.log('[Observability] Auto-refresh enabled');
         }
     }
 
     private stopAutoRefresh(): void {
         this.refreshSubscription?.unsubscribe();
-        console.log('[Observability] Auto-refresh disabled');
     }
 }
