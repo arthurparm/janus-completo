@@ -2,6 +2,8 @@
 
 Interface web do Janus AI Architect, construída com Angular 20.
 
+For full project documentation, roadmap, and architecture details, please refer to the **[root README.md](../README.md)**.
+
 ## Visão Geral
 - Build com `@angular/build:application` (Vite under the hood)
 - Assets servidos a partir de `public/`
