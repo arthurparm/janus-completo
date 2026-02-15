@@ -84,13 +84,16 @@ jobs:
             structlog \
             sqlalchemy \
             psycopg2-binary \
+            asyncpg \
             qdrant-client \
             prometheus-client \
             prometheus-fastapi-instrumentator \
             langchain \
             langchain-core \
+            langchain-ollama \
             langgraph \
-            langgraph-checkpoint-postgres
+            langgraph-checkpoint-postgres \
+            msgpack
 
       - name: Run critical suite
         env:

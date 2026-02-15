@@ -52,13 +52,26 @@ describe('AuthService', () => {
       getIdToken: vi.fn().mockResolvedValue('firebase.jwt')
     }
 
-    const authPromise = authStateCallback?.(firebaseUser)
-    await Promise.resolve()
+    // Ensure initialization happened
+    expect(authMock.onAuthStateChanged).toHaveBeenCalled();
+
+    // Trigger auth state change
+    if (authStateCallback) {
+      await authStateCallback(firebaseUser)
+    }
+
+    // Now verify the exchange request
+    // The previous error was that the request wasn't found.
+    // This could be because initializeAuth() logic is async and might not have completed inside the constructor when we trigger the callback?
+    // Or maybe AuthService handles it but the http request is pending?
+    // Let's verify expectations.
+
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/firebase/exchange`)
     expect(req.request.body).toEqual({ token: 'firebase.jwt' })
     req.flush({ token: 'janus.jwt', user: { id: 'uid-123', roles: ['user'], permissions: ['read'] } })
 
-    if (authPromise) await authPromise
+    // Wait for async logic to settle if needed
+    // The initializeAuth function sets _authReady at the end.
 
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
   })
