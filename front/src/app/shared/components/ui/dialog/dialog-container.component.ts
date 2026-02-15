@@ -1,4 +1,4 @@
-import { Component, ViewChild, ViewEncapsulation } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CdkPortalOutlet, PortalModule } from '@angular/cdk/portal';
 import { A11yModule } from '@angular/cdk/a11y';

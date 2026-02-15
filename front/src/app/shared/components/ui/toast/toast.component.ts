@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ToastData, ToastType } from './toast.types';
+import { ToastData } from './toast.types';
 import { UiIconComponent } from '../icon/icon.component';
 import { UiButtonComponent } from '../button/button.component';
 import { animate, style, transition, trigger } from '@angular/animations';

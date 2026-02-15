@@ -14,7 +14,7 @@ export class ConversationRefreshService {
 
   // Emitir evento de refresh
   triggerRefresh() {
-    console.log('🔄 ConversationRefreshService: Triggering conversations refresh')
+    // console.log('🔄 ConversationRefreshService: Triggering conversations refresh')
     this.refreshConversations$.next();
   }
 }

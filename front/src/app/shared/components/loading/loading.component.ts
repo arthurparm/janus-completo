@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, inject } from '@angular/core'
+import { Component, Input, ChangeDetectionStrategy, inject } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { UiSpinnerComponent } from '../ui/spinner/spinner.component'
 import { LoadingStateService } from '../../../core/services/loading-state.service'

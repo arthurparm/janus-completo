@@ -112,18 +112,18 @@ export class ChatStreamService {
       this.handleMessage('error', ev.data) 
     })
     
-    this.es.addEventListener('heartbeat', (ev: MessageEvent) => { 
+    this.es.addEventListener('heartbeat', (_ev: MessageEvent) => {
       // console.log('[ChatStreamService] Heartbeat recebido')
       /* keep-alive noop */ 
     })
     
-    this.es.addEventListener('protocol', (ev: MessageEvent) => { 
+    this.es.addEventListener('protocol', (_ev: MessageEvent) => {
       // console.log('[ChatStreamService] Evento protocol recebido:', ev.data)
       /* future: inspect version */ 
     })
     
     // Adicionar listener genérico para debug
-    this.es.addEventListener('message', (ev: MessageEvent) => {
+    this.es.addEventListener('message', (_ev: MessageEvent) => {
       // console.log('[ChatStreamService] Mensagem genérica recebida:', ev.type, ev.data)
     })
     

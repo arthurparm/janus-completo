@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Overlay, OverlayRef } from '@angular/cdk/overlay';
 import { ComponentPortal } from '@angular/cdk/portal';
 import { UiToasterComponent } from './toaster.component';
-import { ToastConfig, ToastType } from './toast.types';
+import { ToastConfig } from './toast.types';
 
 @Injectable({ providedIn: 'root' })
 export class UiToastService {
