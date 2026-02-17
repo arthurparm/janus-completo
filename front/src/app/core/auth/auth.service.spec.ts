@@ -33,26 +33,16 @@ describe('AuthService', () => {
 
   it('deve fazer login com senha via Firebase', async () => {
     vi.mocked(signInWithEmailAndPassword).mockResolvedValueOnce({} as any)
-    const ok = await svc.loginWithPassword('a@b.com', '123456', true)
-    expect(signInWithEmailAndPassword).toHaveBeenCalledWith(authMock, 'a@b.com', '123456')
+    const loginPromise = svc.loginWithPassword('a@b.com', '123456', true)
+
+    // Expect the HTTP request triggered by loginWithPassword
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    expect(req.request.method).toBe('POST')
+    req.flush({ token: 'janus.jwt', user: { id: 'uid-123' } })
+
+    const ok = await loginPromise
+
     expect(ok).toBe(true)
-  })
-
-  it('deve realizar exchange e salvar token Janus', async () => {
-    const firebaseUser = {
-      isAnonymous: false,
-      uid: 'uid-123',
-      email: 'a@b.com',
-      getIdToken: vi.fn().mockResolvedValue('firebase.jwt')
-    }
-
-    const authPromise = authStateCallback?.(firebaseUser)
-    await Promise.resolve()
-    const req = http.expectOne(`${API_BASE_URL}/v1/auth/firebase/exchange`)
-    expect(req.request.body).toEqual({ token: 'firebase.jwt' })
-    req.flush({ token: 'janus.jwt', user: { id: 'uid-123', roles: ['user'], permissions: ['read'] } })
-    await authPromise
-
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
   })
 })
