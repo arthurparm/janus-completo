@@ -1,5 +1,7 @@
 # Janus Angular — Frontend
 
+See [root README](../README.md) for project overview and architecture.
+
 Interface web do Janus AI Architect, construída com Angular 20.
 
 ## Visão Geral

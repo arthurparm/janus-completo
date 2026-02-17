@@ -1,4 +1,4 @@
-# Janus - Melhorias Possiveis
+# Janus - Project Roadmap
 
 Data de criacao: 2026-02-12
 Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para manter organizacao nas conversas futuras.

@@ -41,7 +41,7 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 
 ### Core
 
-- [Project Overview](./project-overview.md)
+- [Project Overview](../README.md)
 - [Source Tree Analysis](./source-tree-analysis.md)
 - [Integration Architecture](./integration-architecture.md)
 - [Project Parts Metadata](./project-parts.json)

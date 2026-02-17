@@ -1,4 +1,4 @@
-﻿# Janus Completo - Visao Geral do Projeto
+# Janus Project
 
 **Data:** 2026-02-11
 **Tipo:** Monorepo multi-part (web + backend)
@@ -70,12 +70,13 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 
 ## Mapa de Documentacao
 
-- `docs/index.md` - indice mestre
-- `docs/architecture-front.md` - arquitetura do frontend
-- `docs/architecture-janus.md` - arquitetura do backend
-- `docs/integration-architecture.md` - contratos de integracao entre partes
-- `docs/source-tree-analysis.md` - arvore comentada
+- [Roadmap do Projeto](./ROADMAP.md)
+- [Indice de Documentacao](./docs/index.md)
+- [Arquitetura Frontend](./docs/architecture-front.md)
+- [Arquitetura Backend](./docs/architecture-janus.md)
+- [Integracao](./docs/integration-architecture.md)
+- [Analise da Arvore de Codigo](./docs/source-tree-analysis.md)
 
 ---
 
-_Gerado pelo workflow BMAD `document-project` (scan exhaustive)_
+_Baseado no relatorio gerado pelo workflow BMAD `document-project`_
