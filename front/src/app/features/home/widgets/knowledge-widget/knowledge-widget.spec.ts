@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
 
 import { KnowledgeWidget } from './knowledge-widget';
 
@@ -8,7 +9,8 @@ describe('KnowledgeWidget', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [KnowledgeWidget]
+      imports: [KnowledgeWidget],
+      providers: [provideHttpClient()]
     })
     .compileComponents();
 

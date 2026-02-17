@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing'
 import { LoginComponent } from './login'
 import { AuthService } from '../../../core/auth/auth.service'
-import { Router } from '@angular/router'
+import { Router, provideRouter } from '@angular/router'
 import { vi } from 'vitest'
 
 describe('LoginComponent', () => {
@@ -21,10 +21,25 @@ describe('LoginComponent', () => {
     TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
+        provideRouter([]),
         { provide: AuthService, useValue: authSpy },
-        { provide: Router, useValue: routerSpy },
+        // Router is already provided by provideRouter, but we want to spy on it.
+        // We can override the specific methods or inject the router and spy on it.
+        // Or keep the mock but it conflicts with provideRouter potentially.
+        // Actually, provideRouter provides the Router service.
+        // If we want to spy on it, we can get it from TestBed.
       ]
     })
+
+    // We need to spy on the Router provided by provideRouter or override it.
+    // Let's override the router instance for simplicity if needed, or better,
+    // just spy on the injected router.
+    const router = TestBed.inject(Router)
+    vi.spyOn(router, 'navigate')
+
+    // Update routerSpy to point to the actual router methods being spied on
+    routerSpy.navigate = router.navigate as any
+
     const fixture = TestBed.createComponent(LoginComponent)
     comp = fixture.componentInstance
   })
@@ -45,6 +60,7 @@ describe('LoginComponent', () => {
     authSpy.loginWithPassword.mockResolvedValue(true)
     await comp.loginEmailPassword()
     expect(authSpy.loginWithPassword).toHaveBeenCalled()
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/'])
+    // Check if navigate was called on the injected router
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/'])
   })
 })

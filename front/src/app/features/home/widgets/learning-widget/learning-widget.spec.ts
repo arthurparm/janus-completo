@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
 
 import { LearningWidget } from './learning-widget';
 
@@ -8,7 +9,8 @@ describe('LearningWidget', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [LearningWidget]
+      imports: [LearningWidget],
+      providers: [provideHttpClient()]
     })
     .compileComponents();
 
