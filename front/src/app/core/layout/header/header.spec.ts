@@ -1,5 +1,6 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {RouterTestingModule} from '@angular/router/testing';
+import {HttpClientTestingModule} from '@angular/common/http/testing';
 import {of} from 'rxjs';
 import {AuthService} from '../../auth/auth.service';
 import {Database} from '@angular/fire/database';
@@ -12,7 +13,7 @@ describe('Header', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Header, RouterTestingModule],
+      imports: [Header, RouterTestingModule, HttpClientTestingModule],
       providers: [
         { provide: AuthService, useValue: { isAuthenticated$: of(false), logout: () => {} } },
         { provide: Database, useValue: {} }

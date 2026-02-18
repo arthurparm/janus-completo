@@ -1,13 +1,22 @@
 import { TestBed } from '@angular/core/testing'
+import { RouterTestingModule } from '@angular/router/testing'
+import { HttpClientTestingModule } from '@angular/common/http/testing'
 import { LoginComponent } from './login'
 import { AuthService } from '../../../core/auth/auth.service'
-import { Router } from '@angular/router'
+import { Router, ActivatedRoute, UrlTree, NavigationEnd } from '@angular/router'
 import { vi } from 'vitest'
+import { of } from 'rxjs'
 
 describe('LoginComponent', () => {
   let comp: LoginComponent
   let authSpy: { loginWithPassword: ReturnType<typeof vi.fn>; loginWithProvider: ReturnType<typeof vi.fn> }
-  let routerSpy: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> }
+  let routerSpy: {
+    navigate: ReturnType<typeof vi.fn>;
+    navigateByUrl: ReturnType<typeof vi.fn>;
+    createUrlTree: ReturnType<typeof vi.fn>;
+    serializeUrl: ReturnType<typeof vi.fn>;
+    events: any;
+  }
 
   beforeEach(() => {
     authSpy = {
@@ -16,13 +25,17 @@ describe('LoginComponent', () => {
     }
     routerSpy = {
       navigate: vi.fn(),
-      navigateByUrl: vi.fn()
+      navigateByUrl: vi.fn(),
+      createUrlTree: vi.fn().mockReturnValue({} as UrlTree),
+      serializeUrl: vi.fn().mockReturnValue(''),
+      events: of(new NavigationEnd(0, 'url', 'url'))
     }
     TestBed.configureTestingModule({
-      imports: [LoginComponent],
+      imports: [LoginComponent, RouterTestingModule, HttpClientTestingModule],
       providers: [
         { provide: AuthService, useValue: authSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} } } }
       ]
     })
     const fixture = TestBed.createComponent(LoginComponent)
