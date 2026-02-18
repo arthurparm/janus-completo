@@ -34,31 +34,39 @@ PROM_ENABLED = _PROM_ENABLED
 logger = structlog.get_logger(__name__)
 
 # Metrics definitions
-_CIRCUIT_STATE_GAUGE = Gauge(
-    "janus_resilience_circuit_state",
-    "Circuit breaker state (1 = current state, 0 otherwise)",
-    ["operation", "state"],
-)
-_FAILURE_COUNT_GAUGE = Gauge(
-    "janus_resilience_failure_count",
-    "Current failure count tracked by the circuit breaker",
-    ["operation"],
-)
-_OPEN_TIME_GAUGE = Gauge(
-    "janus_resilience_open_time_seconds",
-    "How long (in seconds) the circuit has been continuously OPEN",
-    ["operation"],
-)
-_RETRIES_COUNTER = Counter(
-    "janus_resilience_retries_total",
-    "Total number of retries performed by the resilient decorator",
-    ["operation", "exception_type"],
-)
-_ATTEMPT_LATENCY_HIST = Histogram(
-    "janus_resilience_attempt_latency_seconds",
-    "Latency per attempt of a resilient/circuit-breaker protected operation",
-    ["operation", "outcome", "exception_type"],
-)
+try:
+    _CIRCUIT_STATE_GAUGE = Gauge(
+        "janus_resilience_circuit_state",
+        "Circuit breaker state (1 = current state, 0 otherwise)",
+        ["operation", "state"],
+    )
+    _FAILURE_COUNT_GAUGE = Gauge(
+        "janus_resilience_failure_count",
+        "Current failure count tracked by the circuit breaker",
+        ["operation"],
+    )
+    _OPEN_TIME_GAUGE = Gauge(
+        "janus_resilience_open_time_seconds",
+        "How long (in seconds) the circuit has been continuously OPEN",
+        ["operation"],
+    )
+    _RETRIES_COUNTER = Counter(
+        "janus_resilience_retries_total",
+        "Total number of retries performed by the resilient decorator",
+        ["operation", "exception_type"],
+    )
+    _ATTEMPT_LATENCY_HIST = Histogram(
+        "janus_resilience_attempt_latency_seconds",
+        "Latency per attempt of a resilient/circuit-breaker protected operation",
+        ["operation", "outcome", "exception_type"],
+    )
+except ValueError:
+    from prometheus_client import REGISTRY
+    _CIRCUIT_STATE_GAUGE = REGISTRY._names_to_collectors["janus_resilience_circuit_state"]
+    _FAILURE_COUNT_GAUGE = REGISTRY._names_to_collectors["janus_resilience_failure_count"]
+    _OPEN_TIME_GAUGE = REGISTRY._names_to_collectors["janus_resilience_open_time_seconds"]
+    _RETRIES_COUNTER = REGISTRY._names_to_collectors["janus_resilience_retries_total"]
+    _ATTEMPT_LATENCY_HIST = REGISTRY._names_to_collectors["janus_resilience_attempt_latency_seconds"]
 
 
 class CircuitBreakerState(Enum):

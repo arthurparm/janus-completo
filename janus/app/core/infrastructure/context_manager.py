@@ -25,20 +25,25 @@ logger = logging.getLogger(__name__)
 
 # Métricas Prometheus (opcional)
 try:
-    from prometheus_client import Counter, Gauge  # type: ignore
+    from prometheus_client import Counter, Gauge, REGISTRY  # type: ignore
 
     _PROM_ENABLED = True
 except Exception:
     _PROM_ENABLED = False
 
 if _PROM_ENABLED:
-    _WEB_CACHE_HITS = Counter("context_web_cache_hits_total", "Total de hits no cache de busca web")
-    _WEB_CACHE_MISSES = Counter(
-        "context_web_cache_misses_total", "Total de misses no cache de busca web"
-    )
-    _WEB_CACHE_SIZE = Gauge(
-        "context_web_cache_size", "Itens atualmente armazenados no cache de busca web"
-    )
+    try:
+        _WEB_CACHE_HITS = Counter("context_web_cache_hits_total", "Total de hits no cache de busca web")
+        _WEB_CACHE_MISSES = Counter(
+            "context_web_cache_misses_total", "Total de misses no cache de busca web"
+        )
+        _WEB_CACHE_SIZE = Gauge(
+            "context_web_cache_size", "Itens atualmente armazenados no cache de busca web"
+        )
+    except ValueError:
+        _WEB_CACHE_HITS = REGISTRY._names_to_collectors["context_web_cache_hits_total"]
+        _WEB_CACHE_MISSES = REGISTRY._names_to_collectors["context_web_cache_misses_total"]
+        _WEB_CACHE_SIZE = REGISTRY._names_to_collectors["context_web_cache_size"]
 
 
 class ContextInfo(BaseModel):

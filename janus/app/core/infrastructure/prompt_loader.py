@@ -12,16 +12,21 @@ from app.repositories.prompt_repository import PromptRepository
 PROMPTS = {}
 
 
-PROMPT_CACHE_HITS = Counter(
-    "prompt_cache_hits_total",
-    "Total de hits no cache de prompts",
-    ["namespace", "name", "version", "lang", "model"],
-)
-PROMPT_CACHE_MISSES = Counter(
-    "prompt_cache_misses_total",
-    "Total de misses no cache de prompts",
-    ["namespace", "name", "version", "lang", "model"],
-)
+try:
+    PROMPT_CACHE_HITS = Counter(
+        "prompt_cache_hits_total",
+        "Total de hits no cache de prompts",
+        ["namespace", "name", "version", "lang", "model"],
+    )
+    PROMPT_CACHE_MISSES = Counter(
+        "prompt_cache_misses_total",
+        "Total de misses no cache de prompts",
+        ["namespace", "name", "version", "lang", "model"],
+    )
+except ValueError:
+    from prometheus_client import REGISTRY
+    PROMPT_CACHE_HITS = REGISTRY._names_to_collectors["prompt_cache_hits_total"]
+    PROMPT_CACHE_MISSES = REGISTRY._names_to_collectors["prompt_cache_misses_total"]
 
 
 class PromptLoader:

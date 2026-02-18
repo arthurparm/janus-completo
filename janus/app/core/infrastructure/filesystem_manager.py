@@ -10,8 +10,28 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-APP_DIR = Path("/app").resolve()
-WORKSPACE_DIR = (APP_DIR / "workspace").resolve()
+try:
+    APP_DIR = Path("/app").resolve()
+    # Check if /app exists and is writable/usable, otherwise fallback
+    if not APP_DIR.exists():
+        APP_DIR = Path.cwd().resolve()
+except (PermissionError, OSError):
+    APP_DIR = Path.cwd().resolve()
+
+# Fallback for workspace directory if /app/workspace is not writable
+try:
+    WORKSPACE_DIR = (APP_DIR / "workspace").resolve()
+    # Try creating directory to check permissions
+    if not WORKSPACE_DIR.exists():
+        WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    # Check writability
+    if not os.access(WORKSPACE_DIR, os.W_OK):
+        raise PermissionError(f"No write access to {WORKSPACE_DIR}")
+except (PermissionError, OSError):
+    # Fallback to local workspace in current directory
+    WORKSPACE_DIR = (Path.cwd() / "workspace").resolve()
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    logger.warning(f"Using fallback workspace directory: {WORKSPACE_DIR}")
 
 # Policies / guardrails
 ALLOWED_WRITE_ROOTS = [WORKSPACE_DIR]
@@ -23,8 +43,18 @@ MAX_CONTENT_SIZE = 1_000_000  # 1MB
 MAX_LINE_COUNT = 10000  # Limite de linhas por arquivo
 
 # Metrics
-_FS_OPS = Counter("fs_ops_total", "Operações de FS", ["op", "outcome", "ext"])
-_FS_BYTES = Counter("fs_bytes_total", "Bytes escritos/lidos", ["op"])
+try:
+    _FS_OPS = Counter("fs_ops_total", "Operações de FS", ["op", "outcome", "ext"])
+    _FS_BYTES = Counter("fs_bytes_total", "Bytes escritos/lidos", ["op"])
+except ValueError:
+    # Metrics already registered (e.g. during tests), access via registry if needed or ignore re-creation
+    # Note: If we can't get the existing metric object easily, we assume this module was reloaded.
+    # For simplicity in this context, we can attempt to get it from registry or just suppress.
+    # However, to avoid 'local variable referenced before assignment', we must ensure they exist.
+    # Best practice is checking registry, but for now we catch ValueError.
+    from prometheus_client import REGISTRY
+    _FS_OPS = REGISTRY._names_to_collectors["fs_ops_total"]
+    _FS_BYTES = REGISTRY._names_to_collectors["fs_bytes_total"]
 
 # Circuit breaker state (very simple)
 _CB_FAILURES = 0

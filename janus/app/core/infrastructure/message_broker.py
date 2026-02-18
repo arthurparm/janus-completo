@@ -36,15 +36,21 @@ from app.models.schemas import TaskMessage
 logger = logging.getLogger(__name__)
 
 # --- Métricas ---
-_MESSAGES_PUBLISHED = Counter(
-    "broker_messages_published_total", "Total de mensagens publicadas", ["queue"]
-)
-_CONNECTION_ERRORS = Counter(
-    "broker_connection_errors_total", "Total de erros de conexão com o broker"
-)
-_CONSUME_ERRORS = Counter(
-    "broker_consume_errors_total", "Total de erros ao consumir mensagens", ["queue"]
-)
+try:
+    _MESSAGES_PUBLISHED = Counter(
+        "broker_messages_published_total", "Total de mensagens publicadas", ["queue"]
+    )
+    _CONNECTION_ERRORS = Counter(
+        "broker_connection_errors_total", "Total de erros de conexão com o broker"
+    )
+    _CONSUME_ERRORS = Counter(
+        "broker_consume_errors_total", "Total de erros ao consumir mensagens", ["queue"]
+    )
+except ValueError:
+    from prometheus_client import REGISTRY
+    _MESSAGES_PUBLISHED = REGISTRY._names_to_collectors["broker_messages_published_total"]
+    _CONNECTION_ERRORS = REGISTRY._names_to_collectors["broker_connection_errors_total"]
+    _CONSUME_ERRORS = REGISTRY._names_to_collectors["broker_consume_errors_total"]
 
 
 class MessageBroker:
