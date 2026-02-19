@@ -1,350 +1,104 @@
-# Janus - Melhorias Possiveis
+# Melhorias Possíveis e Análise Crítica do Janus
 
-Data de criacao: 2026-02-12
-Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para manter organizacao nas conversas futuras.
+Este documento compila uma análise técnica detalhada do estado atual do projeto Janus, identificando áreas de melhoria, código obsoleto, funcionalidades incipientes e dívidas técnicas.
 
-## Como usar este documento
-
-1. Cada item deve ter dono, prioridade e status.
-2. Priorizar por impacto em usuario + reducao de risco tecnico.
-3. Quebrar itens grandes em historias pequenas e testaveis.
-4. Revisar semanalmente e mover itens para roadmap ativo.
-
-## Escala sugerida
-
-- Prioridade: P0 (urgente), P1 (alta), P2 (media), P3 (baixa)
-- Esforco: S (1-2 dias), M (3-7 dias), L (2+ semanas)
-- Status: ideia, planejado, em andamento, concluido, descartado
+**Data da Análise:** 11/02/2026
+**Autor:** Agente de Planejamento (Jules)
 
 ---
 
-## 1) Estudo do proprio codigo (Code Intelligence)
+## 1. Melhorias Críticas de Arquitetura (Backend)
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| CI-001 | Corrigir modelagem de entidades de codigo no grafo (File/Function/Class com chaves consistentes) | P0 | M | feito (2026-02-12) |
-| CI-002 | Corrigir resolucao de `CALLS` para usar nome qualificado e evitar links quebrados | P0 | M | feito (2026-02-12) |
-| CI-003 | Indexacao incremental por `git diff` (alem de reindex full) | P1 | M | ideia |
-| CI-004 | ExtraÃ§Ã£o AST de imports, decorators, assinatura, linhas inicio/fim | P1 | M | ideia |
-| CI-005 | Suporte a multiplas linguagens (TS/JS/Python/SQL) no parser | P1 | L | ideia |
-| CI-006 | Endpoint de pergunta sobre codigo com citacao (`arquivo` + `linha`) | P0 | M | feito (2026-02-12) |
-| CI-007 | Busca hibrida para codigo (lexical + vetorial + grafo) | P1 | L | ideia |
-| CI-008 | Mapa de impacto de mudanca (o que quebra se alterar X) | P1 | M | ideia |
-| CI-009 | Hotspots de complexidade e debt automaticamente rankeados | P2 | M | ideia |
-| CI-010 | Detecao de ciclos de dependencia e camadas violadas | P2 | M | ideia |
-| CI-011 | Identificacao de codigo morto e endpoint sem uso | P2 | M | ideia |
-| CI-012 | Grafo temporal de mudancas por commit e autor | P2 | L | ideia |
-| CI-013 | Explainability: por que o Janus respondeu isso sobre o codigo | P1 | M | ideia |
-| CI-014 | Modo "pair reviewer" para PR com checklist automatico | P1 | M | ideia |
-| CI-015 | Dataset de avaliacao de perguntas tecnicas com baseline versionado | P0 | M | feito (2026-02-12) |
+### 1.1. Refatoração do `config.py`
+**Problema:** O arquivo `janus/app/config.py` é um monolito de configuração. Ele mistura:
+*   Credenciais de infraestrutura (DB, RabbitMQ).
+*   Configurações de negócio (Custos de LLM, Pesos de RAG).
+*   Definições de roles de agentes.
+*   Lógica complexa de validação (parsers JSON manuais em validadores Pydantic).
 
----
+**Impacto:** Dificuldade de manutenção, risco de quebra ao alterar uma config simples, acoplamento forte entre infra e regras de negócio.
 
-## 2) Memoria, RAG e Conhecimento
+**Sugestão:** Quebrar em múltiplos arquivos:
+*   `config/infrastructure.py`: Apenas conexões.
+*   `config/business.py`: Regras de negócio, custos, pesos.
+*   `config/agents.py`: Definições de roles e modelos.
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| MR-001 | Telemetria obrigatoria por etapa (`source`, `db`, `latency_ms`, `confidence`, `error_code`) | P0 | M | feito (2026-02-13) |
-| MR-002 | Politica de roteamento explicita entre Postgres, vetor e grafo | P0 | M | parcial |
-| MR-003 | Threshold de confianca com fluxo de confirmacao do usuario | P0 | S | feito (2026-02-13) |
-| MR-004 | CitaÃ§Ãµes obrigatorias em respostas baseadas em documento/codigo | P0 | M | feito (2026-02-13) |
-| MR-005 | Reranking semantico com features de qualidade por tipo de consulta | P1 | M | ideia |
-| MR-006 | Chunking adaptativo por tipo de arquivo (codigo, doc, conversa) | P1 | M | ideia |
-| MR-007 | Eviccao inteligente de memoria curta com politicas por origem | P1 | S | parcial |
-| MR-008 | Memoria de longo prazo com consolidacao transacional no grafo | P1 | M | ideia |
-| MR-009 | Compactacao e resumo hierarquico de conversas longas | P2 | M | ideia |
-| MR-010 | Detecao de contradicao entre memorias antigas e novas | P2 | M | ideia |
-| MR-011 | Protecao de PII em `pending confirmations` e logs de ferramentas | P0 | S | feito (2026-02-13) |
-| MR-012 | Explainable retrieval (mostrar por que cada contexto entrou) | P1 | M | ideia |
-| MR-013 | Avaliacao offline recorrente (score.json + comparacao de baseline) | P0 | S | parcial |
-| MR-014 | Cache de consulta semantica com invalidacao por mudanca de fonte | P2 | M | ideia |
-| MR-015 | RAG multimodal (imagem + texto + PDF) | P3 | L | ideia |
+### 1.2. Duplicidade e Confusão em Workers
+**Problema:** Existem workers com propósitos sobrepostos ou nomes confusos:
+*   `codex_worker.py` vs `code_agent_worker.py`: O primeiro parece focar em execução de ferramentas CLI, o segundo em geração via LLM. A fronteira não é clara.
+*   `knowledge_consolidator_worker.py` vs `async_consolidation_worker.py`: Um contém a classe de lógica, o outro o loop do consumidor. A nomenclatura sugere dois workers distintos, o que confunde.
+
+**Sugestão:** Unificar a nomenclatura (ex: `CodeGenerationWorker` e `ToolExecutionWorker`) e consolidar arquivos de lógica e consumo onde fizer sentido, ou adotar um padrão claro (ex: `Service` + `WorkerAdapter`).
+
+### 1.3. Hardcoded Prompts e Roles
+**Problema:** Definições de modelos candidatos (`LLM_CLOUD_MODEL_CANDIDATES`) e expectativas de tokens (`LLM_EXPECTED_KTOKENS_BY_ROLE`) estão "cravadas" no código/config.
+
+**Sugestão:** Mover essas definições para o banco de dados (tabela `AgentProfiles` ou `ModelConfig`) para permitir ajuste dinâmico sem deploy.
 
 ---
 
-## 3) Agentes, Planejamento e Execucao
+## 2. Melhorias Críticas de Frontend (Angular)
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| AG-001 | Planejamento hierarquico com decomposicao de metas em tarefas verificaveis | P1 | M | ideia |
-| AG-002 | Politica de ferramenta por perfil de risco e escopo | P0 | M | parcial |
-| AG-003 | Simulacao antes de execucao de acoes destrutivas | P0 | S | ideia |
-| AG-004 | Auto-critica por rodada com memoria de erros recorrentes | P1 | M | ideia |
-| AG-005 | Detecao de loop e escape automatico com estrategia alternativa | P1 | S | ideia |
-| AG-006 | Multi-agente com papeis fixos (executor, reviewer, auditor) | P2 | M | ideia |
-| AG-007 | Checklist de saida por tipo de tarefa (codigo, docs, deploy) | P1 | S | ideia |
-| AG-008 | Modo "aprender com feedback humano" por acao aprovada/rejeitada | P1 | M | ideia |
-| AG-009 | Controle de custo por objetivo e abort por budget | P1 | S | parcial |
-| AG-010 | Recomendador de proxima melhor acao com score esperado | P2 | M | ideia |
+### 2.1. "God Component" (`ConversationsComponent`)
+**Problema:** O arquivo `front/src/app/features/conversations/conversations.ts` possui mais de 800 linhas e acumula responsabilidades de:
+*   Listagem de conversas.
+*   Janela de chat e renderização de mensagens.
+*   Gerenciamento de stream SSE.
+*   Exibição de documentos e traces.
+*   Painel de Autonomia.
 
----
+**Impacto:** Testabilidade baixa, legibilidade ruim, dificuldade de reutilização.
 
-## 4) Ferramentas, SeguranÃ§a e Governanca
+**Sugestão:** Refatorar em sub-componentes:
+*   `ConversationListComponent`
+*   `ChatWindowComponent`
+*   `MessageItemComponent`
+*   `AutonomyPanelComponent`
+*   `TraceViewerComponent`
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
-| SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
-| SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
-| SG-004 | Sandboxing por capability e allowlist de comandos | P0 | M | feito (2026-02-13) |
-| SG-005 | Approvals com explicacao de risco e escopo claro | P1 | S | parcial |
-| SG-006 | Quotas por usuario/projeto/ferramenta com janela deslizante | P1 | M | parcial |
-| SG-007 | Politica de retencao e expurgo de dados sensiveis | P1 | M | ideia |
-| SG-008 | Trilha de auditoria assinada para acoes criticas | P2 | M | ideia |
-| SG-009 | Simulador de politicas para validar mudancas antes de ativar | P2 | M | ideia |
-| SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
+### 2.2. Tratamento de Erros Genérico
+**Problema:** O método `extractErrorMessage` no frontend faz uma tentativa genérica de pegar mensagens de erro, mas a tipagem é fraca (`any` / `unknown` com casts manuais).
+
+**Sugestão:** Implementar um interceptor de erro global mais robusto que padronize as respostas de erro da API (ex: `ProblemDetails` RFC 7807) e tipar corretamente no front.
 
 ---
 
-## 5) Observabilidade, Qualidade e Confiabilidade
+## 3. Funcionalidades Incipientes ou MVP
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
-| OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | parcial |
-| OQ-003 | Tracing distribuido fim-a-fim com correlacao front/back/worker | P1 | M | ideia |
-| OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
-| OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
-| OQ-006 | Contract tests para endpoints criticos e SSE | P0 | M | feito (2026-02-13) |
-| OQ-007 | Scorecards automaticos de qualidade de resposta | P1 | M | ideia |
-| OQ-008 | Canary release para mudancas de prompt/roteador | P2 | M | ideia |
-| OQ-009 | Regressao semantica automatica antes de deploy | P1 | M | ideia |
-| OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
-| OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | planejado |
+### 3.1. `neural_training_worker.py`
+**Estado:** Parece ser uma implementação esquelética ("MVP"). Ele recebe tarefas mas delega para um `LearningRepository` que não foi auditado profundamente, mas a complexidade de um "treinamento neural" real geralmente exige pipelines dedicados (MLFlow, Kubeflow), não apenas um worker Python simples.
+
+**Sugestão:** Avaliar se essa funcionalidade é real ou apenas um placeholder. Se for real, documentar a infraestrutura de treino (onde roda? GPU?).
+
+### 3.2. Testes E2E e Integração
+**Estado:** Embora existam pastas de testes, a cobertura de cenários complexos (ex: RAG Híbrido com falha parcial de um DB) pode ser melhorada.
+
+**Sugestão:** Adicionar testes de caos (Chaos Engineering) para simular queda do RabbitMQ ou Neo4j durante um fluxo de conversa.
 
 ---
 
-## 6) Produto e Experiencia (Front + API)
+## 4. Documentação e Processos
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| PX-001 | Tela de explicacao de resposta (fontes, confianca, latencia) | P1 | M | ideia |
-| PX-002 | UI de citacao clicavel para codigo e documentos | P0 | M | feito (2026-02-13) |
-| PX-003 | Timeline de memoria por conversa e por usuario | P1 | M | parcial |
-| PX-004 | Centro de aprovacoes pendentes com comparacao de risco | P1 | M | feito (2026-02-13) |
-| PX-005 | Modo operador com visao de workers e filas em tempo real | P1 | M | parcial |
-| PX-006 | Busca global no workspace (docs, codigo, conversas, tarefas) | P1 | M | ideia |
-| PX-007 | Acoes rapidas de rotina (criar tarefa, lembrete, resumo) | P2 | M | ideia |
-| PX-008 | Onboarding guiado para novos usuarios | P2 | M | ideia |
-| PX-009 | Perfis de usuario (dev, pm, qa) com defaults de comportamento | P2 | S | ideia |
-| PX-010 | Internacionalizacao completa e consistencia terminologica | P3 | M | ideia |
-| PX-011 | Simplificar UX do chat para modo usuario (modo simples padrao + painel avancado opcional) | P0 | S | em andamento (2026-02-13) |
-| PX-012 | Mensagens de erro de auth mais claras (401/422) + fluxo de reset guiado | P1 | S | planejado |
+### 4.1. Documentação Automática (BMAD)
+**Problema:** Os arquivos gerados pelo BMAD (`docs/project-overview.md`, etc.) são úteis como snapshot, mas tendem a ficar obsoletos rapidamente se não forem regerados no CI/CD. Além disso, misturam inglês e português ou estruturas genéricas.
+
+**Sugestão:** Manter a documentação manual (`docs/MANUAL_*.md`) como fonte da verdade para humanos e usar o BMAD apenas para análise estática automatizada.
+
+### 4.2. Tradução
+**Problema:** O projeto mistura termos em inglês e português na documentação e no código (comentários).
+
+**Sugestão:** Padronizar a documentação oficial (Manuais) em Português (conforme feito nesta atualização) e manter o código/comentários internos preferencialmente em Inglês para padrão internacional, ou assumir Português em tudo. A mistura atual gera atrito.
 
 ---
 
-## 7) Plataforma, Dados e Integracoes
+## 5. Segurança
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| PL-001 | Alinhamento definitivo de schema SQL (evitar drift MySQL vs Postgres) | P0 | M | feito (2026-02-13) |
-| PL-002 | Migracoes idempotentes e auditadas | P1 | M | ideia |
-| PL-003 | Backup/restore automatizado de banco, grafo e vetor | P0 | M | ideia |
-| PL-004 | Multi-tenant com isolamento forte por organizacao | P2 | L | ideia |
-| PL-005 | Feature flags por ambiente e por cliente | P1 | M | ideia |
-| PL-006 | Provisionamento declarativo de infraestrutura local e cloud | P2 | M | ideia |
-| PL-007 | API versioning formal com politica de deprecacao | P1 | M | ideia |
-| PL-008 | Conectores nativos (GitHub, Notion, Jira, Slack, GDrive) | P2 | L | ideia |
-| PL-009 | Pipeline de ingestao em lote com dedupe e retry robusto | P1 | M | ideia |
-| PL-010 | Data catalog interno para fontes de conhecimento | P2 | M | ideia |
+### 5.1. Segredos no Frontend
+**Problema:** O frontend Angular consome APIs (como Firebase) diretamente. Embora padrão, expor chaves de API no código cliente (`environment.ts`) requer regras de segurança (Security Rules) muito bem configuradas no backend do Firebase.
 
----
+**Sugestão:** Garantir que nenhuma chave de serviço backend (OpenAI, AWS, etc.) vaze para o frontend. O Janus já faz isso proxying via backend Python, o que é ótimo. Manter esse padrão rigorosamente.
 
-## 8) DevEx e Fluxo de Entrega
+### 5.2. Rate Limiting
+**Observação:** O sistema possui Rate Limiting, mas a configuração parece global ou por IP.
 
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| DX-001 | Comando unico de setup local (devcontainer/script cross-platform) | P1 | S | ideia |
-| DX-002 | Seed de dados e cenarios de teste reproduziveis | P1 | M | feito (2026-02-13) |
-| DX-003 | Lint/type/test gates padronizados em CI | P0 | S | feito (2026-02-13) |
-| DX-004 | Templates de PR orientados a risco e evidencia | P1 | S | ideia |
-| DX-005 | Testes de carga para chat e retrieval | P1 | M | ideia |
-| DX-006 | Snapshot tests para prompts criticos | P2 | M | ideia |
-| DX-007 | CLI de diagnostico rapido (health + deps + config) | P1 | M | ideia |
-| DX-008 | Reprodutibilidade de bugs via captura de trace minima | P1 | M | ideia |
-| DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
-| DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
-| DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | planejado |
-
----
-
-## 9) IA aplicada ao produto (futuro)
-
-| ID | Melhoria | Prioridade | Esforco | Status |
-|---|---|---|---|---|
-| AI-001 | Roteamento dinamico de modelos por tipo de pergunta e custo | P1 | M | parcial |
-| AI-002 | Distilacao de respostas validadas para modelos menores | P2 | L | ideia |
-| AI-003 | Avaliador automatico de factualidade com juiz externo | P2 | M | ideia |
-| AI-004 | Aprendizado continuo com feedback implicito (uso real) | P2 | L | ideia |
-| AI-005 | Geracao de plano de acao com verificacao automatica de consistencia | P1 | M | ideia |
-| AI-006 | Assistente de arquitetura que compara opcoes e trade-offs | P2 | M | ideia |
-| AI-007 | Suporte a memoria episodica com janela temporal semantica | P2 | M | ideia |
-| AI-008 | Deteccao de alucinacao com fallback para modo conservador | P1 | M | ideia |
-| AI-009 | Fine-tuning supervisionado para dominio Janus | P3 | L | ideia |
-| AI-010 | Modo tutor para explicar decisoes tecnicas passo a passo | P3 | M | ideia |
-
----
-
-## 10) Frontend V1 - Complete UI Coverage (Baseado em 228 APIs)
-
-**Contexto:** Atualmente temos 228 endpoints documentados no OpenAPI, mas apenas ~18% têm interfaces visuais completas. Esta seção organiza o desenvolvimento do frontend em **3 cenários estratégicos** alinhados com perfis de usuário e valor de negócio.
-
-**Inventário API por Módulo (Top 10):**
-- Observability: 22 endpoints
-- Knowledge: 21 endpoints
-- Productivity: 13 endpoints
-- LLM: 12 endpoints
-- Learning: 12 endpoints
-- Chat: 11 endpoints
-- Collaboration: 11 endpoints
-- Autonomy: 11 endpoints
-- Feedback: 7 endpoints
-- Meta-Agent: 6 endpoints
-
----
-
-### Cenário 1: Observability Dashboard (Gestor de Sistema)
-
-**Persona:** Desenvolvedor/DevOps que precisa diagnosticar problemas, monitorar saúde do sistema e entender performance.
-
-**Valor:** Visibilidade completa do sistema operacional sem depender de logs ou ferramentas externas.
-
-| ID | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
-|---|---|---|---|---|---|
-| FE1-001 | Dashboard de sistema único (status, health, services) | `/system/status`, `/system/health/services`, `/system/overview` | P0 | M | ideia |
-| FE1-002 | Visualização de traces distribuídos por request_id | `/observability/traces/*`, `/observability/spans/*` | P0 | M | ideia |
-| FE1-003 | Painel de métricas em tempo real (latência, throughput, errors) | `/observability/metrics/*` | P0 | M | ideia |
-| FE1-004 | Explorador de logs com filtros avançados | `/observability/logs/*` | P1 | M | ideia |
-| FE1-005 | Drill-down de pipeline completo por request (front→API→worker→DB) | Composição de múltiplos endpoints | P0 | L | ideia |
-| FE1-006 | Alertas configuráveis e SLO tracking visual | `/observability/alerts/*` (futuro) | P1 | M | ideia |
-| FE1-007 | Database validation e migration UI | `/system/db/validate`, `/system/db/migrate` | P1 | S | ideia |
-| FE1-008 | Health check detalhado com circuit breaker controls | `/knowledge/health/*` | P1 | S | ideia |
-
-**Arquitetura sugerida:**
-- Dashboard tipo Grafana/Datadog simplificado
-- WebSocket/SSE para métricas real-time
-- Layout responsivo com foco em desktop
-- Exportação para JSON/CSV para análise offline
-
----
-
-### Cenário 2: Knowledge Graph Explorer (Cientista Curioso)
-
-**Persona:** Desenvolvedor que quer entender a base de código, explorar relações entre componentes e fazer perguntas sobre arquitetura.
-
-**Valor:** Transformar o grafo de conhecimento invisível em ferramenta visual de navegação e descoberta.
-
-| ID | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
-|---|---|---|---|---|---|
-| FE2-001 | Visualização interativa do grafo (nós + relacionamentos) | `/knowledge/stats`, `/knowledge/node-types`, `/knowledge/entities` | P0 | L | ideia |
-| FE2-002 | Navegação drill-down de entidades (click → expand relationships) | `/knowledge/entity/{name}/relationships` | P0 | M | ideia |
-| FE2-003 | Interface de consulta com NLQ (Natural Language Query) | `/knowledge/query`, `/knowledge/query/code` | P0 | M | ideia |
-| FE2-004 | Busca de conceitos relacionados com visualização de clusters | `/knowledge/concepts/related` | P1 | M | ideia |
-| FE2-005 | Explorador de code analysis (funções que chamam X, arquivos que importam Y) | `/knowledge/functions/calling`, `/knowledge/files/importing` | P1 | M | ideia |
-| FE2-006 | Quarantine management com promoção visual de sugestões | `/knowledge/quarantine/*` | P1 | S | parcial |
-| FE2-007 | Indexação manual com progresso visual | `/knowledge/index`, `/knowledge/concepts/reindex` | P1 | S | ideia |
-| FE2-008 | Exportação de subgrafos para análise externa (GraphML, JSON) | API customizada necessária | P2 | M | ideia |
-| FE2-009 | Timeline de consolidação de conhecimento | `/knowledge/consolidate` | P2 | M | ideia |
-
-**Arquitetura sugerida:**
-- Biblioteca de visualização: D3.js, Cytoscape.js ou Vis.js
-- Layout força-dirigida com zoom/pan
-- Painel lateral para detalhes de nó
-- Filtros por tipo de nó e relacionamento
-- Modo "mapa de impacto" para mudanças
-
----
-
-### Cenário 3: Orchestration Center (Desenvolvedor Produtivo)
-
-**Persona:** Usuário que interage com o Janus para realizar tarefas, gerenciar autonomia, e acompanhar execuções.
-
-**Valor:** Centralizar controle de agentes, tarefas, ferramentas e feedback em uma interface coesa.
-
-| ID | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
-|---|---|---|---|---|---|
-| FE3-001 | Chat melhorado com stream de eventos de agente (thought stream) | `/chat/*`, SSE events | P0 | M | parcial |
-| FE3-002 | Painel de autonomia com gestão de strategic goals e tools | `/autonomy/*`, `/tools/*` | P0 | M | parcial |
-| FE3-003 | Centro de aprovações pendentes com diff visual | `/pending-actions/*` | P0 | S | feito |
-| FE3-004 | Gerenciamento de tasks e subtasks com Kanban/Timeline | `/tasks/*` | P1 | M | ideia |
-| FE3-005 | Productivity dashboard (summary, metrics, templates) | `/productivity/*` | P1 | M | ideia |
-| FE3-006 | Learning center com insights e flashcards | `/learning/*` | P1 | M | ideia |
-| FE3-007 | Feedback loop UI (thumbs up/down, corrections, reports) | `/feedback/*` | P1 | S | ideia |
-| FE3-008 | Meta-agent control panel (ciclos, configs, histórico) | `/meta-agent/*` | P1 | M | ideia |
-| FE3-009 | Workers monitoring (status, queues, health) | `/workers/*` | P1 | S | ideia |
-| FE3-010 | Evaluation dashboard com comparação de modelos | `/evaluation/*` | P1 | M | ideia |
-| FE3-011 | RAG document management (upload, status, embedding quality) | `/rag/*`, `/documents/*` | P1 | M | ideia |
-| FE3-012 | Context manager visual (memória curta/longa, evictions) | `/context/*` | P2 | M | ideia |
-| FE3-013 | Reflexion viewer (self-critique, improvements) | `/reflexion/*` | P2 | S | ideia |
-| FE3-014 | Sandbox playground para testar ferramentas | `/sandbox/*` | P2 | S | ideia |
-
-**Arquitetura sugerida:**
-- Layout tipo "plataforma unificada" (sidebar + múltiplas views)
-- Real-time updates via SSE/WebSocket
-- Componentização forte (reuso entre módulos)
-- Design system consistente (já existe framework Magicpunk)
-- PWA para acesso offline e notificações
-
----
-
-### Roadmap de Implementação Sugerido
-
-**Sprint 1-3 (Fundação):**
-- ✅ PX-011: Simplificar UX do chat (já em andamento)
-- FE3-001: Chat melhorado com thought stream
-- FE1-001: Dashboard de sistema básico
-- Design system refinement
-
-**Sprint 4-6 (Observability):**
-- FE1-002 a FE1-005: Pipeline completo de observability
-- FE1-007 a FE1-008: Admin tools
-
-**Sprint 7-9 (Knowledge):**
-- FE2-001 a FE2-003: Core do Knowledge Graph Explorer
-- FE2-006: Quarantine management
-- FE2-007: Indexing controls
-
-**Sprint 10-12 (Orchestration):**
-- FE3-002 a FE3-010: Módulos de produtividade e controle
-- FE2-004 a FE2-005: Análise de código avançada
-- FE3-011 a FE3-014: Features secundárias
-
-**Total estimado:** ~36 sprints (9 meses com time de 2 devs)
-**Cobertura final:** 100% dos 228 endpoints com UI funcional
-
----
-
-## 11) Itens imediatos recomendados (Top 12)
-
-1. CI-001 (feito em 2026-02-12)
-2. CI-002 (feito em 2026-02-12)
-3. CI-006 (feito em 2026-02-12)
-4. CI-015 (feito em 2026-02-12)
-5. MR-001 (feito em 2026-02-13)
-6. MR-004 (feito em 2026-02-13)
-7. SG-001 (feito em 2026-02-13)
-8. SG-002 (feito em 2026-02-13)
-9. OQ-001 (feito em 2026-02-13)
-10. OQ-006 (feito em 2026-02-13)
-11. PL-001 (feito em 2026-02-13)
-12. DX-003 (feito em 2026-02-13)
-
----
-
-## Template para novas ideias
-
-Copiar e preencher:
-
-```md
-### [ID] Titulo da melhoria
-- Problema atual:
-- Solucao proposta:
-- Impacto esperado:
-- Riscos:
-- Dependencias:
-- Prioridade:
-- Esforco:
-- Dono:
-- Status:
-```
-
+**Sugestão:** Implementar Rate Limiting por Tenant/Usuário logado para evitar que um usuário consuma toda a quota da API de LLM.

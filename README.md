@@ -1,89 +1,91 @@
-# Janus Completo
+# Janus - Arquiteto de Software Autônomo e Assistente Inteligente
 
-**Type:** Monorepo with 2 parts (Frontend + Backend)
-**Architecture:** Angular SPA + FastAPI modular backend with event-driven workers
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Version](https://img.shields.io/badge/Version-0.5.44-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-## Overview
-
-Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria, RAG, observabilidade e operacao autonoma.
-
-O repositorio `janus-completo` organiza um sistema agentico de IA com duas partes principais: `front` (Angular 20) e `janus` (API FastAPI com motor de agentes, memoria, observabilidade e automacao). O frontend consome a API via REST e SSE, enquanto o backend integra Redis, RabbitMQ, Neo4j, Qdrant e Postgres para processamento de conversa, memoria e operacao autonoma.
-
-## Structure
-
-### Frontend (`front/`)
-
-- **Type:** Web Application
-- **Stack:** Angular 20, TypeScript, RxJS, Tailwind, Vitest
-- **Entry Point:** `front/src/main.ts`
-
-### Backend (`janus/`)
-
-- **Type:** Python Backend
-- **Stack:** FastAPI, SQLAlchemy, RabbitMQ, Redis, Neo4j, Qdrant, Postgres
-- **Entry Point:** `janus/app/main.py`
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20
-- Python 3.11+
-- Docker & Docker Compose (optional for full stack)
-
-### Frontend (Local Development)
-
-```bash
-cd front
-npm install
-npm start
-```
-Access at: `http://localhost:4200`
-
-### Backend (Local Development)
-
-```bash
-cd janus
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-API Documentation at: `http://localhost:8000/docs`
-
-### Full Stack (Docker)
-
-```bash
-docker compose up -d
-```
-
-## Documentation
-
-Comprehensive documentation is available in the `docs/` directory:
-
-- [Project Overview](docs/project-overview.md)
-- [Architecture - Frontend](docs/architecture-front.md)
-- [Architecture - Backend](docs/architecture-janus.md)
-- [Integration Architecture](docs/integration-architecture.md)
-- [Deployment Guide](docs/deployment-guide.md)
-
-## Roadmap / Backlog
-
-Consolidated from prior planning artifacts.
-
-| ID | Prioridade | Task | Dono primário | Resultado esperado |
-|---|---|---|---|---|
-| JNS-001 | P0 | Sanitizar artefatos de épicos (canônico UTF-8 + shards limpos) | Tech Writer + SM | Base documental íntegra |
-| JNS-002 | P0 | Rastreabilidade por story (FRs + NFRs) | PM + SM | Cobertura auditável por história |
-| JNS-003 | P0 | ACs mensuráveis em todas as stories críticas | PM + QA | Critérios testáveis e objetivos |
-| JNS-004 | P0 | Hardening de fluxos sensíveis (expiração, concorrência, idempotência, rollback) | Architect + QA | Governança operacional robusta |
-| JNS-005 | P0 | Contract/Gate baseline (problem+json, REST/SSE contract tests, CI block) | Architect + Dev | Regressão bloqueada |
-| JNS-006 | P0 | Cadência BMAD multi-agente (DoR/DoD + handoffs) | SM | Execução previsível |
-| JNS-007 | P1 | Janus Orchestrator Kernel (roteamento por intenção/risco/confiança) | Architect + Dev | Orquestração multi-agente real |
-| JNS-008 | P1 | Memory Service v1 (curto/médio/longo prazo por tenant/usuário/thread) | Dev | Contexto persistente útil |
-| JNS-009 | P1 | Agent Runtime Contract v1 (IO, confidence, evidence, handoff) | Architect | Interoperabilidade entre agentes |
-| JNS-010 | P1 | Console UX 3 painéis com timeline de evidência | UX + Dev | Loop operacional completo |
-| JNS-011 | P1 | Quality Gates por risco (testes + política) | Test Architect | Segurança de execução |
-| JNS-012 | P2 | Governança adaptativa + learning loop contínuo | PM + Architect | Evolução contínua do super agente |
+O **Janus** é um sistema agêntico avançado projetado para atuar como um arquiteto de software autônomo e assistente inteligente. Ele combina o poder de múltiplos modelos de linguagem (LLMs) com memória de longo prazo (vetorial e semântica) e capacidade de execução de ferramentas para auxiliar no desenvolvimento de software e tomada de decisões.
 
 ---
 
-_Project documentation maintained in `docs/` folder._
+## 📚 Documentação Oficial
+
+A documentação completa do projeto foi atualizada e está disponível na pasta `docs/`. Recomendamos a leitura na seguinte ordem:
+
+1.  **[Manual de Arquitetura](docs/MANUAL_ARQUITETURA.md)**: Entenda como o sistema funciona por dentro (Frontend, Backend, Workers, Memória).
+2.  **[Manual de Operação e Instalação](docs/MANUAL_OPERACAO.md)**: Guia passo-a-passo para rodar o projeto (Docker e Local).
+3.  **[Melhorias Possíveis e Análise Crítica](melhorias-possiveis.md)**: Uma visão honesta sobre o estado atual do código, débitos técnicos e oportunidades de evolução.
+
+Além destes, a pasta `docs/` contém documentos gerados automaticamente (BMAD) que podem servir de referência adicional.
+
+---
+
+## 🚀 Funcionalidades Principais
+
+*   **Agentes Especializados**: Orquestrador, Gerador de Código, Curador de Conhecimento, Auditor de Segurança e mais.
+*   **Memória Bicameral**:
+    *   **Episódica (Rápida)**: Busca vetorial (Qdrant) em logs de chat.
+    *   **Semântica (Profunda)**: Grafo de conhecimento (Neo4j) construído automaticamente a partir das conversas.
+*   **RAG Híbrido**: Recuperação Aumentada por Geração combinando busca vetorial e grafo para respostas precisas.
+*   **Autonomia (OODA Loop)**: Capacidade de planejar e executar tarefas complexas em background (via RabbitMQ).
+*   **Interface Moderna**: Frontend em Angular 20 com streaming real-time (SSE) e observabilidade integrada.
+
+---
+
+## 🛠️ Stack Tecnológico
+
+O projeto é um **Monorepo** dividido em:
+
+### Frontend (`front/`)
+*   **Framework**: Angular 20
+*   **Estilo**: TailwindCSS + Angular Material
+*   **Estado**: Signals + RxJS
+*   **Comunicação**: Server-Sent Events (SSE)
+
+### Backend (`janus/`)
+*   **API**: FastAPI (Python 3.11+)
+*   **IA**: LangChain, LangGraph
+*   **Infraestrutura**:
+    *   **PostgreSQL**: Dados relacionais.
+    *   **RabbitMQ**: Mensageria e filas de tarefas.
+    *   **Redis**: Cache e Rate Limiting.
+    *   **Neo4j**: Knowledge Graph.
+    *   **Qdrant**: Vector Database.
+    *   **Prometheus/Grafana**: Monitoramento.
+
+---
+
+## ⚡ Como Começar (Rápido)
+
+Para rodar o sistema completo em containers:
+
+1.  **Clone o repositório**:
+    ```bash
+    git clone https://github.com/seu-usuario/janus-completo.git
+    cd janus-completo
+    ```
+
+2.  **Configure as Chaves de API**:
+    Edite `janus/app/.env` e adicione sua `OPENAI_API_KEY` (ou outro provedor).
+
+3.  **Suba o Ambiente**:
+    ```bash
+    docker compose up -d
+    ```
+
+4.  **Acesse**:
+    *   **Frontend**: http://localhost:4200
+    *   **API Docs**: http://localhost:8000/docs
+    *   **Grafana**: http://localhost:3000
+
+Para mais detalhes, consulte o **[Manual de Operação](docs/MANUAL_OPERACAO.md)**.
+
+---
+
+## 🤝 Contribuição
+
+Contribuições são bem-vindas! Consulte o `docs/MANUAL_ARQUITETURA.md` para entender onde suas mudanças se encaixam.
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT.
