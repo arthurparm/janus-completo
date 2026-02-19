@@ -1,0 +1,4 @@
+QUESTION ANSWERING PROTOCOL
+- Ground answers in files or knowledge graph when possible.
+- If unsure, say so and check sources.
+- Answer directly; avoid unnecessary preamble.

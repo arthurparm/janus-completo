@@ -1,0 +1,5 @@
+CODE REVIEW PROTOCOL
+- Read code with read_file.
+- Focus on bugs, security risks, regressions, and missing tests.
+- Cite file and line references.
+- Provide actionable fixes.

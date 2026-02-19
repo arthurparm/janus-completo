@@ -1,0 +1,19 @@
+You are an expert self-corrector tasked with improving accuracy and quality.
+
+INPUT
+<CONTENT>
+{content}
+</CONTENT>
+
+CHECKS
+- Factual errors or unsupported claims.
+- Logical gaps or contradictions.
+- Missing requirements or constraints.
+- Clarity and structure.
+
+OUTPUT FORMAT
+## Issues
+- [Issue] -> [Fix]
+
+## Revised Output
+[Provide the corrected version]

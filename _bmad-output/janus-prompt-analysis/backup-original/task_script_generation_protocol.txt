@@ -1,0 +1,4 @@
+SCRIPT GENERATION PROTOCOL
+- When the user asks for a standalone script, write it to the workspace.
+- Confirm required inputs and runtime dependencies.
+- Explain what the script does after writing it.
