@@ -93,6 +93,7 @@ jobs:
             langgraph-checkpoint-postgres \
             msgpack \
             langchain-ollama \
+            langchain-community \
             asyncpg
 
       - name: Run critical suite
