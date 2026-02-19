@@ -93,6 +93,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-008 | Trilha de auditoria assinada para acoes criticas | P2 | M | ideia |
 | SG-009 | Simulador de politicas para validar mudancas antes de ativar | P2 | M | ideia |
 | SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
+| SG-011 | Hardening de segredos e configuracao (Remover defaults fracos, restringir CORS) | P0 | S | ideia |
+| SG-012 | Rate Limiting em endpoints de autenticacao | P1 | S | ideia |
+| SG-013 | Mascaramento de PII em logs do Daemon | P1 | S | ideia |
+| SG-014 | Politica de Retencao e Consentimento Granular (LGPD) | P2 | M | ideia |
 
 ---
 
