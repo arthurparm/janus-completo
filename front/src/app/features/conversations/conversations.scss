@@ -4,35 +4,35 @@
 .conversations {
   position: relative;
   min-height: calc(100vh - 64px);
-  padding-bottom: 80px;
+  padding-bottom: 96px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: clamp(20px, 2vw, 32px);
 }
 
 .convo-shell {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 40px) 0;
+  gap: clamp(22px, 2.4vw, 38px);
+  padding: clamp(20px, 2.3vw, 48px) clamp(18px, 3.8vw, 84px) 0;
 }
 
 .convo-hero {
   display: flex;
-  gap: 24px;
+  gap: clamp(18px, 2vw, 32px);
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
 }
 
 .hero-copy {
-  max-width: 640px;
+  max-width: 78ch;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .eyebrow {
@@ -56,22 +56,22 @@
 
 .convo-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2.2fr) minmax(240px, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(280px, 18%) minmax(0, 1fr) minmax(320px, 24%);
+  gap: clamp(16px, 1.8vw, 30px);
   align-items: start;
 }
 
 .convo-grid.simple {
-  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2.2fr);
+  grid-template-columns: minmax(280px, 22%) minmax(0, 1fr);
 }
 
 .convo-panel {
   @include glass-panel;
   border-radius: var(--janus-radius-lg);
-  padding: 18px 20px;
+  padding: clamp(16px, 1.4vw, 26px) clamp(16px, 1.5vw, 28px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: clamp(14px, 1.2vw, 20px);
   position: relative;
   overflow: hidden;
 }
@@ -100,8 +100,7 @@
 }
 
 .convo-list {
-  min-height: 480px;
-  max-height: 760px;
+  min-height: clamp(520px, 68vh, 920px);
 }
 
 .search-row {
@@ -136,7 +135,7 @@
   position: relative;
   z-index: 1;
   overflow-y: auto;
-  max-height: 620px;
+  max-height: calc(100vh - 320px);
   padding-right: 4px;
 }
 
@@ -226,7 +225,7 @@
 }
 
 .convo-main {
-  min-height: 640px;
+  min-height: clamp(640px, 76vh, 980px);
 }
 
 .chat-head {
@@ -268,16 +267,17 @@
   z-index: 1;
   background: rgba(var(--janus-bg-dark-rgb), 0.2);
   border-radius: $radius-md;
-  padding: 16px;
+  padding: clamp(14px, 1.2vw, 24px);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  max-height: min(58vh, 680px);
+  min-height: clamp(420px, 56vh, 760px);
+  max-height: clamp(520px, 66vh, 980px);
   overflow-y: auto;
 }
 
 .message-feed {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: clamp(14px, 1.2vw, 22px);
 }
 
 .message {
@@ -336,12 +336,20 @@
 
 .bubble {
   border-radius: 18px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-width: min(680px, 100%);
+  gap: 11px;
+}
+
+.message.assistant .bubble,
+.message.system .bubble {
+  max-width: min(92%, clamp(760px, 56vw, 1120px));
+}
+
+.message.user .bubble {
+  max-width: min(86%, clamp(620px, 48vw, 900px));
 }
 
 .message.user .bubble {
@@ -618,6 +626,9 @@
 
 .convo-rail {
   gap: 18px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .explain-card {
@@ -719,7 +730,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 300px;
+  max-height: min(32vh, 420px);
   overflow-y: auto;
   border-left: 2px solid var(--border-subtle);
   padding-left: 0.75rem;
@@ -771,7 +782,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 300px;
+  max-height: min(34vh, 440px);
   overflow-y: auto;
 }
 
@@ -844,6 +855,10 @@
 }
 
 @media (max-width: 1200px) {
+  .convo-shell {
+    padding-inline: clamp(16px, 3vw, 32px);
+  }
+
   .convo-grid {
     grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
   }
@@ -854,10 +869,25 @@
 
   .convo-rail {
     grid-column: span 2;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .convo-list {
+    min-height: 420px;
+  }
+
+  .convo-main {
+    min-height: 0;
   }
 }
 
 @media (max-width: 900px) {
+  .convo-shell {
+    padding-inline: clamp(14px, 4vw, 24px);
+  }
+
   .convo-grid {
     grid-template-columns: 1fr;
   }
@@ -871,7 +901,14 @@
   }
 
   .chat-body {
+    min-height: 320px;
     max-height: 52vh;
+  }
+
+  .convo-rail {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .conversation-trigger {
@@ -893,5 +930,36 @@
   .composer-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .message.assistant .bubble,
+  .message.system .bubble,
+  .message.user .bubble {
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 1800px) {
+  .convo-shell {
+    padding-inline: clamp(36px, 3.8vw, 120px);
+  }
+
+  .convo-grid {
+    grid-template-columns: minmax(320px, 17%) minmax(0, 1fr) minmax(360px, 22%);
+    gap: clamp(22px, 1.8vw, 40px);
+  }
+
+  .convo-grid.simple {
+    grid-template-columns: minmax(320px, 19%) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 2400px) {
+  .convo-shell {
+    padding-inline: clamp(52px, 4.6vw, 180px);
+  }
+
+  .convo-grid {
+    grid-template-columns: minmax(340px, 16%) minmax(0, 1fr) minmax(380px, 20%);
   }
 }

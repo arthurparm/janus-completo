@@ -209,16 +209,16 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 **Valor:** Visibilidade completa do sistema operacional sem depender de logs ou ferramentas externas.
 
-| ID | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
-|---|---|---|---|---|---|
-| FE1-001 | Dashboard de sistema único (status, health, services) | `/system/status`, `/system/health/services`, `/system/overview` | P0 | M | ideia |
-| FE1-002 | Visualização de traces distribuídos por request_id | `/observability/traces/*`, `/observability/spans/*` | P0 | M | ideia |
-| FE1-003 | Painel de métricas em tempo real (latência, throughput, errors) | `/observability/metrics/*` | P0 | M | ideia |
-| FE1-004 | Explorador de logs com filtros avançados | `/observability/logs/*` | P1 | M | ideia |
-| FE1-005 | Drill-down de pipeline completo por request (front→API→worker→DB) | Composição de múltiplos endpoints | P0 | L | ideia |
-| FE1-006 | Alertas configuráveis e SLO tracking visual | `/observability/alerts/*` (futuro) | P1 | M | ideia |
-| FE1-007 | Database validation e migration UI | `/system/db/validate`, `/system/db/migrate` | P1 | S | ideia |
-| FE1-008 | Health check detalhado com circuit breaker controls | `/knowledge/health/*` | P1 | S | ideia |
+|   ID    | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
+|---------|--------------------------------------------------------|---|---|---|---|
+| FE1-001 | Dashboard de sistema único (status, health, services)             | `/system/status`, `/system/health/services`, `/system/overview` | P0 | M | ideia |
+| FE1-002 | Visualização de traces distribuídos por request_id                | `/observability/traces/*`, `/observability/spans/*`             | P0 | M | ideia |
+| FE1-003 | Painel de métricas em tempo real (latência, throughput, errors)   | `/observability/metrics/*`                                      | P0 | M | ideia |
+| FE1-004 | Explorador de logs com filtros avançados                          | `/observability/logs/*`                                         | P1 | M | ideia |
+| FE1-005 | Drill-down de pipeline completo por request (front→API→worker→DB) | Composição de múltiplos endpoints                               | P0 | L | ideia |
+| FE1-006 | Alertas configuráveis e SLO tracking visual                       | `/observability/alerts/*` (futuro)                              | P1 | M | ideia |
+| FE1-007 | Database validation e migration UI                                | `/system/db/validate`, `/system/db/migrate`                     | P1 | S | ideia |
+| FE1-008 | Health check detalhado com circuit breaker controls               | `/knowledge/health/*`                                           | P1 | S | ideia |
 
 **Arquitetura sugerida:**
 - Dashboard tipo Grafana/Datadog simplificado
@@ -236,10 +236,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Funcionalidade | APIs Cobertos | Prioridade | Esforço | Status |
 |---|---|---|---|---|---|
-| FE2-001 | Visualização interativa do grafo (nós + relacionamentos) | `/knowledge/stats`, `/knowledge/node-types`, `/knowledge/entities` | P0 | L | ideia |
-| FE2-002 | Navegação drill-down de entidades (click → expand relationships) | `/knowledge/entity/{name}/relationships` | P0 | M | ideia |
-| FE2-003 | Interface de consulta com NLQ (Natural Language Query) | `/knowledge/query`, `/knowledge/query/code` | P0 | M | ideia |
-| FE2-004 | Busca de conceitos relacionados com visualização de clusters | `/knowledge/concepts/related` | P1 | M | ideia |
+| FE2-001 | Visualização interativa do grafo (nós + relacionamentos)                    | `/knowledge/stats`, `/knowledge/node-types`, `/knowledge/entities` | P0 | L | ideia |
+| FE2-002 | Navegação drill-down de entidades (click → expand relationships)            | `/knowledge/entity/{name}/relationships` | P0 | M | ideia |
+| FE2-003 | Interface de consulta com NLQ (Natural Language Query)                      | `/knowledge/query`, `/knowledge/query/code` | P0 | M | ideia |
+| FE2-004 | Busca de conceitos relacionados com visualização de clusters                | `/knowledge/concepts/related` | P1 | M | ideia |
 | FE2-005 | Explorador de code analysis (funções que chamam X, arquivos que importam Y) | `/knowledge/functions/calling`, `/knowledge/files/importing` | P1 | M | ideia |
 | FE2-006 | Quarantine management com promoção visual de sugestões | `/knowledge/quarantine/*` | P1 | S | parcial |
 | FE2-007 | Indexação manual com progresso visual | `/knowledge/index`, `/knowledge/concepts/reindex` | P1 | S | ideia |
