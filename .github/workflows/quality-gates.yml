@@ -90,7 +90,11 @@ jobs:
             langchain \
             langchain-core \
             langgraph \
-            langgraph-checkpoint-postgres
+            langgraph-checkpoint-postgres \
+            msgpack \
+            langchain-ollama \
+            langchain-community \
+            asyncpg
 
       - name: Run critical suite
         env:

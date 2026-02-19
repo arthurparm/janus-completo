@@ -76,6 +76,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | AG-008 | Modo "aprender com feedback humano" por acao aprovada/rejeitada | P1 | M | ideia |
 | AG-009 | Controle de custo por objetivo e abort por budget | P1 | S | parcial |
 | AG-010 | Recomendador de proxima melhor acao com score esperado | P2 | M | ideia |
+| AG-011 | Refatorar ChatService (Backend) para modularidade e SRP | P1 | M | ideia |
 
 ---
 
@@ -93,6 +94,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-008 | Trilha de auditoria assinada para acoes criticas | P2 | M | ideia |
 | SG-009 | Simulador de politicas para validar mudancas antes de ativar | P2 | M | ideia |
 | SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
+| SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | ideia |
+| SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | ideia |
 
 ---
 
@@ -165,6 +168,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | planejado |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
 
 ---
 
@@ -277,6 +281,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | FE3-012 | Context manager visual (memória curta/longa, evictions) | `/context/*` | P2 | M | ideia |
 | FE3-013 | Reflexion viewer (self-critique, improvements) | `/reflexion/*` | P2 | S | ideia |
 | FE3-014 | Sandbox playground para testar ferramentas | `/sandbox/*` | P2 | S | ideia |
+| FE3-015 | Refatorar JanusApiService para micro-serviços (SRP) | N/A | P1 | M | ideia |
 
 **Arquitetura sugerida:**
 - Layout tipo "plataforma unificada" (sidebar + múltiplas views)
