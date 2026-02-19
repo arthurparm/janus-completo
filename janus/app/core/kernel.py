@@ -277,6 +277,12 @@ class Kernel:
             except Exception as e:
                 logger.error(f"Error stopping scheduler: {e}")
 
+        # Close SQL engines
+        try:
+            await db.shutdown()
+        except Exception as e:
+            logger.warning("Error closing database engines during shutdown", exc_info=e)
+
         # Close Infra
         await asyncio.gather(
             close_graph_db(), close_memory_db(), close_broker(), return_exceptions=True

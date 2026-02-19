@@ -229,6 +229,37 @@ RELATION_SYNONYMS: dict[str, RelationType] = {
     "uses_model": RelationType.HAS_MODEL,
 }
 
+# Mapeamentos orientados por logs para manter o grafo mais estruturado
+# e reduzir o fallback genérico em RELATES_TO.
+LOG_RELATION_TOPIC_SYNONYMS: dict[str, RelationType] = {
+    # Classificação e metadados
+    "has_improvement_type": RelationType.HAS_PROPERTY,
+    "has_type": RelationType.HAS_PROPERTY,
+    "has_none": RelationType.HAS_PROPERTY,
+    "describes": RelationType.HAS_PROPERTY,
+    "prioritizes": RelationType.HAS_PROPERTY,
+    "is_type_of": RelationType.IS_A,
+    # Alvo/aplicação de ação
+    "targets": RelationType.APPLIED_TO,
+    "targeted": RelationType.APPLIED_TO,
+    "applied_improvement": RelationType.APPLIED_TO,
+    # Proveniência/causa
+    "failed_on": RelationType.CAUSED_BY,
+    "originated": RelationType.CAUSED_BY,
+    "originates": RelationType.CAUSED_BY,
+    "originated_from": RelationType.CAUSED_BY,
+    "originates_from": RelationType.CAUSED_BY,
+    "provided_by": RelationType.CAUSED_BY,
+    # Resultado e composição
+    "provides": RelationType.RETURNS,
+    "contains_data_for": RelationType.CONTAINS,
+    "located_in": RelationType.PART_OF,
+    # Ações de engenharia / interação
+    "refactors": RelationType.SOLVES,
+    "queried_for": RelationType.USES,
+    "sent": RelationType.INTERACTS_WITH,
+}
+
 ENTITY_PROPERTY_SYNONYMS: dict[str, dict[str, list[str]]] = {
     EntityType.TOOL.value: {
         "description": ["descricao", "descrição"],
@@ -407,6 +438,14 @@ class GraphGuardian:
         """
         if not type_str:
             return None
+
+        normalized = type_str.strip().lower().replace(" ", "_").replace("-", "_")
+
+        # Stage 0: mapeamentos determinísticos (sinônimos e tópicos observados em log)
+        if normalized in LOG_RELATION_TOPIC_SYNONYMS:
+            return LOG_RELATION_TOPIC_SYNONYMS[normalized]
+        if normalized in RELATION_SYNONYMS:
+            return RELATION_SYNONYMS[normalized]
 
         # Tenta match semântico (cobre enum, sinônimos e fuzzy logic)
         matched_enum, score = match_semantic_relation(type_str)

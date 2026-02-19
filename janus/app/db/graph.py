@@ -481,9 +481,23 @@ class GraphDatabase:
     @resilient(
         operation_name="neo4j_execute",
         circuit_breaker=_DB_CB,
-        max_attempts=int(getattr(settings, "LLM_RETRY_MAX_ATTEMPTS", 3) or 3),
-        initial_backoff=float(getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5) or 0.5),
-        max_backoff=float(getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0) or 5.0),
+        max_attempts=int(getattr(settings, "NEO4J_EXECUTE_MAX_ATTEMPTS", 1) or 1),
+        initial_backoff=float(
+            getattr(
+                settings,
+                "NEO4J_EXECUTE_INITIAL_BACKOFF_SECONDS",
+                getattr(settings, "LLM_RETRY_INITIAL_BACKOFF_SECONDS", 0.5),
+            )
+            or 0.5
+        ),
+        max_backoff=float(
+            getattr(
+                settings,
+                "NEO4J_EXECUTE_MAX_BACKOFF_SECONDS",
+                getattr(settings, "LLM_RETRY_MAX_BACKOFF_SECONDS", 5.0),
+            )
+            or 5.0
+        ),
     )
     async def execute(self, cypher_query: str, params: dict = None, operation: str | None = None):
         op = operation or "execute"

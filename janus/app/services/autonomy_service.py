@@ -479,7 +479,7 @@ class AutonomyService:
                             error_msg = f"Primary and Fallback failed. Last error: {e!s}"
 
             # Dynamic Replanning
-            if step_success and critical:
+            if step_success and critical and current_goal and self._llm_service:
                 try:
                     from app.core.autonomy.planner import verify_outcome
 
@@ -489,7 +489,7 @@ class AutonomyService:
                         result if "result" in locals() else None,
                         None,
                         self._llm_service,
-                    )  # type: ignore
+                    )
                     if not verification.get("success", True):
                         logger.warning(
                             f"[AutonomyLoop] Verificação semântica falhou: {verification.get('reason')}"
@@ -508,15 +508,24 @@ class AutonomyService:
                 )
                 rt.append_log("Falha crítica. Replanejando...", "warning")
 
+                if not current_goal or not self._llm_service:
+                    logger.warning(
+                        "[AutonomyLoop] Meta ou LLM ausente; não é possível replanejar."
+                    )
+                    break
+
+                goal_for_replan = current_goal
+                llm_for_replan = self._llm_service
+
                 try:
                     from app.core.autonomy.planner import replan_goal
 
                     replan_decision = await replan_goal(
-                        goal=current_goal,  # type: ignore
+                        goal=goal_for_replan,
                         failed_step=step,
                         error_msg=str(error_msg),
                         remaining_steps=plan[step_idx + 1 :],
-                        llm_service=self._llm_service,  # type: ignore
+                        llm_service=llm_for_replan,
                         policy=self._policy,
                     )
 
@@ -547,7 +556,9 @@ class AutonomyService:
                         rt.append_log("Replanejador abortou a meta.", "error")
                         break
                 except Exception as e_replan:
-                    logger.error("Erro crítico no sistema de Replanejamento", exc_info=e_replan)
+                    logger.error(
+                        "Erro crítico no sistema de Replanejamento", exc_info=e_replan
+                    )
                     break
 
                 break

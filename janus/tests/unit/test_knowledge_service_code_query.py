@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from app.services.knowledge_service import KnowledgeService
 

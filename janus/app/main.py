@@ -164,8 +164,8 @@ async def lifespan(app: FastAPI):
                 task.cancel()
     except Exception as e:
         logger.warning("Failed to stop orchestrator workers on shutdown.", exc_info=e)
-    await close_graph()
-    await kernel.shutdown()
+    await asyncio.shield(close_graph())
+    await asyncio.shield(kernel.shutdown())
     logger.info("Application shutdown complete.")
 
 

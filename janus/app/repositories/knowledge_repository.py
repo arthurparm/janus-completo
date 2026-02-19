@@ -145,30 +145,72 @@ class KnowledgeRepository:
     async def bulk_merge_calls(self, calls: list[dict[str, Any]]):
         if not calls:
             return
+        # Deduplicate semantic duplicates to reduce write pressure during indexing.
+        deduped_calls = self._dedupe_calls(calls)
+
         query = f"""UNWIND $calls as call
                      MATCH (caller:{GraphLabel.FUNCTION.value} {{file_path: call.file_path}})
                      WHERE (call.caller_qualified IS NOT NULL AND caller.full_name = call.file_path + "::" + call.caller_qualified)
                         OR caller.name = call.caller_name
-                     WITH caller, call
+                     WITH call, head(collect(caller)) as caller
+                     WHERE caller IS NOT NULL
                      OPTIONAL MATCH (callee_same_full:{GraphLabel.FUNCTION.value} {{file_path: call.file_path}})
                      WHERE call.callee_qualified IS NOT NULL
                        AND callee_same_full.full_name = call.file_path + "::" + call.callee_qualified
-                     WITH caller, call, head(collect(callee_same_full)) as callee_same_full
+                     WITH call, caller, head(collect(callee_same_full)) as callee_same_full
                      OPTIONAL MATCH (callee_same_name:{GraphLabel.FUNCTION.value} {{name: call.callee_name, file_path: call.file_path}})
-                     WITH caller, call, callee_same_full, head(collect(callee_same_name)) as callee_same_name
-                     OPTIONAL MATCH (callee_any_full:{GraphLabel.FUNCTION.value})
-                     WHERE call.callee_qualified IS NOT NULL
-                       AND callee_any_full.full_name ENDS WITH ("::" + call.callee_qualified)
-                     WITH caller, call, callee_same_full, callee_same_name, head(collect(callee_any_full)) as callee_any_full
+                     WITH call, caller, callee_same_full, head(collect(callee_same_name)) as callee_same_name
                      OPTIONAL MATCH (callee_any_name:{GraphLabel.FUNCTION.value} {{name: call.callee_name}})
-                     WITH caller, coalesce(callee_same_full, callee_same_name, callee_any_full, head(collect(callee_any_name))) as callee
+                     WITH caller, callee_same_full, callee_same_name, head(collect(callee_any_name)) as callee_any_name
+                     WITH caller, coalesce(callee_same_full, callee_same_name, callee_any_name) as callee
                      WHERE callee IS NOT NULL
                      MERGE (caller)-[r:`{GraphRelationship.CALLS.value}`]->(callee)"""
-        await self._db.execute(query, {"calls": calls}, operation="repo_bulk_merge_calls")
+
+        base_batch_size = 100
+        index = 0
+        while index < len(deduped_calls):
+            batch_size = min(base_batch_size, len(deduped_calls) - index)
+            while True:
+                batch = deduped_calls[index : index + batch_size]
+                try:
+                    await self._db.execute(query, {"calls": batch}, operation="repo_bulk_merge_calls")
+                    index += batch_size
+                    break
+                except TimeoutError:
+                    if batch_size == 1:
+                        raise
+                    reduced = max(1, batch_size // 2)
+                    logger.warning(
+                        "bulk_merge_calls_timeout_retry_smaller_batch",
+                        attempted_batch_size=batch_size,
+                        next_batch_size=reduced,
+                        processed=index,
+                        total=len(deduped_calls),
+                    )
+                    batch_size = reduced
         try:
-            record_audit_event_direct({"action": "bulk_merge_calls", "count": len(calls)})
+            record_audit_event_direct(
+                {"action": "bulk_merge_calls", "count": len(calls), "deduped_count": len(deduped_calls)}
+            )
         except Exception:
             pass
+
+    @staticmethod
+    def _dedupe_calls(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for call in calls:
+            file_path = str(call.get("file_path") or "").strip()
+            caller = str(call.get("caller_qualified") or call.get("caller_name") or "").strip()
+            callee = str(call.get("callee_qualified") or call.get("callee_name") or "").strip()
+            if not file_path or not caller or not callee:
+                continue
+            key = (file_path, caller, callee)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(call)
+        return deduped
 
     async def dedupe_functions_and_classes(self) -> dict[str, int]:
         """Deduplica nÃ³s Function/Class mantendo relacionamentos chave."""

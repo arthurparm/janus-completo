@@ -38,7 +38,13 @@ class RedisUsageTracker:
                 return 0.0
             return float(raw)
         except Exception as e:
-            logger.error(f"Failed to get provider spend for {provider}: {e}", exc_info=True)
+            if _is_event_loop_runtime_error(e):
+                logger.warning(
+                    "Provider spend read skipped due to event-loop mismatch",
+                    extra={"provider": provider},
+                )
+            else:
+                logger.error(f"Failed to get provider spend for {provider}: {e}", exc_info=True)
             return 0.0
 
     async def increment_provider_spend(self, provider: str, cost_usd: float) -> float:
@@ -72,7 +78,13 @@ class RedisUsageTracker:
                 return 0.0
             return float(raw)
         except Exception as e:
-            logger.error(f"Failed to get tenant spend for {kind}:{id_}: {e}", exc_info=True)
+            if _is_event_loop_runtime_error(e):
+                logger.warning(
+                    "Tenant spend read skipped due to event-loop mismatch",
+                    extra={"kind": kind, "id": id_},
+                )
+            else:
+                logger.error(f"Failed to get tenant spend for {kind}:{id_}: {e}", exc_info=True)
             return 0.0
 
     async def increment_tenant_spend(

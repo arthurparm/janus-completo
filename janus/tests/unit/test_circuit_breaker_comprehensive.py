@@ -185,6 +185,32 @@ class TestCircuitBreakerWithCircuitBreaker:
         assert call_count == 3
         assert cb.failure_count == 0  # Should not count as circuit breaker failure
 
+    @pytest.mark.asyncio
+    async def test_operation_name_is_propagated_to_circuit_breaker_errors(self):
+        """CircuitOpenError should expose configured operation_name, not wrapper internals."""
+        from app.core.infrastructure.resilience import resilient
+
+        cb = CircuitBreaker(failure_threshold=1, recovery_timeout=30)
+        cb.state = CircuitBreakerState.OPEN
+        cb.failure_count = 1
+
+        async def mock_function():
+            return "should_not_execute"
+
+        decorated_func = resilient(
+            max_attempts=2,
+            initial_backoff=0.01,
+            circuit_breaker=cb,
+            operation_name="neo4j_query",
+        )(mock_function)
+
+        with pytest.raises(CircuitOpenError) as exc_info:
+            await decorated_func()
+
+        msg = str(exc_info.value)
+        assert "neo4j_query" in msg
+        assert "protected_call" not in msg
+
 
 class TestCircuitBreakerMonitoring:
     """Test circuit breaker monitoring and alerting."""

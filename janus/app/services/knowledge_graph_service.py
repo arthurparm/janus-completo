@@ -4,6 +4,7 @@ from typing import Any
 from datetime import datetime
 
 from app.db.graph import get_graph_db
+from app.core.infrastructure.resilience import CircuitOpenError
 from app.core.memory.graph_guardian import graph_guardian
 from app.models.schemas import EntityType, RelationType, KnowledgeEntity, KnowledgeRelationship, Experience
 
@@ -99,7 +100,7 @@ class KnowledgeGraphService:
         # O LLM pode retornar IDs arbitrários. Precisamos normalizar.
 
         # 1. Persistir Entidades
-        for ent in entities:
+        for idx, ent in enumerate(entities):
             try:
                 # Normalização e Validação
                 name = ent.get("name", "").strip()
@@ -145,11 +146,18 @@ class KnowledgeGraphService:
 
                 created_entities_count += 1
 
+            except CircuitOpenError as e:
+                remaining = max(0, len(entities) - idx)
+                logger.warning(
+                    "Circuit breaker aberto durante persistencia de entidades; "
+                    f"abortando lote (restantes={remaining}): {e}"
+                )
+                break
             except Exception as e:
                 logger.error(f"Erro ao persistir entidade '{ent.get('name')}': {e}", exc_info=True)
 
         # 2. Persistir Relacionamentos
-        for rel in relationships:
+        for idx, rel in enumerate(relationships):
             try:
                 source_name = rel.get("source", "").strip()
                 target_name = rel.get("target", "").strip()
@@ -201,6 +209,13 @@ class KnowledgeGraphService:
                         f"Relacionamento ignorado (nós não encontrados): {source_name} -> {target_name}"
                     )
 
+            except CircuitOpenError as e:
+                remaining = max(0, len(relationships) - idx)
+                logger.warning(
+                    "Circuit breaker aberto durante persistencia de relacionamentos; "
+                    f"abortando lote (restantes={remaining}): {e}"
+                )
+                break
             except Exception as e:
                 logger.error(f"Erro ao persistir relacionamento: {e}", exc_info=True)
 

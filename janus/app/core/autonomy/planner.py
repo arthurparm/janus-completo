@@ -15,6 +15,12 @@ from app.core.agents.utils import parse_json_strict
 logger = structlog.get_logger(__name__)
 
 
+def _goal_title(goal: Goal | None) -> str:
+    if goal and goal.title:
+        return goal.title
+    return "No active goal"
+
+
 def _list_allowed_tools(policy: PolicyEngine | None) -> list[str]:
     try:
         names = list(action_registry._tools.keys())
@@ -232,14 +238,14 @@ async def build_plan_for_goal(
 
 # === Stage 4: REPLANNING (Runtime) ===
 async def _build_replanning_prompt(
-    goal: Goal,
+    goal: Goal | None,
     failed_step: dict[str, Any],
     error_msg: str,
     remaining_steps: list[dict[str, Any]],
     tools: list[str],
 ) -> str:
     ctx = {
-        "goal": goal.title,
+        "goal": _goal_title(goal),
         "failed_step": failed_step,
         "error": error_msg,
         "remaining_steps_count": len(remaining_steps),
@@ -253,7 +259,7 @@ async def _build_replanning_prompt(
 
 
 async def replan_goal(
-    goal: Goal,
+    goal: Goal | None,
     failed_step: dict[str, Any],
     error_msg: str,
     remaining_steps: list[dict[str, Any]],
@@ -264,6 +270,10 @@ async def replan_goal(
     Acionado quando um passo falha em tempo de execução (após retries).
     Decide dinamicamente o que fazer.
     """
+    if goal is None:
+        logger.warning("Replanejamento solicitado sem meta ativa; abortando por seguranca")
+        return {"action": "ABORT", "reason": "missing_goal"}
+
     tools = _list_allowed_tools(policy)
     prompt = await _build_replanning_prompt(goal, failed_step, error_msg, remaining_steps, tools)
 
@@ -290,10 +300,10 @@ async def replan_goal(
 
 # === Stage 5: OUTCOME VERIFICATION (Judge) ===
 async def _build_verification_prompt(
-    goal: Goal, step: dict[str, Any], result: str, error: str | None
+    goal: Goal | None, step: dict[str, Any], result: str, error: str | None
 ) -> str:
     ctx = {
-        "goal": goal.title,
+        "goal": _goal_title(goal),
         "step_tool": step.get("tool"),
         "step_args": step.get("args"),
         "result_preview": result[:1000] if result else "None",
@@ -306,7 +316,7 @@ async def _build_verification_prompt(
 
 
 async def verify_outcome(
-    goal: Goal,
+    goal: Goal | None,
     step: dict[str, Any],
     result: Any,
     error: str | None,
@@ -317,6 +327,9 @@ async def verify_outcome(
     Retorna {"success": bool, "reason": str}
     """
     try:
+        if goal is None:
+            return {"success": False, "reason": "Missing active goal"}
+
         # Se houve erro técnico explícito, nem chama LLM, já é falha.
         if error:
             return {"success": False, "reason": f"System Error: {error}"}

@@ -25,6 +25,7 @@ class RedisManager:
 
     def __init__(self):
         self._client: redis.Redis | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
     @classmethod
     def get_instance(cls) -> "RedisManager":
@@ -50,7 +51,7 @@ class RedisManager:
         )
 
         try:
-            # Usando from_url com pooling e retry config
+            self._event_loop = asyncio.get_running_loop()
             self._client = redis.Redis.from_url(
                 url,
                 encoding="utf-8",
@@ -59,7 +60,7 @@ class RedisManager:
                 retry_on_error=[ConnectionError, TimeoutError, ConnectionRefusedError],
                 health_check_interval=30,
             )
-            
+
             # Fail-fast ping check
             await self._client.ping()
             logger.info("Redis connection established successfully.")
@@ -74,6 +75,8 @@ class RedisManager:
         """Fecha o pool de conexões."""
         if self._client:
             await self._client.aclose()
+            self._client = None
+            self._event_loop = None
             logger.info("Redis connection closed.")
 
     @property
@@ -82,6 +85,11 @@ class RedisManager:
         if self._client is None:
             raise RuntimeError("RedisManager not initialized or Redis disabled.")
         return self._client
+
+    @property
+    def event_loop(self) -> asyncio.AbstractEventLoop | None:
+        """Loop em que o cliente Redis foi inicializado."""
+        return self._event_loop
 
     async def ping(self) -> bool:
         """Verifica saúde da conexão."""
@@ -105,7 +113,7 @@ class RedisManager:
         except Exception as e:
             logger.warning(f"Redis set failed for {key}: {e}")
             return False
-            
+
     async def publish(self, channel: str, message: str) -> int:
         try:
             return await self.client.publish(channel, message)
@@ -117,7 +125,7 @@ class RedisManager:
     async def pubsub(self) -> AsyncGenerator[redis.client.PubSub, None]:
         """Context manager para pubsub."""
         if not self._client:
-             raise RuntimeError("Redis not initialized")
+            raise RuntimeError("Redis not initialized")
         ps = self._client.pubsub()
         try:
             yield ps
@@ -127,17 +135,21 @@ class RedisManager:
     async def get_client(self) -> redis.Redis:
         """Retorna o cliente raw de forma assíncrona (compatibilidade)."""
         if self._client is None:
-             raise RuntimeError("RedisManager not initialized or Redis disabled.")
+            raise RuntimeError("RedisManager not initialized or Redis disabled.")
         return self._client
+
 
 # Singleton global accessor
 redis_manager = RedisManager.get_instance()
+
 
 def get_redis_manager() -> RedisManager:
     """Dependency accessor for RedisManager singleton."""
     return RedisManager.get_instance()
 
+
 async def get_redis() -> AsyncGenerator[redis.Redis, None]:
     """Dependency for FastAPI"""
     if redis_manager.client:
         yield redis_manager.client
+

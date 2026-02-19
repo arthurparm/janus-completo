@@ -154,8 +154,19 @@ class LLMClient:
         import concurrent.futures
 
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
+            # Thread sem loop: executa a coro no loop principal do Redis quando disponível
+            # para evitar uso de conexões async em event loops diferentes.
+            try:
+                from app.core.infrastructure.redis_manager import get_redis_manager
+
+                bridge_loop = get_redis_manager().event_loop
+            except Exception:
+                bridge_loop = None
+
+            if bridge_loop and bridge_loop.is_running():
+                return asyncio.run_coroutine_threadsafe(coro, bridge_loop).result()
             return asyncio.run(coro)
         # Loop já está em execução: executa em um thread separado para evitar nested loop.
         def _runner():

@@ -316,6 +316,16 @@ def _run_async(coro):
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
+        # Thread sem loop: usa o loop onde o Redis foi inicializado, quando disponível.
+        try:
+            from app.core.infrastructure.redis_manager import get_redis_manager
+
+            bridge_loop = get_redis_manager().event_loop
+        except Exception:
+            bridge_loop = None
+
+        if bridge_loop and bridge_loop.is_running():
+            return asyncio.run_coroutine_threadsafe(coro, bridge_loop).result()
         return asyncio.run(coro)
     loop.create_task(coro)
     return None

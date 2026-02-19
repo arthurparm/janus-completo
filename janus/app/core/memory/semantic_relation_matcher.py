@@ -52,6 +52,7 @@ class RelationType(str, Enum):
     INTERACTS_WITH = "INTERACTS_WITH"
     MENTIONS = "MENTIONS"
     APPLIED_TO = "APPLIED_TO"
+    HAS_MODEL = "HAS_MODEL"
 
 
 # Semantic groups - types that are conceptually similar
@@ -67,6 +68,7 @@ SEMANTIC_GROUPS = {
     "semantic_is": {"is_a", "is", "type_of", "kind_of", "instance_of"},
     "storage": {"caches", "stores", "persists", "saves", "keeps"},
     "interaction": {"interacts_with", "communicates_with", "talks_to", "connects_to"},
+    "modeling": {"has_model", "uses_model", "powered_by_model", "model_for"},
 }
 
 # Map each semantic group to its canonical RelationType
@@ -82,6 +84,7 @@ GROUP_TO_CANONICAL = {
     "semantic_is": RelationType.IS_A,
     "storage": RelationType.CACHES,
     "interaction": RelationType.INTERACTS_WITH,
+    "modeling": RelationType.HAS_MODEL,
 }
 
 

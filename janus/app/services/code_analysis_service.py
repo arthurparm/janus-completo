@@ -119,9 +119,10 @@ class CodeAnalysisService:
         """Lê e analisa um único arquivo Python, retornando o objeto parser."""
         logger.debug("Analisando arquivo Python", file_path=file_path)
         try:
-            with open(file_path, encoding="utf-8") as f:
+            # Supports UTF-8 with/without BOM to avoid SyntaxError on ast.parse.
+            with open(file_path, encoding="utf-8-sig") as f:
                 source_code = f.read()
-            tree = ast.parse(source_code)
+            tree = ast.parse(source_code, filename=file_path)
             parser = CodeParser(file_path)
             parser.visit(tree)
             return parser

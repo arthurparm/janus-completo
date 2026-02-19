@@ -479,7 +479,8 @@ def resilient(
                         return await func(*args, **kwargs)
 
                     def call():
-                        return circuit_breaker.call_async(protected_call)
+                        # Preserve configured operation_name in circuit breaker events/errors.
+                        return circuit_breaker.call_async(protected_call, operation=operation)
 
                 else:
 

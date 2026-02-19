@@ -2,9 +2,11 @@
 Configuração do banco de dados PostgreSQL para Configuration-as-Data.
 """
 
+import asyncio
 from collections.abc import Generator, AsyncGenerator
 from contextlib import contextmanager, asynccontextmanager
 
+import structlog
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,6 +15,8 @@ from sqlalchemy.pool import QueuePool
 from app.config import settings
 from app.models.config_models import Base
 import app.models  # noqa: F401  # Ensures all models are registered before create_all
+
+logger = structlog.get_logger(__name__)
 
 
 class PostgresDatabase:
@@ -102,6 +106,30 @@ class PostgresDatabase:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
 
+    async def shutdown(self):
+        """Finaliza engines/sessoes para evitar erros ruidosos no encerramento."""
+        async_engine = self._engine
+        sync_engine = self._sync_engine
+
+        self._engine = None
+        self._sync_engine = None
+        self._session_factory = None
+        self._sync_session_factory = None
+
+        if async_engine is not None:
+            try:
+                await asyncio.shield(async_engine.dispose())
+            except asyncio.CancelledError:
+                logger.warning("Database async engine dispose cancelled during shutdown")
+            except Exception as e:
+                logger.warning("Failed to dispose async database engine", exc_info=e)
+
+        if sync_engine is not None:
+            try:
+                sync_engine.dispose()
+            except Exception as e:
+                logger.warning("Failed to dispose sync database engine", exc_info=e)
+
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
         """
@@ -155,3 +183,8 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def init_database():
     """Inicializa o banco de dados PostgreSQL."""
     await postgres_db.create_tables()
+
+
+async def shutdown_database():
+    """Finaliza conexoes com o PostgreSQL de forma graciosa."""
+    await postgres_db.shutdown()
