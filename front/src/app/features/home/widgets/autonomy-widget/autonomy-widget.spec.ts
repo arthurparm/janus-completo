@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 
 import { AutonomyWidget } from './autonomy-widget';
 
@@ -8,7 +9,7 @@ describe('AutonomyWidget', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [AutonomyWidget]
+      imports: [AutonomyWidget, HttpClientTestingModule]
     })
     .compileComponents();
 
