@@ -94,7 +94,10 @@ jobs:
             msgpack \
             langchain-ollama \
             langchain-community \
-            asyncpg
+            asyncpg \
+            aio-pika \
+            redis \
+            neo4j
 
       - name: Run critical suite
         env:
