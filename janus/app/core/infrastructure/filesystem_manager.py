@@ -10,7 +10,13 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-APP_DIR = Path("/app").resolve()
+# Determine base directory dynamically to support CI/Test environments where /app is read-only or missing
+if Path("/app").exists() and os.access("/app", os.W_OK):
+    APP_DIR = Path("/app").resolve()
+else:
+    # Fallback to local directory (e.g. for CI or local dev)
+    APP_DIR = Path.cwd().resolve()
+
 WORKSPACE_DIR = (APP_DIR / "workspace").resolve()
 
 # Policies / guardrails
@@ -23,8 +29,15 @@ MAX_CONTENT_SIZE = 1_000_000  # 1MB
 MAX_LINE_COUNT = 10000  # Limite de linhas por arquivo
 
 # Metrics
-_FS_OPS = Counter("fs_ops_total", "Operações de FS", ["op", "outcome", "ext"])
-_FS_BYTES = Counter("fs_bytes_total", "Bytes escritos/lidos", ["op"])
+try:
+    _FS_OPS = Counter("fs_ops_total", "Operações de FS", ["op", "outcome", "ext"])
+    _FS_BYTES = Counter("fs_bytes_total", "Bytes escritos/lidos", ["op"])
+except ValueError:
+    # Handle duplicated timeseries error in tests due to re-imports
+    from prometheus_client import REGISTRY
+
+    _FS_OPS = REGISTRY._names_to_collectors["fs_ops_total"]  # type: ignore
+    _FS_BYTES = REGISTRY._names_to_collectors["fs_bytes_total"]  # type: ignore
 
 # Circuit breaker state (very simple)
 _CB_FAILURES = 0
