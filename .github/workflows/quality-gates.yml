@@ -97,7 +97,9 @@ jobs:
             asyncpg \
             aio-pika \
             redis \
-            neo4j
+            neo4j \
+            langchain-google-genai \
+            neo4j-graphrag
 
       - name: Run critical suite
         env:
