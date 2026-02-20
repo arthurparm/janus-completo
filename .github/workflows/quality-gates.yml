@@ -95,7 +95,9 @@ jobs:
             langchain-ollama \
             langchain-community \
             asyncpg \
-            aio-pika
+            aio-pika \
+            redis \
+            neo4j
 
       - name: Run critical suite
         env:
