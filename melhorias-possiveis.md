@@ -96,6 +96,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | ideia |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | ideia |
+| SG-013 | Remover retorno de token em reset de senha (API Auth) | P0 | S | ideia |
+| SG-014 | Implementar fila persistente para exclusão de dados (DataRetentionService) | P0 | M | ideia |
+| SG-015 | Redaction de logs para PII (CPF, Email, Cartão) | P1 | S | ideia |
+| SG-016 | Atualizar dependências críticas (tiktoken, etc) | P2 | S | ideia |
 
 ---
 
