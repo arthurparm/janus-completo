@@ -182,6 +182,20 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | AI-008 | Deteccao de alucinacao com fallback para modo conservador | P1 | M | ideia |
 | AI-009 | Fine-tuning supervisionado para dominio Janus | P3 | L | ideia |
 | AI-010 | Modo tutor para explicar decisoes tecnicas passo a passo | P3 | M | ideia |
+| AI-011 | Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails | P1 | M | ideia |
+
+---
+
+### [AI-011] Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails
+- Problema atual: o roteamento de mensagens do chat depende principalmente de regras e contexto bruto, gerando escolhas subotimas de agente em parte das conversas.
+- Solucao proposta: treinar e integrar um classificador leve (intencao + risco + urgencia) no fluxo de entrada do chat para decidir agente, politicas e nivel de verificacao antes da resposta.
+- Impacto esperado: melhora de qualidade de resposta, menos retries, menor custo de tokens e maior previsibilidade operacional.
+- Riscos: drift de dados, vies de classificacao e latencia adicional se o modelo for pesado.
+- Dependencias: telemetria confiavel por request, dataset rotulado inicial e fallback deterministico quando a confianca for baixa.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
 
 ---
 
@@ -347,4 +361,3 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
-
