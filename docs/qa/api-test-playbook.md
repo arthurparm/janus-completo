@@ -16,6 +16,12 @@ Provide a repeatable flow to:
 - Live endpoint matrix (json): `docs/qa/api-endpoint-matrix.json`
 - API inventory (raw): `api_inventory.json`
 - Smoke results sample: `api_test_results.json`
+- OQ-011 coverage report (json): `artifacts/qa/api_coverage_report.json`
+- OQ-011 coverage report (markdown): `artifacts/qa/api_coverage_report.md`
+- Docker evidence (json): `artifacts/qa/docker_evidence.json`
+- Docker evidence (API log tail): `artifacts/qa/janus_api_log_tail.txt`
+- Domain SLO runbook: `docs/qa/domain-slo-alerts.md`
+- MR-013 offline eval runs: `artifacts/qa/technical-qa/runs/*/score.json`
 
 ## Prerequisites
 
@@ -79,11 +85,57 @@ PYTHONPATH=. pytest -q \
   ../tests/test_knowledge_code_query_contract.py
 ```
 
-### 7) Optional Top-12 docker validation
+### 7) Generate OQ-011 API coverage report + Docker evidence
+
+```bash
+python scripts/generate_api_coverage_report.py \
+  --collect-docker-evidence \
+  --output-json artifacts/qa/api_coverage_report.json \
+  --output-md artifacts/qa/api_coverage_report.md \
+  --docker-evidence-json artifacts/qa/docker_evidence.json \
+  --docker-log-tail-file artifacts/qa/janus_api_log_tail.txt
+```
+
+This report tracks:
+- observed endpoint count (target tracked: 231),
+- coverage status per endpoint (`runtime_validated`, `runtime_failed`, `test_referenced`, `not_covered`),
+- uncovered endpoint backlog,
+- Docker/compose evidence snapshot.
+
+### 8) Validate OQ-002 domain SLO endpoint
+
+```bash
+curl -sf "http://localhost:8000/api/v1/observability/slo/domains?window_minutes=15&min_events=20"
+```
+
+Expected:
+- response with `status`, `domains`, `active_alerts`,
+- one entry per domain: `chat`, `rag`, `tools`, `workers`.
+
+### 9) Optional Top-12 docker validation
 
 ```powershell
 powershell -File scripts/run-top12-tests-docker.ps1
 ```
+
+### 10) Run MR-013 offline baseline gate (pre-merge compatible)
+
+```bash
+python janus/scripts/eval_technical_qa.py \
+  --mode offline-codebase \
+  --repo-root . \
+  --dataset janus/evals/technical-qa/datasets/technical-qa.v1.json \
+  --runs-root artifacts/qa/technical-qa/runs \
+  --baselines-root janus/evals/technical-qa/baselines \
+  --compare-baseline \
+  --gate-on-regression \
+  --require-baseline
+```
+
+Expected:
+- writes a new `score.json` and `summary.md`,
+- compares with versioned baseline,
+- exits non-zero if regression thresholds are violated.
 
 ## CI Mapping
 
@@ -91,16 +143,17 @@ CI workflow: `.github/workflows/quality-gates.yml`
 
 - `backend-lint`
 - `backend-type`
-- `backend-tests` (critical suite)
-- `ops-validation` (manual trigger only)
-
-Recommended CI extension for DX-011 governance:
-1. Run `python scripts/generate_api_matrix.py` in CI.
-2. Upload `docs/qa/api-endpoint-matrix.json` and `docs/qa/api-endpoint-matrix.md` as artifacts.
-3. Fail the pipeline if smoke baseline endpoints regress (based on `api_test_results.json` contract).
+- `backend-tests` (critical suite + MR-013 offline eval gate)
+- `ops-validation` (manual trigger only, includes OQ-011/OQ-002 artifacts)
 
 ## Definition of Done (DX-011)
 
 - Matrix can be regenerated from current API state with one command.
 - Playbook defines deterministic local and CI steps.
 - Matrix and playbook paths are documented and versioned in the repo.
+
+## Definition of Done (OQ-011)
+
+- Coverage report generated automatically for all discovered `/api/v1/*` endpoints.
+- JSON + Markdown report artifacts produced with module-level coverage summary.
+- Docker evidence snapshot generated in the same run (compose status + API log tail).

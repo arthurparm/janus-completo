@@ -1,21 +1,21 @@
 # API Endpoint Matrix (Live)
 
-- Generated at: `2026-02-21T00:00:27.847991+00:00`
+- Generated at: `2026-02-21T01:05:16.666508+00:00`
 - Source: `openapi_live`
 - Regenerate command: `python scripts/generate_api_matrix.py`
 
 ## Summary
 
-- Total endpoints: `228`
+- Total endpoints: `230`
 - Smoke results loaded: `6`
-- Test path references: `49`
+- Test path references: `55`
 
 ### By Method
 
 | Method | Count |
 |---|---:|
 | DELETE | 6 |
-| GET | 123 |
+| GET | 125 |
 | PATCH | 2 |
 | POST | 94 |
 | PUT | 3 |
@@ -44,7 +44,7 @@
 | Learning | 12 | 0 | 0 | 0 |
 | LLM | 12 | 0 | 0 | 0 |
 | Meta-Agent | 6 | 0 | 0 | 1 |
-| Observability | 22 | 0 | 0 | 1 |
+| Observability | 24 | 0 | 0 | 1 |
 | Optimization | 6 | 0 | 0 | 0 |
 | PendingActions | 5 | 0 | 0 | 0 |
 | Productivity | 13 | 0 | 0 | 5 |
@@ -54,7 +54,7 @@
 | Sandbox | 3 | 0 | 0 | 0 |
 | System | 5 | 3 | 0 | 0 |
 | Tasks | 6 | 0 | 0 | 0 |
-| Tools | 8 | 0 | 0 | 2 |
+| Tools | 8 | 0 | 0 | 3 |
 | unknown | 4 | 1 | 0 | 1 |
 | Users | 6 | 0 | 0 | 2 |
 | Workers | 3 | 0 | 0 | 1 |
@@ -199,6 +199,7 @@
 | POST | `/api/v1/meta-agent/heartbeat/stop` | Meta-Agent | N/A | no |
 | GET | `/api/v1/meta-agent/report/latest` | Meta-Agent | N/A | no |
 | GET | `/api/v1/observability/activity/user` | Observability | N/A | no |
+| GET | `/api/v1/observability/anomalies/predictive` | Observability | N/A | no |
 | GET | `/api/v1/observability/audit/events` | Observability | N/A | yes |
 | GET | `/api/v1/observability/audit/export` | Observability | N/A | no |
 | GET | `/api/v1/observability/errors/taxonomy` | Observability | N/A | no |
@@ -219,6 +220,7 @@
 | POST | `/api/v1/observability/poison-pills/release` | Observability | N/A | no |
 | GET | `/api/v1/observability/poison-pills/stats` | Observability | N/A | no |
 | GET | `/api/v1/observability/requests/{request_id}/dashboard` | Observability | N/A | no |
+| GET | `/api/v1/observability/slo/domains` | Observability | N/A | no |
 | GET | `/api/v1/observability/user_summary` | Observability | N/A | no |
 | POST | `/api/v1/optimization/analyze` | Optimization | N/A | no |
 | GET | `/api/v1/optimization/health` | Optimization | N/A | no |
@@ -271,7 +273,7 @@
 | POST | `/api/v1/tasks/queue/{queue_name}/policy/reconcile` | Tasks | N/A | no |
 | GET | `/api/v1/tasks/queue/{queue_name}/policy/validate` | Tasks | N/A | no |
 | GET | `/api/v1/tools/` | Tools | N/A | yes |
-| GET | `/api/v1/tools/categories/list` | Tools | N/A | no |
+| GET | `/api/v1/tools/categories/list` | Tools | N/A | yes |
 | POST | `/api/v1/tools/create/from-api` | Tools | N/A | no |
 | POST | `/api/v1/tools/create/from-function` | Tools | N/A | no |
 | GET | `/api/v1/tools/permissions/list` | Tools | N/A | no |

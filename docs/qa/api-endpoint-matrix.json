@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-02-21T00:00:27.847991+00:00",
+    "generated_at": "2026-02-21T01:05:16.666508+00:00",
     "source": "openapi_live",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
@@ -9,10 +9,10 @@
     }
   },
   "statistics": {
-    "total_endpoints": 228,
+    "total_endpoints": 230,
     "by_method": {
       "DELETE": 6,
-      "GET": 123,
+      "GET": 125,
       "PATCH": 2,
       "POST": 94,
       "PUT": 3
@@ -139,7 +139,7 @@
         "in_tests": 1
       },
       "Observability": {
-        "total": 22,
+        "total": 24,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 1
@@ -202,7 +202,7 @@
         "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 2
+        "in_tests": 3
       },
       "unknown": {
         "total": 4,
@@ -224,7 +224,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 49
+    "test_path_refs": 55
   },
   "endpoints": [
     {
@@ -1725,6 +1725,17 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/observability/anomalies/predictive",
+      "module": "Observability",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/observability/audit/events",
       "module": "Observability",
       "summary": "Lista eventos de auditoria",
@@ -1938,6 +1949,17 @@
       "module": "Observability",
       "summary": "Dashboard de pipeline por request_id",
       "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/slo/domains",
+      "module": "Observability",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -2524,7 +2546,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
