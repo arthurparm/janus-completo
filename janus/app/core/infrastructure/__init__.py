@@ -31,6 +31,7 @@ _EXPORT_MAP: dict[str, tuple[str, str]] = {
     # Middleware
     "CorrelationMiddleware": (".correlation_middleware", "CorrelationMiddleware"),
     "RateLimitMiddleware": (".rate_limit_middleware", "RateLimitMiddleware"),
+    "DomainSLOMetricsMiddleware": (".domain_slo_middleware", "DomainSLOMetricsMiddleware"),
     # Logging
     "setup_logging": (".logging_config", "setup_logging"),
     "setup_tracing": (".logging_config", "setup_tracing"),
@@ -79,6 +80,7 @@ __all__ = [
     # Middleware
     "CorrelationMiddleware",
     "RateLimitMiddleware",
+    "DomainSLOMetricsMiddleware",
     # Logging
     "setup_logging",
     "setup_tracing",

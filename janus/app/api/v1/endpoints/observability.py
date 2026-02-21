@@ -110,6 +110,18 @@ async def get_metrics_summary(service: ObservabilityService = Depends(get_observ
 
 
 @router.get(
+    "/slo/domains",
+    summary="SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
+)
+async def domain_slo_report(
+    window_minutes: int | None = None,
+    min_events: int | None = None,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    return await service.get_domain_slo_report(window_minutes=window_minutes, min_events=min_events)
+
+
+@router.get(
     "/anomalies/predictive",
     summary="Deteccao preditiva de anomalias (latencia, erro e filas)",
 )
