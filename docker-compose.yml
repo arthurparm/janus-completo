@@ -269,6 +269,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./janus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./janus/prometheus/alerts:/etc/prometheus/alerts:ro
     networks:
       - janus-net
     depends_on:

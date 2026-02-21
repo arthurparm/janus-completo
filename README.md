@@ -66,6 +66,7 @@ Comprehensive documentation is available in the `docs/` directory:
 - [Deployment Guide](docs/deployment-guide.md)
 - [API Endpoint Matrix (Live)](docs/qa/api-endpoint-matrix.md)
 - [API Test Playbook](docs/qa/api-test-playbook.md)
+- [Domain SLOs and Alerts](docs/qa/domain-slo-alerts.md)
 
 ## Roadmap / Backlog
 

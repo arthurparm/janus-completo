@@ -56,7 +56,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | MR-010 | Detecao de contradicao entre memorias antigas e novas | P2 | M | ideia |
 | MR-011 | Protecao de PII em `pending confirmations` e logs de ferramentas | P0 | S | feito (2026-02-13) |
 | MR-012 | Explainable retrieval (mostrar por que cada contexto entrou) | P1 | M | ideia |
-| MR-013 | Avaliacao offline recorrente (score.json + comparacao de baseline) | P0 | S | parcial |
+| MR-013 | Avaliacao offline recorrente (score.json + comparacao de baseline) | P0 | S | feito (2026-02-21, gate pre-merge offline) |
 | MR-014 | Cache de consulta semantica com invalidacao por mudanca de fonte | P2 | M | ideia |
 | MR-015 | RAG multimodal (imagem + texto + PDF) | P3 | L | ideia |
 
@@ -105,7 +105,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
-| OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | parcial |
+| OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao front/back/worker | P1 | M | ideia |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
 | OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
@@ -114,7 +114,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-008 | Canary release para mudancas de prompt/roteador | P2 | M | ideia |
 | OQ-009 | Regressao semantica automatica antes de deploy | P1 | M | ideia |
 | OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
-| OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | planejado |
+| OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | feito (2026-02-21, automacao entregue; inventario atual 230/231) |
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
 
 ---
@@ -441,7 +441,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ### [SPR-001] Sprint de prioridades - Fundacao ML + Confiabilidade
 - Janela: 2026-02-23 a 2026-03-06
 - Objetivo: executar o menor conjunto de alto impacto para destravar ML no produto sem perder seguranca/estabilidade.
-- Status: planejado
+- Status: concluido (2026-02-21)
 
 **Backlog priorizado (ordem de execucao):**
 
@@ -467,6 +467,45 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Feature flags para AI-011 e AI-012 com rollback simples.
 - Sem regressao em CI principal.
 - Atualizacao de documentacao operacional minima (runbook/README tecnico).
+
+**Evidencias de fechamento (2026-02-21):**
+- Backlog priorizado 1 a 6 concluido (SG-011, SG-012, OQ-012, AI-011, AI-012, DX-011).
+- Testes unitarios da sprint executados sem falhas (22 passed): `test_sg011_security_config.py`, `test_oq012_data_retention.py`, `test_ai011_intent_routing.py`, `test_ai012_semantic_reranker.py`.
+- Feature flags ativas e com rollback simples por configuracao em `janus/app/config.py`:
+  `AI_INTENT_ROUTING_ENABLED`, `AI_INTENT_RISK_ESCALATION_ENABLED`, `RAG_RERANK_ENABLED`, `RAG_RERANK_BACKEND`, `RAG_RERANK_TOP_K`.
+- Documentacao operacional atualizada via DX-011 em `docs/qa/api-endpoint-matrix.md` e `docs/qa/api-test-playbook.md`.
+
+### [SPR-002] Sprint de prioridades - Operacao previsivel + Qualidade mensuravel
+- Janela: 2026-03-09 a 2026-03-20
+- Objetivo: elevar previsibilidade operacional, cobertura de contrato e qualidade de resposta com gates objetivos antes de novas frentes de ML de alto risco.
+- Status: em andamento (adiantado em 2026-02-21)
+
+**Backlog priorizado (ordem de execucao):**
+
+| Ordem | ID | Tema | Prioridade | Esforco | Resultado esperado na sprint |
+|---|---|---|---|---|---|
+| 1 | OQ-011 | Cobertura automatizada das APIs | P0 | M | concluido (2026-02-21): geracao automatica de matriz + cobertura JSON/MD + evidencias Docker (ops-validation), inventario observado 230/231 |
+| 2 | OQ-002 | SLOs por dominio com alertas | P0 | M | concluido (2026-02-21): metricas por dominio, endpoint de SLO com alertas, regras Prometheus e dashboard Grafana |
+| 3 | MR-013 | Avaliacao offline recorrente | P0 | S | concluido (2026-02-21): baseline versionado + comparacao automatica pre-merge no quality-gates |
+| 4 | MR-002 | Politica explicita de roteamento | P0 | M | regras de decisao documentadas e telemetria por source/latency/confidence |
+| 5 | PX-011 | UX do chat simplificada | P0 | S | modo simples como padrao e painel avancado opcional sem regressao funcional |
+| 6 | SG-013 | Rotacao de logs e expurgo | P1 | S | politica de rotacao/retencao aplicada a logs de auditoria com verificacao automatica |
+
+**Criticos da sprint (nao-negociavel):**
+- OQ-011 e OQ-002 concluidos com evidencias versionadas.
+- MR-013 concluido com evidencias versionadas.
+- Sem aumento de taxa de erro em endpoints criticos apos ativacao dos novos gates.
+
+**Stretch goals (se houver capacidade):**
+- OQ-009 (regressao semantica automatica antes de deploy).
+- DX-005 (testes de carga para chat e retrieval).
+
+**Definicao de pronto da SPR-002:**
+- Cobertura de APIs executada em CI com artefato de resultado por execucao.
+- SLOs publicados com alertas ativos e ownership definido por dominio.
+- Gate de qualidade (baseline offline) bloqueando merge quando houver regressao acima do limite.
+- Politica de roteamento MR-002 com regras, fallback e observabilidade documentados.
+- Evidencia de validacao com 0 erros criticos em log nos cenarios da sprint.
 
 ---
 
