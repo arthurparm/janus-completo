@@ -97,6 +97,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Sanitizar logs no Daemon (remover conteudo bruto de comandos de voz) | P1 | S | ideia |
+| SG-015 | Remover segredos default hardcoded em config.py (reforcar SG-011) | P0 | S | ideia |
 
 ---
 
@@ -170,7 +172,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
-| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | feito (2026-02-21) |
 
 ---
 

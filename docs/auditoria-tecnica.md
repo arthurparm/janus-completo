@@ -93,3 +93,38 @@ Esta auditoria focou na análise estática do código fonte (`janus/` e `front/`
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `janus-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-21
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+### 1. Simplificação e Dívida Técnica (Backend)
+
+*   **Duplicação de Código (Resolvido)**: O arquivo `janus/app/services/tool_service_improved.py` foi removido nesta data. (DX-012 Feito).
+*   **Complexidade Extrema em `ChatService`**: `janus/app/services/chat_service.py` atingiu 1720 linhas, centralizando lógica de SSE, ferramentas, métricas e persistência. (AG-011)
+
+### 2. Simplificação e Dívida Técnica (Frontend)
+
+*   **God Object Service (Agravamento)**: `front/src/app/services/janus-api.service.ts` cresceu para **1434 linhas**, duplicando de tamanho desde a primeira observação. A refatoração é urgente (FE3-015).
+
+### 3. Segurança e Vulnerabilidades
+
+*   **Segredos Default Persistentes**: Apesar da existência de testes de validação (`test_sg011_security_config.py`), o arquivo `janus/app/config.py` ainda contém strings hardcoded (`"change_me_neo4j_password"`, etc.).
+    *   **Risco**: Dependência exclusiva de validação em runtime (se existir) para impedir deploy inseguro. Recomenda-se remover os defaults do código ou torná-los vazios/obrigatórios via Pydantic.
+*   **PII em Logs (LGPD)**: O Daemon (`janus/app/interfaces/daemon/daemon.py`) loga o conteúdo bruto dos comandos de voz: `logger.info(f"Command received: {command}")`. Isso pode expor dados sensíveis ou PII nos logs de aplicação.
+
+## Próximos Passos
+
+1.  **Imediato (P0/P1)**:
+    *   Sanitizar logs no Daemon (remover conteúdo bruto do comando ou usar nível DEBUG/TRACE).
+    *   Refatorar `janus-api.service.ts` (Frontend).
+
+2.  **Status de Itens Anteriores**:
+    *   `janus/app/services/tool_service_improved.py` -> **Removido**.
+    *   `AUTH_RESET_RETURN_TOKEN` -> **Corrigido** (default agora é False e validado por teste).
+    *   Validação de Config -> **Existente em Testes**, mas defaults hardcoded permanecem.
