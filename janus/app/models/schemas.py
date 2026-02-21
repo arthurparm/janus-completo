@@ -3,7 +3,25 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-import msgpack
+try:
+    import msgpack
+except Exception:
+    import json as _json
+
+    class _MsgPackCompat:
+        @staticmethod
+        def packb(obj: Any, use_bin_type: bool = True) -> bytes:
+            del use_bin_type
+            return _json.dumps(obj, ensure_ascii=False).encode("utf-8")
+
+        @staticmethod
+        def unpackb(data: bytes | bytearray, raw: bool = False):
+            del raw
+            if isinstance(data, (bytes, bytearray)):
+                return _json.loads(data.decode("utf-8"))
+            return _json.loads(str(data))
+
+    msgpack = _MsgPackCompat()  # type: ignore[assignment]
 from pydantic import BaseModel, Field
 
 # --- Schemas de Dados ---
@@ -157,6 +175,8 @@ class QueueName(str, Enum):
     TASKS_AGENT_SANDBOX = "janus.tasks.agent.sandbox"
     TASKS_AGENT_THINKER = "janus.tasks.agent.thinker"
     TASKS_AGENT_RED_TEAM = "janus.tasks.agent.red_team"
+    TASKS_AGENT_BLUE_TEAM = "janus.tasks.agent.blue_team"
+    TASKS_AGENT_SECURITY_JUDGE = "janus.tasks.agent.security_judge"
     TASKS_KNOWLEDGE_DISTILLATION = "janus.knowledge.distillation"
     PRODUCTIVITY_GOOGLE = "janus.productivity.google"
     # Debate System Queues
@@ -296,6 +316,7 @@ class AgentPayload(BaseModel):
     security_audit: str | None = None
     audit_passed: bool | None = None
     security_feedback: str | None = None
+    security_findings: list[dict[str, Any]] = Field(default_factory=list)
     code: str | None = None  # Legacy/Generic
     response: str | None = None  # Legacy/Generic
 
@@ -320,6 +341,9 @@ class TaskState(BaseModel):
     status: str = Field(default="in_progress")
     retries: int = Field(default=0)
     meta: dict[str, Any] = Field(default_factory=dict)
+    security_cycle_count: int = Field(default=0)
+    security_decision: str | None = None
+    blocked_reason: str | None = None
     timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
     # Stateful Workers: Context Caching
     context_cached: bool = Field(default=False)

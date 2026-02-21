@@ -1,9 +1,9 @@
 import asyncio
-
 import structlog
 
 from app.core.kernel import Kernel
 from app.core.monitoring.watchdog import Watchdog
+from app.interfaces.daemon.voice_command import process_voice_command
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +43,7 @@ async def main():
             logger.info("Starting Janus Daemon (Jarvis Mode)...")
             await kernel.startup()
             logger.info("Daemon is running. Press Ctrl+C to stop.")
+            voice_conversation_id: str | None = None
 
             # Main Operational Loop
             while not stop_event.is_set():
@@ -64,10 +65,9 @@ async def main():
                             command = await kernel.voice_manager.listen()
                             if command:
                                 logger.info(f"Command received: {command}")
-                                # TODO: Send to ChatService/LLM
-                                # response = await kernel.chat_service.process(command)
-                                # For now, simple echo/placeholder
-                                response = f"Entendido: {command}"
+                                response, voice_conversation_id = await process_voice_command(
+                                    kernel, command, voice_conversation_id
+                                )
                                 await kernel.voice_manager.speak(response)
                             else:
                                 logger.info("No command heard.")

@@ -1,42 +1,51 @@
 """
-Configuração do banco de dados PostgreSQL para Configuration-as-Data.
+Configuracao do banco de dados PostgreSQL para Configuration-as-Data.
 """
 
 import asyncio
-from collections.abc import Generator, AsyncGenerator
-from contextlib import contextmanager, asynccontextmanager
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
 
+import app.models  # noqa: F401  # Ensures all models are registered before create_all
 import structlog
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import QueuePool
 
 from app.config import settings
 from app.models.config_models import Base
-import app.models  # noqa: F401  # Ensures all models are registered before create_all
 
 logger = structlog.get_logger(__name__)
 
 
 class PostgresDatabase:
-    """Gerenciador de conexão PostgreSQL assíncrono para configurações dinâmicas."""
+    """Gerenciador de conexao PostgreSQL assincrono para configuracoes dinamicas."""
 
     def __init__(self):
         self._engine: AsyncEngine | None = None
         self._session_factory = None
         self._sync_engine = None
         self._sync_session_factory = None
-        self._initialize_engine()
+        self._initialized = False
 
-    def _initialize_engine(self):
-        """Inicializa o engine SQLAlchemy com driver asyncpg."""
+    def _ensure_initialized(self) -> None:
+        if self._initialized:
+            return
+        self._initialize_engine()
+        self._initialized = True
+
+    def _initialize_engine(self) -> None:
+        """Inicializa os engines SQLAlchemy apenas quando necessario."""
+        if self._engine is not None or self._sync_engine is not None:
+            return
+
         postgres_url = (
             f"postgresql+asyncpg://{settings.POSTGRES_USER}:"
             f"{settings.POSTGRES_PASSWORD.get_secret_value()}@"
             f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
             f"{settings.POSTGRES_DB}"
         )
+
         sync_driver = "psycopg2"
         try:
             import psycopg2  # noqa: F401
@@ -52,7 +61,6 @@ class PostgresDatabase:
 
         self._engine = create_async_engine(
             postgres_url,
-            # poolclass=QueuePool,  # Removido para compatibilidade com AsyncIO
             pool_size=settings.DB_POOL_SIZE,
             max_overflow=settings.DB_MAX_OVERFLOW,
             pool_pre_ping=True,
@@ -67,6 +75,7 @@ class PostgresDatabase:
             autoflush=False,
             expire_on_commit=False,
         )
+
         self._sync_engine = create_engine(
             sync_url,
             pool_size=settings.DB_POOL_SIZE,
@@ -76,6 +85,7 @@ class PostgresDatabase:
             pool_timeout=settings.DB_POOL_TIMEOUT,
             echo=settings.ENVIRONMENT == "development",
         )
+
         self._sync_session_factory = sessionmaker(
             bind=self._sync_engine,
             autocommit=False,
@@ -85,29 +95,26 @@ class PostgresDatabase:
 
     @property
     def engine(self) -> AsyncEngine:
-        """Retorna o engine SQLAlchemy assíncrono."""
+        self._ensure_initialized()
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
         return self._engine
 
-    async def create_tables(self):
-        """Cria todas as tabelas definidas nos modelos (assíncrono)."""
+    async def create_tables(self) -> None:
+        self._ensure_initialized()
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-        
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    async def drop_tables(self):
-        """Remove todas as tabelas (usar com cuidado!)."""
+    async def drop_tables(self) -> None:
+        self._ensure_initialized()
         if self._engine is None:
             raise RuntimeError("Database engine not initialized")
-            
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
 
-    async def shutdown(self):
-        """Finaliza engines/sessoes para evitar erros ruidosos no encerramento."""
+    async def shutdown(self) -> None:
         async_engine = self._engine
         sync_engine = self._sync_engine
 
@@ -115,6 +122,7 @@ class PostgresDatabase:
         self._sync_engine = None
         self._session_factory = None
         self._sync_session_factory = None
+        self._initialized = False
 
         if async_engine is not None:
             try:
@@ -132,10 +140,7 @@ class PostgresDatabase:
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
-        """
-        [DEPRECATED] Interface síncrona mantida para compatibilidade temporária.
-        Prefira usar get_session_async.
-        """
+        self._ensure_initialized()
         if self._sync_session_factory is None:
             raise RuntimeError("Sync session factory not initialized")
         session: Session = self._sync_session_factory()
@@ -149,17 +154,16 @@ class PostgresDatabase:
             session.close()
 
     def get_session_direct(self) -> Session:
-        """Retorna sessao sync para compatibilidade com repositorios legados."""
+        self._ensure_initialized()
         if self._sync_session_factory is None:
             raise RuntimeError("Sync session factory not initialized")
         return self._sync_session_factory()
 
     @asynccontextmanager
     async def get_session_async(self) -> AsyncGenerator[AsyncSession, None]:
-        """Context manager para sessões de banco de dados assíncronas."""
+        self._ensure_initialized()
         if self._session_factory is None:
             raise RuntimeError("Session factory not initialized")
-        
         session: AsyncSession = self._session_factory()
         try:
             yield session
@@ -170,21 +174,19 @@ class PostgresDatabase:
         finally:
             await session.close()
 
-# Instância singleton
+
+# Instancia singleton
 postgres_db = PostgresDatabase()
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency injection para FastAPI (Async)."""
     async with postgres_db.get_session_async() as session:
         yield session
 
 
-async def init_database():
-    """Inicializa o banco de dados PostgreSQL."""
+async def init_database() -> None:
     await postgres_db.create_tables()
 
 
-async def shutdown_database():
-    """Finaliza conexoes com o PostgreSQL de forma graciosa."""
+async def shutdown_database() -> None:
     await postgres_db.shutdown()
