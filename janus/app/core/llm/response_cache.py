@@ -4,7 +4,25 @@ import time
 from collections import OrderedDict
 from typing import Any
 
-import msgpack
+try:
+    import msgpack
+except Exception:
+    import json as _json
+
+    class _MsgPackCompat:
+        @staticmethod
+        def packb(obj: Any, use_bin_type: bool = True) -> bytes:
+            del use_bin_type
+            return _json.dumps(obj, ensure_ascii=False).encode("utf-8")
+
+        @staticmethod
+        def unpackb(data: bytes | bytearray, raw: bool = False):
+            del raw
+            if isinstance(data, (bytes, bytearray)):
+                return _json.loads(data.decode("utf-8"))
+            return _json.loads(str(data))
+
+    msgpack = _MsgPackCompat()  # type: ignore[assignment]
 
 try:
     from prometheus_client import Counter, Gauge

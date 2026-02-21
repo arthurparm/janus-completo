@@ -4,7 +4,6 @@ from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from prometheus_client import Counter, Gauge
 

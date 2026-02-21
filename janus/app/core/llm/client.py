@@ -4,7 +4,6 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_ollama import ChatOllama
 from prometheus_client import Counter, Histogram
 
 from app.config import settings
@@ -24,6 +23,14 @@ from .sanitizer import ContentSanitizer
 from .types import ModelPriority, ModelRole
 
 logger = logging.getLogger(__name__)
+
+try:
+    from langchain_ollama import ChatOllama
+
+    _OLLAMA_AVAILABLE = True
+except Exception:
+    _OLLAMA_AVAILABLE = False
+    ChatOllama = None  # type: ignore[assignment]
 
 # Metrics
 LLM_REQUESTS = Counter(
@@ -388,6 +395,12 @@ class LLMClient:
 
             if should_fallback:
                 try:
+                    if not _OLLAMA_AVAILABLE or ChatOllama is None:
+                        logger.warning(
+                            "Fallback Ollama requested but langchain_ollama is not installed."
+                        )
+                        raise RuntimeError("langchain_ollama is not installed.")
+
                     logger.info("Tentando fallback para Ollama...")
                     fallback_model = getattr(
                         self.settings,

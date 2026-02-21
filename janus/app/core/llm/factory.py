@@ -6,13 +6,24 @@ from typing import Any
 import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
 
 from app.config import settings
 
 from .resilience import LLM_POOL_WARMS, _add_to_pool, _get_from_pool, _pool_key
+
+try:
+    from langchain_ollama import ChatOllama
+
+    _OLLAMA_AVAILABLE = True
+except Exception:
+    _OLLAMA_AVAILABLE = False
+
+    class ChatOllama:  # type: ignore[override]
+        """Fallback type when langchain_ollama is not installed."""
+
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +158,9 @@ def create_ollama_llm(
     model_kwargs: dict[str, Any] | None = None,
 ) -> ChatOllama:
     """Creates a configured ChatOllama instance with standard settings."""
+    if not _OLLAMA_AVAILABLE:
+        raise RuntimeError("langchain_ollama is not installed. Install it to use Ollama models.")
+
     mk: dict[str, Any] = {}
     if settings.OLLAMA_NUM_CTX:
         mk["num_ctx"] = settings.OLLAMA_NUM_CTX
