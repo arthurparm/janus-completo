@@ -25,7 +25,7 @@ from typing import Any
 
 from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
-from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.filesystem_manager import WORKSPACE_DIR, read_file, write_file
 from app.core.infrastructure.prompt_fallback import PROMPTS_DIR
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
@@ -259,7 +259,7 @@ class NeuralTrainer:
 
     def __init__(self):
         self.preparator = DatasetPreparator()
-        self.models_dir = Path("/app/workspace/models")
+        self.models_dir = WORKSPACE_DIR / "models"
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
     async def train_model(self, config: TrainingConfig) -> TrainingResult:
