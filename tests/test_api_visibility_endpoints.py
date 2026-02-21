@@ -120,6 +120,22 @@ class DummyObservabilityService:
     async def get_multi_agent_system_health(self):
         return {"status": "ok", "details": {"active_agents": 1}}
 
+    async def get_domain_slo_report(self, window_minutes=None, min_events=None):
+        return {
+            "status": "ok",
+            "window": {"window_minutes": window_minutes or 15},
+            "domains": [
+                {
+                    "domain": "chat",
+                    "status": "ok",
+                    "sli": {"total_events": 10, "error_rate_pct": 0.0, "latency_p95_ms": 120.0},
+                    "slo": {"max_error_rate_pct": 5.0, "max_p95_latency_ms": 3500.0, "min_events": 3},
+                    "breaches": [],
+                }
+            ],
+            "active_alerts": [],
+        }
+
 
 class DummyKnowledgeService:
     async def get_health_status(self):
@@ -251,6 +267,15 @@ def test_request_pipeline_dashboard_endpoint(client):
     assert data["found"] is True
     assert data["summary"]["total_events"] == 1
     assert data["timeline"][0]["details"]["source"] == "test"
+
+
+def test_domain_slo_endpoint(client):
+    resp = client.get("/api/v1/observability/slo/domains?window_minutes=10&min_events=3")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["window"]["window_minutes"] == 10
+    assert data["domains"][0]["domain"] == "chat"
 
 
 def test_pending_actions_list(client):

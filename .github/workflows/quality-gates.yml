@@ -116,6 +116,28 @@ jobs:
             tests/test_db_migration_service_contract.py \
             tests/test_knowledge_code_query_contract.py
 
+      - name: Run MR-013 offline evaluation gate
+        run: |
+          python janus/scripts/eval_technical_qa.py \
+            --mode offline-codebase \
+            --repo-root . \
+            --dataset janus/evals/technical-qa/datasets/technical-qa.v1.json \
+            --runs-root artifacts/qa/technical-qa/runs \
+            --baselines-root janus/evals/technical-qa/baselines \
+            --compare-baseline \
+            --gate-on-regression \
+            --require-baseline \
+            --max-pass-rate-drop 0.02 \
+            --max-citation-coverage-drop 0.02 \
+            --max-p95-latency-increase-ms 250
+
+      - name: Upload MR-013 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mr013-offline-eval-artifacts
+          path: artifacts/qa/technical-qa/runs
+
   frontend-quality:
     name: Frontend Lint/Test/Build
     runs-on: ubuntu-latest
@@ -188,6 +210,27 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install QA script dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Generate API matrix and OQ-011 coverage report
+        run: |
+          python scripts/generate_api_matrix.py
+          python scripts/generate_api_coverage_report.py \
+            --collect-docker-evidence \
+            --output-json artifacts/qa/api_coverage_report.json \
+            --output-md artifacts/qa/api_coverage_report.md \
+            --docker-evidence-json artifacts/qa/docker_evidence.json \
+            --docker-log-tail-file artifacts/qa/janus_api_log_tail.txt
+
+      - name: Snapshot OQ-002 domain SLO report
+        run: |
+          mkdir -p artifacts/qa
+          curl -sf "http://localhost:8000/api/v1/observability/slo/domains?window_minutes=15&min_events=20" \
+            > artifacts/qa/domain_slo_report.json
+
       - name: Run async operational validation
         run: |
           python scripts/async_ops_validation.py \
@@ -199,5 +242,13 @@ jobs:
       - name: Upload ops report
         uses: actions/upload-artifact@v4
         with:
-          name: async-ops-validation-report
-          path: artifacts/qa/async_ops_validation_report.json
+          name: qa-ops-and-api-coverage-artifacts
+          path: |
+            artifacts/qa/async_ops_validation_report.json
+            artifacts/qa/api_coverage_report.json
+            artifacts/qa/api_coverage_report.md
+            artifacts/qa/docker_evidence.json
+            artifacts/qa/janus_api_log_tail.txt
+            artifacts/qa/domain_slo_report.json
+            docs/qa/api-endpoint-matrix.json
+            docs/qa/api-endpoint-matrix.md
