@@ -4,6 +4,13 @@ from typing import Any
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_LOCALHOST_ORIGINS = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "http://localhost:4300",
+    "http://127.0.0.1:4300",
+]
+
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -29,12 +36,12 @@ class AppSettings(BaseSettings):
     # CORS
     # Lista de origens permitidas para chamadas ao backend (produção/desenvolvimento)
     # Pode ser configurada via variável de ambiente CORS_ALLOW_ORIGINS (JSON ou CSV)
-    CORS_ALLOW_ORIGINS: list[str] = ["*"]
+    CORS_ALLOW_ORIGINS: list[str] = Field(default_factory=list)
 
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: SecretStr = "password"
+    NEO4J_PASSWORD: SecretStr = SecretStr("change_me_neo4j_password")
 
     # Qdrant
     QDRANT_HOST: str = "qdrant"
@@ -46,7 +53,7 @@ class AppSettings(BaseSettings):
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "janus"
-    POSTGRES_PASSWORD: SecretStr = "janus_pass"
+    POSTGRES_PASSWORD: SecretStr = SecretStr("change_me_postgres_password")
     POSTGRES_DB: str = "janus_db"
 
 
@@ -195,8 +202,6 @@ class AppSettings(BaseSettings):
         "grok-4-1-fast-reasoning",
         "grok-4",
         "grok-3",
-        "grok-2",
-        "grok-2-1212",
     ]
     OPENROUTER_API_KEY: SecretStr | None = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
@@ -233,6 +238,18 @@ class AppSettings(BaseSettings):
     # Re-Ranking: Use LLM to re-rank retrieved chunks
     RAG_RERANK_ENABLED: bool = True
     RAG_RERANK_TOP_K: int = 5
+    RAG_RERANK_BACKEND: str = "cross_encoder"  # cross_encoder | heuristic
+    RAG_RERANK_CROSS_ENCODER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    RAG_RERANK_CROSS_ENCODER_WEIGHT: float = 0.75
+    RAG_RERANK_BASE_SCORE_WEIGHT: float = 0.25
+    RAG_RERANK_METADATA_WEIGHT: float = 0.10
+    RAG_RERANK_RECENCY_WEIGHT: float = 0.05
+    RAG_RERANK_HEURISTIC_TEXT_WEIGHT: float = 0.55
+    RAG_RERANK_HEURISTIC_BASE_WEIGHT: float = 0.30
+    RAG_RERANK_HEURISTIC_METADATA_WEIGHT: float = 0.10
+    RAG_RERANK_HEURISTIC_RECENCY_WEIGHT: float = 0.05
+    RAG_RERANK_CANDIDATE_MULTIPLIER: int = 3
+    RAG_RERANK_MAX_CONTENT_CHARS: int = 1200
 
     # Preço por 1k tokens (USD) por provedor
     # Valores padrão podem ser ajustados via .env conforme necessidade
@@ -351,7 +368,29 @@ class AppSettings(BaseSettings):
     AUTH_JWT_SECRET: str | None = None
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
-    AUTH_RESET_RETURN_TOKEN: bool = True
+    AUTH_RESET_RETURN_TOKEN: bool = False
+    AI_INTENT_ROUTING_ENABLED: bool = True
+    AI_INTENT_RISK_ESCALATION_ENABLED: bool = True
+    AI_INTENT_ROUTING_MIN_CONFIDENCE: float = 0.72
+    AI_INTENT_ROUTING_ORCHESTRATOR_OVERRIDE_CONFIDENCE: float = 0.82
+    AI_INTENT_ROUTING_URGENCY_OVERRIDE_CONFIDENCE: float = 0.76
+    AI_ANOMALY_DETECTION_ENABLED: bool = True
+    AI_ANOMALY_WINDOW_HOURS: int = 6
+    AI_ANOMALY_BUCKET_MINUTES: int = 10
+    AI_ANOMALY_MIN_EVENTS: int = 30
+    AI_ANOMALY_ZSCORE_THRESHOLD: float = 2.5
+    AI_ANOMALY_BACKLOG_THRESHOLD: int = 200
+    AI_ANOMALY_QUEUE_NAMES: list[str] = [
+        "janus.knowledge.consolidation",
+        "janus.agent.tasks",
+        "janus.neural.training",
+        "janus.meta_agent.cycle",
+        "janus.tasks.router",
+    ]
+    AI_DOC_ENRICHMENT_ENABLED: bool = True
+    AI_DOC_ENRICHMENT_MAX_TEXT_CHARS: int = 12000
+    AI_DOC_ENRICHMENT_MAX_ENTITIES_PER_TYPE: int = 8
+    AI_DOC_ENRICHMENT_SUMMARY_MAX_CHARS: int = 280
     SYSTEM_USER_EMAIL: str | None = None
     SYSTEM_USER_USERNAME: str | None = None
     SYSTEM_USER_DISPLAY_NAME: str | None = "Janus"
@@ -362,7 +401,7 @@ class AppSettings(BaseSettings):
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
-    RABBITMQ_PASSWORD: str = "janus_pass"
+    RABBITMQ_PASSWORD: str = "change_me_rabbitmq_password"
     RABBITMQ_MANAGEMENT_PORT: int = 15672
     BROKER_USE_MSGPACK: bool = True
 
@@ -501,17 +540,37 @@ class AppSettings(BaseSettings):
         # Se Tailscale estiver habilitado, adicionar origens Tailscale
         tailscale_enabled = info.data.get("TAILSCALE_SERVE_ENABLED", False)
         tailscale_host = info.data.get("TAILSCALE_HOST", "")
+        environment = str(info.data.get("ENVIRONMENT", "development")).strip().lower()
+        is_prod = environment == "production"
 
         # Parse existing origins
         if isinstance(v, str):
-            if v.strip() == "*":
+            s = v.strip()
+            if not s:
+                origins = []
+            elif s == "*":
                 origins = ["*"]
+            elif s.startswith("["):
+                try:
+                    parsed = json.loads(s)
+                    origins = [str(x).strip() for x in parsed if str(x).strip()]
+                except Exception:
+                    origins = [x.strip() for x in s.split(",") if x.strip()]
             else:
-                origins = [x.strip() for x in v.split(",") if x.strip()]
+                origins = [x.strip() for x in s.split(",") if x.strip()]
         elif isinstance(v, list):
-            origins = v
+            origins = [str(x).strip() for x in v if str(x).strip()]
         else:
-            origins = ["*"]
+            origins = []
+
+        if not origins and not is_prod:
+            # Default seguro para desenvolvimento local.
+            origins = list(_LOCALHOST_ORIGINS)
+
+        if is_prod and "*" in origins:
+            raise ValueError(
+                "CORS_ALLOW_ORIGINS não pode conter '*' em produção. Defina domínios explícitos."
+            )
 
         # Adicionar origens Tailscale se habilitado
         if tailscale_enabled and tailscale_host:

@@ -64,6 +64,8 @@ Comprehensive documentation is available in the `docs/` directory:
 - [Architecture - Backend](docs/architecture-janus.md)
 - [Integration Architecture](docs/integration-architecture.md)
 - [Deployment Guide](docs/deployment-guide.md)
+- [API Endpoint Matrix (Live)](docs/qa/api-endpoint-matrix.md)
+- [API Test Playbook](docs/qa/api-test-playbook.md)
 
 ## Roadmap / Backlog
 

@@ -94,8 +94,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-008 | Trilha de auditoria assinada para acoes criticas | P2 | M | ideia |
 | SG-009 | Simulador de politicas para validar mudancas antes de ativar | P2 | M | ideia |
 | SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
-| SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | ideia |
-| SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | ideia |
+| SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
+| SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
 
 ---
@@ -115,7 +115,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-009 | Regressao semantica automatica antes de deploy | P1 | M | ideia |
 | OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
 | OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | planejado |
-| OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | ideia |
+| OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
 
 ---
 
@@ -169,7 +169,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-008 | Reprodutibilidade de bugs via captura de trace minima | P1 | M | ideia |
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
-| DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | planejado |
+| DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
 | DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
 
 ---
@@ -188,7 +188,13 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | AI-008 | Deteccao de alucinacao com fallback para modo conservador | P1 | M | ideia |
 | AI-009 | Fine-tuning supervisionado para dominio Janus | P3 | L | ideia |
 | AI-010 | Modo tutor para explicar decisoes tecnicas passo a passo | P3 | M | ideia |
-| AI-011 | Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails | P1 | M | ideia |
+| AI-011 | Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails | P1 | M | feito (2026-02-21, refinado v2) |
+| AI-012 | Reranker semantico no RAG com cross-encoder para priorizar evidencias relevantes | P1 | M | feito (2026-02-21, refinado v2) |
+| AI-013 | Politica de decisao para orquestracao autonoma baseada em historico de sucesso | P1 | M | ideia |
+| AI-014 | Deteccao preditiva de anomalias operacionais em latencia, erro e filas | P1 | M | feito (2026-02-21) |
+| AI-015 | Predicao de satisfacao e risco de abandono de conversa com acao automatica | P2 | M | ideia |
+| AI-016 | Classificacao e extracao semantica na ingestao de documentos (tipo, entidades, resumo) | P1 | M | feito (2026-02-21, refinado v2) |
+| AI-017 | Camada multimodal de visao e audio para enriquecer contexto dos agentes | P2 | L | ideia |
 
 ---
 
@@ -200,6 +206,84 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dependencias: telemetria confiavel por request, dataset rotulado inicial e fallback deterministico quando a confianca for baixa.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: feito (2026-02-21)
+
+---
+
+### [AI-012] Reranker semantico no RAG com cross-encoder para priorizar evidencias relevantes
+- Problema atual: o retrieval vetorial puro ainda traz chunks parcialmente relevantes, elevando ruido no contexto final do LLM.
+- Solucao proposta: inserir etapa de reranking com cross-encoder apos recuperacao inicial para reordenar candidatos por relevancia contextual.
+- Impacto esperado: maior precisao factual, menos alucinacao e reducao de tokens por prompt com contexto mais enxuto.
+- Riscos: aumento de latencia por inferencia extra e custo computacional adicional.
+- Dependencias: benchmark de retrieval, conjunto de queries de avaliacao e limite de candidatos por rodada.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: feito (2026-02-21, refinado v2)
+
+---
+
+### [AI-013] Politica de decisao para orquestracao autonoma baseada em historico de sucesso
+- Problema atual: escolha de proximas acoes autonomas ainda depende muito de heuristicas estaticas e pode repetir caminhos ineficientes.
+- Solucao proposta: treinar modelo de ranking/politica com historico de execucoes (sucesso, custo, tempo, falha) para priorizar a melhor proxima acao.
+- Impacto esperado: menos loops, maior taxa de conclusao e melhor uso de budget por objetivo.
+- Riscos: exploracao insuficiente de estrategias novas e vies para cenarios mais frequentes.
+- Dependencias: telemetria historica confiavel, schema de feedback por acao e fallback deterministico.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+---
+
+### [AI-014] Deteccao preditiva de anomalias operacionais em latencia, erro e filas
+- Problema atual: muitos desvios operacionais sao percebidos apenas apos impacto no usuario.
+- Solucao proposta: adicionar deteccao de anomalias em series temporais de metricas criticas (latencia, taxa de erro, backlog de fila) com alertas automaticos.
+- Impacto esperado: deteccao precoce de incidentes, menor MTTR e aumento de confiabilidade do sistema.
+- Riscos: falsos positivos/negativos em periodos de carga irregular.
+- Dependencias: pipeline de metricas consistente, janela historica minima e calibracao de thresholds.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: feito (2026-02-21)
+
+---
+
+### [AI-015] Predicao de satisfacao e risco de abandono de conversa com acao automatica
+- Problema atual: sinais de conversa mal resolvida nem sempre sao capturados em tempo de evitar churn na sessao.
+- Solucao proposta: treinar modelo de classificacao/regressao com sinais de UX (tempo, retries, interrupcoes, feedback) para estimar satisfacao e risco de abandono.
+- Impacto esperado: acionamento proativo de fallback, escalonamento para agente especialista e melhoria de experiencia.
+- Riscos: interpretacao errada de sinais comportamentais e vies por perfil de usuario.
+- Dependencias: coleta de eventos de UX, definicao de labels de sucesso e estrategia de intervencao.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+---
+
+### [AI-016] Classificacao e extracao semantica na ingestao de documentos (tipo, entidades, resumo)
+- Problema atual: ingestao trata documentos de forma quase uniforme, com perda de estrutura e sem priorizacao inteligente.
+- Solucao proposta: aplicar classificacao de tipo de documento, extracao de entidades (NER) e resumo estruturado antes da indexacao.
+- Impacto esperado: base de conhecimento mais consistente, melhor recuperacao no RAG e menor trabalho manual de curadoria.
+- Riscos: erro de classificacao em documentos ambiguos e ruido em entidades extraidas.
+- Dependencias: pipeline de parser robusto, taxonomia de documentos e avaliacao de qualidade de extracao.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: feito (2026-02-21, refinado v2)
+
+---
+
+### [AI-017] Camada multimodal de visao e audio para enriquecer contexto dos agentes
+- Problema atual: agentes ainda exploram pouco sinais de tela e audio para compreender contexto real do usuario.
+- Solucao proposta: integrar modelos de visao/audio para classificacao de contexto, deteccao de eventos e enriquecimento de memoria de sessao.
+- Impacto esperado: respostas mais contextuais em fluxos multimodais e nova classe de automacoes orientadas por percepcao.
+- Riscos: custo computacional, privacidade de dados sensiveis e maior complexidade operacional.
+- Dependencias: politica de consentimento/LGPD, pipeline multimodal observavel e avaliacao de latencia fim a fim.
+- Prioridade: P2
+- Esforco: L
 - Dono: a definir
 - Status: ideia
 
@@ -349,6 +433,40 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 10. OQ-006 (feito em 2026-02-13)
 11. PL-001 (feito em 2026-02-13)
 12. DX-003 (feito em 2026-02-13)
+
+---
+
+## 12) Sprint atual (prioridades)
+
+### [SPR-001] Sprint de prioridades - Fundacao ML + Confiabilidade
+- Janela: 2026-02-23 a 2026-03-06
+- Objetivo: executar o menor conjunto de alto impacto para destravar ML no produto sem perder seguranca/estabilidade.
+- Status: planejado
+
+**Backlog priorizado (ordem de execucao):**
+
+| Ordem | ID | Tema | Prioridade | Esforco | Resultado esperado na sprint |
+|---|---|---|---|---|---|
+| 1 | SG-011 | Seguranca de configuracao | P0 | S | concluido (2026-02-20): segredos default removidos e CORS restrito por ambiente |
+| 2 | SG-012 | Seguranca de auth | P1 | S | concluido (2026-02-20): reset de senha sem vazamento de token/sinal sensivel |
+| 3 | OQ-012 | Confiabilidade de retention | P1 | M | concluido (2026-02-20): execucao assincrona robusta no DataRetentionService sem falhas intermitentes |
+| 4 | AI-011 | Roteamento inteligente de chat | P1 | M | concluido (2026-02-21): classificador refinado (v2) com urgencia, reducao de falso positivo e fallback deterministico |
+| 5 | AI-012 | Qualidade de retrieval no RAG | P1 | M | concluido (2026-02-21): reranker refinado (v2) com sinais de metadata/recencia e telemetria expandida |
+| 6 | DX-011 | Governanca de testes de API | P1 | S | concluido (2026-02-21): matriz viva de endpoints e playbook local/CI atualizado |
+
+**Criticos da sprint (nao-negociavel):**
+- SG-011, SG-012 e OQ-012 concluidos.
+- AI-011 concluido em modo MVP + refinamento v2 (heuristica de urgencia e risco defensivo).
+
+**Stretch goals (se houver capacidade):**
+- AI-016 (classificacao e extracao semantica na ingestao de documentos) - concluido (2026-02-21, refinado v2).
+- AI-014 (deteccao preditiva de anomalias operacionais) - concluido (2026-02-21).
+
+**Definicao de pronto da SPR-001:**
+- PRs vinculadas as issues com evidencias (testes, logs e metricas antes/depois).
+- Feature flags para AI-011 e AI-012 com rollback simples.
+- Sem regressao em CI principal.
+- Atualizacao de documentacao operacional minima (runbook/README tecnico).
 
 ---
 
