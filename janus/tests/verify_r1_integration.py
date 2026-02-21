@@ -48,10 +48,11 @@ class TestR1Integration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(llm.model_name, "deepseek-reasoner")
         self.assertEqual(llm.openai_api_base, "http://mock")
         
-        # Check max_tokens hack for R1
-        # access protected attribute or check signature if possible?
-        # ChatOpenAI stores max_tokens in instance
-        self.assertEqual(llm.max_tokens, 8000)
+        # Validate output limit for R1 in a version-compatible way.
+        max_tokens = getattr(llm, "max_tokens", None)
+        if max_tokens is None:
+            max_tokens = (getattr(llm, "model_kwargs", {}) or {}).get("max_tokens")
+        self.assertEqual(max_tokens, 8000)
         print("[SUCCESS] deepseek-reasoner selected with max_tokens=8000")
 
 if __name__ == "__main__":
