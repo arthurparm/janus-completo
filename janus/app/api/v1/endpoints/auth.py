@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.core.infrastructure.auth import create_token
-from app.core.infrastructure.firebase import get_firebase_service
 from app.core.security.passwords import hash_password, verify_password
 from app.repositories.user_repository import ConsentRepository, UserRepository
 
@@ -138,8 +137,15 @@ class LocalResetResponse(BaseModel):
     reset_token: str | None = None
 
 
+def _can_return_reset_token() -> bool:
+    if str(getattr(settings, "ENVIRONMENT", "")).lower() == "production":
+        return False
+    return bool(getattr(settings, "AUTH_RESET_RETURN_TOKEN", False))
+
+
 def _ensure_firebase_initialized() -> None:
     import firebase_admin
+    from app.core.infrastructure.firebase import get_firebase_service
 
     if firebase_admin._apps:
         return
@@ -295,7 +301,7 @@ async def local_request_reset(
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     repo.set_reset_token(int(user.id), token_hash, expires_at=expires_at)
 
-    if getattr(settings, "AUTH_RESET_RETURN_TOKEN", False) or settings.ENVIRONMENT != "production":
+    if _can_return_reset_token():
         return LocalResetResponse(status="ok", reset_token=token)
     return LocalResetResponse(status="ok", reset_token=None)
 

@@ -78,6 +78,7 @@ class UploadResponse(BaseModel):
     chunks: int
     status: str
     consolidation: dict[str, Any] | None = None
+    semantic: dict[str, Any] | None = None
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -148,6 +149,7 @@ async def upload_document(
         chunks=result.get("chunks"),
         status=result.get("status"),
         consolidation=consolidation,
+        semantic=result.get("semantic"),
     )
 
 
@@ -227,6 +229,9 @@ class DocListItem(BaseModel):
     chunks: int
     conversation_id: str | None
     last_index_ts: int | None
+    semantic_doc_type: str | None = None
+    semantic_confidence: float | None = None
+    semantic_summary: str | None = None
 
 
 class DocListResponse(BaseModel):
@@ -278,12 +283,26 @@ async def list_documents(
             "chunks": 0,
             "conversation_id": meta.get("conversation_id"),
             "last_index_ts": 0,
+            "semantic_doc_type": meta.get("semantic_doc_type"),
+            "semantic_confidence": meta.get("semantic_confidence"),
+            "semantic_summary": meta.get("semantic_summary"),
         }
         cur["chunks"] = int(cur.get("chunks", 0)) + 1
         try:
             ts = int(meta.get("timestamp") or 0)
             if ts > int(cur.get("last_index_ts") or 0):
                 cur["last_index_ts"] = ts
+        except Exception:
+            pass
+        try:
+            conf = float(meta.get("semantic_confidence") or 0.0)
+            prev_conf = float(cur.get("semantic_confidence") or 0.0)
+            if conf > prev_conf:
+                cur["semantic_confidence"] = conf
+                if meta.get("semantic_doc_type"):
+                    cur["semantic_doc_type"] = meta.get("semantic_doc_type")
+            if not cur.get("semantic_summary") and meta.get("semantic_summary"):
+                cur["semantic_summary"] = meta.get("semantic_summary")
         except Exception:
             pass
         agg[did] = cur
@@ -296,6 +315,9 @@ async def list_documents(
                 chunks=int(v.get("chunks", 0)),
                 conversation_id=v.get("conversation_id"),
                 last_index_ts=v.get("last_index_ts"),
+                semantic_doc_type=v.get("semantic_doc_type"),
+                semantic_confidence=v.get("semantic_confidence"),
+                semantic_summary=v.get("semantic_summary"),
             )
         )
     return DocListResponse(items=items)
@@ -341,6 +363,7 @@ class LinkUrlResponse(BaseModel):
     doc_id: str
     status: str
     chunks: int
+    semantic: dict[str, Any] | None = None
 
 
 @router.post("/link-url", response_model=LinkUrlResponse)
@@ -377,7 +400,10 @@ async def link_url(
         user_id=uid, filename=filename, content_type=ct, data=data, conversation_id=conversation_id
     )
     return LinkUrlResponse(
-        doc_id=result.get("doc_id"), status=result.get("status"), chunks=result.get("chunks")
+        doc_id=result.get("doc_id"),
+        status=result.get("status"),
+        chunks=result.get("chunks"),
+        semantic=result.get("semantic"),
     )
 
 
@@ -386,6 +412,7 @@ class DocStatusResponse(BaseModel):
     user_id: str
     chunks_indexed: int
     samples: list[dict[str, Any]]
+    semantic: dict[str, Any] | None = None
 
 
 @router.get("/status/{doc_id}", response_model=DocStatusResponse)
@@ -423,24 +450,62 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
         )
     hits = getattr(res, "points", res) or []
     samples: list[dict[str, Any]] = []
+    semantic_type_counts: dict[str, int] = {}
+    semantic_confidences: list[float] = []
+    semantic_summary: str | None = None
     for h in hits or []:
         payload = getattr(h, "payload", {}) or {}
         meta = payload.get("metadata") or {}
+        sem_type = str(meta.get("semantic_doc_type") or "").strip()
+        if sem_type:
+            semantic_type_counts[sem_type] = semantic_type_counts.get(sem_type, 0) + 1
+        try:
+            sem_conf = float(meta.get("semantic_confidence") or 0.0)
+            if sem_conf > 0:
+                semantic_confidences.append(sem_conf)
+        except Exception:
+            pass
+        if not semantic_summary and meta.get("semantic_summary"):
+            semantic_summary = str(meta.get("semantic_summary"))
         samples.append(
             {
                 "id": getattr(h, "id", None),
                 "file_name": meta.get("file_name"),
                 "index": meta.get("index"),
                 "content": payload.get("content"),
+                "semantic_doc_type": meta.get("semantic_doc_type"),
+                "semantic_confidence": meta.get("semantic_confidence"),
             }
         )
     try:
         total = await async_count_points(client, coll, qfilter, exact=True)
     except Exception:
         total = len(samples)
+    dominant_type = None
+    if semantic_type_counts:
+        dominant_type = max(semantic_type_counts.items(), key=lambda item: item[1])[0]
+    semantic_payload: dict[str, Any] | None = None
+    if dominant_type or semantic_confidences or semantic_summary:
+        avg_conf = (
+            round(sum(semantic_confidences) / max(1, len(semantic_confidences)), 4)
+            if semantic_confidences
+            else None
+        )
+        semantic_payload = {
+            "doc_type": dominant_type,
+            "confidence_avg": avg_conf,
+            "summary": semantic_summary,
+            "type_counts": semantic_type_counts,
+        }
     try:
         _DOC_STATUS_REQ.labels("success").inc()
         _DOC_STATUS_LAT.observe(max(0.0, _t.perf_counter() - _t0))
     except Exception:
         pass
-    return DocStatusResponse(doc_id=doc_id, user_id=uid, chunks_indexed=total, samples=samples)
+    return DocStatusResponse(
+        doc_id=doc_id,
+        user_id=uid,
+        chunks_indexed=total,
+        samples=samples,
+        semantic=semantic_payload,
+    )

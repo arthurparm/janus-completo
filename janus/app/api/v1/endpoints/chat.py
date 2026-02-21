@@ -18,6 +18,7 @@ from app.services.chat_service import (
     MessageTooLargeError,
     get_chat_service,
 )
+from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.trace_service import TraceService, get_trace_service
 
@@ -42,7 +43,7 @@ class ChatStartResponse(BaseModel):
 class ChatMessageRequest(BaseModel):
     conversation_id: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1)
-    role: str = Field("orchestrator")
+    role: str = Field("auto")
     priority: str = Field("fast_and_cheap")
     timeout_seconds: int | None = None
     user_id: str | None = Field(None)
@@ -158,7 +159,20 @@ def _ensure_origin_allowed(http: Request | None) -> None:
         allowed_origins = list(getattr(_settings, "CORS_ALLOW_ORIGINS", [])) or []
     except Exception:
         allowed_origins = []
-    if allowed_origins and origin and origin not in [o.lower() for o in allowed_origins]:
+    normalized_allowed = [o.lower() for o in allowed_origins if isinstance(o, str)]
+
+    # Requisições sem Origin (CLI/server-to-server) não passam por política de CORS.
+    if not origin:
+        return
+
+    if "*" in normalized_allowed:
+        return
+
+    # Em contexto browser, lista vazia significa deny-by-default.
+    if not normalized_allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
+
+    if origin not in normalized_allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed")
 
 
@@ -231,8 +245,11 @@ async def send_message(
     http: Request = None,
     memory: MemoryService = Depends(get_memory_service),
 ):
+    routing_service = get_intent_routing_service()
     try:
-        role = ModelRole(payload.role)
+        role, routing_decision, route_applied = routing_service.resolve_role(
+            payload.role, payload.message
+        )
         priority = ModelPriority(payload.priority)
     except ValueError:
         raise HTTPException(
@@ -240,6 +257,17 @@ async def send_message(
         )
 
     user_id = _resolve_user_id(http, payload.user_id)
+    if routing_decision:
+        logger.info(
+            "chat.intent_routing",
+            conversation_id=payload.conversation_id,
+            requested_role=payload.role,
+            selected_role=role.value,
+            intent=routing_decision.intent,
+            risk_level=routing_decision.risk_level,
+            confidence=routing_decision.confidence,
+            route_applied=route_applied,
+        )
     try:
         result: dict[str, Any] = await service.send_message(
             conversation_id=payload.conversation_id,
@@ -335,6 +363,27 @@ async def send_message(
             "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
             "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
         )
+
+    if routing_decision:
+        understanding = result.get("understanding")
+        if not isinstance(understanding, dict):
+            understanding = {}
+            result["understanding"] = understanding
+        understanding["routing"] = {
+            "requested_role": payload.role,
+            "selected_role": role.value,
+            "route_applied": route_applied,
+            **routing_decision.to_dict(),
+        }
+
+        if routing_decision.risk_level == "high":
+            understanding["requires_confirmation"] = True
+            understanding["confirmation_reason"] = "high_risk"
+            if "alto risco" not in str(result.get("response", "")).lower():
+                result["response"] = (
+                    "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\n"
+                    f"{result.get('response', '')}"
+                )
 
     return ChatMessageResponse(**result)
 
@@ -684,7 +733,7 @@ async def delete_conversation(
 async def stream_message(
     conversation_id: str,
     message: str,
-    role: str = "orchestrator",
+    role: str = "auto",
     priority: str = "fast_and_cheap",
     timeout_seconds: int | None = None,
     user_id: str | None = None,
@@ -697,13 +746,25 @@ async def stream_message(
     Eventos: protocol, ack, token, partial (compat), heartbeat, done, error.
     Descontinuação de partial: ver env CHAT_SSE_PARTIAL_DEPRECATE_AT.
     """
+    routing_service = get_intent_routing_service()
     # valida enum
     try:
-        role_enum = ModelRole(role)
+        role_enum, routing_decision, route_applied = routing_service.resolve_role(role, message)
         priority_enum = ModelPriority(priority)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role or priority"
+        )
+    if routing_decision:
+        logger.info(
+            "chat.intent_routing.stream",
+            conversation_id=conversation_id,
+            requested_role=role,
+            selected_role=role_enum.value,
+            intent=routing_decision.intent,
+            risk_level=routing_decision.risk_level,
+            confidence=routing_decision.confidence,
+            route_applied=route_applied,
         )
 
     # Valida origem (CORS) para SSE

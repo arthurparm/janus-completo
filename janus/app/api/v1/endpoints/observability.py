@@ -109,6 +109,23 @@ async def get_metrics_summary(service: ObservabilityService = Depends(get_observ
     return service.get_metrics_summary()
 
 
+@router.get(
+    "/anomalies/predictive",
+    summary="Deteccao preditiva de anomalias (latencia, erro e filas)",
+)
+async def predictive_anomalies(
+    window_hours: int | None = None,
+    bucket_minutes: int | None = None,
+    min_events: int | None = None,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    return await service.get_predictive_anomaly_report(
+        window_hours=window_hours,
+        bucket_minutes=bucket_minutes,
+        min_events=min_events,
+    )
+
+
 @router.get("/llm/usage", summary="Resumo de uso de LLMs")
 async def llm_usage(
     start_ts: float | None = None,
