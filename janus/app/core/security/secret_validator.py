@@ -11,11 +11,21 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
-# Known insecure defaults that MUST be changed in production
-INSECURE_DEFAULTS = {
-    "NEO4J_PASSWORD": "password",
-
-    "RABBITMQ_PASSWORD": "janus_pass",
+# Known insecure defaults that MUST be changed in production.
+# Values are normalized to lowercase/trim during checks.
+INSECURE_DEFAULTS: dict[str, set[str]] = {
+    "NEO4J_PASSWORD": {"password", "change_me_neo4j_password"},
+    "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password"},
+    "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password"},
+    "AUTH_JWT_SECRET": {
+        "",
+        "none",
+        "null",
+        "changeme",
+        "change_me",
+        "dev_secret_change_me",
+        "janus_dev_secret",
+    },
 }
 
 
@@ -41,14 +51,15 @@ def validate_production_secrets():
     logger.info("Validating production secrets...")
 
     insecure_found = []
-    for setting_name, insecure_value in INSECURE_DEFAULTS.items():
+    for setting_name, insecure_values in INSECURE_DEFAULTS.items():
         current_value = getattr(settings, setting_name, None)
 
         # Handle SecretStr
         if isinstance(current_value, SecretStr):
             current_value = current_value.get_secret_value()
 
-        if current_value == insecure_value:
+        normalized = str(current_value or "").strip().lower()
+        if normalized in insecure_values:
             insecure_found.append(setting_name)
             logger.error(f"Insecure default detected for: {setting_name}",
                          setting=setting_name)
