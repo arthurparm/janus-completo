@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -265,7 +266,7 @@ def publish_baseline(result: dict[str, Any], baselines_root: str | Path) -> Path
         {
             "version": version,
             "published_at": payload["baseline_published_at"],
-            "score_path": str((baseline_dir / "score.json").relative_to(baselines_root)),
+            "score_path": (baseline_dir / "score.json").relative_to(baselines_root).as_posix(),
         }
     )
     index["versions"] = sorted(existing, key=lambda v: v.get("published_at", ""))
@@ -289,6 +290,10 @@ def compare_with_baseline(result: dict[str, Any], baselines_root: str | Path) ->
     return {
         "baseline_path": str(score_path),
         "baseline_generated_at": baseline.get("generated_at"),
+        "dataset_hash_match": str(result.get("dataset", {}).get("hash", ""))
+        == str(baseline.get("dataset", {}).get("hash", "")),
+        "current_summary": current_summary,
+        "baseline_summary": baseline_summary,
         "pass_rate_delta": round(
             float(current_summary.get("pass_rate", 0.0))
             - float(baseline_summary.get("pass_rate", 0.0)),
@@ -305,3 +310,155 @@ def compare_with_baseline(result: dict[str, Any], baselines_root: str | Path) ->
             4,
         ),
     }
+
+
+def evaluate_regression_gate(
+    *,
+    comparison: dict[str, Any] | None,
+    require_baseline: bool,
+    max_pass_rate_drop: float,
+    max_citation_coverage_drop: float,
+    max_p95_latency_increase_ms: float,
+) -> dict[str, Any]:
+    violations: list[str] = []
+    normalized_pass_drop = max(0.0, float(max_pass_rate_drop))
+    normalized_citation_drop = max(0.0, float(max_citation_coverage_drop))
+    normalized_latency_increase = max(0.0, float(max_p95_latency_increase_ms))
+
+    if comparison is None:
+        if require_baseline:
+            violations.append("baseline_missing")
+        return {
+            "passed": not require_baseline,
+            "violations": violations,
+            "thresholds": {
+                "max_pass_rate_drop": normalized_pass_drop,
+                "max_citation_coverage_drop": normalized_citation_drop,
+                "max_p95_latency_increase_ms": normalized_latency_increase,
+            },
+        }
+
+    if comparison.get("dataset_hash_match") is False:
+        violations.append("baseline_dataset_hash_mismatch")
+
+    if float(comparison.get("pass_rate_delta", 0.0)) < -normalized_pass_drop:
+        violations.append("pass_rate_regression")
+
+    if float(comparison.get("citation_coverage_delta", 0.0)) < -normalized_citation_drop:
+        violations.append("citation_coverage_regression")
+
+    if float(comparison.get("p95_latency_ms_delta", 0.0)) > normalized_latency_increase:
+        violations.append("p95_latency_regression")
+
+    return {
+        "passed": not violations,
+        "violations": violations,
+        "thresholds": {
+            "max_pass_rate_drop": normalized_pass_drop,
+            "max_citation_coverage_drop": normalized_citation_drop,
+            "max_p95_latency_increase_ms": normalized_latency_increase,
+        },
+    }
+
+
+def _find_repo_file_for_rule(repo_root: Path, rule: dict[str, Any]) -> Path | None:
+    needle = str(rule.get("file_path_contains", "")).strip().replace("\\", "/")
+    if not needle:
+        return None
+
+    direct = (repo_root / needle).resolve()
+    if direct.exists() and direct.is_file():
+        return direct
+
+    if needle.startswith("./"):
+        direct2 = (repo_root / needle[2:]).resolve()
+        if direct2.exists() and direct2.is_file():
+            return direct2
+
+    for candidate in repo_root.rglob("*"):
+        if not candidate.is_file():
+            continue
+        rel = candidate.relative_to(repo_root).as_posix()
+        if needle in rel:
+            return candidate
+    return None
+
+
+def _find_line_for_keywords(file_path: Path, keywords: list[str], fallback_line: int) -> int:
+    try:
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return max(1, int(fallback_line or 1))
+
+    lowered = [k.lower().strip() for k in keywords if str(k).strip()]
+    if not lowered:
+        return max(1, int(fallback_line or 1))
+
+    for idx, line in enumerate(lines, start=1):
+        text = line.lower()
+        if any(token in text for token in lowered):
+            return idx
+    return max(1, int(fallback_line or 1))
+
+
+def build_offline_codebase_query_fn(
+    *,
+    dataset_payload: dict[str, Any],
+    repo_root: str | Path,
+) -> QueryFn:
+    root = Path(repo_root).resolve()
+    case_by_question = {
+        str(case.get("question", "")).strip(): case
+        for case in (dataset_payload.get("cases") or [])
+    }
+
+    def _query(question: str, _query_limit: int, citation_limit: int, _timeout_s: float) -> dict[str, Any]:
+        started = time.perf_counter()
+        case = case_by_question.get(str(question).strip())
+        if not case:
+            return {
+                "answer": "",
+                "citations": [],
+                "error": "offline_case_not_found",
+                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+            }
+
+        keywords = [str(k).strip().lower() for k in case.get("expected_keywords", []) if str(k).strip()]
+        rules = list(case.get("expected_citations", []) or [])
+        citations: list[dict[str, Any]] = []
+
+        for rule in rules:
+            if len(citations) >= max(1, int(citation_limit)):
+                break
+            file_path = _find_repo_file_for_rule(root, rule)
+            if not file_path:
+                continue
+            line = _find_line_for_keywords(
+                file_path,
+                keywords=keywords,
+                fallback_line=_line_value(rule.get("line_min", 1)),
+            )
+            rel = file_path.relative_to(root).as_posix()
+            citations.append({"file_path": rel, "line": line})
+
+        if not citations:
+            return {
+                "answer": "",
+                "citations": [],
+                "error": "offline_citation_resolution_failed",
+                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+            }
+
+        answer = (
+            "Offline technical QA evidence. "
+            f"Keywords: {', '.join(keywords[:10])}. "
+            "Citations resolved from repository files."
+        )
+        return {
+            "answer": answer,
+            "citations": citations,
+            "error": None,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+        }
+
+    return _query

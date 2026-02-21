@@ -125,6 +125,231 @@ class ObservabilityService:
             logger.error("Erro no repositório ao gerar resumo de métricas", exc_info=e)
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
 
+    @staticmethod
+    def _safe_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _percentile(values: list[float], p: float) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        if len(ordered) == 1:
+            return ordered[0]
+        idx = int(round((len(ordered) - 1) * max(0.0, min(1.0, p))))
+        idx = max(0, min(len(ordered) - 1, idx))
+        return float(ordered[idx])
+
+    @staticmethod
+    def _status_is_error(status: Any) -> bool:
+        if status is None:
+            return False
+        text = str(status).strip().lower()
+        if not text:
+            return False
+        if text in {"ok", "success", "passed", "pass", "completed"}:
+            return False
+        if text in {"error", "failed", "failure", "timeout", "exception", "critical"}:
+            return True
+        if text.startswith("5") and len(text) >= 3 and text[:3].isdigit():
+            return True
+        if text in {"5xx", "server_error"}:
+            return True
+        return False
+
+    @staticmethod
+    def _classify_event_domain(event: dict[str, Any]) -> str:
+        endpoint = str(event.get("endpoint") or "").strip().lower()
+        action = str(event.get("action") or "").strip().lower()
+
+        if "/api/v1/workers" in endpoint or endpoint.startswith("workers"):
+            return "workers"
+        if "worker" in action:
+            return "workers"
+
+        if "/api/v1/rag" in endpoint or endpoint.startswith("rag"):
+            return "rag"
+
+        if "/api/v1/chat" in endpoint or endpoint.startswith("chat"):
+            return "chat"
+
+        if "/api/v1/tools" in endpoint or endpoint.startswith("tool:"):
+            return "tools"
+        if "tool_" in action or action.startswith("tool"):
+            return "tools"
+
+        return "other"
+
+    @staticmethod
+    def _get_domain_slo_thresholds() -> dict[str, dict[str, float]]:
+        return {
+            "chat": {
+                "max_error_rate_pct": float(getattr(settings, "OQ_SLO_CHAT_MAX_ERROR_RATE_PCT", 5.0)),
+                "max_p95_latency_ms": float(getattr(settings, "OQ_SLO_CHAT_MAX_P95_LATENCY_MS", 3500.0)),
+            },
+            "rag": {
+                "max_error_rate_pct": float(getattr(settings, "OQ_SLO_RAG_MAX_ERROR_RATE_PCT", 5.0)),
+                "max_p95_latency_ms": float(getattr(settings, "OQ_SLO_RAG_MAX_P95_LATENCY_MS", 4500.0)),
+            },
+            "tools": {
+                "max_error_rate_pct": float(getattr(settings, "OQ_SLO_TOOLS_MAX_ERROR_RATE_PCT", 3.0)),
+                "max_p95_latency_ms": float(getattr(settings, "OQ_SLO_TOOLS_MAX_P95_LATENCY_MS", 2500.0)),
+            },
+            "workers": {
+                "max_error_rate_pct": float(
+                    getattr(settings, "OQ_SLO_WORKERS_MAX_ERROR_RATE_PCT", 3.0)
+                ),
+                "max_p95_latency_ms": float(
+                    getattr(settings, "OQ_SLO_WORKERS_MAX_P95_LATENCY_MS", 4000.0)
+                ),
+            },
+        }
+
+    async def get_domain_slo_report(
+        self,
+        *,
+        window_minutes: int | None = None,
+        min_events: int | None = None,
+    ) -> dict[str, Any]:
+        now_ts = float(time.time())
+        wm = max(1, int(window_minutes or getattr(settings, "OQ_SLO_WINDOW_MINUTES", 15) or 15))
+        me = max(
+            1,
+            int(min_events or getattr(settings, "OQ_SLO_MIN_EVENTS_PER_DOMAIN", 20) or 20),
+        )
+        start_ts = now_ts - (wm * 60.0)
+        thresholds = self._get_domain_slo_thresholds()
+
+        try:
+            events = self._repo.get_audit_events(
+                user_id=None,
+                tool=None,
+                status=None,
+                start_ts=start_ts,
+                end_ts=now_ts,
+                endpoint=None,
+                limit=20000,
+                offset=0,
+            )
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro ao coletar eventos para OQ-002", exc_info=e)
+            raise ObservabilityServiceError("Falha ao coletar eventos para SLO por domÃ­nio.") from e
+
+        by_domain: dict[str, list[dict[str, Any]]] = {k: [] for k in thresholds.keys()}
+        for ev in events:
+            domain = self._classify_event_domain(ev)
+            if domain in by_domain:
+                by_domain[domain].append(ev)
+
+        domain_reports: list[dict[str, Any]] = []
+        active_alerts: list[dict[str, Any]] = []
+
+        for domain, cfg in thresholds.items():
+            rows = by_domain.get(domain) or []
+            total = len(rows)
+            errors = sum(1 for row in rows if self._status_is_error(row.get("status")))
+            error_rate_pct = round((errors / total) * 100.0, 2) if total else 0.0
+            availability_pct = round(max(0.0, 100.0 - error_rate_pct), 2)
+
+            latencies = [
+                lat
+                for lat in (self._safe_float(row.get("latency_ms")) for row in rows)
+                if lat is not None and lat >= 0.0
+            ]
+            p95_latency_ms = round(self._percentile(latencies, 0.95), 2) if latencies else 0.0
+
+            breaches: list[dict[str, Any]] = []
+            status = "ok"
+            if total < me:
+                status = "insufficient_data"
+            else:
+                if error_rate_pct > cfg["max_error_rate_pct"]:
+                    breaches.append(
+                        {
+                            "type": "error_rate",
+                            "observed": error_rate_pct,
+                            "threshold": cfg["max_error_rate_pct"],
+                            "message": (
+                                f"Taxa de erro acima do limite: {error_rate_pct:.2f}% > "
+                                f"{cfg['max_error_rate_pct']:.2f}%"
+                            ),
+                        }
+                    )
+                if p95_latency_ms > cfg["max_p95_latency_ms"]:
+                    breaches.append(
+                        {
+                            "type": "latency_p95_ms",
+                            "observed": p95_latency_ms,
+                            "threshold": cfg["max_p95_latency_ms"],
+                            "message": (
+                                f"P95 de latÃªncia acima do limite: {p95_latency_ms:.2f}ms > "
+                                f"{cfg['max_p95_latency_ms']:.2f}ms"
+                            ),
+                        }
+                    )
+                if breaches:
+                    status = "breach"
+                    active_alerts.append(
+                        {
+                            "domain": domain,
+                            "severity": "warning",
+                            "breaches": breaches,
+                        }
+                    )
+
+            domain_reports.append(
+                {
+                    "domain": domain,
+                    "status": status,
+                    "window": {
+                        "start_ts": start_ts,
+                        "end_ts": now_ts,
+                        "window_minutes": wm,
+                    },
+                    "sli": {
+                        "total_events": total,
+                        "error_events": errors,
+                        "availability_pct": availability_pct,
+                        "error_rate_pct": error_rate_pct,
+                        "latency_p95_ms": p95_latency_ms,
+                    },
+                    "slo": {
+                        "max_error_rate_pct": cfg["max_error_rate_pct"],
+                        "max_p95_latency_ms": cfg["max_p95_latency_ms"],
+                        "min_events": me,
+                    },
+                    "breaches": breaches,
+                }
+            )
+
+        if active_alerts:
+            overall_status = "degraded"
+        elif all(item["status"] == "insufficient_data" for item in domain_reports):
+            overall_status = "insufficient_data"
+        else:
+            overall_status = "ok"
+
+        logger.info(
+            "oq002_domain_slo_report_generated",
+            status=overall_status,
+            window_minutes=wm,
+            active_alerts=len(active_alerts),
+            domains=len(domain_reports),
+            total_events=len(events),
+        )
+
+        return {
+            "status": overall_status,
+            "window": {"start_ts": start_ts, "end_ts": now_ts, "window_minutes": wm},
+            "domains": domain_reports,
+            "active_alerts": active_alerts,
+        }
+
     async def get_predictive_anomaly_report(
         self,
         *,

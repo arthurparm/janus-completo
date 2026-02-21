@@ -30,6 +30,7 @@ from app.config import settings
 from app.core.agents.graph_orchestrator import close_graph, init_graph
 from app.core.infrastructure import (
     CorrelationMiddleware,
+    DomainSLOMetricsMiddleware,
     RateLimitMiddleware,
     setup_logging,
     setup_tracing,
@@ -189,6 +190,7 @@ else:
         ),
     )
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(DomainSLOMetricsMiddleware)
 app.add_middleware(CorrelationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
