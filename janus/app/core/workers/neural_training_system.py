@@ -49,37 +49,41 @@ def _load_prompt_template(prompt_name: str) -> str:
 
 # ==================== MÉTRICAS ====================
 
-try:
-    _TRAINING_JOBS = Counter(
-        "neural_training_jobs_total",
-        "Total de jobs de treinamento",
-        ["model_type", "outcome"],
-    )
-except ValueError:
-    _TRAINING_JOBS = REGISTRY._names_to_collectors["neural_training_jobs_total"]
+def _get_or_create_metric(metric_class, name, documentation, labels=None, **kwargs):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        if labels:
+            return metric_class(name, documentation, labels, **kwargs)
+        return metric_class(name, documentation, **kwargs)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
 
-try:
-    _TRAINING_LATENCY = Histogram(
-        "neural_training_latency_seconds", "Duração de treinamento de modelos"
-    )
-except ValueError:
-    _TRAINING_LATENCY = REGISTRY._names_to_collectors["neural_training_latency_seconds"]
+_TRAINING_JOBS = _get_or_create_metric(
+    Counter,
+    "neural_training_jobs_total",
+    "Total de jobs de treinamento",
+    labels=["model_type", "outcome"],
+)
 
-try:
-    _MODEL_ACCURACY = Gauge(
-        "neural_model_accuracy",
-        "Acurácia do modelo treinado",
-        ["model_name", "model_version"],
-    )
-except ValueError:
-    _MODEL_ACCURACY = REGISTRY._names_to_collectors["neural_model_accuracy"]
+_TRAINING_LATENCY = _get_or_create_metric(
+    Histogram,
+    "neural_training_latency_seconds",
+    "Duração de treinamento de modelos",
+)
 
-try:
-    _TRAINING_EXAMPLES = Gauge(
-        "neural_training_examples_count", "Número de exemplos no dataset de treino"
-    )
-except ValueError:
-    _TRAINING_EXAMPLES = REGISTRY._names_to_collectors["neural_training_examples_count"]
+_MODEL_ACCURACY = _get_or_create_metric(
+    Gauge,
+    "neural_model_accuracy",
+    "Acurácia do modelo treinado",
+    labels=["model_name", "model_version"],
+)
+
+_TRAINING_EXAMPLES = _get_or_create_metric(
+    Gauge,
+    "neural_training_examples_count",
+    "Número de exemplos no dataset de treino",
+)
 
 
 # ==================== ENUMS ====================
@@ -263,8 +267,20 @@ class NeuralTrainer:
 
     def __init__(self):
         self.preparator = DatasetPreparator()
-        self.models_dir = Path("/app/workspace/models")
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            from app.core.infrastructure.filesystem_manager import WORKSPACE_DIR
+            self.models_dir = WORKSPACE_DIR / "models"
+        except ImportError:
+            # Fallback seguro para testes unitários ou execução isolada
+            self.models_dir = Path.cwd() / "workspace" / "models"
+
+        try:
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            # Em ambientes restritos (CI/GitHub Actions), tenta usar um path local temporário
+            # se /app/workspace não for gravável
+            self.models_dir = Path.cwd() / "models_tmp"
+            self.models_dir.mkdir(parents=True, exist_ok=True)
 
     async def train_model(self, config: TrainingConfig) -> TrainingResult:
         """
