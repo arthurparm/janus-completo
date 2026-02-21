@@ -1,0 +1,10 @@
+{
+  "dataset_id": "technical-qa",
+  "versions": [
+    {
+      "version": "v1",
+      "published_at": "2026-02-21T01:15:31.479319+00:00",
+      "score_path": "technical-qa/v1/score.json"
+    }
+  ]
+}

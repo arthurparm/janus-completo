@@ -19,8 +19,33 @@ From `janus/`:
 python scripts/eval_technical_qa.py --compare-baseline
 ```
 
+Offline recurring run (no API dependency):
+
+```bash
+python scripts/eval_technical_qa.py \
+  --mode offline-codebase \
+  --repo-root .. \
+  --compare-baseline \
+  --gate-on-regression \
+  --require-baseline
+```
+
 To publish a new baseline:
 
 ```bash
-python scripts/eval_technical_qa.py --publish-baseline --compare-baseline
+python scripts/eval_technical_qa.py \
+  --mode offline-codebase \
+  --repo-root .. \
+  --publish-baseline \
+  --compare-baseline
 ```
+
+## Regression gate
+
+When `--gate-on-regression` is enabled, the run fails if any configured threshold is violated:
+
+- pass rate drop (`--max-pass-rate-drop`, default `0.02`)
+- citation coverage drop (`--max-citation-coverage-drop`, default `0.02`)
+- p95 latency increase (`--max-p95-latency-increase-ms`, default `250`)
+
+If `--require-baseline` is set and baseline is missing, the gate fails.

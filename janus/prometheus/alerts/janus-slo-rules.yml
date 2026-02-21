@@ -1,0 +1,128 @@
+groups:
+  - name: janus-domain-slo-error-rate
+    rules:
+      - alert: JanusDomainErrorRateHighChat
+        expr: |
+          (
+            sum(rate(janus_domain_requests_total{domain="chat",outcome="error"}[5m]))
+            /
+            clamp_min(sum(rate(janus_domain_requests_total{domain="chat"}[5m])), 0.001)
+          ) * 100 > 5
+        for: 10m
+        labels:
+          severity: warning
+          domain: chat
+          slo_type: error_rate
+        annotations:
+          summary: "SLO de erro violado no domínio chat"
+          description: "Taxa de erro do domínio chat está acima de 5% por mais de 10 minutos."
+
+      - alert: JanusDomainErrorRateHighRag
+        expr: |
+          (
+            sum(rate(janus_domain_requests_total{domain="rag",outcome="error"}[5m]))
+            /
+            clamp_min(sum(rate(janus_domain_requests_total{domain="rag"}[5m])), 0.001)
+          ) * 100 > 5
+        for: 10m
+        labels:
+          severity: warning
+          domain: rag
+          slo_type: error_rate
+        annotations:
+          summary: "SLO de erro violado no domínio rag"
+          description: "Taxa de erro do domínio rag está acima de 5% por mais de 10 minutos."
+
+      - alert: JanusDomainErrorRateHighTools
+        expr: |
+          (
+            sum(rate(janus_domain_requests_total{domain="tools",outcome="error"}[5m]))
+            /
+            clamp_min(sum(rate(janus_domain_requests_total{domain="tools"}[5m])), 0.001)
+          ) * 100 > 3
+        for: 10m
+        labels:
+          severity: warning
+          domain: tools
+          slo_type: error_rate
+        annotations:
+          summary: "SLO de erro violado no domínio tools"
+          description: "Taxa de erro do domínio tools está acima de 3% por mais de 10 minutos."
+
+      - alert: JanusDomainErrorRateHighWorkers
+        expr: |
+          (
+            sum(rate(janus_domain_requests_total{domain="workers",outcome="error"}[5m]))
+            /
+            clamp_min(sum(rate(janus_domain_requests_total{domain="workers"}[5m])), 0.001)
+          ) * 100 > 3
+        for: 10m
+        labels:
+          severity: warning
+          domain: workers
+          slo_type: error_rate
+        annotations:
+          summary: "SLO de erro violado no domínio workers"
+          description: "Taxa de erro do domínio workers está acima de 3% por mais de 10 minutos."
+
+  - name: janus-domain-slo-latency
+    rules:
+      - alert: JanusDomainP95LatencyHighChat
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(janus_domain_request_latency_seconds_bucket{domain="chat"}[5m])) by (le)
+          ) * 1000 > 3500
+        for: 10m
+        labels:
+          severity: warning
+          domain: chat
+          slo_type: latency_p95
+        annotations:
+          summary: "SLO de latência P95 violado no domínio chat"
+          description: "P95 de latência do domínio chat está acima de 3500ms por mais de 10 minutos."
+
+      - alert: JanusDomainP95LatencyHighRag
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(janus_domain_request_latency_seconds_bucket{domain="rag"}[5m])) by (le)
+          ) * 1000 > 4500
+        for: 10m
+        labels:
+          severity: warning
+          domain: rag
+          slo_type: latency_p95
+        annotations:
+          summary: "SLO de latência P95 violado no domínio rag"
+          description: "P95 de latência do domínio rag está acima de 4500ms por mais de 10 minutos."
+
+      - alert: JanusDomainP95LatencyHighTools
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(janus_domain_request_latency_seconds_bucket{domain="tools"}[5m])) by (le)
+          ) * 1000 > 2500
+        for: 10m
+        labels:
+          severity: warning
+          domain: tools
+          slo_type: latency_p95
+        annotations:
+          summary: "SLO de latência P95 violado no domínio tools"
+          description: "P95 de latência do domínio tools está acima de 2500ms por mais de 10 minutos."
+
+      - alert: JanusDomainP95LatencyHighWorkers
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(janus_domain_request_latency_seconds_bucket{domain="workers"}[5m])) by (le)
+          ) * 1000 > 4000
+        for: 10m
+        labels:
+          severity: warning
+          domain: workers
+          slo_type: latency_p95
+        annotations:
+          summary: "SLO de latência P95 violado no domínio workers"
+          description: "P95 de latência do domínio workers está acima de 4000ms por mais de 10 minutos."
