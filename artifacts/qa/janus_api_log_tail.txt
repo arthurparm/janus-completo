@@ -1,0 +1,200 @@
+janus_api  | InstÃ¢ncia do AsyncQdrantClient criada.
+janus_api  | KnowledgeConsolidator initialized.
+janus_api  | âœ“ Worker de consolidaÃ§Ã£o de conhecimento iniciado.
+janus_api  | Starting neural training worker...
+janus_api  | âœ“ Neural training worker started.
+janus_api  | {"event": "SchedulerService inicializado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.367633Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"schedule_type": "interval", "next_run": "2026-02-21T01:10:04.368013", "event": "Job 'meta_agent_analysis' registrado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.368055Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"schedule_type": "interval", "next_run": "2026-02-21T01:15:04.368394", "event": "Job 'memory_health_check' registrado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.368431Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"schedule_type": "daily", "next_run": "2026-02-21T03:00:00", "event": "Job 'daily_cleanup' registrado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.368799Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"schedule_type": "interval", "next_run": "2026-02-21T02:05:04.369127", "event": "Job 'update_gemini_quotas' registrado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.369185Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Jobs padr\u00e3o registrados: 4", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.369592Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "SchedulerService iniciado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.369982Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+janus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM sysdefault
+janus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+janus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM sysdefault
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.front
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.rear
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.center_lfe
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.side
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround21
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround21
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround40
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround41
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround50
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround51
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround71
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.hdmi
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.hdmi
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline
+janus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+janus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM default
+janus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+janus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM default
+janus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_id returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+janus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+janus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+janus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory
+janus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM dmix
+janus_api  | Cannot connect to server socket err = No such file or directory
+janus_api  | Cannot connect to server request channel
+janus_api  | jack server is not running or cannot be started
+janus_api  | JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
+janus_api  | JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock
+janus_api  | {"event": "Failed to initialize microphone: No Default Input Device Available. STT disabled.", "logger": "app.core.senses.audio.stt_service", "level": "warning", "timestamp": "2026-02-21T01:05:04.390264Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "STT disabled: no microphone detected.", "logger": "app.core.senses.audio.manager", "level": "info", "timestamp": "2026-02-21T01:05:04.390839Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "TTS Service initialized with edge-tts (Voice: pt-BR-AntonioNeural)", "logger": "app.core.senses.audio.tts_service", "level": "info", "timestamp": "2026-02-21T01:05:04.391451Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+janus_api  | {"event": "WakeWord Service initialized. Models: ['/opt/venv/lib/python3.11/site-packages/openwakeword/resources/models/hey_jarvis_v0.1.tflite']", "logger": "app.core.senses.audio.wakeword_service", "level": "info", "timestamp": "2026-02-21T01:05:04.534340Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Voice Manager initialized.", "logger": "app.core.senses.audio.manager", "level": "info", "timestamp": "2026-02-21T01:05:04.534992Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Kernel startup complete. System is ready.", "logger": "app.core.kernel", "level": "info", "timestamp": "2026-02-21T01:05:04.535462Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Monitoramento iniciado (intervalo=30s)
+janus_api  | Iniciando loop para o conector: episodic_memory_connector
+janus_api  | {"event": "LifeCycle: Disparando consolida\u00e7\u00e3o peri\u00f3dica (Batch)...", "logger": "app.core.workers.life_cycle_worker", "level": "info", "timestamp": "2026-02-21T01:05:04.539772Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Scheduler loop iniciado", "logger": "app.services.scheduler_service", "level": "info", "timestamp": "2026-02-21T01:05:04.541134Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Starting automatic codebase indexation...", "logger": "app.core.kernel", "level": "info", "timestamp": "2026-02-21T01:05:04.541595Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Iniciando orquestra\u00e7\u00e3o de indexa\u00e7\u00e3o da base de c\u00f3digo em '/app'...", "logger": "app.services.knowledge_service", "level": "info", "timestamp": "2026-02-21T01:05:04.542059Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | HTTP Request: GET http://qdrant:6333 "HTTP/1.1 200 OK"
+janus_api  | {"threshold": 3, "recovery_timeout": 30, "event": "circuit_breaker_initialized", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:04.588909Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | HTTP Request: GET http://qdrant:6333/collections/janus_episodic_memory "HTTP/1.1 200 OK"
+janus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll "HTTP/1.1 200 OK"
+janus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/query?timeout=30 "HTTP/1.1 200 OK"
+janus_api  | {"operation": "qdrant_search", "state": "CLOSED", "execution_time_seconds": 0.012298345565795898, "failure_count": 0, "event": "circuit_breaker_call_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:04.603344Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"operation": "qdrant_search", "attempt": 1, "max_attempts": 3, "elapsed_ms": 13, "event": "resilient_attempt_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:04.604010Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Processando 50 itens coletados.
+janus_api  | PromptLoader inicializado com suporte a banco de dados Relacional
+janus_api  | {"operation": "neo4j_execute", "state": "CLOSED", "execution_time_seconds": 0.10186433792114258, "failure_count": 0, "event": "circuit_breaker_call_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:04.644392Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"operation": "neo4j_execute", "attempt": 1, "max_attempts": 1, "elapsed_ms": 102, "event": "resilient_attempt_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:04.644976Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Iniciando processamento de tarefa de consolidaÃ§Ã£o: task_id=5cdb495c-722c-420d-9a33-1c473f7fb0a8, type=knowledge_consolidation
+janus_api  | {"event": "LifeCycle: Tarefa de consolida\u00e7\u00e3o enviada com sucesso.", "logger": "app.core.workers.life_cycle_worker", "level": "info", "timestamp": "2026-02-21T01:05:08.337458Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll "HTTP/1.1 200 OK"
+janus_api  | Consolidating experience 654b0980-a3c9-5871-9d84-c87431b1a9e1...
+janus_api  | Graph orchestrator initialized with AsyncPostgresSaver.
+janus_api  | {"event": "Loading global prompts from database...", "logger": "app.main", "level": "info", "timestamp": "2026-02-21T01:05:08.431437Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll "HTTP/1.1 200 OK"
+janus_api  | {"operation": "qdrant_scroll", "state": "CLOSED", "execution_time_seconds": 0.09795427322387695, "failure_count": 0, "event": "circuit_breaker_call_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:08.435964Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Lendo ficheiro de forma segura: /app/workspace/training_data.jsonl
+janus_api  | {"operation": "qdrant_scroll", "attempt": 1, "max_attempts": 3, "elapsed_ms": 98, "event": "resilient_attempt_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:08.436511Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"endpoint": "/memory/service", "step": "recall_recent_failures", "source": "memory_service", "db": "qdrant", "latency_ms": 99, "confidence": 0.0, "error_code": null, "event": "rag_step_telemetry", "logger": "app.core.memory.rag_telemetry", "level": "info", "timestamp": "2026-02-21T01:05:08.437348Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Escrevendo em ficheiro de forma segura: /app/workspace/training_data.jsonl
+janus_api  | {'event': 'write_file_success', 'path': '/app/workspace/training_data.jsonl', 'bytes': 465858, 'overwrite': True, 'latency_ms': 10.3}
+janus_api  | Carregando 1 configuraÃ§Ãµes de limite do Firebase.
+janus_api  | Dataset atualizado: 0 novos exemplos (Total: 353).
+janus_api  | Candidato filtrado por custo: google_gemini:gemini-2.5-flash (expected_cost=3.0000 > max_cost=0.0100, role=knowledge_curator)
+janus_api  | Candidato filtrado por custo: openai:gpt-4o (expected_cost=30.0000 > max_cost=0.0100, role=knowledge_curator)
+janus_api  | EstratÃ©gia fast_and_cheap: Tentando xai:grok-4-1-fast-reasoning (score=0.330, cost_1k=0.001, avg_lat=0.000)
+janus_api  | LLM 'xai:grok-4-1-fast-reasoning' inicializado com sucesso.
+janus_api  | {"event": "Global prompts loaded successfully.", "logger": "app.main", "level": "info", "timestamp": "2026-02-21T01:05:09.705961Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"user_id": "-", "event": "System user ready.", "logger": "app.main", "level": "info", "timestamp": "2026-02-21T01:05:09.727175Z", "trace_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Iniciando orquestrador de workers...
+janus_api  | Memory Maintenance Worker started
+janus_api  | Iniciando worker de consolidaÃ§Ã£o de conhecimento...
+janus_api  | âœ“ Worker de consolidaÃ§Ã£o de conhecimento iniciado.
+janus_api  | Starting agent tasks worker...
+janus_api  | âœ“ Agent tasks worker started.
+janus_api  | Starting neural training worker...
+janus_api  | âœ“ Neural training worker started.
+janus_api  | Iniciando worker de Reflexion (janus.tasks.reflexion)...
+janus_api  | âœ“ Worker de Reflexion iniciado.
+janus_api  | Starting Meta-Agent worker (cycle queue)...
+janus_api  | Meta-Agent worker started.
+janus_api  | Starting Meta-Agent failure consumer (janus.failure.detected)...
+janus_api  | Meta-Agent failure consumer started.
+janus_api  | Iniciando Router Worker...
+janus_api  | âœ“ Router Worker iniciado.
+janus_api  | Iniciando Code Agent Worker...
+janus_api  | âœ“ Code Agent Worker iniciado.
+janus_api  | Iniciando Red Team Agent Worker...
+janus_api  | Red Team Agent Worker iniciado.
+janus_api  | Iniciando Professor Agent Worker...
+janus_api  | âœ“ Professor Agent Worker iniciado.
+janus_api  | Iniciando Sandbox Agent Worker...
+janus_api  | âœ“ Sandbox Agent Worker iniciado.
+janus_api  | Iniciando Thinker Agent Worker...
+janus_api  | âœ“ Thinker Agent Worker iniciado.
+janus_api  | Iniciando Distillation Worker...
+janus_api  | âœ“ Distillation Worker iniciado.
+janus_api  | Worker google_productivity desativado por configuracao.
+janus_api  | Starting Debate Proponent Worker...
+janus_api  | âœ“ Debate Proponent Worker started.
+janus_api  | Starting Debate Critic Worker...
+janus_api  | âœ“ Debate Critic Worker started.
+janus_api  | Iniciando Codex Worker...
+janus_api  | âœ“ Codex Worker iniciado.
+janus_api  | âœ“ 21 workers iniciados pelo orquestrador.
+janus_api  | {"count": 21, "event": "Orchestrator workers started on startup.", "logger": "app.main", "level": "info", "timestamp": "2026-02-21T01:05:09.982871Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Running memory maintenance...
+janus_api  | Iniciando Auto-Scaler de filas (intervalo=10s)...
+janus_api  | Auto-Healer: iniciado (intervalo=30s).
+janus_api  | {"event": "GoalManager initialized with in-memory storage only (Firestore optional).", "logger": "app.core.autonomy.goal_manager", "level": "info", "timestamp": "2026-02-21T01:05:09.985067Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"interval_seconds": 300, "event": "[AutonomyWorker] Iniciado", "logger": "app.core.workers.autonomy_worker", "level": "info", "timestamp": "2026-02-21T01:05:09.985448Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Orquestrando busca de sa\u00fade do sistema via servi\u00e7o.", "logger": "app.services.optimization_service", "level": "info", "timestamp": "2026-02-21T01:05:09.985736Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"health_score": 1.0, "avg_response_time": 0.0, "error_rate": 0.0, "tool_success_rate": 1.0, "active_tools_count": 5, "failed_tools": [], "slow_tools": [], "event": "[AutonomyWorker] Perceber: m\u00e9tricas", "logger": "app.core.workers.autonomy_worker", "level": "info", "timestamp": "2026-02-21T01:05:09.986187Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"sleep_seconds": 300, "event": "[AutonomyWorker] Nenhum objetivo proativo pendente. Dormindo\u2026", "logger": "app.core.workers.autonomy_worker", "level": "info", "timestamp": "2026-02-21T01:05:09.986480Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | INFO:     Application startup complete.
+janus_api  | HTTP Request: GET http://qdrant:6333 "HTTP/1.1 200 OK"
+janus_api  | {"threshold": 3, "recovery_timeout": 30, "event": "circuit_breaker_initialized", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:10.025005Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+janus_api  | HTTP Request: GET http://qdrant:6333/collections/janus_episodic_memory "HTTP/1.1 200 OK"
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | {"operation": "neo4j_query", "state": "CLOSED", "execution_time_seconds": 0.05625772476196289, "failure_count": 0, "event": "circuit_breaker_call_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:10.039923Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"operation": "neo4j_query", "attempt": 1, "max_attempts": 5, "elapsed_ms": 56, "event": "resilient_attempt_success", "logger": "app.core.infrastructure.resilience", "level": "info", "timestamp": "2026-02-21T01:05:10.040311Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | {"event": "Archived 0 old/unimportant memories", "logger": "app.core.memory.generative_memory", "level": "info", "timestamp": "2026-02-21T01:05:10.040635Z", "trace_id": "-", "user_id": "-", "session_id": "-", "conversation_id": "-", "project_id": "-"}
+janus_api  | Memory maintenance completed.
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Consumidor iniciado
+janus_api  | Auto-Scaler: adicionados 1 consumidores em 'janus.agent.tasks' (prefetch=10).
+janus_api  | Consumidor iniciado
+janus_api  | INFO:     172.18.0.5:51992 - "GET /metrics HTTP/1.1" 200 OK
+janus_api  | INFO:     172.18.0.1:55608 - "GET /health HTTP/1.1" 200 OK
+janus_api  | INFO:     127.0.0.1:50420 - "GET /health HTTP/1.1" 200 OK
+janus_api  | INFO:     172.18.0.1:57488 - "GET /openapi.json HTTP/1.1" 200 OK

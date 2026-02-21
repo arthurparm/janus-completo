@@ -1,0 +1,411 @@
+{
+  "generated_at": "2026-02-21T01:05:17.624078+00:00",
+  "docker_available": true,
+  "commands": {
+    "compose_ps_json": {
+      "command": "docker compose ps --format json",
+      "returncode": 0,
+      "stdout": "{\"Command\":\"\\\"sh -lc '/opt/venv/bâ€¦\\\"\",\"CreatedAt\":\"2026-02-20 20:19:22 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"1f5f0e60d583\",\"Image\":\"janus-completo-janus-api:latest\",\"Labels\":\"com.docker.compose.image=sha256:1965db2ef49b70aced28772e12633b43de90fb30f1e17919958d8ac1daedc0f9,com.docker.compose.oneoff=False,com.docker.compose.version=5.0.1,desktop.docker.io/binds/3/Source=//./pipe/docker_engine,desktop.docker.io/binds/6/SourceKind=hostFile,com.docker.compose.container-number=1,com.docker.compose.replace=janus_api,desktop.docker.io/binds/3/Target=/var/run/docker.sock,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/app/tests,desktop.docker.io/ports/8000/tcp=:8000,desktop.docker.io/binds/4/SourceKind=hostFile,com.docker.compose.depends_on=postgres:service_healthy:false,qdrant:service_healthy:false,redis:service_healthy:false,neo4j:service_healthy:false,rabbitmq:service_healthy:false,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/2/Target=/app/data,desktop.docker.io/binds/4/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\app\\\\serviceAccountKey.json,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.service=janus-api,desktop.docker.io/binds/0/Target=/app/scripts,desktop.docker.io/binds/2/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data,desktop.docker.io/binds/1/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\tests,desktop.docker.io/binds/5/SourceKind=hostFile,desktop.docker.io/binds/6/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\workspace,desktop.docker.io/binds/3/SourceKind=hostFile,desktop.docker.io/binds/4/Target=/app/app/serviceAccountKey.json,desktop.docker.io/binds/5/Target=/app/app,desktop.docker.io/binds/6/Target=/app/workspace,desktop.docker.io/ports.scheme=v2,desktop.docker.io/binds/5/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\app,com.docker.compose.config-hash=c01d875f3c838717b8b911107015e6b376ee6e112038a2e25592e54a78534d50,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\scripts,desktop.docker.io/binds/2/SourceKind=hostFile\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦,/pipe/docker_eâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦\",\"Name\":\"janus_api\",\"Names\":\"janus_api\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"0.0.0.0:8000-\\u003e8000/tcp, [::]:8000-\\u003e8000/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"0.0.0.0\",\"TargetPort\":8000,\"PublishedPort\":8000,\"Protocol\":\"tcp\"},{\"URL\":\"::\",\"TargetPort\":8000,\"PublishedPort\":8000,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 hours ago\",\"Service\":\"janus-api\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 25 seconds (healthy)\"}\n{\"Command\":\"\\\"docker-entrypoint.sâ€¦\\\"\",\"CreatedAt\":\"2026-02-20 20:19:38 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"6d5e2e2c125e\",\"Image\":\"janus-completo-front\",\"Labels\":\"desktop.docker.io/ports/4300/tcp=:4300,com.docker.compose.config-hash=6cd48b97f7e2ccafc32fe2b0d4251d603f7e796bd198bb4d224b916246d04d91,com.docker.compose.depends_on=janus-api:service_healthy:false,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.container-number=1,com.docker.compose.image=sha256:0e719ab83d3d15adb5682034214565b0e1e986ab8d7b5459bbc5768a692d160e,com.docker.compose.oneoff=False,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.replace=janus_front,com.docker.compose.service=front,desktop.docker.io/ports.scheme=v2,com.docker.compose.project=janus-completo,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\front,desktop.docker.io/binds/0/Target=/app,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.version=5.0.1\",\"LocalVolumes\":\"1\",\"Mounts\":\"/run/desktop/mâ€¦,4abd7e792ef912â€¦\",\"Name\":\"janus_front\",\"Names\":\"janus_front\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"0.0.0.0:4300-\\u003e4300/tcp, [::]:4300-\\u003e4300/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"0.0.0.0\",\"TargetPort\":4300,\"PublishedPort\":4300,\"Protocol\":\"tcp\"},{\"URL\":\"::\",\"TargetPort\":4300,\"PublishedPort\":4300,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 hours ago\",\"Service\":\"front\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"/run.sh\\\"\",\"CreatedAt\":\"2026-02-03 10:53:26 -0300 -03\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"8914685e10ef\",\"Image\":\"grafana/grafana:10.4.2\",\"Labels\":\"com.docker.compose.image=sha256:7d5faae481a4c6f436c99e98af11534f7fd5e8d3e35213552dd1dd02bc393d2e,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.replace=janus_grafana,com.docker.compose.config-hash=e48712aad1989b2fad90a6a3922b7d48c99f78d8436e111bf35a451a6ae783c9,com.docker.compose.project=janus-completo,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/1/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\grafana\\\\dashboards,desktop.docker.io/binds/1/Target=/var/lib/grafana/dashboards,desktop.docker.io/ports.scheme=v2,com.docker.compose.container-number=1,com.docker.compose.service=grafana,desktop.docker.io/binds/1/SourceKind=hostFile,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\grafana\\\\provisioning,desktop.docker.io/binds/0/Target=/etc/grafana/provisioning,desktop.docker.io/ports/3000/tcp=127.0.0.1:3000,maintainer=Grafana Labs \\u003chello@grafana.com\\u003e,com.docker.compose.depends_on=prometheus:service_started:false\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦,/run/desktop/mâ€¦\",\"Name\":\"janus_grafana\",\"Names\":\"janus_grafana\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:3000-\\u003e3000/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":3000,\"PublishedPort\":3000,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"grafana\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours\"}\n{\"Command\":\"\\\"tini -g -- /startupâ€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"7753f9064bab\",\"Image\":\"neo4j:5.19-community\",\"Labels\":\"desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\neo4j,com.docker.compose.config-hash=dcfa0b3a1257e340a91e76e8f915e890f95f1705820d893f0524e1269f869dfb,com.docker.compose.depends_on=,com.docker.compose.oneoff=False,desktop.docker.io/binds/0/Target=/data,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,com.docker.compose.image=sha256:e5a03c2b120da495ac6d3198849818d54e6dec6209c79b975b5b5a235b2b86e4,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.replace=janus_neo4j,com.docker.compose.service=neo4j,desktop.docker.io/ports/7474/tcp=127.0.0.1:7474,desktop.docker.io/ports/7687/tcp=127.0.0.1:7687,com.docker.compose.container-number=1,com.docker.compose.project=janus-completo,com.docker.compose.version=5.0.1\",\"LocalVolumes\":\"1\",\"Mounts\":\"7c4b33d2b7aee5â€¦,/run/desktop/mâ€¦\",\"Name\":\"janus_neo4j\",\"Names\":\"janus_neo4j\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:7474-\\u003e7474/tcp, 127.0.0.1:7687-\\u003e7687/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":7474,\"PublishedPort\":7474,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":7687,\"PublishedPort\":7687,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"neo4j\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"/bin/sh -lc 'tr -d â€¦\\\"\",\"CreatedAt\":\"2026-02-20 20:19:22 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"f13119273c76\",\"Image\":\"janus-completo-ollama\",\"Labels\":\"com.docker.compose.image=sha256:e9fffb048617d4d358a66ffb995ec930ec2289d550739735db5c2132fb8cbd95,com.docker.compose.oneoff=False,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\ollama,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.config-hash=b20666117f08c1aaa55376039e28d3b9a8c0f841ca5382ee7d1b2b566f0fd48a,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/ports/11434/tcp=127.0.0.1:11435,com.docker.compose.project=janus-completo,com.docker.compose.replace=janus_ollama,com.docker.compose.service=ollama,desktop.docker.io/binds/1/Target=/init-ollama.sh,org.opencontainers.image.version=24.04,com.docker.compose.depends_on=,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,desktop.docker.io/binds/0/Target=/root/.ollama,desktop.docker.io/binds/1/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\scripts\\\\init-ollama.sh,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,org.opencontainers.image.ref.name=ubuntu,com.docker.compose.container-number=1\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦,/run/desktop/mâ€¦\",\"Name\":\"janus_ollama\",\"Names\":\"janus_ollama\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:11435-\\u003e11434/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":11434,\"PublishedPort\":11435,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 hours ago\",\"Service\":\"ollama\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"/otelcol-contrib --â€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"5d73cc121f51\",\"Image\":\"otel/opentelemetry-collector-contrib:0.96.0\",\"Labels\":\"desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/8888/tcp=127.0.0.1:8888,org.opencontainers.image.revision=a2aded80f481c386748718d5a35ab258aeec6ade,org.opencontainers.image.source=https://github.com/open-telemetry/opentelemetry-collector-releases,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\otel\\\\otel-collector-config.yaml,desktop.docker.io/ports/4318/tcp=127.0.0.1:4318,desktop.docker.io/ports/8889/tcp=127.0.0.1:8889,org.opencontainers.image.version=0.96.0,com.docker.compose.depends_on=,com.docker.compose.project=janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Target=/etc/otel-collector-config.yaml,org.opencontainers.image.created=2024-03-05T10:49:11Z,org.opencontainers.image.name=opentelemetry-collector-releases,com.docker.compose.config-hash=da01f856a299d2ffd6db98f16dd532cc835c15fd0cba15e3b27e74432325f9f5,com.docker.compose.image=sha256:7ef2a2ff46b9e432321fdd63df104bfeedaf7b4e276950f42c634d0f23521fc4,com.docker.compose.service=otel-collector,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports/13133/tcp=127.0.0.1:13133,desktop.docker.io/ports/4317/tcp=127.0.0.1:4317,desktop.docker.io/ports/55679/tcp=127.0.0.1:55679,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.replace=janus_otel_collector\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦\",\"Name\":\"janus_otel_collector\",\"Names\":\"janus_otel_collector\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:4317-4318-\\u003e4317-4318/tcp, 127.0.0.1:8888-8889-\\u003e8888-8889/tcp, 127.0.0.1:13133-\\u003e13133/tcp, 127.0.0.1:55679-\\u003e55679/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":4317,\"PublishedPort\":4317,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":4318,\"PublishedPort\":4318,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":8888,\"PublishedPort\":8888,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":8889,\"PublishedPort\":8889,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":13133,\"PublishedPort\":13133,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":55679,\"PublishedPort\":55679,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"otel-collector\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours\"}\n{\"Command\":\"\\\"docker-entrypoint.sâ€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"512eb393b2f6\",\"Image\":\"pgvector/pgvector:pg16\",\"Labels\":\"com.docker.compose.oneoff=False,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.replace=janus_postgres,desktop.docker.io/ports/5432/tcp=127.0.0.1:5432,com.docker.compose.depends_on=,com.docker.compose.service=postgres,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\postgres,desktop.docker.io/ports.scheme=v2,com.docker.compose.image=sha256:0a07c4114ba6d1d04effcce3385e9f5ce305eb02e56a3d35948a415a52f193ec,com.docker.compose.config-hash=8481cadd25e029c1b7f715e6c0e5ebd1193ba5fbcbc1c4832a6e1cfab3765ad6,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/var/lib/postgresql/data,com.docker.compose.container-number=1\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦\",\"Name\":\"janus_postgres\",\"Names\":\"janus_postgres\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:5432-\\u003e5432/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":5432,\"PublishedPort\":5432,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"postgres\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"/bin/prometheus --câ€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:13 -0300 -03\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"045451bf1e29\",\"Image\":\"prom/prometheus:v2.51.0\",\"Labels\":\"maintainer=The Prometheus Authors \\u003cprometheus-developers@googlegroups.com\\u003e,desktop.docker.io/binds/0/Target=/etc/prometheus/prometheus.yml,com.docker.compose.config-hash=5d35c7f8ae081b9672e13e38e2be7796001b79611decb4b0659261a5dd319353,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\prometheus\\\\prometheus.yml,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,com.docker.compose.depends_on=janus-api:service_healthy:false,com.docker.compose.image=sha256:5ccad477d0057e62a7cd1981ffcc43785ac10c5a35522dc207466ff7e7ec845f,com.docker.compose.project=janus-completo,desktop.docker.io/ports/9090/tcp=127.0.0.1:9090,com.docker.compose.replace=janus_prometheus,com.docker.compose.service=prometheus,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.version=5.0.1\",\"LocalVolumes\":\"1\",\"Mounts\":\"/run/desktop/mâ€¦,3187bcccbd35b4â€¦\",\"Name\":\"janus_prometheus\",\"Names\":\"janus_prometheus\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:9090-\\u003e9090/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":9090,\"PublishedPort\":9090,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"prometheus\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 25 seconds\"}\n{\"Command\":\"\\\"./entrypoint.sh\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"cf6603e9a724\",\"Image\":\"qdrant/qdrant:v1.16.2\",\"Labels\":\"org.opencontainers.image.version=v1.16.2,com.docker.compose.service=qdrant,org.opencontainers.image.description=Official Qdrant image,org.opencontainers.image.source=https://github.com/qdrant/qdrant,com.docker.compose.version=5.0.1,com.docker.compose.config-hash=3dd55bbc5b5a1fe7620b84c74e773ba1e3fb92ae768a32e5639bb81a4b997465,com.docker.compose.container-number=1,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.replace=janus_qdrant,org.opencontainers.image.title=Qdrant,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\qdrant,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/qdrant/storage,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/6333/tcp=127.0.0.1:6333,org.opencontainers.image.documentation=https://qdrant.com/docs,org.opencontainers.image.url=https://qdrant.com/,com.docker.compose.depends_on=,com.docker.compose.image=sha256:dab6de32f7b2cc599985a7c764db3e8b062f70508fb85ca074aa856f829bf335,com.docker.compose.oneoff=False,org.opencontainers.image.vendor=Qdrant\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦\",\"Name\":\"janus_qdrant\",\"Names\":\"janus_qdrant\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:6333-\\u003e6333/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":6333,\"PublishedPort\":6333,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"qdrant\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"docker-entrypoint.sâ€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"1283ef5937c9\",\"Image\":\"rabbitmq:3.13-management-alpine\",\"Labels\":\"desktop.docker.io/binds/0/Target=/var/lib/rabbitmq,com.docker.compose.config-hash=352fbfbe2929c66f1e328cdb472da4492a88b27533e75fc8947946b7a27e863b,com.docker.compose.container-number=1,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\rabbitmq,desktop.docker.io/ports.scheme=v2,com.docker.compose.depends_on=,com.docker.compose.oneoff=False,com.docker.compose.service=rabbitmq,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.image=sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.replace=janus_rabbitmq,desktop.docker.io/ports/15672/tcp=127.0.0.1:15672,desktop.docker.io/ports/5672/tcp=127.0.0.1:5672,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦\",\"Name\":\"janus_rabbitmq\",\"Names\":\"janus_rabbitmq\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:5672-\\u003e5672/tcp, 127.0.0.1:15672-\\u003e15672/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":5672,\"PublishedPort\":5672,\"Protocol\":\"tcp\"},{\"URL\":\"127.0.0.1\",\"TargetPort\":15672,\"PublishedPort\":15672,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"rabbitmq\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n{\"Command\":\"\\\"docker-entrypoint.sâ€¦\\\"\",\"CreatedAt\":\"2026-02-03 10:53:03 -0300 -03\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"41cae9351b56\",\"Image\":\"redis:7-alpine\",\"Labels\":\"com.docker.compose.service=redis,desktop.docker.io/binds/0/Target=/data,com.docker.compose.container-number=1,desktop.docker.io/binds/0/Source=E:\\\\repos\\\\janus-completo\\\\janus\\\\data\\\\redis,desktop.docker.io/ports.scheme=v2,com.docker.compose.config-hash=ef6951e84d4998dc1e471825dc7e440bf897585fed82ba7e9904e84a6df80af5,com.docker.compose.depends_on=,com.docker.compose.image=sha256:ee64a64eaab618d88051c3ade8f6352d11531fcf79d9a4818b9b183d8c1d18ba,com.docker.compose.project.config_files=E:\\\\repos\\\\janus-completo\\\\docker-compose.yml,com.docker.compose.replace=janus_redis,com.docker.compose.oneoff=False,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\\\repos\\\\janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports/6379/tcp=127.0.0.1:6379\",\"LocalVolumes\":\"0\",\"Mounts\":\"/run/desktop/mâ€¦\",\"Name\":\"janus_redis\",\"Names\":\"janus_redis\",\"Networks\":\"janus-completo_janus-net\",\"Ports\":\"127.0.0.1:6379-\\u003e6379/tcp\",\"Project\":\"janus-completo\",\"Publishers\":[{\"URL\":\"127.0.0.1\",\"TargetPort\":6379,\"PublishedPort\":6379,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"redis\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 hours (healthy)\"}\n",
+      "stderr": ""
+    },
+    "compose_ps": {
+      "command": "docker compose ps",
+      "returncode": 0,
+      "stdout": "NAME                   IMAGE                                         COMMAND                  SERVICE          CREATED       STATUS                    PORTS\njanus_api              janus-completo-janus-api:latest               \"sh -lc '/opt/venv/bâ€¦\"   janus-api        2 hours ago   Up 25 seconds (healthy)   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp\njanus_front            janus-completo-front                          \"docker-entrypoint.sâ€¦\"   front            2 hours ago   Up 2 hours (healthy)      0.0.0.0:4300->4300/tcp, [::]:4300->4300/tcp\njanus_grafana          grafana/grafana:10.4.2                        \"/run.sh\"                grafana          2 weeks ago   Up 2 hours                127.0.0.1:3000->3000/tcp\njanus_neo4j            neo4j:5.19-community                          \"tini -g -- /startupâ€¦\"   neo4j            2 weeks ago   Up 2 hours (healthy)      127.0.0.1:7474->7474/tcp, 127.0.0.1:7687->7687/tcp\njanus_ollama           janus-completo-ollama                         \"/bin/sh -lc 'tr -d â€¦\"   ollama           2 hours ago   Up 2 hours (healthy)      127.0.0.1:11435->11434/tcp\njanus_otel_collector   otel/opentelemetry-collector-contrib:0.96.0   \"/otelcol-contrib --â€¦\"   otel-collector   2 weeks ago   Up 2 hours                127.0.0.1:4317-4318->4317-4318/tcp, 127.0.0.1:8888-8889->8888-8889/tcp, 127.0.0.1:13133->13133/tcp, 127.0.0.1:55679->55679/tcp\njanus_postgres         pgvector/pgvector:pg16                        \"docker-entrypoint.sâ€¦\"   postgres         2 weeks ago   Up 2 hours (healthy)      127.0.0.1:5432->5432/tcp\njanus_prometheus       prom/prometheus:v2.51.0                       \"/bin/prometheus --câ€¦\"   prometheus       2 weeks ago   Up 25 seconds             127.0.0.1:9090->9090/tcp\njanus_qdrant           qdrant/qdrant:v1.16.2                         \"./entrypoint.sh\"        qdrant           2 weeks ago   Up 2 hours (healthy)      127.0.0.1:6333->6333/tcp\njanus_rabbitmq         rabbitmq:3.13-management-alpine               \"docker-entrypoint.sâ€¦\"   rabbitmq         2 weeks ago   Up 2 hours (healthy)      127.0.0.1:5672->5672/tcp, 127.0.0.1:15672->15672/tcp\njanus_redis            redis:7-alpine                                \"docker-entrypoint.sâ€¦\"   redis            2 weeks ago   Up 2 hours (healthy)      127.0.0.1:6379->6379/tcp\n",
+      "stderr": ""
+    },
+    "compose_images": {
+      "command": "docker compose images",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "Error response from daemon: No such image: sha256:7d6e3e8d13d016caedb86a167f735dc129753fabb9a6b753c917ba104411e3b5\n"
+    },
+    "compose_logs_api": {
+      "command": "docker compose logs --no-color --tail 200 janus-api",
+      "returncode": 0,
+      "stdout": "janus_api  | InstÃ¢ncia do AsyncQdrantClient criada.\njanus_api  | KnowledgeConsolidator initialized.\njanus_api  | âœ“ Worker de consolidaÃ§Ã£o de conhecimento iniciado.\njanus_api  | Starting neural training worker...\njanus_api  | âœ“ Neural training worker started.\njanus_api  | {\"event\": \"SchedulerService inicializado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.367633Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"schedule_type\": \"interval\", \"next_run\": \"2026-02-21T01:10:04.368013\", \"event\": \"Job 'meta_agent_analysis' registrado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.368055Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"schedule_type\": \"interval\", \"next_run\": \"2026-02-21T01:15:04.368394\", \"event\": \"Job 'memory_health_check' registrado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.368431Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"schedule_type\": \"daily\", \"next_run\": \"2026-02-21T03:00:00\", \"event\": \"Job 'daily_cleanup' registrado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.368799Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"schedule_type\": \"interval\", \"next_run\": \"2026-02-21T02:05:04.369127\", \"event\": \"Job 'update_gemini_quotas' registrado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.369185Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Jobs padr\\u00e3o registrados: 4\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.369592Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"SchedulerService iniciado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.369982Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\njanus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM sysdefault\njanus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\njanus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM sysdefault\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.front\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.rear\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.center_lfe\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.side\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround21\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround21\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround40\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround41\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround50\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround51\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.surround71\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.iec958\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.hdmi\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.hdmi\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.modem\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM cards.pcm.phoneline\njanus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\njanus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM default\njanus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\njanus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM default\njanus_api  | ALSA lib confmisc.c:855:(parse_card) cannot find card '0'\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_card_id returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\njanus_api  | ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name\njanus_api  | ALSA lib conf.c:5180:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\njanus_api  | ALSA lib conf.c:5703:(snd_config_expand) Evaluate error: No such file or directory\njanus_api  | ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM dmix\njanus_api  | Cannot connect to server socket err = No such file or directory\njanus_api  | Cannot connect to server request channel\njanus_api  | jack server is not running or cannot be started\njanus_api  | JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock\njanus_api  | JackShmReadWritePtr::~JackShmReadWritePtr - Init not done for -1, skipping unlock\njanus_api  | {\"event\": \"Failed to initialize microphone: No Default Input Device Available. STT disabled.\", \"logger\": \"app.core.senses.audio.stt_service\", \"level\": \"warning\", \"timestamp\": \"2026-02-21T01:05:04.390264Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"STT disabled: no microphone detected.\", \"logger\": \"app.core.senses.audio.manager\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.390839Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"TTS Service initialized with edge-tts (Voice: pt-BR-AntonioNeural)\", \"logger\": \"app.core.senses.audio.tts_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.391451Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | INFO: Created TensorFlow Lite XNNPACK delegate for CPU.\njanus_api  | {\"event\": \"WakeWord Service initialized. Models: ['/opt/venv/lib/python3.11/site-packages/openwakeword/resources/models/hey_jarvis_v0.1.tflite']\", \"logger\": \"app.core.senses.audio.wakeword_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.534340Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Voice Manager initialized.\", \"logger\": \"app.core.senses.audio.manager\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.534992Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Kernel startup complete. System is ready.\", \"logger\": \"app.core.kernel\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.535462Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Monitoramento iniciado (intervalo=30s)\njanus_api  | Iniciando loop para o conector: episodic_memory_connector\njanus_api  | {\"event\": \"LifeCycle: Disparando consolida\\u00e7\\u00e3o peri\\u00f3dica (Batch)...\", \"logger\": \"app.core.workers.life_cycle_worker\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.539772Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Scheduler loop iniciado\", \"logger\": \"app.services.scheduler_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.541134Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Starting automatic codebase indexation...\", \"logger\": \"app.core.kernel\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.541595Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"event\": \"Iniciando orquestra\\u00e7\\u00e3o de indexa\\u00e7\\u00e3o da base de c\\u00f3digo em '/app'...\", \"logger\": \"app.services.knowledge_service\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.542059Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | HTTP Request: GET http://qdrant:6333 \"HTTP/1.1 200 OK\"\njanus_api  | {\"threshold\": 3, \"recovery_timeout\": 30, \"event\": \"circuit_breaker_initialized\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.588909Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | HTTP Request: GET http://qdrant:6333/collections/janus_episodic_memory \"HTTP/1.1 200 OK\"\njanus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll \"HTTP/1.1 200 OK\"\njanus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/query?timeout=30 \"HTTP/1.1 200 OK\"\njanus_api  | {\"operation\": \"qdrant_search\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.012298345565795898, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.603344Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"operation\": \"qdrant_search\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 13, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.604010Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Processando 50 itens coletados.\njanus_api  | PromptLoader inicializado com suporte a banco de dados Relacional\njanus_api  | {\"operation\": \"neo4j_execute\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.10186433792114258, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.644392Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"operation\": \"neo4j_execute\", \"attempt\": 1, \"max_attempts\": 1, \"elapsed_ms\": 102, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:04.644976Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Consumidor iniciado\njanus_api  | Consumidor iniciado\njanus_api  | Iniciando processamento de tarefa de consolidaÃ§Ã£o: task_id=5cdb495c-722c-420d-9a33-1c473f7fb0a8, type=knowledge_consolidation\njanus_api  | {\"event\": \"LifeCycle: Tarefa de consolida\\u00e7\\u00e3o enviada com sucesso.\", \"logger\": \"app.core.workers.life_cycle_worker\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:08.337458Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll \"HTTP/1.1 200 OK\"\njanus_api  | Consolidating experience 654b0980-a3c9-5871-9d84-c87431b1a9e1...\njanus_api  | Graph orchestrator initialized with AsyncPostgresSaver.\njanus_api  | {\"event\": \"Loading global prompts from database...\", \"logger\": \"app.main\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:08.431437Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | HTTP Request: POST http://qdrant:6333/collections/janus_episodic_memory/points/scroll \"HTTP/1.1 200 OK\"\njanus_api  | {\"operation\": \"qdrant_scroll\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.09795427322387695, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:08.435964Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Lendo ficheiro de forma segura: /app/workspace/training_data.jsonl\njanus_api  | {\"operation\": \"qdrant_scroll\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 98, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:08.436511Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"endpoint\": \"/memory/service\", \"step\": \"recall_recent_failures\", \"source\": \"memory_service\", \"db\": \"qdrant\", \"latency_ms\": 99, \"confidence\": 0.0, \"error_code\": null, \"event\": \"rag_step_telemetry\", \"logger\": \"app.core.memory.rag_telemetry\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:08.437348Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Escrevendo em ficheiro de forma segura: /app/workspace/training_data.jsonl\njanus_api  | {'event': 'write_file_success', 'path': '/app/workspace/training_data.jsonl', 'bytes': 465858, 'overwrite': True, 'latency_ms': 10.3}\njanus_api  | Carregando 1 configuraÃ§Ãµes de limite do Firebase.\njanus_api  | Dataset atualizado: 0 novos exemplos (Total: 353).\njanus_api  | Candidato filtrado por custo: google_gemini:gemini-2.5-flash (expected_cost=3.0000 > max_cost=0.0100, role=knowledge_curator)\njanus_api  | Candidato filtrado por custo: openai:gpt-4o (expected_cost=30.0000 > max_cost=0.0100, role=knowledge_curator)\njanus_api  | EstratÃ©gia fast_and_cheap: Tentando xai:grok-4-1-fast-reasoning (score=0.330, cost_1k=0.001, avg_lat=0.000)\njanus_api  | LLM 'xai:grok-4-1-fast-reasoning' inicializado com sucesso.\njanus_api  | {\"event\": \"Global prompts loaded successfully.\", \"logger\": \"app.main\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:09.705961Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"user_id\": \"-\", \"event\": \"System user ready.\", \"logger\": \"app.main\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:09.727175Z\", \"trace_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Iniciando orquestrador de workers...\njanus_api  | Memory Maintenance Worker started\njanus_api  | Iniciando worker de consolidaÃ§Ã£o de conhecimento...\njanus_api  | âœ“ Worker de consolidaÃ§Ã£o de conhecimento iniciado.\njanus_api  | Starting agent tasks worker...\njanus_api  | âœ“ Agent tasks worker started.\njanus_api  | Starting neural training worker...\njanus_api  | âœ“ Neural training worker started.\njanus_api  | Iniciando worker de Reflexion (janus.tasks.reflexion)...\njanus_api  | âœ“ Worker de Reflexion iniciado.\njanus_api  | Starting Meta-Agent worker (cycle queue)...\njanus_api  | Meta-Agent worker started.\njanus_api  | Starting Meta-Agent failure consumer (janus.failure.detected)...\njanus_api  | Meta-Agent failure consumer started.\njanus_api  | Iniciando Router Worker...\njanus_api  | âœ“ Router Worker iniciado.\njanus_api  | Iniciando Code Agent Worker...\njanus_api  | âœ“ Code Agent Worker iniciado.\njanus_api  | Iniciando Red Team Agent Worker...\njanus_api  | Red Team Agent Worker iniciado.\njanus_api  | Iniciando Professor Agent Worker...\njanus_api  | âœ“ Professor Agent Worker iniciado.\njanus_api  | Iniciando Sandbox Agent Worker...\njanus_api  | âœ“ Sandbox Agent Worker iniciado.\njanus_api  | Iniciando Thinker Agent Worker...\njanus_api  | âœ“ Thinker Agent Worker iniciado.\njanus_api  | Iniciando Distillation Worker...\njanus_api  | âœ“ Distillation Worker iniciado.\njanus_api  | Worker google_productivity desativado por configuracao.\njanus_api  | Starting Debate Proponent Worker...\njanus_api  | âœ“ Debate Proponent Worker started.\njanus_api  | Starting Debate Critic Worker...\njanus_api  | âœ“ Debate Critic Worker started.\njanus_api  | Iniciando Codex Worker...\njanus_api  | âœ“ Codex Worker iniciado.\njanus_api  | âœ“ 21 workers iniciados pelo orquestrador.\njanus_api  | {\"count\": 21, \"event\": \"Orchestrator workers started on startup.\", \"logger\": \"app.main\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:09.982871Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | Running memory maintenance...\njanus_api  | Iniciando Auto-Scaler de filas (intervalo=10s)...\njanus_api  | Auto-Healer: iniciado (intervalo=30s).\njanus_api  | {\"event\": \"GoalManager initialized with in-memory storage only (Firestore optional).\", \"logger\": \"app.core.autonomy.goal_manager\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:09.985067Z\", \"trace_id\": \"-\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}\njanus_api  | {\"interval_seconds\": 300, \"event\": \"[AutonomyWorker] Iniciado\", \"logger\": \"app.core.workers.autonomy_worker\", \"level\": \"info\", \"timestamp\": \"2026-02-21T01:05:09.985448Z\", \"trac\n...[truncated]...",
+      "stderr": ""
+    }
+  },
+  "services": [
+    {
+      "Command": "\"sh -lc '/opt/venv/bâ€¦\"",
+      "CreatedAt": "2026-02-20 20:19:22 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "1f5f0e60d583",
+      "Image": "janus-completo-janus-api:latest",
+      "Labels": "com.docker.compose.image=sha256:1965db2ef49b70aced28772e12633b43de90fb30f1e17919958d8ac1daedc0f9,com.docker.compose.oneoff=False,com.docker.compose.version=5.0.1,desktop.docker.io/binds/3/Source=//./pipe/docker_engine,desktop.docker.io/binds/6/SourceKind=hostFile,com.docker.compose.container-number=1,com.docker.compose.replace=janus_api,desktop.docker.io/binds/3/Target=/var/run/docker.sock,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/app/tests,desktop.docker.io/ports/8000/tcp=:8000,desktop.docker.io/binds/4/SourceKind=hostFile,com.docker.compose.depends_on=postgres:service_healthy:false,qdrant:service_healthy:false,redis:service_healthy:false,neo4j:service_healthy:false,rabbitmq:service_healthy:false,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/2/Target=/app/data,desktop.docker.io/binds/4/Source=E:\\repos\\janus-completo\\janus\\app\\serviceAccountKey.json,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.service=janus-api,desktop.docker.io/binds/0/Target=/app/scripts,desktop.docker.io/binds/2/Source=E:\\repos\\janus-completo\\janus\\data,desktop.docker.io/binds/1/Source=E:\\repos\\janus-completo\\janus\\tests,desktop.docker.io/binds/5/SourceKind=hostFile,desktop.docker.io/binds/6/Source=E:\\repos\\janus-completo\\janus\\workspace,desktop.docker.io/binds/3/SourceKind=hostFile,desktop.docker.io/binds/4/Target=/app/app/serviceAccountKey.json,desktop.docker.io/binds/5/Target=/app/app,desktop.docker.io/binds/6/Target=/app/workspace,desktop.docker.io/ports.scheme=v2,desktop.docker.io/binds/5/Source=E:\\repos\\janus-completo\\janus\\app,com.docker.compose.config-hash=c01d875f3c838717b8b911107015e6b376ee6e112038a2e25592e54a78534d50,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\scripts,desktop.docker.io/binds/2/SourceKind=hostFile",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦,/pipe/docker_eâ€¦,/run/desktop/mâ€¦,/run/desktop/mâ€¦",
+      "Name": "janus_api",
+      "Names": "janus_api",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "0.0.0.0",
+          "TargetPort": 8000,
+          "PublishedPort": 8000,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "::",
+          "TargetPort": 8000,
+          "PublishedPort": 8000,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 hours ago",
+      "Service": "janus-api",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 25 seconds (healthy)"
+    },
+    {
+      "Command": "\"docker-entrypoint.sâ€¦\"",
+      "CreatedAt": "2026-02-20 20:19:38 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "6d5e2e2c125e",
+      "Image": "janus-completo-front",
+      "Labels": "desktop.docker.io/ports/4300/tcp=:4300,com.docker.compose.config-hash=6cd48b97f7e2ccafc32fe2b0d4251d603f7e796bd198bb4d224b916246d04d91,com.docker.compose.depends_on=janus-api:service_healthy:false,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.container-number=1,com.docker.compose.image=sha256:0e719ab83d3d15adb5682034214565b0e1e986ab8d7b5459bbc5768a692d160e,com.docker.compose.oneoff=False,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.replace=janus_front,com.docker.compose.service=front,desktop.docker.io/ports.scheme=v2,com.docker.compose.project=janus-completo,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\front,desktop.docker.io/binds/0/Target=/app,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.version=5.0.1",
+      "LocalVolumes": "1",
+      "Mounts": "/run/desktop/mâ€¦,4abd7e792ef912â€¦",
+      "Name": "janus_front",
+      "Names": "janus_front",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "0.0.0.0:4300->4300/tcp, [::]:4300->4300/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "0.0.0.0",
+          "TargetPort": 4300,
+          "PublishedPort": 4300,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "::",
+          "TargetPort": 4300,
+          "PublishedPort": 4300,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 hours ago",
+      "Service": "front",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"/run.sh\"",
+      "CreatedAt": "2026-02-03 10:53:26 -0300 -03",
+      "ExitCode": 0,
+      "Health": "",
+      "ID": "8914685e10ef",
+      "Image": "grafana/grafana:10.4.2",
+      "Labels": "com.docker.compose.image=sha256:7d5faae481a4c6f436c99e98af11534f7fd5e8d3e35213552dd1dd02bc393d2e,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.replace=janus_grafana,com.docker.compose.config-hash=e48712aad1989b2fad90a6a3922b7d48c99f78d8436e111bf35a451a6ae783c9,com.docker.compose.project=janus-completo,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/1/Source=E:\\repos\\janus-completo\\janus\\grafana\\dashboards,desktop.docker.io/binds/1/Target=/var/lib/grafana/dashboards,desktop.docker.io/ports.scheme=v2,com.docker.compose.container-number=1,com.docker.compose.service=grafana,desktop.docker.io/binds/1/SourceKind=hostFile,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\grafana\\provisioning,desktop.docker.io/binds/0/Target=/etc/grafana/provisioning,desktop.docker.io/ports/3000/tcp=127.0.0.1:3000,maintainer=Grafana Labs <hello@grafana.com>,com.docker.compose.depends_on=prometheus:service_started:false",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦,/run/desktop/mâ€¦",
+      "Name": "janus_grafana",
+      "Names": "janus_grafana",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:3000->3000/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 3000,
+          "PublishedPort": 3000,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "grafana",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours"
+    },
+    {
+      "Command": "\"tini -g -- /startupâ€¦\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "7753f9064bab",
+      "Image": "neo4j:5.19-community",
+      "Labels": "desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\neo4j,com.docker.compose.config-hash=dcfa0b3a1257e340a91e76e8f915e890f95f1705820d893f0524e1269f869dfb,com.docker.compose.depends_on=,com.docker.compose.oneoff=False,desktop.docker.io/binds/0/Target=/data,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,com.docker.compose.image=sha256:e5a03c2b120da495ac6d3198849818d54e6dec6209c79b975b5b5a235b2b86e4,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.replace=janus_neo4j,com.docker.compose.service=neo4j,desktop.docker.io/ports/7474/tcp=127.0.0.1:7474,desktop.docker.io/ports/7687/tcp=127.0.0.1:7687,com.docker.compose.container-number=1,com.docker.compose.project=janus-completo,com.docker.compose.version=5.0.1",
+      "LocalVolumes": "1",
+      "Mounts": "7c4b33d2b7aee5â€¦,/run/desktop/mâ€¦",
+      "Name": "janus_neo4j",
+      "Names": "janus_neo4j",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:7474->7474/tcp, 127.0.0.1:7687->7687/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 7474,
+          "PublishedPort": 7474,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 7687,
+          "PublishedPort": 7687,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "neo4j",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"/bin/sh -lc 'tr -d â€¦\"",
+      "CreatedAt": "2026-02-20 20:19:22 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "f13119273c76",
+      "Image": "janus-completo-ollama",
+      "Labels": "com.docker.compose.image=sha256:e9fffb048617d4d358a66ffb995ec930ec2289d550739735db5c2132fb8cbd95,com.docker.compose.oneoff=False,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\ollama,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.config-hash=b20666117f08c1aaa55376039e28d3b9a8c0f841ca5382ee7d1b2b566f0fd48a,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/ports/11434/tcp=127.0.0.1:11435,com.docker.compose.project=janus-completo,com.docker.compose.replace=janus_ollama,com.docker.compose.service=ollama,desktop.docker.io/binds/1/Target=/init-ollama.sh,org.opencontainers.image.version=24.04,com.docker.compose.depends_on=,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,desktop.docker.io/binds/0/Target=/root/.ollama,desktop.docker.io/binds/1/Source=E:\\repos\\janus-completo\\janus\\scripts\\init-ollama.sh,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,org.opencontainers.image.ref.name=ubuntu,com.docker.compose.container-number=1",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦,/run/desktop/mâ€¦",
+      "Name": "janus_ollama",
+      "Names": "janus_ollama",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:11435->11434/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 11434,
+          "PublishedPort": 11435,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 hours ago",
+      "Service": "ollama",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"/otelcol-contrib --â€¦\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "",
+      "ID": "5d73cc121f51",
+      "Image": "otel/opentelemetry-collector-contrib:0.96.0",
+      "Labels": "desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/8888/tcp=127.0.0.1:8888,org.opencontainers.image.revision=a2aded80f481c386748718d5a35ab258aeec6ade,org.opencontainers.image.source=https://github.com/open-telemetry/opentelemetry-collector-releases,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\otel\\otel-collector-config.yaml,desktop.docker.io/ports/4318/tcp=127.0.0.1:4318,desktop.docker.io/ports/8889/tcp=127.0.0.1:8889,org.opencontainers.image.version=0.96.0,com.docker.compose.depends_on=,com.docker.compose.project=janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Target=/etc/otel-collector-config.yaml,org.opencontainers.image.created=2024-03-05T10:49:11Z,org.opencontainers.image.name=opentelemetry-collector-releases,com.docker.compose.config-hash=da01f856a299d2ffd6db98f16dd532cc835c15fd0cba15e3b27e74432325f9f5,com.docker.compose.image=sha256:7ef2a2ff46b9e432321fdd63df104bfeedaf7b4e276950f42c634d0f23521fc4,com.docker.compose.service=otel-collector,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports/13133/tcp=127.0.0.1:13133,desktop.docker.io/ports/4317/tcp=127.0.0.1:4317,desktop.docker.io/ports/55679/tcp=127.0.0.1:55679,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.replace=janus_otel_collector",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦",
+      "Name": "janus_otel_collector",
+      "Names": "janus_otel_collector",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:4317-4318->4317-4318/tcp, 127.0.0.1:8888-8889->8888-8889/tcp, 127.0.0.1:13133->13133/tcp, 127.0.0.1:55679->55679/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 4317,
+          "PublishedPort": 4317,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 4318,
+          "PublishedPort": 4318,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 8888,
+          "PublishedPort": 8888,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 8889,
+          "PublishedPort": 8889,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 13133,
+          "PublishedPort": 13133,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 55679,
+          "PublishedPort": 55679,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "otel-collector",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours"
+    },
+    {
+      "Command": "\"docker-entrypoint.sâ€¦\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "512eb393b2f6",
+      "Image": "pgvector/pgvector:pg16",
+      "Labels": "com.docker.compose.oneoff=False,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.replace=janus_postgres,desktop.docker.io/ports/5432/tcp=127.0.0.1:5432,com.docker.compose.depends_on=,com.docker.compose.service=postgres,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\postgres,desktop.docker.io/ports.scheme=v2,com.docker.compose.image=sha256:0a07c4114ba6d1d04effcce3385e9f5ce305eb02e56a3d35948a415a52f193ec,com.docker.compose.config-hash=8481cadd25e029c1b7f715e6c0e5ebd1193ba5fbcbc1c4832a6e1cfab3765ad6,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/var/lib/postgresql/data,com.docker.compose.container-number=1",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦",
+      "Name": "janus_postgres",
+      "Names": "janus_postgres",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:5432->5432/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 5432,
+          "PublishedPort": 5432,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "postgres",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"/bin/prometheus --câ€¦\"",
+      "CreatedAt": "2026-02-03 10:53:13 -0300 -03",
+      "ExitCode": 0,
+      "Health": "",
+      "ID": "045451bf1e29",
+      "Image": "prom/prometheus:v2.51.0",
+      "Labels": "maintainer=The Prometheus Authors <prometheus-developers@googlegroups.com>,desktop.docker.io/binds/0/Target=/etc/prometheus/prometheus.yml,com.docker.compose.config-hash=5d35c7f8ae081b9672e13e38e2be7796001b79611decb4b0659261a5dd319353,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\prometheus\\prometheus.yml,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports.scheme=v2,com.docker.compose.depends_on=janus-api:service_healthy:false,com.docker.compose.image=sha256:5ccad477d0057e62a7cd1981ffcc43785ac10c5a35522dc207466ff7e7ec845f,com.docker.compose.project=janus-completo,desktop.docker.io/ports/9090/tcp=127.0.0.1:9090,com.docker.compose.replace=janus_prometheus,com.docker.compose.service=prometheus,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.version=5.0.1",
+      "LocalVolumes": "1",
+      "Mounts": "/run/desktop/mâ€¦,3187bcccbd35b4â€¦",
+      "Name": "janus_prometheus",
+      "Names": "janus_prometheus",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:9090->9090/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 9090,
+          "PublishedPort": 9090,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "prometheus",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 25 seconds"
+    },
+    {
+      "Command": "\"./entrypoint.sh\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "cf6603e9a724",
+      "Image": "qdrant/qdrant:v1.16.2",
+      "Labels": "org.opencontainers.image.version=v1.16.2,com.docker.compose.service=qdrant,org.opencontainers.image.description=Official Qdrant image,org.opencontainers.image.source=https://github.com/qdrant/qdrant,com.docker.compose.version=5.0.1,com.docker.compose.config-hash=3dd55bbc5b5a1fe7620b84c74e773ba1e3fb92ae768a32e5639bb81a4b997465,com.docker.compose.container-number=1,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.replace=janus_qdrant,org.opencontainers.image.title=Qdrant,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\qdrant,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/qdrant/storage,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/6333/tcp=127.0.0.1:6333,org.opencontainers.image.documentation=https://qdrant.com/docs,org.opencontainers.image.url=https://qdrant.com/,com.docker.compose.depends_on=,com.docker.compose.image=sha256:dab6de32f7b2cc599985a7c764db3e8b062f70508fb85ca074aa856f829bf335,com.docker.compose.oneoff=False,org.opencontainers.image.vendor=Qdrant",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦",
+      "Name": "janus_qdrant",
+      "Names": "janus_qdrant",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:6333->6333/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 6333,
+          "PublishedPort": 6333,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "qdrant",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"docker-entrypoint.sâ€¦\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "1283ef5937c9",
+      "Image": "rabbitmq:3.13-management-alpine",
+      "Labels": "desktop.docker.io/binds/0/Target=/var/lib/rabbitmq,com.docker.compose.config-hash=352fbfbe2929c66f1e328cdb472da4492a88b27533e75fc8947946b7a27e863b,com.docker.compose.container-number=1,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\rabbitmq,desktop.docker.io/ports.scheme=v2,com.docker.compose.depends_on=,com.docker.compose.oneoff=False,com.docker.compose.service=rabbitmq,desktop.docker.io/binds/0/SourceKind=hostFile,com.docker.compose.image=sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.replace=janus_rabbitmq,desktop.docker.io/ports/15672/tcp=127.0.0.1:15672,desktop.docker.io/ports/5672/tcp=127.0.0.1:5672,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦",
+      "Name": "janus_rabbitmq",
+      "Names": "janus_rabbitmq",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:5672->5672/tcp, 127.0.0.1:15672->15672/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 5672,
+          "PublishedPort": 5672,
+          "Protocol": "tcp"
+        },
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 15672,
+          "PublishedPort": 15672,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "rabbitmq",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    },
+    {
+      "Command": "\"docker-entrypoint.sâ€¦\"",
+      "CreatedAt": "2026-02-03 10:53:03 -0300 -03",
+      "ExitCode": 0,
+      "Health": "healthy",
+      "ID": "41cae9351b56",
+      "Image": "redis:7-alpine",
+      "Labels": "com.docker.compose.service=redis,desktop.docker.io/binds/0/Target=/data,com.docker.compose.container-number=1,desktop.docker.io/binds/0/Source=E:\\repos\\janus-completo\\janus\\data\\redis,desktop.docker.io/ports.scheme=v2,com.docker.compose.config-hash=ef6951e84d4998dc1e471825dc7e440bf897585fed82ba7e9904e84a6df80af5,com.docker.compose.depends_on=,com.docker.compose.image=sha256:ee64a64eaab618d88051c3ade8f6352d11531fcf79d9a4818b9b183d8c1d18ba,com.docker.compose.project.config_files=E:\\repos\\janus-completo\\docker-compose.yml,com.docker.compose.replace=janus_redis,com.docker.compose.oneoff=False,com.docker.compose.project=janus-completo,com.docker.compose.project.working_dir=E:\\repos\\janus-completo,com.docker.compose.version=5.0.1,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/ports/6379/tcp=127.0.0.1:6379",
+      "LocalVolumes": "0",
+      "Mounts": "/run/desktop/mâ€¦",
+      "Name": "janus_redis",
+      "Names": "janus_redis",
+      "Networks": "janus-completo_janus-net",
+      "Ports": "127.0.0.1:6379->6379/tcp",
+      "Project": "janus-completo",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 6379,
+          "PublishedPort": 6379,
+          "Protocol": "tcp"
+        }
+      ],
+      "RunningFor": "2 weeks ago",
+      "Service": "redis",
+      "Size": "0B",
+      "State": "running",
+      "Status": "Up 2 hours (healthy)"
+    }
+  ],
+  "api_log_signal_counts": {
+    "error": 30,
+    "exception": 0,
+    "traceback": 0,
+    "critical": 0
+  }
+}
