@@ -239,6 +239,22 @@ class CollaborationService:
                 payload={"task_state": task_state.model_dump()},
                 timestamp=datetime.utcnow().timestamp(),
             ).model_dump_json()
+        elif role in ("blue_team", "defense", "remediator"):
+            queue = QueueName.TASKS_AGENT_BLUE_TEAM.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
+        elif role in ("security_judge", "judge", "security_gate"):
+            queue = QueueName.TASKS_AGENT_SECURITY_JUDGE.value
+            msg = TaskMessage(
+                task_id=task_state.task_id,
+                task_type="task_state",
+                payload={"task_state": task_state.model_dump()},
+                timestamp=datetime.utcnow().timestamp(),
+            ).model_dump_json()
         elif role in ("thinker", "thinker_agent", "architect", "reasoning"):
             queue = QueueName.TASKS_AGENT_THINKER.value
             msg = TaskMessage(

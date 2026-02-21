@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+from inspect import isawaitable
 from typing import Any
 
 import structlog
@@ -347,7 +348,9 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         try:
             memory = await get_memory_db()
             if memory:
-                await memory.health_check()
+                result = memory.health_check()
+                if isawaitable(result):
+                    await result
         except Exception as e:
             logger.error(f"Memory health check failed: {e}")
 

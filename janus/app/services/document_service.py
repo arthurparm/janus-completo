@@ -12,6 +12,7 @@ from app.repositories.observability_repository import record_audit_event_direct
 from app.core.exceptions.document_exceptions import QuotaExceededError
 from app.core.monitoring.document_metrics import get_metrics_recorder
 from app.services.document_parser_service import DocumentParserService
+from app.services.document_semantic_enrichment_service import DocumentSemanticEnrichmentService
 
 try:
     from opentelemetry import trace  # type: ignore
@@ -33,6 +34,7 @@ class DocumentIngestionService:
     def __init__(self, memory_service):
         self._memory_service = memory_service
         self._parser = DocumentParserService()
+        self._semantic_enricher = DocumentSemanticEnrichmentService()
         self._metrics = get_metrics_recorder()
 
     def _chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> list[str]:
@@ -88,6 +90,11 @@ class DocumentIngestionService:
             return {"doc_id": doc_id, "chunks": 0, "status": "unsupported_content_type"}
 
         # Chunk text
+        semantic = self._semantic_enricher.enrich(
+            text=text,
+            filename=filename,
+            content_type=content_type,
+        )
         chunk_size = 1000
         overlap = 100
         try:
@@ -105,6 +112,8 @@ class DocumentIngestionService:
         if _OTEL and span is not None:
             try:
                 span.set_attribute("doc.chunk_count", len(chunks))
+                span.set_attribute("doc.semantic_type", semantic.doc_type)
+                span.set_attribute("doc.semantic_confidence", float(semantic.confidence))
             except Exception as e:
                 logger.debug("otel_chunk_count_failed", error=str(e))
 
@@ -218,6 +227,10 @@ class DocumentIngestionService:
                     "content_hash": content_hash,
                     "status": dup_status,
                     "conversation_id": conversation_id,
+                    "semantic_doc_type": semantic.doc_type,
+                    "semantic_entities": semantic.entities,
+                    "semantic_summary": semantic.summary,
+                    "semantic_confidence": semantic.confidence,
                 },
                 "content": chunks[i][:2000],
             }
@@ -245,4 +258,9 @@ class DocumentIngestionService:
         except Exception as e:
             logger.debug("audit_event_failed", status="indexed", error=str(e))
 
-        return {"doc_id": doc_id, "chunks": len(chunks), "status": "indexed"}
+        return {
+            "doc_id": doc_id,
+            "chunks": len(chunks),
+            "status": "indexed",
+            "semantic": semantic.to_dict(),
+        }

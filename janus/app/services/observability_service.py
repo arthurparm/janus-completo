@@ -1,14 +1,19 @@
 import json
+import time
 from collections import Counter
 from typing import Any
 
 import structlog
 from fastapi import Request
 
+from app.config import settings
 from app.core.monitoring.poison_pill_handler import QuarantinedMessage
 from app.repositories.observability_repository import (
     ObservabilityRepository,
     ObservabilityRepositoryError,
+)
+from app.services.predictive_anomaly_detection_service import (
+    get_predictive_anomaly_detection_service,
 )
 
 logger = structlog.get_logger(__name__)
@@ -119,6 +124,89 @@ class ObservabilityService:
         except ObservabilityRepositoryError as e:
             logger.error("Erro no repositório ao gerar resumo de métricas", exc_info=e)
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
+
+    async def get_predictive_anomaly_report(
+        self,
+        *,
+        window_hours: int | None = None,
+        bucket_minutes: int | None = None,
+        min_events: int | None = None,
+    ) -> dict[str, Any]:
+        if not bool(getattr(settings, "AI_ANOMALY_DETECTION_ENABLED", True)):
+            return {
+                "status": "disabled",
+                "risk": {
+                    "score": 0,
+                    "level": "low",
+                    "should_alert": False,
+                    "reasons": ["feature_flag_disabled"],
+                },
+                "anomalies": [],
+            }
+
+        now_ts = float(time.time())
+        wh = max(1, int(window_hours or getattr(settings, "AI_ANOMALY_WINDOW_HOURS", 6) or 6))
+        bm = max(
+            1,
+            int(bucket_minutes or getattr(settings, "AI_ANOMALY_BUCKET_MINUTES", 10) or 10),
+        )
+        me = max(5, int(min_events or getattr(settings, "AI_ANOMALY_MIN_EVENTS", 30) or 30))
+        start_ts = now_ts - (wh * 3600.0)
+
+        try:
+            events = self._repo.get_audit_events(
+                user_id=None,
+                tool=None,
+                status=None,
+                start_ts=start_ts,
+                end_ts=now_ts,
+                endpoint=None,
+                limit=10000,
+                offset=0,
+            )
+        except ObservabilityRepositoryError as e:
+            logger.error("Erro ao coletar eventos para AI-014", exc_info=e)
+            raise ObservabilityServiceError("Falha ao coletar eventos de auditoria.") from e
+
+        queue_snapshots: list[dict[str, Any]] = []
+        try:
+            from app.core.infrastructure.message_broker import get_broker
+
+            broker = await get_broker()
+            queue_names = list(getattr(settings, "AI_ANOMALY_QUEUE_NAMES", []) or [])
+            for queue_name in queue_names:
+                try:
+                    info = await broker.get_queue_info(str(queue_name))
+                    if info:
+                        queue_snapshots.append(info)
+                except Exception as queue_err:
+                    logger.warning(
+                        "ai014_queue_info_failed",
+                        queue_name=str(queue_name),
+                        error=str(queue_err),
+                    )
+        except Exception as e:
+            logger.warning("ai014_broker_unavailable", error=str(e))
+
+        detector = get_predictive_anomaly_detection_service()
+        report = detector.analyze(
+            events=events,
+            queue_snapshots=queue_snapshots,
+            start_ts=start_ts,
+            end_ts=now_ts,
+            bucket_minutes=bm,
+            min_events=me,
+        )
+
+        logger.info(
+            "ai014_predictive_anomaly_report_generated",
+            status=report.get("status"),
+            risk_level=(report.get("risk") or {}).get("level"),
+            risk_score=(report.get("risk") or {}).get("score"),
+            anomaly_count=len(report.get("anomalies") or []),
+            total_events=((report.get("window") or {}).get("total_events")),
+        )
+        return report
 
     async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
         logger.info("Coletando métricas agregadas por usuário", user_id=user_id)

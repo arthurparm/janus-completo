@@ -4,12 +4,20 @@ import structlog
 from fastapi import Request
 
 from app.config import settings
-from app.core.llm import ModelPriority, ModelRole, get_llm_client
+from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.task_policy import resolve_llm_task_policy
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_manager_health
-from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
 from app.services.prompt_service import PromptService
+
+try:
+    from app.repositories.llm_repository import LLMRepository, LLMRepositoryError
+except Exception:
+    class LLMRepositoryError(Exception):
+        pass
+
+    class LLMRepository:  # type: ignore[override]
+        pass
 
 logger = structlog.get_logger(__name__)
 
@@ -234,6 +242,8 @@ class LLMService:
         project_id: str | None = None,
     ) -> dict[str, Any]:
         """Seleciona provider/modelo antecipadamente sem invocar o LLM."""
+        from app.core.llm import get_llm_client
+
         client = await get_llm_client(
             role=role, priority=priority, user_id=user_id, project_id=project_id
         )

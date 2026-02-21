@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from qdrant_client import models as qdrant_models
 
+from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.llm import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_fallback import get_formatted_prompt
@@ -12,6 +13,7 @@ from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_tele
 from app.core.ui.generative_ui import extract_ui_block
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.chat_repository import ChatRepository
+from app.services.semantic_reranker_service import get_semantic_reranker
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 
@@ -72,6 +74,7 @@ class RAGService:
         self._repo = repo
         self._llm = llm_service
         self._memory = memory_service
+        self._reranker = get_semantic_reranker()
 
     def _format_memories(self, memories: list[dict[str, Any]]) -> Optional[str]:
         memory_lines = []
@@ -169,6 +172,12 @@ class RAGService:
             vec = await aembed_text(message)
             collection_name = await aget_or_create_collection(f"user_{user_id}")
             client = get_async_qdrant_client()
+            candidate_multiplier = max(1, int(getattr(settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)))
+            query_limit = (
+                max(int(limit), int(limit) * candidate_multiplier)
+                if bool(getattr(settings, "RAG_RERANK_ENABLED", True))
+                else int(limit)
+            )
 
             must: list[qdrant_models.FieldCondition] = [
                 qdrant_models.FieldCondition(
@@ -183,7 +192,7 @@ class RAGService:
             res = await client.query_points(
                 collection_name=collection_name,
                 query=vec,
-                limit=limit,
+                limit=query_limit,
                 with_payload=True,
                 query_filter=qfilter,
             )
@@ -202,6 +211,15 @@ class RAGService:
                         "score": score,
                     }
                 )
+            rerank_applied = False
+            rerank_method = "none"
+            rerank_candidate_count = len(memories)
+            if memories:
+                rerank_result = await self._reranker.rerank(query=message, items=memories, top_k=limit)
+                memories = rerank_result.items
+                rerank_applied = rerank_result.applied
+                rerank_method = rerank_result.method
+                rerank_candidate_count = int(rerank_result.candidate_count)
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
             scores = [m.get("score") for m in memories]
@@ -214,7 +232,15 @@ class RAGService:
                     started_at=start,
                     db="qdrant",
                     confidence=confidence_from_scores(scores),
-                    extra={"result_count": len(memories), "limit": int(limit)},
+                    extra={
+                        "result_count": len(memories),
+                        "limit": int(limit),
+                        "query_limit": int(query_limit),
+                        "rerank_applied": rerank_applied,
+                        "rerank_method": rerank_method,
+                        "rerank_candidate_count": int(rerank_candidate_count),
+                        "rerank_top_k": int(limit),
+                    },
                 )
                 return self._format_memories(memories)
 
@@ -224,7 +250,15 @@ class RAGService:
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
-                extra={"result_count": 0, "limit": int(limit)},
+                extra={
+                    "result_count": 0,
+                    "limit": int(limit),
+                    "query_limit": int(query_limit),
+                    "rerank_applied": False,
+                    "rerank_method": "none",
+                    "rerank_candidate_count": int(rerank_candidate_count),
+                    "rerank_top_k": int(limit),
+                },
             )
             return None
         except Exception as e:

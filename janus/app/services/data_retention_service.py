@@ -6,6 +6,7 @@ from app.repositories.knowledge_repository import get_knowledge_repository
 
 logger = structlog.get_logger(__name__)
 
+
 class DataRetentionService:
     """
     Service responsible for cleaning up artifacts (Vectors, Graph Nodes)
@@ -34,27 +35,7 @@ class DataRetentionService:
 
         # 2. Cleanup Graph Store (Neo4j)
         try:
-            # We need an instance of KnowledgeRepository
-            # Since this is a static/sync context often called by SQLAlchemy,
-            # we might need to handle async execution carefully.
-            # However, SQLAlchemy events are sync. We might need to run this in a loop or thread.
-
-            # For simplicity in this step, let's assume we can schedule it or run it.
-            # But wait, SQLAlchemy events are synchronous.
-            # We should probably push this to a background task or use a sync wrapper if possible.
-            # Or use `asyncio.create_task` if there is a running loop.
-
-            # Since we are in the API (async), there should be a loop.
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(DataRetentionService._async_graph_cleanup(user_id))
-            except RuntimeError:
-                # No running loop (e.g. script or sync worker)
-                # Fallback to run_until_complete? Or skip?
-                # For critical data integrity, we should ensure it runs.
-                pass
-
+            await DataRetentionService._async_graph_cleanup(user_id)
         except Exception as e:
             logger.error(f"Failed to trigger graph cleanup for user {user_id}: {e}")
 

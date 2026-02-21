@@ -11,7 +11,7 @@ from fastapi import Request
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.llm import ModelPriority, ModelRole
-from app.core.llm.llm_manager import _provider_pricing  # type: ignore
+from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
     CHAT_LATENCY_SECONDS,
     CHAT_MESSAGES_TOTAL,
@@ -95,9 +95,7 @@ class ChatService:
 
         # New modular services (Phase 2 refactoring)
         self._command_handler = ChatCommandHandler(tool_service, memory_service)
-        self._event_publisher = ChatEventPublisher(db_logger=None)  # TODO: inject DB logger
-        if event_logger is not None:
-            self._event_publisher = ChatEventPublisher(db_logger=event_logger)
+        self._event_publisher = ChatEventPublisher(db_logger=event_logger)
         self._agent_loop = ChatAgentLoop(
             llm_service=llm_service,
             tool_executor=self._tool_executor,
