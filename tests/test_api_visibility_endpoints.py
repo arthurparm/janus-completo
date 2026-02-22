@@ -196,12 +196,20 @@ async def dummy_session_cm():
 def client(monkeypatch):
     app = FastAPI()
 
-    # Stub graph orchestrator before importing pending_actions
-    stub_graph_module = types.ModuleType("app.core.agents.graph_orchestrator")
-    stub_graph_module.get_graph = lambda: DummyGraph()
-    sys.modules["app.core.agents.graph_orchestrator"] = stub_graph_module
+    # Patch filesystem_manager.APP_DIR to use a temporary directory to avoid PermissionError
+    import tempfile
+    from pathlib import Path
+    import app.core.infrastructure.filesystem_manager as fs_manager
 
-    from app.api.v1.endpoints.observability import router as observability_router
+    with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setattr(fs_manager, "APP_DIR", Path(tmpdir))
+
+        # Stub graph orchestrator before importing pending_actions
+        stub_graph_module = types.ModuleType("app.core.agents.graph_orchestrator")
+        stub_graph_module.get_graph = lambda: DummyGraph()
+        sys.modules["app.core.agents.graph_orchestrator"] = stub_graph_module
+
+        from app.api.v1.endpoints.observability import router as observability_router
     from app.api.v1.endpoints.pending_actions import router as pending_router
     from app.api.v1.endpoints.system_overview import router as system_overview_router
     from app.api.v1.endpoints.tools import router as tools_router

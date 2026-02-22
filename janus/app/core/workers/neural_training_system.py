@@ -23,9 +23,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
-from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.filesystem_manager import APP_DIR, read_file, write_file
 from app.core.infrastructure.prompt_fallback import PROMPTS_DIR
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
@@ -49,21 +49,37 @@ def _load_prompt_template(prompt_name: str) -> str:
 
 # ==================== MÉTRICAS ====================
 
-_TRAINING_JOBS = Counter(
-    "neural_training_jobs_total", "Total de jobs de treinamento", ["model_type", "outcome"]
-)
+try:
+    _TRAINING_JOBS = Counter(
+        "neural_training_jobs_total",
+        "Total de jobs de treinamento",
+        ["model_type", "outcome"],
+    )
+except ValueError:
+    _TRAINING_JOBS = REGISTRY._names_to_collectors["neural_training_jobs_total"]
 
-_TRAINING_LATENCY = Histogram(
-    "neural_training_latency_seconds", "Duração de treinamento de modelos"
-)
+try:
+    _TRAINING_LATENCY = Histogram(
+        "neural_training_latency_seconds", "Duração de treinamento de modelos"
+    )
+except ValueError:
+    _TRAINING_LATENCY = REGISTRY._names_to_collectors["neural_training_latency_seconds"]
 
-_MODEL_ACCURACY = Gauge(
-    "neural_model_accuracy", "Acurácia do modelo treinado", ["model_name", "model_version"]
-)
+try:
+    _MODEL_ACCURACY = Gauge(
+        "neural_model_accuracy",
+        "Acurácia do modelo treinado",
+        ["model_name", "model_version"],
+    )
+except ValueError:
+    _MODEL_ACCURACY = REGISTRY._names_to_collectors["neural_model_accuracy"]
 
-_TRAINING_EXAMPLES = Gauge(
-    "neural_training_examples_count", "Número de exemplos no dataset de treino"
-)
+try:
+    _TRAINING_EXAMPLES = Gauge(
+        "neural_training_examples_count", "Número de exemplos no dataset de treino"
+    )
+except ValueError:
+    _TRAINING_EXAMPLES = REGISTRY._names_to_collectors["neural_training_examples_count"]
 
 
 # ==================== ENUMS ====================
@@ -247,7 +263,7 @@ class NeuralTrainer:
 
     def __init__(self):
         self.preparator = DatasetPreparator()
-        self.models_dir = Path("/app/workspace/models")
+        self.models_dir = APP_DIR / "workspace" / "models"
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
     async def train_model(self, config: TrainingConfig) -> TrainingResult:
