@@ -99,6 +99,7 @@ jobs:
             redis \
             neo4j \
             langchain-google-genai \
+            langchain-openai \
             neo4j-graphrag
 
       - name: Run critical suite
