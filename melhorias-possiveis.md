@@ -97,6 +97,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Corrigir Auth Bypass (header X-User-Id) | P0 | S | ideia |
+| SG-015 | Proteger endpoints criticos (workspace/system) contra acesso anonimo | P0 | S | ideia |
+| SG-016 | Sanitizar logs de PII (email, user_id) | P0 | S | ideia |
+| SG-017 | Implementar scan de dependencias (SCA) no CI | P1 | S | ideia |
+| SG-018 | Corrigir Rate Limiting para falhar fechado (fail-closed) ou alertar | P1 | M | ideia |
+| SG-019 | Remover estado global em memoria (productivity tools) para evitar leak | P2 | M | ideia |
 
 ---
 
