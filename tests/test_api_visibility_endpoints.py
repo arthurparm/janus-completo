@@ -199,6 +199,7 @@ def client(monkeypatch):
     # Patch filesystem_manager.APP_DIR to use a temporary directory to avoid PermissionError
     import tempfile
     from pathlib import Path
+
     import app.core.infrastructure.filesystem_manager as fs_manager
 
     with tempfile.TemporaryDirectory() as tmpdir:
