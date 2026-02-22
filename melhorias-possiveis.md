@@ -94,9 +94,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-008 | Trilha de auditoria assinada para acoes criticas | P2 | M | ideia |
 | SG-009 | Simulador de politicas para validar mudancas antes de ativar | P2 | M | ideia |
 | SG-010 | Modo compliance (LGPD/GDPR) com controles pre-configurados | P2 | M | ideia |
-| SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
+| SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | reaberto (regressão) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Corrigir vulnerabilidade de bypass de autenticação via X-User-Id | P0 | S | planejado |
+| SG-015 | Sanitizar logs de PII em ferramentas e daemon (email/voice) | P0 | S | planejado |
 
 ---
 
@@ -170,7 +172,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
-| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P0 | S | planejado |
 
 ---
 

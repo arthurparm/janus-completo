@@ -93,3 +93,46 @@ Esta auditoria focou na análise estática do código fonte (`janus/` e `front/`
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `janus-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-24
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+Esta auditoria focou na análise de segurança, regressões e riscos LGPD em código recente.
+
+### 1. Segurança e Vulnerabilidades (Crítico)
+
+*   **Bypass de Autenticação (`X-User-Id`)**: O arquivo `janus/app/core/infrastructure/auth.py` confia no header `X-User-Id` se o token JWT for inválido ou ausente. Isso permite que qualquer atacante personifique qualquer usuário apenas injetando esse header.
+    *   **Evidência**: `xuid = request.headers.get("X-User-Id")` sem validação de origem confiável (ex: gateway interno).
+    *   **Impacto**: Acesso total a dados de usuários e ações privilegiadas.
+
+*   **Regressão de Segredos (SG-011)**: Apesar do item SG-011 estar marcado como "feito", o arquivo `janus/app/config.py` ainda contém senhas padrão (`"change_me_neo4j_password"`, `"change_me_postgres_password"`).
+    *   **Ação**: Reabrir SG-011 e forçar falha no startup se senhas default forem detectadas em produção.
+
+### 2. LGPD e Privacidade
+
+*   **PII em Logs de Ferramentas**: `janus/app/core/tools/productivity_tools.py` loga o assunto (`subject`) de e-mails enviados. Assuntos podem conter dados sensíveis.
+    *   **Evidência**: `logger.info("[EMAIL]", extra={"user_id": user_id, "to": to, "subject": subject})`.
+*   **Comandos de Voz em Log**: `janus/app/interfaces/daemon/daemon.py` loga o texto transcrito do comando de voz. Se o usuário ditar informações sensíveis, elas persistirão nos logs.
+    *   **Evidência**: `logger.info(f"Command received: {command}")`.
+
+### 3. Dívida Técnica e Limpeza
+
+*   **Arquivo Duplicado**: `janus/app/services/tool_service_improved.py` ainda existe e é idêntico ao `tool_service.py`. Deve ser removido (DX-012).
+*   **God Objects (Frontend)**: `front/src/app/services/janus-api.service.ts` cresceu para ~1434 linhas, acumulando responsabilidades de Chat, Auth, System, Memory, etc.
+
+## Próximos Passos
+
+1.  **Imediato (P0)**:
+    *   Corrigir vulnerabilidade de `auth.py` (remover fallback para header inseguro).
+    *   Sanitizar logs em `productivity_tools.py` e `daemon.py`.
+    *   Remover arquivo duplicado `tool_service_improved.py`.
+    *   Revalidar limpeza de segredos em `config.py`.
+
+2.  **Médio Prazo (P1)**:
+    *   Refatorar `janus-api.service.ts` (Frontend).
