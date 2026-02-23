@@ -4,17 +4,29 @@ import pytest
 
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 
+try:
+    import msgpack
+except Exception:
+    msgpack = None
 
 class FakeBroker:
     def __init__(self):
         self.published = []
 
-    async def publish(self, queue_name: str, message: str, priority: int | None = None, headers: dict | None = None):
+    async def publish(
+        self,
+        queue_name: str,
+        message: str | bytes,
+        priority: int | None = None,
+        headers: dict | None = None,
+        use_msgpack: bool = False,
+    ):
         self.published.append({
             "queue": queue_name,
             "message": message,
             "priority": priority,
             "headers": headers,
+            "use_msgpack": use_msgpack,
         })
 
 
@@ -44,7 +56,12 @@ async def test_publish_consolidation_task_enqueues_valid_message(monkeypatch):
     pub = fake_broker.published[0]
     assert pub["queue"] == QueueName.KNOWLEDGE_CONSOLIDATION.value
 
-    msg = json.loads(pub["message"])
+    assert pub["use_msgpack"] is True
+    raw = pub["message"]
+    if msgpack is not None:
+        msg = msgpack.unpackb(raw, raw=False)
+    else:
+        msg = json.loads(raw.decode("utf-8"))
     assert msg["task_type"] == "knowledge_consolidation"
     assert msg["payload"]["mode"] == "single"
     assert msg["payload"]["experience_id"] == "exp-1"

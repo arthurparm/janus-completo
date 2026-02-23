@@ -14,16 +14,16 @@ import pytest
 # ============================================================================
 
 class TestKnowledgeConsolidatorWorker:
-    """Tests for KnowledgeConsolidatorWorker."""
+    """Tests for KnowledgeConsolidator worker module."""
 
     def test_knowledge_consolidator_worker_import(self):
-        """Test KnowledgeConsolidatorWorker can be imported."""
+        """Test KnowledgeConsolidator can be imported from canonical module."""
         try:
-            from app.core.workers.knowledge_consolidator_worker import KnowledgeConsolidatorWorker
-            assert KnowledgeConsolidatorWorker is not None
-            print("✓ KnowledgeConsolidatorWorker import available")
+            from app.core.workers.knowledge_consolidator_worker import KnowledgeConsolidator
+            assert KnowledgeConsolidator is not None
+            print("✓ KnowledgeConsolidator import available")
         except Exception as e:
-            print(f"⚠ KnowledgeConsolidatorWorker import: {e}")
+            print(f"⚠ KnowledgeConsolidator import: {e}")
 
 
 # ============================================================================
@@ -121,7 +121,7 @@ class TestKnowledgeConsolidator:
     def test_knowledge_consolidator_import(self):
         """Test KnowledgeConsolidator can be imported."""
         try:
-            from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
+            from app.core.workers.knowledge_consolidator_worker import KnowledgeConsolidator
             assert KnowledgeConsolidator is not None
             print("✓ KnowledgeConsolidator import available")
         except Exception as e:

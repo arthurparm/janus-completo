@@ -4,17 +4,29 @@ import pytest
 
 from app.models.schemas import TaskMessage, TaskState
 
+try:
+    import msgpack
+except Exception:
+    msgpack = None
 
 class FakeBroker:
     def __init__(self):
         self.published = []
 
-    async def publish(self, queue_name: str, message: str, priority: int | None = None, headers: dict | None = None):
+    async def publish(
+        self,
+        queue_name: str,
+        message: str | bytes,
+        priority: int | None = None,
+        headers: dict | None = None,
+        use_msgpack: bool = False,
+    ):
         self.published.append({
             "queue": queue_name,
             "message": message,
             "priority": priority,
             "headers": headers,
+            "use_msgpack": use_msgpack,
         })
 
 
@@ -49,9 +61,14 @@ async def test_router_side_publishes_consolidation(monkeypatch):
     pub = fake_broker.published[0]
     from app.models.schemas import QueueName
     assert pub["queue"] == QueueName.KNOWLEDGE_CONSOLIDATION.value
+    assert pub["use_msgpack"] is True
 
-    # Assert payload is a TaskMessage JSON with mode single and content present
-    payload = json.loads(pub["message"])
+    # Assert payload is a TaskMessage with mode single and content present
+    raw = pub["message"]
+    if msgpack is not None:
+        payload = msgpack.unpackb(raw, raw=False)
+    else:
+        payload = json.loads(raw.decode("utf-8"))
     assert payload["task_type"] == "knowledge_consolidation"
     assert payload["payload"]["mode"] == "single"
     content = payload["payload"]["experience_content"]

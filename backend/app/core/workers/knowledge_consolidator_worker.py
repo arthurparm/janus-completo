@@ -15,6 +15,7 @@ from typing import Any
 
 from prometheus_client import Counter, Histogram
 
+from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.db.vector_store import get_async_qdrant_client
 from app.models.schemas import VectorCollection
@@ -49,6 +50,9 @@ class KnowledgeConsolidator:
     def __init__(self):
         self.qdrant_client = None
         self._initialized = False
+        self.is_running = False
+        self._task: asyncio.Task | None = None
+        self._batch_lock = asyncio.Lock()
 
     def _chunk_text(
         self, text: Any, chunk_size: int = 1000, overlap: int = 200
@@ -103,73 +107,123 @@ class KnowledgeConsolidator:
         except Exception as e:
             logger.error(f"Failed to initialize KnowledgeConsolidator: {e}")
 
+    async def start(self, *, limit: int = 10, min_score: float = 0.0) -> None:
+        """Inicia o ciclo periódico de consolidação em background."""
+        await self._initialize()
+        if self.is_running:
+            return
+        self.is_running = True
+        self._task = asyncio.create_task(
+            self._consolidation_cycle(limit=limit, min_score=min_score)
+        )
+        logger.info("KnowledgeConsolidator scheduler started.")
+
+    async def stop(self) -> None:
+        """Interrompe o ciclo periódico de consolidação."""
+        if not self.is_running:
+            return
+        self.is_running = False
+        task = self._task
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._task = None
+        logger.info("KnowledgeConsolidator scheduler stopped.")
+
+    async def _consolidation_cycle(self, *, limit: int, min_score: float) -> None:
+        """Loop periódico de consolidação em lote."""
+        interval = getattr(settings, "KNOWLEDGE_CONSOLIDATOR_INTERVAL_SECONDS", 60)
+        while self.is_running:
+            try:
+                await self.consolidate_batch(limit=limit, min_score=min_score)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Error during consolidation cycle: {e}", exc_info=True)
+
+            if not self.is_running:
+                break
+
+            await asyncio.sleep(interval)
+
     async def consolidate_batch(self, limit: int = 10, min_score: float = 0.0) -> dict[str, Any]:
         """
         Consolida um lote de experiências da memória episódica.
         Entry point principal do worker.
         """
-        stats = {
-            "successful": 0,
-            "total_processed": 0,
-            "total_entities": 0,
-            "total_relationships": 0,
-        }
+        async with self._batch_lock:
+            stats = {
+                "successful": 0,
+                "total_processed": 0,
+                "total_entities": 0,
+                "total_relationships": 0,
+            }
 
-        await self._initialize()
-        if not self.qdrant_client:
-            logger.warning("Qdrant client unavailable, returning empty stats")
-            return stats
-
-        try:
-            # 1. Buscar experiências não consolidadas
-            # Nota: Em um sistema real, teríamos um flag 'consolidated' no payload ou uma coleção separada
-            # Para este exemplo, vamos assumir que buscamos as mais recentes e verificamos se já existem no grafo
-
-            # Filtro simplificado: buscar ultimas memories
-            # Idealmente: filter={"must_not": [{"key": "metadata.consolidated", "match": {"value": True}}]}
-            try:
-                results = await self.qdrant_client.scroll(
-                    collection_name=VectorCollection.EPISODIC_MEMORY.value,  # Nome hipotético da coleção de memória
-                    limit=limit,
-                    with_payload=True,
-                    with_vectors=False,
-                )
-            except Exception as e:
-                # Se a coleção não existir ou der erro de conexão
-                logger.warning(f"Failed to scroll episodes collection: {e}")
+            await self._initialize()
+            if not self.qdrant_client:
+                logger.warning("Qdrant client unavailable, returning empty stats")
                 return stats
 
-            points = results[0]  # scroll returns (points, next_page_offset)
-            stats["total_processed"] = len(points)
+            try:
+                # 1. Buscar experiências não consolidadas
+                # Nota: Em um sistema real, teríamos um flag 'consolidated' no payload ou uma coleção separada
+                # Para este exemplo, vamos assumir que buscamos as mais recentes e verificamos se já existem no grafo
 
-            for point in points:
-                if not point.payload:
-                    continue
-
-                exp_id = point.id
-                content = point.payload.get("content", "") or point.payload.get("page_content", "")
-                metadata = point.payload.get("metadata", {})
-
-                # Skip se já consolidado (verificação otimizada seria no filtro do qdrant)
-                if metadata.get("consolidated"):
-                    continue
-
+                # Filtro simplificado: buscar ultimas memories
+                # Idealmente: filter={"must_not": [{"key": "metadata.consolidated", "match": {"value": True}}]}
                 try:
-                    result = await self.consolidate_experience(str(exp_id), content, metadata)
-                    if result:
-                        stats["successful"] += 1
-                        stats["total_entities"] += result.get("entities_created", 0)
-                        stats["total_relationships"] += result.get("relationships_created", 0)
-                except Exception:
-                    # Individual failures logged in consolidate_experience
-                    pass
+                    results = await self.qdrant_client.scroll(
+                        collection_name=VectorCollection.EPISODIC_MEMORY.value,  # Nome hipotético da coleção de memória
+                        limit=limit,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                except Exception as e:
+                    # Se a coleção não existir ou der erro de conexão
+                    logger.warning(f"Failed to scroll episodes collection: {e}")
+                    return stats
 
-            return stats
+                points = results[0]  # scroll returns (points, next_page_offset)
+                stats["total_processed"] = len(points)
 
-        except Exception as e:
-            logger.error(f"Batch consolidation failed: {e}", exc_info=True)
-            CONSOLIDATION_COUNTER.labels(outcome="failure", exception_type=type(e).__name__).inc()
-            return stats
+                for point in points:
+                    if not point.payload:
+                        continue
+
+                    exp_id = point.id
+                    content = point.payload.get("content", "") or point.payload.get(
+                        "page_content", ""
+                    )
+                    metadata = point.payload.get("metadata", {})
+
+                    # Skip se já consolidado (verificação otimizada seria no filtro do qdrant)
+                    if metadata.get("consolidated"):
+                        continue
+
+                    try:
+                        result = await self.consolidate_experience(str(exp_id), content, metadata)
+                        if result:
+                            stats["successful"] += 1
+                            stats["total_entities"] += result.get("entities_created", 0)
+                            stats["total_relationships"] += result.get(
+                                "relationships_created", 0
+                            )
+                    except Exception:
+                        # Individual failures logged in consolidate_experience
+                        pass
+
+                return stats
+
+            except Exception as e:
+                logger.error(f"Batch consolidation failed: {e}", exc_info=True)
+                CONSOLIDATION_COUNTER.labels(
+                    outcome="failure", exception_type=type(e).__name__
+                ).inc()
+                return stats
 
     @resilient(circuit_breaker=_consolidation_cb)
     async def consolidate_experience(

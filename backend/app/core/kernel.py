@@ -18,7 +18,7 @@ from app.core.tools.os_tools import register_os_tools
 from app.core.workers import data_harvester as data_harvester_module
 from app.core.workers.async_consolidation_worker import start_consolidation_worker
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector
-from app.core.workers.knowledge_consolidator import KnowledgeConsolidator
+from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
 from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
@@ -398,13 +398,6 @@ class Kernel:
             if self.config_service:
                 await self.config_service.start()
 
-            knowledge_consolidator = KnowledgeConsolidator(
-                agent_service=self.agent_service,
-                memory_service=self.memory_service,
-                knowledge_repo=self.knowledge_repo,
-                llm_service=self.llm_service,
-            )
-
             memory_connector = MemoryConnector(self.memory_repo)
             data_harvester = DataHarvester(connectors=[memory_connector])
             data_harvester_module.harvester = data_harvester
@@ -413,7 +406,7 @@ class Kernel:
                 goal_manager=self.goal_manager, memory_service=self.memory_service
             )
 
-            await knowledge_consolidator.start()
+            await knowledge_consolidator.start(limit=10, min_score=0.0)
             await data_harvester.start()
             await life_cycle_worker.start()
             if self.outbox_service:
