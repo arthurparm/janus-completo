@@ -223,6 +223,9 @@ def client(monkeypatch):
     # Patch pending actions dependencies
     import app.api.v1.endpoints.pending_actions as pending_module
     import app.db.postgres_config as postgres_module
+    import tempfile
+    from pathlib import Path
+    import app.core.infrastructure.filesystem_manager as fs_module
 
     monkeypatch.setattr(
         postgres_module,
@@ -232,7 +235,10 @@ def client(monkeypatch):
     monkeypatch.setattr(pending_module, "get_graph", lambda: DummyGraph())
     monkeypatch.setattr(pending_module, "_resume_graph_execution", lambda *args, **kwargs: None)
 
-    return TestClient(app)
+    # Mock APP_DIR to a temporary directory to avoid PermissionError: /app
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        monkeypatch.setattr(fs_module, "APP_DIR", Path(tmp_dir))
+        yield TestClient(app)
 
 
 def test_tools_list_endpoint(client):
