@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to load global prompts: {e}")
         # We don't raise here to allow startup with empty prompts (they might be fetched on demand or fallback)
 
-    # 2. Map Kernel Services to App State (for backward compatibility with Routers)
+    # 2. Map Kernel services to FastAPI app state for endpoint access
     app.state.graph_db = kernel.graph_db
     app.state.memory_db = kernel.memory_db
     app.state.broker = kernel.broker
@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
     app.state.outbox_service = kernel.outbox_service
     app.state.goal_manager = kernel.goal_manager
 
-    # Store workers in app state if needed by old shutdown logic, but we use kernel.shutdown now
+    # Store workers in app state for status endpoints and diagnostics
     app.state.workers = kernel.workers
 
     # 2.5 Ensure system user (optional)
@@ -286,7 +286,7 @@ try:
         app.mount(
             "/static",
             StaticFiles(
-                directory=getattr(settings, "STATIC_FILES_DIR", "frontend/janus-angular/public"),
+                directory=getattr(settings, "STATIC_FILES_DIR", "frontend/dist/janus-angular/browser"),
                 check_dir=False,
             ),
             name="static",

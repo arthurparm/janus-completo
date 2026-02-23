@@ -358,7 +358,7 @@ class AppSettings(BaseSettings):
 
     # Estáticos
     SERVE_STATIC_FILES: bool = False
-    STATIC_FILES_DIR: str = "frontend/janus-angular/public"
+    STATIC_FILES_DIR: str = "frontend/dist/janus-angular/browser"
 
     # Timeouts de infraestrutura
     QDRANT_DEFAULT_TIMEOUT_SECONDS: int = 60
