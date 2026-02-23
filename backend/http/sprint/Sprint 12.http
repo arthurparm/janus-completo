@@ -1,0 +1,57 @@
+###
+# SPRINT 12: Resiliência e Maturidade - Observabilidade e Operação Contínua
+# Testes completos de health checks, poison pills e métricas
+###
+
+@host = http://localhost:8000
+@api_v1_prefix = /api/v1
+
+###
+# 1. Health Check do Sistema Completo
+GET {{host}}{{api_v1_prefix}}/observability/health/system
+Accept: application/json
+
+###
+# 2. Health Check do LLM Router
+GET {{host}}{{api_v1_prefix}}/observability/health/components/llm_router
+Accept: application/json
+
+###
+# 3. Health Check do Sistema Multi-Agente
+GET {{host}}{{api_v1_prefix}}/observability/health/components/multi_agent_system
+Accept: application/json
+
+###
+# 4. Health Check do Poison Pill Handler
+GET {{host}}{{api_v1_prefix}}/observability/health/components/poison_pill_handler
+Accept: application/json
+
+###
+# 5. Forçar Execução de Todos os Health Checks
+POST {{host}}{{api_v1_prefix}}/observability/health/check-all
+Content-Type: application/json
+
+###
+# 6. Listar Mensagens em Quarentena
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/quarantined
+Accept: application/json
+
+###
+# 7. Estatísticas de Poison Pills
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/stats
+Accept: application/json
+
+###
+# 8. Limpar Quarentena Expirada
+POST {{host}}{{api_v1_prefix}}/observability/poison-pills/cleanup
+Content-Type: application/json
+
+###
+# 9. Resumo de Métricas do Sistema
+GET {{host}}{{api_v1_prefix}}/observability/metrics/summary
+Accept: application/json
+
+###
+# 10. Métricas Prometheus (endpoint padrão)
+GET {{host}}/metrics
+Accept: text/plain

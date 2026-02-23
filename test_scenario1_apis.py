@@ -1,6 +1,7 @@
 import requests
 import json
 import sys
+from pathlib import Path
 
 BASE_URL = "http://localhost:8000/api/v1"
 
@@ -70,10 +71,12 @@ print("=" * 70)
 print(f"\n📊 Summary: {sum(1 for r in results if r.get('success'))} / {len(results)} passed\n")
 
 # Save detailed results
-with open("api_test_results.json", "w", encoding="utf-8") as f:
+output_file = Path("outputs/qa/api_test_results.json")
+output_file.parent.mkdir(parents=True, exist_ok=True)
+with open(output_file, "w", encoding="utf-8") as f:
     json.dump(results, f, indent=2, ensure_ascii=False)
 
-print("💾 Detailed results saved to: api_test_results.json")
+print(f"💾 Detailed results saved to: {output_file}")
 
 # Exit with error if any failed
 if not all(r.get("success") for r in results):

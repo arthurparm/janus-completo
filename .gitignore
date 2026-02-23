@@ -29,25 +29,26 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 copilot-messages.log
-janus.log
-janus/janus.log
-janus/app/janus.log
+backend.log
+backend/backend.log
+backend/app/backend.log
 
 # -----------------------------
 # Environment / secrets (local only)
 # -----------------------------
-front/.env
-janus/app/.env
-janus/app/.env.windows
-janus/config/.env
-janus/.env*
+.env
+frontend/.env
+backend/app/.env
+backend/app/.env.windows
+backend/config/.env
+backend/.env*
 .env.local
 .env.*.local
 *.pem
 *.key
 *.p12
 *.pfx
-janus/app/serviceAccountKey.json
+backend/app/serviceAccountKey.json
 
 # -----------------------------
 # Python
@@ -69,20 +70,20 @@ htmlcov/
 .venv/
 venv/
 env/
-janus/.venv/
+backend/.venv/
 
 # -----------------------------
 # Node / Angular
 # -----------------------------
 node_modules/
-front/node_modules/
-front/dist/
-front/.angular/cache/
-front/coverage/
-front/.sass-cache/
-front/tmp/
-front/out-tsc/
-front/bazel-out/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/cache/
+frontend/coverage/
+frontend/.sass-cache/
+frontend/tmp/
+frontend/out-tsc/
+frontend/bazel-out/
 *.tsbuildinfo
 
 # -----------------------------
@@ -110,8 +111,8 @@ pip-wheel-metadata/
 .project/complete_drafts.txt
 .project/localProjectSettings.json
 .project/attachments/files/**
-janus/data/
-janus/workspace/
+backend/data/
+backend/workspace/
 .claude/worktrees/
 _bmad/
 
@@ -119,6 +120,6 @@ _bmad/
 # Temporary artifacts
 # -----------------------------
 coverage/
-artifacts/tmp/
-janus/evals/technical-qa/runs/
+outputs/tmp/
+backend/evals/technical-qa/runs/
 evidencia.txt

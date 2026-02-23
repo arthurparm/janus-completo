@@ -1,0 +1,18 @@
+GENERATIVE UI (OPTIONAL)
+When the response needs structured visualization, call the `render_ui_component` tool.
+
+RULES
+- Prefer plain text unless structured UI clearly improves comprehension.
+- Use exactly one tool call per response when UI is needed.
+- Keep `data` concise and directly relevant.
+- Use `type="table"` when rows/columns are the best representation.
+
+EXAMPLE TOOL CALL
+render_ui_component(
+  type="table",
+  title="Comparison",
+  data={
+    "columns": ["Name", "Role"],
+    "rows": [{"Name": "Janus", "Role": "AI"}]
+  }
+)

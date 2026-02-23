@@ -7,21 +7,21 @@
 
 Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria, RAG, observabilidade e operacao autonoma.
 
-O repositorio `janus-completo` organiza um sistema agentico de IA com duas partes principais: `front` (Angular 20) e `janus` (API FastAPI com motor de agentes, memoria, observabilidade e automacao). O frontend consome a API via REST e SSE, enquanto o backend integra Redis, RabbitMQ, Neo4j, Qdrant e Postgres para processamento de conversa, memoria e operacao autonoma.
+O repositorio `janus-completo` organiza um sistema agentico de IA com duas partes principais: `frontend` (Angular 20) e `backend` (API FastAPI com motor de agentes, memoria, observabilidade e automacao). O frontend consome a API via REST e SSE, enquanto o backend integra Redis, RabbitMQ, Neo4j, Qdrant e Postgres para processamento de conversa, memoria e operacao autonoma.
 
 ## Structure
 
-### Frontend (`front/`)
+### Frontend (`frontend/`)
 
 - **Type:** Web Application
 - **Stack:** Angular 20, TypeScript, RxJS, Tailwind, Vitest
-- **Entry Point:** `front/src/main.ts`
+- **Entry Point:** `frontend/src/main.ts`
 
-### Backend (`janus/`)
+### Backend (`backend/`)
 
 - **Type:** Python Backend
 - **Stack:** FastAPI, SQLAlchemy, RabbitMQ, Redis, Neo4j, Qdrant, Postgres
-- **Entry Point:** `janus/app/main.py`
+- **Entry Point:** `backend/app/main.py`
 
 ## Getting Started
 
@@ -34,7 +34,7 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 ### Frontend (Local Development)
 
 ```bash
-cd front
+cd frontend
 npm install
 npm start
 ```
@@ -43,7 +43,7 @@ Access at: `http://localhost:4200`
 ### Backend (Local Development)
 
 ```bash
-cd janus
+cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -57,16 +57,16 @@ docker compose up -d
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+Comprehensive documentation is available in the `documentation/` directory:
 
-- [Project Overview](docs/project-overview.md)
-- [Architecture - Frontend](docs/architecture-front.md)
-- [Architecture - Backend](docs/architecture-janus.md)
-- [Integration Architecture](docs/integration-architecture.md)
-- [Deployment Guide](docs/deployment-guide.md)
-- [API Endpoint Matrix (Live)](docs/qa/api-endpoint-matrix.md)
-- [API Test Playbook](docs/qa/api-test-playbook.md)
-- [Domain SLOs and Alerts](docs/qa/domain-slo-alerts.md)
+- [Project Overview](documentation/project-overview.md)
+- [Architecture - Frontend](documentation/architecture-frontend.md)
+- [Architecture - Backend](documentation/architecture-backend.md)
+- [Integration Architecture](documentation/integration-architecture.md)
+- [Deployment Guide](documentation/deployment-guide.md)
+- [API Endpoint Matrix (Live)](documentation/qa/api-endpoint-matrix.md)
+- [API Test Playbook](documentation/qa/api-test-playbook.md)
+- [Domain SLOs and Alerts](documentation/qa/domain-slo-alerts.md)
 
 ## Roadmap / Backlog
 
@@ -89,4 +89,4 @@ Consolidated from prior planning artifacts.
 
 ---
 
-_Project documentation maintained in `docs/` folder._
+_Project documentation maintained in `documentation/` folder._

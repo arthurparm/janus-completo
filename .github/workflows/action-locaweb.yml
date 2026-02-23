@@ -11,35 +11,35 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Node.js (with npm cache)
-        if: ${{ hashFiles('front/package-lock.json') != '' }}
+        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
         uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'front/package-lock.json'
+          cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Setup Node.js (no cache)
-        if: ${{ hashFiles('front/package-lock.json') == '' }}
+        if: ${{ hashFiles('frontend/package-lock.json') == '' }}
         uses: actions/setup-node@v5
         with:
           node-version: '20'
       - name: Install dependencies (front via npm ci)
-        if: ${{ hashFiles('front/package-lock.json') != '' }}
+        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
         run: npm ci
-        working-directory: front
+        working-directory: frontend
 
       - name: Install dependencies (front via npm install)
-        if: ${{ hashFiles('front/package-lock.json') == '' }}
+        if: ${{ hashFiles('frontend/package-lock.json') == '' }}
         run: npm install
-        working-directory: front
+        working-directory: frontend
       - name: Create .env.production (VITE_API_BASE_URL)
         run: |
           echo "VITE_API_BASE_URL=${{ secrets.BACKEND_API_URL }}" > .env.production
-        working-directory: front
+        working-directory: frontend
 
       - name: Build Angular application (Angular 20)
         run: npm run build -- --configuration production --base-href /
-        working-directory: front
+        working-directory: frontend
         
       - name: FTP Deploy (com sincronização)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -47,6 +47,6 @@ jobs:
           server: ${{ secrets.HOST }}
           username: ${{ secrets.USER }}
           password: ${{ secrets.PASS }}
-          local-dir: front/dist/janus-angular/browser/
-          server-dir: public_html/janus-front/
+          local-dir: frontend/dist/janus-angular/browser/
+          server-dir: public_html/janus-frontend/
           dangerous-clean-slate: true

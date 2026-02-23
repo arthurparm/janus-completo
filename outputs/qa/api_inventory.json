@@ -1,0 +1,6289 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-13T11:26:54.938272",
+    "source": "OpenAPI Specification",
+    "version": "1.0"
+  },
+  "statistics": {
+    "total_endpoints": 228,
+    "by_method": {
+      "POST": 94,
+      "GET": 123,
+      "DELETE": 6,
+      "PATCH": 2,
+      "PUT": 3
+    },
+    "by_module": {
+      "Collaboration - Workspace": 5,
+      "System": 5,
+      "unknown": 4,
+      "Knowledge": 21,
+      "RAG": 5,
+      "Documents": 6,
+      "Productivity": 13,
+      "Agent": 1,
+      "Optimization": 6,
+      "Admin": 1,
+      "Learning": 12,
+      "Tasks": 6,
+      "Context": 6,
+      "Sandbox": 3,
+      "Reflexion": 5,
+      "Tools": 8,
+      "LLM": 12,
+      "Collaboration": 11,
+      "Observability": 22,
+      "Meta-Agent": 6,
+      "Chat": 11,
+      "Users": 6,
+      "Profiles": 2,
+      "Autonomy": 11,
+      "Workers": 3,
+      "Assistant": 1,
+      "AutonomyHistory": 3,
+      "Consents": 3,
+      "PendingActions": 5,
+      "Evaluation": 5,
+      "Deployment": 4,
+      "Auth": 8,
+      "Auto Analysis": 1,
+      "Feedback": 7
+    },
+    "by_auth": {
+      "requires_auth": 0,
+      "public": 228
+    },
+    "extraction_timestamp": "2026-02-13T11:26:54.938272"
+  },
+  "endpoints": [
+    {
+      "path": "/api/v1/collaboration/workspace/artifacts/add",
+      "method": "POST",
+      "operation_id": "add_artifact_api_v1_collaboration_workspace_artifacts_add_post",
+      "summary": "Add Artifact",
+      "tags": [
+        "Collaboration - Workspace"
+      ],
+      "module": "Collaboration - Workspace",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/AddArtifactRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/workspace/artifacts/{key}",
+      "method": "GET",
+      "operation_id": "get_artifact_api_v1_collaboration_workspace_artifacts__key__get",
+      "summary": "Get Artifact",
+      "tags": [
+        "Collaboration - Workspace"
+      ],
+      "module": "Collaboration - Workspace",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "key",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/workspace/messages/send",
+      "method": "POST",
+      "operation_id": "send_message_api_v1_collaboration_workspace_messages_send_post",
+      "summary": "Send Message",
+      "tags": [
+        "Collaboration - Workspace"
+      ],
+      "module": "Collaboration - Workspace",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/SendMessageRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/workspace/messages/{agent_id}",
+      "method": "GET",
+      "operation_id": "get_messages_for_api_v1_collaboration_workspace_messages__agent_id__get",
+      "summary": "Get Messages For",
+      "tags": [
+        "Collaboration - Workspace"
+      ],
+      "module": "Collaboration - Workspace",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "agent_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/system/shutdown",
+      "method": "POST",
+      "operation_id": "shutdown_system_api_v1_collaboration_system_shutdown_post",
+      "summary": "Shutdown System",
+      "tags": [
+        "Collaboration - Workspace",
+        "Collaboration - System"
+      ],
+      "module": "Collaboration - Workspace",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/status",
+      "method": "GET",
+      "operation_id": "get_system_status_api_v1_system_status_get",
+      "summary": "Verifica o estado da aplicação",
+      "tags": [
+        "System"
+      ],
+      "module": "System",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/StatusResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/health/services",
+      "method": "GET",
+      "operation_id": "get_services_health_api_v1_system_health_services_get",
+      "summary": "Saúde dos microsserviços",
+      "tags": [
+        "System"
+      ],
+      "module": "System",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ServiceHealthResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/status/user",
+      "method": "GET",
+      "operation_id": "get_user_status_api_v1_system_status_user_get",
+      "summary": "Resumo de status por usuário (ator ou admin)",
+      "tags": [
+        "System"
+      ],
+      "module": "System",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UserStatusResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/db/validate",
+      "method": "GET",
+      "operation_id": "validate_db_schema_api_v1_system_db_validate_get",
+      "summary": "Valida schema Database (users/sessions/messages/profiles)",
+      "tags": [
+        "System"
+      ],
+      "module": "System",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/db/migrate",
+      "method": "POST",
+      "operation_id": "migrate_db_schema_api_v1_system_db_migrate_post",
+      "summary": "Migra schema Database (cria índices/constraints ausentes)",
+      "tags": [
+        "System"
+      ],
+      "module": "System",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/system/overview",
+      "method": "GET",
+      "operation_id": "get_system_overview_api_v1_system_overview_get",
+      "summary": "System overview",
+      "tags": [],
+      "module": "unknown",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/SystemOverviewResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/index",
+      "method": "POST",
+      "operation_id": "trigger_indexing_api_v1_knowledge_index_post",
+      "summary": "Inicia a indexação da base de código",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/IndexResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/stats",
+      "method": "GET",
+      "operation_id": "get_knowledge_stats_api_v1_knowledge_stats_get",
+      "summary": "Estatísticas do grafo",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/entities",
+      "method": "GET",
+      "operation_id": "get_code_entities_api_v1_knowledge_entities_get",
+      "summary": "Lista entidades de código",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "file_path",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/CodeEntity'}, 'title': 'Response Get Code Entities Api V1 Knowledge Entities Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/entity/{entity_name}/relationships",
+      "method": "GET",
+      "operation_id": "get_entity_relationships_api_v1_knowledge_entity__entity_name__relationships_get",
+      "summary": "Navega relacionamentos de uma entidade",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "entity_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "rel_type",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "direction",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        },
+        {
+          "name": "max_depth",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "skip",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/EntityRelationshipsResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/clear",
+      "method": "DELETE",
+      "operation_id": "clear_knowledge_graph_api_v1_knowledge_clear_delete",
+      "summary": "Limpa todo o grafo",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ClearGraphResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/query",
+      "method": "POST",
+      "operation_id": "query_knowledge_api_v1_knowledge_query_post",
+      "summary": "Consulta o grafo de conhecimento (Graph RAG)",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/KnowledgeQueryRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/KnowledgeQueryResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/query/code",
+      "method": "POST",
+      "operation_id": "query_code_with_citations_api_v1_knowledge_query_code_post",
+      "summary": "Pergunta sobre codigo com citacoes de arquivo e linha",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CodeQuestionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/CodeQuestionResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/concepts/related",
+      "method": "POST",
+      "operation_id": "related_concepts_api_v1_knowledge_concepts_related_post",
+      "summary": "Busca conceitos relacionados",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/RelatedConceptsRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/RelatedConceptsResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/concepts/reindex",
+      "method": "POST",
+      "operation_id": "reindex_concepts_api_v1_knowledge_concepts_reindex_post",
+      "summary": "Reindexa (gera embeddings) para conceitos que ainda não possuem",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ReindexRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ReindexResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/node-types",
+      "method": "GET",
+      "operation_id": "get_node_types_api_v1_knowledge_node_types_get",
+      "summary": "Lista tipos de nós presentes no grafo",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/NodeTypesResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/health",
+      "method": "GET",
+      "operation_id": "knowledge_health_api_v1_knowledge_health_get",
+      "summary": "Health check da memória semântica",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/KnowledgeHealthResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/health/reset-circuit-breaker",
+      "method": "POST",
+      "operation_id": "reset_circuit_breaker_api_v1_knowledge_health_reset_circuit_breaker_post",
+      "summary": "Reseta o circuit breaker do Qdrant",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/health/detailed",
+      "method": "GET",
+      "operation_id": "detailed_health_check_api_v1_knowledge_health_detailed_get",
+      "summary": "Status detalhado do sistema de memória",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/consolidate",
+      "method": "POST",
+      "operation_id": "publish_consolidation_api_v1_knowledge_consolidate_post",
+      "summary": "Dispara consolidação de conhecimento via fila",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ConsolidationRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ConsolidationResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/consolidate/document",
+      "method": "POST",
+      "operation_id": "consolidate_document_api_v1_knowledge_consolidate_document_post",
+      "summary": "Consolida conhecimento a partir de um documento (doc_id) do usuário",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/DocConsolidationRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ConsolidationResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/relationship-types/register",
+      "method": "POST",
+      "operation_id": "register_relationship_type_api_v1_knowledge_relationship_types_register_post",
+      "summary": "Registra um tipo canônico de relacionamento",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/RegisterRelTypeRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/RegisterRelTypeResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/quarantine",
+      "method": "GET",
+      "operation_id": "list_quarantine_api_v1_knowledge_quarantine_get",
+      "summary": "Lista itens em quarentena no grafo",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/QuarantineListResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/quarantine/promote",
+      "method": "POST",
+      "operation_id": "promote_quarantine_api_v1_knowledge_quarantine_promote_post",
+      "summary": "Promove um item de quarentena a relacionamento no grafo",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/app__api__v1__endpoints__knowledge__PromoteQuarantineRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/PromoteQuarantineResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/functions/calling",
+      "method": "GET",
+      "operation_id": "functions_calling_api_v1_knowledge_functions_calling_get",
+      "summary": "Lista funções que chamam a função informada",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/CodeEntity'}, 'title': 'Response Functions Calling Api V1 Knowledge Functions Calling Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/files/importing",
+      "method": "GET",
+      "operation_id": "files_importing_api_v1_knowledge_files_importing_get",
+      "summary": "Lista arquivos que importam o módulo/arquivo informado",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "module",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/CodeEntity'}, 'title': 'Response Files Importing Api V1 Knowledge Files Importing Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/knowledge/classes/implementations",
+      "method": "GET",
+      "operation_id": "classes_implementations_api_v1_knowledge_classes_implementations_get",
+      "summary": "Lista classes que implementam o protocolo/interface informado",
+      "tags": [
+        "Knowledge"
+      ],
+      "module": "Knowledge",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "protocol",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/CodeEntity'}, 'title': 'Response Classes Implementations Api V1 Knowledge Classes Implementations Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/rag/search",
+      "method": "GET",
+      "operation_id": "rag_search_api_v1_rag_search_get",
+      "summary": "Busca baseada em fatos com memória vetorial",
+      "tags": [
+        "RAG"
+      ],
+      "module": "RAG",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "origin",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "file_path",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RAGSearchResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/rag/user-chat",
+      "method": "GET",
+      "operation_id": "rag_user_chat_search_api_v1_rag_user_chat_get",
+      "summary": "Busca em mensagens pessoais indexadas por usuário",
+      "tags": [
+        "RAG"
+      ],
+      "module": "RAG",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "session_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "role",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RAGUserChatResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/rag/productivity",
+      "method": "GET",
+      "operation_id": "rag_productivity_search_api_v1_rag_productivity_get",
+      "summary": "Busca em itens de produtividade (calendar/mail/notes) do usuário",
+      "tags": [
+        "RAG"
+      ],
+      "module": "RAG",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RAGProductivityResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/rag/user_chat",
+      "method": "GET",
+      "operation_id": "user_chat_v2_api_v1_rag_user_chat_get",
+      "summary": "Busca semântica em mensagens pessoais de chat",
+      "tags": [
+        "RAG"
+      ],
+      "module": "RAG",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "session_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "start_ts_ms",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "end_ts_ms",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RAGUserChatResponseV2",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/rag/hybrid_search",
+      "method": "GET",
+      "operation_id": "rag_hybrid_search_api_v1_rag_hybrid_search_get",
+      "summary": "Busca híbrida (vetor + grafo) em conhecimento pessoal",
+      "tags": [
+        "RAG"
+      ],
+      "module": "RAG",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RAGHybridResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/upload",
+      "method": "POST",
+      "operation_id": "upload_document_api_v1_documents_upload_post",
+      "summary": "Upload Document",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UploadResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/search",
+      "method": "GET",
+      "operation_id": "search_documents_api_v1_documents_search_get",
+      "summary": "Search Documents",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/DocSearchResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/list",
+      "method": "GET",
+      "operation_id": "list_documents_api_v1_documents_list_get",
+      "summary": "List Documents",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "conversation_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/DocListResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/{doc_id}",
+      "method": "DELETE",
+      "operation_id": "delete_document_api_v1_documents__doc_id__delete",
+      "summary": "Delete Document",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "doc_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/link-url",
+      "method": "POST",
+      "operation_id": "link_url_api_v1_documents_link_url_post",
+      "summary": "Link Url",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/LinkUrlResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/documents/status/{doc_id}",
+      "method": "GET",
+      "operation_id": "document_status_api_v1_documents_status__doc_id__get",
+      "summary": "Document Status",
+      "tags": [
+        "Documents"
+      ],
+      "module": "Documents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "doc_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/DocStatusResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/calendar/events/add",
+      "method": "POST",
+      "operation_id": "calendar_add_event_api_v1_productivity_calendar_events_add_post",
+      "summary": "Calendar Add Event",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CalendarAddRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/oauth/google/start",
+      "method": "POST",
+      "operation_id": "oauth_google_start_api_v1_productivity_oauth_google_start_post",
+      "summary": "Oauth Google Start",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/OAuthStartRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/oauth/google/start",
+      "method": "GET",
+      "operation_id": "google_oauth_start_api_v1_productivity_oauth_google_start_get",
+      "summary": "Google Oauth Start",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "integer"
+        },
+        {
+          "name": "scope",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/calendar/events",
+      "method": "GET",
+      "operation_id": "calendar_list_events_api_v1_productivity_calendar_events_get",
+      "summary": "Calendar List Events",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/mail/messages/send",
+      "method": "POST",
+      "operation_id": "mail_send_api_v1_productivity_mail_messages_send_post",
+      "summary": "Mail Send",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/MailSendRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/mail/messages",
+      "method": "GET",
+      "operation_id": "mail_list_api_v1_productivity_mail_messages_get",
+      "summary": "Mail List",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/notes/add",
+      "method": "POST",
+      "operation_id": "notes_add_api_v1_productivity_notes_add_post",
+      "summary": "Notes Add",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/NoteAddRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/notes",
+      "method": "GET",
+      "operation_id": "notes_list_api_v1_productivity_notes_get",
+      "summary": "Notes List",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/limits/status",
+      "method": "GET",
+      "operation_id": "limits_status_api_v1_productivity_limits_status_get",
+      "summary": "Limits Status",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/oauth/google/callback",
+      "method": "POST",
+      "operation_id": "google_oauth_callback_api_v1_productivity_oauth_google_callback_post",
+      "summary": "Google Oauth Callback",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/GoogleOAuthCallbackRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/productivity/oauth/google/refresh",
+      "method": "POST",
+      "operation_id": "google_oauth_refresh_api_v1_productivity_oauth_google_refresh_post",
+      "summary": "Google Oauth Refresh",
+      "tags": [
+        "Productivity"
+      ],
+      "module": "Productivity",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/agent/execute",
+      "method": "POST",
+      "operation_id": "agent_execute_api_v1_agent_execute_post",
+      "summary": "Envia uma instrução para um agente executar",
+      "tags": [
+        "Agent"
+      ],
+      "module": "Agent",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/AgentExecutionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/AgentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/run-cycle",
+      "method": "POST",
+      "operation_id": "run_optimization_cycle_api_v1_optimization_run_cycle_post",
+      "summary": "Executa um ciclo de auto-otimização",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/OptimizationCycleRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/OptimizationCycleResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/health",
+      "method": "GET",
+      "operation_id": "get_system_health_api_v1_optimization_health_get",
+      "summary": "Verifica a saúde geral do sistema",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/SystemHealthResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/issues",
+      "method": "GET",
+      "operation_id": "get_detected_issues_api_v1_optimization_issues_get",
+      "summary": "Lista problemas detectados no sistema",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "severity",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "category",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/DetectedIssueResponse'}, 'title': 'Response Get Detected Issues Api V1 Optimization Issues Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/metrics/history",
+      "method": "GET",
+      "operation_id": "get_metrics_history_api_v1_optimization_metrics_history_get",
+      "summary": "Retorna o histórico de métricas de saúde",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/status",
+      "method": "GET",
+      "operation_id": "get_optimization_status_api_v1_optimization_status_get",
+      "summary": "Status do módulo de auto-otimização",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/optimization/analyze",
+      "method": "POST",
+      "operation_id": "analyze_system_api_v1_optimization_analyze_post",
+      "summary": "Analisa métricas e problemas do sistema",
+      "tags": [
+        "Optimization",
+        "Optimization"
+      ],
+      "module": "Optimization",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "analysis_type",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        },
+        {
+          "name": "detailed",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/SystemAnalysisResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/admin/config",
+      "method": "PATCH",
+      "operation_id": "update_config_api_v1_admin_config_patch",
+      "summary": "Atualiza configurações do sistema em tempo de execução (Hot-Reload)",
+      "tags": [
+        "Admin",
+        "Admin"
+      ],
+      "module": "Admin",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ConfigUpdateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ConfigUpdateResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/memory/timeline",
+      "method": "GET",
+      "operation_id": "get_memories_timeline_api_v1_memory_timeline_get",
+      "summary": "Get Memories Timeline",
+      "tags": [],
+      "module": "unknown",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "start_date",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "end_date",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "query",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/MemoryTimelineItem'}, 'title': 'Response Get Memories Timeline Api V1 Memory Timeline Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/memory/generative",
+      "method": "GET",
+      "operation_id": "get_generative_memories_api_v1_memory_generative_get",
+      "summary": "Get Generative Memories",
+      "tags": [],
+      "module": "unknown",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/ScoredExperience'}, 'title': 'Response Get Generative Memories Api V1 Memory Generative Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/memory/generative",
+      "method": "POST",
+      "operation_id": "add_generative_memory_api_v1_memory_generative_post",
+      "summary": "Add Generative Memory",
+      "tags": [],
+      "module": "unknown",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "content",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "importance",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/Experience",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/harvest",
+      "method": "POST",
+      "operation_id": "trigger_harvesting_api_v1_learning_harvest_post",
+      "summary": "Inicia a coleta de dados para treino",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/HarvestRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LearningResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/train",
+      "method": "POST",
+      "operation_id": "trigger_training_api_v1_learning_train_post",
+      "summary": "Agenda o treino de um novo modelo",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/TrainRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/TrainingAckResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/training/status",
+      "method": "GET",
+      "operation_id": "get_training_status_api_v1_learning_training_status_get",
+      "summary": "Obtém status do treinamento atual",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/TrainingStatusResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/models",
+      "method": "GET",
+      "operation_id": "list_models_api_v1_learning_models_get",
+      "summary": "Lista todos os modelos treinados",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ModelListResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/models/{model_id}",
+      "method": "GET",
+      "operation_id": "get_model_details_api_v1_learning_models__model_id__get",
+      "summary": "Obtém detalhes de um modelo",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "model_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ModelInfo",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/stats",
+      "method": "GET",
+      "operation_id": "get_learning_stats_api_v1_learning_stats_get",
+      "summary": "Obtém estatísticas do sistema de treinamento",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/dataset/preview",
+      "method": "GET",
+      "operation_id": "preview_dataset_api_v1_learning_dataset_preview_get",
+      "summary": "Pré-visualiza exemplos do dataset de treino",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/evaluate",
+      "method": "POST",
+      "operation_id": "evaluate_model_api_v1_learning_evaluate_post",
+      "summary": "Avalia a performance de um modelo",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/EvaluateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/EvaluationResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/dataset/version",
+      "method": "GET",
+      "operation_id": "get_dataset_version_api_v1_learning_dataset_version_get",
+      "summary": "Obtém a versão atual do dataset de treino",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/DatasetVersionResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/experiments",
+      "method": "GET",
+      "operation_id": "list_experiments_api_v1_learning_experiments_get",
+      "summary": "Lista experimentos de treinamento",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ExperimentListResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/experiments/{experiment_id}",
+      "method": "GET",
+      "operation_id": "get_experiment_details_api_v1_learning_experiments__experiment_id__get",
+      "summary": "Obtém detalhes de um experimento",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "experiment_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ExperimentInfo",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/learning/health",
+      "method": "GET",
+      "operation_id": "learning_health_api_v1_learning_health_get",
+      "summary": "Health check do sistema de treinamento",
+      "tags": [
+        "Learning"
+      ],
+      "module": "Learning",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/consolidation",
+      "method": "POST",
+      "operation_id": "create_consolidation_task_api_v1_tasks_consolidation_post",
+      "summary": "Publica tarefa de consolidação",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ConsolidationTaskRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/TaskResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/queue/{queue_name}",
+      "method": "GET",
+      "operation_id": "get_queue_info_api_v1_tasks_queue__queue_name__get",
+      "summary": "Obtém informações sobre uma fila",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "queue_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/QueueInfoResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/health/rabbitmq",
+      "method": "GET",
+      "operation_id": "check_rabbitmq_health_api_v1_tasks_health_rabbitmq_get",
+      "summary": "Verifica saúde do RabbitMQ",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/queue/{queue_name}/policy",
+      "method": "GET",
+      "operation_id": "get_queue_policy_api_v1_tasks_queue__queue_name__policy_get",
+      "summary": "Obtém política/argumentos da fila",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "queue_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/QueuePolicyResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/queue/{queue_name}/policy/validate",
+      "method": "GET",
+      "operation_id": "validate_queue_policy_api_v1_tasks_queue__queue_name__policy_validate_get",
+      "summary": "Valida argumentos da fila contra configuração esperada",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "queue_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/QueuePolicyValidationResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/queue/{queue_name}/policy/reconcile",
+      "method": "POST",
+      "operation_id": "reconcile_queue_policy_api_v1_tasks_queue__queue_name__policy_reconcile_post",
+      "summary": "Reconcilia política da fila (deleta e recria se divergente)",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ReconcilePolicyRequest",
+      "parameters": [
+        {
+          "name": "queue_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ReconcilePolicyResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/current",
+      "method": "GET",
+      "operation_id": "get_current_context_api_v1_context_current_get",
+      "summary": "Obtém contexto ambiental atual",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ContextInfo"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/web-search",
+      "method": "GET",
+      "operation_id": "search_web_api_v1_context_web_search_get",
+      "summary": "Busca informações na web",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "query",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "max_results",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "search_depth",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/WebSearchResult",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/enriched",
+      "method": "POST",
+      "operation_id": "get_enriched_context_api_v1_context_enriched_post",
+      "summary": "Obtém contexto enriquecido",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/EnrichedContextRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/format-prompt",
+      "method": "GET",
+      "operation_id": "format_context_for_prompt_api_v1_context_format_prompt_get",
+      "summary": "Formata contexto para prompt",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "include_datetime",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        },
+        {
+          "name": "include_system",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        },
+        {
+          "name": "web_query",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/web-cache/status",
+      "method": "GET",
+      "operation_id": "get_web_cache_status_api_v1_context_web_cache_status_get",
+      "summary": "Status do cache de busca web",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/context/web-cache/invalidate",
+      "method": "POST",
+      "operation_id": "invalidate_web_cache_api_v1_context_web_cache_invalidate_post",
+      "summary": "Invalida entradas do cache de busca web",
+      "tags": [
+        "Context"
+      ],
+      "module": "Context",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/InvalidateCacheRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/sandbox/execute",
+      "method": "POST",
+      "operation_id": "execute_code_api_v1_sandbox_execute_post",
+      "summary": "Executa código Python no sandbox",
+      "tags": [
+        "Sandbox"
+      ],
+      "module": "Sandbox",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CodeExecutionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/sandbox/evaluate",
+      "method": "POST",
+      "operation_id": "evaluate_expression_api_v1_sandbox_evaluate_post",
+      "summary": "Avalia uma expressão Python",
+      "tags": [
+        "Sandbox"
+      ],
+      "module": "Sandbox",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ExpressionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/sandbox/capabilities",
+      "method": "GET",
+      "operation_id": "get_sandbox_capabilities_api_v1_sandbox_capabilities_get",
+      "summary": "Lista capacidades do sandbox",
+      "tags": [
+        "Sandbox"
+      ],
+      "module": "Sandbox",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/reflexion/execute",
+      "method": "POST",
+      "operation_id": "execute_with_reflexion_api_v1_reflexion_execute_post",
+      "summary": "Executa tarefa com o ciclo Reflexion",
+      "tags": [
+        "Reflexion"
+      ],
+      "module": "Reflexion",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ReflexionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ReflexionResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/reflexion/config",
+      "method": "GET",
+      "operation_id": "get_reflexion_config_api_v1_reflexion_config_get",
+      "summary": "Obtém configuração padrão do Reflexion",
+      "tags": [
+        "Reflexion"
+      ],
+      "module": "Reflexion",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/reflexion/reset-circuit-breaker",
+      "method": "POST",
+      "operation_id": "reset_circuit_breaker_api_v1_reflexion_reset_circuit_breaker_post",
+      "summary": "Reseta o circuit breaker dos agentes",
+      "tags": [
+        "Reflexion"
+      ],
+      "module": "Reflexion",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/reflexion/health",
+      "method": "GET",
+      "operation_id": "reflexion_health_api_v1_reflexion_health_get",
+      "summary": "Verifica saúde do módulo Reflexion",
+      "tags": [
+        "Reflexion"
+      ],
+      "module": "Reflexion",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/reflexion/summary/post_sprint",
+      "method": "GET",
+      "operation_id": "get_post_sprint_summary_api_v1_reflexion_summary_post_sprint_get",
+      "summary": "Resumo pós-sprint: lições e estado do sistema",
+      "tags": [
+        "Reflexion"
+      ],
+      "module": "Reflexion",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "timeframe_seconds",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_score",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/PostSprintSummaryResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/",
+      "method": "GET",
+      "operation_id": "list_tools_api_v1_tools__get",
+      "summary": "Lista todas as ferramentas disponíveis",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "category",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "permission_level",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "tags",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ToolListResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/{tool_name}",
+      "method": "GET",
+      "operation_id": "get_tool_details_api_v1_tools__tool_name__get",
+      "summary": "Obtém detalhes de uma ferramenta",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "tool_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ToolInfo",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/{tool_name}",
+      "method": "DELETE",
+      "operation_id": "delete_tool_api_v1_tools__tool_name__delete",
+      "summary": "Remove uma ferramenta dinâmica",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "tool_name",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/stats/usage",
+      "method": "GET",
+      "operation_id": "get_tool_statistics_api_v1_tools_stats_usage_get",
+      "summary": "Estatísticas de uso de ferramentas",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ToolStatsResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/create/from-function",
+      "method": "POST",
+      "operation_id": "create_tool_from_function_api_v1_tools_create_from_function_post",
+      "summary": "Cria ferramenta a partir de código Python",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CreateToolFromFunctionRequest",
+      "parameters": [],
+      "response_schemas": {
+        "201": "#/components/schemas/ToolInfo",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/create/from-api",
+      "method": "POST",
+      "operation_id": "create_tool_from_api_api_v1_tools_create_from_api_post",
+      "summary": "Cria ferramenta a partir de endpoint HTTP",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CreateToolFromApiRequest",
+      "parameters": [],
+      "response_schemas": {
+        "201": "#/components/schemas/ToolInfo",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/categories/list",
+      "method": "GET",
+      "operation_id": "list_categories_api_v1_tools_categories_list_get",
+      "summary": "Lista todas as categorias de ferramentas",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tools/permissions/list",
+      "method": "GET",
+      "operation_id": "list_permissions_api_v1_tools_permissions_list_get",
+      "summary": "Lista todos os níveis de permissão",
+      "tags": [
+        "Tools"
+      ],
+      "module": "Tools",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/invoke",
+      "method": "POST",
+      "operation_id": "invoke_llm_api_v1_llm_invoke_post",
+      "summary": "Invoca um LLM com base no papel e prioridade",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/LLMInvokeRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LLMInvokeResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/cache/status",
+      "method": "GET",
+      "operation_id": "get_cache_status_api_v1_llm_cache_status_get",
+      "summary": "Retorna o status do cache de LLMs",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LLMCacheStatusResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/cache/invalidate",
+      "method": "POST",
+      "operation_id": "invalidate_llm_cache_api_v1_llm_cache_invalidate_post",
+      "summary": "Invalida o cache de LLMs",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "provider",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/response-cache/status",
+      "method": "GET",
+      "operation_id": "get_response_cache_status_api_v1_llm_response_cache_status_get",
+      "summary": "Status do cache de respostas (prompts/respostas)",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LLMCacheStatusResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/response-cache/invalidate",
+      "method": "POST",
+      "operation_id": "invalidate_response_cache_api_v1_llm_response_cache_invalidate_post",
+      "summary": "Invalida cache de respostas por prompt/role/priority",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/InvalidateResponseCacheRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/circuit-breakers",
+      "method": "GET",
+      "operation_id": "get_circuit_breaker_status_api_v1_llm_circuit_breakers_get",
+      "summary": "Retorna o status dos circuit breakers",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{'items': {'$ref': '#/components/schemas/CircuitBreakerStatus'}, 'type': 'array', 'title': 'Response Get Circuit Breaker Status Api V1 Llm Circuit Breakers Get'}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/circuit-breakers/{provider}/reset",
+      "method": "POST",
+      "operation_id": "reset_circuit_breaker_api_v1_llm_circuit_breakers__provider__reset_post",
+      "summary": "Reseta o circuit breaker de um provedor",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "provider",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/providers",
+      "method": "GET",
+      "operation_id": "list_llm_providers_api_v1_llm_providers_get",
+      "summary": "Lista provedores configurados de LLMs",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/health",
+      "method": "GET",
+      "operation_id": "llm_health_api_v1_llm_health_get",
+      "summary": "Health check do sistema de LLMs",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/ab/set-experiment",
+      "method": "POST",
+      "operation_id": "set_ab_experiment_api_v1_llm_ab_set_experiment_post",
+      "summary": "Define experimento A/B para seleção de LLM por usuário",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ABExperimentSetRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/budget/summary",
+      "method": "GET",
+      "operation_id": "get_budget_summary_api_v1_llm_budget_summary_get",
+      "summary": "Retorna resumo de budget e gastos por provedor",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/llm/pricing/providers",
+      "method": "GET",
+      "operation_id": "get_provider_pricing_api_v1_llm_pricing_providers_get",
+      "summary": "Retorna tabela de preços por provedor",
+      "tags": [
+        "LLM"
+      ],
+      "module": "LLM",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/agents/create",
+      "method": "POST",
+      "operation_id": "create_agent_api_v1_collaboration_agents_create_post",
+      "summary": "Create Agent",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CreateAgentRequest",
+      "parameters": [],
+      "response_schemas": {
+        "201": "#/components/schemas/CreateAgentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/agents",
+      "method": "GET",
+      "operation_id": "list_agents_api_v1_collaboration_agents_get",
+      "summary": "Lista todos os agentes ativos",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/agents/{agent_id}",
+      "method": "GET",
+      "operation_id": "get_agent_details_api_v1_collaboration_agents__agent_id__get",
+      "summary": "Obtém detalhes de um agente",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "agent_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/tasks/create",
+      "method": "POST",
+      "operation_id": "create_task_api_v1_collaboration_tasks_create_post",
+      "summary": "Cria uma nova tarefa",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CreateTaskRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/tasks/execute",
+      "method": "POST",
+      "operation_id": "execute_task_api_v1_collaboration_tasks_execute_post",
+      "summary": "Executa uma tarefa específica",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ExecuteTaskRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/tasks",
+      "method": "GET",
+      "operation_id": "list_tasks_api_v1_collaboration_tasks_get",
+      "summary": "Lista todas as tarefas",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/tasks/{task_id}",
+      "method": "GET",
+      "operation_id": "get_task_details_api_v1_collaboration_tasks__task_id__get",
+      "summary": "Obtém detalhes de uma tarefa",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "task_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/projects/execute",
+      "method": "POST",
+      "operation_id": "execute_project_api_v1_collaboration_projects_execute_post",
+      "summary": "Executa um projeto completo",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ExecuteProjectRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/workspace/status",
+      "method": "GET",
+      "operation_id": "get_workspace_status_api_v1_collaboration_workspace_status_get",
+      "summary": "Retorna o status do workspace",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/tasks/execute_parallel",
+      "method": "POST",
+      "operation_id": "execute_tasks_parallel_api_v1_collaboration_tasks_execute_parallel_post",
+      "summary": "Executa múltiplas tarefas em paralelo respeitando dependências",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ExecuteTasksParallelRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/collaboration/health",
+      "method": "GET",
+      "operation_id": "health_check_api_v1_collaboration_health_get",
+      "summary": "Health check do sistema de colaboração",
+      "tags": [
+        "Collaboration"
+      ],
+      "module": "Collaboration",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/health/system",
+      "method": "GET",
+      "operation_id": "get_system_health_api_v1_observability_health_system_get",
+      "summary": "Retorna a saúde agregada do sistema",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/health/check-all",
+      "method": "POST",
+      "operation_id": "check_all_components_api_v1_observability_health_check_all_post",
+      "summary": "Força a execução de todos os health checks",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/health/components/llm_router",
+      "method": "GET",
+      "operation_id": "health_llm_router_api_v1_observability_health_components_llm_router_get",
+      "summary": "Health do componente LLM Router",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/health/components/multi_agent_system",
+      "method": "GET",
+      "operation_id": "health_multi_agent_api_v1_observability_health_components_multi_agent_system_get",
+      "summary": "Health do componente Multi-Agent System",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/health/components/poison_pill_handler",
+      "method": "GET",
+      "operation_id": "health_poison_pill_handler_api_v1_observability_health_components_poison_pill_handler_get",
+      "summary": "Health do componente Poison Pill Handler",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/poison-pills/quarantined",
+      "method": "GET",
+      "operation_id": "get_quarantined_messages_api_v1_observability_poison_pills_quarantined_get",
+      "summary": "Retorna mensagens em quarentena",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "queue",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/poison-pills/release",
+      "method": "POST",
+      "operation_id": "release_from_quarantine_api_v1_observability_poison_pills_release_post",
+      "summary": "Libera uma mensagem da quarentena",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ReleaseQuarantineRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/poison-pills/cleanup",
+      "method": "POST",
+      "operation_id": "cleanup_quarantine_api_v1_observability_poison_pills_cleanup_post",
+      "summary": "Limpa mensagens expiradas da quarentena",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/poison-pills/stats",
+      "method": "GET",
+      "operation_id": "get_poison_pill_stats_api_v1_observability_poison_pills_stats_get",
+      "summary": "Retorna estatísticas de poison pills",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "queue",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/metrics/summary",
+      "method": "GET",
+      "operation_id": "get_metrics_summary_api_v1_observability_metrics_summary_get",
+      "summary": "Retorna um resumo de métricas chave do sistema",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/llm/usage",
+      "method": "GET",
+      "operation_id": "llm_usage_api_v1_observability_llm_usage_get",
+      "summary": "Resumo de uso de LLMs",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "start_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "end_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/graph/audit",
+      "method": "GET",
+      "operation_id": "graph_audit_api_v1_observability_graph_audit_get",
+      "summary": "Auditoria de higiene do grafo de conhecimento",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/graph/quarantine",
+      "method": "GET",
+      "operation_id": "graph_quarantine_list_api_v1_observability_graph_quarantine_get",
+      "summary": "Lista itens de quarentena do grafo",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/graph/quarantine/promote",
+      "method": "POST",
+      "operation_id": "graph_quarantine_promote_api_v1_observability_graph_quarantine_promote_post",
+      "summary": "Promove item de quarentena para relação no grafo",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/PromoteQuarantineRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/user_summary",
+      "method": "GET",
+      "operation_id": "user_summary_api_v1_observability_user_summary_get",
+      "summary": "Resumo de uso por usuário",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UserSummaryResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/audit/events",
+      "method": "GET",
+      "operation_id": "audit_events_api_v1_observability_audit_events_get",
+      "summary": "Lista eventos de auditoria",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "tool",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "start_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "end_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/errors/taxonomy",
+      "method": "GET",
+      "operation_id": "error_taxonomy_api_v1_observability_errors_taxonomy_get",
+      "summary": "Catalogo padronizado de erros",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/requests/{request_id}/dashboard",
+      "method": "GET",
+      "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
+      "summary": "Dashboard de pipeline por request_id",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "request_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "include_details",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/audit/export",
+      "method": "GET",
+      "operation_id": "export_audit_events_api_v1_observability_audit_export_get",
+      "summary": "Exporta eventos de auditoria",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "format",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        },
+        {
+          "name": "fields",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "tool",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "start_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "end_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/metrics/user",
+      "method": "GET",
+      "operation_id": "user_metrics_api_v1_observability_metrics_user_get",
+      "summary": "Métricas agregadas por usuário",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UserMetricsResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/activity/user",
+      "method": "GET",
+      "operation_id": "user_activity_api_v1_observability_activity_user_get",
+      "summary": "Atividade agregada por usuário",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UserActivityResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/metrics/ux",
+      "method": "POST",
+      "operation_id": "record_ux_metric_api_v1_observability_metrics_ux_post",
+      "summary": "Registra métrica de UX de chat",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/UxMetricItem",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/analyze",
+      "method": "POST",
+      "operation_id": "run_analysis_api_v1_meta_agent_analyze_post",
+      "summary": "Força a execução de um ciclo de análise do Meta-Agente",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/report/latest",
+      "method": "GET",
+      "operation_id": "get_latest_report_api_v1_meta_agent_report_latest_get",
+      "summary": "Retorna o último relatório de saúde do sistema",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/heartbeat/start",
+      "method": "POST",
+      "operation_id": "start_heartbeat_api_v1_meta_agent_heartbeat_start_post",
+      "summary": "Inicia o ciclo de vida proativo (heartbeat) do Meta-Agente",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/StartHeartbeatRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/heartbeat/stop",
+      "method": "POST",
+      "operation_id": "stop_heartbeat_api_v1_meta_agent_heartbeat_stop_post",
+      "summary": "Para o heartbeat do Meta-Agente",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/heartbeat/status",
+      "method": "GET",
+      "operation_id": "get_heartbeat_status_api_v1_meta_agent_heartbeat_status_get",
+      "summary": "Retorna o status do heartbeat",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/meta-agent/health",
+      "method": "GET",
+      "operation_id": "health_check_api_v1_meta_agent_health_get",
+      "summary": "Health check do Meta-Agente",
+      "tags": [
+        "Meta-Agent"
+      ],
+      "module": "Meta-Agent",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/start",
+      "method": "POST",
+      "operation_id": "start_chat_api_v1_chat_start_post",
+      "summary": "Inicia uma nova conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ChatStartRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ChatStartResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/message",
+      "method": "POST",
+      "operation_id": "send_message_api_v1_chat_message_post",
+      "summary": "Envia uma mensagem e recebe a resposta do LLM",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ChatMessageRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ChatMessageResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}/history",
+      "method": "GET",
+      "operation_id": "chat_history_api_v1_chat__conversation_id__history_get",
+      "summary": "Retorna o histórico da conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "before_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "after_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ChatHistoryResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}/history/paginated",
+      "method": "GET",
+      "operation_id": "chat_history_paginated_api_v1_chat__conversation_id__history_paginated_get",
+      "summary": "Retorna o histórico da conversa com paginação e RBAC",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "before_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "after_ts",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ChatHistoryPaginatedResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/conversations",
+      "method": "GET",
+      "operation_id": "list_conversations_api_v1_chat_conversations_get",
+      "summary": "Lista conversas com filtros de RBAC",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "project_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/ChatListResponse'}, 'title': 'Response List Conversations Api V1 Chat Conversations Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}/rename",
+      "method": "PUT",
+      "operation_id": "rename_conversation_api_v1_chat__conversation_id__rename_put",
+      "summary": "Renomeia uma conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ChatRenameRequest",
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/health",
+      "method": "GET",
+      "operation_id": "chat_health_api_v1_chat_health_get",
+      "summary": "Verifica o status do serviço de chat",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}",
+      "method": "DELETE",
+      "operation_id": "delete_conversation_api_v1_chat__conversation_id__delete",
+      "summary": "Apaga uma conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "project_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/stream/{conversation_id}",
+      "method": "GET",
+      "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
+      "summary": "Streaming de resposta via SSE",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "message",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "role",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        },
+        {
+          "name": "priority",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        },
+        {
+          "name": "timeout_seconds",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "project_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}/trace",
+      "method": "GET",
+      "operation_id": "get_conversation_trace_api_v1_chat__conversation_id__trace_get",
+      "summary": "Retorna o rastro de execução (Chain of Thought)",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}/events",
+      "method": "GET",
+      "operation_id": "stream_agent_events_api_v1_chat__conversation_id__events_get",
+      "summary": "Streaming de eventos de agentes (observabilidade)",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/",
+      "method": "POST",
+      "operation_id": "create_user_api_v1_users__post",
+      "summary": "Create User",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/CreateUserRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/UserResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/{user_id}",
+      "method": "GET",
+      "operation_id": "get_user_api_v1_users__user_id__get",
+      "summary": "Get User",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/UserResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/{user_id}/roles",
+      "method": "POST",
+      "operation_id": "assign_role_api_v1_users__user_id__roles_post",
+      "summary": "Assign Role",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/AssignRoleRequest",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/{user_id}/consents",
+      "method": "POST",
+      "operation_id": "add_consent_api_v1_users__user_id__consents_post",
+      "summary": "Add Consent",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ConsentRequest",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ConsentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/{user_id}/consents",
+      "method": "GET",
+      "operation_id": "list_consents_api_v1_users__user_id__consents_get",
+      "summary": "List Consents",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/users/{user_id}/consents/{scope}",
+      "method": "DELETE",
+      "operation_id": "revoke_consent_api_v1_users__user_id__consents__scope__delete",
+      "summary": "Revoke Consent",
+      "tags": [
+        "Users"
+      ],
+      "module": "Users",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        },
+        {
+          "name": "scope",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/profiles/{user_id}",
+      "method": "GET",
+      "operation_id": "get_profile_api_v1_profiles__user_id__get",
+      "summary": "Get Profile",
+      "tags": [
+        "Profiles"
+      ],
+      "module": "Profiles",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ProfileResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/profiles/",
+      "method": "POST",
+      "operation_id": "upsert_profile_api_v1_profiles__post",
+      "summary": "Upsert Profile",
+      "tags": [
+        "Profiles"
+      ],
+      "module": "Profiles",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/UpsertProfileRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ProfileResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/start",
+      "method": "POST",
+      "operation_id": "start_autonomy_api_v1_autonomy_start_post",
+      "summary": "Inicia o AutonomyLoop contínuo",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/AutonomyStartRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/stop",
+      "method": "POST",
+      "operation_id": "stop_autonomy_api_v1_autonomy_stop_post",
+      "summary": "Para o AutonomyLoop",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/status",
+      "method": "GET",
+      "operation_id": "autonomy_status_api_v1_autonomy_status_get",
+      "summary": "Obtém status do AutonomyLoop",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/AutonomyStatusResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/plan",
+      "method": "GET",
+      "operation_id": "get_autonomy_plan_api_v1_autonomy_plan_get",
+      "summary": "Obtém o plano de execução atual do AutonomyLoop",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/plan",
+      "method": "PUT",
+      "operation_id": "update_autonomy_plan_api_v1_autonomy_plan_put",
+      "summary": "Atualiza o plano de execução do AutonomyLoop",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/PlanUpdateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/policy",
+      "method": "PUT",
+      "operation_id": "update_policy_api_v1_autonomy_policy_put",
+      "summary": "Atualiza configurações de políticas do AutonomyLoop",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/PolicyUpdateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/goals",
+      "method": "POST",
+      "operation_id": "create_goal_api_v1_autonomy_goals_post",
+      "summary": "Cria uma nova meta",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/GoalCreateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/GoalResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/goals",
+      "method": "GET",
+      "operation_id": "list_goals_api_v1_autonomy_goals_get",
+      "summary": "Lista metas",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/GoalResponse'}, 'title': 'Response List Goals Api V1 Autonomy Goals Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/goals/{goal_id}",
+      "method": "GET",
+      "operation_id": "get_goal_api_v1_autonomy_goals__goal_id__get",
+      "summary": "Obtém meta por ID",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "goal_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/GoalResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/goals/{goal_id}",
+      "method": "DELETE",
+      "operation_id": "delete_goal_api_v1_autonomy_goals__goal_id__delete",
+      "summary": "Remove meta",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "goal_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/goals/{goal_id}/status",
+      "method": "PATCH",
+      "operation_id": "update_goal_status_api_v1_autonomy_goals__goal_id__status_patch",
+      "summary": "Atualiza status da meta",
+      "tags": [
+        "Autonomy"
+      ],
+      "module": "Autonomy",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/GoalStatusUpdateRequest",
+      "parameters": [
+        {
+          "name": "goal_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/GoalResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/workers/start-all",
+      "method": "POST",
+      "operation_id": "start_workers_api_v1_workers_start_all_post",
+      "summary": "Start all orchestrator-managed workers",
+      "tags": [
+        "Workers"
+      ],
+      "module": "Workers",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/workers/stop-all",
+      "method": "POST",
+      "operation_id": "stop_workers_api_v1_workers_stop_all_post",
+      "summary": "Stop all orchestrator-managed workers",
+      "tags": [
+        "Workers"
+      ],
+      "module": "Workers",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/workers/status",
+      "method": "GET",
+      "operation_id": "workers_status_api_v1_workers_status_get",
+      "summary": "Get status for orchestrator-managed workers",
+      "tags": [
+        "Workers"
+      ],
+      "module": "Workers",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/assistant/execute",
+      "method": "POST",
+      "operation_id": "assistant_execute_api_v1_assistant_execute_post",
+      "summary": "Executa pedido com seleção automática de ferramentas",
+      "tags": [
+        "Assistant"
+      ],
+      "module": "Assistant",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/AssistantExecuteRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/AssistantExecutionResult",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/history/runs",
+      "method": "GET",
+      "operation_id": "list_runs_api_v1_autonomy_history_runs_get",
+      "summary": "Lista execuções do AutonomyLoop",
+      "tags": [
+        "AutonomyHistory"
+      ],
+      "module": "AutonomyHistory",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "project_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/RunSummary'}, 'title': 'Response List Runs Api V1 Autonomy History Runs Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/history/runs/{run_id}",
+      "method": "GET",
+      "operation_id": "get_run_api_v1_autonomy_history_runs__run_id__get",
+      "summary": "Obtém uma execução específica",
+      "tags": [
+        "AutonomyHistory"
+      ],
+      "module": "AutonomyHistory",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "run_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/RunSummary",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/history/runs/{run_id}/steps",
+      "method": "GET",
+      "operation_id": "list_steps_api_v1_autonomy_history_runs__run_id__steps_get",
+      "summary": "Lista passos de uma execução",
+      "tags": [
+        "AutonomyHistory"
+      ],
+      "module": "AutonomyHistory",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "run_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        },
+        {
+          "name": "cycle",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/StepItem'}, 'title': 'Response List Steps Api V1 Autonomy History Runs  Run Id  Steps Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/consents/",
+      "method": "POST",
+      "operation_id": "grant_consent_api_v1_consents__post",
+      "summary": "Grant Consent",
+      "tags": [
+        "Consents"
+      ],
+      "module": "Consents",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/app__api__v1__endpoints__consents__ConsentRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/app__api__v1__endpoints__consents__ConsentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/consents/",
+      "method": "GET",
+      "operation_id": "list_consents_api_v1_consents__get",
+      "summary": "List Consents",
+      "tags": [
+        "Consents"
+      ],
+      "module": "Consents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "scope",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/app__api__v1__endpoints__consents__ConsentResponse'}, 'title': 'Response List Consents Api V1 Consents  Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/consents/{consent_id}/revoke",
+      "method": "POST",
+      "operation_id": "revoke_consent_api_v1_consents__consent_id__revoke_post",
+      "summary": "Revoke Consent",
+      "tags": [
+        "Consents"
+      ],
+      "module": "Consents",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "consent_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/app__api__v1__endpoints__consents__ConsentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/pending_actions/",
+      "method": "GET",
+      "operation_id": "list_pending_api_v1_pending_actions__get",
+      "summary": "List Pending",
+      "tags": [
+        "PendingActions"
+      ],
+      "module": "PendingActions",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "include_graph",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        },
+        {
+          "name": "include_sql",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "pending_status",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/PendingActionDTO'}, 'title': 'Response List Pending Api V1 Pending Actions  Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/pending_actions/{thread_id}/approve",
+      "method": "POST",
+      "operation_id": "approve_api_v1_pending_actions__thread_id__approve_post",
+      "summary": "Approve",
+      "tags": [
+        "PendingActions"
+      ],
+      "module": "PendingActions",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "thread_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "202": "#/components/schemas/PendingActionDTO",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/pending_actions/action/{action_id}/approve",
+      "method": "POST",
+      "operation_id": "approve_sql_action_api_v1_pending_actions_action__action_id__approve_post",
+      "summary": "Approve Sql Action",
+      "tags": [
+        "PendingActions"
+      ],
+      "module": "PendingActions",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "action_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "202": "#/components/schemas/PendingActionDTO",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/pending_actions/action/{action_id}/reject",
+      "method": "POST",
+      "operation_id": "reject_sql_action_api_v1_pending_actions_action__action_id__reject_post",
+      "summary": "Reject Sql Action",
+      "tags": [
+        "PendingActions"
+      ],
+      "module": "PendingActions",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "action_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "202": "#/components/schemas/PendingActionDTO",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/pending_actions/{thread_id}/reject",
+      "method": "POST",
+      "operation_id": "reject_api_v1_pending_actions__thread_id__reject_post",
+      "summary": "Reject",
+      "tags": [
+        "PendingActions"
+      ],
+      "module": "PendingActions",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "thread_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "202": "#/components/schemas/PendingActionDTO",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/evaluation/experiments",
+      "method": "POST",
+      "operation_id": "create_experiment_api_v1_evaluation_experiments_post",
+      "summary": "Create Experiment",
+      "tags": [
+        "Evaluation"
+      ],
+      "module": "Evaluation",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ExperimentCreateRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/ExperimentResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/evaluation/experiments",
+      "method": "GET",
+      "operation_id": "list_experiments_api_v1_evaluation_experiments_get",
+      "summary": "List Experiments",
+      "tags": [
+        "Evaluation"
+      ],
+      "module": "Evaluation",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/ExperimentResponse'}, 'title': 'Response List Experiments Api V1 Evaluation Experiments Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/evaluation/experiments/{experiment_id}/arms",
+      "method": "POST",
+      "operation_id": "add_arm_api_v1_evaluation_experiments__experiment_id__arms_post",
+      "summary": "Add Arm",
+      "tags": [
+        "Evaluation"
+      ],
+      "module": "Evaluation",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ArmCreateRequest",
+      "parameters": [
+        {
+          "name": "experiment_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/ArmResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/evaluation/experiments/{experiment_id}/results",
+      "method": "POST",
+      "operation_id": "add_result_api_v1_evaluation_experiments__experiment_id__results_post",
+      "summary": "Add Result",
+      "tags": [
+        "Evaluation"
+      ],
+      "module": "Evaluation",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ResultCreateRequest",
+      "parameters": [
+        {
+          "name": "experiment_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/evaluation/experiments/{experiment_id}/winner",
+      "method": "GET",
+      "operation_id": "experiment_winner_api_v1_evaluation_experiments__experiment_id__winner_get",
+      "summary": "Experiment Winner",
+      "tags": [
+        "Evaluation"
+      ],
+      "module": "Evaluation",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "experiment_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        },
+        {
+          "name": "metric_name",
+          "in": "query",
+          "required": false,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/deployment/stage",
+      "method": "POST",
+      "operation_id": "stage_api_v1_deployment_stage_post",
+      "summary": "Stage",
+      "tags": [
+        "Deployment"
+      ],
+      "module": "Deployment",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/StageRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/deployment/publish",
+      "method": "POST",
+      "operation_id": "publish_api_v1_deployment_publish_post",
+      "summary": "Publish",
+      "tags": [
+        "Deployment"
+      ],
+      "module": "Deployment",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "model_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/deployment/precheck",
+      "method": "POST",
+      "operation_id": "precheck_api_v1_deployment_precheck_post",
+      "summary": "Precheck",
+      "tags": [
+        "Deployment"
+      ],
+      "module": "Deployment",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "model_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/deployment/rollback",
+      "method": "POST",
+      "operation_id": "rollback_api_v1_deployment_rollback_post",
+      "summary": "Rollback",
+      "tags": [
+        "Deployment"
+      ],
+      "module": "Deployment",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "model_id",
+          "in": "query",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/token",
+      "method": "POST",
+      "operation_id": "issue_token_api_v1_auth_token_post",
+      "summary": "Issue Token",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/TokenRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/TokenResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/supabase/exchange",
+      "method": "POST",
+      "operation_id": "supabase_exchange_api_v1_auth_supabase_exchange_post",
+      "summary": "Supabase Exchange",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/SupabaseExchangeRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/TokenResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/firebase/exchange",
+      "method": "POST",
+      "operation_id": "firebase_exchange_api_v1_auth_firebase_exchange_post",
+      "summary": "Firebase Exchange",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/FirebaseExchangeRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/AuthExchangeResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/local/register",
+      "method": "POST",
+      "operation_id": "local_register_api_v1_auth_local_register_post",
+      "summary": "Local Register",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/LocalRegisterRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LocalAuthResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/local/login",
+      "method": "POST",
+      "operation_id": "local_login_api_v1_auth_local_login_post",
+      "summary": "Local Login",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/LocalLoginRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LocalAuthResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/local/me",
+      "method": "GET",
+      "operation_id": "local_me_api_v1_auth_local_me_get",
+      "summary": "Local Me",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LocalAuthUserResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/local/request-reset",
+      "method": "POST",
+      "operation_id": "local_request_reset_api_v1_auth_local_request_reset_post",
+      "summary": "Local Request Reset",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/LocalResetRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LocalResetResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auth/local/reset",
+      "method": "POST",
+      "operation_id": "local_reset_password_api_v1_auth_local_reset_post",
+      "summary": "Local Reset Password",
+      "tags": [
+        "Auth"
+      ],
+      "module": "Auth",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/LocalResetConfirmRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/LocalResetResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/auto-analysis/health-check",
+      "method": "GET",
+      "operation_id": "auto_analyze_api_v1_auto_analysis_health_check_get",
+      "summary": "Janus se analisa",
+      "tags": [
+        "Auto Analysis"
+      ],
+      "module": "Auto Analysis",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/AutoAnalysisResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/",
+      "method": "POST",
+      "operation_id": "record_feedback_api_v1_feedback__post",
+      "summary": "Record Feedback",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/FeedbackRequest",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/FeedbackResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/thumbs-up",
+      "method": "POST",
+      "operation_id": "thumbs_up_api_v1_feedback_thumbs_up_post",
+      "summary": "Thumbs Up",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/QuickFeedbackRequest",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/FeedbackResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/thumbs-down",
+      "method": "POST",
+      "operation_id": "thumbs_down_api_v1_feedback_thumbs_down_post",
+      "summary": "Thumbs Down",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/QuickFeedbackRequest",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/FeedbackResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/stats",
+      "method": "GET",
+      "operation_id": "get_feedback_stats_api_v1_feedback_stats_get",
+      "summary": "Get Feedback Stats",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/FeedbackStatsResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/report",
+      "method": "GET",
+      "operation_id": "get_satisfaction_report_api_v1_feedback_report_get",
+      "summary": "Get Satisfaction Report",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "hours",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "#/components/schemas/SatisfactionReportResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/suggestions",
+      "method": "GET",
+      "operation_id": "get_improvement_suggestions_api_v1_feedback_suggestions_get",
+      "summary": "Get Improvement Suggestions",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/feedback/conversation/{conversation_id}",
+      "method": "GET",
+      "operation_id": "get_conversation_feedback_api_v1_feedback_conversation__conversation_id__get",
+      "summary": "Get Conversation Feedback",
+      "tags": [
+        "Feedback"
+      ],
+      "module": "Feedback",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    }
+  ]
+}
