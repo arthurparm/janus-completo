@@ -31,7 +31,7 @@ async def test_memory_core_dependency_injection():
     )
 
     # 3. Verify it uses the injected client
-    assert memory.client is mock_client
+    assert memory.provider.client is mock_client
     assert memory._cb is mock_cb
     assert memory.settings is mock_settings
 

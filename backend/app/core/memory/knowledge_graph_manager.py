@@ -269,21 +269,6 @@ def index_codebase() -> dict:
                 repo.query("ensure_index", q)
             except Exception:
                 pass
-        legacy_queries = [
-            "CREATE INDEX ON :CodeFile(path)",
-            "CREATE INDEX ON :File(path)",
-            "CREATE INDEX ON :Function(name)",
-            "CREATE INDEX ON :Class(name)",
-            "CREATE INDEX ON :Function(name, file_path)",
-            "CREATE INDEX ON :Class(name, file_path)",
-            "CREATE INDEX ON :CodeFunction(name, file_path)",
-            "CREATE INDEX ON :CodeClass(name, file_path)",
-        ]
-        for q in legacy_queries:
-            try:
-                repo.query("ensure_index_legacy", q)
-            except Exception:
-                pass
 
     _ensure_indexes()
 

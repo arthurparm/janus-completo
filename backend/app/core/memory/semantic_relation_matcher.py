@@ -186,11 +186,7 @@ def normalize_relation(type_str: str) -> str:
     return matched.value
 
 
-# ============================================================
-# INTEGRATION: Replace the old normalize_relation_type in GraphGuardian
-# ============================================================
-
-# For backward compatibility, export the enum
+# Public module exports.
 __all__ = [
     "SEMANTIC_GROUPS",
     "RelationType",

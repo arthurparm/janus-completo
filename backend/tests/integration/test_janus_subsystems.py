@@ -45,7 +45,7 @@ class TestMemoryCoreConfig:
             memory = MemoryCore(client=mock_client)
 
             assert memory is not None
-            assert memory.client == mock_client
+            assert memory.provider.client == mock_client
 
             print("✓ MemoryCore initialization with mock client")
         except Exception as e:

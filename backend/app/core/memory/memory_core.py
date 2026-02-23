@@ -31,8 +31,8 @@ class MemoryCore:
 
     def __init__(
         self,
-        client=None,  # Typed as AsyncQdrantClient via provider, kept for compat
-        circuit_breaker: CircuitBreaker = None,
+        client: AsyncQdrantClient | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
         config: Any = None,
     ):
         self.settings = config if config is not None else settings
@@ -60,17 +60,6 @@ class MemoryCore:
         # Metrics
         self._quota_rejections = memory_quota_rejections_total
         self._ops_total = memory_operations_total
-        # Cache metrics aliases for legacy tests
-        self._short_hits = self.cache._metric_hits
-        self._short_misses = self.cache._metric_misses
-        self._short_size = self.cache._metric_size
-
-    def _get_provider_client(self):
-        """Compatibilidade para testes que acessam .client diretamente"""
-        return self.provider.client
-
-    # Property alias for compatibility
-    client = property(_get_provider_client)
 
     async def initialize(self):
         """Inicializa provedores."""

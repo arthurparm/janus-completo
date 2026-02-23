@@ -517,7 +517,7 @@ async def check_qdrant_health() -> dict[str, Any]:
 
         # Tenta verificar coleção
         try:
-            await mem.client.get_collection(mem.collection_name)
+            await mem.provider.client.get_collection(mem.collection_name)
             is_healthy = True
             msg = "Qdrant operacional"
         except Exception:

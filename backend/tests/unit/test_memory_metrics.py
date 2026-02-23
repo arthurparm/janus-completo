@@ -27,15 +27,15 @@ def test_no_duplicate_metric_registration(monkeypatch):
     mc2 = MemoryCore()
 
     # Both instances should share the same singleton metric objects
-    assert mc1._short_hits is mc2._short_hits
-    assert mc1._short_misses is mc2._short_misses
-    assert mc1._short_size is mc2._short_size
+    assert mc1.cache._metric_hits is mc2.cache._metric_hits
+    assert mc1.cache._metric_misses is mc2.cache._metric_misses
+    assert mc1.cache._metric_size is mc2.cache._metric_size
     assert mc1._quota_rejections is mc2._quota_rejections
     assert mc1._ops_total is mc2._ops_total
 
     # Call inc() to make sure metrics work
-    mc1._short_hits.inc()
-    mc2._short_hits.inc()
+    mc1.cache._metric_hits.inc()
+    mc2.cache._metric_hits.inc()
 
 
 def test_metrics_module_exports():
