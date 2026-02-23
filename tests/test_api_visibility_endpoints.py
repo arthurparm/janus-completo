@@ -1,8 +1,10 @@
 import os
 import sys
+import tempfile
 import types
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 # Ensure "app" package is discoverable when running from repo root
 sys.path.append(os.path.join(os.getcwd(), "janus"))
 
+import app.core.infrastructure.filesystem_manager as fs_module  # noqa: E402
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
 from app.services.knowledge_service import get_knowledge_service
 from app.services.llm_service import get_llm_service
@@ -223,9 +226,6 @@ def client(monkeypatch):
     # Patch pending actions dependencies
     import app.api.v1.endpoints.pending_actions as pending_module
     import app.db.postgres_config as postgres_module
-    import tempfile
-    from pathlib import Path
-    import app.core.infrastructure.filesystem_manager as fs_module
 
     monkeypatch.setattr(
         postgres_module,
