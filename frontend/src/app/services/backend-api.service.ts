@@ -1428,11 +1428,6 @@ export class BackendApiService {
   }
 }
 
-/**
- * @deprecated Use `BackendApiService`. Planned removal in the next cycle.
- */
-export { BackendApiService as JanusApiService };
-
 export type WorkersStatusItem = WorkerStatusResponse;
 
 export interface ToolStats {

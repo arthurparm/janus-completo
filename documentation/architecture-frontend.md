@@ -55,7 +55,6 @@ Aplicacao Angular 20 responsavel por autenticacao, conversa com o assistente, da
 
 - `environment.ts` contem credenciais e URLs sensiveis; recomenda-se externalizar por variaveis seguras em pipeline.
 - `BackendApiService` e extenso; pode ser dividido por dominios (chat, observabilidade, autonomy, tools) para manter evolucao.
-- Compatibilidade temporaria: `JanusApiService` permanece apenas como alias deprecado para `BackendApiService` e deve ser removido no proximo ciclo de manutencao.
 
 ## Decisoes Arquiteturais
 

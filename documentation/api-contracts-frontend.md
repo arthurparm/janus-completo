@@ -58,7 +58,6 @@
 ## Observacoes
 
 - `BackendApiService` concentra muitos dominios; recomendavel separar por bounded contexts para reduzir acoplamento.
-- Alias de compatibilidade ativo: `JanusApiService` (deprecado) redireciona para `BackendApiService`; remocao planejada para o proximo ciclo.
 
 ---
 
