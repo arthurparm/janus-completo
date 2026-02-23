@@ -93,3 +93,44 @@ Esta auditoria focou na análise estática do código fonte (`janus/` e `front/`
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `janus-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-23
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+Esta auditoria focou na validação de correções anteriores e identificação de novos riscos em privacidade e persistência.
+
+### 1. Simplificação e Dívida Técnica (Backend)
+
+*   **Duplicação Persistente**: `janus/app/services/tool_service_improved.py` permanece idêntico a `janus/app/services/tool_service.py` (DX-012 não resolvido).
+*   **Complexidade Excessiva**: `janus/app/services/chat_service.py` (1720 linhas) e `front/src/app/services/janus-api.service.ts` (1434 linhas) continuam violando SRP.
+
+### 2. Segurança e Vulnerabilidades (Regressão/Gap)
+
+*   **Validação de Segredos Incompleta**: Embora SG-011 esteja marcado como "feito", `janus/app/config.py` não valida senhas padrão (`NEO4J_PASSWORD`, `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`) em produção, apenas CORS.
+    *   **Evidência**: Ausência de `@field_validator` para senhas comparando com valores default ("change_me...").
+*   **Retorno de Token de Reset**: `janus/app/api/v1/endpoints/auth.py` ainda retorna o token no corpo da resposta (`LocalResetResponse`) dependendo de flag de configuração, o que é inseguro por design (SG-012 incompleto).
+*   **Logging de PII em Ferramentas**: `janus/app/core/tools/productivity_tools.py` loga metadados sensíveis de email (`to`, `subject`) via `logger.info`.
+    *   **Evidência**: `logger.info("[EMAIL]", extra={"user_id": user_id, "to": to, "subject": subject})`.
+
+### 3. Confiabilidade e Persistência
+
+*   **Execução Assíncrona Frágil**: `janus/app/db/sync_events.py` usa `loop.create_task` dentro de contexto síncrono para `DataRetentionService`, com fallback para Thread. Isso não garante execução se o processo morrer imediatamente (OQ-012 parcial).
+*   **Persistência em Memória (Risco de Perda de Dados)**: `janus/app/core/tools/productivity_tools.py` utiliza dicionários globais (`_calendar_events`, `_notes`) para armazenar dados de usuário. Reiniciar o serviço apaga todos os dados criados pelas ferramentas.
+
+## Próximos Passos
+
+1.  **Imediato (P0/P1)**:
+    *   Implementar validator em `config.py` para bloquear startup em produção com senhas default (SG-014).
+    *   Remover campo `reset_token` do response model `LocalResetResponse` definitivamente (SG-015).
+    *   Sanitizar logs de `productivity_tools.py` removendo PII (SG-016).
+    *   Migrar `DataRetentionService` para gerenciador de tarefas robusto (OQ-013).
+
+2.  **Médio Prazo (P2)**:
+    *   Implementar persistência real (SQL/NoSQL) para ferramentas de produtividade (PL-011).
+    *   Continuar refatoração de God Objects (`ChatService`, `JanusApiService`).
