@@ -6,7 +6,6 @@ from typing import Any
 import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
 from openai import OpenAI
 
 from app.config import settings
@@ -22,6 +21,18 @@ except Exception:
 
     class ChatOllama:  # type: ignore[override]
         """Fallback type when langchain_ollama is not installed."""
+
+        pass
+
+try:
+    from langchain_openai import ChatOpenAI
+
+    _LANGCHAIN_OPENAI_AVAILABLE = True
+except Exception:
+    _LANGCHAIN_OPENAI_AVAILABLE = False
+
+    class ChatOpenAI:  # type: ignore[override]
+        """Fallback type when langchain_openai is not installed."""
 
         pass
 
@@ -43,6 +54,13 @@ def _get_executor(provider_key: str) -> ThreadPoolExecutor:
 
 _openai_http_client: httpx.Client | None = None
 _openai_client: OpenAI | None = None
+
+
+def _require_langchain_openai() -> None:
+    if not _LANGCHAIN_OPENAI_AVAILABLE:
+        raise RuntimeError(
+            "langchain_openai is not installed. Install it to use OpenAI-compatible chat models."
+        )
 
 
 def _get_openai_http_client() -> httpx.Client:
@@ -203,6 +221,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     continue
                 _add_to_pool("ollama", model, llm)
             elif provider == "openai":
+                _require_langchain_openai()
                 if not _validate_openai_key(
                     getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
                 ):
@@ -231,6 +250,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 )
                 _add_to_pool("google_gemini", model, llm)
             elif provider == "deepseek":
+                _require_langchain_openai()
                 if not _validate_deepseek_key(
                     getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
                 ):
@@ -245,6 +265,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 )
                 _add_to_pool("deepseek", model, llm)
             elif provider == "openrouter":
+                _require_langchain_openai()
                 if not _validate_openrouter_key(
                     getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)()
                 ):

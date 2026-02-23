@@ -4,7 +4,6 @@ from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
 from prometheus_client import Counter, Gauge
 
 from app.config import settings
@@ -33,6 +32,18 @@ from .types import ModelPriority, ModelRole
 
 logger = logging.getLogger(__name__)
 
+try:
+    from langchain_openai import ChatOpenAI
+
+    _LANGCHAIN_OPENAI_AVAILABLE = True
+except Exception:
+    _LANGCHAIN_OPENAI_AVAILABLE = False
+
+    class ChatOpenAI:  # type: ignore[override]
+        """Fallback type when langchain_openai is not installed."""
+
+        pass
+
 # Metrics
 LLM_ROUTER_COUNTER = Counter(
     "llm_router_model_selected_total",
@@ -59,6 +70,18 @@ LLM_EXPLORATION_DECISIONS = Counter(
     "Contagem de decisões de exploração na seleção",
     ["role", "priority"],
 )
+
+
+def _require_langchain_openai() -> None:
+    if not _LANGCHAIN_OPENAI_AVAILABLE:
+        raise RuntimeError(
+            "langchain_openai is not installed. Install it to use OpenAI-compatible chat models."
+        )
+
+
+def _create_openai_compatible_chat(**kwargs):
+    _require_langchain_openai()
+    return ChatOpenAI(**kwargs)
 
 
 def _normalize(values):
@@ -139,7 +162,7 @@ def _create_openai_model(
         logger.debug(f"Model {model} doesn't support temperature, omitting it")
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
-    return ChatOpenAI(**kwargs)
+    return _create_openai_compatible_chat(**kwargs)
 
 
 async def get_llm(
@@ -293,6 +316,7 @@ async def get_llm(
                     ):
                         raise RuntimeError(f"Health check failed for model '{model_name}'")
                 elif explicit_provider == "deepseek":
+                    _require_langchain_openai()
                     if not _validate_deepseek_key(
                         getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
                     ):
@@ -304,7 +328,7 @@ async def get_llm(
                     max_tokens = max_tokens_override
                     if max_tokens is None and "reasoner" in model_name:
                         max_tokens = 8000
-                    llm = ChatOpenAI(
+                    llm = _create_openai_compatible_chat(
                         model=model_name,
                         temperature=deepseek_temperature,
                         api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
@@ -343,6 +367,7 @@ async def get_llm(
                         max_tokens=max_tokens_override,
                     )
                 elif explicit_provider == "xai":
+                    _require_langchain_openai()
                     if not _validate_xai_key(
                         getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
                     ):
@@ -352,7 +377,7 @@ async def get_llm(
                     ):
                         raise RuntimeError("xAI provider unavailable.")
                     max_tokens = max_tokens_override if max_tokens_override is not None else 8000
-                    llm = ChatOpenAI(
+                    llm = _create_openai_compatible_chat(
                         model=model_name,
                         temperature=temperature_override if temperature_override is not None else 0,
                         api_key=getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)(),
@@ -428,7 +453,7 @@ async def get_llm(
                 getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
             ),
             # DeepSeek R1 (reasoner) pode ignorar temperature; aplicamos temperatura por papel quando suportado.
-            "initializer_factory": lambda model, _temp=deepseek_temperature, _max=max_tokens_override: ChatOpenAI(
+            "initializer_factory": lambda model, _temp=deepseek_temperature, _max=max_tokens_override: _create_openai_compatible_chat(
                 model=model,
                 temperature=_temp,
                 api_key=getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)(),
@@ -481,7 +506,7 @@ async def get_llm(
             "enabled": _validate_xai_key(
                 getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
             ),
-            "initializer_factory": lambda model, _temp=temperature_default, _max=max_tokens_override: ChatOpenAI(
+            "initializer_factory": lambda model, _temp=temperature_default, _max=max_tokens_override: _create_openai_compatible_chat(
                 model=model,
                 temperature=_temp,
                 api_key=getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)(),
