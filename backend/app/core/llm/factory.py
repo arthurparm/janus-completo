@@ -6,7 +6,6 @@ from typing import Any
 import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
-from openai import OpenAI
 
 from app.config import settings
 
@@ -36,6 +35,18 @@ except Exception:
 
         pass
 
+try:
+    from openai import OpenAI
+
+    _OPENAI_SDK_AVAILABLE = True
+except Exception:
+    _OPENAI_SDK_AVAILABLE = False
+
+    class OpenAI:  # type: ignore[override]
+        """Fallback type when openai SDK is not installed."""
+
+        pass
+
 logger = logging.getLogger(__name__)
 
 # Pool de executores por provedor
@@ -61,6 +72,11 @@ def _require_langchain_openai() -> None:
         raise RuntimeError(
             "langchain_openai is not installed. Install it to use OpenAI-compatible chat models."
         )
+
+
+def _require_openai_sdk() -> None:
+    if not _OPENAI_SDK_AVAILABLE:
+        raise RuntimeError("openai SDK is not installed. Install it to use OpenAI clients.")
 
 
 def _get_openai_http_client() -> httpx.Client:
@@ -107,6 +123,7 @@ def _get_openai_http_client() -> httpx.Client:
 def _get_openai_client() -> OpenAI:
     global _openai_client
     if _openai_client is None:
+        _require_openai_sdk()
         http_client = _get_openai_http_client()
         api_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
         _openai_client = OpenAI(api_key=api_key, http_client=http_client)
