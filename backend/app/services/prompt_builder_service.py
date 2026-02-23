@@ -143,7 +143,7 @@ class PromptBuilderService:
                     tool_list = tools.list_tools()
                 except Exception:
                     pass
-        # Fallback to get_tools pattern (legacy or mock)
+        # Fallback to get_tools pattern (alternate interface or mock)
         elif hasattr(tools, "get_tools"):
             tool_list = tools.get_tools()
 

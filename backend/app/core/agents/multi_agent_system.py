@@ -158,9 +158,7 @@ class MultiAgentSystem:
         # nós despachamos para a fila.
         await self.dispatch_task(pm_task)
 
-        # Para compatibilidade imediata com testes antigos que esperam retorno síncrono,
-        # poderíamos esperar polling aqui. Mas como o objetivo é migrar para async,
-        # retornamos status de "em andamento".
+        # O fluxo é assíncrono: iniciamos a execução e retornamos status imediato.
 
         return {
             "project_status": "started",
