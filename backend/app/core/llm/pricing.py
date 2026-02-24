@@ -195,8 +195,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
         import structlog
 
         logger = structlog.get_logger(__name__)
-        logger.warning(
-            f"Budget threshold exceeded! Spend: ${total_spend:.2f} >= "
+        logger.warning("log_warning", message=f"Budget threshold exceeded! Spend: ${total_spend:.2f} >= "
             f"{threshold * 100:.0f}% of ${total_budget:.2f}"
         )
 

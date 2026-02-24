@@ -7,7 +7,7 @@ e KnowledgeGraphService.
 """
 
 import asyncio
-import logging
+import structlog
 import time
 import uuid
 from datetime import datetime
@@ -22,7 +22,7 @@ from app.models.schemas import VectorCollection
 from app.services.knowledge_extraction_service import get_knowledge_extraction_service
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Métricas
 CONSOLIDATION_COUNTER = Counter(
@@ -105,7 +105,7 @@ class KnowledgeConsolidator:
             self._initialized = True
             logger.info("KnowledgeConsolidator initialized.")
         except Exception as e:
-            logger.error(f"Failed to initialize KnowledgeConsolidator: {e}")
+            logger.error("log_error", message=f"Failed to initialize KnowledgeConsolidator: {e}")
 
     async def start(self, *, limit: int = 10, min_score: float = 0.0) -> None:
         """Inicia o ciclo periódico de consolidação em background."""
@@ -143,7 +143,7 @@ class KnowledgeConsolidator:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.error(f"Error during consolidation cycle: {e}", exc_info=True)
+                logger.error("log_error", message=f"Error during consolidation cycle: {e}", exc_info=True)
 
             if not self.is_running:
                 break
@@ -184,7 +184,7 @@ class KnowledgeConsolidator:
                     )
                 except Exception as e:
                     # Se a coleção não existir ou der erro de conexão
-                    logger.warning(f"Failed to scroll episodes collection: {e}")
+                    logger.warning("log_warning", message=f"Failed to scroll episodes collection: {e}")
                     return stats
 
                 points = results[0]  # scroll returns (points, next_page_offset)
@@ -219,7 +219,7 @@ class KnowledgeConsolidator:
                 return stats
 
             except Exception as e:
-                logger.error(f"Batch consolidation failed: {e}", exc_info=True)
+                logger.error("log_error", message=f"Batch consolidation failed: {e}", exc_info=True)
                 CONSOLIDATION_COUNTER.labels(
                     outcome="failure", exception_type=type(e).__name__
                 ).inc()
@@ -233,7 +233,7 @@ class KnowledgeConsolidator:
         Consolida uma única experiência.
         """
         start_time = time.time()
-        logger.info(f"Consolidating experience {experience_id}...")
+        logger.info("log_info", message=f"Consolidating experience {experience_id}...")
 
         try:
             # 1. Extração
@@ -241,7 +241,7 @@ class KnowledgeConsolidator:
             extracted_data = await extractor.extract_from_text(experience_content, metadata)
 
             if not extracted_data:
-                logger.warning(f"No knowledge extracted for experience {experience_id}")
+                logger.warning("log_warning", message=f"No knowledge extracted for experience {experience_id}")
                 return
 
             num_entities = len(extracted_data.get("entities", []))
@@ -264,8 +264,7 @@ class KnowledgeConsolidator:
             CONSOLIDATION_LATENCY.labels(outcome="success").observe(duration)
             CONSOLIDATION_COUNTER.labels(outcome="success", exception_type="None").inc()
 
-            logger.info(
-                f"Consolidated experience {experience_id}: {created_ents} entities, {created_rels} relationships."
+            logger.info("log_info", message=f"Consolidated experience {experience_id}: {created_ents} entities, {created_rels} relationships."
             )
 
             # Retorna stats para o chamador
@@ -275,7 +274,7 @@ class KnowledgeConsolidator:
             duration = time.time() - start_time
             CONSOLIDATION_LATENCY.labels(outcome="error").observe(duration)
             CONSOLIDATION_COUNTER.labels(outcome="failure", exception_type=type(e).__name__).inc()
-            logger.error(f"Failed to consolidate experience {experience_id}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Failed to consolidate experience {experience_id}: {e}", exc_info=True)
             raise  # Re-raise for circuit breaker
 
     async def _mark_as_consolidated(self, experience_id: str, metadata: dict[str, Any] | None = None):
@@ -297,8 +296,7 @@ class KnowledgeConsolidator:
                     f"(experience_id={experience_id}, collection={collection})"
                 )
                 return
-            logger.warning(
-                f"Failed to mark experience {experience_id} as consolidated: {e}", exc_info=True
+            logger.warning("log_warning", message=f"Failed to mark experience {experience_id} as consolidated: {e}", exc_info=True
             )
 
 

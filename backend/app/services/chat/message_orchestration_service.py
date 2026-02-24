@@ -114,7 +114,7 @@ class MessageOrchestrationService:
                     text=message, user_id=user_id, conversation_id=conversation_id, role="user"
                 )
         except Exception as e:
-            logger.warning(f"Failed to index user message for {conversation_id}: {e}")
+            logger.warning("log_warning", message=f"Failed to index user message for {conversation_id}: {e}")
 
         if self._command_handler.is_command(message):
             start_t = _time.time()
@@ -168,8 +168,7 @@ class MessageOrchestrationService:
                         project_id=project_id,
                     )
             except Exception as e:
-                logger.warning(
-                    f"Failed to trigger summary during discovery for {conversation_id}: {e}"
+                logger.warning("log_warning", message=f"Failed to trigger summary during discovery for {conversation_id}: {e}"
                 )
 
             result = {

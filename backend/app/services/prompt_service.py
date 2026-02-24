@@ -37,13 +37,13 @@ class PromptService:
                 break # Ensure we only use one session
 
             if fallback_text:
-                logger.warning(f"Prompt '{prompt_name}' not found or inactive. Using fallback.")
+                logger.warning("log_warning", message=f"Prompt '{prompt_name}' not found or inactive. Using fallback.")
                 return fallback_text
 
-            logger.error(f"Prompt '{prompt_name}' not found and no fallback provided.")
+            logger.error("log_error", message=f"Prompt '{prompt_name}' not found and no fallback provided.")
             return ""
         except Exception as e:
-            logger.error(f"Error serving prompt '{prompt_name}': {e}")
+            logger.error("log_error", message=f"Error serving prompt '{prompt_name}': {e}")
             return fallback_text or ""
 
 

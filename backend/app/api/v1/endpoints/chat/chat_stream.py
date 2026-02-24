@@ -130,7 +130,7 @@ async def stream_agent_events(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting event stream: {e}")
+        logger.error("log_error", message=f"Error starting event stream: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
         )

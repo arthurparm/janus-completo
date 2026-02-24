@@ -31,13 +31,13 @@ class DataRetentionService:
             try:
                 await delete_points_by_filter(col, {"metadata.user_id": user_id})
             except Exception as e:
-                logger.error(f"Failed to cleanup vector collection {col} for user {user_id}: {e}")
+                logger.error("log_error", message=f"Failed to cleanup vector collection {col} for user {user_id}: {e}")
 
         # 2. Cleanup Graph Store (Neo4j)
         try:
             await DataRetentionService._async_graph_cleanup(user_id)
         except Exception as e:
-            logger.error(f"Failed to trigger graph cleanup for user {user_id}: {e}")
+            logger.error("log_error", message=f"Failed to trigger graph cleanup for user {user_id}: {e}")
 
     @staticmethod
     async def _async_graph_cleanup(user_id: int):
@@ -48,4 +48,4 @@ class DataRetentionService:
             await repo.delete_user_data(user_id)
             logger.info("Graph cleanup completed for user", user_id=user_id)
         except Exception as e:
-            logger.error(f"Async graph cleanup failed for user {user_id}: {e}")
+            logger.error("log_error", message=f"Async graph cleanup failed for user {user_id}: {e}")

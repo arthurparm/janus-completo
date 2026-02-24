@@ -4,8 +4,7 @@ Reflexion Worker - Consome tarefas de reflexão e publica sinais de falha.
 Liga a fila interna "janus.tasks.reflexion" ao serviço de Reflexion.
 Quando detectar falha ou baixa eficiência, publica "janus.failure.detected".
 """
-
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -20,7 +19,7 @@ from app.repositories.reflexion_repository import ReflexionRepository
 from app.services.memory_service import MemoryService
 from app.services.reflexion_service import ReflexionService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Instâncias lazy (criadas em start_reflexion_worker)
 _memory_service: MemoryService | None = None
@@ -96,11 +95,10 @@ async def process_reflexion_task(task: TaskMessage) -> None:
     overrides: dict[str, Any] = payload.get("config_overrides", {})
 
     if not task_text:
-        logger.warning(f"Tarefa de Reflexion vazia. task_id={task.task_id}")
+        logger.warning("log_warning", message=f"Tarefa de Reflexion vazia. task_id={task.task_id}")
         return
 
-    logger.info(
-        f"Reflexion: iniciando ciclo para task_id={task.task_id} interaction_id={interaction_id}"
+    logger.info("log_info", message=f"Reflexion: iniciando ciclo para task_id={task.task_id} interaction_id={interaction_id}"
     )
 
     try:
@@ -111,8 +109,7 @@ async def process_reflexion_task(task: TaskMessage) -> None:
         best_score = float(result.get("best_score", 0.0))
         lessons = result.get("lessons_learned", [])
 
-        logger.info(
-            f"Reflexion concluído: success={success} best_score={best_score:.2f} lessons={len(lessons)}"
+        logger.info("log_info", message=f"Reflexion concluído: success={success} best_score={best_score:.2f} lessons={len(lessons)}"
         )
 
         threshold = overrides.get("success_threshold") or settings.REFLEXION_SUCCESS_THRESHOLD
@@ -129,7 +126,7 @@ async def process_reflexion_task(task: TaskMessage) -> None:
             )
 
     except Exception as e:
-        logger.error(f"Erro ao executar Reflexion: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao executar Reflexion: {e}", exc_info=True)
         # Publica falha crítica imediatamente
         await _publish_failure_signal(
             reason=f"Reflexion error: {e}",

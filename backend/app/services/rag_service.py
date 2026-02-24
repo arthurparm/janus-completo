@@ -437,7 +437,7 @@ class RAGService:
                 error_code=type(e).__name__,
                 extra={"threshold_messages": int(threshold_messages)},
             )
-            logger.error(f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
             # Fail silently but log it - summarization is optional
         finally:
             _RAG_LATENCY.labels("summarize").observe(time.perf_counter() - start)

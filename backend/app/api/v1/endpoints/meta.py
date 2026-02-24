@@ -1,4 +1,4 @@
-import logging
+import structlog
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.core.agents.meta_agent import StateReport, get_meta_agent
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MetaAgentStatusResponse(BaseModel):
@@ -39,7 +39,7 @@ def get_status():
             last_report=last_report_dict,
         )
     except Exception as e:
-        logger.error(f"Erro ao obter status do Meta-Agente: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao obter status do Meta-Agente: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Não foi possível recuperar o status do Meta-Agente.",
@@ -73,7 +73,7 @@ async def run_analysis_cycle():
             )
         return report
     except Exception as e:
-        logger.error(f"Erro ao tentar executar o ciclo do Meta-Agente: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao tentar executar o ciclo do Meta-Agente: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Não foi possível executar o ciclo de análise.",

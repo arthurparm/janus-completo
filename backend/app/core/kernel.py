@@ -187,10 +187,10 @@ class Kernel:
 
             logger.info("Kernel startup complete. System is ready.")
         except KernelError as ke:
-            logger.critical(f"Kernel startup failed: {ke}")
+            logger.critical("log_critical", message=f"Kernel startup failed: {ke}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected kernel failure: {e}", exc_info=True)
+            logger.critical("log_critical", message=f"Unexpected kernel failure: {e}", exc_info=True)
             raise KernelError(f"Unexpected kernel failure: {e}") from e
 
     async def _init_infrastructure(self):
@@ -198,7 +198,7 @@ class Kernel:
             try:
                 await db.create_tables()
             except Exception as e:
-                logger.warning(f"DB table creation skipped or failed: {e}")
+                logger.warning("log_warning", message=f"DB table creation skipped or failed: {e}")
 
             # Initialize Core Infra
             from app.core.infrastructure.redis_manager import RedisManager
@@ -237,9 +237,9 @@ class Kernel:
                     get_firebase_service().initialize(cred_path, db_url)
                     logger.info("Firebase Service initialized.", db_url=db_url)
                 else:
-                    logger.warning(f"Firebase credentials missing at {cred_path}")
+                    logger.warning("log_warning", message=f"Firebase credentials missing at {cred_path}")
             except Exception as e:
-                logger.error(f"Firebase init failed: {e}")
+                logger.error("log_error", message=f"Firebase init failed: {e}")
                 # Non-critical, do not raise
 
     async def _init_senses(self):
@@ -247,7 +247,7 @@ class Kernel:
             self.voice_manager = VoiceManager()
             self.voice_manager.initialize()
         except Exception as e:
-            logger.warning(f"Voice Manager failed to initialize: {e}")
+            logger.warning("log_warning", message=f"Voice Manager failed to initialize: {e}")
 
     async def shutdown(self):
         """Gracefully shuts down the system."""
@@ -258,7 +258,7 @@ class Kernel:
             try:
                 await worker.stop()
             except Exception as e:
-                logger.error(f"Error stopping worker {worker}: {e}")
+                logger.error("log_error", message=f"Error stopping worker {worker}: {e}")
 
         # Cancel training task
         if self._neural_training_task:
@@ -278,7 +278,7 @@ class Kernel:
             try:
                 await self.scheduler.stop()
             except Exception as e:
-                logger.error(f"Error stopping scheduler: {e}")
+                logger.error("log_error", message=f"Error stopping scheduler: {e}")
 
         # Close SQL engines
         try:
@@ -307,7 +307,7 @@ class Kernel:
             logger.info("Multi-Agent System actors initialized.")
         except Exception as e:
             # Critical because agents are core to operation
-            logger.error(f"Failed to initialize Multi-Agent System actors: {e}")
+            logger.error("log_error", message=f"Failed to initialize Multi-Agent System actors: {e}")
             raise KernelError("Failed to initialize system agents") from e
 
     def _build_dependency_graph(self):
@@ -416,7 +416,7 @@ class Kernel:
             try:
                 self._consolidation_consumer_task = await start_consolidation_worker()
             except Exception as e:
-                logger.error(f"Failed to start async consolidation worker: {e}")
+                logger.error("log_error", message=f"Failed to start async consolidation worker: {e}")
 
             self._neural_training_task = await start_neural_training_worker()
 
@@ -435,7 +435,7 @@ class Kernel:
 
         except Exception as e:
             # If workers fail, system is degraded but maybe usable
-            logger.error(f"Background process initialization failed: {e}")
+            logger.error("log_error", message=f"Background process initialization failed: {e}")
 
             # Register a failing health check so /health endpoint reports the error
             if hasattr(self, "monitor") and self.monitor:
@@ -464,7 +464,7 @@ class Kernel:
 
             logger.info("Automatic indexation complete.")
         except Exception as e:
-            logger.error(f"Error during automatic indexation: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error during automatic indexation: {e}", exc_info=True)
 
     async def _warm_up_llms_async(self):
         """Warm up LLMs in a separate thread to avoid blocking the event loop."""
@@ -474,6 +474,6 @@ class Kernel:
                 logger.info("Starting background LLM pool warm-up...")
                 # Run the synchronous warm_pool in a thread
                 warmed = await asyncio.to_thread(self.llm_service.warm_pool, warm_specs)
-                logger.info(f"Background LLM warm-up complete. Warmed: {warmed}")
+                logger.info("log_info", message=f"Background LLM warm-up complete. Warmed: {warmed}")
         except Exception as e:
-            logger.warning(f"Background LLM warm-up failed (non-critical): {e}")
+            logger.warning("log_warning", message=f"Background LLM warm-up failed (non-critical): {e}")

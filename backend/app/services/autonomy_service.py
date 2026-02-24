@@ -384,7 +384,7 @@ class AutonomyService:
                         else:
                             payload = "" if not args else json.dumps(args, ensure_ascii=False)
                     except Exception as e:
-                        logger.warning(f"Erro ao preparar payload para {tool_name}", exc_info=e)
+                        logger.warning("log_warning", message=f"Erro ao preparar payload para {tool_name}", exc_info=e)
                         payload = args
 
                     rt.broadcast_status(
@@ -454,15 +454,15 @@ class AutonomyService:
                     break  # Sai do loop de retries
 
                 if attempts <= max_retries:
-                    logger.info(f"[AutonomyLoop] Retentando {tool_name} em 2s...")
+                    logger.info("log_info", message=f"[AutonomyLoop] Retentando {tool_name} em 2s...")
                     await asyncio.sleep(2)
 
             # Fallback & Replanning logic...
             if not step_success:
-                logger.error(f"[AutonomyLoop] Passo falhou definitivamente: {tool_name}")
+                logger.error("log_error", message=f"[AutonomyLoop] Passo falhou definitivamente: {tool_name}")
 
                 if fallback_tool_name:
-                    logger.info(f"[AutonomyLoop] Tentando fallback: {fallback_tool_name}")
+                    logger.info("log_info", message=f"[AutonomyLoop] Tentando fallback: {fallback_tool_name}")
                     fallback_tool = action_registry.get_tool(fallback_tool_name)
                     if fallback_tool:
                         try:
@@ -472,10 +472,10 @@ class AutonomyService:
                                 if hasattr(fallback_tool, "arun")
                                 else fallback_tool.run(args)
                             )
-                            logger.info(f"[AutonomyLoop] Fallback executado com sucesso")
+                            logger.info("log_info", message=f"[AutonomyLoop] Fallback executado com sucesso")
                             step_success = True
                         except Exception as e:
-                            logger.error(f"[AutonomyLoop] Fallback falhou: {e}")
+                            logger.error("log_error", message=f"[AutonomyLoop] Fallback falhou: {e}")
                             error_msg = f"Primary and Fallback failed. Last error: {e!s}"
 
             # Dynamic Replanning
@@ -491,8 +491,7 @@ class AutonomyService:
                         self._llm_service,
                     )
                     if not verification.get("success", True):
-                        logger.warning(
-                            f"[AutonomyLoop] Verificação semântica falhou: {verification.get('reason')}"
+                        logger.warning("log_warning", message=f"[AutonomyLoop] Verificação semântica falhou: {verification.get('reason')}"
                         )
                         rt.append_log(
                             f"Resultado rejeitado: {verification.get('reason')}", "warning"
@@ -503,8 +502,7 @@ class AutonomyService:
                     logger.error("Erro na verificação semântica", exc_info=e_ver)
 
             if not step_success and critical:
-                logger.warning(
-                    f"[AutonomyLoop] Falha crítica em {tool_name}. Iniciando REPLANNING..."
+                logger.warning("log_warning", message=f"[AutonomyLoop] Falha crítica em {tool_name}. Iniciando REPLANNING..."
                 )
                 rt.append_log("Falha crítica. Replanejando...", "warning")
 
@@ -530,7 +528,7 @@ class AutonomyService:
                     )
 
                     action = replan_decision.get("action", "ABORT")
-                    logger.info(f"[AutonomyLoop] Decisão de Replanejamento: {action}")
+                    logger.info("log_info", message=f"[AutonomyLoop] Decisão de Replanejamento: {action}")
 
                     if action == "IGNORE":
                         rt.append_log("Falha ignorada pelo replanejador.", "info")

@@ -78,7 +78,7 @@ class ChatCommandHandler:
 
         handler = getattr(self, handler_name, None)
         if not handler:
-            logger.warning(f"Command handler '{handler_name}' not found")
+            logger.warning("log_warning", message=f"Command handler '{handler_name}' not found")
             return None
 
         try:
@@ -135,7 +135,7 @@ Use `/memory` para ver estatísticas detalhadas."""
 
 Use comandos naturais para acessar memórias!"""
         except Exception as e:
-            logger.warning(f"Failed to get memory stats: {e}")
+            logger.warning("log_warning", message=f"Failed to get memory stats: {e}")
             return "🔍 Não foi possível obter estatísticas de memória."
 
     async def _handle_tools(self, args: str, conversation_id: str, user_id: str | None) -> str:
@@ -161,7 +161,7 @@ Use comandos naturais para acessar memórias!"""
 
 Peça para usar qualquer ferramenta naturalmente!"""
         except Exception as e:
-            logger.warning(f"Failed to list tools: {e}")
+            logger.warning("log_warning", message=f"Failed to list tools: {e}")
             return "🛠️ Não foi possível listar ferramentas."
 
     async def _handle_feedback(self, args: str, conversation_id: str, user_id: str | None) -> str:

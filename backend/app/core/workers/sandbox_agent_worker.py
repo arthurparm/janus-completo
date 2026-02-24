@@ -7,7 +7,7 @@ sem rede, sem volumes e com limites de CPU/memória.
 """
 
 import base64
-import logging
+import structlog
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
@@ -16,7 +16,7 @@ from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
 from app.services.collaboration_service import CollaborationService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _build_command_for_code(code: str) -> list:
@@ -158,7 +158,7 @@ async def process_sandbox_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error(f"SandboxAgent falhou: {e}", exc_info=True)
+        logger.error("log_error", message=f"SandboxAgent falhou: {e}", exc_info=True)
         raise
 
 

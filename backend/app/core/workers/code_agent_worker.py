@@ -4,8 +4,7 @@ Code Agent Worker
 Consome a fila JANUS.tasks.agent.coder, gera código com LLM e decide
 próximo agente (Professor ou Sandbox) com base em heurísticas de complexidade.
 """
-
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
@@ -20,7 +19,7 @@ from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _build_coding_prompt(
@@ -97,15 +96,13 @@ async def process_code_task(task: TaskMessage) -> None:
             if settings.CODER_SELF_HEALING_ENABLED:
                 validation_result = _validate_code_syntax(code)
                 if validation_result["valid"]:
-                    logger.info(
-                        f"Code validated on iteration {iteration + 1}/{max_iterations}",
+                    logger.info("log_info", message=f"Code validated on iteration {iteration + 1}/{max_iterations}",
                         extra={"task_id": state.task_id},
                     )
                     break
                 else:
                     compilation_error = validation_result["error"]
-                    logger.warning(
-                        f"Code validation failed on iteration {iteration + 1}, retrying...",
+                    logger.warning("log_warning", message=f"Code validation failed on iteration {iteration + 1}, retrying...",
                         extra={"task_id": state.task_id, "error": compilation_error[:200]},
                     )
             else:
@@ -139,7 +136,7 @@ async def process_code_task(task: TaskMessage) -> None:
             },
         )
     except Exception as e:
-        logger.error(f"CodeAgent falhou: {e}", exc_info=True)
+        logger.error("log_error", message=f"CodeAgent falhou: {e}", exc_info=True)
         raise
 
 

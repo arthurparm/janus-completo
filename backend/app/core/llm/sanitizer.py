@@ -1,8 +1,8 @@
-import logging
+import structlog
 import re
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ContentSanitizer:
@@ -73,6 +73,6 @@ class ContentSanitizer:
             sanitized = re.sub(r"(?i)^(assistant|model|ai)\s*:\s*", "", sanitized.strip())
             return sanitized
         except Exception as e:
-            logger.warning(f"Failed to sanitize output: {e}")
+            logger.warning("log_warning", message=f"Failed to sanitize output: {e}")
             # Fail open: Return original text if sanitization crashes
             return text

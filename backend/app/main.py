@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
         await load_evolution_prompts()
         logger.info("Global prompts loaded successfully.")
     except Exception as e:
-        logger.error(f"Failed to load global prompts: {e}")
+        logger.error("log_error", message=f"Failed to load global prompts: {e}")
         # We don't raise here to allow startup with empty prompts (they might be fetched on demand or fallback)
 
     # 2. Map Kernel services to FastAPI app state for endpoint access

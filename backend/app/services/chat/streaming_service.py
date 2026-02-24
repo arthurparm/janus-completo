@@ -601,7 +601,7 @@ class StreamingService:
                 await subscription_task
             except Exception:
                 pass
-            logger.info(f"Stream de eventos encerrado para {conversation_id}")
+            logger.info("log_info", message=f"Stream de eventos encerrado para {conversation_id}")
 
     def _cb_should_block(self, provider: str | None) -> bool:
         try:

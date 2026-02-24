@@ -4,8 +4,7 @@ Router Worker (Rececionista)
 Consome a fila central JANUS.tasks.router e decide o próximo agente
 para o TaskState usando o Planner na decomposição inicial.
 """
-
-import logging
+import structlog
 from datetime import datetime
 
 import msgpack
@@ -19,7 +18,7 @@ from app.models.schemas import QueueName, TaskMessage, TaskState
 from app.repositories.collaboration_repository import CollaborationRepository
 from app.services.collaboration_service import CollaborationService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _decompose_complex_task(goal: str) -> str:
@@ -37,7 +36,7 @@ async def _decompose_complex_task(goal: str) -> str:
         res = await llm.ainvoke(prompt)
         return res.content
     except Exception as e:
-        logger.warning(f"Falha na decomposição de tarefa: {e}")
+        logger.warning("log_warning", message=f"Falha na decomposição de tarefa: {e}")
         return ""
 
 
@@ -181,7 +180,7 @@ async def process_router_task(task: TaskMessage) -> None:
             "Router encaminhou TaskState", task_id=state.task_id, next_role=state.next_agent_role
         )
     except Exception as e:
-        logger.error(f"Router falhou ao processar TaskState: {e}", exc_info=True)
+        logger.error("log_error", message=f"Router falhou ao processar TaskState: {e}", exc_info=True)
         raise
 
 

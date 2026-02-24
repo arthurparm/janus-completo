@@ -1,4 +1,4 @@
-import logging
+import structlog
 import asyncio
 import json
 from typing import List
@@ -13,7 +13,7 @@ from app.core.agents.graph_orchestrator import get_graph
 from app.core.security.redaction import redact_sensitive_payload
 
 router = APIRouter(tags=["PendingActions"], prefix="/pending_actions")
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class PendingActionDTO(BaseModel):
     source: str = "langgraph"
@@ -214,7 +214,7 @@ async def _thread_exists_in_checkpoints(thread_id: str) -> bool | None:
                 return len(rows) > 0 if rows is not None else None
             return None
     except Exception as e:
-        logger.warning(f"Failed to verify thread existence in checkpoints: {e}")
+        logger.warning("log_warning", message=f"Failed to verify thread existence in checkpoints: {e}")
         if _is_backend_unavailable_error(e):
             raise
         return None
@@ -224,13 +224,13 @@ async def _resume_graph_execution(thread_id: str, resume_value: str):
     """
     Background task to resume graph execution.
     """
-    logger.info(f"Resuming execution for thread {thread_id} with value {resume_value}")
+    logger.info("log_info", message=f"Resuming execution for thread {thread_id} with value {resume_value}")
     try:
         graph = get_graph()
         await _invoke_resume(graph, thread_id, resume_value)
-        logger.info(f"Execution finished for thread {thread_id}")
+        logger.info("log_info", message=f"Execution finished for thread {thread_id}")
     except Exception as e:
-        logger.error(f"Error in background execution for thread {thread_id}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error in background execution for thread {thread_id}: {e}", exc_info=True)
 
 @router.get("/", response_model=List[PendingActionDTO])
 async def list_pending(
@@ -277,7 +277,7 @@ async def list_pending(
                     )
                 )
         except Exception as e:
-            logger.warning(f"Failed to query SQL pending actions: {e}")
+            logger.warning("log_warning", message=f"Failed to query SQL pending actions: {e}")
             if _is_backend_unavailable_error(e):
                 raise HTTPException(
                     status_code=503,
@@ -303,7 +303,7 @@ async def list_pending(
                     state = await _get_state(graph, {"configurable": {"thread_id": tid}})
                     return tid, _is_waiting_for_human_approval(getattr(state, "next", None))
                 except Exception as e:
-                    logger.warning(f"Failed to inspect graph state for thread {tid}: {e}")
+                    logger.warning("log_warning", message=f"Failed to inspect graph state for thread {tid}: {e}")
                     return tid, False
 
             checks = await asyncio.gather(*(_is_waiting_for_approval(tid) for tid in thread_ids))
@@ -321,7 +321,7 @@ async def list_pending(
             ]
             return items + graph_items
     except Exception as e:
-        logger.warning(f"Failed to query checkpoints: {e}")
+        logger.warning("log_warning", message=f"Failed to query checkpoints: {e}")
         if _is_backend_unavailable_error(e):
             raise HTTPException(
                 status_code=503,
@@ -366,7 +366,7 @@ async def approve(thread_id: str, background_tasks: BackgroundTasks):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error approving action: {e}")
+        logger.error("log_error", message=f"Error approving action: {e}")
         if _is_backend_unavailable_error(e):
             raise HTTPException(
                 status_code=503,
@@ -418,7 +418,7 @@ async def approve_sql_action(action_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error approving SQL pending action: {e}")
+        logger.error("log_error", message=f"Error approving SQL pending action: {e}")
         if _is_backend_unavailable_error(e):
             raise HTTPException(
                 status_code=503,
@@ -470,7 +470,7 @@ async def reject_sql_action(action_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error rejecting SQL pending action: {e}")
+        logger.error("log_error", message=f"Error rejecting SQL pending action: {e}")
         if _is_backend_unavailable_error(e):
             raise HTTPException(
                 status_code=503,
@@ -515,7 +515,7 @@ async def reject(thread_id: str, background_tasks: BackgroundTasks):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error rejecting action: {e}")
+        logger.error("log_error", message=f"Error rejecting action: {e}")
         if _is_backend_unavailable_error(e):
             raise HTTPException(
                 status_code=503,

@@ -75,7 +75,7 @@ async def auto_analyze(
         )
 
     except Exception as e:
-        logger.error(f"[AutoAnalysis] Auto-exame falhou: {e}", exc_info=True)
+        logger.error("log_error", message=f"[AutoAnalysis] Auto-exame falhou: {e}", exc_info=True)
         return AutoAnalysisResponse(
             timestamp=datetime.now().isoformat(),
             overall_health="unknown",
@@ -131,7 +131,7 @@ async def _analyze_api_costs(llm_repo: LLMRepository) -> HealthInsight | None:
         )
 
     except Exception as e:
-        logger.warning(f"[AutoAnalysis] Falha ao analisar custos: {e}")
+        logger.warning("log_warning", message=f"[AutoAnalysis] Falha ao analisar custos: {e}")
         return HealthInsight(
             issue="Gastos com APIs",
             severity="low",
@@ -154,7 +154,7 @@ async def _analyze_performance(observability: ObservabilityService) -> HealthIns
         )
 
     except Exception as e:
-        logger.warning(f"[AutoAnalysis] Falha ao analisar performance: {e}")
+        logger.warning("log_warning", message=f"[AutoAnalysis] Falha ao analisar performance: {e}")
         return None
 
 
@@ -169,7 +169,7 @@ async def _analyze_response_quality(llm_repo: LLMRepository) -> HealthInsight | 
         )
 
     except Exception as e:
-        logger.warning(f"[AutoAnalysis] Falha ao analisar qualidade: {e}")
+        logger.warning("log_warning", message=f"[AutoAnalysis] Falha ao analisar qualidade: {e}")
         return None
 
 

@@ -6,7 +6,7 @@ se retorna ao CodeAgent para correções ou segue para Sandbox.
 """
 
 import json
-import logging
+import structlog
 import re
 from datetime import datetime
 from typing import Any
@@ -22,7 +22,7 @@ from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _build_review_prompt(state: TaskState) -> str:
@@ -36,7 +36,7 @@ def _parse_review_json(review_text: str) -> dict[str, Any]:
         return parse_json_strict(review_text)
     except Exception:
         # Fallback para parsing manual "sujo" ou rejeição por padrão em caso de erro grave
-        logger.warning(f"Falha ao parsear JSON do Professor: {review_text[:100]}...")
+        logger.warning("log_warning", message=f"Falha ao parsear JSON do Professor: {review_text[:100]}...")
         # Se falhar o parse, assumimos rejeição para segurança
         return {
             "status": "REJECTED",
@@ -98,8 +98,7 @@ async def process_professor_task(task: TaskMessage) -> None:
                 issues = "\n- ".join(review_data.get("critical_issues", []))
                 state.data_payload.review_notes = f"REJEITADO PELO PROFESSOR:\nIssues:\n- {issues}"
 
-                logger.info(
-                    f"Deep Reflexion: Retrying task ({state.retries}/10)",
+                logger.info("log_info", message=f"Deep Reflexion: Retrying task ({state.retries}/10)",
                     extra={"task_id": state.task_id, "attempt": state.retries}
                 )
             else:
@@ -116,7 +115,7 @@ async def process_professor_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error(f"ProfessorAgent falhou: {e}", exc_info=True)
+        logger.error("log_error", message=f"ProfessorAgent falhou: {e}", exc_info=True)
         raise
 
 

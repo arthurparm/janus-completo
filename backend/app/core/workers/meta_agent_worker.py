@@ -6,7 +6,7 @@ Consumes messages from janus.meta_agent.cycle and triggers async Meta-Agent cycl
 
 import asyncio
 import inspect
-import logging
+import structlog
 import time
 import uuid
 from datetime import datetime
@@ -22,7 +22,7 @@ from app.models.schemas import QueueName, TaskMessage
 from app.repositories.memory_repository import MemoryRepository
 from app.services.memory_service import MemoryService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Worker metrics
 _META_AGENT_MESSAGES_TOTAL = Counter(

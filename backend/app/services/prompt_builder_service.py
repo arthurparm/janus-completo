@@ -2,13 +2,12 @@
 Prompt Builder Service - Modular Architecture
 Delegates to PromptComposer for efficient, intent-based prompt generation.
 """
-
-import logging
+import structlog
 from typing import Any
 
 from app.services.prompt_service import PromptService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PromptBuilderService:
@@ -79,8 +78,7 @@ class PromptBuilderService:
         composer = get_prompt_composer(self.prompt_service)
         compiled = await composer.compose(intent, context)
 
-        logger.info(
-            f"[PROMPT_BUILD] ✅ Composed {len(compiled.modules_used)} modules, "
+        logger.info("log_info", message=f"[PROMPT_BUILD] ✅ Composed {len(compiled.modules_used)} modules, "
             f"~{compiled.token_count} tokens (intent={intent.value})"
         )
 

@@ -1,11 +1,10 @@
-import logging
-
+import structlog
 from app.core.infrastructure.message_broker import get_broker
 from app.core.knowledge.distillation_service import DistillationService
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_KNOWLEDGE_DISTILLATION.value,
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 )
 async def process_distillation_task(task: TaskMessage) -> None:
     try:
-        logger.info(f"DistillationWorker recebeu tarefa: {task.task_id}")
+        logger.info("log_info", message=f"DistillationWorker recebeu tarefa: {task.task_id}")
 
         raw_state = (task.payload or {}).get("task_state", {})
         if not raw_state:
@@ -29,12 +28,12 @@ async def process_distillation_task(task: TaskMessage) -> None:
         saved = service.process_task(state)
 
         if saved:
-            logger.info(f"✓ Tarefa {state.task_id} destilada e salva no dataset.")
+            logger.info("log_info", message=f"✓ Tarefa {state.task_id} destilada e salva no dataset.")
         else:
-            logger.debug(f"Tarefa {state.task_id} descartada (não atendeu critérios de qualidade).")
+            logger.debug("log_debug", message=f"Tarefa {state.task_id} descartada (não atendeu critérios de qualidade).")
 
     except Exception as e:
-        logger.error(f"Erro no DistillationWorker: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro no DistillationWorker: {e}", exc_info=True)
         # Não damos raise para evitar retry infinito de tarefa "ruim" (dataset poisoning)
         # Poison pill handler já protege, mas aqui preferimos falhar silenciosamente para não travar fila
 

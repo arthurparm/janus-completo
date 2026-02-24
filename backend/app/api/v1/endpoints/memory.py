@@ -1,4 +1,4 @@
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +13,7 @@ from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MemoryTimelineItem(BaseModel):
@@ -143,7 +143,7 @@ async def get_memories_timeline(
             items.sort(key=lambda item: item.ts_ms or 0, reverse=True)
             return items[:limit]
         except Exception as e:
-            logger.error(f"Error retrieving user timeline: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error retrieving user timeline: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to retrieve user timeline memories",
@@ -155,7 +155,7 @@ async def get_memories_timeline(
         )
         return [_experience_to_item(exp) for exp in memories]
     except Exception as e:
-        logger.error(f"Error retrieving timeline: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error retrieving timeline: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve timeline memories",
@@ -173,7 +173,7 @@ async def get_generative_memories(
         memories = await generative_memory_service.retrieve_memories(query, limit=limit)
         return memories
     except Exception as e:
-        logger.error(f"Error retrieving generative memories: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error retrieving generative memories: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve generative memories: {e}"
@@ -196,7 +196,7 @@ async def add_generative_memory(
         memory = await generative_memory_service.add_memory(content, type=type, metadata=meta)
         return memory
     except Exception as e:
-        logger.error(f"Error adding generative memory: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error adding generative memory: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add generative memory: {e}"

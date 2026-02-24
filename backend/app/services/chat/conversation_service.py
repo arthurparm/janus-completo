@@ -36,7 +36,7 @@ class ConversationService:
             count = self._repo.count_conversations()
             update_active_conversations(count)
         except Exception as e:
-            logger.warning(f"Failed to update active conversation metrics: {e}")
+            logger.warning("log_warning", message=f"Failed to update active conversation metrics: {e}")
         return cid
 
     async def start_conversation_async(
@@ -50,14 +50,13 @@ class ConversationService:
         user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
-        logger.info(f"Getting chat history for conversation: {conversation_id}")
+        logger.info("log_info", message=f"Getting chat history for conversation: {conversation_id}")
         try:
             conv = self._repo.get_conversation(conversation_id)
             self.validate_conversation_access(conversation_id, conv, user_id, project_id)
 
             if not isinstance(conv, dict):
-                logger.error(
-                    f"Invalid conversation structure for {conversation_id}: expected dict, got {type(conv)}"
+                logger.error("log_error", message=f"Invalid conversation structure for {conversation_id}: expected dict, got {type(conv)}"
                 )
                 raise ConversationNotFoundError(
                     f"Invalid conversation structure for {conversation_id}"
@@ -65,13 +64,11 @@ class ConversationService:
 
             messages = conv.get("messages", [])
             if not isinstance(messages, list):
-                logger.warning(
-                    f"Messages is not a list for conversation {conversation_id}, converting to empty list"
+                logger.warning("log_warning", message=f"Messages is not a list for conversation {conversation_id}, converting to empty list"
                 )
                 messages = []
 
-            logger.info(
-                f"Successfully retrieved conversation {conversation_id} with {len(messages)} messages"
+            logger.info("log_info", message=f"Successfully retrieved conversation {conversation_id} with {len(messages)} messages"
             )
 
             return {
@@ -80,15 +77,14 @@ class ConversationService:
                 "messages": messages,
             }
         except ChatRepositoryError as e:
-            logger.error(f"Repository error getting conversation {conversation_id}: {e}")
+            logger.error("log_error", message=f"Repository error getting conversation {conversation_id}: {e}")
             raise ConversationNotFoundError(str(e)) from e
         except ConversationNotFoundError:
             raise
         except ChatServiceError:
             raise
         except Exception as e:
-            logger.error(
-                f"Unexpected error getting history for conversation {conversation_id}: {e}",
+            logger.error("log_error", message=f"Unexpected error getting history for conversation {conversation_id}: {e}",
                 exc_info=True,
             )
             raise ChatServiceError(
@@ -105,8 +101,7 @@ class ConversationService:
         user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
-        logger.info(
-            f"Getting paginated chat history for conversation: {conversation_id}, limit: {limit}, offset: {offset}"
+        logger.info("log_info", message=f"Getting paginated chat history for conversation: {conversation_id}, limit: {limit}, offset: {offset}"
         )
 
         try:
@@ -114,8 +109,7 @@ class ConversationService:
             conv = self._repo.get_conversation(conversation_id)
 
             if not isinstance(conv, dict):
-                logger.error(
-                    f"Invalid conversation structure for {conversation_id}: expected dict, got {type(conv)}"
+                logger.error("log_error", message=f"Invalid conversation structure for {conversation_id}: expected dict, got {type(conv)}"
                 )
                 raise ConversationNotFoundError(
                     f"Invalid conversation structure for {conversation_id}"
@@ -127,8 +121,7 @@ class ConversationService:
                 conversation_id, limit=limit, offset=offset, before_ts=before_ts, after_ts=after_ts
             )
 
-            logger.info(
-                f"Successfully retrieved paginated history for conversation {conversation_id}: "
+            logger.info("log_info", message=f"Successfully retrieved paginated history for conversation {conversation_id}: "
                 f"{len(result['messages'])} messages (total: {result['total_count']})"
             )
 
@@ -143,15 +136,14 @@ class ConversationService:
                 "offset": result["offset"],
             }
         except ChatRepositoryError as e:
-            logger.error(f"Repository error getting paginated history for {conversation_id}: {e}")
+            logger.error("log_error", message=f"Repository error getting paginated history for {conversation_id}: {e}")
             raise ConversationNotFoundError(str(e)) from e
         except ConversationNotFoundError:
             raise
         except ChatServiceError:
             raise
         except Exception as e:
-            logger.error(
-                f"Unexpected error getting paginated history for conversation {conversation_id}: {e}",
+            logger.error("log_error", message=f"Unexpected error getting paginated history for conversation {conversation_id}: {e}",
                 exc_info=True,
             )
             raise ChatServiceError(

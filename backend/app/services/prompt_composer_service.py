@@ -2,8 +2,7 @@
 Prompt Composer Service - Orchestrates modular prompt construction.
 Replaces monolithic prompt_builder_service with efficient, composable architecture.
 """
-
-import logging
+import structlog
 from functools import lru_cache
 from typing import Any
 
@@ -21,7 +20,7 @@ from app.core.prompts.modules import (
 from app.core.prompts.types import IntentType
 from app.services.prompt_service import PromptService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CompiledPrompt:
@@ -93,8 +92,7 @@ class PromptComposer:
         # Select applicable modules
         applicable_modules = [m for m in self.modules if m.is_applicable(intent)]
 
-        logger.info(
-            f"[PROMPT_COMPOSE] Intent={intent.value}, "
+        logger.info("log_info", message=f"[PROMPT_COMPOSE] Intent={intent.value}, "
             f"Modules={[m.name for m in applicable_modules]}"
         )
 
@@ -109,7 +107,7 @@ class PromptComposer:
                     sections.append(rendered)
                     modules_used.append(module.name)
             except Exception as e:
-                logger.error(f"[PROMPT_COMPOSE] Error rendering module {module.name}: {e}")
+                logger.error("log_error", message=f"[PROMPT_COMPOSE] Error rendering module {module.name}: {e}")
                 # Continue with other modules
 
         # Add current user message
@@ -122,8 +120,7 @@ class PromptComposer:
         # Estimate tokens
         token_count = self._estimate_tokens(final_prompt)
 
-        logger.info(
-            f"[PROMPT_COMPOSE] Compiled {len(modules_used)} modules, " f"~{token_count} tokens"
+        logger.info("log_info", message=f"[PROMPT_COMPOSE] Compiled {len(modules_used)} modules, " f"~{token_count} tokens"
         )
 
         return CompiledPrompt(

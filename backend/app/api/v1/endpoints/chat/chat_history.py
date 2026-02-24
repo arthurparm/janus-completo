@@ -37,7 +37,7 @@ async def chat_history(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    logger.info(f"API request for chat history: {conversation_id}, limit: {limit}, offset: {offset}")
+    logger.info("log_info", message=f"API request for chat history: {conversation_id}, limit: {limit}, offset: {offset}")
 
     try:
         user_id = actor_user_id(http)
@@ -65,9 +65,9 @@ async def chat_history(
                     ):
                         messages.append(ChatMessage(**apply_ui_to_message(message)))
                     else:
-                        logger.warning(f"Skipping invalid message at index {i}: {message}")
+                        logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
                 except Exception as e:
-                    logger.warning(f"Error converting message at index {i}: {e}")
+                    logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
 
             return ChatHistoryResponse(
                 conversation_id=hist["conversation_id"],
@@ -91,9 +91,9 @@ async def chat_history(
                 ):
                     messages.append(ChatMessage(**apply_ui_to_message(message)))
                 else:
-                    logger.warning(f"Skipping invalid message at index {i}: {message}")
+                    logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
             except Exception as e:
-                logger.warning(f"Error converting message at index {i}: {e}")
+                logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
 
         return ChatHistoryResponse(
             conversation_id=hist["conversation_id"],
@@ -152,9 +152,9 @@ async def chat_history_paginated(
                 ):
                     messages.append(ChatMessage(**apply_ui_to_message(message)))
                 else:
-                    logger.warning(f"Skipping invalid message at index {i}: {message}")
+                    logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
             except Exception as e:
-                logger.warning(f"Error converting message at index {i}: {e}")
+                logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
 
         return ChatHistoryPaginatedResponse(
             conversation_id=hist["conversation_id"],

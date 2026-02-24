@@ -14,7 +14,7 @@ Ações implementadas:
 """
 
 import asyncio
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -23,7 +23,7 @@ from app.core.monitoring.health_monitor import HealthStatus, get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.models.schemas import QueueName
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Flags/estado interno
 _healer_task: asyncio.Task | None = None
@@ -55,7 +55,7 @@ async def _heal_message_broker() -> None:
             await broker.connect()
             logger.info("Auto-Healer: reconexão do Message Broker executada.")
     except Exception as e:
-        logger.error(f"Auto-Healer: falha ao reconectar broker: {e}", exc_info=True)
+        logger.error("log_error", message=f"Auto-Healer: falha ao reconectar broker: {e}", exc_info=True)
 
 
 async def _reconcile_queue_policies() -> None:
@@ -71,13 +71,12 @@ async def _reconcile_queue_policies() -> None:
         ]:
             try:
                 res = await broker.reconcile_queue_policy(q, force_delete=True)
-                logger.info(
-                    f"Auto-Healer: reconciliada política da fila '{q}' (status={res.get('status', 'unknown')})."
+                logger.info("log_info", message=f"Auto-Healer: reconciliada política da fila '{q}' (status={res.get('status', 'unknown')})."
                 )
             except Exception as qe:
-                logger.error(f"Auto-Healer: erro ao reconciliar fila '{q}': {qe}", exc_info=True)
+                logger.error("log_error", message=f"Auto-Healer: erro ao reconciliar fila '{q}': {qe}", exc_info=True)
     except Exception as e:
-        logger.error(f"Auto-Healer: falha geral ao reconciliar filas: {e}", exc_info=True)
+        logger.error("log_error", message=f"Auto-Healer: falha geral ao reconciliar filas: {e}", exc_info=True)
 
 
 async def _heal_poison_pills() -> None:
@@ -86,9 +85,9 @@ async def _heal_poison_pills() -> None:
         handler = get_poison_pill_handler()
         removed = handler.cleanup_expired_quarantine()
         if removed > 0:
-            logger.info(f"Auto-Healer: {removed} mensagens liberadas da quarentena (expiradas).")
+            logger.info("log_info", message=f"Auto-Healer: {removed} mensagens liberadas da quarentena (expiradas).")
     except Exception as e:
-        logger.error(f"Auto-Healer: falha ao limpar quarentena de poison pills: {e}", exc_info=True)
+        logger.error("log_error", message=f"Auto-Healer: falha ao limpar quarentena de poison pills: {e}", exc_info=True)
 
 
 async def _heal_llm_router() -> None:
@@ -111,11 +110,10 @@ async def _heal_llm_router() -> None:
 
         # Reset oportunista dos circuit breakers de provedores abertos por muito tempo
         for provider in force_reset_stale_open_circuit_breakers(_LLM_CB_FORCE_RESET_SECONDS):
-            logger.warning(
-                f"Auto-Healer: CircuitBreaker de '{provider}' resetado (aberto há muito tempo)."
+            logger.warning("log_warning", message=f"Auto-Healer: CircuitBreaker de '{provider}' resetado (aberto há muito tempo)."
             )
     except Exception as e:
-        logger.error(f"Auto-Healer: falha ao curar LLM Router: {e}", exc_info=True)
+        logger.error("log_error", message=f"Auto-Healer: falha ao curar LLM Router: {e}", exc_info=True)
 
 
 async def _maybe_trigger_meta_agent(system_status: dict[str, Any]) -> None:
@@ -134,9 +132,9 @@ async def _maybe_trigger_meta_agent(system_status: dict[str, Any]) -> None:
             if now - last > max(60.0, _HEAL_INTERVAL * 2):
                 _last_actions["meta_agent_cycle"] = now
                 await publish_meta_agent_cycle(mode="auto_heal")
-                logger.info(f"Auto-Healer: meta-agente acionado (status={status}, score={score}).")
+                logger.info("log_info", message=f"Auto-Healer: meta-agente acionado (status={status}, score={score}).")
     except Exception as e:
-        logger.error(f"Auto-Healer: falha ao acionar meta-agente: {e}", exc_info=True)
+        logger.error("log_error", message=f"Auto-Healer: falha ao acionar meta-agente: {e}", exc_info=True)
 
 
 async def _heal_with_codex(system_status: dict[str, Any]) -> None:
@@ -167,7 +165,7 @@ async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task
     monitor = get_health_monitor()
 
     async def _loop() -> None:
-        logger.info(f"Auto-Healer: iniciado (intervalo={interval_seconds}s).")
+        logger.info("log_info", message=f"Auto-Healer: iniciado (intervalo={interval_seconds}s).")
         while True:
             try:
                 # Executa/atualiza health checks e obtém visão agregada
@@ -236,7 +234,7 @@ async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task
 
                 await asyncio.sleep(interval_seconds)
             except Exception as e:
-                logger.error(f"Auto-Healer: erro no loop principal: {e}", exc_info=True)
+                logger.error("log_error", message=f"Auto-Healer: erro no loop principal: {e}", exc_info=True)
                 await asyncio.sleep(interval_seconds)
 
     _healer_task = asyncio.create_task(_loop())

@@ -1,10 +1,10 @@
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class LLMAdapter(ABC):
@@ -40,7 +40,7 @@ class OpenAIAdapter(LLMAdapter):
             else:
                 self.base_model.model_kwargs = {"max_tokens": max_output_tokens}
         except Exception as e:
-            logger.warning(f"Failed to apply output limit for OpenAI: {e}")
+            logger.warning("log_warning", message=f"Failed to apply output limit for OpenAI: {e}")
 
 
 
@@ -56,7 +56,7 @@ class GeminiAdapter(LLMAdapter):
                 else:
                     self.base_model.model_kwargs = {"max_output_tokens": max_output_tokens}
         except Exception as e:
-            logger.warning(f"Failed to apply output limit for Gemini: {e}")
+            logger.warning("log_warning", message=f"Failed to apply output limit for Gemini: {e}")
 
 
 class OllamaAdapter(LLMAdapter):

@@ -1,4 +1,4 @@
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
@@ -12,7 +12,7 @@ from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 async def _build_prompt(state: TaskState) -> str:
     goal = state.original_goal
@@ -36,7 +36,7 @@ async def process_proponent_task(task: TaskMessage) -> None:
         state = TaskState(**raw_state)
         state.current_agent_role = "debate_proponent"
         
-        logger.info(f"Debate Proponent processing task {state.task_id}")
+        logger.info("log_info", message=f"Debate Proponent processing task {state.task_id}")
 
         llm_service = LLMService(LLMRepository())
         prompt = await _build_prompt(state)
@@ -71,10 +71,10 @@ async def process_proponent_task(task: TaskMessage) -> None:
         
         service = CollaborationService(CollaborationRepository())
         await service.pass_task(state)
-        logger.info(f"Proponent task {state.task_id} passed to Critic")
+        logger.info("log_info", message=f"Proponent task {state.task_id} passed to Critic")
         
     except Exception as e:
-        logger.error(f"Debate Proponent failed: {e}", exc_info=True)
+        logger.error("log_error", message=f"Debate Proponent failed: {e}", exc_info=True)
         raise
 
 async def start_debate_proponent_worker():

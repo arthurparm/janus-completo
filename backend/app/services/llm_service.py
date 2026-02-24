@@ -261,7 +261,7 @@ class LLMService:
                     return True
             return False
         except Exception as e:
-            logger.debug(f"Failed to check provider status: {e}")
+            logger.debug("log_debug", message=f"Failed to check provider status: {e}")
             return False
 
 

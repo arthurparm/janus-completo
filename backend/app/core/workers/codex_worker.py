@@ -4,8 +4,7 @@ Codex Worker
 Worker dedicado a executar tarefas do Codex CLI (execução e revisão)
 de forma assíncrona, garantindo isolamento e controle de fluxo.
 """
-
-import logging
+import structlog
 from datetime import datetime
 
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
@@ -16,7 +15,7 @@ from app.repositories.collaboration_repository import CollaborationRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.tool_executor_service import ToolExecutorService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _build_codex_policy(approved: bool) -> PolicyEngine:
@@ -56,7 +55,7 @@ async def process_codex_task(task: TaskMessage) -> None:
             user_id = payload.get("user_id")
             approved = bool(payload.get("approved") or payload.get("auto_confirm"))
 
-        logger.info(f"Processando task Codex: {task_id} (Tipo: {task_type})")
+        logger.info("log_info", message=f"Processando task Codex: {task_id} (Tipo: {task_type})")
 
         # Garante que as ferramentas externas estejam registradas
         register_external_cli_tools()
@@ -95,7 +94,7 @@ async def process_codex_task(task: TaskMessage) -> None:
                 author="codex_worker"
             )
             
-            logger.info(f"Codex task concluída. Artefato salvo: {artifact_key}")
+            logger.info("log_info", message=f"Codex task concluída. Artefato salvo: {artifact_key}")
         elif task_type == "codex_review":
             prompt = payload.get("prompt")
             args = {
@@ -126,12 +125,12 @@ async def process_codex_task(task: TaskMessage) -> None:
                 },
                 author="codex_worker",
             )
-            logger.info(f"Codex review concluído. Artefato salvo: {artifact_key}")
+            logger.info("log_info", message=f"Codex review concluído. Artefato salvo: {artifact_key}")
         else:
-            logger.warning(f"Tipo de task desconhecido para Codex Worker: {task_type}")
+            logger.warning("log_warning", message=f"Tipo de task desconhecido para Codex Worker: {task_type}")
 
     except Exception as e:
-        logger.error(f"Codex Worker falhou na task {task.task_id}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Codex Worker falhou na task {task.task_id}: {e}", exc_info=True)
 
 
 async def start_codex_worker():

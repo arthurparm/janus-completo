@@ -1,4 +1,4 @@
-import logging
+import structlog
 from typing import List
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
@@ -9,7 +9,7 @@ from app.db.postgres_config import get_db_session, postgres_db
 from app.core.agents.graph_orchestrator import GRAPH_SCHEMA_VERSION
 
 router = APIRouter(tags=["Admin"], prefix="/admin/graph")
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class CleanupResult(BaseModel):
     deleted_threads_count: int

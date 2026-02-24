@@ -550,7 +550,7 @@ class ObservabilityService:
                     s_out += int(dj.get("output_tokens") or 0)
                     s_cost += float(dj.get("cost_usd") or 0.0)
                 except Exception as e:
-                    logger.debug(f"Failed to parse usage details: {e}")
+                    logger.debug("log_debug", message=f"Failed to parse usage details: {e}")
             return {
                 "calls": c,
                 "avg_input_tokens": (s_in / c) if c else 0,

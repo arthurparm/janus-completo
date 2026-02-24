@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 import json
-import logging
+import structlog
 import time
 from typing import Any, Protocol, runtime_checkable
 
@@ -12,7 +12,7 @@ from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.memory_core import get_memory_db
 from app.repositories.memory_repository import MemoryRepository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 TRAINING_DATA_FILE = "training_data.jsonl"
@@ -111,12 +111,12 @@ class MemoryConnector(IHarvesterConnector):
         return q
 
     async def fetch_batch(self, limit: int = 50, query: str | None = None) -> list[dict[str, Any]]:
-        logger.debug(f"Coletando experiências via {self.name}")
+        logger.debug("log_debug", message=f"Coletando experiências via {self.name}")
         try:
             effective_query = query or self._next_query()
             return await self._repo.search_experiences(query=effective_query, limit=limit)
         except Exception as e:
-            logger.error(f"Erro ao coletar dados de {self.name}", exc_info=e)
+            logger.error("log_error", message=f"Erro ao coletar dados de {self.name}", exc_info=e)
             return []
 
 
@@ -132,7 +132,7 @@ class DataHarvester:
         self._batch_size = batch_size
         self._stop_event = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
-        logger.info(f"DataHarvester inicializado com {len(connectors)} conector(es).")
+        logger.info("log_info", message=f"DataHarvester inicializado com {len(connectors)} conector(es).")
 
     async def start(self):
         """Inicia os loops de coleta para cada conector."""
@@ -157,7 +157,7 @@ class DataHarvester:
 
     async def _run_connector_loop(self, connector: IHarvesterConnector):
         """Loop de execução para um conector específico."""
-        logger.info(f"Iniciando loop para o conector: {connector.name}")
+        logger.info("log_info", message=f"Iniciando loop para o conector: {connector.name}")
         while not self._stop_event.is_set():
             try:
                 items = await connector.fetch_batch(self._batch_size)
@@ -168,13 +168,13 @@ class DataHarvester:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Erro no loop do conector {connector.name}", exc_info=e)
+                logger.error("log_error", message=f"Erro no loop do conector {connector.name}", exc_info=e)
                 await asyncio.sleep(30)  # Penalidade em caso de erro
-        logger.info(f"Loop do conector {connector.name} encerrado.")
+        logger.info("log_info", message=f"Loop do conector {connector.name} encerrado.")
 
     async def _process_items(self, items: list[dict[str, Any]]):
         """Processa um lote de itens, formata e salva em um arquivo JSONL."""
-        logger.info(f"Processando {len(items)} itens coletados.")
+        logger.info("log_info", message=f"Processando {len(items)} itens coletados.")
         try:
             training_examples: list[dict[str, Any]] = []
             for raw_item in items:
@@ -191,8 +191,7 @@ class DataHarvester:
                 return
 
             stats = await _save_dataset_updates(training_examples)
-            logger.info(
-                f"Dataset atualizado: {stats['added']} novos exemplos (Total: {stats['total']})."
+            logger.info("log_info", message=f"Dataset atualizado: {stats['added']} novos exemplos (Total: {stats['total']})."
             )
 
         except Exception as e:
@@ -230,7 +229,7 @@ async def harvest_data_for_training(
                     # Fallback
                     items = await connector.fetch_batch(limit=limit, query=query)
             except Exception as e:
-                logger.warning(f"Erro na busca filtrada, fallback para fetch normal: {e}")
+                logger.warning("log_warning", message=f"Erro na busca filtrada, fallback para fetch normal: {e}")
                 items = await connector.fetch_batch(limit=limit, query=query)
         else:
             items = await connector.fetch_batch(limit=limit, query=query)

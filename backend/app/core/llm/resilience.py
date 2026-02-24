@@ -1,4 +1,4 @@
-import logging
+import structlog
 import time
 from datetime import datetime
 from typing import Any
@@ -11,7 +11,7 @@ from app.core.infrastructure.resilience import CircuitBreaker
 
 from .types import CachedLLM
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Metrics
 LLM_POOL_SIZE = Gauge(
@@ -122,7 +122,7 @@ def invalidate_cache(provider: str | None = None):
         keys_to_remove = [k for k in list(_llm_pool.keys()) if k.startswith(f"{provider}:")]
         for key in keys_to_remove:
             del _llm_pool[key]
-        logger.info(f"Pool invalidado para provider: {provider}")
+        logger.info("log_info", message=f"Pool invalidado para provider: {provider}")
     else:
         _llm_pool.clear()
         logger.info("Pool de LLMs completamente invalidado.")

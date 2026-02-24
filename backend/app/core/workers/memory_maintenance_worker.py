@@ -1,8 +1,8 @@
 import asyncio
-import logging
+import structlog
 from app.core.memory.generative_memory import generative_memory_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class MemoryMaintenanceWorker:
     def __init__(self, interval_seconds: int = 86400): # Once a day
@@ -32,7 +32,7 @@ class MemoryMaintenanceWorker:
                 await generative_memory_service.prune_memories()
                 logger.info("Memory maintenance completed.")
             except Exception as e:
-                logger.error(f"Error in memory maintenance: {e}")
+                logger.error("log_error", message=f"Error in memory maintenance: {e}")
             
             await asyncio.sleep(self.interval)
 

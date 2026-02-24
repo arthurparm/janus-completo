@@ -66,7 +66,7 @@ class LifeCycleWorker:
         try:
             next_goal = self._goal_manager.get_next_goal()
             if next_goal:
-                logger.info(f"Metas pendentes detectadas: {next_goal.title}.")
+                logger.info("log_info", message=f"Metas pendentes detectadas: {next_goal.title}.")
         except Exception:
             pass
 
@@ -95,7 +95,7 @@ class LifeCycleWorker:
             except Exception as e:
                 # Logar exceção completa para debug
                 import traceback
-                logger.error(f"LifeCycle: Falha ao enviar consolidação: {e}\n{traceback.format_exc()}")
+                logger.error("log_error", message=f"LifeCycle: Falha ao enviar consolidação: {e}\n{traceback.format_exc()}")
 
         # 3. Auto-Check de Falhas (Resilience)
         try:
@@ -103,8 +103,7 @@ class LifeCycleWorker:
                 limit=5, timeframe_seconds=600
             )
             if len(failures) >= 3:
-                logger.warning(
-                    f"ALERTA DE SISTEMA: {len(failures)} falhas recentes detectadas pelo LifeCycle."
+                logger.warning("log_warning", message=f"ALERTA DE SISTEMA: {len(failures)} falhas recentes detectadas pelo LifeCycle."
                 )
         except Exception:
             pass

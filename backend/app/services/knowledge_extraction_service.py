@@ -1,4 +1,4 @@
-import logging
+import structlog
 import json
 from typing import Any, Optional
 
@@ -9,7 +9,7 @@ from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import get_llm
 from app.core.llm.types import ModelPriority, ModelRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class KnowledgeExtractionService:
@@ -28,7 +28,7 @@ class KnowledgeExtractionService:
                     role=ModelRole.KNOWLEDGE_CURATOR, priority=ModelPriority.FAST_AND_CHEAP
                 )
             except Exception as e:
-                logger.error(f"Failed to initialize LLM for knowledge extraction: {e}")
+                logger.error("log_error", message=f"Failed to initialize LLM for knowledge extraction: {e}")
                 raise
 
     async def extract_from_text(self, text: str, metadata: dict[str, Any] = None) -> dict[str, Any]:
@@ -62,7 +62,7 @@ class KnowledgeExtractionService:
             return self._parse_json_response(content)
 
         except Exception as e:
-            logger.error(f"Error extracting knowledge: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error extracting knowledge: {e}", exc_info=True)
             return {}
 
     def _parse_json_response(self, content: str) -> dict[str, Any]:
@@ -84,7 +84,7 @@ class KnowledgeExtractionService:
 
             return data
         except json.JSONDecodeError:
-            logger.warning(f"Failed to parse JSON from LLM response. Raw length: {len(content)}")
+            logger.warning("log_warning", message=f"Failed to parse JSON from LLM response. Raw length: {len(content)}")
             return {}
 
 

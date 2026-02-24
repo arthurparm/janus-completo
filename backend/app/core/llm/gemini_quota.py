@@ -1,4 +1,4 @@
-import logging
+import structlog
 import os
 import time
 from typing import Any
@@ -7,7 +7,7 @@ from google.cloud import monitoring_v3
 
 from .rate_limiter import get_rate_limiter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class GeminiQuotaFetcher:
@@ -36,8 +36,7 @@ class GeminiQuotaFetcher:
             return self._client
 
         if not os.path.exists(self.key_path):
-            logger.warning(
-                f"Service Account Key not found at {self.key_path}. Cannot fetch Gemini quotas."
+            logger.warning("log_warning", message=f"Service Account Key not found at {self.key_path}. Cannot fetch Gemini quotas."
             )
             return None
 
@@ -45,7 +44,7 @@ class GeminiQuotaFetcher:
             self._client = monitoring_v3.MetricServiceClient()
             return self._client
         except Exception as e:
-            logger.error(f"Failed to initialize MetricServiceClient: {e}")
+            logger.error("log_error", message=f"Failed to initialize MetricServiceClient: {e}")
             return None
 
     def fetch_and_update_limits(self):
@@ -69,7 +68,7 @@ class GeminiQuotaFetcher:
         )
 
         try:
-            logger.info(f"Fetching Gemini quotas from Cloud Monitoring for {self.project_id}...")
+            logger.info("log_info", message=f"Fetching Gemini quotas from Cloud Monitoring for {self.project_id}...")
             results = client.list_time_series(
                 request={
                     "name": project_name,
@@ -89,7 +88,7 @@ class GeminiQuotaFetcher:
                     "No Gemini quota metrics found. Check if Generative Language API is enabled and used."
                 )
             else:
-                logger.info(f"Updated Gemini limits from {count} metrics.")
+                logger.info("log_info", message=f"Updated Gemini limits from {count} metrics.")
 
         except Exception as e:
             if "Permission denied" in str(e):
@@ -97,7 +96,7 @@ class GeminiQuotaFetcher:
                     "Permission denied fetching Gemini quotas. Ensure Service Account has 'Monitoring Viewer' role."
                 )
             else:
-                logger.error(f"Error fetching Gemini quotas: {e}")
+                logger.error("log_error", message=f"Error fetching Gemini quotas: {e}")
 
     def _process_quota_metric(self, result: Any):
         """Process a single time series result and update RateLimiter."""
@@ -172,7 +171,7 @@ class GeminiQuotaFetcher:
             pass
 
             # For now, let's just log what we found
-            logger.info(f"Discovered quota for {model}: {config_update}")
+            logger.info("log_info", message=f"Discovered quota for {model}: {config_update}")
 
             # We will use a private method or modify RateLimiter to support partial updates
             # Or just store it in a local dict and apply at end?

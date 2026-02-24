@@ -4,8 +4,7 @@ Async Knowledge Consolidation Worker - Sprint 1 + Sprint 8
 Worker assíncrono que consome mensagens de consolidação de conhecimento do RabbitMQ.
 Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
-
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -36,7 +35,7 @@ from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.models.schemas import QueueName, TaskMessage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @protect_against_poison_pills(
@@ -50,8 +49,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
     Args:
         task: Mensagem de tarefa recebida
     """
-    logger.info(
-        f"Iniciando processamento de tarefa de consolidação: "
+    logger.info("log_info", message=f"Iniciando processamento de tarefa de consolidação: "
         f"task_id={task.task_id}, type={task.task_type}"
     )
 
@@ -66,8 +64,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
 
             stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
 
-            logger.info(
-                f"✓ Consolidação em lote concluída: {stats['successful']}/{stats['total_processed']} "
+            logger.info("log_info", message=f"✓ Consolidação em lote concluída: {stats['successful']}/{stats['total_processed']} "
                 f"experiências processadas, {stats['total_entities']} entidades, "
                 f"{stats['total_relationships']} relacionamentos criados."
             )
@@ -89,8 +86,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                 metadata=metadata,
             )
 
-            logger.info(
-                f"✓ Consolidação individual concluída: {result['entities_created']} entidades, "
+            logger.info("log_info", message=f"✓ Consolidação individual concluída: {result['entities_created']} entidades, "
                 f"{result['relationships_created']} relacionamentos criados."
             )
 
@@ -132,15 +128,15 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                             routing_key=routing_key,
                             message=msgpack.packb(event_payload, use_bin_type=True),
                         )
-                        logger.debug(f"Evento de memória publicado para {conversation_id}")
+                        logger.debug("log_debug", message=f"Evento de memória publicado para {conversation_id}")
             except Exception as evt_err:
-                logger.warning(f"Falha ao publicar evento de memória: {evt_err}")
+                logger.warning("log_warning", message=f"Falha ao publicar evento de memória: {evt_err}")
 
         else:
             raise ValueError(f"Modo de consolidação desconhecido: {consolidation_mode}")
 
     except Exception as e:
-        logger.error(f"Erro ao processar tarefa de consolidação {task.task_id}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao processar tarefa de consolidação {task.task_id}: {e}", exc_info=True)
         raise
 
 

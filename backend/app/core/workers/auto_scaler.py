@@ -6,7 +6,7 @@ por fila (scale up/down), usando o MessageBroker start_consumer.
 """
 
 import asyncio
-import logging
+import structlog
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -18,7 +18,7 @@ from app.core.workers.meta_agent_worker import process_meta_agent_cycle
 from app.core.workers.neural_training_worker import process_neural_training_task
 from app.models.schemas import QueueName
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class _QueueRule:
@@ -134,15 +134,14 @@ async def _ensure_consumers(queue_name: str, target_ours: int, rule: _QueueRule)
                 prefetch_count=rule.prefetch_per_consumer,
             )
             lst.append(t)
-        logger.info(
-            f"Auto-Scaler: adicionados {to_start} consumidores em '{queue_name}' (prefetch={rule.prefetch_per_consumer})."
+        logger.info("log_info", message=f"Auto-Scaler: adicionados {to_start} consumidores em '{queue_name}' (prefetch={rule.prefetch_per_consumer})."
         )
     elif len(lst) > target_ours:
         to_stop = len(lst) - target_ours
         for _ in range(to_stop):
             t = lst.pop()
             t.cancel()
-        logger.info(f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'.")
+        logger.info("log_info", message=f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'.")
 
 
 async def _scale_once() -> None:
@@ -175,7 +174,7 @@ async def _scale_once() -> None:
             target_ours = max(0, desired_total - others)
             await _ensure_consumers(qname, target_ours, rule)
         except Exception as e:
-            logger.error(f"Auto-Scaler: erro ao escalar fila '{qname}': {e}", exc_info=True)
+            logger.error("log_error", message=f"Auto-Scaler: erro ao escalar fila '{qname}': {e}", exc_info=True)
 
 
 async def start_auto_scaler(poll_interval_seconds: int | None = None) -> asyncio.Task:
@@ -185,7 +184,7 @@ async def start_auto_scaler(poll_interval_seconds: int | None = None) -> asyncio
     )
 
     async def _loop():
-        logger.info(f"Iniciando Auto-Scaler de filas (intervalo={interval}s)...")
+        logger.info("log_info", message=f"Iniciando Auto-Scaler de filas (intervalo={interval}s)...")
         try:
             while True:
                 await _scale_once()

@@ -1,4 +1,4 @@
-import logging
+import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
@@ -22,7 +22,7 @@ from .router import get_llm
 from .sanitizer import ContentSanitizer
 from .types import ModelPriority, ModelRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 try:
     from langchain_ollama import ChatOllama
@@ -149,12 +149,11 @@ class LLMClient:
                 is_quota = True
 
             if is_quota:
-                logger.warning(
-                    f"Quota Exceeded for {self.provider}/{self.model}. Marking as exhausted for day."
+                logger.warning("log_warning", message=f"Quota Exceeded for {self.provider}/{self.model}. Marking as exhausted for day."
                 )
                 get_rate_limiter().mark_exhausted_for_day(self.provider, self.model)
         except Exception as e:
-            logger.error(f"Error handling rate limit: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error handling rate limit: {e}", exc_info=True)
 
     def _run_async(self, coro):
         import asyncio
@@ -199,7 +198,7 @@ class LLMClient:
 
         cached_entry = response_cache.get(prompt, self.role.value, priority_val)
         if cached_entry:
-            logger.info(f"LLM Cache HIT for {self.provider}/{self.model}")
+            logger.info("log_info", message=f"LLM Cache HIT for {self.provider}/{self.model}")
             return cached_entry["response"]
 
         self._validate_prompt(prompt)
@@ -219,7 +218,7 @@ class LLMClient:
         try:
             circuit_breaker.update_params(recovery_timeout=int(max(1, timeout)))
         except Exception as e:
-            logger.warning(f"Failed to update circuit breaker params: {e}")
+            logger.warning("log_warning", message=f"Failed to update circuit breaker params: {e}")
 
         # Decorate the adapter-based invoke
         decorated_invoke = resilient(
@@ -239,8 +238,7 @@ class LLMClient:
 
             allowed_out = self._run_async(self._compute_output_limit(prompt))
             if allowed_out < 1:
-                logger.warning(
-                    f"Orçamento insuficiente para {self.provider} (tokens={allowed_out}). Acionando fallback."
+                logger.warning("log_warning", message=f"Orçamento insuficiente para {self.provider} (tokens={allowed_out}). Acionando fallback."
                 )
                 raise RuntimeError(f"Orçamento insuficiente ou esgotado para {self.provider}.")
 
@@ -354,9 +352,9 @@ class LLMClient:
                 try:
                     register_usage(self.provider, self.user_id, self.project_id, cost)
                 except Exception as e:
-                    logger.warning(f"Failed to register LLM usage cost: {e}")
+                    logger.warning("log_warning", message=f"Failed to register LLM usage cost: {e}")
             except Exception as e:
-                logger.warning(f"Failed to cache LLM response: {e}")
+                logger.warning("log_warning", message=f"Failed to cache LLM response: {e}")
 
             # 3. Register usage with rate limiter
             try:
@@ -365,7 +363,7 @@ class LLMClient:
                     self.provider, self.model, tokens=tokens_total, requests=1
                 )
             except Exception as e:
-                logger.debug(f"Failed to register rate limit usage: {e}")
+                logger.debug("log_debug", message=f"Failed to register rate limit usage: {e}")
 
             return sanitized_text
 
@@ -384,7 +382,7 @@ class LLMClient:
             LLM_REQUESTS.labels(
                 self.provider, self.model, self.role.value, "failure", type(e).__name__
             ).inc()
-            logger.warning(f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
+            logger.warning("log_warning", message=f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
 
             # Fallback to Ollama if configured and current provider is not already Ollama
             should_fallback = (
@@ -428,7 +426,7 @@ class LLMClient:
                     # _health_check_ollama is sync, run in thread
                     # For simplicity, just run it sync as fallback is rare
                     if _health_check_ollama(fallback_llm, timeout_s=120):
-                        logger.info(f"Fallback Ollama ({fallback_model}) saudável. Invocando...")
+                        logger.info("log_info", message=f"Fallback Ollama ({fallback_model}) saudável. Invocando...")
                         result = fallback_llm.invoke(prompt)
 
                         # Process success equivalent to main flow
@@ -444,7 +442,7 @@ class LLMClient:
                         logger.warning("Fallback Ollama falhou no health check.")
 
                 except Exception as fb_err:
-                    logger.error(f"Falha crítica no fallback Ollama: {fb_err}")
+                    logger.error("log_error", message=f"Falha crítica no fallback Ollama: {fb_err}")
 
             # If fallback didn't return, re-raise original exception
             raise

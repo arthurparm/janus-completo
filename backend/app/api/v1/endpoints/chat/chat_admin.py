@@ -51,7 +51,7 @@ async def chat_health(service: ChatService = Depends(get_chat_service)):
             "total_conversations": total_conversations,
         }
     except Exception as e:
-        logger.error(f"Health check failed: {e}", exc_info=True)
+        logger.error("log_error", message=f"Health check failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Chat service unhealthy"
         )

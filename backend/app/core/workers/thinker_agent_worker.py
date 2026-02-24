@@ -5,8 +5,7 @@ Consome a fila JANUS.tasks.agent.thinker.
 Este agente atua antes do CodeAgent, usando modelos de raciocínio (como DeepSeek R1)
 para planejar a arquitetura e a lógica antes de qualquer código ser escrito.
 """
-
-import logging
+import structlog
 from datetime import datetime
 
 from app.core.infrastructure.message_broker import get_broker
@@ -19,7 +18,7 @@ from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _build_thinking_prompt(state: TaskState) -> str:
@@ -79,7 +78,7 @@ async def process_thinker_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error(f"ThinkerAgent falhou: {e}", exc_info=True)
+        logger.error("log_error", message=f"ThinkerAgent falhou: {e}", exc_info=True)
         raise
 
 

@@ -127,7 +127,7 @@ class CodeAnalysisService:
             parser.visit(tree)
             return parser
         except Exception as e:
-            logger.error(f"Falha ao fazer o parse do arquivo {file_path}", exc_info=e)
+            logger.error("log_error", message=f"Falha ao fazer o parse do arquivo {file_path}", exc_info=e)
             return None
 
     def find_python_files(self, directory: str) -> list[str]:

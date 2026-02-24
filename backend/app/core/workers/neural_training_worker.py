@@ -3,8 +3,7 @@ Async Neural Training Worker
 
 Consumes training tasks from RabbitMQ and triggers LearningRepository training process.
 """
-
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -14,7 +13,7 @@ from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage
 from app.repositories.learning_repository import LearningRepository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @protect_against_poison_pills(
@@ -35,12 +34,10 @@ async def process_neural_training_task(task: TaskMessage) -> None:
             model_name=model_name,
             training_params=training_params,
         )
-        logger.info(
-            f"✓ Neural training task completed: task_id={task.task_id}, summary={str(summary)[:200]}"
+        logger.info("log_info", message=f"✓ Neural training task completed: task_id={task.task_id}, summary={str(summary)[:200]}"
         )
     except Exception as e:
-        logger.error(
-            f"Neural training task failed: task_id={task.task_id}, error={e}",
+        logger.error("log_error", message=f"Neural training task failed: task_id={task.task_id}, error={e}",
             exc_info=True,
         )
         raise
@@ -70,8 +67,7 @@ async def publish_neural_training_task(
     serialized = task_message.model_dump_json()
     broker = await get_broker()
     await broker.publish(queue_name=QueueName.NEURAL_TRAINING.value, message=serialized)
-    logger.info(
-        f"Published neural training task: task_id={task_id}, model={model_name}, dataset={dataset_version}"
+    logger.info("log_info", message=f"Published neural training task: task_id={task_id}, model={model_name}, dataset={dataset_version}"
     )
     return task_id
 

@@ -1,4 +1,4 @@
-import logging
+import structlog
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
@@ -47,7 +47,7 @@ except Exception:
 
         pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Pool de executores por provedor
 _llm_executors: dict[str, ThreadPoolExecutor] = {}
@@ -112,7 +112,7 @@ def _get_openai_http_client() -> httpx.Client:
                         provider, model, dict(response.headers)
                     )
             except Exception as e:
-                logger.warning(f"Erro no hook de rate limit: {e}")
+                logger.warning("log_warning", message=f"Erro no hook de rate limit: {e}")
 
         _openai_http_client = httpx.Client(
             limits=limits, timeout=timeout, event_hooks={"response": [_rate_limit_hook]}
@@ -170,16 +170,14 @@ def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     try:
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ollama_health")
         model_name = getattr(llm, "model", "unknown")
-        logger.debug(
-            f"Iniciando health check do Ollama para modelo: {model_name} (timeout={timeout_s}s)"
+        logger.debug("log_debug", message=f"Iniciando health check do Ollama para modelo: {model_name} (timeout={timeout_s}s)"
         )
         future = executor.submit(llm.invoke, "ping")
         future.result(timeout=timeout_s)
         logger.debug("Health check Ollama passou.")
         return True
     except Exception as e:
-        logger.error(
-            f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError)
+        logger.error("log_error", message=f"Health check Ollama falhou: {e}", exc_info=isinstance(e, FuturesTimeoutError)
         )
         return False
     finally:
@@ -308,7 +306,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
             except Exception:
                 pass
         except Exception as e:
-            logger.warning(f"Failed to warm up LLM pool for spec '{spec}': {e}")
+            logger.warning("log_warning", message=f"Failed to warm up LLM pool for spec '{spec}': {e}")
     return warmed
 
 

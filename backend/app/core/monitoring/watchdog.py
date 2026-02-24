@@ -36,7 +36,7 @@ class Watchdog:
         """
         self._heartbeats[name] = time.time()  # Start assuming alive
         self._thresholds[name] = timeout_seconds
-        logger.info(f"Watchdog: Registered '{name}' with timeout {timeout_seconds}s")
+        logger.info("log_info", message=f"Watchdog: Registered '{name}' with timeout {timeout_seconds}s")
 
     def beat(self, name: str):
         """
@@ -66,8 +66,7 @@ class Watchdog:
             for name, last_time in self._heartbeats.items():
                 timeout = self._thresholds.get(name, 60.0)
                 if now - last_time > timeout:
-                    logger.critical(
-                        f"WATCHDOG ALERT: Component '{name}' froze! Last beat: {now - last_time:.2f}s ago. Limit: {timeout}s."
+                    logger.critical("log_critical", message=f"WATCHDOG ALERT: Component '{name}' froze! Last beat: {now - last_time:.2f}s ago. Limit: {timeout}s."
                     )
                     try:
                         # Attempt to dump threads? traceback?

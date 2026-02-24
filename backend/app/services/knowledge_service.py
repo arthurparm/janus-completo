@@ -96,7 +96,7 @@ class KnowledgeService:
         return stats
 
     async def index_codebase(self) -> dict[str, Any]:
-        logger.info(f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
+        logger.info("log_info", message=f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
         await self._repo.clear_code_entities()
 
         python_files = code_analysis_service.find_python_files(CODEBASE_DIR)

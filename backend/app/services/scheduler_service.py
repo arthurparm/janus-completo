@@ -153,8 +153,7 @@ class SchedulerService:
         self._jobs[name] = job
         SCHEDULER_ACTIVE_JOBS.set(len([j for j in self._jobs.values() if j.enabled]))
 
-        logger.info(
-            f"Job '{name}' registrado",
+        logger.info("log_info", message=f"Job '{name}' registrado",
             schedule_type=schedule_type.value,
             next_run=job.next_run.isoformat(),
         )
@@ -166,7 +165,7 @@ class SchedulerService:
         if name in self._jobs:
             del self._jobs[name]
             SCHEDULER_ACTIVE_JOBS.set(len([j for j in self._jobs.values() if j.enabled]))
-            logger.info(f"Job '{name}' removido")
+            logger.info("log_info", message=f"Job '{name}' removido")
             return True
         return False
 
@@ -257,13 +256,13 @@ class SchedulerService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Erro no scheduler loop: {e}")
+                logger.error("log_error", message=f"Erro no scheduler loop: {e}")
                 await asyncio.sleep(self._check_interval)
 
     async def _execute_job(self, job: ScheduledJob):
         """Executa um job específico."""
         try:
-            logger.info(f"Executando job '{job.name}'")
+            logger.info("log_info", message=f"Executando job '{job.name}'")
 
             await job.callback()
 
@@ -274,7 +273,7 @@ class SchedulerService:
             SCHEDULER_JOBS_TOTAL.labels(job_name=job.name, status="success").inc()
             SCHEDULER_LAST_RUN.labels(job_name=job.name).set(job.last_run.timestamp())
 
-            logger.info(f"Job '{job.name}' executado com sucesso", run_count=job.run_count)
+            logger.info("log_info", message=f"Job '{job.name}' executado com sucesso", run_count=job.run_count)
 
         except Exception as e:
             job.error_count += 1
@@ -282,7 +281,7 @@ class SchedulerService:
 
             SCHEDULER_JOBS_TOTAL.labels(job_name=job.name, status="error").inc()
 
-            logger.error(f"Erro ao executar job '{job.name}': {e}")
+            logger.error("log_error", message=f"Erro ao executar job '{job.name}': {e}")
 
     def get_status(self) -> dict[str, Any]:
         """Retorna o status do scheduler."""
@@ -333,7 +332,7 @@ async def initialize_default_jobs(scheduler: SchedulerService):
             agent = get_meta_agent()
             await agent.run_analysis_cycle(trigger={"mode": "scheduled_heartbeat", "source": "scheduler"})
         except Exception as e:
-            logger.error(f"MetaAgent analysis failed: {e}")
+            logger.error("log_error", message=f"MetaAgent analysis failed: {e}")
 
     scheduler.register_job(
         name="meta_agent_analysis",
@@ -352,7 +351,7 @@ async def initialize_default_jobs(scheduler: SchedulerService):
                 if isawaitable(result):
                     await result
         except Exception as e:
-            logger.error(f"Memory health check failed: {e}")
+            logger.error("log_error", message=f"Memory health check failed: {e}")
 
     scheduler.register_job(
         name="memory_health_check",
@@ -386,7 +385,7 @@ async def initialize_default_jobs(scheduler: SchedulerService):
             fetcher.fetch_and_update_limits()
             logger.info("Gemini quotas updated successfully.")
         except Exception as e:
-            logger.error(f"Failed to update Gemini quotas: {e}")
+            logger.error("log_error", message=f"Failed to update Gemini quotas: {e}")
 
     scheduler.register_job(
         name="update_gemini_quotas",
@@ -396,4 +395,4 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         metadata={"description": "Atualização de cotas da API Gemini via Google Cloud Monitoring"},
     )
 
-    logger.info(f"Jobs padrão registrados: {len(scheduler.list_jobs())}")
+    logger.info("log_info", message=f"Jobs padrão registrados: {len(scheduler.list_jobs())}")

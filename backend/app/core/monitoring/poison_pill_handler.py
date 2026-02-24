@@ -4,8 +4,7 @@ Poison Pill Handler para gestão robusta de mensagens/tarefas problemáticas (Sp
 Implementa detecção e isolamento de "poison pills" - mensagens que causam
 falhas repetidas e podem travar o sistema.
 """
-
-import logging
+import structlog
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,7 +13,7 @@ from typing import Any
 
 from prometheus_client import Counter, Gauge
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Métricas ---
 POISON_PILL_DETECTED = Counter(
@@ -106,8 +105,7 @@ class PoisonPillHandler:
             lambda: {"total_failures": 0, "total_quarantined": 0, "consecutive_failures": 0}
         )
 
-        logger.info(
-            f"PoisonPillHandler inicializado: "
+        logger.info("log_info", message=f"PoisonPillHandler inicializado: "
             f"threshold={failure_threshold}, "
             f"consecutive_threshold={consecutive_failure_threshold}"
         )
@@ -141,8 +139,7 @@ class PoisonPillHandler:
         self.queue_stats[queue]["total_failures"] += 1
         self.queue_stats[queue]["consecutive_failures"] += 1
 
-        logger.warning(
-            f"Falha registrada para mensagem {message_id} na fila {queue}: "
+        logger.warning("log_warning", message=f"Falha registrada para mensagem {message_id} na fila {queue}: "
             f"count={record.failure_count}, error={error_type}"
         )
 
@@ -170,7 +167,7 @@ class PoisonPillHandler:
         # Resetar falhas consecutivas
         self.queue_stats[queue]["consecutive_failures"] = 0
 
-        logger.debug(f"Sucesso registrado para mensagem {message_id} na fila {queue}")
+        logger.debug("log_debug", message=f"Sucesso registrado para mensagem {message_id} na fila {queue}")
 
     def _check_poison_pill(self, record: FailureRecord) -> bool:
         """
@@ -216,8 +213,7 @@ class PoisonPillHandler:
         POISON_PILL_QUARANTINED.labels(queue=record.queue).inc()
         POISON_PILL_IN_QUARANTINE.labels(queue=record.queue).inc()
 
-        logger.error(
-            f"Mensagem {record.message_id} colocada em QUARENTENA: "
+        logger.error("log_error", message=f"Mensagem {record.message_id} colocada em QUARENTENA: "
             f"queue={record.queue}, reason={reason}, failures={record.failure_count}"
         )
 
@@ -263,8 +259,7 @@ class PoisonPillHandler:
 
         POISON_PILL_IN_QUARANTINE.labels(queue=msg.queue).dec()
 
-        logger.info(
-            f"Mensagem {message_id} LIBERADA da quarentena: "
+        logger.info("log_info", message=f"Mensagem {message_id} LIBERADA da quarentena: "
             f"queue={msg.queue}, allow_retry={allow_retry}"
         )
 
@@ -287,8 +282,7 @@ class PoisonPillHandler:
         for msg_id in expired_ids:
             msg = self.release_from_quarantine(msg_id, allow_retry=self.enable_auto_retry)
             if msg:
-                logger.info(
-                    f"Quarentena expirada para {msg_id}: "
+                logger.info("log_info", message=f"Quarentena expirada para {msg_id}: "
                     f"duration={(now - msg.quarantined_at).total_seconds():.0f}s"
                 )
 
@@ -382,12 +376,12 @@ def protect_against_poison_pills(queue_name: str, extract_message_id: Callable[[
             try:
                 message_id = extract_message_id(args[0] if args else kwargs)
             except Exception as e:
-                logger.error(f"Erro ao extrair message_id: {e}")
+                logger.error("log_error", message=f"Erro ao extrair message_id: {e}")
                 return await func(*args, **kwargs)
 
             # Verificar se está em quarentena
             if handler.is_quarantined(message_id):
-                logger.warning(f"Mensagem {message_id} está em QUARENTENA, pulando processamento")
+                logger.warning("log_warning", message=f"Mensagem {message_id} está em QUARENTENA, pulando processamento")
                 return None
 
             # Tentar processar

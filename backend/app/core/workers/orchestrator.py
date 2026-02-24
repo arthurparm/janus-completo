@@ -4,14 +4,13 @@ Orquestrador de Workers
 Centraliza a inicialização de todos os workers e tarefas em background
 usando imports lazy para evitar ciclos de importação.
 """
-
-import logging
+import structlog
 from dataclasses import dataclass
 from typing import Any
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 WORKER_NAMES: list[str] = [
     "memory_maintenance",
@@ -169,5 +168,5 @@ async def start_all_workers():
     codex_worker = await start_codex_worker()
     workers.append(codex_worker)
 
-    logger.info(f"✓ {len(workers)} workers iniciados pelo orquestrador.")
+    logger.info("log_info", message=f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

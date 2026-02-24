@@ -5,7 +5,7 @@ Consumes agent task messages from RabbitMQ and runs the agent asynchronously.
 """
 
 import asyncio
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -21,7 +21,7 @@ from app.core.infrastructure.resilience import CircuitBreaker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # Bulkheads e Circuitos por agente
@@ -109,13 +109,12 @@ async def process_agent_task(task: TaskMessage) -> None:
 
             result = await circuit.call_async(_execute)
 
-            logger.info(
-                f"\u2713 Agent task completed: task_id={task.task_id}, type={agent_type}, result={str(result)[:200]}"
+            logger.info("log_info", message=f"\u2713 Agent task completed: task_id={task.task_id}, type={agent_type}, result={str(result)[:200]}"
             )
         finally:
             bulkhead.release()
     except Exception as e:
-        logger.error(f"Agent task failed: task_id={task.task_id}, error={e}", exc_info=True)
+        logger.error("log_error", message=f"Agent task failed: task_id={task.task_id}, error={e}", exc_info=True)
         raise
 
 
@@ -139,7 +138,7 @@ async def publish_agent_task(question: str, agent_type: AgentType | str) -> str:
         queue_name=QueueName.AGENT_TASKS.value, message=serialized, use_msgpack=True
     )
 
-    logger.info(f"Published agent task: task_id={task_id}, type={payload['agent_type']}")
+    logger.info("log_info", message=f"Published agent task: task_id={task_id}, type={payload['agent_type']}")
     return task_id
 
 

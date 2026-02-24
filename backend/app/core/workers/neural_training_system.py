@@ -16,7 +16,7 @@ Funcionalidades:
 
 import asyncio
 import json
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,7 +30,7 @@ from app.core.infrastructure.prompt_loader import PROMPTS_DIR
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _PROMPT_CACHE: dict[str, str] = {}
 
@@ -181,7 +181,7 @@ class DatasetPreparator:
                 completion = content
                 dataset.append({"prompt": prompt, "completion": completion})
 
-        logger.info(f"[DatasetPreparator] Preparados {len(dataset)} exemplos para LLM fine-tuning")
+        logger.info("log_info", message=f"[DatasetPreparator] Preparados {len(dataset)} exemplos para LLM fine-tuning")
         return dataset
 
     def prepare_for_classification(
@@ -203,7 +203,7 @@ class DatasetPreparator:
             texts.append(content)
             labels.append(exp_type)
 
-        logger.info(f"[DatasetPreparator] Preparados {len(texts)} exemplos para classificação")
+        logger.info("log_info", message=f"[DatasetPreparator] Preparados {len(texts)} exemplos para classificação")
         return texts, labels
 
     def prepare_for_prediction(self, experiences: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -226,7 +226,7 @@ class DatasetPreparator:
 
             dataset.append({"context": context_text, "next_action": next_action.get("content", "")})
 
-        logger.info(f"[DatasetPreparator] Preparados {len(dataset)} exemplos para predição")
+        logger.info("log_info", message=f"[DatasetPreparator] Preparados {len(dataset)} exemplos para predição")
         return dataset
 
 
@@ -262,7 +262,7 @@ class NeuralTrainer:
         start_time = time.perf_counter()
 
         try:
-            logger.info(f"[NeuralTrainer] Iniciando treinamento: {config.model_name}")
+            logger.info("log_info", message=f"[NeuralTrainer] Iniciando treinamento: {config.model_name}")
 
             # 1. Carrega dados de treino
             experiences = await self._load_training_data(config)
@@ -308,11 +308,11 @@ class NeuralTrainer:
             # Memoriza resultado
             await self._memorize_training(config, result)
 
-            logger.info(f"[NeuralTrainer] Treinamento concluído: {result.status.value}")
+            logger.info("log_info", message=f"[NeuralTrainer] Treinamento concluído: {result.status.value}")
             return result
 
         except Exception as e:
-            logger.error(f"[NeuralTrainer] Erro no treinamento: {e}", exc_info=True)
+            logger.error("log_error", message=f"[NeuralTrainer] Erro no treinamento: {e}", exc_info=True)
             _TRAINING_JOBS.labels(config.model_type.value, "error").inc()
 
             return TrainingResult(
@@ -330,7 +330,7 @@ class NeuralTrainer:
                 logger.info("[NeuralTrainer] Carregando dados de training_data.jsonl")
                 content = read_file("workspace/training_data.jsonl")
                 if content.startswith("Erro:"):
-                    logger.warning(f"Falha ao ler training_data.jsonl: {content}")
+                    logger.warning("log_warning", message=f"Falha ao ler training_data.jsonl: {content}")
                     return []
 
                 experiences = []
@@ -347,7 +347,7 @@ class NeuralTrainer:
                     except Exception:
                         continue
 
-                logger.info(f"[NeuralTrainer] Carregados {len(experiences)} exemplos do arquivo")
+                logger.info("log_info", message=f"[NeuralTrainer] Carregados {len(experiences)} exemplos do arquivo")
                 return experiences
 
             query = "experiência de uso de ferramentas e aprendizado"
@@ -359,11 +359,11 @@ class NeuralTrainer:
                     e for e in experiences if str(e.get("metadata", {}).get("user_id", "")) == uid
                 ]
 
-            logger.info(f"[NeuralTrainer] Carregadas {len(experiences)} experiências para treino")
+            logger.info("log_info", message=f"[NeuralTrainer] Carregadas {len(experiences)} experiências para treino")
             return experiences
 
         except Exception as e:
-            logger.error(f"[NeuralTrainer] Erro ao carregar dados: {e}", exc_info=True)
+            logger.error("log_error", message=f"[NeuralTrainer] Erro ao carregar dados: {e}", exc_info=True)
             return []
 
     def _prepare_dataset(self, model_type: ModelType, experiences: list[dict[str, Any]]) -> Any:
@@ -387,7 +387,7 @@ class NeuralTrainer:
         - Scikit-learn (para classificadores)
         - PyTorch/TensorFlow (para modelos customizados)
         """
-        logger.info(f"[NeuralTrainer] Treinando modelo {config.model_name}...")
+        logger.info("log_info", message=f"[NeuralTrainer] Treinando modelo {config.model_name}...")
 
         # Simula treinamento
         await asyncio.sleep(2)  # Em produção: loop de treinamento real
@@ -409,7 +409,7 @@ class NeuralTrainer:
 
     async def _validate(self, config: TrainingConfig, result: TrainingResult) -> TrainingResult:
         """Valida performance do modelo em dataset de validação."""
-        logger.info(f"[NeuralTrainer] Validando modelo {config.model_name}...")
+        logger.info("log_info", message=f"[NeuralTrainer] Validando modelo {config.model_name}...")
 
         # Simula validação
         await asyncio.sleep(1)
@@ -421,7 +421,7 @@ class NeuralTrainer:
 
     async def _save_model(self, config: TrainingConfig, result: TrainingResult) -> TrainingResult:
         """Salva modelo treinado em disco."""
-        logger.info(f"[NeuralTrainer] Salvando modelo {config.model_name}...")
+        logger.info("log_info", message=f"[NeuralTrainer] Salvando modelo {config.model_name}...")
 
         # Cria o diretório apenas no momento de uso para evitar side effects em import-time
         # (ex.: ambientes de CI sem permissão de escrita em /app).
@@ -449,7 +449,7 @@ class NeuralTrainer:
         write_file(metadata_file, json.dumps(metadata, indent=2))
 
         result.metadata["model_path"] = str(model_path)
-        logger.info(f"[NeuralTrainer] Modelo salvo em: {model_path}")
+        logger.info("log_info", message=f"[NeuralTrainer] Modelo salvo em: {model_path}")
 
         return result
 
@@ -474,7 +474,7 @@ class NeuralTrainer:
                 )
             )
         except Exception as e:
-            logger.warning(f"Falha ao memorizar treino: {e}")
+            logger.warning("log_warning", message=f"Falha ao memorizar treino: {e}")
 
 
 # ==================== INSTÂNCIA GLOBAL ====================

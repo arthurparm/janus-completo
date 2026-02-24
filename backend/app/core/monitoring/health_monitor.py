@@ -6,7 +6,7 @@ diagnósticos detalhados para operação contínua.
 """
 
 import asyncio
-import logging
+import structlog
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,7 +18,7 @@ from prometheus_client import Gauge, Histogram, Info
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Métricas ---
 COMPONENT_HEALTH = Gauge(
@@ -160,7 +160,7 @@ class HealthMonitor:
             is_critical: Se True, falha afeta saúde geral do sistema
         """
         self.health_checks[component] = {"func": check_func, "is_critical": is_critical}
-        logger.info(f"Health check registrado: {component} (critical={is_critical})")
+        logger.info("log_info", message=f"Health check registrado: {component} (critical={is_critical})")
 
     async def check_component(self, component: str) -> HealthCheckResult:
         """
@@ -216,7 +216,7 @@ class HealthMonitor:
 
         except TimeoutError:
             duration = asyncio.get_event_loop().time() - start_time
-            logger.error(f"Health check timeout para {component}")
+            logger.error("log_error", message=f"Health check timeout para {component}")
 
             return HealthCheckResult(
                 component=component,
@@ -230,7 +230,7 @@ class HealthMonitor:
 
         except Exception as e:
             duration = asyncio.get_event_loop().time() - start_time
-            logger.error(f"Erro no health check de {component}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro no health check de {component}: {e}", exc_info=True)
 
             return HealthCheckResult(
                 component=component,
@@ -257,7 +257,7 @@ class HealthMonitor:
 
         for component, result in zip(tasks.keys(), completed):
             if isinstance(result, Exception):
-                logger.error(f"Exceção ao verificar {component}: {result}")
+                logger.error("log_error", message=f"Exceção ao verificar {component}: {result}")
                 results[component] = HealthCheckResult(
                     component=component,
                     status=HealthStatus.UNHEALTHY,
@@ -363,14 +363,14 @@ class HealthMonitor:
         self.check_interval_seconds = interval_seconds
 
         async def monitoring_loop():
-            logger.info(f"Monitoramento iniciado (intervalo={interval_seconds}s)")
+            logger.info("log_info", message=f"Monitoramento iniciado (intervalo={interval_seconds}s)")
 
             while True:
                 try:
                     await self.check_all_components()
                     await asyncio.sleep(interval_seconds)
                 except Exception as e:
-                    logger.error(f"Erro no loop de monitoramento: {e}", exc_info=True)
+                    logger.error("log_error", message=f"Erro no loop de monitoramento: {e}", exc_info=True)
                     await asyncio.sleep(interval_seconds)
 
         self._monitoring_task = asyncio.create_task(monitoring_loop())

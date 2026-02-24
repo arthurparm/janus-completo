@@ -297,7 +297,7 @@ class CollaborationService:
                         origin_agent = ar
                         break
             except Exception as e:
-                logger.warning(f"Falha ao determinar agente de origem: {e}")
+                logger.warning("log_warning", message=f"Falha ao determinar agente de origem: {e}")
                 origin_agent = None
             meta = {
                 "source_task_id": task_state.task_id,

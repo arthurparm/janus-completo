@@ -1,4 +1,4 @@
-import logging
+import structlog
 import random
 from typing import Any
 
@@ -30,7 +30,7 @@ from .rate_limiter import get_rate_limiter
 from .resilience import _add_to_pool, _circuit_closed, _get_from_pool
 from .types import ModelPriority, ModelRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 try:
     from langchain_openai import ChatOpenAI
@@ -159,7 +159,7 @@ def _create_openai_model(
     if _model_supports_temperature(model):
         kwargs["temperature"] = temperature
     else:
-        logger.debug(f"Model {model} doesn't support temperature, omitting it")
+        logger.debug("log_debug", message=f"Model {model} doesn't support temperature, omitting it")
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
     return _create_openai_compatible_chat(**kwargs)
@@ -232,15 +232,14 @@ async def get_llm(
                     ollama_kwargs_override["keep_alive"] = keep_alive
 
     except Exception as e:
-        logger.warning(f"Error applying LLM overrides from config: {e}", exc_info=True)
+        logger.warning("log_warning", message=f"Error applying LLM overrides from config: {e}", exc_info=True)
         # Continue to default selection logic
 
     # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spending exceeds threshold
     # Except for HIGH_QUALITY priority (critical tasks that need cloud models)
     if priority != ModelPriority.LOCAL_ONLY and priority != ModelPriority.HIGH_QUALITY:
         if await is_total_budget_threshold_exceeded():
-            logger.warning(
-                f"Budget guardrail activated! Forcing LOCAL_ONLY for role={role.value}, "
+            logger.warning("log_warning", message=f"Budget guardrail activated! Forcing LOCAL_ONLY for role={role.value}, "
                 f"original_priority={priority.value}"
             )
             priority = ModelPriority.LOCAL_ONLY
@@ -419,14 +418,13 @@ async def get_llm(
             if not _health_check_ollama(llm, timeout_s=settings.LLM_DEFAULT_TIMEOUT_SECONDS * 3):
                 raise RuntimeError(f"Health check falhou para modelo '{local_model_name}'")
 
-            logger.info(f"Modelo local '{local_model_name}' inicializado com sucesso.")
+            logger.info("log_info", message=f"Modelo local '{local_model_name}' inicializado com sucesso.")
             LLM_ROUTER_COUNTER.labels(role.value, priority.value, local_model_name, "ollama").inc()
             if pool_allowed:
                 _add_to_pool("ollama", local_model_name, llm)
             return llm
         except Exception as e:
-            logger.error(
-                f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True
+            logger.error("log_error", message=f"Falha crítica ao carregar modelo local para LOCAL_ONLY: {e}", exc_info=True
             )
             raise RuntimeError(f"Falha crítica ao carregar modelo local. Causa: {e}") from e
 
@@ -538,7 +536,7 @@ async def get_llm(
                 provider_key, model_name = spec.split(":", 1)
                 role_candidates_map.setdefault(provider_key.strip(), set()).add(model_name.strip())
             except Exception:
-                logger.warning(f"Spec de candidato inválido: '{spec}' — esperado 'provider:model'")
+                logger.warning("log_warning", message=f"Spec de candidato inválido: '{spec}' — esperado 'provider:model'")
 
         candidates = []
         for p in cloud_catalog:
@@ -569,8 +567,7 @@ async def get_llm(
                 rate_limiter = get_rate_limiter()
                 if not rate_limiter.is_available(provider_key, model_name):
                     availability = rate_limiter.get_availability(provider_key, model_name)
-                    logger.info(
-                        f"Modelo {provider_key}:{model_name} indisponível por rate limit "
+                    logger.info("log_info", message=f"Modelo {provider_key}:{model_name} indisponível por rate limit "
                         f"(uso={availability['usage_percent']:.1%})"
                     )
                     continue
@@ -620,8 +617,7 @@ async def get_llm(
                 if expected_cost <= max_cost:
                     filtered.append(c)
                 else:
-                    logger.info(
-                        f"Candidato filtrado por custo: {c['provider_key']}:{c['model_name']} (expected_cost={expected_cost:.4f} > max_cost={max_cost:.4f}, role={role_key})"
+                    logger.info("log_info", message=f"Candidato filtrado por custo: {c['provider_key']}:{c['model_name']} (expected_cost={expected_cost:.4f} > max_cost={max_cost:.4f}, role={role_key})"
                     )
 
             candidates = (
@@ -697,18 +693,15 @@ async def get_llm(
                     LLM_EXPLORATION_DECISIONS.labels(role=role.value, priority=priority.value).inc()
                 except Exception:
                     pass
-                logger.info(
-                    f"Exploração ativada (p={explore_p:.2f}). Priorizando candidato alternativo index={alt_idx}."
+                logger.info("log_info", message=f"Exploração ativada (p={explore_p:.2f}). Priorizando candidato alternativo index={alt_idx}."
                 )
 
             for score, cand in scored:
-                logger.info(
-                    f"Estratégia {priority.value}: Tentando {cand['provider_key']}:{cand['model_name']} (score={score:.3f}, cost_1k={cand['cost_per_1k']:.3f}, avg_lat={cand['stats'].avg_latency:.3f})"
+                logger.info("log_info", message=f"Estratégia {priority.value}: Tentando {cand['provider_key']}:{cand['model_name']} (score={score:.3f}, cost_1k={cand['cost_per_1k']:.3f}, avg_lat={cand['stats'].avg_latency:.3f})"
                 )
                 try:
                     llm = cand["initializer_factory"](cand["model_name"])
-                    logger.info(
-                        f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso."
+                    logger.info("log_info", message=f"LLM '{cand['provider_key']}:{cand['model_name']}' inicializado com sucesso."
                     )
                     LLM_ROUTER_COUNTER.labels(
                         role.value, priority.value, cand["model_name"], cand["provider_key"]
@@ -717,8 +710,7 @@ async def get_llm(
                         _add_to_pool(cand["provider_key"], cand["model_name"], llm)
                     return llm
                 except Exception as e:
-                    logger.warning(
-                        f"Falha ao inicializar '{cand['provider_key']}:{cand['model_name']}' (score={score:.3f}): {e}",
+                    logger.warning("log_warning", message=f"Falha ao inicializar '{cand['provider_key']}:{cand['model_name']}' (score={score:.3f}): {e}",
                         exc_info=True,
                     )
 
@@ -743,8 +735,7 @@ async def get_llm(
             _add_to_pool("ollama", local_model_name, llm)
         return llm
     except Exception as e:
-        logger.critical(
-            f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}",
+        logger.critical("log_critical", message=f"FALHA CRÍTICA: Nenhum provedor de LLM pôde ser inicializado. Erro final: {e}",
             exc_info=True,
         )
         raise RuntimeError("Sistema inoperável: nenhum LLM disponível.") from e

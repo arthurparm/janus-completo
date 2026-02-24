@@ -224,7 +224,7 @@ async def generate_semantic_commit(
                         "diff_chars": len(diff),
                     }
                 except Exception as e:
-                    logger.warning(f"Attempt {attempt + 1} failed for semantic commit: {e}")
+                    logger.warning("log_warning", message=f"Attempt {attempt + 1} failed for semantic commit: {e}")
                     last_error = e
                     await asyncio.sleep(1)  # exponential backoff if needed
 

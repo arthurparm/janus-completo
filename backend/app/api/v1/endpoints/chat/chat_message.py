@@ -137,7 +137,7 @@ async def send_message(
                 }
             )
     except Exception as e:
-        logger.warning(f"Failed to retrieve citations for message: {e}")
+        logger.warning("log_warning", message=f"Failed to retrieve citations for message: {e}")
         citations = []
     result["citations"] = citations
 

@@ -52,7 +52,7 @@ class SystemStatusService:
             rss_mb = float(p.memory_info().rss) / (1024 * 1024)
             proc_info["rss_mb"] = round(rss_mb, 2)
         except Exception as e:
-            logger.debug(f"Failed to get process info: {e}")
+            logger.debug("log_debug", message=f"Failed to get process info: {e}")
 
         # Métricas de performance (CPU/Memória), se psutil disponível
         perf: dict[str, float | None] = {}
@@ -62,7 +62,7 @@ class SystemStatusService:
             perf["cpu_percent"] = float(psutil.cpu_percent(interval=0.0))
             perf["memory_percent"] = float(psutil.virtual_memory().percent)
         except Exception as e:
-            logger.debug(f"Failed to get system performance metrics: {e}")
+            logger.debug("log_debug", message=f"Failed to get system performance metrics: {e}")
             perf["cpu_percent"] = None
             perf["memory_percent"] = None
 
@@ -77,7 +77,7 @@ class SystemStatusService:
                 len(providers_cfg) if isinstance(providers_cfg, dict) else 0
             )
         except Exception as e:
-            logger.debug(f"Failed to read providers config: {e}")
+            logger.debug("log_debug", message=f"Failed to read providers config: {e}")
             cfg["providers_configured"] = 0
 
         return {

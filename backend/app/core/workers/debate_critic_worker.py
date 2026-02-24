@@ -1,4 +1,4 @@
-import logging
+import structlog
 import json
 from datetime import datetime
 from typing import Any
@@ -13,7 +13,7 @@ from app.repositories.llm_repository import LLMRepository
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 async def _build_prompt(state: TaskState) -> str:
     goal = state.original_goal
@@ -34,7 +34,7 @@ async def process_critic_task(task: TaskMessage) -> None:
         state = TaskState(**raw_state)
         state.current_agent_role = "debate_critic"
         
-        logger.info(f"Debate Critic processing task {state.task_id}")
+        logger.info("log_info", message=f"Debate Critic processing task {state.task_id}")
 
         llm_service = LLMService(LLMRepository())
         prompt = await _build_prompt(state)
@@ -72,7 +72,7 @@ async def process_critic_task(task: TaskMessage) -> None:
             state.data_payload.review_notes = f"Status: {'Approved' if is_approved else 'Rejected'}\nIssues: {json.dumps(issues, indent=2)}\nComments: {comments}"
             
         except Exception as e:
-            logger.error(f"Failed to parse Critic JSON: {e}")
+            logger.error("log_error", message=f"Failed to parse Critic JSON: {e}")
             state.data_payload.approved = False
             state.data_payload.review_notes = f"CRITIC ERROR: Could not parse output. Raw output: {response}"
             
@@ -86,7 +86,7 @@ async def process_critic_task(task: TaskMessage) -> None:
         # Next Step Logic
         if state.data_payload.approved:
             # Done!
-            logger.info(f"Task {state.task_id} APPROVED by Debate Critic.")
+            logger.info("log_info", message=f"Task {state.task_id} APPROVED by Debate Critic.")
             # We can route to 'router' or just leave it. 
             # If we want to notify completion, we might send to router with status 'completed'
             state.status = "completed"
@@ -97,7 +97,7 @@ async def process_critic_task(task: TaskMessage) -> None:
             state.data_payload.self_healing_iterations = current_iter + 1
             
             if current_iter >= 5: # Max iterations hardcoded
-                logger.warning(f"Max debate iterations reached for task {state.task_id}")
+                logger.warning("log_warning", message=f"Max debate iterations reached for task {state.task_id}")
                 state.status = "max_iterations_reached"
                 state.next_agent_role = "router"
                 state.data_payload.review_notes += "\n[SYSTEM]: Max iterations reached."
@@ -108,7 +108,7 @@ async def process_critic_task(task: TaskMessage) -> None:
         await service.pass_task(state)
         
     except Exception as e:
-        logger.error(f"Debate Critic failed: {e}", exc_info=True)
+        logger.error("log_error", message=f"Debate Critic failed: {e}", exc_info=True)
         raise
 
 async def start_debate_critic_worker():

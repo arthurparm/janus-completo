@@ -54,7 +54,7 @@ async def generate_hypothetical_answer(question: str) -> str:
 
         return hypothetical
     except Exception as e:
-        logger.warning(f"HyDE generation failed, falling back to question: {e}")
+        logger.warning("log_warning", message=f"HyDE generation failed, falling back to question: {e}")
         return question
 
 
@@ -117,11 +117,11 @@ async def rerank_chunks(
 
             return reranked
         except Exception as parse_error:
-            logger.warning(f"Failed to parse ranking, using original order: {parse_error}")
+            logger.warning("log_warning", message=f"Failed to parse ranking, using original order: {parse_error}")
             return chunks[:top_k]
 
     except Exception as e:
-        logger.warning(f"Re-ranking failed, using original order: {e}")
+        logger.warning("log_warning", message=f"Re-ranking failed, using original order: {e}")
         return chunks[:top_k]
 
 

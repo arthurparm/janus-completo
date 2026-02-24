@@ -4,8 +4,7 @@ Rate Limit Tracker - Gerencia limites de taxa por modelo LLM.
 Permite verificação proativa de disponibilidade antes de selecionar um modelo,
 evitando erros 429 e distribuindo carga entre modelos.
 """
-
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -14,7 +13,7 @@ from typing import Any
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -124,7 +123,7 @@ class ModelUsageTracker:
                 )
                 self.configure_limits(provider, model, cfg)
             except Exception as e:
-                logger.error(f"Erro ao configurar limite para {key_str}: {e}")
+                logger.error("log_error", message=f"Erro ao configurar limite para {key_str}: {e}")
 
     def load_limits_from_firebase(self):
         """Carrega limites do Firebase Realtime Database."""
@@ -139,10 +138,10 @@ class ModelUsageTracker:
             remote_limits = ref.get()
 
             if remote_limits and isinstance(remote_limits, dict):
-                logger.info(f"Carregando {len(remote_limits)} configurações de limite do Firebase.")
+                logger.info("log_info", message=f"Carregando {len(remote_limits)} configurações de limite do Firebase.")
                 self.configure_limits_bulk(remote_limits)
         except Exception as e:
-            logger.warning(f"Falha ao carregar limites do Firebase: {e}")
+            logger.warning("log_warning", message=f"Falha ao carregar limites do Firebase: {e}")
 
     def save_limit_to_firebase(self, key: str, config: RateLimitConfig):
         """Salva um limite específico no Firebase."""
@@ -160,9 +159,9 @@ class ModelUsageTracker:
             data = {k: v for k, v in data.items() if v is not None}
 
             ref.set(data)
-            logger.debug(f"Limite para {key} salvo no Firebase.")
+            logger.debug("log_debug", message=f"Limite para {key} salvo no Firebase.")
         except Exception as e:
-            logger.error(f"Falha ao salvar limite {key} no Firebase: {e}")
+            logger.error("log_error", message=f"Falha ao salvar limite {key} no Firebase: {e}")
 
     def update_limits_from_headers(self, provider: str, model: str, headers: dict[str, Any]):
         """
@@ -204,7 +203,7 @@ class ModelUsageTracker:
                         cfg.rpm = val
                         updated = True
                 except Exception as e:
-                    logger.debug(f"Failed to parse x-ratelimit-limit-requests: {e}")
+                    logger.debug("log_debug", message=f"Failed to parse x-ratelimit-limit-requests: {e}")
 
             if limit_tok:
                 try:
@@ -213,7 +212,7 @@ class ModelUsageTracker:
                         cfg.tpm = val
                         updated = True
                 except Exception as e:
-                    logger.debug(f"Failed to parse x-ratelimit-limit-tokens: {e}")
+                    logger.debug("log_debug", message=f"Failed to parse x-ratelimit-limit-tokens: {e}")
 
             # Persiste no Firebase se houve alteração na configuração de limites
             if updated and getattr(settings, "FIREBASE_ENABLED", False):
@@ -231,7 +230,7 @@ class ModelUsageTracker:
                     # Atualiza timestamp para evitar reset imediato incorreto
                     minute_window.window_start = time.time()
                 except Exception as e:
-                    logger.debug(f"Failed to parse x-ratelimit-remaining-requests: {e}")
+                    logger.debug("log_debug", message=f"Failed to parse x-ratelimit-remaining-requests: {e}")
 
             if rem_tok and cfg.tpm:
                 try:
@@ -240,7 +239,7 @@ class ModelUsageTracker:
                     minute_window.tokens = used
                     minute_window.window_start = time.time()
                 except Exception as e:
-                    logger.debug(f"Failed to parse x-ratelimit-remaining-tokens: {e}")
+                    logger.debug("log_debug", message=f"Failed to parse x-ratelimit-remaining-tokens: {e}")
 
             # Atualiza Uso (Sincronização com Servidor)
             # Usage = Limit - Remaining
@@ -256,7 +255,7 @@ class ModelUsageTracker:
                         # Resetamos o window_start para agora para evitar reset imediato
                         minute_window.window_start = time.time()
                 except Exception as e:
-                    logger.debug(f"Failed to calculate request usage from headers: {e}")
+                    logger.debug("log_debug", message=f"Failed to calculate request usage from headers: {e}")
 
             if limit_tok and rem_tok:
                 try:
@@ -267,10 +266,9 @@ class ModelUsageTracker:
                         minute_window.tokens = used_t
                         minute_window.window_start = time.time()
                 except Exception as e:
-                    logger.debug(f"Failed to calculate token usage from headers: {e}")
+                    logger.debug("log_debug", message=f"Failed to calculate token usage from headers: {e}")
 
-            logger.debug(
-                f"RateLimit atualizado via headers para {key}: RPM={cfg.rpm}, TPM={cfg.tpm}, UsedReq={minute_window.requests}, UsedTok={minute_window.tokens}"
+            logger.debug("log_debug", message=f"RateLimit atualizado via headers para {key}: RPM={cfg.rpm}, TPM={cfg.tpm}, UsedReq={minute_window.requests}, UsedTok={minute_window.tokens}"
             )
 
     def _check_daily_reset(self):
@@ -298,8 +296,7 @@ class ModelUsageTracker:
         key = self._get_model_key(provider, model)
         with self._lock:
             self._daily_exhausted.add(key)
-            logger.warning(
-                f"Modelo {key} marcado como ESGOTADO para o dia. Será liberado à meia-noite UTC."
+            logger.warning("log_warning", message=f"Modelo {key} marcado como ESGOTADO para o dia. Será liberado à meia-noite UTC."
             )
 
     def update_model_limits(
@@ -334,7 +331,7 @@ class ModelUsageTracker:
                 updated = True
 
             if updated:
-                logger.info(f"Limites atualizados manualmente para {key}: {cfg}")
+                logger.info("log_info", message=f"Limites atualizados manualmente para {key}: {cfg}")
                 if getattr(settings, "FIREBASE_ENABLED", False):
                     self.save_limit_to_firebase(key, cfg)
 
@@ -479,6 +476,5 @@ def configure_rate_limits_from_settings(
     limiter = get_rate_limiter()
     limiter.set_threshold(threshold)
     limiter.configure_limits_bulk(settings_dict)
-    logger.info(
-        f"Rate limits configurados para {len(settings_dict)} modelos (threshold={threshold})"
+    logger.info("log_info", message=f"Rate limits configurados para {len(settings_dict)} modelos (threshold={threshold})"
     )

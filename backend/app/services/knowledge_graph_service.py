@@ -1,4 +1,4 @@
-import logging
+import structlog
 import asyncio
 from typing import Any
 from datetime import datetime
@@ -8,7 +8,7 @@ from app.core.infrastructure.resilience import CircuitOpenError
 from app.core.memory.graph_guardian import graph_guardian
 from app.models.schemas import EntityType, RelationType, KnowledgeEntity, KnowledgeRelationship, Experience
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class KnowledgeGraphService:
@@ -76,7 +76,7 @@ class KnowledgeGraphService:
                 return result[0]["id"]
             return None
         except Exception as ex:
-            logger.error(f"Erro ao persistir nó de experiência: {ex}")
+            logger.error("log_error", message=f"Erro ao persistir nó de experiência: {ex}")
             return None
 
     async def persist_extraction(
@@ -154,7 +154,7 @@ class KnowledgeGraphService:
                 )
                 break
             except Exception as e:
-                logger.error(f"Erro ao persistir entidade '{ent.get('name')}': {e}", exc_info=True)
+                logger.error("log_error", message=f"Erro ao persistir entidade '{ent.get('name')}': {e}", exc_info=True)
 
         # 2. Persistir Relacionamentos
         for idx, rel in enumerate(relationships):
@@ -205,8 +205,7 @@ class KnowledgeGraphService:
                     created_relationships_count += 1
                 else:
                     # Se falhou, pode ser que um dos nós não exista (ex: erro de digitação do LLM)
-                    logger.warning(
-                        f"Relacionamento ignorado (nós não encontrados): {source_name} -> {target_name}"
+                    logger.warning("log_warning", message=f"Relacionamento ignorado (nós não encontrados): {source_name} -> {target_name}"
                     )
 
             except CircuitOpenError as e:
@@ -217,7 +216,7 @@ class KnowledgeGraphService:
                 )
                 break
             except Exception as e:
-                logger.error(f"Erro ao persistir relacionamento: {e}", exc_info=True)
+                logger.error("log_error", message=f"Erro ao persistir relacionamento: {e}", exc_info=True)
 
         return created_entities_count, created_relationships_count
 
@@ -379,7 +378,7 @@ class KnowledgeGraphService:
             }
 
         except Exception as e:
-            logger.error(f"Erro ao buscar subgrafo contextual: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro ao buscar subgrafo contextual: {e}", exc_info=True)
             return {"nodes": [], "edges": []}
 
 
