@@ -27,7 +27,26 @@ class ConfigService:
         """Starts the background listener task."""
         if self._running:
             return
-        
+
+        if not settings.REDIS_ENABLED:
+            logger.info(
+                "ConfigService listener skipped (Redis disabled).",
+                channel=self.channel_name,
+            )
+            return
+
+        try:
+            await self.redis.initialize()
+            if not await self.redis.ping():
+                logger.warning(
+                    "ConfigService listener skipped (Redis unavailable).",
+                    channel=self.channel_name,
+                )
+                return
+        except Exception as e:
+            logger.error("ConfigService Redis init failed", error=str(e))
+            return
+
         self._running = True
         self._listener_task = asyncio.create_task(self._listen_loop())
         logger.info("ConfigService listener started.", channel=self.channel_name)
