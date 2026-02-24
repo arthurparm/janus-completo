@@ -28,6 +28,36 @@ class _FakeMetric:
         return _FakeMetricChild(self, labels)
 
 
+class _FakeSpan:
+    def __init__(self, name: str):
+        self.name = name
+        self.attributes: dict[str, object] = {}
+
+    def set_attribute(self, key: str, value: object):
+        self.attributes[key] = value
+
+
+class _FakeSpanContext:
+    def __init__(self, tracer, name: str):
+        self._tracer = tracer
+        self._span = _FakeSpan(name)
+
+    def __enter__(self):
+        self._tracer.started.append(self._span)
+        return self._span
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeTracer:
+    def __init__(self):
+        self.started: list[_FakeSpan] = []
+
+    def start_as_current_span(self, name: str):
+        return _FakeSpanContext(self, name)
+
+
 @pytest.fixture()
 def fake_metrics(monkeypatch):
     import app.services.observability_service as obs_module
@@ -176,3 +206,45 @@ def test_observe_ux_metric_record_tracks_low_cardinality_metrics(fake_metrics):
     )
     metrics = {call[1].get("metric") for call in ux_latency.calls if call[0] == "observe"}
     assert {"ttft", "latency"} == metrics
+
+
+@pytest.mark.asyncio
+async def test_domain_slo_report_starts_otel_span_when_tracer_present(fake_metrics, monkeypatch):
+    import app.services.observability_service as obs_module
+
+    tracer = _FakeTracer()
+    monkeypatch.setattr(obs_module, "_tracer", tracer)
+
+    class _Repo:
+        def get_audit_events(self, **_kwargs):
+            return [
+                {"endpoint": "/api/v1/chat/message", "status": "ok", "latency_ms": 100},
+                {"endpoint": "/api/v1/chat/message", "status": "ok", "latency_ms": 110},
+            ]
+
+    service = ObservabilityService(repo=_Repo())
+    await service.get_domain_slo_report(window_minutes=5, min_events=2)
+
+    assert any(span.name == "observability.service.domain_slo_report" for span in tracer.started)
+    slo_span = next(span for span in tracer.started if span.name == "observability.service.domain_slo_report")
+    assert slo_span.attributes["observability.operation"] == "domain_slo_report"
+    assert slo_span.attributes["observability.window_minutes"] == 5
+
+
+def test_request_pipeline_dashboard_starts_otel_span_when_tracer_present(fake_metrics, monkeypatch):
+    import app.services.observability_service as obs_module
+
+    tracer = _FakeTracer()
+    monkeypatch.setattr(obs_module, "_tracer", tracer)
+
+    class _Repo:
+        def get_audit_events_by_trace_id(self, trace_id: str, limit: int = 2000, offset: int = 0):
+            return _events_for_dashboard()
+
+    service = ObservabilityService(repo=_Repo())
+    dashboard = service.get_request_pipeline_dashboard("req-1")
+
+    assert dashboard["found"] is True
+    assert any(
+        span.name == "observability.service.request_pipeline_dashboard" for span in tracer.started
+    )

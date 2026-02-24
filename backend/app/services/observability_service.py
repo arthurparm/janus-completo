@@ -1,6 +1,7 @@
 import json
 import time
 from collections import Counter
+from contextlib import nullcontext
 from typing import Any
 
 import structlog
@@ -8,6 +9,11 @@ from fastapi import Request
 from prometheus_client import Counter as PromCounter
 from prometheus_client import Histogram as PromHistogram
 from prometheus_client import REGISTRY
+
+try:
+    from opentelemetry import trace as otel_trace
+except Exception:  # pragma: no cover - optional dependency
+    otel_trace = None
 
 from app.config import settings
 from app.core.monitoring.poison_pill_handler import QuarantinedMessage
@@ -20,6 +26,7 @@ from app.services.predictive_anomaly_detection_service import (
 )
 
 logger = structlog.get_logger(__name__)
+_tracer = otel_trace.get_tracer(__name__) if otel_trace is not None else None
 
 
 def _get_or_create_counter(name: str, documentation: str, labelnames: list[str]) -> PromCounter:
@@ -121,6 +128,22 @@ class ObservabilityService:
         if size < 0:
             return
         _OBS_RESULT_ITEMS.labels(operation=operation, kind=kind).observe(float(size))
+
+    @staticmethod
+    def _span_context(span_name: str):
+        if _tracer is None:
+            return nullcontext(None)
+        return _tracer.start_as_current_span(span_name)
+
+    @staticmethod
+    def _set_span_attrs(span: Any, **attrs: Any) -> None:
+        if span is None:
+            return
+        for key, value in attrs.items():
+            if value is None:
+                continue
+            if isinstance(value, (str, bool, int, float)):
+                span.set_attribute(key, value)
 
     async def get_system_health(self) -> dict[str, Any]:
         op = "system_health"
@@ -393,144 +416,161 @@ class ObservabilityService:
             window_minutes=wm,
             min_events=me,
         )
-        start_ts = now_ts - (wm * 60.0)
-        thresholds = self._get_domain_slo_thresholds()
-
-        try:
-            events = self._repo.get_audit_events(
-                user_id=None,
-                tool=None,
-                status=None,
-                start_ts=start_ts,
-                end_ts=now_ts,
-                endpoint=None,
-                limit=20000,
-                offset=0,
+        with self._span_context("observability.service.domain_slo_report") as span:
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.operation": op,
+                    "observability.window_minutes": wm,
+                    "observability.min_events": me,
+                },
             )
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_domain_slo_events_query_failed",
-                operation="domain_slo_report",
-                window_minutes=wm,
-                min_events=me,
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao coletar eventos para SLO por domÃ­nio.") from e
+            start_ts = now_ts - (wm * 60.0)
+            thresholds = self._get_domain_slo_thresholds()
 
-        by_domain: dict[str, list[dict[str, Any]]] = {k: [] for k in thresholds.keys()}
-        for ev in events:
-            domain = self._classify_event_domain(ev)
-            if domain in by_domain:
-                by_domain[domain].append(ev)
+            try:
+                events = self._repo.get_audit_events(
+                    user_id=None,
+                    tool=None,
+                    status=None,
+                    start_ts=start_ts,
+                    end_ts=now_ts,
+                    endpoint=None,
+                    limit=20000,
+                    offset=0,
+                )
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_domain_slo_events_query_failed",
+                    operation="domain_slo_report",
+                    window_minutes=wm,
+                    min_events=me,
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao coletar eventos para SLO por domÃ­nio.") from e
 
-        domain_reports: list[dict[str, Any]] = []
-        active_alerts: list[dict[str, Any]] = []
+            by_domain: dict[str, list[dict[str, Any]]] = {k: [] for k in thresholds.keys()}
+            for ev in events:
+                domain = self._classify_event_domain(ev)
+                if domain in by_domain:
+                    by_domain[domain].append(ev)
 
-        for domain, cfg in thresholds.items():
-            rows = by_domain.get(domain) or []
-            total = len(rows)
-            errors = sum(1 for row in rows if self._status_is_error(row.get("status")))
-            error_rate_pct = round((errors / total) * 100.0, 2) if total else 0.0
-            availability_pct = round(max(0.0, 100.0 - error_rate_pct), 2)
+            domain_reports: list[dict[str, Any]] = []
+            active_alerts: list[dict[str, Any]] = []
 
-            latencies = [
-                lat
-                for lat in (self._safe_float(row.get("latency_ms")) for row in rows)
-                if lat is not None and lat >= 0.0
-            ]
-            p95_latency_ms = round(self._percentile(latencies, 0.95), 2) if latencies else 0.0
+            for domain, cfg in thresholds.items():
+                rows = by_domain.get(domain) or []
+                total = len(rows)
+                errors = sum(1 for row in rows if self._status_is_error(row.get("status")))
+                error_rate_pct = round((errors / total) * 100.0, 2) if total else 0.0
+                availability_pct = round(max(0.0, 100.0 - error_rate_pct), 2)
 
-            breaches: list[dict[str, Any]] = []
-            status = "ok"
-            if total < me:
-                status = "insufficient_data"
+                latencies = [
+                    lat
+                    for lat in (self._safe_float(row.get("latency_ms")) for row in rows)
+                    if lat is not None and lat >= 0.0
+                ]
+                p95_latency_ms = round(self._percentile(latencies, 0.95), 2) if latencies else 0.0
+
+                breaches: list[dict[str, Any]] = []
+                status = "ok"
+                if total < me:
+                    status = "insufficient_data"
+                else:
+                    if error_rate_pct > cfg["max_error_rate_pct"]:
+                        breaches.append(
+                            {
+                                "type": "error_rate",
+                                "observed": error_rate_pct,
+                                "threshold": cfg["max_error_rate_pct"],
+                                "message": (
+                                    f"Taxa de erro acima do limite: {error_rate_pct:.2f}% > "
+                                    f"{cfg['max_error_rate_pct']:.2f}%"
+                                ),
+                            }
+                        )
+                    if p95_latency_ms > cfg["max_p95_latency_ms"]:
+                        breaches.append(
+                            {
+                                "type": "latency_p95_ms",
+                                "observed": p95_latency_ms,
+                                "threshold": cfg["max_p95_latency_ms"],
+                                "message": (
+                                    f"P95 de latÃªncia acima do limite: {p95_latency_ms:.2f}ms > "
+                                    f"{cfg['max_p95_latency_ms']:.2f}ms"
+                                ),
+                            }
+                        )
+                    if breaches:
+                        status = "breach"
+                        active_alerts.append(
+                            {
+                                "domain": domain,
+                                "severity": "warning",
+                                "breaches": breaches,
+                            }
+                        )
+
+                domain_reports.append(
+                    {
+                        "domain": domain,
+                        "status": status,
+                        "window": {
+                            "start_ts": start_ts,
+                            "end_ts": now_ts,
+                            "window_minutes": wm,
+                        },
+                        "sli": {
+                            "total_events": total,
+                            "error_events": errors,
+                            "availability_pct": availability_pct,
+                            "error_rate_pct": error_rate_pct,
+                            "latency_p95_ms": p95_latency_ms,
+                        },
+                        "slo": {
+                            "max_error_rate_pct": cfg["max_error_rate_pct"],
+                            "max_p95_latency_ms": cfg["max_p95_latency_ms"],
+                            "min_events": me,
+                        },
+                        "breaches": breaches,
+                    }
+                )
+
+            if active_alerts:
+                overall_status = "degraded"
+            elif all(item["status"] == "insufficient_data" for item in domain_reports):
+                overall_status = "insufficient_data"
             else:
-                if error_rate_pct > cfg["max_error_rate_pct"]:
-                    breaches.append(
-                        {
-                            "type": "error_rate",
-                            "observed": error_rate_pct,
-                            "threshold": cfg["max_error_rate_pct"],
-                            "message": (
-                                f"Taxa de erro acima do limite: {error_rate_pct:.2f}% > "
-                                f"{cfg['max_error_rate_pct']:.2f}%"
-                            ),
-                        }
-                    )
-                if p95_latency_ms > cfg["max_p95_latency_ms"]:
-                    breaches.append(
-                        {
-                            "type": "latency_p95_ms",
-                            "observed": p95_latency_ms,
-                            "threshold": cfg["max_p95_latency_ms"],
-                            "message": (
-                                f"P95 de latÃªncia acima do limite: {p95_latency_ms:.2f}ms > "
-                                f"{cfg['max_p95_latency_ms']:.2f}ms"
-                            ),
-                        }
-                    )
-                if breaches:
-                    status = "breach"
-                    active_alerts.append(
-                        {
-                            "domain": domain,
-                            "severity": "warning",
-                            "breaches": breaches,
-                        }
-                    )
+                overall_status = "ok"
 
-            domain_reports.append(
-                {
-                    "domain": domain,
-                    "status": status,
-                    "window": {
-                        "start_ts": start_ts,
-                        "end_ts": now_ts,
-                        "window_minutes": wm,
-                    },
-                    "sli": {
-                        "total_events": total,
-                        "error_events": errors,
-                        "availability_pct": availability_pct,
-                        "error_rate_pct": error_rate_pct,
-                        "latency_p95_ms": p95_latency_ms,
-                    },
-                    "slo": {
-                        "max_error_rate_pct": cfg["max_error_rate_pct"],
-                        "max_p95_latency_ms": cfg["max_p95_latency_ms"],
-                        "min_events": me,
-                    },
-                    "breaches": breaches,
-                }
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.event_count": len(events),
+                    "observability.domain_count": len(domain_reports),
+                    "observability.alert_count": len(active_alerts),
+                },
             )
+            logger.info(
+                "oq002_domain_slo_report_generated",
+                status=overall_status,
+                window_minutes=wm,
+                active_alerts=len(active_alerts),
+                domains=len(domain_reports),
+                total_events=len(events),
+            )
+            self._observe_result_size(op, "domains", len(domain_reports))
+            self._observe_result_size(op, "alerts", len(active_alerts))
+            self._observe_result_size(op, "events", len(events))
+            self._observe_operation_success(op, op_start)
 
-        if active_alerts:
-            overall_status = "degraded"
-        elif all(item["status"] == "insufficient_data" for item in domain_reports):
-            overall_status = "insufficient_data"
-        else:
-            overall_status = "ok"
-
-        logger.info(
-            "oq002_domain_slo_report_generated",
-            status=overall_status,
-            window_minutes=wm,
-            active_alerts=len(active_alerts),
-            domains=len(domain_reports),
-            total_events=len(events),
-        )
-        self._observe_result_size(op, "domains", len(domain_reports))
-        self._observe_result_size(op, "alerts", len(active_alerts))
-        self._observe_result_size(op, "events", len(events))
-        self._observe_operation_success(op, op_start)
-
-        return {
-            "status": overall_status,
-            "window": {"start_ts": start_ts, "end_ts": now_ts, "window_minutes": wm},
-            "domains": domain_reports,
-            "active_alerts": active_alerts,
-        }
+            return {
+                "status": overall_status,
+                "window": {"start_ts": start_ts, "end_ts": now_ts, "window_minutes": wm},
+                "domains": domain_reports,
+                "active_alerts": active_alerts,
+            }
 
     async def get_predictive_anomaly_report(
         self,
@@ -541,105 +581,122 @@ class ObservabilityService:
     ) -> dict[str, Any]:
         op = "predictive_anomaly_report"
         op_start = self._observe_operation_start(op)
-        if not bool(getattr(settings, "AI_ANOMALY_DETECTION_ENABLED", True)):
-            logger.info(
-                "observability_predictive_anomaly_report_skipped",
-                operation="predictive_anomaly_report",
-                reason="feature_flag_disabled",
+        with self._span_context("observability.service.predictive_anomaly_report") as span:
+            if not bool(getattr(settings, "AI_ANOMALY_DETECTION_ENABLED", True)):
+                logger.info(
+                    "observability_predictive_anomaly_report_skipped",
+                    operation="predictive_anomaly_report",
+                    reason="feature_flag_disabled",
+                )
+                self._observe_operation_success(op, op_start)
+                return {
+                    "status": "disabled",
+                    "risk": {
+                        "score": 0,
+                        "level": "low",
+                        "should_alert": False,
+                        "reasons": ["feature_flag_disabled"],
+                    },
+                    "anomalies": [],
+                }
+
+            now_ts = float(time.time())
+            wh = max(1, int(window_hours or getattr(settings, "AI_ANOMALY_WINDOW_HOURS", 6) or 6))
+            bm = max(
+                1,
+                int(bucket_minutes or getattr(settings, "AI_ANOMALY_BUCKET_MINUTES", 10) or 10),
             )
-            self._observe_operation_success(op, op_start)
-            return {
-                "status": "disabled",
-                "risk": {
-                    "score": 0,
-                    "level": "low",
-                    "should_alert": False,
-                    "reasons": ["feature_flag_disabled"],
+            me = max(5, int(min_events or getattr(settings, "AI_ANOMALY_MIN_EVENTS", 30) or 30))
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.operation": op,
+                    "observability.window_hours": wh,
+                    "observability.bucket_minutes": bm,
+                    "observability.min_events": me,
                 },
-                "anomalies": [],
-            }
-
-        now_ts = float(time.time())
-        wh = max(1, int(window_hours or getattr(settings, "AI_ANOMALY_WINDOW_HOURS", 6) or 6))
-        bm = max(
-            1,
-            int(bucket_minutes or getattr(settings, "AI_ANOMALY_BUCKET_MINUTES", 10) or 10),
-        )
-        me = max(5, int(min_events or getattr(settings, "AI_ANOMALY_MIN_EVENTS", 30) or 30))
-        logger.info(
-            "observability_predictive_anomaly_report_requested",
-            operation="predictive_anomaly_report",
-            window_hours=wh,
-            bucket_minutes=bm,
-            min_events=me,
-        )
-        start_ts = now_ts - (wh * 3600.0)
-
-        try:
-            events = self._repo.get_audit_events(
-                user_id=None,
-                tool=None,
-                status=None,
-                start_ts=start_ts,
-                end_ts=now_ts,
-                endpoint=None,
-                limit=10000,
-                offset=0,
             )
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_predictive_anomaly_events_query_failed",
+            logger.info(
+                "observability_predictive_anomaly_report_requested",
                 operation="predictive_anomaly_report",
                 window_hours=wh,
                 bucket_minutes=bm,
                 min_events=me,
-                error=str(e),
             )
-            raise ObservabilityServiceError("Falha ao coletar eventos de auditoria.") from e
+            start_ts = now_ts - (wh * 3600.0)
 
-        queue_snapshots: list[dict[str, Any]] = []
-        try:
-            from app.core.infrastructure.message_broker import get_broker
+            try:
+                events = self._repo.get_audit_events(
+                    user_id=None,
+                    tool=None,
+                    status=None,
+                    start_ts=start_ts,
+                    end_ts=now_ts,
+                    endpoint=None,
+                    limit=10000,
+                    offset=0,
+                )
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_predictive_anomaly_events_query_failed",
+                    operation="predictive_anomaly_report",
+                    window_hours=wh,
+                    bucket_minutes=bm,
+                    min_events=me,
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao coletar eventos de auditoria.") from e
 
-            broker = await get_broker()
-            queue_names = list(getattr(settings, "AI_ANOMALY_QUEUE_NAMES", []) or [])
-            for queue_name in queue_names:
-                try:
-                    info = await broker.get_queue_info(str(queue_name))
-                    if info:
-                        queue_snapshots.append(info)
-                except Exception as queue_err:
-                    logger.warning(
-                        "ai014_queue_info_failed",
-                        queue_name=str(queue_name),
-                        error=str(queue_err),
-                    )
-        except Exception as e:
-            logger.warning("ai014_broker_unavailable", error=str(e))
+            queue_snapshots: list[dict[str, Any]] = []
+            try:
+                from app.core.infrastructure.message_broker import get_broker
 
-        detector = get_predictive_anomaly_detection_service()
-        report = detector.analyze(
-            events=events,
-            queue_snapshots=queue_snapshots,
-            start_ts=start_ts,
-            end_ts=now_ts,
-            bucket_minutes=bm,
-            min_events=me,
-        )
+                broker = await get_broker()
+                queue_names = list(getattr(settings, "AI_ANOMALY_QUEUE_NAMES", []) or [])
+                for queue_name in queue_names:
+                    try:
+                        info = await broker.get_queue_info(str(queue_name))
+                        if info:
+                            queue_snapshots.append(info)
+                    except Exception as queue_err:
+                        logger.warning(
+                            "ai014_queue_info_failed",
+                            queue_name=str(queue_name),
+                            error=str(queue_err),
+                        )
+            except Exception as e:
+                logger.warning("ai014_broker_unavailable", error=str(e))
 
-        logger.info(
-            "ai014_predictive_anomaly_report_generated",
-            status=report.get("status"),
-            risk_level=(report.get("risk") or {}).get("level"),
-            risk_score=(report.get("risk") or {}).get("score"),
-            anomaly_count=len(report.get("anomalies") or []),
-            total_events=((report.get("window") or {}).get("total_events")),
-        )
-        self._observe_result_size(op, "events", len(events))
-        self._observe_result_size(op, "alerts", len(report.get("anomalies") or []))
-        self._observe_operation_success(op, op_start)
-        return report
+            detector = get_predictive_anomaly_detection_service()
+            report = detector.analyze(
+                events=events,
+                queue_snapshots=queue_snapshots,
+                start_ts=start_ts,
+                end_ts=now_ts,
+                bucket_minutes=bm,
+                min_events=me,
+            )
+
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.event_count": len(events),
+                    "observability.alert_count": len(report.get("anomalies") or []),
+                },
+            )
+            logger.info(
+                "ai014_predictive_anomaly_report_generated",
+                status=report.get("status"),
+                risk_level=(report.get("risk") or {}).get("level"),
+                risk_score=(report.get("risk") or {}).get("score"),
+                anomaly_count=len(report.get("anomalies") or []),
+                total_events=((report.get("window") or {}).get("total_events")),
+            )
+            self._observe_result_size(op, "events", len(events))
+            self._observe_result_size(op, "alerts", len(report.get("anomalies") or []))
+            self._observe_operation_success(op, op_start)
+            return report
 
     async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
         logger.info(
@@ -679,25 +736,33 @@ class ObservabilityService:
         op = "graph_audit_report"
         op_start = self._observe_operation_start(op)
         logger.info("observability_graph_audit_requested", operation="graph_audit_report")
-        try:
-            report = await self._repo.get_graph_audit_report()
-            self._observe_operation_success(op, op_start)
-            logger.info(
-                "observability_graph_audit_completed",
-                operation="graph_audit_report",
-                quarantine_count=report.get("quarantine_count"),
-                mentions_count=report.get("mentions_count"),
-                relationship_types_present=len(report.get("relationship_types_present") or []),
-            )
-            return report
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_graph_audit_failed",
-                operation="graph_audit_report",
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao auditar o grafo.") from e
+        with self._span_context("observability.service.graph_audit_report") as span:
+            self._set_span_attrs(span, **{"observability.operation": op})
+            try:
+                report = await self._repo.get_graph_audit_report()
+                self._observe_operation_success(op, op_start)
+                self._set_span_attrs(
+                    span,
+                    **{
+                        "observability.alert_count": int(report.get("quarantine_count") or 0),
+                    },
+                )
+                logger.info(
+                    "observability_graph_audit_completed",
+                    operation="graph_audit_report",
+                    quarantine_count=report.get("quarantine_count"),
+                    mentions_count=report.get("mentions_count"),
+                    relationship_types_present=len(report.get("relationship_types_present") or []),
+                )
+                return report
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_graph_audit_failed",
+                    operation="graph_audit_report",
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao auditar o grafo.") from e
 
     async def get_graph_quarantine_items(self, limit: int = 100) -> list[dict[str, Any]]:
         logger.info(
@@ -788,21 +853,30 @@ class ObservabilityService:
             limit=limit,
             offset=offset,
         )
-        try:
-            result = self._repo.get_audit_events(
-                user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
+        with self._span_context("observability.service.audit_events_query") as span:
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.operation": op,
+                    "observability.limit": limit,
+                },
             )
-            self._observe_result_size(op, "events", len(result))
-            self._observe_operation_success(op, op_start)
-            return result
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_audit_events_query_failed",
-                operation="audit_events_query",
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
+            try:
+                result = self._repo.get_audit_events(
+                    user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
+                )
+                self._set_span_attrs(span, **{"observability.event_count": len(result)})
+                self._observe_result_size(op, "events", len(result))
+                self._observe_operation_success(op, op_start)
+                return result
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_audit_events_query_failed",
+                    operation="audit_events_query",
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
 
     def get_audit_events_count(
         self,
@@ -821,24 +895,27 @@ class ObservabilityService:
             tool=tool,
             status=status,
         )
-        try:
-            count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
-            self._observe_result_size(op, "rows", count)
-            self._observe_operation_success(op, op_start)
-            logger.info(
-                "observability_audit_events_count_completed",
-                operation="audit_events_count",
-                count=count,
-            )
-            return count
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_audit_events_count_failed",
-                operation="audit_events_count",
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao contar eventos de auditoria.") from e
+        with self._span_context("observability.service.audit_events_count") as span:
+            self._set_span_attrs(span, **{"observability.operation": op})
+            try:
+                count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+                self._set_span_attrs(span, **{"observability.event_count": count})
+                self._observe_result_size(op, "rows", count)
+                self._observe_operation_success(op, op_start)
+                logger.info(
+                    "observability_audit_events_count_completed",
+                    operation="audit_events_count",
+                    count=count,
+                )
+                return count
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_audit_events_count_failed",
+                    operation="audit_events_count",
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao contar eventos de auditoria.") from e
 
     def get_llm_usage_summary(self, start_ts: float | None, end_ts: float | None) -> dict[str, Any]:
         op = "llm_usage_summary"
@@ -955,117 +1032,134 @@ class ObservabilityService:
             include_details=include_details,
         )
 
-        try:
-            events = self._repo.get_audit_events_by_trace_id(
-                trace_id=request_id, limit=limit, offset=0
+        with self._span_context("observability.service.request_pipeline_dashboard") as span:
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.operation": op,
+                    "observability.limit": limit,
+                    "observability.include_details": include_details,
+                },
             )
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_request_pipeline_dashboard_failed",
-                operation="request_pipeline_dashboard",
-                request_id=request_id,
-                limit=limit,
-                include_details=include_details,
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao montar dashboard por request_id.") from e
+            try:
+                events = self._repo.get_audit_events_by_trace_id(
+                    trace_id=request_id, limit=limit, offset=0
+                )
+            except ObservabilityRepositoryError as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_request_pipeline_dashboard_failed",
+                    operation="request_pipeline_dashboard",
+                    request_id=request_id,
+                    limit=limit,
+                    include_details=include_details,
+                    error=str(e),
+                )
+                raise ObservabilityServiceError("Falha ao montar dashboard por request_id.") from e
 
-        if not events:
+            if not events:
+                self._set_span_attrs(span, **{"observability.found": False, "observability.event_count": 0})
+                logger.info(
+                    "observability_request_pipeline_dashboard_completed",
+                    operation="request_pipeline_dashboard",
+                    request_id=request_id,
+                    found=False,
+                    event_count=0,
+                )
+                self._observe_result_size(op, "timeline", 0)
+                self._observe_operation_success(op, op_start)
+                return {
+                    "request_id": request_id,
+                    "found": False,
+                    "summary": {
+                        "total_events": 0,
+                        "start_ts": None,
+                        "end_ts": None,
+                        "duration_ms": 0,
+                        "status_counts": {},
+                        "endpoint_counts": {},
+                        "action_counts": {},
+                        "tool_counts": {},
+                    },
+                    "timeline": [],
+                }
+
+            events_sorted = sorted(events, key=lambda ev: float(ev.get("created_at") or 0.0))
+            start_ts = float(events_sorted[0].get("created_at") or 0.0)
+            end_ts = float(events_sorted[-1].get("created_at") or 0.0)
+            duration_ms = int(round(max(0.0, (end_ts - start_ts) * 1000.0)))
+
+            status_counts: Counter[str] = Counter()
+            endpoint_counts: Counter[str] = Counter()
+            action_counts: Counter[str] = Counter()
+            tool_counts: Counter[str] = Counter()
+            timeline: list[dict[str, Any]] = []
+
+            for ev in events_sorted:
+                status_key = self._normalize_counter_key(ev.get("status"))
+                endpoint_key = self._normalize_counter_key(ev.get("endpoint"))
+                action_key = self._normalize_counter_key(ev.get("action"))
+                tool_key = self._normalize_counter_key(ev.get("tool"))
+                status_counts[status_key] += 1
+                endpoint_counts[endpoint_key] += 1
+                action_counts[action_key] += 1
+                tool_counts[tool_key] += 1
+
+                ts = float(ev.get("created_at") or 0.0)
+                details = self._parse_details_payload(ev.get("details_json"))
+                stage = None
+                if isinstance(details, dict):
+                    stage = details.get("stage") or details.get("event_type") or details.get("step")
+
+                item = {
+                    "id": ev.get("id"),
+                    "timestamp": ts if ts > 0 else None,
+                    "offset_ms": int(round(max(0.0, (ts - start_ts) * 1000.0))),
+                    "endpoint": ev.get("endpoint"),
+                    "action": ev.get("action"),
+                    "tool": ev.get("tool"),
+                    "status": ev.get("status"),
+                    "latency_ms": ev.get("latency_ms"),
+                    "stage": stage,
+                }
+                if include_details and details is not None:
+                    item["details"] = details
+                timeline.append(item)
+
+            result = {
+                "request_id": request_id,
+                "found": True,
+                "summary": {
+                    "total_events": len(events_sorted),
+                    "start_ts": start_ts if start_ts > 0 else None,
+                    "end_ts": end_ts if end_ts > 0 else None,
+                    "duration_ms": duration_ms,
+                    "status_counts": dict(sorted(status_counts.items())),
+                    "endpoint_counts": dict(sorted(endpoint_counts.items())),
+                    "action_counts": dict(sorted(action_counts.items())),
+                    "tool_counts": dict(sorted(tool_counts.items())),
+                },
+                "timeline": timeline,
+            }
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.found": True,
+                    "observability.event_count": len(events_sorted),
+                },
+            )
             logger.info(
                 "observability_request_pipeline_dashboard_completed",
                 operation="request_pipeline_dashboard",
                 request_id=request_id,
-                found=False,
-                event_count=0,
+                found=True,
+                event_count=len(events_sorted),
+                timeline_count=len(timeline),
+                duration_ms=duration_ms,
             )
-            self._observe_result_size(op, "timeline", 0)
+            self._observe_result_size(op, "timeline", len(timeline))
             self._observe_operation_success(op, op_start)
-            return {
-                "request_id": request_id,
-                "found": False,
-                "summary": {
-                    "total_events": 0,
-                    "start_ts": None,
-                    "end_ts": None,
-                    "duration_ms": 0,
-                    "status_counts": {},
-                    "endpoint_counts": {},
-                    "action_counts": {},
-                    "tool_counts": {},
-                },
-                "timeline": [],
-            }
-
-        events_sorted = sorted(events, key=lambda ev: float(ev.get("created_at") or 0.0))
-        start_ts = float(events_sorted[0].get("created_at") or 0.0)
-        end_ts = float(events_sorted[-1].get("created_at") or 0.0)
-        duration_ms = int(round(max(0.0, (end_ts - start_ts) * 1000.0)))
-
-        status_counts: Counter[str] = Counter()
-        endpoint_counts: Counter[str] = Counter()
-        action_counts: Counter[str] = Counter()
-        tool_counts: Counter[str] = Counter()
-        timeline: list[dict[str, Any]] = []
-
-        for ev in events_sorted:
-            status_key = self._normalize_counter_key(ev.get("status"))
-            endpoint_key = self._normalize_counter_key(ev.get("endpoint"))
-            action_key = self._normalize_counter_key(ev.get("action"))
-            tool_key = self._normalize_counter_key(ev.get("tool"))
-            status_counts[status_key] += 1
-            endpoint_counts[endpoint_key] += 1
-            action_counts[action_key] += 1
-            tool_counts[tool_key] += 1
-
-            ts = float(ev.get("created_at") or 0.0)
-            details = self._parse_details_payload(ev.get("details_json"))
-            stage = None
-            if isinstance(details, dict):
-                stage = details.get("stage") or details.get("event_type") or details.get("step")
-
-            item = {
-                "id": ev.get("id"),
-                "timestamp": ts if ts > 0 else None,
-                "offset_ms": int(round(max(0.0, (ts - start_ts) * 1000.0))),
-                "endpoint": ev.get("endpoint"),
-                "action": ev.get("action"),
-                "tool": ev.get("tool"),
-                "status": ev.get("status"),
-                "latency_ms": ev.get("latency_ms"),
-                "stage": stage,
-            }
-            if include_details and details is not None:
-                item["details"] = details
-            timeline.append(item)
-
-        result = {
-            "request_id": request_id,
-            "found": True,
-            "summary": {
-                "total_events": len(events_sorted),
-                "start_ts": start_ts if start_ts > 0 else None,
-                "end_ts": end_ts if end_ts > 0 else None,
-                "duration_ms": duration_ms,
-                "status_counts": dict(sorted(status_counts.items())),
-                "endpoint_counts": dict(sorted(endpoint_counts.items())),
-                "action_counts": dict(sorted(action_counts.items())),
-                "tool_counts": dict(sorted(tool_counts.items())),
-            },
-            "timeline": timeline,
-        }
-        logger.info(
-            "observability_request_pipeline_dashboard_completed",
-            operation="request_pipeline_dashboard",
-            request_id=request_id,
-            found=True,
-            event_count=len(events_sorted),
-            timeline_count=len(timeline),
-            duration_ms=duration_ms,
-        )
-        self._observe_result_size(op, "timeline", len(timeline))
-        self._observe_operation_success(op, op_start)
-        return result
+            return result
 
 
 def observe_ux_metric_record(
