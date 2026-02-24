@@ -97,6 +97,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Mitigar risco de PII em logs do ChatCommandHandler | P1 | S | ideia |
 
 ---
 
@@ -116,6 +117,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
 | OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | feito (2026-02-21, automacao entregue; inventario atual 230/231) |
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
+| OQ-013 | Corrigir instabilidade na definicao de metricas Prometheus em neural_training_system.py | P1 | S | ideia |
+| OQ-014 | Corrigir falha silenciosa do Rate Limiter sem script Lua | P1 | S | ideia |
 
 ---
 
@@ -152,6 +155,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | PL-008 | Conectores nativos (GitHub, Notion, Jira, Slack, GDrive) | P2 | L | ideia |
 | PL-009 | Pipeline de ingestao em lote com dedupe e retry robusto | P1 | M | ideia |
 | PL-010 | Data catalog interno para fontes de conhecimento | P2 | M | ideia |
+| PL-011 | Padronizar acesso a configuracao no ChatAgentLoop | P2 | S | ideia |
 
 ---
 
@@ -170,7 +174,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
-| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P0 | S | ideia |
 
 ---
 
@@ -381,7 +385,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | FE3-012 | Context manager visual (memória curta/longa, evictions) | `/context/*` | P2 | M | ideia |
 | FE3-013 | Reflexion viewer (self-critique, improvements) | `/reflexion/*` | P2 | S | ideia |
 | FE3-014 | Sandbox playground para testar ferramentas | `/sandbox/*` | P2 | S | ideia |
-| FE3-015 | Refatorar JanusApiService para micro-serviços (SRP) | N/A | P1 | M | ideia |
+| FE3-015 | Refatorar JanusApiService para micro-serviços (SRP) | N/A | P0 | M | ideia |
 
 **Arquitetura sugerida:**
 - Layout tipo "plataforma unificada" (sidebar + múltiplas views)

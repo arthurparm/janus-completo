@@ -93,3 +93,47 @@ Esta auditoria focou na análise estática do código fonte (`backend/` e `front
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `backend-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-24
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+### 1. Melhorias (Simplificação e Refatoração)
+
+*   **Refatoração do `ChatService`**: O arquivo `backend/app/services/chat_service.py` foi massivamente refatorado, caindo de 1722 linhas para ~287 linhas. A lógica complexa foi delegada para `ChatAgentLoop` (282 linhas) e `ChatCommandHandler` (110 linhas), melhorando significativamente a modularidade.
+    *   **Evidência**: `wc -l backend/app/services/chat_service.py` -> 287.
+
+### 2. Dívida Técnica Persistente
+
+*   **Duplicação de Código (Crítica)**: `backend/app/services/tool_service_improved.py` continua idêntico a `backend/app/services/tool_service.py`. Deve ser removido imediatamente. (DX-012, P0).
+*   **God Object Frontend (Crítico)**: `frontend/src/app/services/backend-api.service.ts` cresceu para 1439 linhas (anteriormente ~800), agravando a violação de SRP. Requer refatoração urgente. (FE3-015, P0).
+
+### 3. Confiabilidade e Lógica Frágil
+
+*   **Instabilidade em Métricas Prometheus**: `backend/app/core/workers/neural_training_system.py` define métricas (`_TRAINING_JOBS`, etc.) no nível do módulo. Isso pode causar erros de `ValueError: Duplicated timeseries` durante testes ou reloads se não envolto em `try...except`. (OQ-013).
+*   **Rate Limiter Fail-Open**: `backend/app/core/infrastructure/rate_limit_middleware.py` falha silenciosamente (desabilita limites) se o arquivo Lua estiver ausente ou Redis indisponível, a menos que `fail_closed` seja ativado. (OQ-014).
+
+### 4. Segurança e Privacidade
+
+*   **Risco de PII em Logs**: `ChatCommandHandler` loga o conteúdo completo do feedback do usuário (`args`) em `logger.info("user_feedback_received", feedback=args...)`. Se o usuário enviar dados sensíveis, estes serão persistidos em logs. (SG-014).
+*   **Acesso a Configuração Inconsistente**: `ChatAgentLoop` utiliza `os.getenv` diretamente para `CHAT_TOOL_RISK_PROFILE`, ignorando a centralização em `app.config.settings` e potenciais overrides de teste. (PL-011).
+*   **Segredos Default**: `backend/app/config.py` mantém senhas padrão.
+
+## Próximos Passos
+
+1.  **Imediato (P0)**:
+    *   Remover `backend/app/services/tool_service_improved.py`.
+    *   Iniciar decomposição do `backend-api.service.ts` (criar `AuthService` e `ChatService` no frontend).
+
+2.  **Curto Prazo (P1)**:
+    *   Envolver definição de métricas em `neural_training_system.py` com bloco `try...except ValueError` (padrão Registry).
+    *   Sanitizar logs de feedback em `ChatCommandHandler` (logar apenas tamanho ou hash, ou aplicar redaction).
+    *   Implementar verificação de existência do script Lua no startup do `RateLimitMiddleware` ou embutir o script no código python.
+
+3.  **Médio Prazo (P2)**:
+    *   Migrar `os.getenv` em `ChatAgentLoop` para `settings`.
