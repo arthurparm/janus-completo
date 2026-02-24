@@ -65,6 +65,15 @@ def _get_executor(provider_key: str) -> ThreadPoolExecutor:
 
 _openai_http_client: httpx.Client | None = None
 _openai_client: OpenAI | None = None
+_invalid_key_warning_emitted: set[str] = set()
+
+
+def _warn_invalid_key_once(provider: str) -> None:
+    key = (provider or "unknown").lower()
+    if key in _invalid_key_warning_emitted:
+        return
+    _invalid_key_warning_emitted.add(key)
+    logger.warning("llm_provider_api_key_invalid", provider=key)
 
 
 def _require_langchain_openai() -> None:
@@ -132,35 +141,35 @@ def _get_openai_client() -> OpenAI:
 
 def _validate_gemini_key(key: str | None) -> bool:
     if not key or not key.startswith("AIza") or len(key) < 30:
-        logger.warning("GEMINI_API_KEY parece inválido.")
+        _warn_invalid_key_once("gemini")
         return False
     return True
 
 
 def _validate_openai_key(key: str | None) -> bool:
     if not key or not key.startswith("sk-") or len(key) < 20:
-        logger.warning("OPENAI_API_KEY parece inválido.")
+        _warn_invalid_key_once("openai")
         return False
     return True
 
 
 def _validate_deepseek_key(key: str | None) -> bool:
     if not key or len(key) < 10:
-        logger.warning("DEEPSEEK_API_KEY parece inválido.")
+        _warn_invalid_key_once("deepseek")
         return False
     return True
 
 
 def _validate_xai_key(key: str | None) -> bool:
     if not key or not key.startswith("xai-") or len(key) < 20:
-        logger.warning("XAI_API_KEY parece inválido.")
+        _warn_invalid_key_once("xai")
         return False
     return True
 
 
 def _validate_openrouter_key(key: str | None) -> bool:
     if not key or not key.startswith("sk-or-") or len(key) < 20:
-        logger.warning("OPENROUTER_API_KEY parece inválido.")
+        _warn_invalid_key_once("openrouter")
         return False
     return True
 
