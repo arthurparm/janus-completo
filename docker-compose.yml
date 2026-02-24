@@ -19,7 +19,6 @@ services:
       - ./backend/tests:/app/tests
       - ./backend/data:/app/data
       - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
-      - ./backend/app/serviceAccountKey.json:/app/app/serviceAccountKey.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: [ "sh", "-lc", "/opt/venv/bin/python /app/scripts/sync_prompts.py && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
@@ -287,6 +286,34 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: janus_alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./backend/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    networks:
+      - janus-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   grafana:
     image: grafana/grafana:10.4.2
     container_name: janus_grafana
@@ -304,6 +331,8 @@ services:
       - janus-net
     depends_on:
       prometheus:
+        condition: service_started
+      alertmanager:
         condition: service_started
     deploy:
       resources:
