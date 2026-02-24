@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from app.api.exception_handlers import get_error_taxonomy_catalog
-from app.services.observability_service import ObservabilityService, get_observability_service
+from app.services.observability_service import (
+    ObservabilityService,
+    get_observability_service,
+    observe_ux_metric_record,
+)
 
 router = APIRouter(tags=["Observability"])
 logger = structlog.get_logger(__name__)
@@ -474,6 +478,12 @@ async def record_ux_metric(
     item: UxMetricItem, service: ObservabilityService = Depends(get_observability_service)
 ):
     """Registra uma métrica de UX para análise de desempenho do chat."""
+    observe_ux_metric_record(
+        outcome=item.outcome,
+        provider=item.provider,
+        ttft_ms=item.ttft_ms,
+        latency_ms=item.latency_ms,
+    )
     logger.info(
         "observability_endpoint_ux_metric_recorded",
         operation="ux_metric_record",

@@ -5,6 +5,9 @@ from typing import Any
 
 import structlog
 from fastapi import Request
+from prometheus_client import Counter as PromCounter
+from prometheus_client import Histogram as PromHistogram
+from prometheus_client import REGISTRY
 
 from app.config import settings
 from app.core.monitoring.poison_pill_handler import QuarantinedMessage
@@ -17,6 +20,55 @@ from app.services.predictive_anomaly_detection_service import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def _get_or_create_counter(name: str, documentation: str, labelnames: list[str]) -> PromCounter:
+    try:
+        return PromCounter(name, documentation, labelnames)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]  # type: ignore[index]
+
+
+def _get_or_create_histogram(
+    name: str,
+    documentation: str,
+    labelnames: list[str],
+    *,
+    buckets: tuple[float, ...] | None = None,
+) -> PromHistogram:
+    try:
+        kwargs = {"buckets": buckets} if buckets is not None else {}
+        return PromHistogram(name, documentation, labelnames, **kwargs)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]  # type: ignore[index]
+
+
+_OBS_OPERATIONS_TOTAL = _get_or_create_counter(
+    "janus_observability_operations_total",
+    "Total de operacoes do dominio observability por resultado",
+    ["operation", "outcome"],
+)
+_OBS_OPERATION_DURATION_SECONDS = _get_or_create_histogram(
+    "janus_observability_operation_duration_seconds",
+    "Latencia das operacoes do dominio observability",
+    ["operation"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0),
+)
+_OBS_RESULT_ITEMS = _get_or_create_histogram(
+    "janus_observability_result_items",
+    "Distribuicao do tamanho de resultados do dominio observability",
+    ["operation", "kind"],
+)
+_OBS_UX_METRICS_TOTAL = _get_or_create_counter(
+    "janus_observability_ux_metrics_total",
+    "Total de metricas de UX registradas por provider e resultado",
+    ["outcome", "provider"],
+)
+_OBS_UX_LATENCY_SECONDS = _get_or_create_histogram(
+    "janus_observability_ux_latency_seconds",
+    "Latencias de UX registradas em segundos",
+    ["metric", "outcome"],
+)
 
 # --- Custom Service-Layer Exceptions ---
 
@@ -45,11 +97,41 @@ class ObservabilityService:
     def __init__(self, repo: ObservabilityRepository):
         self._repo = repo
 
+    @staticmethod
+    def _observe_operation_start(operation: str, **_attrs: Any) -> float:
+        return time.perf_counter()
+
+    @staticmethod
+    def _observe_operation_success(operation: str, start_ts: float, **_attrs: Any) -> None:
+        _OBS_OPERATIONS_TOTAL.labels(operation=operation, outcome="success").inc()
+        elapsed = max(0.0, time.perf_counter() - start_ts)
+        _OBS_OPERATION_DURATION_SECONDS.labels(operation=operation).observe(elapsed)
+
+    @staticmethod
+    def _observe_operation_failure(
+        operation: str, start_ts: float, error: Exception, **_attrs: Any
+    ) -> None:
+        _ = error
+        _OBS_OPERATIONS_TOTAL.labels(operation=operation, outcome="error").inc()
+        elapsed = max(0.0, time.perf_counter() - start_ts)
+        _OBS_OPERATION_DURATION_SECONDS.labels(operation=operation).observe(elapsed)
+
+    @staticmethod
+    def _observe_result_size(operation: str, kind: str, size: int) -> None:
+        if size < 0:
+            return
+        _OBS_RESULT_ITEMS.labels(operation=operation, kind=kind).observe(float(size))
+
     async def get_system_health(self) -> dict[str, Any]:
+        op = "system_health"
+        op_start = self._observe_operation_start(op)
         logger.info("observability_system_health_requested", operation="system_health")
         try:
-            return await self._repo.get_system_health()
+            result = await self._repo.get_system_health()
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_system_health_failed",
                 operation="system_health",
@@ -58,10 +140,16 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao buscar a saúde do sistema.") from e
 
     async def check_all_components(self) -> dict[str, dict[str, Any]]:
+        op = "check_all_components"
+        op_start = self._observe_operation_start(op)
         logger.info("observability_check_all_components_requested", operation="check_all_components")
         try:
-            return await self._repo.check_all_components()
+            result = await self._repo.check_all_components()
+            self._observe_operation_success(op, op_start)
+            self._observe_result_size(op, "rows", len(result))
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_check_all_components_failed",
                 operation="check_all_components",
@@ -70,10 +158,15 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao executar os health checks.") from e
 
     async def get_llm_router_health(self) -> dict[str, Any]:
+        op = "llm_router_health"
+        op_start = self._observe_operation_start(op)
         logger.info("observability_llm_router_health_requested", operation="llm_router_health")
         try:
-            return await self._repo.get_llm_router_health()
+            result = await self._repo.get_llm_router_health()
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_llm_router_health_failed",
                 operation="llm_router_health",
@@ -82,13 +175,18 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao buscar saúde do LLM Router.") from e
 
     async def get_multi_agent_system_health(self) -> dict[str, Any]:
+        op = "multi_agent_system_health"
+        op_start = self._observe_operation_start(op)
         logger.info(
             "observability_multi_agent_health_requested",
             operation="multi_agent_system_health",
         )
         try:
-            return await self._repo.get_multi_agent_system_health()
+            result = await self._repo.get_multi_agent_system_health()
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_multi_agent_health_failed",
                 operation="multi_agent_system_health",
@@ -97,13 +195,18 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao buscar saúde do sistema multi-agente.") from e
 
     async def get_poison_pill_handler_health(self) -> dict[str, Any]:
+        op = "poison_pill_handler_health"
+        op_start = self._observe_operation_start(op)
         logger.info(
             "observability_poison_pill_health_requested",
             operation="poison_pill_handler_health",
         )
         try:
-            return await self._repo.get_poison_pill_handler_health()
+            result = await self._repo.get_poison_pill_handler_health()
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_poison_pill_health_failed",
                 operation="poison_pill_handler_health",
@@ -169,10 +272,15 @@ class ObservabilityService:
         return self._repo.get_poison_pill_stats(queue=queue)
 
     def get_metrics_summary(self) -> dict[str, Any]:
+        op = "metrics_summary"
+        op_start = self._observe_operation_start(op)
         logger.info("observability_metrics_summary_requested", operation="metrics_summary")
         try:
-            return self._repo.get_metrics_summary()
+            result = self._repo.get_metrics_summary()
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_metrics_summary_failed",
                 operation="metrics_summary",
@@ -271,6 +379,8 @@ class ObservabilityService:
         window_minutes: int | None = None,
         min_events: int | None = None,
     ) -> dict[str, Any]:
+        op = "domain_slo_report"
+        op_start = self._observe_operation_start(op)
         now_ts = float(time.time())
         wm = max(1, int(window_minutes or getattr(settings, "OQ_SLO_WINDOW_MINUTES", 15) or 15))
         me = max(
@@ -298,6 +408,7 @@ class ObservabilityService:
                 offset=0,
             )
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_domain_slo_events_query_failed",
                 operation="domain_slo_report",
@@ -409,6 +520,10 @@ class ObservabilityService:
             domains=len(domain_reports),
             total_events=len(events),
         )
+        self._observe_result_size(op, "domains", len(domain_reports))
+        self._observe_result_size(op, "alerts", len(active_alerts))
+        self._observe_result_size(op, "events", len(events))
+        self._observe_operation_success(op, op_start)
 
         return {
             "status": overall_status,
@@ -424,12 +539,15 @@ class ObservabilityService:
         bucket_minutes: int | None = None,
         min_events: int | None = None,
     ) -> dict[str, Any]:
+        op = "predictive_anomaly_report"
+        op_start = self._observe_operation_start(op)
         if not bool(getattr(settings, "AI_ANOMALY_DETECTION_ENABLED", True)):
             logger.info(
                 "observability_predictive_anomaly_report_skipped",
                 operation="predictive_anomaly_report",
                 reason="feature_flag_disabled",
             )
+            self._observe_operation_success(op, op_start)
             return {
                 "status": "disabled",
                 "risk": {
@@ -469,6 +587,7 @@ class ObservabilityService:
                 offset=0,
             )
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_predictive_anomaly_events_query_failed",
                 operation="predictive_anomaly_report",
@@ -517,6 +636,9 @@ class ObservabilityService:
             anomaly_count=len(report.get("anomalies") or []),
             total_events=((report.get("window") or {}).get("total_events")),
         )
+        self._observe_result_size(op, "events", len(events))
+        self._observe_result_size(op, "alerts", len(report.get("anomalies") or []))
+        self._observe_operation_success(op, op_start)
         return report
 
     async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
@@ -554,9 +676,12 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao gerar atividade por usuário.") from e
 
     async def get_graph_audit_report(self) -> dict[str, Any]:
+        op = "graph_audit_report"
+        op_start = self._observe_operation_start(op)
         logger.info("observability_graph_audit_requested", operation="graph_audit_report")
         try:
             report = await self._repo.get_graph_audit_report()
+            self._observe_operation_success(op, op_start)
             logger.info(
                 "observability_graph_audit_completed",
                 operation="graph_audit_report",
@@ -566,6 +691,7 @@ class ObservabilityService:
             )
             return report
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_graph_audit_failed",
                 operation="graph_audit_report",
@@ -622,11 +748,15 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao promover item de quarentena.") from e
 
     def record_audit_event(self, event: dict[str, Any]) -> None:
+        op = "record_audit_event"
+        op_start = self._observe_operation_start(op)
         safe_event = {k: v for k, v in event.items() if k not in {"detail", "details_json"}}
         logger.info("observability_audit_event_record_requested", operation="record_audit_event", **safe_event)
         try:
             self._repo.record_audit_event(event)
+            self._observe_operation_success(op, op_start)
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_audit_event_record_failed",
                 operation="record_audit_event",
@@ -646,6 +776,8 @@ class ObservabilityService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
+        op = "audit_events_query"
+        op_start = self._observe_operation_start(op)
         logger.info(
             "observability_audit_events_query_requested",
             operation="audit_events_query",
@@ -657,10 +789,14 @@ class ObservabilityService:
             offset=offset,
         )
         try:
-            return self._repo.get_audit_events(
+            result = self._repo.get_audit_events(
                 user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
             )
+            self._observe_result_size(op, "events", len(result))
+            self._observe_operation_success(op, op_start)
+            return result
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_audit_events_query_failed",
                 operation="audit_events_query",
@@ -676,6 +812,8 @@ class ObservabilityService:
         start_ts: float | None,
         end_ts: float | None,
     ) -> int:
+        op = "audit_events_count"
+        op_start = self._observe_operation_start(op)
         logger.info(
             "observability_audit_events_count_requested",
             operation="audit_events_count",
@@ -685,6 +823,8 @@ class ObservabilityService:
         )
         try:
             count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+            self._observe_result_size(op, "rows", count)
+            self._observe_operation_success(op, op_start)
             logger.info(
                 "observability_audit_events_count_completed",
                 operation="audit_events_count",
@@ -692,6 +832,7 @@ class ObservabilityService:
             )
             return count
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_audit_events_count_failed",
                 operation="audit_events_count",
@@ -700,18 +841,29 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao contar eventos de auditoria.") from e
 
     def get_llm_usage_summary(self, start_ts: float | None, end_ts: float | None) -> dict[str, Any]:
+        op = "llm_usage_summary"
+        op_start = self._observe_operation_start(op)
         logger.info(
             "observability_llm_usage_summary_requested",
             operation="llm_usage_summary",
             start_ts=start_ts,
             end_ts=end_ts,
         )
-        o = self._repo.get_audit_events(
-            None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0
-        )
-        g = self._repo.get_audit_events(
-            None, "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
-        )
+        try:
+            o = self._repo.get_audit_events(
+                None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0
+            )
+            g = self._repo.get_audit_events(
+                None, "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
+            )
+        except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
+            logger.exception(
+                "observability_llm_usage_summary_failed",
+                operation=op,
+                error=str(e),
+            )
+            raise ObservabilityServiceError("Falha ao gerar resumo de uso de LLMs.") from e
 
         def agg(rows: list[dict[str, Any]]) -> dict[str, Any]:
             import json as _json
@@ -757,6 +909,8 @@ class ObservabilityService:
             openai_calls=a_o["calls"],
             gemini_calls=a_g["calls"],
         )
+        self._observe_result_size(op, "rows", int(summary["total_calls"]))
+        self._observe_operation_success(op, op_start)
         return summary
 
     @staticmethod
@@ -788,6 +942,8 @@ class ObservabilityService:
     def get_request_pipeline_dashboard(
         self, request_id: str, limit: int = 2000, include_details: bool = False
     ) -> dict[str, Any]:
+        op = "request_pipeline_dashboard"
+        op_start = self._observe_operation_start(op)
         request_id = str(request_id or "").strip()
         if not request_id:
             raise ObservabilityServiceError("request_id cannot be empty.")
@@ -804,6 +960,7 @@ class ObservabilityService:
                 trace_id=request_id, limit=limit, offset=0
             )
         except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
             logger.exception(
                 "observability_request_pipeline_dashboard_failed",
                 operation="request_pipeline_dashboard",
@@ -822,6 +979,8 @@ class ObservabilityService:
                 found=False,
                 event_count=0,
             )
+            self._observe_result_size(op, "timeline", 0)
+            self._observe_operation_success(op, op_start)
             return {
                 "request_id": request_id,
                 "found": False,
@@ -904,7 +1063,32 @@ class ObservabilityService:
             timeline_count=len(timeline),
             duration_ms=duration_ms,
         )
+        self._observe_result_size(op, "timeline", len(timeline))
+        self._observe_operation_success(op, op_start)
         return result
+
+
+def observe_ux_metric_record(
+    *,
+    outcome: str,
+    provider: str | None,
+    ttft_ms: float | None,
+    latency_ms: float | None,
+) -> None:
+    provider_value = (provider or "unknown").strip().lower() or "unknown"
+    provider_value = provider_value[:64]
+    outcome_value = (outcome or "unknown").strip().lower() or "unknown"
+    _OBS_UX_METRICS_TOTAL.labels(outcome=outcome_value, provider=provider_value).inc()
+
+    ttft = ObservabilityService._safe_float(ttft_ms)
+    if ttft is not None and ttft >= 0.0:
+        _OBS_UX_LATENCY_SECONDS.labels(metric="ttft", outcome=outcome_value).observe(ttft / 1000.0)
+
+    latency = ObservabilityService._safe_float(latency_ms)
+    if latency is not None and latency >= 0.0:
+        _OBS_UX_LATENCY_SECONDS.labels(metric="latency", outcome=outcome_value).observe(
+            latency / 1000.0
+        )
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço
