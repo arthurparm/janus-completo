@@ -17,52 +17,6 @@ from app.core.llm.types import ModelRole
 
 logger = logging.getLogger(__name__)
 
-# Compat: algumas versões usam .index_name e a classe tem __slots__=().
-# Criamos uma property que devolve vector_index_name e aceita setter sem quebrar __slots__.
-try:  # pragma: no cover
-    def _get_index_name(self):
-        try:
-            return getattr(self, "vector_index_name", None)
-        except Exception:
-            return None
-
-    def _set_index_name(self, value):
-        try:
-            object.__setattr__(self, "vector_index_name", value)
-        except Exception:
-            pass
-
-    HybridRetriever.index_name = property(_get_index_name, _set_index_name)  # type: ignore[attr-defined]
-except Exception:
-    pass
-
-
-class HybridRetrieverShim:
-    """
-    Wrapper de composição para contornar bug de atributo ausente (index_name) no HybridRetriever.
-    Expõe .search e .index_name para compatibilidade sem tocar na classe base.
-    """
-
-    def __init__(
-        self,
-        driver,
-        vector_index_name: str,
-        fulltext_index_name: str,
-        embedder=None,
-        return_properties=None,
-    ):
-        self._inner = HybridRetriever(
-            driver=driver,
-            vector_index_name=vector_index_name,
-            fulltext_index_name=fulltext_index_name,
-            embedder=embedder,
-            return_properties=return_properties,
-        )
-        self.index_name = vector_index_name
-
-    def search(self, *args, **kwargs):
-        return self._inner.search(*args, **kwargs)
-
 # Initialize Driver
 try:
     driver = GraphDatabase.driver(
@@ -73,7 +27,7 @@ except Exception as e:
     logger.error(f"Failed to initialize Neo4j driver: {e}")
     driver = None
 
-class NativeGraphRAG:
+class GraphRAGCore:
     def __init__(self):
         self.driver = driver
         self.retriever = None
@@ -92,7 +46,7 @@ class NativeGraphRAG:
                 api_key=settings.OPENAI_API_KEY.get_secret_value() if settings.OPENAI_API_KEY else ""
             )
             
-            self.retriever = HybridRetrieverShim(
+            self.retriever = HybridRetriever(
                 driver=self.driver,
                 vector_index_name="janus_vector_index",
                 fulltext_index_name="janus_fulltext_index",
@@ -107,7 +61,7 @@ class NativeGraphRAG:
                     "Create janus_vector_index/janus_fulltext_index to enable."
                 )
             else:
-                logger.warning(f"Could not initialize Native GraphRAG retriever: {e}")
+                logger.warning(f"Could not initialize GraphRAG retriever: {e}")
             self.retriever = None
 
     @traceable(name="GraphRAG.query", run_type="retriever")
@@ -164,14 +118,14 @@ class NativeGraphRAG:
             return str(response.content)
 
         except Exception as e:
-            logger.error(f"Error in Native GraphRAG query: {e}")
+            logger.error(f"Error in GraphRAG query: {e}")
             return f"Error retrieving information: {e}"
 
 # Global instance
-_native_rag = NativeGraphRAG()
+_graph_rag_core = GraphRAGCore()
 
 async def query_knowledge_graph(question: str, limit: int = 10) -> str:
     """
-    Public API replacement using native neo4j_graphrag
+    Public API using neo4j_graphrag
     """
-    return await _native_rag.query(question, limit)
+    return await _graph_rag_core.query(question, limit)

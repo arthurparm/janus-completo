@@ -147,14 +147,11 @@ class TestGraphRAGCore:
 
     def test_graph_rag_core_import(self):
         """Test GraphRAGCore can be imported."""
-        try:
-            from app.core.memory.graph_rag_core import GraphRAGCore
+        from app.core.memory.graph_rag_core import GraphRAGCore
 
-            assert GraphRAGCore is not None
+        assert GraphRAGCore is not None
 
-            print("✓ GraphRAGCore available")
-        except Exception as e:
-            print(f"⚠ GraphRAGCore: {e}")
+        print("✓ GraphRAGCore available")
 
 
 # ============================================================================
