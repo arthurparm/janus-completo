@@ -87,6 +87,8 @@ class MessageBroker:
         self._queue_policy_checked: set[str] = set()
         self._publish_channel: aio_pika.Channel | None = None
         self._publish_lock = asyncio.Lock()
+        self._dlx_setup_lock = asyncio.Lock()
+        self._dlx_topology_ready = False
 
     async def connect(self):
         """Estabelece a conexão com o RabbitMQ."""
@@ -116,34 +118,13 @@ class MessageBroker:
                     )
                     logger.info("Conexão com RabbitMQ (localhost) estabelecida com sucesso.")
 
-                    # Ensure system-wide DLX exists
+                    # Ensure system-wide DLX/DLQ exist (idempotent)
                     try:
                         async with self._connection.channel() as ch:
-                            # 1. Declare DLX
-                            await ch.declare_exchange(
-                                "janus.dlx", type=aio_pika.ExchangeType.DIRECT, durable=True
-                            )
-
-                            # 2. Declare DLQ
-                            dlq_args = self._get_queue_arguments("janus.dlq")
-                            await ch.declare_queue(
-                                "janus.dlq", durable=True, arguments=dlq_args
-                            )
-
-                            # 3. Bind DLQ to DLX (routing key 'dead_letter' or default)
-                            # RabbitMQ x-dead-letter-routing-key defaults to original routing key if not specified.
-                            # We can use a catch-all or specific bindings.
-                            # For simplicity, let's bind it with a wildcard if we were using topic, but DLX is direct usually.
-                            # Wait, if queue has x-dead-letter-exchange=janus.dlx, RK is preserved.
-                            # So janus.dlq must be bound with the same routing keys OR we use a fanout DLX.
-                            # BETTER STRATEGY: Fanout DLX is easiest for a catch-all "graveyard".
-                            # Let's redeclare as FANOUT to avoid binding headaches, OR Direct and we rely on RK preservation.
-                            # Defaulting to FANOUT for "dump all dead stuff here" is safer for generic DLQ.
-                            # But code above used DIRECT. Let's switch to FANOUT for simpler maintenance unless we need to segregate dead letters.
-                            pass
+                            await self._ensure_dead_letter_topology(ch)
 
                     except Exception as ex:
-                        logger.warning("log_warning", message=f"Falha ao configurar DLX/DLQ: {ex}")
+                        logger.warning("broker_dlx_setup_failed", error=str(ex))
                 except Exception as e2:
                     logger.warning(
                         "RabbitMQ indisponível; seguindo em modo offline sem conexão.", exc_info=e2
@@ -228,9 +209,7 @@ class MessageBroker:
 
                     # Ensure DLX/DLQ setup (idempotent)
                     try:
-                        dlx = await self._ensure_dlx(channel)
-                        dlq = await self._declare_queue_safely(channel, "janus.dlq")
-                        await dlq.bind(dlx, routing_key="#")
+                        await self._ensure_dead_letter_topology(channel)
                     except Exception:
                         pass
 
@@ -308,16 +287,20 @@ class MessageBroker:
         """
         Garante existência da DLX sem provocar precondition em exchanges já existentes.
         """
-        try:
-            return await channel.declare_exchange("janus.dlx", passive=True)
-        except ChannelNotFoundEntity:
-            pass
-        except ChannelPreconditionFailed:
-            return await channel.declare_exchange("janus.dlx", passive=True)
-
         return await channel.declare_exchange(
             "janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True
         )
+
+    async def _ensure_dead_letter_topology(self, channel: aio_pika.Channel) -> None:
+        if self._dlx_topology_ready:
+            return
+        async with self._dlx_setup_lock:
+            if self._dlx_topology_ready:
+                return
+            dlx = await self._ensure_dlx(channel)
+            dlq = await self._declare_queue_safely(channel, "janus.dlq")
+            await dlq.bind(dlx, routing_key="#")
+            self._dlx_topology_ready = True
 
     async def _declare_queue_safely(
         self, channel: aio_pika.Channel, queue_name: str
@@ -522,6 +505,14 @@ class MessageBroker:
 
                     async with self._connection.channel() as channel:
                         await channel.set_qos(prefetch_count=prefetch_count)
+                        try:
+                            await self._ensure_dlx(channel)
+                        except Exception as exc:
+                            logger.warning(
+                                "broker_dlx_setup_failed_for_consumer",
+                                queue=queue_name,
+                                error=str(exc),
+                            )
                         queue = await self._declare_queue_safely(channel, queue_name)
                         await queue.consume(_on_message, no_ack=False)
                         logger.info(
