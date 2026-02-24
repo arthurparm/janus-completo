@@ -1,5 +1,6 @@
 import structlog
 import json
+import time
 from typing import Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -20,16 +21,54 @@ class KnowledgeExtractionService:
 
     def __init__(self):
         self.llm: Optional[BaseChatModel] = None
+        self._llm_unavailable_until: float | None = None
+        self._llm_init_failures: int = 0
+        self._last_llm_unavailable_log_ts: float | None = None
+        self._llm_unavailable_cooldown_seconds = 300.0
+
+    def is_llm_temporarily_unavailable(self) -> bool:
+        until = self._llm_unavailable_until
+        return bool(until and time.time() < until)
+
+    def llm_unavailable_remaining_seconds(self) -> float:
+        until = self._llm_unavailable_until
+        if not until:
+            return 0.0
+        return max(0.0, until - time.time())
 
     async def _ensure_llm(self):
         if not self.llm:
+            now = time.time()
+            if self.is_llm_temporarily_unavailable():
+                remaining = self.llm_unavailable_remaining_seconds()
+                # Log at most once per cooldown window.
+                if (
+                    self._last_llm_unavailable_log_ts is None
+                    or now - self._last_llm_unavailable_log_ts >= self._llm_unavailable_cooldown_seconds
+                ):
+                    self._last_llm_unavailable_log_ts = now
+                    logger.warning(
+                        "knowledge_extraction_llm_temporarily_unavailable",
+                        cooldown_remaining_seconds=round(remaining, 1),
+                    )
+                return
             try:
                 self.llm = await get_llm(
                     role=ModelRole.KNOWLEDGE_CURATOR, priority=ModelPriority.FAST_AND_CHEAP
                 )
+                self._llm_unavailable_until = None
+                self._llm_init_failures = 0
             except Exception as e:
-                logger.error("log_error", message=f"Failed to initialize LLM for knowledge extraction: {e}")
-                raise
+                self._llm_init_failures += 1
+                self._llm_unavailable_until = now + self._llm_unavailable_cooldown_seconds
+                self._last_llm_unavailable_log_ts = now
+                logger.warning(
+                    "knowledge_extraction_llm_init_failed",
+                    failure_count=self._llm_init_failures,
+                    cooldown_seconds=int(self._llm_unavailable_cooldown_seconds),
+                    error=str(e),
+                )
+                return
 
     async def extract_from_text(self, text: str, metadata: dict[str, Any] = None) -> dict[str, Any]:
         """
@@ -62,7 +101,7 @@ class KnowledgeExtractionService:
             return self._parse_json_response(content)
 
         except Exception as e:
-            logger.error("log_error", message=f"Error extracting knowledge: {e}", exc_info=True)
+            logger.error("knowledge_extraction_failed", error=str(e), exc_info=True)
             return {}
 
     def _parse_json_response(self, content: str) -> dict[str, Any]:
@@ -84,7 +123,10 @@ class KnowledgeExtractionService:
 
             return data
         except json.JSONDecodeError:
-            logger.warning("log_warning", message=f"Failed to parse JSON from LLM response. Raw length: {len(content)}")
+            logger.warning(
+                "knowledge_extraction_json_parse_failed",
+                content_length=len(content),
+            )
             return {}
 
 
