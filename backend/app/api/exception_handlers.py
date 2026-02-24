@@ -124,7 +124,12 @@ def _error_payload(
 
 
 async def http_404_not_found_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("Recurso nao encontrado", exc_info=exc, url=request.url.path)
+    logger.warning(
+        "resource_not_found",
+        url=request.url.path,
+        exception_type=type(exc).__name__,
+        detail=str(exc),
+    )
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content=_error_payload(
@@ -137,11 +142,16 @@ async def http_404_not_found_handler(request: Request, exc: Exception) -> JSONRe
 
 
 async def http_400_bad_request_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("Requisicao invalida", exc_info=exc, url=request.url.path)
     detail = str(exc)
     error_code = "ACCESS_DENIED" if "access denied" in detail.lower() else "INVALID_INPUT"
     status_code = (
         status.HTTP_403_FORBIDDEN if error_code == "ACCESS_DENIED" else status.HTTP_400_BAD_REQUEST
+    )
+    logger.warning(
+        "access_denied" if error_code == "ACCESS_DENIED" else "request_invalid",
+        url=request.url.path,
+        detail=detail,
+        error_code=error_code,
     )
     return JSONResponse(
         status_code=status_code,
@@ -155,7 +165,7 @@ async def http_400_bad_request_handler(request: Request, exc: Exception) -> JSON
 
 
 async def http_408_timeout_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Timeout na operacao do servico", exc_info=exc, url=request.url.path)
+    logger.error("service_operation_timeout", exc_info=exc, url=request.url.path)
     return JSONResponse(
         status_code=status.HTTP_408_REQUEST_TIMEOUT,
         content=_error_payload(
@@ -168,7 +178,7 @@ async def http_408_timeout_handler(request: Request, exc: Exception) -> JSONResp
 
 
 async def generic_service_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Erro inesperado no servico", exc_info=exc, url=request.url.path)
+    logger.error("service_unexpected_error", exc_info=exc, url=request.url.path)
     detail = str(exc)
     error_code = "ACCESS_DENIED" if "access denied" in detail.lower() else "INTERNAL_SERVICE_ERROR"
     status_code = (
