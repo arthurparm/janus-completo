@@ -49,6 +49,7 @@ backend/.env*
 *.p12
 *.pfx
 backend/app/serviceAccountKey.json
+backend/observability/alertmanager/alertmanager.local.yml
 
 # -----------------------------
 # Python
@@ -121,5 +122,6 @@ _bmad/
 # -----------------------------
 coverage/
 outputs/tmp/
+outputs/backups/
 backend/evals/technical-qa/runs/
 evidencia.txt
