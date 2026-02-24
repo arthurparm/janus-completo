@@ -590,8 +590,18 @@ def main() -> int:
     ap.add_argument("--seed-user-id", default="seed-admin")
     ap.add_argument("--limit", type=int, default=0, help="Debug: limit number of probes (0 = all)")
     ap.add_argument("--max-429-retries", type=int, default=4)
-    ap.add_argument("--min-interval-ms", type=float, default=120.0)
+    ap.add_argument(
+        "--min-interval-ms",
+        type=float,
+        default=1500.0,
+        help="Minimum gap between requests in milliseconds (safe default for 60 req/min per-IP limiter with background traffic).",
+    )
     ap.add_argument("--progress-every", type=int, default=25)
+    ap.add_argument(
+        "--fail-on-429",
+        action="store_true",
+        help="Return non-zero if any request required a 429 retry.",
+    )
     args = ap.parse_args()
 
     ctx = ContextStore()
@@ -614,6 +624,7 @@ def main() -> int:
     probe_results: list[dict[str, Any]] = []
     executed_unique = set()
     last_request_started_at = 0.0
+    total_429_retries = 0
 
     total_rows = len(rows)
     for idx, endpoint in enumerate(rows, start=1):
@@ -663,6 +674,7 @@ def main() -> int:
             resp = session.request(endpoint.method, url, **req_kwargs)
             while resp.status_code == 429 and retry_count < args.max_429_retries:
                 retry_count += 1
+                total_429_retries += 1
                 backoff = retry_after_seconds(resp, retry_count)
                 print(
                     f"[retry429] {endpoint.method} {endpoint.path} attempt={retry_count} backoff={backoff:.2f}s",
@@ -774,6 +786,7 @@ def main() -> int:
             "openapi_total_endpoints": len(endpoints),
             "executed_unique_endpoints": len(executed_unique),
             "total_probes": len(probe_results),
+            "total_429_retries": total_429_retries,
             **summary_counts,
         },
         "results": probe_results,
@@ -790,9 +803,14 @@ def main() -> int:
     print(
         "[summary] openapi_total={openapi_total_endpoints} executed={executed_unique_endpoints} "
         "success={pass_success} contract_reject={pass_contract_rejection} "
-        "unexpected={fail_unexpected_status} server5xx={fail_server_5xx} transport={fail_transport}".format(**s)
+        "unexpected={fail_unexpected_status} server5xx={fail_server_5xx} transport={fail_transport} "
+        "retries429={total_429_retries}".format(**s)
     )
-    return 0 if not failures else 1
+    if failures:
+        return 1
+    if args.fail_on_429 and total_429_retries > 0:
+        return 2
+    return 0
 
 
 def _flatten_keys(obj: Any, prefix: str = "") -> list[str]:
