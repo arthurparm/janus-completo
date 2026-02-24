@@ -1,5 +1,7 @@
 import logging
+import time
 from datetime import datetime
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from prometheus_client import Counter, Gauge
@@ -124,6 +126,68 @@ def invalidate_cache(provider: str | None = None):
     else:
         _llm_pool.clear()
         logger.info("Pool de LLMs completamente invalidado.")
+
+
+def get_llm_pool_snapshot() -> dict[str, list[dict[str, object]]]:
+    """Retorna snapshot serializável do pool de LLMs sem expor instâncias internas."""
+    snapshot: dict[str, list[dict[str, object]]] = {}
+    for key, items in _llm_pool.items():
+        snapshot[key] = [
+            {
+                "provider": item.provider,
+                "model": item.model,
+                "consecutive_failures": item.consecutive_failures,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in items
+        ]
+    return snapshot
+
+
+def get_llm_pool_summary() -> dict[str, int]:
+    """Retorna contagem agregada do pool de LLMs."""
+    return {
+        "pool_keys": len(_llm_pool),
+        "pool_total_instances": sum(len(v) for v in _llm_pool.values()),
+    }
+
+
+def get_circuit_breaker_snapshot() -> dict[str, dict[str, Any]]:
+    """Retorna snapshot serializável dos circuit breakers por provedor."""
+    return {
+        provider: {
+            "state": cb.state.value,
+            "failure_count": cb.failure_count,
+            "last_failure_time": cb.last_failure_time,
+        }
+        for provider, cb in _provider_circuit_breakers.items()
+    }
+
+
+def reset_provider_circuit_breaker(provider: str) -> bool:
+    """Reseta o circuit breaker do provedor quando existir."""
+    cb = _provider_circuit_breakers.get(provider)
+    if cb is None:
+        return False
+    cb.reset()
+    return True
+
+
+def force_reset_stale_open_circuit_breakers(max_open_age_seconds: float) -> list[str]:
+    """Reseta CBs OPEN há muito tempo (ou sem timestamp) e retorna provedores resetados."""
+    now = time.time()
+    reset_providers: list[str] = []
+    for provider, cb in _provider_circuit_breakers.items():
+        try:
+            if cb.state.value != "OPEN":
+                continue
+            last = float(cb.last_failure_time or 0.0)
+            if last == 0.0 or (now - last) > max_open_age_seconds:
+                cb.reset()
+                reset_providers.append(provider)
+        except Exception:
+            continue
+    return reset_providers
 
 
 def _circuit_closed(provider: str) -> bool:

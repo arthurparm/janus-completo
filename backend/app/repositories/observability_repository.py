@@ -104,14 +104,20 @@ class ObservabilityRepository:
     def get_metrics_summary(self) -> dict[str, Any]:
         logger.debug("Coletando resumo de métricas do sistema via repositório.")
         from app.core.agents import get_multi_agent_system
-        from app.core.llm import _llm_pool, _provider_circuit_breakers
+        from app.core.llm import get_circuit_breaker_snapshot, get_llm_pool_summary
+
+        pool_summary = get_llm_pool_summary()
+        cb_snapshot = get_circuit_breaker_snapshot()
 
         llm_stats = {
-            "pool_keys": len(_llm_pool),
-            "pool_total_instances": sum(len(v) for v in _llm_pool.values()),
+            "pool_keys": pool_summary["pool_keys"],
+            "pool_total_instances": pool_summary["pool_total_instances"],
             "circuit_breakers": {
-                provider: {"state": cb.state.value, "failure_count": cb.failure_count}
-                for provider, cb in _provider_circuit_breakers.items()
+                provider: {
+                    "state": details.get("state"),
+                    "failure_count": details.get("failure_count"),
+                }
+                for provider, details in cb_snapshot.items()
             },
         }
 

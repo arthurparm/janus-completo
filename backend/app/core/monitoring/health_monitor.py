@@ -388,15 +388,15 @@ class HealthMonitor:
 async def check_llm_router_health() -> dict[str, Any]:
     """Health check do LLM Router."""
     try:
-        from app.core.llm.resilience import _llm_pool, _provider_circuit_breakers
+        from app.core.llm.resilience import get_circuit_breaker_snapshot, get_llm_pool_summary
 
-        open_circuits = sum(
-            1 for cb in _provider_circuit_breakers.values() if cb.state.value == "OPEN"
-        )
+        cb_snapshot = get_circuit_breaker_snapshot()
+        pool_summary = get_llm_pool_summary()
+        open_circuits = sum(1 for cb in cb_snapshot.values() if cb.get("state") == "OPEN")
+        pool_instances = pool_summary["pool_total_instances"]
+        total_circuits = len(cb_snapshot)
 
-        pool_instances = sum(len(v) for v in _llm_pool.values())
-
-        if open_circuits >= len(_provider_circuit_breakers) - 1:
+        if total_circuits > 0 and open_circuits >= total_circuits - 1:
             return {
                 "status": "unhealthy",
                 "message": "Todos os provedores com circuit breaker aberto",

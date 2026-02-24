@@ -25,11 +25,13 @@ from app.core.llm import (
     LLMClient,
     ModelPriority,
     ModelRole,
-    _llm_pool,
-    _provider_circuit_breakers,
+    get_circuit_breaker_snapshot,
     get_llm,
     get_llm_client,
+    get_llm_pool_snapshot,
+    get_llm_pool_summary,
     invalidate_cache,
+    reset_provider_circuit_breaker,
 )
 
 logger = structlog.get_logger(__name__)
@@ -282,7 +284,8 @@ class LLMRepository:
     def get_cache_entries(self) -> list[dict[str, Any]]:
         logger.debug("Buscando entradas do pool de LLMs no repositório.")
         entries = []
-        for key, items in _llm_pool.items():
+        pool_snapshot = get_llm_pool_snapshot()
+        for key, items in pool_snapshot.items():
             try:
                 provider, model = key.split(":", 1)
             except Exception:
@@ -299,10 +302,10 @@ class LLMRepository:
                 entries.append(
                     {
                         "pool_key": key,
-                        "provider": it.provider,
-                        "model": it.model,
-                        "consecutive_failures": it.consecutive_failures,
-                        "created_at": it.created_at.isoformat(),
+                        "provider": it.get("provider"),
+                        "model": it.get("model"),
+                        "consecutive_failures": it.get("consecutive_failures"),
+                        "created_at": it.get("created_at"),
                     }
                 )
         # Acrescenta entradas do cache de respostas
@@ -315,7 +318,7 @@ class LLMRepository:
     def invalidate_cache(self, provider: str | None = None) -> int:
         logger.debug("Invalidando pool de LLMs via repositório", provider=provider)
         invalidate_cache(provider=provider)
-        return sum(len(v) for v in _llm_pool.values())
+        return get_llm_pool_summary()["pool_total_instances"]
 
     def warm_pool(self, specs: list[str] | None = None) -> dict[str, int]:
         logger.debug("Pré-aquecendo pool de LLMs via repositório.")
@@ -335,23 +338,21 @@ class LLMRepository:
     def get_circuit_breakers(self) -> list[dict[str, Any]]:
         logger.debug("Buscando status dos circuit breakers no repositório.")
         statuses = []
-        for provider, cb in _provider_circuit_breakers.items():
+        for provider, cb in get_circuit_breaker_snapshot().items():
             statuses.append(
                 {
                     "provider": provider,
-                    "state": cb.state.value,
-                    "failure_count": cb.failure_count,
-                    "last_failure_time": cb.last_failure_time,
+                    "state": cb.get("state"),
+                    "failure_count": cb.get("failure_count"),
+                    "last_failure_time": cb.get("last_failure_time"),
                 }
             )
         return statuses
 
     def reset_circuit_breaker(self, provider: str):
         logger.debug("Resetando circuit breaker via repositório", provider=provider)
-        if provider not in _provider_circuit_breakers:
+        if not reset_provider_circuit_breaker(provider):
             raise LLMRepositoryError(f"Provedor '{provider}' não encontrado.")
-        cb = _provider_circuit_breakers[provider]
-        cb.reset()
 
     def list_providers(self) -> list[dict[str, Any]]:
         """Lista provedores configurados com status de habilitação e modelos padrão."""

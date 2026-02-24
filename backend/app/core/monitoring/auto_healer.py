@@ -96,7 +96,7 @@ async def _heal_llm_router() -> None:
     try:
         # Import interno para evitar ciclos
         from app.core.llm.pricing import _model_penalty_factors
-        from app.core.llm.resilience import _provider_circuit_breakers
+        from app.core.llm.resilience import force_reset_stale_open_circuit_breakers
 
         # Decaimento suave das penalizações (não abaixo de 1.0)
         try:
@@ -110,20 +110,10 @@ async def _heal_llm_router() -> None:
             logger.warning("Auto-Healer: erro ao decair penalizações de LLM.")
 
         # Reset oportunista dos circuit breakers de provedores abertos por muito tempo
-        now = time.time()
-        for provider, cb in _provider_circuit_breakers.items():
-            try:
-                if cb.state.value == "OPEN":
-                    last = float(cb.last_failure_time or 0.0)
-                    if last == 0.0 or (now - last) > _LLM_CB_FORCE_RESET_SECONDS:
-                        cb.reset()
-                        logger.warning(
-                            f"Auto-Healer: CircuitBreaker de '{provider}' resetado (aberto há muito tempo)."
-                        )
-            except Exception:
-                logger.warning(
-                    f"Auto-Healer: erro ao avaliar/resetar circuit breaker de '{provider}'."
-                )
+        for provider in force_reset_stale_open_circuit_breakers(_LLM_CB_FORCE_RESET_SECONDS):
+            logger.warning(
+                f"Auto-Healer: CircuitBreaker de '{provider}' resetado (aberto há muito tempo)."
+            )
     except Exception as e:
         logger.error(f"Auto-Healer: falha ao curar LLM Router: {e}", exc_info=True)
 

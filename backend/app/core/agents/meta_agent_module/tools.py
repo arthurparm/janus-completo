@@ -111,7 +111,7 @@ def get_system_health_metrics() -> str:
     """
     try:
         from app.core.agents.multi_agent_system import get_multi_agent_system
-        from app.core.llm.resilience import _llm_pool, _provider_circuit_breakers
+        from app.core.llm.resilience import get_circuit_breaker_snapshot, get_llm_pool_summary
         from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 
         health_monitor = get_health_monitor()
@@ -122,6 +122,8 @@ def get_system_health_metrics() -> str:
         pp_handler = get_poison_pill_handler()
 
         error_stats = GlobalErrorTracker.get_instance().get_stats()
+        pool_summary = get_llm_pool_summary()
+        cb_snapshot = get_circuit_breaker_snapshot()
 
         # Task Statistics
         task_stats = {"pending": 0, "in_progress": 0, "completed": 0, "failed": 0, "blocked": 0}
@@ -147,11 +149,14 @@ def get_system_health_metrics() -> str:
             "system_health": system_health,
             "error_tracking": error_stats,
             "llm_router": {
-                "pool_keys": len(_llm_pool),
-                "pool_total_instances": sum(len(v) for v in _llm_pool.values()),
+                "pool_keys": pool_summary["pool_keys"],
+                "pool_total_instances": pool_summary["pool_total_instances"],
                 "circuit_breakers": {
-                    provider: {"state": cb.state.value, "failure_count": cb.failure_count}
-                    for provider, cb in _provider_circuit_breakers.items()
+                    provider: {
+                        "state": details.get("state"),
+                        "failure_count": details.get("failure_count"),
+                    }
+                    for provider, details in cb_snapshot.items()
                 },
             },
             "multi_agent_system": {
