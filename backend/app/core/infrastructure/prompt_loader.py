@@ -10,10 +10,21 @@ from prometheus_client import Counter
 from app.repositories.prompt_repository import PromptRepository
 
 PROMPTS = {}
-PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
-if not PROMPTS_DIR.exists() and Path("/app/app/prompts").exists():
-    PROMPTS_DIR = Path("/app/app/prompts")
 _file_prompts_cache: dict[str, str] = {}
+
+
+def _path_exists_safely(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+if not _path_exists_safely(PROMPTS_DIR):
+    container_prompts_dir = Path("/app/app/prompts")
+    if _path_exists_safely(container_prompts_dir):
+        PROMPTS_DIR = container_prompts_dir
 
 
 PROMPT_CACHE_HITS = Counter(
