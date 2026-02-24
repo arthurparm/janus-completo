@@ -7,7 +7,7 @@ import inspect
 from langsmith import traceable
 
 from app.core.tools.sandbox_executor import sandbox
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 logger = logging.getLogger(__name__)
 

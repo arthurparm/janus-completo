@@ -17,7 +17,7 @@ from app.core.agents.agent_manager import AgentType, agent_manager
 from app.core.agents.utils import parse_json_strict
 from app.core.llm.client import get_llm_client
 from app.core.llm.router import ModelPriority, ModelRole
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.services.memory_service import MemoryService
 
 logger = logging.getLogger(__name__)

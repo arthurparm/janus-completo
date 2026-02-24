@@ -7,7 +7,7 @@ from langchain.agents import create_react_agent
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.llm.types import ModelPriority, ModelRole
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ class ReasoningSession:
         if self.agent_executor:
             return
 
-        prompt_text = await get_prompt_with_fallback(self.prompt_name)
+        prompt_text = await get_prompt(self.prompt_name)
         if not prompt_text:
             raise ValueError(f"Prompt '{self.prompt_name}' nao encontrado.")
 

@@ -12,7 +12,7 @@ import msgpack
 
 from app.core.autonomy.planner import build_plan_for_goal
 from app.core.infrastructure.message_broker import get_broker
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState

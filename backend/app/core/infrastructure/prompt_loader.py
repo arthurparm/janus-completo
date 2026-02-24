@@ -10,6 +10,10 @@ from prometheus_client import Counter
 from app.repositories.prompt_repository import PromptRepository
 
 PROMPTS = {}
+PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+if not PROMPTS_DIR.exists() and Path("/app/app/prompts").exists():
+    PROMPTS_DIR = Path("/app/app/prompts")
+_file_prompts_cache: dict[str, str] = {}
 
 
 PROMPT_CACHE_HITS = Counter(
@@ -138,6 +142,26 @@ class PromptLoader:
 
         return None
 
+    def _get_prompt_from_file(self, name: str) -> str | None:
+        if not PROMPTS_DIR.exists():
+            return None
+
+        file_path = PROMPTS_DIR / f"{name}.txt"
+        if not file_path.exists():
+            return None
+
+        try:
+            if name in _file_prompts_cache:
+                return _file_prompts_cache[name]
+
+            content = file_path.read_text(encoding="utf-8")
+            _file_prompts_cache[name] = content
+            self._logger.debug(f"Prompt '{name}' carregado de arquivo local: {file_path}")
+            return content
+        except Exception as e:
+            self._logger.warning(f"Erro ao ler arquivo de prompt '{name}': {e}")
+            return None
+
     async def get(
         self,
         name: str,
@@ -190,14 +214,18 @@ class PromptLoader:
                 self._logger.warning(f"Provider externo falhou para '{name}': {e}")
                 template = None
 
-        # 3. Fallback para store em memória
+        # 3. Fallback para arquivo local
+        if template is None:
+            template = self._get_prompt_from_file(name)
+
+        # 4. Fallback para store em memória
         if template is None:
             try:
                 template = self._store[name]
                 self._logger.debug(f"Prompt '{name}' carregado do fallback em memória")
             except KeyError:
                 raise KeyError(
-                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo)."
+                    f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, arquivo)."
                 )
 
         self._validate_placeholders(template, variables)
@@ -217,30 +245,51 @@ class PromptLoader:
 prompt_loader = PromptLoader()
 
 
-async def get_prompt(prompt_name: str) -> str:
-    # compatibilidade retro - agora async
-    return await prompt_loader.get(prompt_name)
-
-
-async def get_prompt_advanced(
+async def get_prompt(
     prompt_name: str,
     *,
     namespace: str | None = None,
     version: str | None = None,
     lang: str | None = None,
     model: str | None = None,
-    variables: dict[str, Any] | None = None,
     hot_reload: bool | None = None,
-) -> str:
-    return await prompt_loader.get(
-        prompt_name,
-        namespace=namespace,
-        version=version,
-        lang=lang,
-        model=model,
-        variables=variables,
-        hot_reload=hot_reload,
-    )
+) -> str | None:
+    """Retorna o prompt bruto (sem formatação) usando a hierarquia canônica de fontes."""
+    try:
+        return await prompt_loader.get(
+            prompt_name,
+            namespace=namespace,
+            version=version,
+            lang=lang,
+            model=model,
+            hot_reload=hot_reload,
+        )
+    except KeyError:
+        return None
+
+
+async def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
+    """
+    Carrega um prompt pela hierarquia canônica e aplica formatação.
+
+    Se faltar placeholder, registra erro e retorna o template bruto (comportamento tolerante).
+    """
+    prompt = await get_prompt(prompt_name)
+    if not prompt:
+        raise ValueError(f"Prompt '{prompt_name}' não encontrado no banco de dados.")
+
+    if format_kwargs:
+        try:
+            return prompt.format(**format_kwargs)
+        except KeyError as e:
+            logging.getLogger(__name__).error(
+                "Variável faltando no prompt '%s': %s",
+                prompt_name,
+                e,
+            )
+            return prompt
+
+    return prompt
 
 
 def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent") -> bool:

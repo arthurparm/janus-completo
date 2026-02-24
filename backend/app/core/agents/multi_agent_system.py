@@ -20,7 +20,7 @@ from app.core.agents.specialized_agent import SpecializedAgent
 logger = logging.getLogger(__name__)
 
 # Re-import missing utility if not in utils
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 
 class MultiAgentSystem:

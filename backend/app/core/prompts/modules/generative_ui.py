@@ -2,7 +2,7 @@
 Generative UI Module - Optional UI blocks for structured answers.
 """
 
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
@@ -21,5 +21,5 @@ class GenerativeUIModule(PromptModule):
         return intent in {IntentType.ANALYSIS, IntentType.QUESTION, IntentType.RESEARCH}
 
     async def render(self, intent: IntentType, context: ConversationContext) -> str:
-        content = await get_prompt_with_fallback("generative_ui")
+        content = await get_prompt("generative_ui")
         return content or ""

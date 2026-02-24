@@ -26,7 +26,7 @@ from typing import Any
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.infrastructure.filesystem_manager import read_file, write_file
-from app.core.infrastructure.prompt_fallback import PROMPTS_DIR
+from app.core.infrastructure.prompt_loader import PROMPTS_DIR
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience
 

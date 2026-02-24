@@ -24,7 +24,7 @@ from app.core.agents.utils import (
     _clean_json_output,
     AgentEventCallbackHandler,
 )
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class SpecializedAgent:
 
         prompt_name = f"agent_{self.role.value}"
         try:
-            prompt_text = await get_prompt_with_fallback(prompt_name)
+            prompt_text = await get_prompt(prompt_name)
             if prompt_text:
                 return prompt_text
         except Exception as e:

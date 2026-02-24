@@ -5,7 +5,7 @@ Uses Chain-of-Density approach to compress long conversations.
 
 import logging
 
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext, Message
 from app.core.prompts.types import IntentType

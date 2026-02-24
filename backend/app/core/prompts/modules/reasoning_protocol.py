@@ -3,7 +3,7 @@ Reasoning Protocol Module - Task-specific reasoning guidelines.
 Conditionally loads appropriate protocol based on intent.
 """
 
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
@@ -45,7 +45,7 @@ class ReasoningProtocolModule(PromptModule):
             return ""
         # Load protocol from database/files
         try:
-            protocol_content = await get_prompt_with_fallback(protocol_name)
+            protocol_content = await get_prompt(protocol_name)
             if protocol_content:
                 return f"\n{protocol_content}\n"
         except Exception:

@@ -7,7 +7,7 @@ import operator
 from langgraph.graph import END, START, StateGraph
 
 from app.core.llm import ModelPriority, ModelRole
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
 

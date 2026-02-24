@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
 from app.core.agents.leaf_worker import LeafWorker
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 logger = logging.getLogger(__name__)
 

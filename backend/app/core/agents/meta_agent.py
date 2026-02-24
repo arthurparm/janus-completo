@@ -50,7 +50,7 @@ from app.core.agents.multi_agent_system import MultiAgentSystem
 from app.core.agents.structures import AgentRole, Task, TaskPriority
 from app.core.agents.utils import parse_json_lenient
 from app.config import settings
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
 
 logger = logging.getLogger(__name__)

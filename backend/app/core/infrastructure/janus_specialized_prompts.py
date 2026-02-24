@@ -1,4 +1,4 @@
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 
 # Templates Especializados do Sistema Janus
 
@@ -40,10 +40,10 @@ async def load_specialized_prompts():
     global ERROR_RECOVERY_TEMPLATE
     global CONTEXT_COMPRESSION_TEMPLATE
 
-    MEMORY_INTEGRATION_TEMPLATE = await get_prompt_with_fallback("memory_integration")
-    GRAPH_QUERY_PLANNING_TEMPLATE = await get_prompt_with_fallback("graph_query_planning")
-    ERROR_RECOVERY_TEMPLATE = await get_prompt_with_fallback("error_recovery")
-    CONTEXT_COMPRESSION_TEMPLATE = await get_prompt_with_fallback("context_compression")
+    MEMORY_INTEGRATION_TEMPLATE = await get_prompt("memory_integration")
+    GRAPH_QUERY_PLANNING_TEMPLATE = await get_prompt("graph_query_planning")
+    ERROR_RECOVERY_TEMPLATE = await get_prompt("error_recovery")
+    CONTEXT_COMPRESSION_TEMPLATE = await get_prompt("context_compression")
 
 
 # Exportar todos os templates

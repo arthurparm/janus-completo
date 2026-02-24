@@ -8,7 +8,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from app.core.infrastructure.filesystem_manager import read_file, write_file
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.memory_core import get_memory_db
 from app.repositories.memory_repository import MemoryRepository
 

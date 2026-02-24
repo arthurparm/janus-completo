@@ -5,7 +5,7 @@ from typing import Any, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import get_llm
 from app.core.llm.types import ModelPriority, ModelRole
 

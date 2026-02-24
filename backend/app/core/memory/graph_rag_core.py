@@ -11,7 +11,7 @@ from neo4j_graphrag.retrievers import HybridRetriever
 from neo4j_graphrag.types import RetrieverResultItem
 
 from app.config import settings
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import get_llm
 from app.core.llm.types import ModelRole
 

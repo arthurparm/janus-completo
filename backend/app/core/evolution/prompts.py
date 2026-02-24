@@ -1,4 +1,4 @@
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 
 # Nota: Estas constantes são definidas como strings vazias inicialmente
 # e devem ser carregadas de forma assíncrona durante a inicialização.
@@ -15,6 +15,6 @@ async def load_evolution_prompts():
     global TOOL_GENERATION_PROMPT
     global tool_validation_prompt
 
-    TOOL_SPECIFICATION_PROMPT = await get_prompt_with_fallback("tool_specification")
-    TOOL_GENERATION_PROMPT = await get_prompt_with_fallback("tool_generation")
-    tool_validation_prompt = await get_prompt_with_fallback("tool_validation")
+    TOOL_SPECIFICATION_PROMPT = await get_prompt("tool_specification")
+    TOOL_GENERATION_PROMPT = await get_prompt("tool_generation")
+    tool_validation_prompt = await get_prompt("tool_validation")

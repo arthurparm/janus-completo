@@ -6,7 +6,7 @@ from fastapi import Request
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.task_policy import resolve_llm_task_policy
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_router_health
 from app.services.prompt_service import PromptService
 

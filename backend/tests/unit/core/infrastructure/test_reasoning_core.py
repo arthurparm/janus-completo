@@ -42,7 +42,7 @@ async def test_reasoning_session_ensure_agent_is_idempotent(monkeypatch):
         calls["agent_factory"] += 1
         return _AsyncExecutor()
 
-    monkeypatch.setattr(reasoning_core, "get_prompt_with_fallback", fake_prompt)
+    monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", fake_create_react_agent)
 
     session = reasoning_core.ReasoningSession(fake_provider, [])
@@ -63,7 +63,7 @@ async def test_solve_question_uses_async_executor_path(monkeypatch):
     async def fake_prompt(prompt_name: str):
         return "Pergunta: {input}"
 
-    monkeypatch.setattr(reasoning_core, "get_prompt_with_fallback", fake_prompt)
+    monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
 
     session = reasoning_core.ReasoningSession(fake_provider, [])
@@ -83,7 +83,7 @@ async def test_solve_question_falls_back_to_sync_invoke(monkeypatch):
     async def fake_prompt(prompt_name: str):
         return "Pergunta: {input}"
 
-    monkeypatch.setattr(reasoning_core, "get_prompt_with_fallback", fake_prompt)
+    monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
 
     session = reasoning_core.ReasoningSession(fake_provider, [])
@@ -105,7 +105,7 @@ async def test_solve_question_returns_controlled_error_on_executor_failure(monke
     async def fake_prompt(prompt_name: str):
         return "Pergunta: {input}"
 
-    monkeypatch.setattr(reasoning_core, "get_prompt_with_fallback", fake_prompt)
+    monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: _BrokenExecutor())
 
     session = reasoning_core.ReasoningSession(fake_provider, [])

@@ -8,7 +8,7 @@ from qdrant_client import models as qdrant_models
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.llm import ModelPriority, ModelRole
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.chat_repository import ChatRepository

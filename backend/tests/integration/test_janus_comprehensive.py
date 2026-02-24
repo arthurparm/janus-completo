@@ -520,9 +520,10 @@ class TestPromptLoader:
 
         # get_prompt should work (returns template or fallback)
         try:
-            prompt = get_prompt("system", "default_agent")
-            assert isinstance(prompt, str)
-            print(f"✓ PromptLoader working, got prompt of length {len(prompt)}")
+            prompt = asyncio.run(get_prompt("system"))
+            assert prompt is None or isinstance(prompt, str)
+            prompt_len = len(prompt) if isinstance(prompt, str) else 0
+            print(f"✓ PromptLoader working, got prompt of length {prompt_len}")
         except Exception as e:
             print(f"⚠ PromptLoader test (no DB): {e}")
 
@@ -1262,4 +1263,3 @@ async def run_all_tests():
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())
     exit(0 if success else 1)
-

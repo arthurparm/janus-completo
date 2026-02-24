@@ -221,7 +221,7 @@ class EvolutionManager:
 
     async def _specify_tool(self, request: str) -> dict[str, Any] | None:
         """Usa LLM para criar a especificação técnica da ferramenta."""
-        from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+        from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
         try:
             prompt = await get_formatted_prompt("tool_specification", request=request)
@@ -255,7 +255,7 @@ class EvolutionManager:
 
     async def _generate_code(self, spec: dict[str, Any]) -> str | None:
         """Usa LLM para gerar o código Python."""
-        from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+        from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
         spec_str = json.dumps(spec, indent=2)
 

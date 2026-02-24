@@ -3,7 +3,7 @@ Tool Documentation Module - Dynamic, intent-based tool documentation.
 Only documents tools relevant to the current intent.
 """
 
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType

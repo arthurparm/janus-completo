@@ -3,7 +3,7 @@ Task-Specific Instructions Module - Intent-specific guidelines.
 Provides clear, actionable instructions only for the current task type.
 """
 
-from app.core.infrastructure.prompt_fallback import get_prompt_with_fallback
+from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
@@ -41,7 +41,7 @@ class TaskSpecificModule(PromptModule):
             return ""
 
         try:
-            content = await get_prompt_with_fallback(prompt_name)
+            content = await get_prompt(prompt_name)
             return content or ""
         except Exception:
             return ""

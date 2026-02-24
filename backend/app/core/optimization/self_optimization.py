@@ -23,7 +23,7 @@ from typing import Any
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.agents.agent_manager import AgentType, agent_manager
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.memory_core import get_memory_db
 from app.core.tools.action_module import action_registry
 from app.models.schemas import Experience

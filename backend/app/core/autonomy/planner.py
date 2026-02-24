@@ -8,7 +8,7 @@ from app.core.autonomy.goal_manager import Goal
 from app.core.autonomy.policy_engine import PolicyEngine
 from app.core.llm import ModelPriority, ModelRole
 from app.core.tools.action_module import PermissionLevel, action_registry
-from app.core.infrastructure.prompt_fallback import get_formatted_prompt
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.services.llm_service import LLMService
 from app.core.agents.utils import parse_json_strict
 
