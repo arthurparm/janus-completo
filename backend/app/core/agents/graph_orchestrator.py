@@ -1,4 +1,4 @@
-import logging
+import structlog
 import operator
 from typing import Annotated, Literal, Sequence, TypedDict
 
@@ -10,7 +10,7 @@ from app.config import settings
 from app.core.agents.leaf_worker import LeafWorker
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Constants
 GRAPH_SCHEMA_VERSION = 1
@@ -104,7 +104,7 @@ async def worker_node(state: AgentState):
         result = await worker.run(prompt)
         return {"worker_output": result.response, "next_step": "supervisor"}
     except Exception as e:
-        logger.error(f"Worker execution failed: {e}")
+        logger.error("log_error", message=f"Worker execution failed: {e}")
         return {"error": str(e), "next_step": "finish"}
 
 async def human_approval_node(state: AgentState):
@@ -174,7 +174,7 @@ async def init_graph():
         )
         logger.info("Graph orchestrator initialized with AsyncPostgresSaver.")
     except Exception as e:
-        logger.warning(f"Failed to initialize AsyncPostgresSaver: {e}. Falling back to MemorySaver.")
+        logger.warning("log_warning", message=f"Failed to initialize AsyncPostgresSaver: {e}. Falling back to MemorySaver.")
         if _checkpointer_ctx is not None:
             try:
                 await _checkpointer_ctx.__aexit__(None, None, None)
@@ -198,7 +198,7 @@ async def close_graph():
         try:
             await _checkpointer_ctx.__aexit__(None, None, None)
         except Exception as e:
-            logger.warning(f"Failed to close graph checkpointer cleanly: {e}")
+            logger.warning("log_warning", message=f"Failed to close graph checkpointer cleanly: {e}")
     _graph_instance = None
     _checkpointer_ctx = None
     _checkpointer = None

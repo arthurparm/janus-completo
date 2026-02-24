@@ -9,13 +9,12 @@ This agent analyzes past experiences from memory to identify:
 
 The output is a structured "Reflection Report" that feeds into the Evolution system.
 """
-
-import logging
+import structlog
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -99,7 +98,7 @@ class ReflectorAgent:
         Returns:
             ReflectionReport with identified patterns and suggestions.
         """
-        logger.info(f"[Reflector] Iniciando análise das últimas {hours_back} horas...")
+        logger.info("log_info", message=f"[Reflector] Iniciando análise das últimas {hours_back} horas...")
 
         report = ReflectionReport(generated_at=datetime.now().isoformat(), experiences_analyzed=0)
 
@@ -124,8 +123,7 @@ class ReflectorAgent:
             # Calculate health score
             report.overall_health_score = self._calculate_health_score(report)
 
-            logger.info(
-                f"[Reflector] Análise completa. "
+            logger.info("log_info", message=f"[Reflector] Análise completa. "
                 f"Padrões de falha: {len(report.failure_patterns)}, "
                 f"Score de saúde: {report.overall_health_score:.2f}"
             )
@@ -133,7 +131,7 @@ class ReflectorAgent:
             return report
 
         except Exception as e:
-            logger.error(f"[Reflector] Erro durante análise: {e}", exc_info=True)
+            logger.error("log_error", message=f"[Reflector] Erro durante análise: {e}", exc_info=True)
             return report
 
     async def _fetch_recent_experiences(self, hours_back: int, limit: int) -> list[dict[str, Any]]:
@@ -159,7 +157,7 @@ class ReflectorAgent:
                     if results:
                         experiences.extend(results)
                 except Exception as e:
-                    logger.debug(f"[Reflector] Query '{query}' falhou: {e}")
+                    logger.debug("log_debug", message=f"[Reflector] Query '{query}' falhou: {e}")
                     continue
 
             # Filter by time if possible (depends on metadata structure)
@@ -183,7 +181,7 @@ class ReflectorAgent:
             return filtered[:limit]
 
         except Exception as e:
-            logger.error(f"[Reflector] Erro ao buscar experiências: {e}")
+            logger.error("log_error", message=f"[Reflector] Erro ao buscar experiências: {e}")
             return []
 
     def _detect_failure_patterns(self, experiences: list[dict[str, Any]]) -> list[FailurePattern]:

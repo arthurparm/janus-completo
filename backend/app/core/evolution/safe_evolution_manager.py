@@ -14,7 +14,7 @@ This is the complete "Dream Mode" where Janus safely improves itself.
 
 import asyncio
 import json
-import logging
+import structlog
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
@@ -24,7 +24,7 @@ from app.core.evolution.janus_lab import JanusLabManager
 # Use LogAwareReflector that reads ACTUAL logs, not just Qdrant memory!
 from app.core.memory.log_aware_reflector import LogAwareReflector
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -113,7 +113,7 @@ class SafeEvolutionManager:
             session_id=str(uuid.uuid4()), started_at=datetime.now().isoformat()
         )
 
-        logger.info(f"[SafeEvolution] 🌙 Starting safe evolution session: {session.session_id}")
+        logger.info("log_info", message=f"[SafeEvolution] 🌙 Starting safe evolution session: {session.session_id}")
 
         try:
             # Phase 1: Reflection - NOW READS FROM ACTUAL LOGS!
@@ -121,8 +121,7 @@ class SafeEvolutionManager:
             report = self.reflector.analyze_all_sources(hours_back=hours_to_analyze)
             session.reflection_health_score = report.overall_health_score
 
-            logger.info(
-                f"[SafeEvolution] Log analysis complete. "
+            logger.info("log_info", message=f"[SafeEvolution] Log analysis complete. "
                 f"Health: {report.overall_health_score:.2f}, "
                 f"Errors: {report.total_errors}, "
                 f"Patterns: {report.error_patterns}"
@@ -148,7 +147,7 @@ class SafeEvolutionManager:
             candidates = report.suggested_improvements[:max_tries]
 
             for i, suggestion in enumerate(candidates):
-                logger.info(f"[SafeEvolution] Attempt {i + 1}: {suggestion[:60]}...")
+                logger.info("log_info", message=f"[SafeEvolution] Attempt {i + 1}: {suggestion[:60]}...")
 
                 attempt = await self._attempt_safe_evolution(
                     description=suggestion, attempt_num=i + 1
@@ -167,13 +166,12 @@ class SafeEvolutionManager:
             session.status = "completed"
             session.completed_at = datetime.now().isoformat()
 
-            logger.info(
-                f"[SafeEvolution] 🌙 Session complete. "
+            logger.info("log_info", message=f"[SafeEvolution] 🌙 Session complete. "
                 f"Evolved: {session.total_evolved}, Failed: {session.total_failed}"
             )
 
         except Exception as e:
-            logger.error(f"[SafeEvolution] Session failed: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SafeEvolution] Session failed: {e}", exc_info=True)
             session.status = "failed"
             session.completed_at = datetime.now().isoformat()
 
@@ -203,7 +201,7 @@ class SafeEvolutionManager:
 
         try:
             # Step 1: Generate the evolution (code for new tool)
-            logger.info(f"[SafeEvolution] Generating improvement: {description[:50]}...")
+            logger.info("log_info", message=f"[SafeEvolution] Generating improvement: {description[:50]}...")
 
             # Queue and process to get the specification
             self.evolution.queue_request(description)
@@ -256,7 +254,7 @@ print("Lab validation complete!")
 print("VALIDATION_PASSED=true")
 """
 
-            logger.info(f"[SafeEvolution] Running validation in Lab {lab_config.lab_id}...")
+            logger.info("log_info", message=f"[SafeEvolution] Running validation in Lab {lab_config.lab_id}...")
             result = self.lab.run_python_in_lab(lab_config.lab_id, test_code)
 
             # Check if validation passed
@@ -272,8 +270,7 @@ print("VALIDATION_PASSED=true")
 
                     if evolution_result:
                         attempt.applied_to_prime = True
-                        logger.info(
-                            f"[SafeEvolution] Evolution applied! "
+                        logger.info("log_info", message=f"[SafeEvolution] Evolution applied! "
                             f"New tool: {evolution_result.get('name', 'unknown')}"
                         )
                     else:
@@ -281,22 +278,22 @@ print("VALIDATION_PASSED=true")
 
                 except Exception as e:
                     attempt.error = f"Apply failed: {e!s}"
-                    logger.error(f"[SafeEvolution] Failed to apply: {e}")
+                    logger.error("log_error", message=f"[SafeEvolution] Failed to apply: {e}")
 
             else:
                 attempt.lab_test_passed = False
                 attempt.error = f"Lab validation failed: {result.error or 'Unknown'}"
                 logger.warning("[SafeEvolution] Lab validation FAILED ❌")
-                logger.debug(f"Lab output: {result.test_output[:500]}")
+                logger.debug("log_debug", message=f"Lab output: {result.test_output[:500]}")
 
         except Exception as e:
             attempt.error = str(e)
-            logger.error(f"[SafeEvolution] Attempt failed: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SafeEvolution] Attempt failed: {e}", exc_info=True)
 
         finally:
             # Step 5: Cleanup Lab
             if lab_config:
-                logger.info(f"[SafeEvolution] Destroying Lab {lab_config.lab_id}...")
+                logger.info("log_info", message=f"[SafeEvolution] Destroying Lab {lab_config.lab_id}...")
                 self.lab.destroy_lab(lab_config.lab_id)
 
             attempt.duration_seconds = time.time() - start_time
@@ -317,7 +314,7 @@ print("VALIDATION_PASSED=true")
                 json.dump(sessions, f, indent=2, default=str)
 
         except Exception as e:
-            logger.error(f"[SafeEvolution] Failed to save session: {e}")
+            logger.error("log_error", message=f"[SafeEvolution] Failed to save session: {e}")
 
     def _load_sessions(self) -> list[dict]:
         try:

@@ -4,14 +4,13 @@ Graph Guardian - Sprint 8
 "Guardião do Grafo" - Camada de normalização e validação para o grafo de conhecimento.
 Garante consistência em nós (entidades) e relações, evitando poluição semântica.
 """
-
-import logging
+import structlog
 import re
 from enum import Enum
 
 from app.core.memory.semantic_relation_matcher import match_relation_type as match_semantic_relation
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RelationType(str, Enum):
@@ -423,7 +422,7 @@ class GraphGuardian:
             return EntityType.PERSON
 
         # Default: Concept (mais genérico)
-        logger.debug(f"Tipo '{type_str}' não reconhecido. Usando CONCEPT como padrão.")
+        logger.debug("log_debug", message=f"Tipo '{type_str}' não reconhecido. Usando CONCEPT como padrão.")
         return EntityType.CONCEPT
 
     def normalize_relation_type(self, type_str: str) -> RelationType | None:
@@ -455,8 +454,7 @@ class GraphGuardian:
             return RelationType(matched_enum.value)
         except ValueError:
             # Se o valor retornado pelo matcher não existir no enum local, fallback
-            logger.warning(
-                f"Relation type mismatch: {matched_enum.value} not in GraphGuardian.RelationType. Fallback to RELATES_TO."
+            logger.warning("log_warning", message=f"Relation type mismatch: {matched_enum.value} not in GraphGuardian.RelationType. Fallback to RELATES_TO."
             )
             return RelationType.RELATES_TO
 
@@ -528,14 +526,13 @@ class GraphGuardian:
         validated_rel_type = self.normalize_relation_type(rel_type)
 
         if not normalized_from or not normalized_to:
-            logger.warning(
-                f"Relacionamento ignorado: entidade origem/destino vazia após normalização. "
+            logger.warning("log_warning", message=f"Relacionamento ignorado: entidade origem/destino vazia após normalização. "
                 f"Original: '{from_entity}' -> '{to_entity}'"
             )
             return None
 
         if not validated_rel_type:
-            logger.warning(f"Relacionamento ignorado: tipo de relação inválido '{rel_type}'")
+            logger.warning("log_warning", message=f"Relacionamento ignorado: tipo de relação inválido '{rel_type}'")
             return None
 
         return {
@@ -563,7 +560,7 @@ class GraphGuardian:
         norm_relation = self.normalize_relation_type(relation_type)
         
         if not norm_relation:
-            logger.warning(f"Política: Relação negada por tipo inválido: {relation_type}")
+            logger.warning("log_warning", message=f"Política: Relação negada por tipo inválido: {relation_type}")
             return False
             
         # Política básica: Tipos devem ser reconhecidos
@@ -581,7 +578,7 @@ class GraphGuardian:
             source_id: ID da origem (experience_id)
             reason: Motivo da quarentena
         """
-        logger.warning(f"QUARENTENA ({reason}): {item_type} de {source_id} - {content}")
+        logger.warning("log_warning", message=f"QUARENTENA ({reason}): {item_type} de {source_id} - {content}")
         
         try:
             from app.db.postgres_config import postgres_db
@@ -596,10 +593,10 @@ class GraphGuardian:
                 )
                 session.add(item)
                 await session.commit()
-                logger.info(f"Item persistido na quarentena: ID {item.id}")
+                logger.info("log_info", message=f"Item persistido na quarentena: ID {item.id}")
                 
         except Exception as e:
-            logger.error(f"Falha ao persistir item na quarentena: {e}")
+            logger.error("log_error", message=f"Falha ao persistir item na quarentena: {e}")
             # Não quebrar o fluxo se o DB falhar, apenas logar
             
         return True

@@ -1,11 +1,11 @@
 from typing import Literal
-import logging
+import structlog
 from langgraph.graph import END, START, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.core.agents.meta_agent_module.schemas import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MetaAgentGraphBuilder:
@@ -88,7 +88,7 @@ class MetaAgentGraphBuilder:
         return await self.agent.error_reflexion_node_logic(state)
 
     async def _node_dead_letter_wrapper(self, state: AgentState) -> dict:
-        logger.critical(f"DEAD LETTER: Cycle {state.get('cycle_id')} failed after max retries.")
+        logger.critical("log_critical", message=f"DEAD LETTER: Cycle {state.get('cycle_id')} failed after max retries.")
         # Alerting logic here
         return {"status": "dead_letter"}
 

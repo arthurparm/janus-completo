@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import json
-import logging
+import structlog
 from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote
@@ -52,7 +52,7 @@ except Exception:
     _tracer = None
 from app.models.schemas import TaskMessage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Métricas ---
 _MESSAGES_PUBLISHED = Counter(
@@ -104,8 +104,7 @@ class MessageBroker:
                 logger.info("Conexão com RabbitMQ estabelecida com sucesso.")
             except Exception as e:
                 _CONNECTION_ERRORS.inc()
-                logger.error(
-                    f"Falha ao conectar ao RabbitMQ em host '{self.settings.RABBITMQ_HOST}': {e}",
+                logger.error("log_error", message=f"Falha ao conectar ao RabbitMQ em host '{self.settings.RABBITMQ_HOST}': {e}",
                     exc_info=True,
                 )
                 # Fallback: tentar localhost para execução fora do Docker
@@ -144,7 +143,7 @@ class MessageBroker:
                             pass
 
                     except Exception as ex:
-                        logger.warning(f"Falha ao configurar DLX/DLQ: {ex}")
+                        logger.warning("log_warning", message=f"Falha ao configurar DLX/DLQ: {ex}")
                 except Exception as e2:
                     logger.warning(
                         "RabbitMQ indisponível; seguindo em modo offline sem conexão.", exc_info=e2
@@ -488,8 +487,7 @@ class MessageBroker:
                         # Send to DLX (Dead Letter Exchange) by Nack(requeue=False).
                         # Queue must be configured with x-dead-letter-exchange for this to work properly.
                         await message.nack(requeue=False)
-                        logger.warning(
-                            f"Mensagem movida para DLX (requeue=False) devido a erro: {e}"
+                        logger.warning("log_warning", message=f"Mensagem movida para DLX (requeue=False) devido a erro: {e}"
                         )
                     else:
                         logger.warning(
@@ -604,7 +602,7 @@ class MessageBroker:
 
                     await callback(payload)
                 except Exception as e:
-                    logger.error(f"Erro ao processar evento da exchange {exchange_name}: {e}")
+                    logger.error("log_error", message=f"Erro ao processar evento da exchange {exchange_name}: {e}")
 
         async def _consume_loop():
             while True:
@@ -629,13 +627,13 @@ class MessageBroker:
                         await queue.bind(exchange, routing_key=routing_key)
                         await queue.consume(_on_message)
 
-                        logger.info(f"Subscription iniciada: {exchange_name} -> {routing_key}")
+                        logger.info("log_info", message=f"Subscription iniciada: {exchange_name} -> {routing_key}")
                         await asyncio.Future()  # Keep alive
 
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logger.error(f"Erro na subscription {exchange_name}: {e}")
+                    logger.error("log_error", message=f"Erro na subscription {exchange_name}: {e}")
                     await asyncio.sleep(5)
 
         return asyncio.create_task(_consume_loop())
@@ -681,7 +679,7 @@ class MessageBroker:
                         "arguments": data.get("arguments", {}) or {},
                     }
             except Exception as e:
-                logger.error(f"Erro ao consultar Management API do RabbitMQ: {e}")
+                logger.error("log_error", message=f"Erro ao consultar Management API do RabbitMQ: {e}")
                 return None
 
         return await asyncio.to_thread(_fetch)
@@ -760,7 +758,7 @@ class MessageBroker:
                     status = getattr(resp, "status", 200)
                     return 200 <= status < 300
             except Exception as e:
-                logger.error(f"Erro ao deletar fila via Management API: {e}")
+                logger.error("log_error", message=f"Erro ao deletar fila via Management API: {e}")
                 return False
 
         return await asyncio.to_thread(_delete)
@@ -789,7 +787,7 @@ class MessageBroker:
                         await channel.declare_queue(queue_name, durable=True, arguments=args)
                     actions.append({"action": "declare_queue", "success": True})
                 except Exception as e:
-                    logger.error(f"Erro ao recriar fila {queue_name}: {e}")
+                    logger.error("log_error", message=f"Erro ao recriar fila {queue_name}: {e}")
                     actions.append({"action": "declare_queue", "success": False, "error": str(e)})
 
             # Validar novamente após tentativa de reconciliação

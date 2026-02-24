@@ -1,12 +1,12 @@
 import asyncio
-import logging
+import structlog
 from typing import Any
 
 from app.core.agents.multi_agent_system import SpecializedAgent, Task, TaskStatus
 from app.core.infrastructure.message_broker import MessageBroker, get_broker
 from app.models.schemas import TaskMessage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AgentActor:
@@ -29,7 +29,7 @@ class AgentActor:
 
         self.broker = await get_broker()
         self._is_running = True
-        logger.info(f"Iniciando AgentActor para {self.agent.role.value} na fila {self.queue_name}")
+        logger.info("log_info", message=f"Iniciando AgentActor para {self.agent.role.value} na fila {self.queue_name}")
 
         # Inicia consumidor
         self._consumer_task = self.broker.start_consumer(
@@ -47,11 +47,11 @@ class AgentActor:
                 await self._consumer_task
             except asyncio.CancelledError:
                 pass
-        logger.info(f"AgentActor para {self.agent.role.value} parado")
+        logger.info("log_info", message=f"AgentActor para {self.agent.role.value} parado")
 
     async def _on_message(self, message: TaskMessage):
         """Callback processar mensagem da fila."""
-        logger.info(f"AgentActor {self.agent.role.value} recebeu tarefa: {message.task_id}")
+        logger.info("log_info", message=f"AgentActor {self.agent.role.value} recebeu tarefa: {message.task_id}")
 
         try:
             # Reconstrói objeto Task (simplificado)
@@ -82,7 +82,7 @@ class AgentActor:
             await self._publish_result(result)
 
         except Exception as e:
-            logger.error(f"Erro fatal no AgentActor {self.agent.role.value}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro fatal no AgentActor {self.agent.role.value}: {e}", exc_info=True)
             # Tenta publicar erro
             await self._publish_result(
                 {
@@ -108,10 +108,10 @@ class AgentActor:
             )
 
             await self.broker.publish(queue_name=self.results_queue, message=msg.model_dump())
-            logger.info(f"Resultado da tarefa {msg.task_id} publicado por {self.agent.role.value}")
+            logger.info("log_info", message=f"Resultado da tarefa {msg.task_id} publicado por {self.agent.role.value}")
 
         except Exception as e:
-            logger.error(f"Erro ao publicar resultado da tarefa {result.get('task_id')}: {e}")
+            logger.error("log_error", message=f"Erro ao publicar resultado da tarefa {result.get('task_id')}: {e}")
 
     async def _publish_event(
         self, task_id: str, event_type: str, content: str, conversation_id: str = "global"
@@ -140,4 +140,4 @@ class AgentActor:
             )
 
         except Exception as e:
-            logger.warning(f"Erro ao publicar evento {event_type} para tarefa {task_id}: {e}")
+            logger.warning("log_warning", message=f"Erro ao publicar evento {event_type} para tarefa {task_id}: {e}")

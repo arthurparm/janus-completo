@@ -173,7 +173,7 @@ class GenerativeMemoryService:
             return 5.0 # Default
             
         except Exception as e:
-            logger.error(f"Failed to calculate importance: {e}")
+            logger.error("log_error", message=f"Failed to calculate importance: {e}")
             if use_local:
                 raise e # Propagate to allow fallback
             return 5.0
@@ -201,9 +201,9 @@ class GenerativeMemoryService:
             result = await db.query(cypher, {"cutoff_date": cutoff_date, "min_importance": min_importance})
             if result:
                 count = result[0].get("archived_count", 0)
-                logger.info(f"Archived {count} old/unimportant memories")
+                logger.info("log_info", message=f"Archived {count} old/unimportant memories")
         except Exception as e:
-            logger.error(f"Failed to prune memories: {e}")
+            logger.error("log_error", message=f"Failed to prune memories: {e}")
 
 # Global instance
 generative_memory_service = GenerativeMemoryService()

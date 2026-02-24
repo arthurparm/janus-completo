@@ -3,7 +3,7 @@ Qdrant monitoring and recovery service for enhanced resilience.
 """
 
 import asyncio
-import logging
+import structlog
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -12,7 +12,7 @@ from typing import Any
 
 from app.core.memory.enhanced_qdrant_client import EnhancedQdrantClient
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RecoveryStrategy(Enum):

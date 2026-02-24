@@ -9,8 +9,7 @@ This enhanced version checks:
 
 Much better at catching REAL errors!
 """
-
-import logging
+import structlog
 import os
 import re
 from collections import Counter
@@ -18,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -227,7 +226,7 @@ class LogAwareReflector:
         """Find the first existing log file."""
         for path in self.LOG_FILE_PATHS:
             if os.path.exists(path) and os.path.getsize(path) > 0:
-                logger.info(f"[LogReflector] Found log file: {path}")
+                logger.info("log_info", message=f"[LogReflector] Found log file: {path}")
                 return path
 
         # Try to find any .log file in /app
@@ -237,7 +236,7 @@ class LogAwareReflector:
                     if f.endswith(".log"):
                         full_path = os.path.join(root, f)
                         if os.path.getsize(full_path) > 100:
-                            logger.info(f"[LogReflector] Found log file: {full_path}")
+                            logger.info("log_info", message=f"[LogReflector] Found log file: {full_path}")
                             return full_path
         except Exception:
             pass
@@ -268,12 +267,12 @@ class LogAwareReflector:
 
         # 1. Check log file
         log_path = self._log_path or "(no log file)"
-        logger.info(f"[LogReflector] Analyzing {log_path}...")
+        logger.info("log_info", message=f"[LogReflector] Analyzing {log_path}...")
         file_errors = self._analyze_log_file(cutoff)
         if file_errors:
             report.log_file_checked = True
             all_errors.extend(file_errors)
-            logger.info(f"[LogReflector] Found {len(file_errors)} errors in log file")
+            logger.info("log_info", message=f"[LogReflector] Found {len(file_errors)} errors in log file")
 
         # 2. Aggregate and categorize
         report.log_errors = all_errors
@@ -307,8 +306,7 @@ class LogAwareReflector:
         # Generate suggestions based on patterns
         report.suggested_improvements = self._generate_suggestions(report.error_patterns)
 
-        logger.info(
-            f"[LogReflector] Analysis complete. "
+        logger.info("log_info", message=f"[LogReflector] Analysis complete. "
             f"Health: {report.overall_health_score:.2f}, "
             f"Errors: {report.total_errors}, "
             f"Critical: {len(report.critical_issues)}"
@@ -344,7 +342,7 @@ class LogAwareReflector:
                     )
 
         except Exception as e:
-            logger.error(f"[LogReflector] Failed to read log file: {e}")
+            logger.error("log_error", message=f"[LogReflector] Failed to read log file: {e}")
 
         return errors
 

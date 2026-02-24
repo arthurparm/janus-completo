@@ -90,7 +90,7 @@ class ScreenCaptureService:
         try:
             return await asyncio.to_thread(self._capture_active_window_sync)
         except Exception as e:
-            logger.error(f"Failed to capture active window: {e}")
+            logger.error("log_error", message=f"Failed to capture active window: {e}")
             return None
 
     def _capture_active_window_sync(self) -> ScreenCapture | None:
@@ -121,7 +121,7 @@ class ScreenCaptureService:
             return self._process_image(img, "active_window")
 
         except Exception as e:
-            logger.error(f"Active window capture failed: {e}")
+            logger.error("log_error", message=f"Active window capture failed: {e}")
             return self._capture_full_screen_sync()
 
     async def capture_full_screen(self) -> ScreenCapture | None:
@@ -137,7 +137,7 @@ class ScreenCaptureService:
         try:
             return await asyncio.to_thread(self._capture_full_screen_sync)
         except Exception as e:
-            logger.error(f"Failed to capture full screen: {e}")
+            logger.error("log_error", message=f"Failed to capture full screen: {e}")
             return None
 
     def _capture_full_screen_sync(self) -> ScreenCapture | None:
@@ -146,7 +146,7 @@ class ScreenCaptureService:
             img = ImageGrab.grab()
             return self._process_image(img, "full_screen")
         except Exception as e:
-            logger.error(f"Full screen capture failed: {e}")
+            logger.error("log_error", message=f"Full screen capture failed: {e}")
             return None
 
     async def capture_region(self, x: int, y: int, width: int, height: int) -> ScreenCapture | None:
@@ -167,7 +167,7 @@ class ScreenCaptureService:
             img = await asyncio.to_thread(ImageGrab.grab, bbox=bbox)
             return self._process_image(img, "region")
         except Exception as e:
-            logger.error(f"Failed to capture region: {e}")
+            logger.error("log_error", message=f"Failed to capture region: {e}")
             return None
 
     def _process_image(self, img: "Image.Image", source: str) -> ScreenCapture:

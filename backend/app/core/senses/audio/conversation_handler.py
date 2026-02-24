@@ -196,7 +196,7 @@ class ConversationHandler:
             return response
 
         except Exception as e:
-            logger.error(f"Error processing input: {e}")
+            logger.error("log_error", message=f"Error processing input: {e}")
             self._state = ConversationState.LISTENING
             return "I had trouble processing that. Could you repeat?"
 

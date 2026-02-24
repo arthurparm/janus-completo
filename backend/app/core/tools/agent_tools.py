@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+import structlog
 import urllib.error
 import urllib.request
 from html.parser import HTMLParser
@@ -35,7 +35,7 @@ from app.repositories.tool_repository import ToolRepository
 from app.services.llm_service import LLMService
 from app.services.tool_service import ToolService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Usa WORKSPACE_ROOT das configurações como raiz canônica do workspace
 WORKSPACE_ROOT = Path(settings.WORKSPACE_ROOT).resolve()
@@ -183,7 +183,7 @@ def list_directory(path: str = "/app/workspace") -> str:
     Exemplo de uso:
         list_directory(path="/app/workspace")
     """
-    logger.info(f"[LIST_DIRECTORY] Chamada recebida - path={path!r}, type={type(path)}")
+    logger.info("log_info", message=f"[LIST_DIRECTORY] Chamada recebida - path={path!r}, type={type(path)}")
 
     try:
         # Garante que o path é seguro
@@ -193,15 +193,15 @@ def list_directory(path: str = "/app/workspace") -> str:
         if not path.startswith("/app/workspace"):
             path = f"/app/workspace/{path.lstrip('/')}"
 
-        logger.info(f"[LIST_DIRECTORY] Path processado: {path}")
+        logger.info("log_info", message=f"[LIST_DIRECTORY] Path processado: {path}")
 
         resolved_path = Path(path).resolve()
-        logger.info(f"[LIST_DIRECTORY] Path resolvido: {resolved_path}")
+        logger.info("log_info", message=f"[LIST_DIRECTORY] Path resolvido: {resolved_path}")
 
         resolved_path.relative_to(WORKSPACE_ROOT)  # Valida segurança
 
         if not resolved_path.exists():
-            logger.warning(f"[LIST_DIRECTORY] Diretório não existe: {resolved_path}")
+            logger.warning("log_warning", message=f"[LIST_DIRECTORY] Diretório não existe: {resolved_path}")
             return f"Erro: O diretório '{path}' não existe."
 
         if not resolved_path.is_dir():
@@ -216,14 +216,14 @@ def list_directory(path: str = "/app/workspace") -> str:
         if not items:
             return f"O diretório '{path}' está vazio."
 
-        logger.info(f"[LIST_DIRECTORY] Sucesso - {len(items)} itens encontrados")
+        logger.info("log_info", message=f"[LIST_DIRECTORY] Sucesso - {len(items)} itens encontrados")
         return f"Conteúdo de '{path}':\n" + "\n".join(items)
 
     except ValueError as e:
-        logger.error(f"[LIST_DIRECTORY] Erro de validação: {e}")
+        logger.error("log_error", message=f"[LIST_DIRECTORY] Erro de validação: {e}")
         return f"Erro de validação: {e}"
     except Exception as e:
-        logger.error(f"[LIST_DIRECTORY] Erro: {e}", exc_info=True)
+        logger.error("log_error", message=f"[LIST_DIRECTORY] Erro: {e}", exc_info=True)
         return f"Erro ao listar diretório: {e}"
 
 
@@ -237,7 +237,7 @@ async def recall_experiences(query: str) -> str:
         experiences = await memory_db.arecall(query=query, limit=3)
         return json.dumps(experiences, indent=2, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"Error recalling experiences: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error recalling experiences: {e}", exc_info=True)
         return f"Erro ao buscar experiências na memória: {e}"
 
 
@@ -280,7 +280,7 @@ async def analyze_memory_for_failures(last_n_experiences: int = 100) -> str:
 
         return summary
     except Exception as e:
-        logger.error(f"Error analyzing memory for failures: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error analyzing memory for failures: {e}", exc_info=True)
         return f"Erro ao analisar memória para falhas: {e}"
 
 
@@ -320,7 +320,7 @@ async def evolve_tool(capability_request: str | None = None) -> str:
         result = await manager.evolve_tool(str(capability_request))
         return json.dumps({"success": True, "tool": result}, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"Erro ao evoluir ferramenta: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao evoluir ferramenta: {e}", exc_info=True)
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 
 
@@ -367,7 +367,7 @@ async def query_knowledge_graph(query: str) -> str:
         return response
 
     except Exception as e:
-        logger.error(f"Erro ao consultar grafo de conhecimento: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao consultar grafo de conhecimento: {e}", exc_info=True)
         return f"Erro ao consultar grafo de conhecimento: {e}"
 
 
@@ -433,7 +433,7 @@ def find_related_concepts(concept: str, max_depth: int = 2, **kwargs) -> str:
         return response
 
     except Exception as e:
-        logger.error(f"Erro ao buscar conceitos relacionados: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao buscar conceitos relacionados: {e}", exc_info=True)
         return f"Erro ao buscar conceitos relacionados: {e}"
 
 
@@ -483,7 +483,7 @@ async def get_entity_details(entity_name: str, **kwargs) -> str:
         return response
 
     except Exception as e:
-        logger.error(f"Erro ao obter detalhes da entidade: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao obter detalhes da entidade: {e}", exc_info=True)
         return f"Erro ao obter detalhes: {e}"
 
 
@@ -708,7 +708,7 @@ def browse_url(url: str) -> str:
     if not url.startswith("http"):
         return "Erro: A URL deve começar com http:// ou https://"
 
-    logger.info(f"Browsing URL: {url}")
+    logger.info("log_info", message=f"Browsing URL: {url}")
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -736,7 +736,7 @@ def browse_url(url: str) -> str:
     except urllib.error.URLError as e:
         return f"Erro de Conexão: {e.reason}"
     except Exception as e:
-        logger.error(f"Erro ao navegar na URL {url}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao navegar na URL {url}: {e}", exc_info=True)
         return f"Erro inesperado ao acessar URL: {e}"
 
 
@@ -753,7 +753,7 @@ def recall_working_memory(query: str, limit: int = 5) -> str:
         results = wm.recall(query=query, limit=limit)
         return json.dumps(results, indent=2, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"Error recalling working memory: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error recalling working memory: {e}", exc_info=True)
         return f"Erro ao buscar na working memory: {e}"
 
 

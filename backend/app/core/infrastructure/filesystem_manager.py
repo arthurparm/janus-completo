@@ -1,4 +1,4 @@
-import logging
+import structlog
 import os
 import threading
 import time
@@ -8,7 +8,7 @@ from prometheus_client import Counter
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Determine base directory dynamically to support CI/Test environments where /app is read-only or missing
 if Path("/app").exists() and os.access("/app", os.W_OK):
@@ -110,7 +110,7 @@ def read_file(file_path: str) -> str:
                 f"Acesso de leitura negado: O caminho '{file_path}' está fora da área segura da aplicação (/app)."
             )
 
-        logger.info(f"Lendo ficheiro de forma segura: {absolute_path}")
+        logger.info("log_info", message=f"Lendo ficheiro de forma segura: {absolute_path}")
 
         # Retry aprimorado: até 3 tentativas para leitura
         max_attempts = 3
@@ -125,7 +125,7 @@ def read_file(file_path: str) -> str:
                 _FS_BYTES.labels("read").inc(len(data.encode("utf-8")))
 
                 if attempt > 0:
-                    logger.info(f"Leitura bem-sucedida após {attempt} tentativa(s)")
+                    logger.info("log_info", message=f"Leitura bem-sucedida após {attempt} tentativa(s)")
 
                 return data
 
@@ -139,8 +139,7 @@ def read_file(file_path: str) -> str:
 
                 if attempt < max_attempts:
                     backoff = 0.02 * (2 ** (attempt - 1))  # 20ms, 40ms, 80ms
-                    logger.warning(
-                        f"Tentativa de leitura {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
+                    logger.warning("log_warning", message=f"Tentativa de leitura {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
                     )
                     time.sleep(backoff)
 
@@ -152,7 +151,7 @@ def read_file(file_path: str) -> str:
         return f"Erro: O ficheiro '{file_path}' não foi encontrado."
     except Exception as e:
         _FS_OPS.labels("read", "error", Path(file_path).suffix.lower()).inc()
-        logger.error(f"Erro ao ler ficheiro após retries: {e}")
+        logger.error("log_error", message=f"Erro ao ler ficheiro após retries: {e}")
         return f"Erro ao ler o ficheiro '{file_path}': {e}"
 
 
@@ -224,7 +223,7 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
             elapsed = (time.time() - start) * 1000
             return f"[DRY_RUN] Intenção registrada: escrever {len(normalized)} chars em '{absolute_path}'. ({elapsed:.1f}ms)"
 
-        logger.info(f"Escrevendo em ficheiro de forma segura: {absolute_path}")
+        logger.info("log_info", message=f"Escrevendo em ficheiro de forma segura: {absolute_path}")
         absolute_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Retry aprimorado: até 3 tentativas com backoff exponencial
@@ -252,7 +251,7 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
                 }
                 if attempt > 0:
                     log_data["retries"] = attempt
-                    logger.info(f"Escrita bem-sucedida após {attempt} tentativa(s)")
+                    logger.info("log_info", message=f"Escrita bem-sucedida após {attempt} tentativa(s)")
 
                 logger.info(log_data)
                 return f"Ficheiro '{file_path}' escrito com sucesso no workspace."
@@ -264,14 +263,13 @@ def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
                 if attempt < max_attempts:
                     # Backoff exponencial: 50ms, 200ms, 800ms
                     backoff = 0.05 * (4 ** (attempt - 1))
-                    logger.warning(
-                        f"Tentativa {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
+                    logger.warning("log_warning", message=f"Tentativa {attempt}/{max_attempts} falhou, aguardando {backoff * 1000:.0f}ms: {e}"
                     )
                     time.sleep(backoff)
 
         # Se chegou aqui, falhou todas as tentativas
         _record_failure()
-        logger.error(f"Escrita falhou após {max_attempts} tentativas: {last_err}")
+        logger.error("log_error", message=f"Escrita falhou após {max_attempts} tentativas: {last_err}")
         raise last_err if last_err else RuntimeError("Falha desconhecida na escrita")
 
     except Exception as e:
@@ -299,7 +297,7 @@ def list_directory(path: str = ".") -> str:
                 f"Acesso de listagem negado: Apenas é permitido listar o diretório '{WORKSPACE_DIR}'."
             )
 
-        logger.info(f"Listando diretório de forma segura: {absolute_path}")
+        logger.info("log_info", message=f"Listando diretório de forma segura: {absolute_path}")
         if not absolute_path.is_dir():
             _FS_OPS.labels("list", "not_dir", "").inc()
             return f"Erro: '{path}' não é um diretório dentro do workspace."

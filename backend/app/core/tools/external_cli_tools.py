@@ -1,4 +1,4 @@
-import logging
+import structlog
 import shutil
 import subprocess
 from pathlib import Path
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.core.tools.action_module import PermissionLevel, ToolCategory, register_tool
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _get_cli_path(command: str) -> str | None:
@@ -47,7 +47,7 @@ def _run_command(args: list[str], cwd: Path | None = None) -> str:
         # Se args[0] for um caminho absoluto, subprocess.run usa ele diretamente.
         # Isso resolve a ambiguidade em ambientes Windows.
         cmd_str = _redact_args_for_log(args)
-        logger.debug(f"Executando comando externo: {cmd_str}")
+        logger.debug("log_debug", message=f"Executando comando externo: {cmd_str}")
 
         result = subprocess.run(
             args,
@@ -88,7 +88,7 @@ def codex_exec(prompt: str, model: str | None = None) -> str:
         args += ["-m", model]
     args.append(prompt)
     
-    logger.info(f"Executando Codex CLI ({cli_path})", extra={"command": "codex exec"})
+    logger.info("log_info", message=f"Executando Codex CLI ({cli_path})", extra={"command": "codex exec"})
     return _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
 
 
@@ -125,7 +125,7 @@ def codex_review(
     if prompt:
         args.append(prompt)
 
-    logger.info(f"Executando Codex review ({cli_path})", extra={"command": "codex review"})
+    logger.info("log_info", message=f"Executando Codex review ({cli_path})", extra={"command": "codex review"})
     return _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
 
 
@@ -150,7 +150,7 @@ def jules_new(prompt: str, repo: str | None = None) -> str:
         args += ["--repo", repo]
     args.append(prompt)
 
-    logger.info(f"Executando Jules new ({cli_path})", extra={"command": "jules new"})
+    logger.info("log_info", message=f"Executando Jules new ({cli_path})", extra={"command": "jules new"})
     return _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
 
 
@@ -168,7 +168,7 @@ def jules_pull(session_id: str) -> str:
         return "Erro: 'jules' CLI não encontrado no PATH do sistema Windows."
 
     args = [cli_path, "remote", "pull", "--session", str(session_id)]
-    logger.info(f"Executando Jules remote pull ({cli_path})", extra={"command": "jules remote pull"})
+    logger.info("log_info", message=f"Executando Jules remote pull ({cli_path})", extra={"command": "jules remote pull"})
     return _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
 
 
@@ -203,7 +203,7 @@ def codex_login(token: str | None = None) -> str:
         output = _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
         return output or "Processo de login finalizado."
     except Exception as e:
-        logger.error(f"Erro ao executar codex login: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao executar codex login: {e}", exc_info=True)
         return f"Erro inesperado no login: {e}"
 
 

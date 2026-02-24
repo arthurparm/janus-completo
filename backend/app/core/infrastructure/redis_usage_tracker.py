@@ -1,13 +1,12 @@
 from __future__ import annotations
-
-import logging
+import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
 from app.core.infrastructure.redis_manager import RedisManager, redis_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _is_event_loop_runtime_error(error: Exception) -> bool:
@@ -44,7 +43,7 @@ class RedisUsageTracker:
                     extra={"provider": provider},
                 )
             else:
-                logger.error(f"Failed to get provider spend for {provider}: {e}", exc_info=True)
+                logger.error("log_error", message=f"Failed to get provider spend for {provider}: {e}", exc_info=True)
             return 0.0
 
     async def increment_provider_spend(self, provider: str, cost_usd: float) -> float:
@@ -64,7 +63,7 @@ class RedisUsageTracker:
                     extra={"provider": provider},
                 )
                 return await self.get_provider_spend(provider)
-            logger.error(f"Failed to increment provider spend for {provider}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Failed to increment provider spend for {provider}: {e}", exc_info=True)
             return await self.get_provider_spend(provider)
 
     async def get_tenant_spend(self, kind: str, id_: str, date: Optional[str] = None) -> float:
@@ -84,7 +83,7 @@ class RedisUsageTracker:
                     extra={"kind": kind, "id": id_},
                 )
             else:
-                logger.error(f"Failed to get tenant spend for {kind}:{id_}: {e}", exc_info=True)
+                logger.error("log_error", message=f"Failed to get tenant spend for {kind}:{id_}: {e}", exc_info=True)
             return 0.0
 
     async def increment_tenant_spend(
@@ -110,7 +109,7 @@ class RedisUsageTracker:
                     extra={"kind": kind, "id": id_},
                 )
                 return await self.get_tenant_spend(kind, id_, date)
-            logger.error(f"Failed to increment tenant spend for {kind}:{id_}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Failed to increment tenant spend for {kind}:{id_}: {e}", exc_info=True)
             return await self.get_tenant_spend(kind, id_, date)
 
 

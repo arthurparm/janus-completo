@@ -75,7 +75,7 @@ class AgentManager:
                 "status": result.get("status"),
             }
         except Exception as e:
-            logger.error(f"Erro na execução do agente: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro na execução do agente: {e}", exc_info=True)
             return {
                 "answer": f"Desculpe, ocorreu um erro ao processar sua solicitação: {e!s}",
                 "intermediate_steps": [],

@@ -73,7 +73,7 @@ class VisionAnalyzer:
                 capture, prompt="Describe what you see in this screenshot. Be concise."
             )
         except Exception as e:
-            logger.error(f"Failed to describe screen: {e}")
+            logger.error("log_error", message=f"Failed to describe screen: {e}")
             return f"Error analyzing screen: {e}"
 
     async def find_element(self, description: str) -> dict[str, Any] | None:
@@ -106,7 +106,7 @@ class VisionAnalyzer:
                 "found": bool(result and "not found" not in result.lower()),
             }
         except Exception as e:
-            logger.error(f"Failed to find element: {e}")
+            logger.error("log_error", message=f"Failed to find element: {e}")
             return None
 
     async def extract_text(self) -> str | None:
@@ -130,7 +130,7 @@ class VisionAnalyzer:
                 "List the text you can see, organized by sections.",
             )
         except Exception as e:
-            logger.error(f"Failed to extract text: {e}")
+            logger.error("log_error", message=f"Failed to extract text: {e}")
             return None
 
     async def analyze_context(self) -> dict[str, Any] | None:
@@ -162,7 +162,7 @@ class VisionAnalyzer:
                 "timestamp": capture.timestamp.isoformat(),
             }
         except Exception as e:
-            logger.error(f"Failed to analyze context: {e}")
+            logger.error("log_error", message=f"Failed to analyze context: {e}")
             return None
 
     async def _analyze_with_llm(self, capture: ScreenCapture, prompt: str) -> str:
@@ -202,7 +202,7 @@ class VisionAnalyzer:
         except ImportError:
             pass
         except Exception as e:
-            logger.warning(f"LLM vision analysis failed: {e}")
+            logger.warning("log_warning", message=f"LLM vision analysis failed: {e}")
 
         # Fallback: return basic info
         return (

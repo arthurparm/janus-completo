@@ -65,9 +65,9 @@ class QdrantProvider:
             try:
                 try:
                     await self.client.get_collection(self.collection_name)
-                    logger.info(f"Coleção '{self.collection_name}' já existe.")
+                    logger.info("log_info", message=f"Coleção '{self.collection_name}' já existe.")
                 except Exception:
-                    logger.info(f"Coleção '{self.collection_name}' não encontrada. Criando...")
+                    logger.info("log_info", message=f"Coleção '{self.collection_name}' não encontrada. Criando...")
                     await self.client.create_collection(
                         collection_name=self.collection_name,
                         vectors_config=models.VectorParams(
@@ -89,8 +89,7 @@ class QdrantProvider:
                     return
                 else:
                     delay = base_delay * (1.5**attempt)
-                    logger.warning(
-                        f"Falha Qdrant (tentativa {attempt+1}). Retentando em {delay:.1f}s..."
+                    logger.warning("log_warning", message=f"Falha Qdrant (tentativa {attempt+1}). Retentando em {delay:.1f}s..."
                     )
                     await asyncio.sleep(delay)
 
@@ -176,7 +175,7 @@ class QdrantProvider:
             return result.points
 
         except Exception:
-            logger.error(f"{operation_name} failed.", exc_info=True)
+            logger.error("log_error", message=f"{operation_name} failed.", exc_info=True)
             self._offline = True
             return []
 

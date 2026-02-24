@@ -60,9 +60,9 @@ class GoalManager:
             db = firestore.Client()
             doc_ref = db.collection(self._collection).document(goal.id)
             doc_ref.set(goal.to_dict())
-            logger.debug(f"Goal {goal.id} synced to Firestore")
+            logger.debug("log_debug", message=f"Goal {goal.id} synced to Firestore")
         except Exception as e:
-            logger.warning(f"Failed to sync goal {goal.id} to Firestore: {e}")
+            logger.warning("log_warning", message=f"Failed to sync goal {goal.id} to Firestore: {e}")
 
     def _delete_from_firestore(self, goal_id: str):
         if not self._firestore_enabled:
@@ -73,18 +73,18 @@ class GoalManager:
             db = firestore.Client()
             doc_ref = db.collection(self._collection).document(goal_id)
             doc_ref.delete()
-            logger.debug(f"Goal {goal_id} deleted from Firestore")
+            logger.debug("log_debug", message=f"Goal {goal_id} deleted from Firestore")
         except Exception as e:
-            logger.warning(f"Failed to delete goal {goal_id} from Firestore: {e}")
+            logger.warning("log_warning", message=f"Failed to delete goal {goal_id} from Firestore: {e}")
 
     def _log_to_memory_service(self, goal: Goal, action: str):
         if not self._memory_service:
             return
         try:
             event_text = f"Goal {action}: {goal.title} (Priority: {goal.priority}, Status: {goal.status})"
-            logger.info(f"Goal event: {event_text}", goal_id=goal.id, action=action)
+            logger.info("log_info", message=f"Goal event: {event_text}", goal_id=goal.id, action=action)
         except Exception as e:
-            logger.warning(f"Failed to log goal {goal.id} to memory service: {e}")
+            logger.warning("log_warning", message=f"Failed to log goal {goal.id} to memory service: {e}")
 
     def create_goal(
         self,
@@ -122,7 +122,7 @@ class GoalManager:
         goal.updated_at = time.time()
         if status in [GoalStatus.COMPLETED, GoalStatus.FAILED]:
             self._goals.pop(goal_id, None)
-            logger.info(f"Goal {goal_id} archived (terminal state).")
+            logger.info("log_info", message=f"Goal {goal_id} archived (terminal state).")
         else:
             self._goals[goal_id] = goal
         self._save_to_firestore(goal)

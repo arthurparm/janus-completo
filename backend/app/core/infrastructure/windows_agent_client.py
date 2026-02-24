@@ -109,7 +109,7 @@ class WindowsAgentClient:
                     return data.get("success", False)
 
         except Exception as e:
-            logger.error(f"Failed to send notification: {e}")
+            logger.error("log_error", message=f"Failed to send notification: {e}")
             return False
 
     async def speak(self, text: str, rate: int = 150) -> bool:
@@ -134,7 +134,7 @@ class WindowsAgentClient:
                     return data.get("success", False)
 
         except Exception as e:
-            logger.error(f"Failed to speak: {e}")
+            logger.error("log_error", message=f"Failed to speak: {e}")
             return False
 
     async def get_active_window_title(self) -> str | None:

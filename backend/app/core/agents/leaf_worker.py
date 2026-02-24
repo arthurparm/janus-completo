@@ -1,7 +1,7 @@
 from typing import Any, Callable, List, Type
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-import logging
+import structlog
 import inspect
 
 from langsmith import traceable
@@ -9,7 +9,7 @@ from langsmith import traceable
 from app.core.tools.sandbox_executor import sandbox
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class WorkerResult(BaseModel):
     response: str
@@ -62,7 +62,7 @@ class LeafWorker:
         sig = inspect.signature(original_tool)
         
         async def sandboxed_tool(ctx: RunContext, *args, **kwargs) -> str:
-            logger.warning(f"Intercepting unsafe tool {original_tool.__name__} for sandbox execution")
+            logger.warning("log_warning", message=f"Intercepting unsafe tool {original_tool.__name__} for sandbox execution")
             
             # Construct a python script that calls the tool? 
             # Or if the tool IS 'execute_python', we just pass the code.
@@ -100,7 +100,7 @@ class LeafWorker:
         """
         Executes the worker with the given prompt.
         """
-        logger.info(f"Worker {self.name} starting task: {prompt[:50]}...")
+        logger.info("log_info", message=f"Worker {self.name} starting task: {prompt[:50]}...")
         try:
             # PydanticAI run method
             result = await self.agent.run(prompt)
@@ -111,7 +111,7 @@ class LeafWorker:
                 return WorkerResult(**output)
             return WorkerResult(response=str(output))
         except Exception as e:
-            logger.error(f"Worker {self.name} failed: {e}")
+            logger.error("log_error", message=f"Worker {self.name} failed: {e}")
             raise
 
 # Example usage/factory

@@ -1,4 +1,4 @@
-import logging
+import structlog
 import string
 import time
 from collections import OrderedDict
@@ -37,6 +37,7 @@ PROMPT_CACHE_MISSES = Counter(
     "Total de misses no cache de prompts",
     ["namespace", "name", "version", "lang", "model"],
 )
+logger = structlog.get_logger(__name__)
 
 
 class PromptLoader:
@@ -57,7 +58,7 @@ class PromptLoader:
         )
         self._cache: OrderedDict[tuple[str, str, str, str, str], tuple[float, str]] = OrderedDict()
         self._prompt_repo: PromptRepository | None = None
-        self._logger = logging.getLogger(__name__)
+        self._logger = logger
 
         # Inicializar repositório se usar banco de dados
         if self.use_database:
@@ -67,8 +68,7 @@ class PromptLoader:
                     "PromptLoader inicializado com suporte a banco de dados Relacional"
                 )
             except Exception as e:
-                self._logger.warning(
-                    f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
+                self._logger.warning("log_warning", message=f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
                 )
                 self.use_database = False
 
@@ -149,7 +149,7 @@ class PromptLoader:
                 break # Apenas uma sessão necessária
                 
         except Exception as e:
-            self._logger.error(f"Erro ao buscar prompt '{name}' do banco: {e}")
+            self._logger.error("log_error", message=f"Erro ao buscar prompt '{name}' do banco: {e}")
 
         return None
 
@@ -167,10 +167,10 @@ class PromptLoader:
 
             content = file_path.read_text(encoding="utf-8")
             _file_prompts_cache[name] = content
-            self._logger.debug(f"Prompt '{name}' carregado de arquivo local: {file_path}")
+            self._logger.debug("log_debug", message=f"Prompt '{name}' carregado de arquivo local: {file_path}")
             return content
         except Exception as e:
-            self._logger.warning(f"Erro ao ler arquivo de prompt '{name}': {e}")
+            self._logger.warning("log_warning", message=f"Erro ao ler arquivo de prompt '{name}': {e}")
             return None
 
     async def get(
@@ -211,7 +211,7 @@ class PromptLoader:
                 name, version=version, namespace=namespace, lang=lang, model=model
             )
             if template:
-                self._logger.debug(f"Prompt '{name}' carregado do banco de dados")
+                self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do banco de dados")
 
         # 2. Tentar provider externo se banco falhou
         if template is None and self._external_provider is not None:
@@ -220,9 +220,9 @@ class PromptLoader:
                 candidate = self._external_provider(name)
                 if isinstance(candidate, str) and candidate:
                     template = candidate
-                    self._logger.debug(f"Prompt '{name}' carregado do provider externo")
+                    self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do provider externo")
             except Exception as e:
-                self._logger.warning(f"Provider externo falhou para '{name}': {e}")
+                self._logger.warning("log_warning", message=f"Provider externo falhou para '{name}': {e}")
                 template = None
 
         # 3. Fallback para arquivo local
@@ -233,7 +233,7 @@ class PromptLoader:
         if template is None:
             try:
                 template = self._store[name]
-                self._logger.debug(f"Prompt '{name}' carregado do fallback em memória")
+                self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do fallback em memória")
             except KeyError:
                 raise KeyError(
                     f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, arquivo)."
@@ -293,10 +293,10 @@ async def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
         try:
             return prompt.format(**format_kwargs)
         except KeyError as e:
-            logging.getLogger(__name__).error(
-                "Variável faltando no prompt '%s': %s",
-                prompt_name,
-                e,
+            logger.error(
+                "prompt_format_variable_missing",
+                prompt_name=prompt_name,
+                error=str(e),
             )
             return prompt
 
@@ -309,8 +309,9 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
     Usado pelo Meta-Agent para otimização dinâmica.
     """
     if not prompt_loader.use_database or not prompt_loader._prompt_repo:
-        logging.warning(
-            f"Tentativa de atualizar prompt '{prompt_name}' sem banco de dados habilitado"
+        logger.warning(
+            "prompt_update_database_disabled",
+            prompt_name=prompt_name,
         )
         return False
 
@@ -326,12 +327,18 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
         # Invalidar cache para forçar reload
         prompt_loader.invalidate(lambda k: k[1] == prompt_name)
 
-        logging.info(
-            f"Prompt '{prompt_name}' atualizado com sucesso. Nova versão: {new_prompt.version}"
+        logger.info(
+            "prompt_updated",
+            prompt_name=prompt_name,
+            version=getattr(new_prompt, "version", None),
         )
         return True
     except Exception as e:
-        logging.error(f"Erro ao atualizar prompt '{prompt_name}': {e}")
+        logger.error(
+            "prompt_update_failed",
+            prompt_name=prompt_name,
+            error=str(e),
+        )
         return False
 
 
@@ -345,5 +352,5 @@ def get_prompt_stats() -> dict[str, Any]:
     try:
         return prompt_loader._prompt_repo.get_prompt_stats()
     except Exception as e:
-        logging.error(f"Erro ao obter estatísticas de prompts: {e}")
+        logger.error("prompt_stats_failed", error=str(e))
         return {"error": str(e)}

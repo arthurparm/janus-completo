@@ -6,7 +6,7 @@ state changes and Qdrant service health.
 """
 
 import asyncio
-import logging
+import structlog
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
@@ -17,7 +17,7 @@ from typing import Any
 
 from app.core.infrastructure.resilience import CircuitBreakerState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AlertSeverity(Enum):
@@ -146,27 +146,36 @@ class CircuitBreakerAlertManager:
             try:
                 handler(alert)
             except Exception as e:
-                logger.error(f"Error in alert handler: {e}", exc_info=True)
+                logger.error("log_error", message=f"Error in alert handler: {e}", exc_info=True)
                 handler(alert)
             except Exception as e:
-                logger.error(f"Error in alert handler: {e}", exc_info=True)
+                logger.error("log_error", message=f"Error in alert handler: {e}", exc_info=True)
 
-        logger.log(
-            self._get_log_level(severity),
-            f"Circuit Breaker Alert: {message} [alert_id={alert_id}, circuit_breaker={circuit_breaker_name}, transition={alert.state_transition}, failures={failure_count}/{failure_threshold}]",
+        self._emit_alert_log(
+            severity,
+            "circuit_breaker_alert",
+            message=message,
+            alert_id=alert_id,
+            circuit_breaker=circuit_breaker_name,
+            transition=alert.state_transition,
+            failure_count=failure_count,
+            failure_threshold=failure_threshold,
         )
 
         return alert
 
-    def _get_log_level(self, severity: AlertSeverity) -> int:
-        """Convert alert severity to logging level."""
+    def _get_log_method(self, severity: AlertSeverity) -> str:
+        """Convert alert severity to structlog method name."""
         mapping = {
-            AlertSeverity.INFO: logging.INFO,
-            AlertSeverity.WARNING: logging.WARNING,
-            AlertSeverity.CRITICAL: logging.ERROR,
-            AlertSeverity.EMERGENCY: logging.CRITICAL,
+            AlertSeverity.INFO: "info",
+            AlertSeverity.WARNING: "warning",
+            AlertSeverity.CRITICAL: "error",
+            AlertSeverity.EMERGENCY: "critical",
         }
-        return mapping.get(severity, logging.WARNING)
+        return mapping.get(severity, "warning")
+
+    def _emit_alert_log(self, severity: AlertSeverity, event: str, **kwargs):
+        getattr(logger, self._get_log_method(severity))(event, **kwargs)
 
     def check_extended_open_duration(
         self, circuit_breaker_name: str, open_since: float
@@ -204,8 +213,7 @@ class CircuitBreakerAlertManager:
                 alert.acknowledged = True
                 alert.acknowledged_by = acknowledged_by
                 alert.acknowledged_at = datetime.now()
-                logger.info(
-                    f"Alert acknowledged: {alert.message} [alert_id={alert_id}, acknowledged_by={acknowledged_by}]"
+                logger.info("log_info", message=f"Alert acknowledged: {alert.message} [alert_id={alert_id}, acknowledged_by={acknowledged_by}]"
                 )
                 return True
         return False
@@ -533,9 +541,10 @@ def setup_default_alert_handlers():
 
     # Console logging handler
     def console_alert_handler(alert: CircuitBreakerAlert):
-        logger.log(
-            monitoring_service.alert_manager._get_log_level(alert.severity),
-            f"🚨 CIRCUIT BREAKER ALERT: {alert.message}",
+        monitoring_service.alert_manager._emit_alert_log(
+            alert.severity,
+            "circuit_breaker_alert_console",
+            message=alert.message,
             alert_id=alert.alert_id,
             severity=alert.severity.value,
             circuit_breaker=alert.circuit_breaker_name,

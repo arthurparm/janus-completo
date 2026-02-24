@@ -1,6 +1,6 @@
 import ast
 import json
-import logging
+import structlog
 import re
 from typing import Any
 
@@ -9,7 +9,7 @@ from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService
 from app.services.tool_service import ToolNotFoundError, ToolService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class EvolutionManager:
@@ -50,7 +50,7 @@ class EvolutionManager:
         backlog.append(item)
         self._save_backlog(backlog)
 
-        logger.info(f"[Evolution] Solicitação agendada: {capability_request} (ID: {req_id})")
+        logger.info("log_info", message=f"[Evolution] Solicitação agendada: {capability_request} (ID: {req_id})")
         return req_id
 
     async def process_next_pending(self) -> dict[str, Any] | None:
@@ -69,7 +69,7 @@ class EvolutionManager:
         item_id = item["id"]
         request = item["request"]
 
-        logger.info(f"[Evolution] Processando item pendente: {request} (ID: {item_id})")
+        logger.info("log_info", message=f"[Evolution] Processando item pendente: {request} (ID: {item_id})")
 
         try:
             # Mark as processing
@@ -82,7 +82,7 @@ class EvolutionManager:
             return result
 
         except Exception as e:
-            logger.error(f"[Evolution] Erro ao processar item {item_id}: {e}")
+            logger.error("log_error", message=f"[Evolution] Erro ao processar item {item_id}: {e}")
             self._update_status(item_id, "failed", backlog, error=str(e))
             raise
 
@@ -116,7 +116,7 @@ class EvolutionManager:
             with open(self.BACKLOG_FILE, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            logger.error(f"[Evolution] Falha ao salvar backlog: {e}")
+            logger.error("log_error", message=f"[Evolution] Falha ao salvar backlog: {e}")
 
     def _update_status(
         self, item_id: str, status: str, backlog: list, result: Any = None, error: str = None
@@ -163,7 +163,7 @@ class EvolutionManager:
         Returns:
             Metadata da ferramenta criada ou erro.
         """
-        logger.info(f"[Evolution] Iniciando evolução para: {capability_request}")
+        logger.info("log_info", message=f"[Evolution] Iniciando evolução para: {capability_request}")
 
         try:
             spec = await self._specify_tool(capability_request)
@@ -178,9 +178,9 @@ class EvolutionManager:
             except ToolNotFoundError:
                 existing_metadata = None
             except Exception as e:
-                logger.warning(f"[Evolution] Falha ao verificar ferramenta existente: {e}")
+                logger.warning("log_warning", message=f"[Evolution] Falha ao verificar ferramenta existente: {e}")
 
-            logger.info(f"[Evolution] Especificação gerada: {tool_name}")
+            logger.info("log_info", message=f"[Evolution] Especificação gerada: {tool_name}")
 
             code = await self._generate_code(spec)
             if not code:
@@ -191,7 +191,7 @@ class EvolutionManager:
 
             tool_meta = self._register_tool(spec, code)
 
-            logger.info(f"[Evolution] Ferramenta '{tool_meta.name}' registrada com sucesso.")
+            logger.info("log_info", message=f"[Evolution] Ferramenta '{tool_meta.name}' registrada com sucesso.")
             from dataclasses import asdict
             from enum import Enum
 
@@ -216,7 +216,7 @@ class EvolutionManager:
             return raw
 
         except Exception as e:
-            logger.error(f"[Evolution] Falha no processo de evolução: {e}", exc_info=True)
+            logger.error("log_error", message=f"[Evolution] Falha no processo de evolução: {e}", exc_info=True)
             raise
 
     async def _specify_tool(self, request: str) -> dict[str, Any] | None:
@@ -226,7 +226,7 @@ class EvolutionManager:
         try:
             prompt = await get_formatted_prompt("tool_specification", request=request)
         except Exception as e:
-            logger.error(f"[Evolution] Falha ao carregar prompt tool_specification: {e}")
+            logger.error("log_error", message=f"[Evolution] Falha ao carregar prompt tool_specification: {e}")
             return None
         # Invocar LLM diretamente (async)
         response = await self.llm_service.invoke_llm(
@@ -250,7 +250,7 @@ class EvolutionManager:
             spec = json.loads(text)
             return spec
         except json.JSONDecodeError:
-            logger.error(f"[Evolution] Falha ao decodificar JSON da especificação: {text}")
+            logger.error("log_error", message=f"[Evolution] Falha ao decodificar JSON da especificação: {text}")
             return None
 
     async def _generate_code(self, spec: dict[str, Any]) -> str | None:
@@ -263,7 +263,7 @@ class EvolutionManager:
             # Use get_formatted_prompt which handles fallback and formatting
             prompt = await get_formatted_prompt("tool_generation", specification=spec_str)
         except Exception as e:
-            logger.error(f"[Evolution] Falha ao carregar prompt tool_generation: {e}")
+            logger.error("log_error", message=f"[Evolution] Falha ao carregar prompt tool_generation: {e}")
             return None
 
         response = await self.llm_service.invoke_llm(
@@ -290,11 +290,11 @@ class EvolutionManager:
                 if isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name in forbidden_imports:
-                            logger.warning(f"[Evolution] Import proibido detectado: {alias.name}")
+                            logger.warning("log_warning", message=f"[Evolution] Import proibido detectado: {alias.name}")
                             return False
                 elif isinstance(node, ast.ImportFrom):
                     if node.module in forbidden_imports:
-                        logger.warning(f"[Evolution] ImportFrom proibido detectado: {node.module}")
+                        logger.warning("log_warning", message=f"[Evolution] ImportFrom proibido detectado: {node.module}")
                         return False
                     # Check os.system usage specifically usually complicated via AST without deep analysis
                     # This is a basic filter.

@@ -1,4 +1,4 @@
-import logging
+import structlog
 from pathlib import Path
 
 from langchain.tools import tool
@@ -7,7 +7,7 @@ from app.config import settings
 from app.core.tools.command_sandbox import run_restricted_command
 from app.core.tools.action_module import PermissionLevel, ToolCategory, register_tool
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @tool
@@ -49,7 +49,7 @@ def write_system_file(path: str, content: str) -> str:
     """
     try:
         p = Path(path).resolve()
-        logger.warning(f"⚠️ ESCREVENDO ARQUIVO SISTEMA: {p}")
+        logger.warning("log_warning", message=f"⚠️ ESCREVENDO ARQUIVO SISTEMA: {p}")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"Arquivo escrito com sucesso em: {p}"
@@ -64,7 +64,7 @@ def read_system_file(path: str) -> str:
     """
     try:
         p = Path(path).resolve()
-        logger.info(f"Lendo arquivo sistema: {p}")
+        logger.info("log_info", message=f"Lendo arquivo sistema: {p}")
         if not p.exists():
             return "Erro: Arquivo não existe."
         if p.stat().st_size > 10 * 1024 * 1024:  # 10MB limit
@@ -90,7 +90,7 @@ def list_directory(path: str | None = None, directory: str | None = None) -> str
 
     try:
         p = Path(target_path).resolve()
-        logger.info(f"Listando diretório: {p}")
+        logger.info("log_info", message=f"Listando diretório: {p}")
         if not p.exists():
             return "Erro: Diretório não existe."
         if not p.is_dir():

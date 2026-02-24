@@ -2,15 +2,13 @@
 Context Compression Module - Intelligent history summarization.
 Uses Chain-of-Density approach to compress long conversations.
 """
-
-import logging
-
+import structlog
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.prompts.base import PromptModule
 from app.core.prompts.context import ConversationContext, Message
 from app.core.prompts.types import IntentType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ContextCompressionModule(PromptModule):

@@ -1,5 +1,5 @@
 import json
-import logging
+import structlog
 import re
 import threading
 from datetime import datetime
@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from app.models.schemas import TaskState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DistillationService:
@@ -41,7 +41,7 @@ class DistillationService:
         try:
             # 1. Filtro de Qualidade
             if not self._is_high_quality(state):
-                logger.debug(f"Tarefa {state.task_id} ignorada pelo filtro de qualidade.")
+                logger.debug("log_debug", message=f"Tarefa {state.task_id} ignorada pelo filtro de qualidade.")
                 return False
 
             # 2. Extração e Sanitização
@@ -52,14 +52,13 @@ class DistillationService:
             # 3. Persistência (Thread-Safe)
             self._append_to_dataset(training_example)
 
-            logger.info(
-                f"Conhecimento destilado com sucesso: {state.task_id}",
+            logger.info("log_info", message=f"Conhecimento destilado com sucesso: {state.task_id}",
                 extra={"reasoning_len": len(training_example["reasoning"])}
             )
             return True
 
         except Exception as e:
-            logger.error(f"Falha ao destilar tarefa {state.task_id}: {e}", exc_info=True)
+            logger.error("log_error", message=f"Falha ao destilar tarefa {state.task_id}: {e}", exc_info=True)
             return False
 
     def _is_high_quality(self, state: TaskState) -> bool:

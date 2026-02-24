@@ -34,7 +34,7 @@ class STTService(STTProvider):
         except ImportError:
             logger.warning("speech_recognition library not found. STT disabled.")
         except Exception as e:
-            logger.warning(f"Failed to initialize microphone: {e}. STT disabled.")
+            logger.warning("log_warning", message=f"Failed to initialize microphone: {e}. STT disabled.")
 
     async def listen(self) -> str:
         if not self._available:
@@ -48,7 +48,7 @@ class STTService(STTProvider):
             text = await loop.run_in_executor(None, self._listen_sync)
             return text
         except Exception as e:
-            logger.error(f"Error during listening: {e}")
+            logger.error("log_error", message=f"Error during listening: {e}")
             return ""
 
     def _listen_sync(self) -> str:
@@ -70,11 +70,11 @@ class STTService(STTProvider):
             # recognize_google is free and works well for general commands
             # language='pt-BR' can be made configurable
             text = self.recognizer.recognize_google(audio, language="pt-BR")
-            logger.info(f"Heard: {text}")
+            logger.info("log_info", message=f"Heard: {text}")
             return text
         except sr.UnknownValueError:
             logger.debug("Could not understand audio")
             return ""
         except sr.RequestError as e:
-            logger.error(f"Could not request results from Google Speech Recognition service; {e}")
+            logger.error("log_error", message=f"Could not request results from Google Speech Recognition service; {e}")
             return ""

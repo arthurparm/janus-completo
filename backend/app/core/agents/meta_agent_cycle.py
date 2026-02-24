@@ -49,24 +49,24 @@ async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> dict[str,
     phase_name = phase.value
     start = time.perf_counter()
     try:
-        logger.info(f"META-AGENT: Iniciando fase {phase_name}")
+        logger.info("log_info", message=f"META-AGENT: Iniciando fase {phase_name}")
         result = await asyncio.wait_for(func(*args, **kwargs), timeout=_PHASE_TIMEOUT)
         elapsed = time.perf_counter() - start
         _META_EVENTS.labels(phase.value, "success").inc()
         _META_LAT.labels(phase.value, "success").observe(elapsed)
-        logger.info(f"META-AGENT: Fase {phase_name} concluída com sucesso em {elapsed:.2f}s.")
+        logger.info("log_info", message=f"META-AGENT: Fase {phase_name} concluída com sucesso em {elapsed:.2f}s.")
         return {"ok": True, "result": result}
     except TimeoutError:
         elapsed = time.perf_counter() - start
         _META_EVENTS.labels(phase.value, "timeout").inc()
         _META_LAT.labels(phase.value, "timeout").observe(elapsed)
-        logger.error(f"META-AGENT: Timeout na fase {phase_name} após {_PHASE_TIMEOUT}s")
+        logger.error("log_error", message=f"META-AGENT: Timeout na fase {phase_name} após {_PHASE_TIMEOUT}s")
         return {"ok": False, "error": "timeout", "result": None}
     except Exception as e:
         elapsed = time.perf_counter() - start
         _META_EVENTS.labels(phase.value, "error").inc()
         _META_LAT.labels(phase.value, "error").observe(elapsed)
-        logger.error(f"META-AGENT: Erro na fase {phase_name}: {e}", exc_info=True)
+        logger.error("log_error", message=f"META-AGENT: Erro na fase {phase_name}: {e}", exc_info=True)
         return {"ok": False, "error": str(e), "result": None}
 
 
@@ -95,8 +95,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
                 result = await session.run(query)
                 reflections = [record["insight"] for record in await result.list()]
         except Exception as e:
-            logger.error(
-                f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True
+            logger.error("log_error", message=f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True
             )
             return {
                 "analysis": "Falha crítica ao acessar a Memória Semântica (Grafo de Conhecimento)."
@@ -157,7 +156,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
             )
         )
     except Exception as e:
-        logger.warning(f"Falha ao salvar checkpoint PLAN: {e}")
+        logger.warning("log_warning", message=f"Falha ao salvar checkpoint PLAN: {e}")
 
     res_act = await _run_phase(Phase.ACT, _phase_act)
     res_obs = await _run_phase(Phase.OBSERVE, _phase_observe, res_act.get("result"))
@@ -178,7 +177,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
             )
         )
     except Exception as e:
-        logger.warning(f"Falha ao salvar checkpoint pós-ciclo: {e}")
+        logger.warning("log_warning", message=f"Falha ao salvar checkpoint pós-ciclo: {e}")
 
     observe_result = res_obs.get("result")
     if observe_result and observe_result.get("has_issue") is False:
@@ -240,7 +239,7 @@ async def run_meta_agent_cycle():
 
             final_refinement = (shared.get("refinements") or [{}])[-1]
             final_answer = final_refinement.get("refinement", "Sem conclusão.")
-            logger.info(f"META-AGENTE: Conclusão: {final_answer}")
+            logger.info("log_info", message=f"META-AGENTE: Conclusão: {final_answer}")
             logger.info("=" * 80)
             consecutive_failures = 0
 
@@ -249,8 +248,7 @@ async def run_meta_agent_cycle():
             break
         except Exception as e:
             consecutive_failures += 1
-            logger.critical(
-                f"META-AGENT: Erro CRÍTICO ({consecutive_failures}/{_MAX_CONSECUTIVE_FAILURES}): {e}",
+            logger.critical("log_critical", message=f"META-AGENT: Erro CRÍTICO ({consecutive_failures}/{_MAX_CONSECUTIVE_FAILURES}): {e}",
                 exc_info=True,
             )
             if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
@@ -259,5 +257,5 @@ async def run_meta_agent_cycle():
             backoff = min(
                 600, settings.META_AGENT_CYCLE_INTERVAL_SECONDS * (2**consecutive_failures)
             )
-            logger.warning(f"META-AGENT: Aguardando {backoff}s antes de retry...")
+            logger.warning("log_warning", message=f"META-AGENT: Aguardando {backoff}s antes de retry...")
             await asyncio.sleep(backoff)

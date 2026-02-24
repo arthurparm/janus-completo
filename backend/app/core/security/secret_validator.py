@@ -61,7 +61,7 @@ def validate_production_secrets():
         normalized = str(current_value or "").strip().lower()
         if normalized in insecure_values:
             insecure_found.append(setting_name)
-            logger.error(f"Insecure default detected for: {setting_name}",
+            logger.error("log_error", message=f"Insecure default detected for: {setting_name}",
                          setting=setting_name)
 
     if insecure_found:

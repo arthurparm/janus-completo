@@ -1,11 +1,11 @@
-import logging
+import structlog
 import asyncio
 from typing import Any
 
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
 from app.db.graph import get_graph_db
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class GraphEmbeddingsManager:
     """
@@ -41,7 +41,7 @@ class GraphEmbeddingsManager:
             return vector
             return vector
         except Exception as e:
-            logger.error(f"Erro ao gerar/salvar embedding para nó {node_id}: {e}")
+            logger.error("log_error", message=f"Erro ao gerar/salvar embedding para nó {node_id}: {e}")
             return None
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -54,7 +54,7 @@ class GraphEmbeddingsManager:
         try:
             return await aembed_texts(texts)
         except Exception as e:
-            logger.error(f"Erro ao gerar batch embeddings: {e}")
+            logger.error("log_error", message=f"Erro ao gerar batch embeddings: {e}")
             return []
 
     async def vector_search(self, query: str, k: int = 10, min_score: float = 0.7, label: str = "Concept") -> list[dict[str, Any]]:
@@ -86,7 +86,7 @@ class GraphEmbeddingsManager:
             )
             return results
         except Exception as e:
-            logger.error(f"Erro na busca vetorial no Neo4j (Index: {index_name}): {e}")
+            logger.error("log_error", message=f"Erro na busca vetorial no Neo4j (Index: {index_name}): {e}")
             return []
 
     async def fulltext_search(self, query: str, k: int = 10) -> list[dict[str, Any]]:
@@ -112,7 +112,7 @@ class GraphEmbeddingsManager:
             )
             return results
         except Exception as e:
-            logger.error(f"Erro na busca Full-Text no Neo4j: {e}")
+            logger.error("log_error", message=f"Erro na busca Full-Text no Neo4j: {e}")
             return []
 
     async def hybrid_search(self, query: str, k: int = 10) -> list[dict[str, Any]]:
@@ -176,7 +176,7 @@ class GraphEmbeddingsManager:
         Labels suportadas: Concept, Technology, Tool, Pattern, Solution, Error.
         """
         target_labels = labels or ["Concept", "Technology", "Tool", "Pattern", "Solution", "Error"]
-        logger.info(f"Iniciando reindexação universal para labels: {target_labels}")
+        logger.info("log_info", message=f"Iniciando reindexação universal para labels: {target_labels}")
         
         db = await self._db_getter()
         if not db:
@@ -185,7 +185,7 @@ class GraphEmbeddingsManager:
         total_updated = 0
         
         for label in target_labels:
-            logger.info(f"Processando label: {label}...")
+            logger.info("log_info", message=f"Processando label: {label}...")
             while True:
                 # Busca lote de nós sem embedding
                 nodes = await db.query(
@@ -222,7 +222,7 @@ class GraphEmbeddingsManager:
                         {"updates": updates}
                     )
                     total_updated += len(updates)
-                    logger.info(f"Label {label}: Reindexados {len(updates)} nós...")
+                    logger.info("log_info", message=f"Label {label}: Reindexados {len(updates)} nós...")
                 else:
                     # Se falhou em gerar, break loop to avoid infinite loop on bad nodes
                     # Ou marcar como falha? Por simplicidade, break se não conseguiu updates
@@ -231,5 +231,5 @@ class GraphEmbeddingsManager:
                     # MVP: break
                     break
         
-        logger.info(f"Reindexação universal concluída. Total: {total_updated}")
+        logger.info("log_info", message=f"Reindexação universal concluída. Total: {total_updated}")
         return total_updated

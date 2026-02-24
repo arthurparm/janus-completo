@@ -1,4 +1,4 @@
-import logging
+import structlog
 import time
 from typing import Any, List
 
@@ -15,7 +15,7 @@ from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import get_llm
 from app.core.llm.types import ModelRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Initialize Driver
 try:
@@ -24,7 +24,7 @@ try:
         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD.get_secret_value())
     )
 except Exception as e:
-    logger.error(f"Failed to initialize Neo4j driver: {e}")
+    logger.error("log_error", message=f"Failed to initialize Neo4j driver: {e}")
     driver = None
 
 class GraphRAGCore:
@@ -61,7 +61,7 @@ class GraphRAGCore:
                     "Create janus_vector_index/janus_fulltext_index to enable."
                 )
             else:
-                logger.warning(f"Could not initialize GraphRAG retriever: {e}")
+                logger.warning("log_warning", message=f"Could not initialize GraphRAG retriever: {e}")
             self.retriever = None
 
     @traceable(name="GraphRAG.query", run_type="retriever")
@@ -85,7 +85,7 @@ class GraphRAGCore:
                         query_text = hypothetical
                         logger.debug("Using HyDE query", hypothetical=hypothetical)
                 except Exception as e:
-                    logger.warning(f"HyDE generation failed: {e}, falling back to original question")
+                    logger.warning("log_warning", message=f"HyDE generation failed: {e}, falling back to original question")
 
             # neo4j-graphrag retrievers are typically synchronous or have async methods.
             # Checking library convention: typically sync methods in v1.
@@ -118,7 +118,7 @@ class GraphRAGCore:
             return str(response.content)
 
         except Exception as e:
-            logger.error(f"Error in GraphRAG query: {e}")
+            logger.error("log_error", message=f"Error in GraphRAG query: {e}")
             return f"Error retrieving information: {e}"
 
 # Global instance

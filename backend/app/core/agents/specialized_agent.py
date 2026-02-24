@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -26,7 +26,7 @@ from app.core.agents.utils import (
 )
 from app.core.infrastructure.prompt_loader import get_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SpecializedAgentError(Exception):
@@ -48,7 +48,7 @@ class SpecializedAgent:
 
         # self._initialize_agent() chamada lazily no execute_task
         ACTIVE_AGENTS_GAUGE.inc()
-        logger.info(f"Agente '{self.agent_id}' ({role.value}) instanciado")
+        logger.info("log_info", message=f"Agente '{self.agent_id}' ({role.value}) instanciado")
 
     def set_event_callback(self, callback):
         """Define callback assíncrono para eventos de progresso."""
@@ -66,7 +66,7 @@ class SpecializedAgent:
             if prompt_text:
                 return prompt_text
         except Exception as e:
-            logger.error(f"Erro ao buscar prompt para {self.role.value}: {e}")
+            logger.error("log_error", message=f"Erro ao buscar prompt para {self.role.value}: {e}")
 
         raise ValueError(f"Prompt não encontrado para {prompt_name}")
 
@@ -82,7 +82,7 @@ class SpecializedAgent:
                 llm_priority = ModelPriority[llm_priority_str]
                 return llm_role, llm_priority
             except KeyError as e:
-                logger.warning(f"Configuração LLM inválida no banco: {e}. Usando fallback.")
+                logger.warning("log_warning", message=f"Configuração LLM inválida no banco: {e}. Usando fallback.")
 
         # Fallback para mapeamento padrão
         llm_mapping = {
@@ -107,11 +107,10 @@ class SpecializedAgent:
                 agent_name=self.agent_id, agent_role=self.role.value
             )
             if config:
-                logger.info(
-                    f"Configuração dinâmica carregada para {self.role.value} ({self.agent_id})"
+                logger.info("log_info", message=f"Configuração dinâmica carregada para {self.role.value} ({self.agent_id})"
                 )
         except Exception as e:
-            logger.warning(f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
+            logger.warning("log_warning", message=f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
 
         # Carregar prompt (do banco ou fallback)
         prompt_text = await self._get_prompt_for_role(config)
@@ -152,7 +151,7 @@ class SpecializedAgent:
             )
             self.executor = agent
 
-        logger.info(f"Agente '{self.agent_id}' inicializado com sucesso.")
+        logger.info("log_info", message=f"Agente '{self.agent_id}' inicializado com sucesso.")
 
     async def execute_task(self, task: Task, max_retries: int = 2) -> dict[str, Any]:
         """
@@ -175,14 +174,13 @@ class SpecializedAgent:
         task.started_at = datetime.now()
         task.assigned_to = self.agent_id
 
-        logger.info(f"Agente {self.agent_id} iniciando tarefa: {task.description}")
+        logger.info("log_info", message=f"Agente {self.agent_id} iniciando tarefa: {task.description}")
 
         last_error = None
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
-                    logger.warning(
-                        f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}"
+                    logger.warning("log_warning", message=f"Tentativa {attempt + 1}/{max_retries + 1} para tarefa {task.id}"
                     )
                     await asyncio.sleep(2**attempt)  # Backoff exponencial
 
@@ -225,7 +223,7 @@ class SpecializedAgent:
                 AGENT_TASKS_COUNTER.labels(agent_role=self.role.value, status="completed").inc()
                 AGENT_TASK_DURATION.labels(agent_role=self.role.value).observe(duration)
 
-                logger.info(f"Tarefa {task.id} concluída com sucesso (tentativa {attempt + 1})")
+                logger.info("log_info", message=f"Tarefa {task.id} concluída com sucesso (tentativa {attempt + 1})")
 
                 return {
                     "task_id": task.id,
@@ -237,7 +235,7 @@ class SpecializedAgent:
 
             except TimeoutError as e:
                 last_error = f"Timeout ao executar tarefa: {e}"
-                logger.warning(f"Timeout na tentativa {attempt + 1} para tarefa {task.id}")
+                logger.warning("log_warning", message=f"Timeout na tentativa {attempt + 1} para tarefa {task.id}")
                 if attempt == max_retries:
                     break
                 continue
@@ -245,8 +243,7 @@ class SpecializedAgent:
             except ValueError as e:
                 # Erros de validação (parsing, output vazio, etc)
                 last_error = f"Erro de validação: {e}"
-                logger.warning(
-                    f"Erro de validação na tentativa {attempt + 1} para tarefa {task.id}: {e}"
+                logger.warning("log_warning", message=f"Erro de validação na tentativa {attempt + 1} para tarefa {task.id}: {e}"
                 )
                 if attempt == max_retries:
                     break
@@ -254,15 +251,14 @@ class SpecializedAgent:
 
             except Exception as e:
                 last_error = str(e)
-                logger.error(
-                    f"Erro na tentativa {attempt + 1} para tarefa {task.id}: {e}", exc_info=True
+                logger.error("log_error", message=f"Erro na tentativa {attempt + 1} para tarefa {task.id}: {e}", exc_info=True
                 )
                 if attempt == max_retries:
                     break
                 continue
 
         # Se chegou aqui, todas as tentativas falharam
-        logger.error(f"Tarefa {task.id} falhou após {max_retries + 1} tentativas: {last_error}")
+        logger.error("log_error", message=f"Tarefa {task.id} falhou após {max_retries + 1} tentativas: {last_error}")
         task.status = TaskStatus.FAILED
         task.error = last_error
         task.completed_at = datetime.now()
@@ -303,15 +299,15 @@ class SpecializedAgent:
     async def update_config(self, config):
         """Atualiza a configuração do agente dinamicamente."""
         try:
-            logger.info(f"Atualizando configuração do agente {self.agent_id}")
+            logger.info("log_info", message=f"Atualizando configuração do agente {self.agent_id}")
             # FIX: método correto é _initialize_agent (que é async)
             await self._initialize_agent()
-            logger.info(f"Configuração do agente {self.agent_id} atualizada com sucesso")
+            logger.info("log_info", message=f"Configuração do agente {self.agent_id} atualizada com sucesso")
         except Exception as e:
-            logger.error(f"Erro ao atualizar configuração do agente {self.agent_id}: {e}")
+            logger.error("log_error", message=f"Erro ao atualizar configuração do agente {self.agent_id}: {e}")
             raise SpecializedAgentError(f"Falha na atualização de config: {e}") from e
 
     def shutdown(self):
         """Desliga o agente."""
         ACTIVE_AGENTS_GAUGE.dec()
-        logger.info(f"Agente {self.agent_id} desligado")
+        logger.info("log_info", message=f"Agente {self.agent_id} desligado")

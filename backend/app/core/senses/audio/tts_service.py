@@ -25,7 +25,7 @@ class TTSService(TTSProvider):
 
         self._available = importlib.util.find_spec("edge_tts") is not None
         if self._available:
-            logger.info(f"TTS Service initialized with edge-tts (Voice: {self.voice})")
+            logger.info("log_info", message=f"TTS Service initialized with edge-tts (Voice: {self.voice})")
         else:
             logger.warning("edge_tts library not found. TTS disabled.")
 
@@ -46,7 +46,7 @@ class TTSService(TTSProvider):
             await communicate.save(temp_path)
             await self._play_audio(temp_path)
         except Exception as e:
-            logger.error(f"TTS Error: {e}")
+            logger.error("log_error", message=f"TTS Error: {e}")
         finally:
             if os.path.exists(temp_path):
                 try:
@@ -59,7 +59,7 @@ class TTSService(TTSProvider):
         Plays the audio file. Accessing OS audio device.
         Requires a player installed or python library like playsound.
         """
-        logger.info(f"Speaking: {file_path}")
+        logger.info("log_info", message=f"Speaking: {file_path}")
 
         # Crude but effective cross-platform playback attempts
         # 1. Try 'playsound' library if available
@@ -71,7 +71,7 @@ class TTSService(TTSProvider):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: self._play_audio_sync(file_path))
         except Exception as e:
-            logger.error(f"Audio playback failed: {e}")
+            logger.error("log_error", message=f"Audio playback failed: {e}")
 
     def _play_audio_sync(self, file_path: str):
         # Strategy 1: playsound

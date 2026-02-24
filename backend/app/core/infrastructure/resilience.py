@@ -121,11 +121,9 @@ class CircuitBreaker:
         if result:
             import traceback
 
-            logger.warning(
-                f"[CircuitBreaker] is_open=True! state={self.state.value}, failures={self.failure_count}, last_failure={self.last_failure_time}"
+            logger.warning("log_warning", message=f"[CircuitBreaker] is_open=True! state={self.state.value}, failures={self.failure_count}, last_failure={self.last_failure_time}"
             )
-            logger.warning(
-                f"[CircuitBreaker] Call stack:\n{''.join(traceback.format_stack()[-5:])}"
+            logger.warning("log_warning", message=f"[CircuitBreaker] Call stack:\n{''.join(traceback.format_stack()[-5:])}"
             )
         return result
 
@@ -357,8 +355,7 @@ class CircuitBreaker:
             )
             import traceback
 
-            logger.warning(
-                f"[CircuitBreaker] State changed to OPEN from HALF_OPEN after failed test. "
+            logger.warning("log_warning", message=f"[CircuitBreaker] State changed to OPEN from HALF_OPEN after failed test. "
                 f"Failures: {self.failure_count}/{self.failure_threshold}, "
                 f"Recovery timeout: {self.recovery_timeout}s. "
                 f"Stack:\n{''.join(traceback.format_stack()[-8:])}"
@@ -378,8 +375,7 @@ class CircuitBreaker:
             )
             import traceback
 
-            logger.warning(
-                f"[CircuitBreaker] CRITICAL: Circuit breaker OPENED due to threshold reached. "
+            logger.warning("log_warning", message=f"[CircuitBreaker] CRITICAL: Circuit breaker OPENED due to threshold reached. "
                 f"Failures: {self.failure_count}/{self.failure_threshold}, "
                 f"Recovery timeout: {self.recovery_timeout}s. "
                 f"All calls to '{operation}' will be blocked for {self.recovery_timeout} seconds. "

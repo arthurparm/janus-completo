@@ -1,12 +1,12 @@
 import base64
-import logging
+import structlog
 from typing import List, Dict, Any, Tuple
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
 from app.models.schemas import QueueName, TaskMessage, TaskState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class SandboxExecutor:
     """
@@ -103,7 +103,7 @@ class SandboxExecutor:
                 
             except ImageNotFound:
                 # Fallback: pull image and retry
-                logger.info(f"Image {self.image} not found, pulling...")
+                logger.info("log_info", message=f"Image {self.image} not found, pulling...")
                 client.images.pull(self.image)
                 return self.run_code(code, timeout_seconds) # Retry once
                 

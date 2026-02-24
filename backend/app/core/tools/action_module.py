@@ -11,8 +11,7 @@ Funcionalidades:
 - Controle de permissões e rate limiting
 - Telemetria de uso de ferramentas
 """
-
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -40,7 +39,7 @@ import inspect
 
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ==================== MÉTRICAS ====================
 
@@ -225,11 +224,11 @@ class DynamicToolGenerator:
             dynamic_tool.name = name
             dynamic_tool.__name__ = name
 
-            logger.info(f"[ActionModule] Ferramenta dinâmica criada: {name}")
+            logger.info("log_info", message=f"[ActionModule] Ferramenta dinâmica criada: {name}")
             return dynamic_tool
 
         except Exception as e:
-            logger.error(f"[ActionModule] Erro ao criar ferramenta '{name}': {e}", exc_info=True)
+            logger.error("log_error", message=f"[ActionModule] Erro ao criar ferramenta '{name}': {e}", exc_info=True)
             raise
 
     @staticmethod
@@ -317,7 +316,7 @@ class DynamicToolGenerator:
                 )
 
                 if not result.success:
-                    logger.error(f"[ActionModule] Erro na execução sandbox: {result.error}")
+                    logger.error("log_error", message=f"[ActionModule] Erro na execução sandbox: {result.error}")
                     return f"Erro na execução: {result.error}"
 
                 # Se houver stdout, retorna
@@ -334,7 +333,7 @@ class DynamicToolGenerator:
                 return f"Erro: Function '{function_name}' not found or produced no output."
 
             except Exception as e:
-                logger.error(f"[ActionModule] Erro ao executar código dinâmico: {e}", exc_info=True)
+                logger.error("log_error", message=f"[ActionModule] Erro ao executar código dinâmico: {e}", exc_info=True)
                 return f"Erro na execução: {e}"
 
         return DynamicToolGenerator.from_function_spec(
@@ -386,7 +385,7 @@ class ActionRegistry:
         name = tool.name
 
         if name in self._tools:
-            logger.warning(f"[ActionModule] Ferramenta '{name}' já registrada. Substituindo...")
+            logger.warning("log_warning", message=f"[ActionModule] Ferramenta '{name}' já registrada. Substituindo...")
 
         self._tools[name] = tool
         self._metadata[name] = ToolMetadata(
@@ -399,14 +398,14 @@ class ActionRegistry:
             tags=tags or [],
         )
 
-        logger.info(f"[ActionModule] Ferramenta registrada: {name} [{category.value}]")
+        logger.info("log_info", message=f"[ActionModule] Ferramenta registrada: {name} [{category.value}]")
 
     def unregister(self, tool_name: str) -> None:
         """Remove uma ferramenta do registro."""
         if tool_name in self._tools:
             del self._tools[tool_name]
             del self._metadata[tool_name]
-            logger.info(f"[ActionModule] Ferramenta removida: {tool_name}")
+            logger.info("log_info", message=f"[ActionModule] Ferramenta removida: {tool_name}")
 
     def get_tool(self, name: str) -> BaseTool | None:
         """Obtém uma ferramenta pelo nome."""

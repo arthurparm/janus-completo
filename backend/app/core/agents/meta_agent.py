@@ -8,7 +8,7 @@ melhorias sem intervenção humana.
 
 import asyncio
 import json
-import logging
+import structlog
 import uuid
 import time
 import re
@@ -53,7 +53,7 @@ from app.config import settings
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Métricas ---
 META_AGENT_CYCLES = Counter(
@@ -139,7 +139,7 @@ class MetaAgent:
             )
             logger.info("Meta-Agente (LangGraph) inicializado com sucesso.")
         except Exception as e:
-            logger.warning(f"Meta-Agente iniciou sem LLM: {e}")
+            logger.warning("log_warning", message=f"Meta-Agente iniciou sem LLM: {e}")
             self.llm = None
 
     async def run_analysis_cycle(
@@ -151,7 +151,7 @@ class MetaAgent:
 
         if self._cycle_lock.locked() and not force:
             META_AGENT_CYCLE_SKIPPED.labels("busy").inc()
-            logger.info(f"Meta-Agent cycle skipped: busy (trigger={trigger})")
+            logger.info("log_info", message=f"Meta-Agent cycle skipped: busy (trigger={trigger})")
             if self.last_report is not None:
                 return self.last_report
             return self._create_skipped_report("busy")
@@ -160,8 +160,7 @@ class MetaAgent:
         if (not force) and self._last_cycle_started_at and elapsed < self._min_cycle_interval_seconds:
             META_AGENT_CYCLE_SKIPPED.labels("cooldown").inc()
             remaining = self._min_cycle_interval_seconds - elapsed
-            logger.info(
-                f"Meta-Agent cycle skipped: cooldown (remaining_seconds={remaining:.2f}, trigger={trigger})"
+            logger.info("log_info", message=f"Meta-Agent cycle skipped: cooldown (remaining_seconds={remaining:.2f}, trigger={trigger})"
             )
             if self.last_report is not None:
                 return self.last_report
@@ -204,7 +203,7 @@ class MetaAgent:
                 self._log_report(report)
                 return report
             except Exception as e:
-                logger.error(f"Erro fatal no LangGraph do Meta-Agente: {e}", exc_info=True)
+                logger.error("log_error", message=f"Erro fatal no LangGraph do Meta-Agente: {e}", exc_info=True)
                 return self._create_error_report(str(e))
             finally:
                 META_AGENT_CYCLE_DURATION.observe(time.perf_counter() - cycle_start)
@@ -216,7 +215,7 @@ class MetaAgent:
             return False
         interval_seconds = max(30, int(interval_minutes) * 60)
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(interval_seconds))
-        logger.info(f"Meta-Agent heartbeat iniciado (interval_seconds={interval_seconds})")
+        logger.info("log_info", message=f"Meta-Agent heartbeat iniciado (interval_seconds={interval_seconds})")
         return True
 
     def stop_heartbeat(self) -> None:
@@ -259,7 +258,7 @@ class MetaAgent:
             if isinstance(parsed, list):
                 return {"items": parsed}
         except Exception as exc:
-            logger.warning(f"Failed to parse JSON response: {exc}")
+            logger.warning("log_warning", message=f"Failed to parse JSON response: {exc}")
         return {}
 
     def _extract_response_text(self, response: Any) -> str:
@@ -355,12 +354,12 @@ class MetaAgent:
                     )
 
             except Exception as e:
-                logger.warning(f"Error parsing metrics for heuristic check: {e}")
+                logger.warning("log_warning", message=f"Error parsing metrics for heuristic check: {e}")
 
             return {"metrics": metrics, "detected_issues": issues}
 
         except Exception as e:
-            logger.error(f"Error in monitor node: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error in monitor node: {e}", exc_info=True)
             return {"metrics": {"error": str(e)}}
 
     async def diagnosis_node_logic(self, state: AgentState) -> dict:
@@ -397,8 +396,7 @@ class MetaAgent:
                     return {"diagnosis": parsed["root_cause"]}
                 return {"diagnosis": raw_text}
             except Exception as parse_err:
-                logger.warning(
-                    f"Structured output failed for diagnosis: {parse_err}. Falling back to raw."
+                logger.warning("log_warning", message=f"Structured output failed for diagnosis: {parse_err}. Falling back to raw."
                 )
                 response = await self.llm.ainvoke(prompt)
                 raw_text = self._extract_response_text(response)
@@ -407,7 +405,7 @@ class MetaAgent:
                     return {"diagnosis": parsed["root_cause"]}
                 return {"diagnosis": raw_text}
         except Exception as e:
-            logger.error(f"Error in diagnosis node: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error in diagnosis node: {e}", exc_info=True)
             return {"diagnosis": f"Diagnosis failed: {e}"}
 
     async def planning_node_logic(self, state: AgentState) -> dict:
@@ -448,7 +446,7 @@ class MetaAgent:
                 return {"candidate_plan": recommendations}
 
             except Exception as parse_err:
-                logger.warning(f"Structured output failed for plan: {parse_err}")
+                logger.warning("log_warning", message=f"Structured output failed for plan: {parse_err}")
                 return {
                     "candidate_plan": [
                         {
@@ -460,7 +458,7 @@ class MetaAgent:
                     ]
                 }
         except Exception as e:
-            logger.error(f"Error in planning node: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error in planning node: {e}", exc_info=True)
             return {"candidate_plan": []}
 
     async def reflection_node_logic(self, state: AgentState) -> dict:
@@ -523,7 +521,7 @@ class MetaAgent:
                     "retry_count": state.get("retry_count", 0) + 1,
                 }
             except Exception as parse_err:
-                logger.warning(f"Structured critique failed: {parse_err}")
+                logger.warning("log_warning", message=f"Structured critique failed: {parse_err}")
                 critique_fallback = self._heuristic_critique(plan)
                 if critique_fallback.get("approved"):
                     return {
@@ -537,7 +535,7 @@ class MetaAgent:
                     "retry_count": state.get("retry_count", 0) + 1,
                 }
         except Exception as e:
-            logger.error(f"Error in reflection node: {e}", exc_info=True)
+            logger.error("log_error", message=f"Error in reflection node: {e}", exc_info=True)
             return {
                 "critique": {"approved": False, "reason": f"Error: {e}"},
                 "status": "retry",
@@ -575,7 +573,7 @@ class MetaAgent:
             }
 
         except Exception as e:
-            logger.error(f"[MetaAgent] Execution Failed: {e}", exc_info=True)
+            logger.error("log_error", message=f"[MetaAgent] Execution Failed: {e}", exc_info=True)
             return {
                 "execution_error": str(e),
                 "status": "execution_failed",
@@ -656,7 +654,7 @@ class MetaAgent:
                 "diagnosis": f"Previous Failure: {root_cause}. Fix: {actionable_insights}",
             }
         except Exception as e:
-            logger.error(f"Reflexion failed: {e}")
+            logger.error("log_error", message=f"Reflexion failed: {e}")
             # Se a reflexão falhar, apenas incrementa retry e tenta novamente (ou desiste)
             return {
                 "status": "retry", 
@@ -736,8 +734,7 @@ class MetaAgent:
         agent_role = self._map_suggested_agent(agent_hint)
         task_priority = self._map_priority(priority)
 
-        logger.info(
-            f"[MetaAgent] Dispatching Task: {title} (priority={priority}, agent={agent_hint})"
+        logger.info("log_info", message=f"[MetaAgent] Dispatching Task: {title} (priority={priority}, agent={agent_hint})"
         )
 
         system = self._get_execution_system()
@@ -767,7 +764,7 @@ class MetaAgent:
                 "duration_seconds": result.get("duration_seconds"),
             }
         except Exception as e:
-            logger.error(f"Erro ao executar recomendacao '{title}': {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro ao executar recomendacao '{title}': {e}", exc_info=True)
             return {
                 "title": title,
                 "status": "failed",
@@ -795,7 +792,7 @@ class MetaAgent:
                     )
                 )
             except Exception as e:
-                logger.warning(f"Error converting issue to obj: {e}")
+                logger.warning("log_warning", message=f"Error converting issue to obj: {e}")
 
         recs = []
         for r_dict in state.get("final_plan", []):
@@ -814,7 +811,7 @@ class MetaAgent:
                     )
                 )
             except Exception as e:
-                logger.warning(f"Error converting recommendation to obj: {e}")
+                logger.warning("log_warning", message=f"Error converting recommendation to obj: {e}")
 
         health_score = 100 - (len(issues) * 10)
         health_score = max(0, health_score)
@@ -836,12 +833,11 @@ class MetaAgent:
                 execution_results=state.get("execution_results", []),
             )
         except Exception as e:
-            logger.error(f"Error creating StateReport object: {e}")
+            logger.error("log_error", message=f"Error creating StateReport object: {e}")
             raise
 
     def _log_report(self, report: StateReport):
-        logger.info(
-            f"Report Generated: {report.cycle_id} | Status: {report.overall_status} | Issues: {len(report.issues_detected)}"
+        logger.info("log_info", message=f"Report Generated: {report.cycle_id} | Status: {report.overall_status} | Issues: {len(report.issues_detected)}"
         )
 
     def _create_skipped_report(self, reason: str) -> StateReport:

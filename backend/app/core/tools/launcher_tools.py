@@ -1,10 +1,10 @@
-import logging
+import structlog
 import platform
 import subprocess
 
 from langchain.tools import tool
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @tool
@@ -24,7 +24,7 @@ def launch_app(app_name: str) -> str:
     system = platform.system()
     app_name = app_name.strip()
 
-    logger.info(f"Tentando iniciar aplicativo: {app_name} no sistema {system}")
+    logger.info("log_info", message=f"Tentando iniciar aplicativo: {app_name} no sistema {system}")
 
     try:
         if system == "Windows":
@@ -42,5 +42,5 @@ def launch_app(app_name: str) -> str:
 
         return f"Comando de lançamento enviado para '{app_name}'."
     except Exception as e:
-        logger.error(f"Erro ao lançar app {app_name}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao lançar app {app_name}: {e}", exc_info=True)
         return f"Erro ao tentar iniciar '{app_name}': {e!s}"

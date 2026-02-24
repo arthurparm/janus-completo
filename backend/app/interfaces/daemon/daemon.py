@@ -24,7 +24,7 @@ async def main():
     stop_event = asyncio.Event()
 
     def signal_handler(sig, frame):
-        logger.info(f"Received shutdown signal {sig}")
+        logger.info("log_info", message=f"Received shutdown signal {sig}")
         stop_event.set()
         watchdog.stop()
 
@@ -64,7 +64,7 @@ async def main():
 
                             command = await kernel.voice_manager.listen()
                             if command:
-                                logger.info(f"Command received: {command}")
+                                logger.info("log_info", message=f"Command received: {command}")
                                 response, voice_conversation_id = await process_voice_command(
                                     kernel, command, voice_conversation_id
                                 )
@@ -72,7 +72,7 @@ async def main():
                             else:
                                 logger.info("No command heard.")
                     except Exception as e:
-                        logger.error(f"Error in Voice Loop: {e}", exc_info=False)
+                        logger.error("log_error", message=f"Error in Voice Loop: {e}", exc_info=False)
                         # Cool-down to prevent log spam if mic is broken
                         await asyncio.sleep(5)
 
@@ -84,7 +84,7 @@ async def main():
             stop_event.set()
             break
         except Exception as e:
-            logger.critical(f"Daemon Critical Failure: {e}", exc_info=True)
+            logger.critical("log_critical", message=f"Daemon Critical Failure: {e}", exc_info=True)
             restart_count += 1
 
             # Logic to handle restarts
@@ -103,7 +103,7 @@ async def main():
             try:
                 await kernel.shutdown()
             except Exception as e:
-                logger.error(f"Error during shutdown: {e}")
+                logger.error("log_error", message=f"Error during shutdown: {e}")
 
             if stop_event.is_set():
                 logger.info("Daemon stopped.")

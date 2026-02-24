@@ -3,7 +3,7 @@ Enhanced Qdrant client with improved timeout, retry, and circuit breaker support
 """
 
 import asyncio
-import logging
+import structlog
 import random
 import time
 from typing import Any
@@ -14,7 +14,7 @@ from qdrant_client.models import Filter, SearchParams
 from app.core.memory.circuit_config import RESILIENCE_CONFIG
 from app.core.memory.enhanced_circuit_breaker import circuit_breaker_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class QdrantOperationTimeout(Exception):

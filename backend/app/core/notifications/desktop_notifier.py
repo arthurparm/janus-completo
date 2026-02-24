@@ -84,13 +84,13 @@ class DesktopNotifier:
             else:
                 NOTIFICATIONS_SENT.labels(urgency=urgency.value, status="fallback").inc()
                 # Fallback: just log it
-                logger.warning(f"NOTIFICATION: {title} - {message}", urgency=urgency.value)
+                logger.warning("log_warning", message=f"NOTIFICATION: {title} - {message}", urgency=urgency.value)
 
             return success
 
         except Exception as e:
             NOTIFICATIONS_SENT.labels(urgency=urgency.value, status="error").inc()
-            logger.error(f"Failed to send notification: {e}")
+            logger.error("log_error", message=f"Failed to send notification: {e}")
             return False
 
     async def _send_windows_toast(self, title: str, message: str, sound: bool) -> bool:
@@ -145,7 +145,7 @@ class DesktopNotifier:
             logger.warning("PowerShell not available")
             return False
         except Exception as e:
-            logger.debug(f"Windows toast failed: {e}")
+            logger.debug("log_debug", message=f"Windows toast failed: {e}")
             return False
 
     async def notify_task_complete(self, task_name: str, result: str = "success") -> bool:

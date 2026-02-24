@@ -1,11 +1,11 @@
-import logging
+import structlog
 from collections import OrderedDict
 from datetime import UTC, datetime
 
 from app.config import settings
 from app.models.schemas import Experience
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class WorkingMemory:

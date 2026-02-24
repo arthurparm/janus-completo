@@ -1,4 +1,4 @@
-import logging
+import structlog
 import json
 import re
 from typing import Annotated, Literal, TypedDict
@@ -11,7 +11,7 @@ from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.repositories.llm_repository import LLMRepository
 from app.services.llm_service import LLMService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 class DebateState(TypedDict):
     task_id: str
@@ -24,7 +24,7 @@ class DebateState(TypedDict):
     history: Annotated[list[str], operator.add]
 
 async def propose_node(state: DebateState):
-    logger.info(f"Debate Propose Node: Iteration {state['iteration']}")
+    logger.info("log_info", message=f"Debate Propose Node: Iteration {state['iteration']}")
     llm = LLMService(LLMRepository())
     
     goal = state['goal']
@@ -74,7 +74,7 @@ async def critique_node(state: DebateState):
         json_str = json_str.replace("```json", "").replace("```", "").strip()
         critique = json.loads(json_str)
     except Exception as e:
-        logger.error(f"Error parsing critique JSON: {e}")
+        logger.error("log_error", message=f"Error parsing critique JSON: {e}")
         critique = {
             "approved": False, 
             "issues": [{"description": "Parse Error", "severity": "critical"}], 

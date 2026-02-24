@@ -1,5 +1,5 @@
 import json
-import logging
+import structlog
 import re
 from functools import wraps
 from typing import Any, Union
@@ -7,7 +7,7 @@ import inspect
 
 from langchain_core.callbacks import BaseCallbackHandler
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AgentEventCallbackHandler(BaseCallbackHandler):
@@ -22,13 +22,13 @@ class AgentEventCallbackHandler(BaseCallbackHandler):
                 "tool_start", f"Starting tool {serialized.get('name')}: {input_str}"
             )
         except Exception as e:
-            logger.warning(f"Error in callback: {e}")
+            logger.warning("log_warning", message=f"Error in callback: {e}")
 
     async def on_tool_end(self, output: str, **kwargs: Any) -> Any:
         try:
             await self.async_callback("tool_end", f"Tool output: {output[:200]}...")
         except Exception as e:
-            logger.warning(f"Error in callback: {e}")
+            logger.warning("log_warning", message=f"Error in callback: {e}")
 
     async def on_agent_action(self, action: Any, **kwargs: Any) -> Any:
         try:
@@ -36,7 +36,7 @@ class AgentEventCallbackHandler(BaseCallbackHandler):
             content = f"Thought: I need to use {action.tool} with input {action.tool_input}"
             await self.async_callback("agent_thought", content)
         except Exception as e:
-            logger.warning(f"Error in callback: {e}")
+            logger.warning("log_warning", message=f"Error in callback: {e}")
 
 
 def _clean_json_output(text: str) -> str:
@@ -191,18 +191,17 @@ def _create_tool_wrapper(tool):
     Este wrapper detecta isso e faz o parse correto, suportando sync e async.
     """
 
-    logger.info(f"[WRAPPER INIT] Criando wrapper para {tool.name} - type={type(tool)}")
+    logger.info("log_info", message=f"[WRAPPER INIT] Criando wrapper para {tool.name} - type={type(tool)}")
 
     # Detecta qual método usar
     if hasattr(tool, "func") and callable(tool.func):
         original_func = tool.func
-        logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool.func")
+        logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - Usando tool.func")
     elif hasattr(tool, "_run") and callable(tool._run):
         original_func = tool._run
-        logger.info(f"[WRAPPER INIT] {tool.name} - Usando tool._run")
+        logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - Usando tool._run")
     else:
-        logger.warning(
-            f"[WRAPPER INIT] {tool.name} - Nenhum método encontrado, retornando original"
+        logger.warning("log_warning", message=f"[WRAPPER INIT] {tool.name} - Nenhum método encontrado, retornando original"
         )
         return tool
 
@@ -213,27 +212,26 @@ def _create_tool_wrapper(tool):
         @wraps(original_func)
         async def async_wrapper(*args, **kwargs):
             tool_name = getattr(tool, "name", "unknown")
-            logger.debug(f"[WRAPPER ASYNC] {tool_name} - args={args}, kwargs={kwargs}")
+            logger.debug("log_debug", message=f"[WRAPPER ASYNC] {tool_name} - args={args}, kwargs={kwargs}")
 
             # Se recebeu apenas 1 argumento e ele parece ser um JSON string
             if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], str):
                 arg = args[0]
-                logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
+                logger.debug("log_debug", message=f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
 
                 try:
                     # Usa a estratégia unificada Strict + Regex
                     parsed = parse_json_strict(arg)
 
                     if isinstance(parsed, dict):
-                        logger.info(
-                            f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
+                        logger.info("log_info", message=f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
                         )
                         # Chama a função com os parâmetros corretos
                         return await original_func(**parsed)
 
                 except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
-                    logger.debug(f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
+                    logger.warning("log_warning", message=f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
+                    logger.debug("log_debug", message=f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
 
             # Se não conseguiu fazer parse ou não era JSON, chama normalmente
             return await original_func(*args, **kwargs)
@@ -241,37 +239,36 @@ def _create_tool_wrapper(tool):
         # Substitui AMBOS func e _run
         if hasattr(tool, "func"):
             tool.func = async_wrapper
-            logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (async)")
+            logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - tool.func substituído (async)")
         if hasattr(tool, "_run"):
             tool._run = async_wrapper
-            logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (async)")
+            logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - tool._run substituído (async)")
 
     else:
 
         @wraps(original_func)
         def sync_wrapper(*args, **kwargs):
             tool_name = getattr(tool, "name", "unknown")
-            logger.debug(f"[WRAPPER SYNC] {tool_name} - args={args}, kwargs={kwargs}")
+            logger.debug("log_debug", message=f"[WRAPPER SYNC] {tool_name} - args={args}, kwargs={kwargs}")
 
             # Se recebeu apenas 1 argumento e ele parece ser um JSON string
             if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], str):
                 arg = args[0]
-                logger.debug(f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
+                logger.debug("log_debug", message=f"[WRAPPER] {tool_name} - Argumento string recebido: {arg[:150]}")
 
                 try:
                     # Usa a estratégia unificada Strict + Regex
                     parsed = parse_json_strict(arg)
 
                     if isinstance(parsed, dict):
-                        logger.info(
-                            f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
+                        logger.info("log_info", message=f"[WRAPPER] {tool_name} - ✅ JSON parseado: {list(parsed.keys())}"
                         )
                         # Chama a função com os parâmetros corretos
                         return original_func(**parsed)
 
                 except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
-                    logger.debug(f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
+                    logger.warning("log_warning", message=f"[WRAPPER] {tool_name} - ❌ Falha ao parsear: {e}")
+                    logger.debug("log_debug", message=f"[WRAPPER] {tool_name} - String que falhou: {arg[:200]}")
 
             # Se não conseguiu fazer parse ou não era JSON, chama normalmente
             return original_func(*args, **kwargs)
@@ -279,9 +276,9 @@ def _create_tool_wrapper(tool):
         # Substitui AMBOS func e _run
         if hasattr(tool, "func"):
             tool.func = sync_wrapper
-            logger.info(f"[WRAPPER INIT] {tool.name} - tool.func substituído (sync)")
+            logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - tool.func substituído (sync)")
         if hasattr(tool, "_run"):
             tool._run = sync_wrapper
-            logger.info(f"[WRAPPER INIT] {tool.name} - tool._run substituído (sync)")
+            logger.info("log_info", message=f"[WRAPPER INIT] {tool.name} - tool._run substituído (sync)")
 
     return tool

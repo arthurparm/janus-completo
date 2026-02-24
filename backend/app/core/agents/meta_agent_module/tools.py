@@ -1,5 +1,5 @@
 import json
-import logging
+import structlog
 import statistics
 import asyncio
 from typing import Any
@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 from app.core.monitoring.health_monitor import get_health_monitor, _latency_windows
 from app.core.monitoring.error_tracker import GlobalErrorTracker
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @tool
@@ -97,7 +97,7 @@ async def analyze_memory_for_failures(time_window_hours: Any = 24, max_results: 
         return json.dumps(analysis, indent=2)
 
     except Exception as e:
-        logger.error(f"Erro ao analisar memória: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao analisar memória: {e}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})
 
 
@@ -177,7 +177,7 @@ def get_system_health_metrics() -> str:
         return json.dumps(metrics, indent=2)
 
     except Exception as e:
-        logger.error(f"Erro ao obter métricas: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao obter métricas: {e}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})
 
 
@@ -264,7 +264,7 @@ def analyze_performance_trends(metric_name: str, hours: int = 24) -> str:
         return json.dumps(analysis, indent=2)
 
     except Exception as e:
-        logger.error(f"Erro ao analisar performance: {e}")
+        logger.error("log_error", message=f"Erro ao analisar performance: {e}")
         return json.dumps({"status": "error", "message": str(e)})
 
 
@@ -313,5 +313,5 @@ def get_resource_usage() -> str:
     except ImportError:
         return json.dumps({"status": "error", "message": "Biblioteca 'psutil' não instalada."})
     except Exception as e:
-        logger.error(f"Erro ao obter recursos: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao obter recursos: {e}", exc_info=True)
         return json.dumps({"status": "error", "message": str(e)})

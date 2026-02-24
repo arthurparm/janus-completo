@@ -2,13 +2,12 @@
 Intent classification for routing to appropriate prompt modules.
 Extracted from prompt_builder_service.py to separate logic from prompt content.
 """
-
-import logging
+import structlog
 from typing import Any
 
 from app.core.prompts.types import IntentType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class IntentClassifier:
@@ -113,8 +112,7 @@ class IntentClassifier:
             classified = max(intent_scores, key=intent_scores.get)
             confidence = self._calculate_confidence(intent_scores[classified], len(message))
 
-            logger.info(
-                f"[INTENT_CLASSIFICATION] Classified as {classified.value} "
+            logger.info("log_info", message=f"[INTENT_CLASSIFICATION] Classified as {classified.value} "
                 f"(confidence: {confidence:.2f})"
             )
             return classified

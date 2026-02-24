@@ -6,7 +6,7 @@ trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 """
 
 import asyncio
-import logging
+import structlog
 from typing import Any
 from pathlib import Path
 
@@ -17,7 +17,7 @@ from app.core.agents.structures import AgentRole, Task, TaskStatus, TaskPriority
 from app.core.agents.workspace import SharedWorkspace
 from app.core.agents.specialized_agent import SpecializedAgent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Re-import missing utility if not in utils
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
@@ -43,18 +43,18 @@ class MultiAgentSystem:
         try:
             if not workspace_path.exists():
                 workspace_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Diretório workspace criado em: {workspace_path}")
+                logger.info("log_info", message=f"Diretório workspace criado em: {workspace_path}")
             else:
-                logger.info(f"Diretório workspace já existe: {workspace_path}")
+                logger.info("log_info", message=f"Diretório workspace já existe: {workspace_path}")
         except Exception as e:
-            logger.error(f"Erro ao criar diretório workspace em {workspace_path}: {e}")
+            logger.error("log_error", message=f"Erro ao criar diretório workspace em {workspace_path}: {e}")
             # Fallback para diretório temporário se não conseguir criar no local configurado
             import tempfile
 
             fallback_path = Path(tempfile.gettempdir()) / "janus_workspace"
             if not fallback_path.exists():
                 fallback_path.mkdir(parents=True, exist_ok=True)
-            logger.warning(f"Usando diretório fallback: {fallback_path}")
+            logger.warning("log_warning", message=f"Usando diretório fallback: {fallback_path}")
             # Atualiza o settings para refletir o novo caminho
             settings.WORKSPACE_ROOT = str(fallback_path)
 
@@ -75,7 +75,7 @@ class MultiAgentSystem:
         # Hack para iniciar o consumidor em background na mesma loop
         asyncio.create_task(actor.start())
 
-        logger.info(f"Ator iniciado para agente {agent.agent_id} ({role.value})")
+        logger.info("log_info", message=f"Ator iniciado para agente {agent.agent_id} ({role.value})")
 
         if role == AgentRole.PROJECT_MANAGER and not self.project_manager:
             self.project_manager = agent
@@ -112,7 +112,7 @@ class MultiAgentSystem:
         )
 
         await broker.publish(queue_name, msg.model_dump())
-        logger.info(f"Tarefa {task.id} despachada para fila {queue_name}")
+        logger.info("log_info", message=f"Tarefa {task.id} despachada para fila {queue_name}")
 
     def get_agent(self, agent_id: str) -> SpecializedAgent | None:
         """Recupera um agente pelo ID."""
@@ -139,7 +139,7 @@ class MultiAgentSystem:
         if not self.project_manager:
             self.project_manager = await self.create_agent(AgentRole.PROJECT_MANAGER)
 
-        logger.info(f"Iniciando projeto: {project_description}")
+        logger.info("log_info", message=f"Iniciando projeto: {project_description}")
 
         # 1. PM analisa e decompõe o projeto
         decomposition_prompt = await get_formatted_prompt(
@@ -170,14 +170,14 @@ class MultiAgentSystem:
         """Atualiza a configuração de um agente específico."""
         agent = self.get_agent(agent_id)
         if not agent:
-            logger.warning(f"Agente {agent_id} não encontrado para atualização de configuração")
+            logger.warning("log_warning", message=f"Agente {agent_id} não encontrado para atualização de configuração")
             return False
 
         try:
             await agent.update_config(config)
             return True
         except Exception as e:
-            logger.error(f"Erro ao atualizar configuração do agente {agent_id}: {e}")
+            logger.error("log_error", message=f"Erro ao atualizar configuração do agente {agent_id}: {e}")
             return False
 
     def get_workspace_status(self) -> dict[str, Any]:

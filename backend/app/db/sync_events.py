@@ -54,7 +54,7 @@ def register_cleanup_events():
         Triggered after a User row is deleted.
         """
         user_id = target.id
-        logger.info(f"User {user_id} deleted from DB. Triggering artifact cleanup.")
+        logger.info("log_info", message=f"User {user_id} deleted from DB. Triggering artifact cleanup.")
 
         _dispatch_user_cleanup(user_id)
 

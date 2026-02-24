@@ -6,7 +6,7 @@ Executa código Python de forma isolada e segura usando RestrictedPython.
 import base64
 import io
 import json
-import logging
+import structlog
 import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ from typing import Any
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _SAFE_BUILTIN_NAMES = [
     "abs",
@@ -95,7 +95,7 @@ class PythonSandbox:
             "time",
         }
         self._mode = str(getattr(settings, "SANDBOX_MODE", "auto") or "auto").strip().lower()
-        logger.info(f"Sandbox Python configurado com módulos permitidos: {self.allowed_modules}")
+        logger.info("log_info", message=f"Sandbox Python configurado com módulos permitidos: {self.allowed_modules}")
 
     def _safe_import(self, name, *args, **kwargs):
         """Import hook seguro que só permite módulos whitelist."""
@@ -384,7 +384,7 @@ class PythonSandbox:
             )
 
         try:
-            logger.info(f"[SANDBOX] Executando código - {len(code)} caracteres")
+            logger.info("log_info", message=f"[SANDBOX] Executando código - {len(code)} caracteres")
 
             timeout_seconds = float(getattr(settings, "SANDBOX_TIMEOUT_SECONDS", 15))
             use_docker = self._mode in ("docker", "auto")
@@ -406,7 +406,7 @@ class PythonSandbox:
                             exit_code=1,
                             execution_time=time.time() - start_time,
                         )
-                    logger.warning(f"[SANDBOX] Docker fallback to process: {e}")
+                    logger.warning("log_warning", message=f"[SANDBOX] Docker fallback to process: {e}")
                 else:
                     if timed_out:
                         return ExecutionResult(
@@ -462,7 +462,7 @@ class PythonSandbox:
                     call_error = f"{type(e).__name__}: {e}"
 
             execution_time = time.time() - start_time
-            logger.info(f"[SANDBOX] ✓ Execução concluída - tempo={execution_time:.3f}s")
+            logger.info("log_info", message=f"[SANDBOX] ✓ Execução concluída - tempo={execution_time:.3f}s")
 
             output = stdout_capture.getvalue()
             stderr_output = stderr_capture.getvalue()
@@ -488,7 +488,7 @@ class PythonSandbox:
             )
 
         except ImportError as e:
-            logger.warning(f"[SANDBOX] ⚠️ Tentativa de importar módulo não permitido: {e}")
+            logger.warning("log_warning", message=f"[SANDBOX] ⚠️ Tentativa de importar módulo não permitido: {e}")
             return ExecutionResult(
                 success=False,
                 output="",
@@ -498,7 +498,7 @@ class PythonSandbox:
             )
 
         except Exception as e:
-            logger.error(f"[SANDBOX] ❌ Erro ao executar código: {e}", exc_info=False)
+            logger.error("log_error", message=f"[SANDBOX] ❌ Erro ao executar código: {e}", exc_info=False)
             return ExecutionResult(
                 success=False,
                 output="",

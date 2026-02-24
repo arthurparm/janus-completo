@@ -1,9 +1,8 @@
-import logging
-
+import structlog
 import firebase_admin
 from firebase_admin import credentials, db, firestore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FirebaseService:
@@ -31,7 +30,7 @@ class FirebaseService:
             logger.info("Firebase Admin initialized successfully.")
             self._initialized = True
         except Exception as e:
-            logger.error(f"Failed to initialize Firebase: {e}")
+            logger.error("log_error", message=f"Failed to initialize Firebase: {e}")
             raise e
 
     def get_firestore(self):

@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 import requests
 import urllib3
 from qdrant_client import AsyncQdrantClient, models
@@ -8,7 +7,7 @@ from qdrant_client.http.models import PayloadSchemaType
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Circuit Breakers
 _qdrant_init_cb = CircuitBreaker(failure_threshold=3, recovery_timeout=120)
@@ -68,7 +67,7 @@ def _validate_collection_name(collection_name: str) -> str:
     # Substituir caracteres inválidos por underscore
     sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", collection_name)
     if sanitized != collection_name:
-        logger.warning(f"Nome da coleção '{collection_name}' sanitizado para '{sanitized}'")
+        logger.warning("log_warning", message=f"Nome da coleção '{collection_name}' sanitizado para '{sanitized}'")
     return sanitized
 
 
@@ -82,9 +81,9 @@ async def aget_or_create_collection(
     try:
         collection_info = await async_client.get_collection(collection_name=collection_name)
         if collection_info.config.params.vectors.size != vector_size:
-            logger.warning(f"Tamanho do vetor da coleção '{collection_name}' difere do solicitado.")
+            logger.warning("log_warning", message=f"Tamanho do vetor da coleção '{collection_name}' difere do solicitado.")
     except Exception:
-        logger.warning(f"Coleção '{collection_name}' não encontrada. Criando via async...")
+        logger.warning("log_warning", message=f"Coleção '{collection_name}' não encontrada. Criando via async...")
         try:
             await async_client.create_collection(
                 collection_name=collection_name,
@@ -106,7 +105,7 @@ async def aget_or_create_collection(
                     full_scan_threshold=10000,
                 ),
             )
-            logger.info(f"Coleção '{collection_name}' criada via async.")
+            logger.info("log_info", message=f"Coleção '{collection_name}' criada via async.")
             # Criar índices de payload para metadados importantes
             await async_client.create_payload_index(
                 collection_name=collection_name,
@@ -125,7 +124,7 @@ async def aget_or_create_collection(
                     field_schema=PayloadSchemaType.KEYWORD,
                 )
             except Exception as e:
-                logger.warning(f"Failed to create async 'origin' index for {collection_name}: {e}")
+                logger.warning("log_warning", message=f"Failed to create async 'origin' index for {collection_name}: {e}")
             try:
                 await async_client.create_payload_index(
                     collection_name=collection_name,
@@ -133,13 +132,11 @@ async def aget_or_create_collection(
                     field_schema=PayloadSchemaType.KEYWORD,
                 )
             except Exception as e:
-                logger.warning(f"Failed to create async 'status' index for {collection_name}: {e}")
-            logger.info(
-                f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async."
+                logger.warning("log_warning", message=f"Failed to create async 'status' index for {collection_name}: {e}")
+            logger.info("log_info", message=f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async."
             )
         except Exception as create_error:
-            logger.error(
-                f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
+            logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
             )
             raise ConnectionError(
                 f"Não foi possível criar a coleção async: {create_error}"
@@ -155,7 +152,7 @@ async def check_qdrant_readiness() -> bool:
         logger.info("Qdrant readiness check PASSED.")
         return True
     except Exception as e:
-        logger.error(f"Qdrant readiness check FAILED: {e}", exc_info=True)
+        logger.error("log_error", message=f"Qdrant readiness check FAILED: {e}", exc_info=True)
         raise ConnectionError(f"Qdrant não está pronto: {e}") from e
 
 
@@ -166,7 +163,7 @@ async def reset_client() -> None:
         try:
             await _async_qdrant_client.close()
         except Exception as e:
-            logger.warning(f"Error closing async Qdrant client: {e}")
+            logger.warning("log_warning", message=f"Error closing async Qdrant client: {e}")
     _async_qdrant_client = None
     logger.info("Cliente Qdrant async resetado.")
 
@@ -187,9 +184,9 @@ async def delete_points_by_filter(collection_name: str, filter_conditions: dict)
             collection_name=collection_name,
             points_selector=models.FilterSelector(filter=q_filter)
         )
-        logger.info(f"Pontos deletados de '{collection_name}' com filtro: {filter_conditions}")
+        logger.info("log_info", message=f"Pontos deletados de '{collection_name}' com filtro: {filter_conditions}")
     except Exception as e:
-        logger.error(f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
         raise
 
 async def aget_collection_info(collection_name: str) -> dict:
@@ -205,5 +202,5 @@ async def aget_collection_info(collection_name: str) -> dict:
             "status": str(info.status),
         }
     except Exception as e:
-        logger.error(f"Erro ao obter informações da coleção '{collection_name}' (async): {e}")
+        logger.error("log_error", message=f"Erro ao obter informações da coleção '{collection_name}' (async): {e}")
         raise

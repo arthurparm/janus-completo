@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+import structlog
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from langchain.agents import create_react_agent
@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.llm.types import ModelPriority, ModelRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _resolve_memory_db() -> Any:

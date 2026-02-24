@@ -5,7 +5,7 @@ Implementa o padrão Reflexion de forma assíncrona.
 """
 
 import json
-import logging
+import structlog
 import time
 import re
 from collections.abc import Awaitable, Callable
@@ -20,7 +20,7 @@ from app.core.llm.router import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.services.memory_service import MemoryService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Métricas (placeholders para evitar erros de importação se não existirem no contexto global)
 # Em produção, usaríamos prometheus_client
@@ -113,7 +113,7 @@ class ReflexionSession:
             evaluation_str = await self._llm.asend(prompt, timeout_s=30)
             return self._extract_json(evaluation_str)
         except Exception as e:
-            logger.error(f"Erro na avaliação padrão: {e}")
+            logger.error("log_error", message=f"Erro na avaliação padrão: {e}")
             # Fallback seguro
             return {
                 "score": 0.5,
@@ -140,7 +140,7 @@ class ReflexionSession:
             data = self._extract_json(resp)
             return data.get("reflection", ""), data.get("lessons", [])
         except Exception as e:
-            logger.error(f"Erro ao refletir: {e}")
+            logger.error("log_error", message=f"Erro ao refletir: {e}")
             return "Falha na reflexão (erro de parsing ou LLM)", []
 
     async def arun(self) -> dict[str, Any]:
@@ -158,7 +158,7 @@ class ReflexionSession:
                     logger.warning("Tempo limite do Reflexion excedido")
                     break
 
-                logger.info(f"Reflexion Iteração {iteration + 1}/{self.config.max_iterations}")
+                logger.info("log_info", message=f"Reflexion Iteração {iteration + 1}/{self.config.max_iterations}")
 
                 # 2. Executar (Gerar Solução)
                 execution_prompt = await get_formatted_prompt(
@@ -175,7 +175,7 @@ class ReflexionSession:
                     # Aqui usamos o LLM diretamente para simplicidade, mas o ideal é um agente
                     action_result = await self._llm.asend(execution_prompt)
                 except Exception as e:
-                    logger.error(f"Erro na execução da tarefa: {e}")
+                    logger.error("log_error", message=f"Erro na execução da tarefa: {e}")
                     action_result = f"Erro de execução: {str(e)}"
 
                 # 3. Avaliar
@@ -197,7 +197,7 @@ class ReflexionSession:
                     best_result = action_result
 
                 if score >= self.config.success_threshold:
-                    logger.info(f"Reflexion atingiu threshold de sucesso: {score}")
+                    logger.info("log_info", message=f"Reflexion atingiu threshold de sucesso: {score}")
                     step.reflection = "Sucesso atingido."
                     self._steps.append(step)
                     REFLEXION_SUCCESS.inc()
@@ -239,7 +239,7 @@ class ReflexionSession:
             }
 
         except Exception as e:
-            logger.error(f"Erro fatal no loop de reflexion: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro fatal no loop de reflexion: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     async def _save_lessons(self):
@@ -256,6 +256,6 @@ class ReflexionSession:
                 content=content,
                 metadata={"origin": "reflexion_core", "task": self.task, "timestamp": time.time()},
             )
-            logger.info(f"[Reflexion] {len(unique_lessons)} lições memorizadas.")
+            logger.info("log_info", message=f"[Reflexion] {len(unique_lessons)} lições memorizadas.")
         except Exception as e:
-            logger.error(f"[Reflexion] Erro ao salvar lições: {e}")
+            logger.error("log_error", message=f"[Reflexion] Erro ao salvar lições: {e}")

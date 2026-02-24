@@ -10,12 +10,11 @@ This approach:
 
 Much cleaner than maintaining a giant synonym dictionary!
 """
-
-import logging
+import structlog
 from difflib import SequenceMatcher
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RelationType(str, Enum):
@@ -146,7 +145,7 @@ def match_relation_type(type_str: str, threshold: float = 0.75) -> tuple[Relatio
     # Stage 2: Semantic group match
     group_match = _find_in_semantic_groups(type_str)
     if group_match:
-        logger.debug(f"Semantic group match: '{type_str}' -> {group_match.value}")
+        logger.debug("log_debug", message=f"Semantic group match: '{type_str}' -> {group_match.value}")
         return group_match, 0.9
 
     # Stage 3: Fuzzy match against all enum values
@@ -162,12 +161,11 @@ def match_relation_type(type_str: str, threshold: float = 0.75) -> tuple[Relatio
                 best_match = rel_type
 
     if best_score >= threshold:
-        logger.debug(f"Fuzzy match: '{type_str}' -> {best_match.value} (score={best_score:.2f})")
+        logger.debug("log_debug", message=f"Fuzzy match: '{type_str}' -> {best_match.value} (score={best_score:.2f})")
         return best_match, best_score
 
     # Stage 4: Accept as custom type (future: could add dynamically)
-    logger.info(
-        f"New relation type discovered: '{type_str}' (best match: {best_match.value} @ {best_score:.2f}). "
+    logger.info("log_info", message=f"New relation type discovered: '{type_str}' (best match: {best_match.value} @ {best_score:.2f}). "
         f"Using RELATES_TO as fallback."
     )
     return RelationType.RELATES_TO, 0.5

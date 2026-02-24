@@ -27,11 +27,11 @@ class WakeWordService:
             # We'll rely on auto-download or pre-existence.
             self.oww_model = Model(self.models)
             self._available = True
-            logger.info(f"WakeWord Service initialized. Models: {self.models}")
+            logger.info("log_info", message=f"WakeWord Service initialized. Models: {self.models}")
         except ImportError:
             logger.warning("openwakeword library not found. Wake Word detection disabled.")
         except Exception as e:
-            logger.error(f"Failed to initialize openwakeword: {e}")
+            logger.error("log_error", message=f"Failed to initialize openwakeword: {e}")
             self._available = False
 
     async def wait_for_wake_word(self) -> bool:
@@ -55,7 +55,7 @@ class WakeWordService:
             return False
 
         formatted_models = ", ".join(self.models)
-        logger.info(f"Waiting for wake word ({formatted_models})...")
+        logger.info("log_info", message=f"Waiting for wake word ({formatted_models})...")
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._listen_loop_sync)
@@ -76,7 +76,7 @@ class WakeWordService:
                 format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK
             )
         except Exception as e:
-            logger.error(f"Failed to open audio stream: {e}")
+            logger.error("log_error", message=f"Failed to open audio stream: {e}")
             return False
 
         detected = False
@@ -94,7 +94,7 @@ class WakeWordService:
                 for model_name in self.models:
                     score = prediction.get(model_name, 0.0)
                     if score > 0.5:  # Threshold
-                        logger.info(f"Wake Word Detected: {model_name} (Score: {score:.2f})")
+                        logger.info("log_info", message=f"Wake Word Detected: {model_name} (Score: {score:.2f})")
                         detected = True
                         break
 
@@ -102,7 +102,7 @@ class WakeWordService:
                     break
 
         except Exception as e:
-            logger.error(f"Error in wake word loop: {e}")
+            logger.error("log_error", message=f"Error in wake word loop: {e}")
         finally:
             if stream:
                 stream.stop_stream()

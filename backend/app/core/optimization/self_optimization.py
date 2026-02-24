@@ -14,7 +14,7 @@ Funcionalidades:
 """
 
 import asyncio
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -28,7 +28,7 @@ from app.core.memory.memory_core import get_memory_db
 from app.core.tools.action_module import action_registry
 from app.models.schemas import Experience
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ==================== MÉTRICAS ====================
 
@@ -213,7 +213,7 @@ class SystemMonitor:
             return metrics
 
         except Exception as e:
-            logger.error(f"[SelfOptimization] Erro ao coletar métricas: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SelfOptimization] Erro ao coletar métricas: {e}", exc_info=True)
             return SystemMetrics(
                 avg_response_time=0.0,
                 error_rate=0.0,
@@ -516,7 +516,7 @@ class ImprovementExecutor:
         Returns:
             Resultado da execução
         """
-        logger.info(f"[SelfOptimization] Executando melhoria: {improvement.description}")
+        logger.info("log_info", message=f"[SelfOptimization] Executando melhoria: {improvement.description}")
 
         try:
             # Usa agente para executar os passos
@@ -580,12 +580,12 @@ class ImprovementExecutor:
                     )
                 )
             except Exception as e:
-                logger.warning(f"Falha ao memorizar melhoria: {e}")
+                logger.warning("log_warning", message=f"Falha ao memorizar melhoria: {e}")
 
             return applied
 
         except Exception as e:
-            logger.error(f"[SelfOptimization] Erro ao executar melhoria: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SelfOptimization] Erro ao executar melhoria: {e}", exc_info=True)
             return AppliedImprovement(improvement=improvement, success=False, error=str(e))
 
 
@@ -621,14 +621,13 @@ class SelfOptimizationCycle:
 
             # 1. MONITOR
             metrics = await self.monitor.collect_metrics()
-            logger.info(
-                f"[SelfOptimization] Métricas: health_score={self.monitor._calculate_health_score(metrics):.2f}, "
+            logger.info("log_info", message=f"[SelfOptimization] Métricas: health_score={self.monitor._calculate_health_score(metrics):.2f}, "
                 f"error_rate={metrics.error_rate:.1%}, avg_response={metrics.avg_response_time:.2f}s"
             )
 
             # 2. DETECT
             issues = self.monitor.detect_issues()
-            logger.info(f"[SelfOptimization] Problemas detectados: {len(issues)}")
+            logger.info("log_info", message=f"[SelfOptimization] Problemas detectados: {len(issues)}")
 
             if not issues:
                 logger.info("[SelfOptimization] ✓ Sistema saudável - nenhuma melhoria necessária")
@@ -642,7 +641,7 @@ class SelfOptimizationCycle:
 
             # 3. PLAN
             improvements = await self.planner.plan_improvements(issues, metrics)
-            logger.info(f"[SelfOptimization] Melhorias planejadas: {len(improvements)}")
+            logger.info("log_info", message=f"[SelfOptimization] Melhorias planejadas: {len(improvements)}")
 
             # Limita melhorias por ciclo (padrão 3) para evitar sobrecarga
             effective_limit = max_improvements if (max_improvements is not None) else 3
@@ -656,7 +655,7 @@ class SelfOptimizationCycle:
                     applied_improvements.append(applied)
 
                     if not applied.success:
-                        logger.warning(f"[SelfOptimization] Melhoria falhou: {applied.error}")
+                        logger.warning("log_warning", message=f"[SelfOptimization] Melhoria falhou: {applied.error}")
             else:
                 logger.info(
                     "[SelfOptimization] Execução automática desabilitada - melhorias apenas planejadas"
@@ -664,8 +663,7 @@ class SelfOptimizationCycle:
 
             # 5. LEARN
             successful = sum(1 for imp in applied_improvements if imp.success)
-            logger.info(
-                f"[SelfOptimization] Melhorias aplicadas: {successful}/{len(applied_improvements)}"
+            logger.info("log_info", message=f"[SelfOptimization] Melhorias aplicadas: {successful}/{len(applied_improvements)}"
             )
 
             elapsed = time.perf_counter() - cycle_start
@@ -683,7 +681,7 @@ class SelfOptimizationCycle:
             }
 
         except Exception as e:
-            logger.error(f"[SelfOptimization] Erro no ciclo: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SelfOptimization] Erro no ciclo: {e}", exc_info=True)
             _OPTIMIZATION_CYCLES.labels("error").inc()
             return {"success": False, "error": str(e)}
 
@@ -695,8 +693,7 @@ class SelfOptimizationCycle:
             interval_seconds: Intervalo entre ciclos (padrão: 5 minutos)
         """
         self._running = True
-        logger.info(
-            f"[SelfOptimization] Iniciando execução contínua (intervalo: {interval_seconds}s)"
+        logger.info("log_info", message=f"[SelfOptimization] Iniciando execução contínua (intervalo: {interval_seconds}s)"
         )
 
         while self._running:

@@ -1,12 +1,12 @@
 import json
-import logging
+import structlog
 from typing import Any
 
 from langchain.tools import tool
 
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _calendar_events: dict[str, list[dict[str, Any]]] = {}
 _notes: dict[str, list[dict[str, Any]]] = {}

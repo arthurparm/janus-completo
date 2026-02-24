@@ -1,5 +1,5 @@
 import hashlib
-import logging
+import structlog
 import time
 from collections import OrderedDict
 from typing import Any
@@ -8,7 +8,7 @@ import numpy as np
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 try:
     from prometheus_client import Counter, Gauge, Histogram  # type: ignore
@@ -110,7 +110,7 @@ def _load_local_model() -> SentenceTransformer:
     if SentenceTransformer is None:
         raise RuntimeError("sentence-transformers não está instalado")
     model_name = _DEFAULT_LOCAL_MODEL
-    logger.info(f"Carregando modelo local de embeddings: {model_name}")
+    logger.info("log_info", message=f"Carregando modelo local de embeddings: {model_name}")
     try:
         _local_model = SentenceTransformer(model_name)
         try:
@@ -119,8 +119,7 @@ def _load_local_model() -> SentenceTransformer:
             pass
         return _local_model
     except NotImplementedError as e:
-        logger.warning(
-            f"Falha ao inicializar modelo local de embeddings com configuração padrão: {e}. "
+        logger.warning("log_warning", message=f"Falha ao inicializar modelo local de embeddings com configuração padrão: {e}. "
             "Tentando fallback para CPU..."
         )
         try:
@@ -162,7 +161,7 @@ def _load_openai_embedder() -> OpenAIEmbeddings:
     if not openai_key:
         raise RuntimeError("OPENAI_API_KEY não configurada para embeddings OpenAI")
     model_name = _DEFAULT_OPENAI_MODEL
-    logger.info(f"Inicializando OpenAIEmbeddings com modelo: {model_name}")
+    logger.info("log_info", message=f"Inicializando OpenAIEmbeddings com modelo: {model_name}")
     _openai_embedder = OpenAIEmbeddings(model=model_name, api_key=openai_key)
     try:
         _EMB_MODEL_LOADED.labels("openai").set(1)
@@ -191,7 +190,7 @@ def _load_openrouter_embedder() -> OpenAIEmbeddings:
         raise RuntimeError("OPENROUTER_API_KEY não configurada para embeddings OpenRouter")
         
     model_name = _DEFAULT_OPENROUTER_MODEL
-    logger.info(f"Inicializando OpenRouterEmbeddings com modelo: {model_name}")
+    logger.info("log_info", message=f"Inicializando OpenRouterEmbeddings com modelo: {model_name}")
     # OpenRouter usa interface compatível com OpenAI
     _openrouter_embedder = OpenAIEmbeddings(
         model=model_name, 
@@ -322,7 +321,7 @@ def embed_text(text: str) -> list[float]:
                 pass
             return vec
         except Exception as e:
-            logger.warning(f"Embedding provider '{p}' falhou; tentando fallback. Erro: {e}")
+            logger.warning("log_warning", message=f"Embedding provider '{p}' falhou; tentando fallback. Erro: {e}")
             try:
                 _EMB_REQ.labels(p, "error").inc()
                 _EMB_LAT.labels(p, "error").observe(0.0)
@@ -377,7 +376,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 pass
             return res
         except Exception as e:
-            logger.warning(f"Embedding provider batch '{p}' falhou; tentando fallback. Erro: {e}")
+            logger.warning("log_warning", message=f"Embedding provider batch '{p}' falhou; tentando fallback. Erro: {e}")
             try:
                 _EMB_REQ.labels(p, "error").inc()
                 _EMB_LAT.labels(p, "error").observe(0.0)

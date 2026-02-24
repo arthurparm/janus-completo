@@ -43,7 +43,7 @@ class RedisManager:
             return
 
         url = settings.REDIS_URL
-        logger.info(f"Initializing Redis connection pool at {url}")
+        logger.info("log_info", message=f"Initializing Redis connection pool at {url}")
 
         retry_strategy = Retry(
             ExponentialBackoff(cap=2.0, base=0.5),
@@ -66,7 +66,7 @@ class RedisManager:
             logger.info("Redis connection established successfully.")
 
         except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}", exc_info=True)
+            logger.error("log_error", message=f"Failed to connect to Redis: {e}", exc_info=True)
             # Em modo 'Fail Open', não crashamos a app, mas o client fica None ou inoperante.
             # Se for strict, deveríamos dar raise.
             # Aqui vamos deixar o client operante para sofrer retries subsequentes ou falhar nas chamadas.
@@ -104,21 +104,21 @@ class RedisManager:
         try:
             return await self.client.get(key)
         except Exception as e:
-            logger.warning(f"Redis get failed for {key}: {e}")
+            logger.warning("log_warning", message=f"Redis get failed for {key}: {e}")
             return None
 
     async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         try:
             return await self.client.set(key, value, ex=ttl)
         except Exception as e:
-            logger.warning(f"Redis set failed for {key}: {e}")
+            logger.warning("log_warning", message=f"Redis set failed for {key}: {e}")
             return False
 
     async def publish(self, channel: str, message: str) -> int:
         try:
             return await self.client.publish(channel, message)
         except Exception as e:
-            logger.error(f"Redis publish failed to {channel}: {e}")
+            logger.error("log_error", message=f"Redis publish failed to {channel}: {e}")
             return 0
 
     @asynccontextmanager

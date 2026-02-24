@@ -1,4 +1,4 @@
-import logging
+import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -7,7 +7,7 @@ from typing import Any
 from app.core.agents.structures import Task, TaskStatus
 from app.core.agents.metrics import AGENT_COLLABORATION_COUNTER
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -25,7 +25,7 @@ class SharedWorkspace:
             "author": author,
             "timestamp": datetime.now().isoformat(),
         }
-        logger.info(f"Artefato '{key}' adicionado ao workspace por {author}")
+        logger.info("log_info", message=f"Artefato '{key}' adicionado ao workspace por {author}")
 
     def get_artifact(self, key: str) -> Any | None:
         """Recupera um artefato do workspace."""
@@ -43,7 +43,7 @@ class SharedWorkspace:
         }
         self.messages.append(message)
         AGENT_COLLABORATION_COUNTER.labels(initiator=from_agent, collaborator=to_agent).inc()
-        logger.info(f"Mensagem enviada: {from_agent} → {to_agent}")
+        logger.info("log_info", message=f"Mensagem enviada: {from_agent} → {to_agent}")
 
     def get_messages_for(self, agent_id: str) -> list[dict[str, Any]]:
         """Recupera mensagens destinadas a um agente."""
@@ -52,7 +52,7 @@ class SharedWorkspace:
     def add_task(self, task: Task):
         """Adiciona uma tarefa ao workspace."""
         self.tasks[task.id] = task
-        logger.info(f"Tarefa '{task.id}' adicionada: {task.description}")
+        logger.info("log_info", message=f"Tarefa '{task.id}' adicionada: {task.description}")
 
     def get_task(self, task_id: str) -> Task | None:
         """Recupera uma tarefa pelo ID."""

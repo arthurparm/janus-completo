@@ -12,7 +12,7 @@ The loop runs during idle time (low system load) to avoid impacting user request
 
 import asyncio
 import json
-import logging
+import structlog
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -20,7 +20,7 @@ from typing import Any
 from app.core.evolution.evolution_manager import EvolutionManager
 from app.core.evolution.reflector_agent import ReflectorAgent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -78,7 +78,7 @@ class SelfStudyManager:
         session = StudySession(session_id=str(uuid.uuid4()), started_at=datetime.now().isoformat())
         self._current_session = session
 
-        logger.info(f"[SelfStudy] Iniciando sessão de auto-estudo: {session.session_id}")
+        logger.info("log_info", message=f"[SelfStudy] Iniciando sessão de auto-estudo: {session.session_id}")
 
         try:
             # Phase 1: Reflection
@@ -86,8 +86,7 @@ class SelfStudyManager:
             report = await self.reflector.analyze_recent_experiences(hours_back=hours_to_analyze)
             session.reflection_summary = self.reflector.to_dict(report)
 
-            logger.info(
-                f"[SelfStudy] Reflexão completa. "
+            logger.info("log_info", message=f"[SelfStudy] Reflexão completa. "
                 f"Health Score: {report.overall_health_score:.2f}, "
                 f"Padrões detectados: {len(report.failure_patterns)}"
             )
@@ -101,8 +100,7 @@ class SelfStudyManager:
                 return session
 
             if report.overall_health_score >= self.MIN_HEALTH_SCORE_TO_TRIGGER:
-                logger.info(
-                    f"[SelfStudy] Sistema saudável (score={report.overall_health_score:.2f}). "
+                logger.info("log_info", message=f"[SelfStudy] Sistema saudável (score={report.overall_health_score:.2f}). "
                     "Nenhuma evolução necessária."
                 )
                 session.status = "completed"
@@ -122,8 +120,7 @@ class SelfStudyManager:
             ]
 
             for i, pattern in enumerate(evolution_candidates[:evolutions_limit]):
-                logger.info(
-                    f"[SelfStudy] Evolução {i + 1}/{len(evolution_candidates)}: "
+                logger.info("log_info", message=f"[SelfStudy] Evolução {i + 1}/{len(evolution_candidates)}: "
                     f"{pattern.description}"
                 )
 
@@ -138,12 +135,12 @@ class SelfStudyManager:
 
                     if result:
                         session.evolutions_succeeded += 1
-                        logger.info(f"[SelfStudy] Evolução bem-sucedida: {result.get('name')}")
+                        logger.info("log_info", message=f"[SelfStudy] Evolução bem-sucedida: {result.get('name')}")
                     else:
                         session.evolutions_failed += 1
 
                 except Exception as e:
-                    logger.error(f"[SelfStudy] Falha na evolução: {e}")
+                    logger.error("log_error", message=f"[SelfStudy] Falha na evolução: {e}")
                     session.evolutions_failed += 1
 
                 # Small delay between evolutions
@@ -152,13 +149,12 @@ class SelfStudyManager:
             session.status = "completed"
             session.completed_at = datetime.now().isoformat()
 
-            logger.info(
-                f"[SelfStudy] Sessão completa. "
+            logger.info("log_info", message=f"[SelfStudy] Sessão completa. "
                 f"Evoluções: {session.evolutions_succeeded}/{session.evolutions_triggered} sucesso"
             )
 
         except Exception as e:
-            logger.error(f"[SelfStudy] Erro na sessão: {e}", exc_info=True)
+            logger.error("log_error", message=f"[SelfStudy] Erro na sessão: {e}", exc_info=True)
             session.status = "failed"
             session.completed_at = datetime.now().isoformat()
 
@@ -175,7 +171,7 @@ class SelfStudyManager:
         Returns:
             Reflection report as dictionary.
         """
-        logger.info(f"[SelfStudy] Executando reflexão (últimas {hours}h)...")
+        logger.info("log_info", message=f"[SelfStudy] Executando reflexão (últimas {hours}h)...")
         report = await self.reflector.analyze_recent_experiences(hours_back=hours)
         return self.reflector.to_dict(report)
 
@@ -207,7 +203,7 @@ class SelfStudyManager:
                 json.dump(sessions, f, indent=2)
 
         except Exception as e:
-            logger.error(f"[SelfStudy] Erro ao salvar sessão: {e}")
+            logger.error("log_error", message=f"[SelfStudy] Erro ao salvar sessão: {e}")
 
     def _load_sessions(self) -> list[dict[str, Any]]:
         """Load sessions from log file."""

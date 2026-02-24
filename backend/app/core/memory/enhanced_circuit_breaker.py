@@ -2,7 +2,7 @@
 Enhanced circuit breaker with improved monitoring, recovery, and resilience features.
 """
 
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -12,7 +12,7 @@ from typing import Any
 from app.core.infrastructure.resilience import CircuitBreaker, CircuitBreakerState, CircuitOpenError
 from app.core.memory.circuit_config import RESILIENCE_CONFIG
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass

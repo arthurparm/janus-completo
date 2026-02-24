@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import structlog
 import re
 from typing import Any
 
@@ -10,7 +10,7 @@ from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.models.schemas import GraphRelationship
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # --- Métricas e Circuit Breaker ---
 _DB_QUERIES = Counter("neo4j_queries_total", "Total de queries ao Neo4j", ["operation", "outcome"])
@@ -226,8 +226,7 @@ class GraphDatabase:
                                 "Índices Vetoriais e Full-Text (Universal) verificados."
                             )
                         except Exception as e:
-                            logger.warning(
-                                f"Falha ao criar índices avançados (Vector/FullText): {e}"
+                            logger.warning("log_warning", message=f"Falha ao criar índices avançados (Vector/FullText): {e}"
                             )
 
                         # Core Constraints
@@ -648,7 +647,7 @@ class GraphDatabase:
                 record = await result.single()
                 return bool(record and record.get("ok") == 1)
         except Exception as e:
-            logger.warning(f"Neo4j health check falhou: {e}")
+            logger.warning("log_warning", message=f"Neo4j health check falhou: {e}")
             return False
 
 

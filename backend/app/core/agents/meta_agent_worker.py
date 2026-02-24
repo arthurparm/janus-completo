@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import Any
@@ -7,7 +7,7 @@ from typing import Any
 from app.core.agents.meta_agent import MetaAgent
 from app.core.infrastructure.message_broker import MessageBroker, get_broker
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MetaAgentWorker:
@@ -33,7 +33,7 @@ class MetaAgentWorker:
 
         self.broker = await get_broker()
         self._is_running = True
-        logger.info(f"Iniciando MetaAgentWorker na fila {self.queue_name}")
+        logger.info("log_info", message=f"Iniciando MetaAgentWorker na fila {self.queue_name}")
 
         # Inicia consumidor RabbitMQ
         self._consumer_task = self.broker.start_consumer(
@@ -66,7 +66,7 @@ class MetaAgentWorker:
 
     async def _scheduler_loop(self):
         """Loop que publica eventos de gatilho periodicamente."""
-        logger.info(f"MetaAgentWorker: Scheduler iniciado (intervalo={self.interval_seconds}s)")
+        logger.info("log_info", message=f"MetaAgentWorker: Scheduler iniciado (intervalo={self.interval_seconds}s)")
         while self._is_running:
             try:
                 await asyncio.sleep(self.interval_seconds)
@@ -74,7 +74,7 @@ class MetaAgentWorker:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Erro no scheduler do MetaAgent: {e}")
+                logger.error("log_error", message=f"Erro no scheduler do MetaAgent: {e}")
                 await asyncio.sleep(60)  # Backoff on error
 
     async def _trigger_cycle(self, source: str):
@@ -99,9 +99,9 @@ class MetaAgentWorker:
 
         try:
             await self.broker.publish(queue_name=self.queue_name, message=message_dict)
-            logger.debug(f"Gatilho de ciclo ({source}) publicado.")
+            logger.debug("log_debug", message=f"Gatilho de ciclo ({source}) publicado.")
         except Exception as e:
-            logger.error(f"Falha ao publicar gatilho de ciclo: {e}")
+            logger.error("log_error", message=f"Falha ao publicar gatilho de ciclo: {e}")
 
     async def _on_message(self, message: Any):
         """
@@ -121,4 +121,4 @@ class MetaAgentWorker:
             # meta_agent.py já loga, mas poderíamos publicar 'janus.events.meta_agent.report'
 
         except Exception as e:
-            logger.error(f"Erro fatal executando ciclo do MetaAgent via Worker: {e}", exc_info=True)
+            logger.error("log_error", message=f"Erro fatal executando ciclo do MetaAgent via Worker: {e}", exc_info=True)

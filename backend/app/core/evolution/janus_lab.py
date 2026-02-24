@@ -8,8 +8,7 @@ Allows Janus Prime to spawn a lightweight "Lab" instance for testing:
 
 The Lab runs in an isolated Docker container with resource limits.
 """
-
-import logging
+import structlog
 import os
 import tempfile
 import time
@@ -25,7 +24,7 @@ except ImportError:
     DOCKER_AVAILABLE = False
     docker = None
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -78,7 +77,7 @@ class JanusLabManager:
             self.client.ping()
             logger.info("[JanusLab] Docker client initialized successfully")
         except Exception as e:
-            logger.error(f"[JanusLab] Failed to connect to Docker: {e}")
+            logger.error("log_error", message=f"[JanusLab] Failed to connect to Docker: {e}")
             raise
 
         self._active_labs: dict[str, Any] = {}
@@ -107,7 +106,7 @@ class JanusLabManager:
         lab_id = f"{self.LAB_PREFIX}{uuid.uuid4().hex[:8]}"
         config = LabConfig(lab_id=lab_id, purpose=purpose, timeout_seconds=timeout_seconds)
 
-        logger.info(f"[JanusLab] Spawning lab: {lab_id} for '{purpose}'")
+        logger.info("log_info", message=f"[JanusLab] Spawning lab: {lab_id} for '{purpose}'")
 
         try:
             # Generate minimal .env for Lab
@@ -154,11 +153,11 @@ class JanusLabManager:
                 "created_at": time.time(),
             }
 
-            logger.info(f"[JanusLab] Lab {lab_id} spawned successfully")
+            logger.info("log_info", message=f"[JanusLab] Lab {lab_id} spawned successfully")
             return config
 
         except Exception as e:
-            logger.error(f"[JanusLab] Failed to spawn lab: {e}", exc_info=True)
+            logger.error("log_error", message=f"[JanusLab] Failed to spawn lab: {e}", exc_info=True)
             raise
 
     def run_test_in_lab(self, lab_id: str, test_command: str, timeout: int = 60) -> LabResult:
@@ -180,7 +179,7 @@ class JanusLabManager:
         container = lab["container"]
         start_time = time.time()
 
-        logger.info(f"[JanusLab] Running test in {lab_id}: {test_command}")
+        logger.info("log_info", message=f"[JanusLab] Running test in {lab_id}: {test_command}")
 
         try:
             # Execute command in container
@@ -201,8 +200,7 @@ class JanusLabManager:
                 error=None if exit_code == 0 else f"Exit code: {exit_code}",
             )
 
-            logger.info(
-                f"[JanusLab] Test in {lab_id} {'PASSED' if result.success else 'FAILED'} "
+            logger.info("log_info", message=f"[JanusLab] Test in {lab_id} {'PASSED' if result.success else 'FAILED'} "
                 f"(duration: {duration:.2f}s)"
             )
 
@@ -210,7 +208,7 @@ class JanusLabManager:
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"[JanusLab] Test execution failed: {e}")
+            logger.error("log_error", message=f"[JanusLab] Test execution failed: {e}")
             return LabResult(
                 lab_id=lab_id,
                 success=False,
@@ -248,7 +246,7 @@ class JanusLabManager:
             True if destroyed successfully
         """
         if lab_id not in self._active_labs:
-            logger.warning(f"[JanusLab] Lab {lab_id} not found")
+            logger.warning("log_warning", message=f"[JanusLab] Lab {lab_id} not found")
             return False
 
         lab = self._active_labs[lab_id]
@@ -256,7 +254,7 @@ class JanusLabManager:
         workspace = lab["workspace"]
 
         try:
-            logger.info(f"[JanusLab] Destroying lab: {lab_id}")
+            logger.info("log_info", message=f"[JanusLab] Destroying lab: {lab_id}")
 
             # Stop and remove container
             container.stop(timeout=5)
@@ -269,11 +267,11 @@ class JanusLabManager:
                 shutil.rmtree(workspace)
 
             del self._active_labs[lab_id]
-            logger.info(f"[JanusLab] Lab {lab_id} destroyed")
+            logger.info("log_info", message=f"[JanusLab] Lab {lab_id} destroyed")
             return True
 
         except Exception as e:
-            logger.error(f"[JanusLab] Failed to destroy lab: {e}")
+            logger.error("log_error", message=f"[JanusLab] Failed to destroy lab: {e}")
             return False
 
     def cleanup_stale_labs(self, max_age_seconds: int = 600) -> int:
@@ -300,7 +298,7 @@ class JanusLabManager:
                 cleaned += 1
 
         if cleaned:
-            logger.info(f"[JanusLab] Cleaned up {cleaned} stale labs")
+            logger.info("log_info", message=f"[JanusLab] Cleaned up {cleaned} stale labs")
 
         return cleaned
 

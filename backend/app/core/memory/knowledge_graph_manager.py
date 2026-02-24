@@ -1,5 +1,5 @@
 import ast
-import logging
+import structlog
 import os
 import time
 from typing import Any, Protocol
@@ -9,7 +9,7 @@ from prometheus_client import Counter, Histogram
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.db.graph import graph_db
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 CODEBASE_DIR = "/app"
 
@@ -172,7 +172,7 @@ def _parse_python_file(file_path: str) -> CodeParser | None:
         parser.visit(tree)
         return parser
     except Exception as e:
-        logger.error(f"Falha ao fazer o parse do arquivo {file_path}: {e}", exc_info=True)
+        logger.error("log_error", message=f"Falha ao fazer o parse do arquivo {file_path}: {e}", exc_info=True)
         return None
 
 
@@ -220,7 +220,7 @@ async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
     e o insere no grafo semântico (Neo4j) usando o Knowledge Consolidator Worker.
     Esta função agora é assíncrona.
     """
-    logger.info(f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
+    logger.info("log_info", message=f"Iniciando a consolidação de conhecimento a partir de {limit} experiências.")
 
     try:
         # Lazy import para evitar carga na inicialização e dependências circulares
@@ -242,7 +242,7 @@ async def aconsolidate_experiences_into_graph(limit: int = 10) -> dict:
         return {"message": "Processo de consolidação concluído.", "summary": summary}
 
     except Exception as e:
-        logger.error(f"Erro na consolidação de experiências: {e}", exc_info=True)
+        logger.error("log_error", message=f"Erro na consolidação de experiências: {e}", exc_info=True)
         return {"message": "Erro na consolidação de experiências.", "summary": f"Erro: {e!s}"}
 
 
@@ -251,7 +251,7 @@ def index_codebase() -> dict:
     Orquestra a análise completa da base de código e a (re)criação do
     grafo de conhecimento estático.
     """
-    logger.info(f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
+    logger.info("log_info", message=f"Iniciando varredura e análise da base de código em '{CODEBASE_DIR}'...")
 
     def _ensure_indexes():
         idx_queries = [
@@ -370,7 +370,7 @@ class KnowledgeGraphManager:
             )
             return results if results else []
         except Exception as e:
-            logger.error(f"Erro no semantic_search: {e}")
+            logger.error("log_error", message=f"Erro no semantic_search: {e}")
             return []
 
 

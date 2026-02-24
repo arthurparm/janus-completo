@@ -44,7 +44,7 @@ class VoiceManager:
             self._enabled = any([self.stt, self.tts, self.wakeword])
             logger.info("Voice Manager initialized.")
         except Exception as e:
-            logger.error(f"Failed to initialize Voice Manager: {e}")
+            logger.error("log_error", message=f"Failed to initialize Voice Manager: {e}")
             self._enabled = False
 
     def _check_circuit(self) -> bool:
@@ -68,7 +68,7 @@ class VoiceManager:
 
         self._failure_count += 1
         self._last_failure_time = time.time()
-        logger.warning(f"Voice Failure ({self._failure_count}/{self._max_failures}): {error}")
+        logger.warning("log_warning", message=f"Voice Failure ({self._failure_count}/{self._max_failures}): {error}")
 
         if self._failure_count >= self._max_failures:
             self._circuit_open = True
