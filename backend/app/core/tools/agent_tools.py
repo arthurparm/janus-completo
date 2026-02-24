@@ -44,33 +44,27 @@ MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
 
 class WriteFileInput(BaseModel):
-    file_path: str | None = Field(
-        default=None, description="O caminho do arquivo, relativo ao workspace."
-    )
-    path: str | None = Field(
-        default=None, description="Alias para file_path (aceito para compatibilidade)."
+    file_path: str = Field(
+        description="O caminho do arquivo, relativo ao workspace."
     )
     content: str = Field(description="O conteúdo a ser escrito no arquivo.")
     overwrite: bool = Field(default=False, description="Se deve sobrescrever o arquivo.")
 
     @field_validator("file_path")
-    def validate_path_is_safe(cls, v: str | None, info) -> str:
-        effective = v or info.data.get("path")
-        if not effective:
-            raise ValueError("Você deve fornecer 'file_path' ou 'path'.")
-        absolute_path = (WORKSPACE_ROOT / effective).resolve()
+    def validate_path_is_safe(cls, v: str) -> str:
+        absolute_path = (WORKSPACE_ROOT / v).resolve()
         try:
             absolute_path.relative_to(WORKSPACE_ROOT)
-            return effective
+            return v
         except ValueError:
             raise ValueError(
-                f"Acesso negado. O caminho '{effective}' está fora do diretório permitido."
+                f"Acesso negado. O caminho '{v}' está fora do diretório permitido."
             )
 
 
 @tool  # Removido args_schema temporariamente para permitir que o wrapper funcione
 def write_file(
-    file_path: str | None = None, content: str = "", overwrite: bool = False, path: str | None = None
+    file_path: str, content: str, overwrite: bool = False
 ) -> str:
     """
     Writes content to a file within the secure workspace (/app/workspace).
@@ -94,12 +88,11 @@ def write_file(
         write_file(file_path="main.py", content="from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route('/')\\ndef home():\\n    return 'Hello World'", overwrite=False)
     """
     try:
-        actual_path = file_path or path
-        if not actual_path:
-            return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path' ou 'path'."
+        if not file_path:
+            return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path'."
         if not isinstance(content, str) or len(content) == 0:
             return "Erro: 'content' é obrigatório e não pode ser vazio."
-        target_path = (WORKSPACE_ROOT / actual_path).resolve()
+        target_path = (WORKSPACE_ROOT / file_path).resolve()
         target_path.relative_to(WORKSPACE_ROOT)  # Re-valida para segurança
 
         if target_path.suffix not in ALLOWED_EXTENSIONS:
@@ -107,11 +100,11 @@ def write_file(
         if len(content.encode("utf-8")) > MAX_FILE_SIZE:
             return f"Erro: Conteúdo excede o tamanho máximo de {MAX_FILE_SIZE} bytes."
         if target_path.exists() and not overwrite:
-            return f"Erro: O arquivo '{actual_path}' já existe. Use overwrite=True."
+            return f"Erro: O arquivo '{file_path}' já existe. Use overwrite=True."
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(content, encoding="utf-8")
-        return f"Arquivo '{actual_path}' salvo com sucesso."
+        return f"Arquivo '{file_path}' salvo com sucesso."
     except ValueError as e:
         return f"Erro de validação: {e}"
     except Exception as e:
@@ -119,19 +112,13 @@ def write_file(
 
 
 class ReadFileInput(BaseModel):
-    """Input schema for read_file that accepts both 'file_path' and 'path'."""
+    """Input schema for read_file."""
 
-    file_path: str | None = Field(default=None, description="Caminho do arquivo a ser lido")
-    path: str | None = Field(default=None, description="Alias para file_path")
-
-    @property
-    def resolved_path(self) -> str:
-        """Get the actual path, preferring file_path over path."""
-        return self.file_path or self.path or ""
+    file_path: str = Field(description="Caminho do arquivo a ser lido")
 
 
 @tool(args_schema=ReadFileInput)
-def read_file(file_path: str | None = None, path: str | None = None) -> str:
+def read_file(file_path: str) -> str:
     """
     Lê o conteúdo completo de um arquivo do sistema de arquivos.
 
@@ -142,16 +129,13 @@ def read_file(file_path: str | None = None, path: str | None = None) -> str:
 
     Args:
         file_path: Caminho do arquivo a ser lido (ex: 'src/main.py', 'config.json')
-        path: Alias para file_path (aceito para compatibilidade)
 
     Returns:
         Conteúdo do arquivo ou mensagem de erro se não encontrado
     """
-    # Resolve path from either parameter
-    actual_path = file_path or path
-    if not actual_path:
-        return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path' ou 'path'."
-    return filesystem_manager.read_file(actual_path)
+    if not file_path:
+        return "Erro: Nenhum caminho de arquivo fornecido. Use 'file_path'."
+    return filesystem_manager.read_file(file_path)
 
 
 class ListDirectoryInput(BaseModel):
@@ -344,7 +328,7 @@ async def evolve_tool(capability_request: str | None = None) -> str:
 
 
 @tool
-async def query_knowledge_graph(query: str = None, consulta: str = None, **kwargs) -> str:
+async def query_knowledge_graph(query: str) -> str:
     """
     Consulta o grafo de conhecimento semântico (Neo4j) para obter informações estruturadas
     sobre conceitos, ferramentas, erros e relacionamentos consolidados de experiências passadas.
@@ -361,22 +345,20 @@ async def query_knowledge_graph(query: str = None, consulta: str = None, **kwarg
 
     Args:
         query: Consulta em linguagem natural (ex: "Quais ferramentas causam erros de timeout?")
-        consulta: Alias para query (em português), caso o modelo use este nome.
 
     Returns:
         Resultados estruturados do grafo de conhecimento
     """
     try:
-        actual_query = query or consulta or kwargs.get("consulta")
-        if not actual_query:
-            return "Erro: Você deve fornecer uma consulta (parâmetro 'query')."
+        if not query:
+            return "Erro: Você deve fornecer uma busca (parâmetro 'query')."
 
         from app.core.memory.knowledge_graph_manager import knowledge_graph_manager
 
-        result = await knowledge_graph_manager.semantic_search(actual_query, limit=10)
+        result = await knowledge_graph_manager.semantic_search(query, limit=10)
 
         if not result:
-            return f"Nenhum conhecimento relevante encontrado no grafo para a consulta: '{query}'"
+            return f"Nenhum conhecimento relevante encontrado no grafo para a busca: '{query}'"
 
         response = f"📊 Conhecimento encontrado no grafo ({len(result)} resultados):\n\n"
         for idx, item in enumerate(result, 1):
