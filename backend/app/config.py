@@ -407,8 +407,8 @@ class AppSettings(BaseSettings):
     BROKER_USE_MSGPACK: bool = True
 
     # Redis
-    REDIS_ENABLED: bool = Field(default=False, env="REDIS_ENABLED")
-    REDIS_URL: str = Field(default="redis://redis:6379", env="REDIS_URL")
+    REDIS_ENABLED: bool = False
+    REDIS_URL: str = "redis://redis:6379"
 
     RABBITMQ_QUEUE_CONFIG: dict[str, dict[str, Any]] = {
         "janus.knowledge.consolidation": {

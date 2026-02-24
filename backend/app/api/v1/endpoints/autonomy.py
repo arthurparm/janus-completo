@@ -55,38 +55,38 @@ def _validate_plan_steps(
     for idx, step in enumerate(plan):
         if not isinstance(step, dict):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Passo {idx} do plano inválido: deve ser um objeto.",
             )
         tool_name = step.get("tool")
         args = step.get("args", {})
         if not tool_name or not isinstance(tool_name, str):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Passo {idx} inválido: campo 'tool' ausente ou não é string.",
             )
         if not isinstance(args, dict):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Passo {idx} inválido: campo 'args' deve ser um objeto.",
             )
 
         # Listas de permissão/bloqueio
         if blocklist and tool_name in blocklist:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Ferramenta '{tool_name}' bloqueada pela blocklist.",
             )
         if allowlist and tool_name not in allowlist:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Ferramenta '{tool_name}' não permitida pela allowlist.",
             )
 
         tool = action_registry.get_tool(tool_name)
         if not tool:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Ferramenta '{tool_name}' não encontrada no registro.",
             )
 
@@ -99,7 +99,7 @@ def _validate_plan_steps(
             except ValidationError as e:
                 # Erros detalhados de validação
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "message": f"Passo {idx} inválido: argumentos não compatíveis com schema de '{tool_name}'.",
                         "errors": e.errors() if hasattr(e, "errors") else str(e),
@@ -276,7 +276,7 @@ async def update_goal_status(
         GoalStatus.FAILED,
     }:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Status inválido"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Status inválido"
         )
     goal = manager.update_goal_status(goal_id, req.status)
     if not goal:

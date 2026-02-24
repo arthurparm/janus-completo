@@ -22,7 +22,7 @@ except Exception:
             return _json.loads(str(data))
 
     msgpack = _MsgPackCompat()  # type: ignore[assignment]
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Schemas de Dados ---
 
@@ -41,8 +41,7 @@ class ExperienceMetadata(BaseModel):
     access_count: int = Field(default=0, description="Number of times retrieved")
     pointer_id: str | None = Field(default=None, description="Neo4j Node ID reference")
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     def get(self, key: str, default: Any | None = None) -> Any | None:
         return getattr(self, key, default)
@@ -320,8 +319,7 @@ class AgentPayload(BaseModel):
     code: str | None = None  # Legacy/Generic
     response: str | None = None  # Legacy/Generic
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class TaskState(BaseModel):

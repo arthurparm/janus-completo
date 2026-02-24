@@ -35,7 +35,7 @@ async def stream_message(
         priority_enum = ModelPriority(priority)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role or priority"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid role or priority"
         )
 
     if routing_decision:

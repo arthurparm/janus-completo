@@ -63,7 +63,7 @@ async def supabase_exchange(
         sub = str(data.get("sub") or "").strip()
         if not email and not sub:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email/sub missing"
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="email/sub missing"
             )
         u = repo.get_by_email(email) if email else None
         if not u:
@@ -185,7 +185,7 @@ async def firebase_exchange(
     display_name = str(decoded.get("name") or email or "").strip() or None
     if not uid and not email:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="uid/email missing"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="uid/email missing"
         )
 
     user = repo.get_by_external_id(uid) if uid else None
@@ -218,7 +218,7 @@ async def local_register(
 ):
     if not payload.terms:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Terms not accepted"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Terms not accepted"
         )
 
     email = payload.email.strip().lower()

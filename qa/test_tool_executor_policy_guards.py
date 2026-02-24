@@ -107,6 +107,22 @@ class _SchemaTool:
         return f"ok:{payload.get('value')}"
 
 
+def test_validate_tool_args_uses_pydantic_v2_schema_path_directly():
+    service = ToolExecutorService()
+    tool = _SchemaTool()
+
+    ok, normalized, error = service._validate_tool_args(tool=tool, args={"value": "11"})
+    assert ok is True
+    assert normalized == {"value": 11}
+    assert error is None
+
+    ok, normalized, error = service._validate_tool_args(tool=tool, args={"value": "bad"})
+    assert ok is False
+    assert normalized == {"value": "bad"}
+    assert isinstance(error, str)
+    assert "Invalid arguments for tool schema" in error
+
+
 @pytest.mark.asyncio
 async def test_execute_tool_calls_blocks_invalid_args_by_schema(monkeypatch):
     events = []

@@ -184,12 +184,8 @@ class ToolExecutorService:
             )
 
         try:
-            if hasattr(schema, "model_validate"):  # pydantic v2
-                parsed = schema.model_validate(args)
-                normalized = parsed.model_dump(mode="python", exclude_none=True)
-            else:  # pydantic v1 compatibility
-                parsed = schema.parse_obj(args)
-                normalized = parsed.dict(exclude_none=True)
+            parsed = schema.model_validate(args)
+            normalized = parsed.model_dump(mode="python", exclude_none=True)
             return True, normalized, None
         except ValidationError as e:
             try:

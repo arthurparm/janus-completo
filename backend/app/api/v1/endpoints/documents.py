@@ -101,7 +101,7 @@ async def upload_document(
     uid = user_id or hdr_uid
     if not uid:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     data = await file.read()
     try:
@@ -332,7 +332,7 @@ async def delete_document(doc_id: str, user_id: str | None = None, request: Requ
     uid = user_id or hdr_uid
     if not uid:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     client = get_async_qdrant_client()
     coll = await aget_or_create_collection(f"user_{uid}")
@@ -381,7 +381,7 @@ async def link_url(
     uid = user_id or hdr_uid
     if not uid:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     import httpx
 
@@ -427,7 +427,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
     uid = user_id or hdr_uid
     if not uid:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id necessário"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     client = get_async_qdrant_client()
     coll = await aget_or_create_collection(f"user_{uid}")
