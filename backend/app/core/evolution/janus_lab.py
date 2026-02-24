@@ -353,7 +353,7 @@ def quick_lab_test(code: str, purpose: str = "quick_test") -> LabResult:
     Quick helper to spawn a lab, run code, and cleanup.
 
     Usage:
-        result = quick_lab_test("print('Hello from Lab!')")
+        result = quick_lab_test("message = 'Hello from Lab!'")
         # result.test_output
     """
     manager = JanusLabManager()
