@@ -49,7 +49,7 @@ class ConfigService:
         while self._running:
             try:
                 # Get a dedicated pubsub connection
-                redis_client = await self.redis.get_client()
+                redis_client = self.redis.client
                 pubsub = redis_client.pubsub()
                 await pubsub.subscribe(self.channel_name)
 
