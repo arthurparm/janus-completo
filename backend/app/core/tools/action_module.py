@@ -385,7 +385,15 @@ class ActionRegistry:
         name = tool.name
 
         if name in self._tools:
-            logger.warning("log_warning", message=f"[ActionModule] Ferramenta '{name}' já registrada. Substituindo...")
+            existing_tool = self._tools[name]
+            same_instance = existing_tool is tool
+            log_fn = logger.debug if same_instance else logger.info
+            log_fn(
+                "action_module_tool_reregistered",
+                tool_name=name,
+                same_instance=same_instance,
+                category=category.value,
+            )
 
         self._tools[name] = tool
         self._metadata[name] = ToolMetadata(
@@ -398,14 +406,18 @@ class ActionRegistry:
             tags=tags or [],
         )
 
-        logger.info("log_info", message=f"[ActionModule] Ferramenta registrada: {name} [{category.value}]")
+        logger.info(
+            "action_module_tool_registered",
+            tool_name=name,
+            category=category.value,
+        )
 
     def unregister(self, tool_name: str) -> None:
         """Remove uma ferramenta do registro."""
         if tool_name in self._tools:
             del self._tools[tool_name]
             del self._metadata[tool_name]
-            logger.info("log_info", message=f"[ActionModule] Ferramenta removida: {tool_name}")
+            logger.info("action_module_tool_unregistered", tool_name=tool_name)
 
     def get_tool(self, name: str) -> BaseTool | None:
         """Obtém uma ferramenta pelo nome."""
