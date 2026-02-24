@@ -248,7 +248,6 @@ class NeuralTrainer:
     def __init__(self):
         self.preparator = DatasetPreparator()
         self.models_dir = Path("/app/workspace/models")
-        self.models_dir.mkdir(parents=True, exist_ok=True)
 
     async def train_model(self, config: TrainingConfig) -> TrainingResult:
         """
@@ -424,6 +423,9 @@ class NeuralTrainer:
         """Salva modelo treinado em disco."""
         logger.info(f"[NeuralTrainer] Salvando modelo {config.model_name}...")
 
+        # Cria o diretório apenas no momento de uso para evitar side effects em import-time
+        # (ex.: ambientes de CI sem permissão de escrita em /app).
+        self.models_dir.mkdir(parents=True, exist_ok=True)
         model_path = self.models_dir / f"{config.model_name}_v{result.model_version}"
         model_path.mkdir(parents=True, exist_ok=True)
 
