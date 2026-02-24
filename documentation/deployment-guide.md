@@ -42,7 +42,13 @@ docker compose logs -f frontend
 ## Variaveis e Segredos
 
 - Arquivo `backend/app/.env` e usado por multiplos servicos.
+- Template para bootstrap local: `backend/app/.env.example`
 - Chaves de API/credenciais nao devem ser hardcoded em ambientes versionados.
+
+## Operacao Basica (v1)
+
+- Runbook de bootstrap, alerting e backup/restore local:
+  - `documentation/ops/ops-basics-v1.md`
 
 ## Pipeline e Boas Praticas
 
