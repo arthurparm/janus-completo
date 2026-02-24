@@ -47,16 +47,8 @@ def get_async_qdrant_client() -> AsyncQdrantClient:
 async def async_count_points(
     client: AsyncQdrantClient, collection_name: str, qfilter: models.Filter, exact: bool = True
 ) -> int:
-    """
-    Conta pontos de forma compatível entre versões do cliente.
-    Alguns releases expõem `count` e outros `count_points`.
-    """
-    if hasattr(client, "count"):
-        resp = await client.count(collection_name=collection_name, count_filter=qfilter, exact=exact)
-    else:  # pragma: no cover - retrocompatibilidade
-        resp = await client.count_points(
-            collection_name=collection_name, count_filter=qfilter, exact=exact
-        )
+    """Conta pontos usando a API canônica `count` do cliente Qdrant."""
+    resp = await client.count(collection_name=collection_name, count_filter=qfilter, exact=exact)
     return int(getattr(resp, "count", 0) or 0)
 
 
