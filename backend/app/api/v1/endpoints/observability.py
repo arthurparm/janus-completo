@@ -118,7 +118,21 @@ async def domain_slo_report(
     min_events: int | None = None,
     service: ObservabilityService = Depends(get_observability_service),
 ):
-    return await service.get_domain_slo_report(window_minutes=window_minutes, min_events=min_events)
+    logger.info(
+        "observability_endpoint_domain_slo_report_requested",
+        operation="domain_slo_report",
+        window_minutes=window_minutes,
+        min_events=min_events,
+    )
+    result = await service.get_domain_slo_report(window_minutes=window_minutes, min_events=min_events)
+    logger.info(
+        "observability_endpoint_domain_slo_report_completed",
+        operation="domain_slo_report",
+        status=result.get("status"),
+        domain_count=len(result.get("domains") or []),
+        alert_count=len(result.get("active_alerts") or []),
+    )
+    return result
 
 
 @router.get(
@@ -131,11 +145,25 @@ async def predictive_anomalies(
     min_events: int | None = None,
     service: ObservabilityService = Depends(get_observability_service),
 ):
-    return await service.get_predictive_anomaly_report(
+    logger.info(
+        "observability_endpoint_predictive_anomalies_requested",
+        operation="predictive_anomaly_report",
         window_hours=window_hours,
         bucket_minutes=bucket_minutes,
         min_events=min_events,
     )
+    result = await service.get_predictive_anomaly_report(
+        window_hours=window_hours,
+        bucket_minutes=bucket_minutes,
+        min_events=min_events,
+    )
+    logger.info(
+        "observability_endpoint_predictive_anomalies_completed",
+        operation="predictive_anomaly_report",
+        status=result.get("status"),
+        anomaly_count=len(result.get("anomalies") or []),
+    )
+    return result
 
 
 @router.get("/llm/usage", summary="Resumo de uso de LLMs")
@@ -150,14 +178,34 @@ async def llm_usage(
 @router.get("/graph/audit", summary="Auditoria de higiene do grafo de conhecimento")
 async def graph_audit(service: ObservabilityService = Depends(get_observability_service)):
     """Executa consultas de auditoria no grafo e retorna um relatório resumido."""
-    return await service.get_graph_audit_report()
+    logger.info("observability_endpoint_graph_audit_requested", operation="graph_audit_report")
+    result = await service.get_graph_audit_report()
+    logger.info(
+        "observability_endpoint_graph_audit_completed",
+        operation="graph_audit_report",
+        quarantine_count=result.get("quarantine_count"),
+        mentions_count=result.get("mentions_count"),
+    )
+    return result
 
 
 @router.get("/graph/quarantine", summary="Lista itens de quarentena do grafo")
 async def graph_quarantine_list(
     limit: int = 100, service: ObservabilityService = Depends(get_observability_service)
 ):
-    return await service.get_graph_quarantine_items(limit)
+    logger.info(
+        "observability_endpoint_graph_quarantine_list_requested",
+        operation="graph_quarantine_list",
+        limit=limit,
+    )
+    items = await service.get_graph_quarantine_items(limit)
+    logger.info(
+        "observability_endpoint_graph_quarantine_list_completed",
+        operation="graph_quarantine_list",
+        limit=limit,
+        row_count=len(items),
+    )
+    return items
 
 
 class PromoteQuarantineRequest(BaseModel):
@@ -171,7 +219,19 @@ async def graph_quarantine_promote(
     request: PromoteQuarantineRequest,
     service: ObservabilityService = Depends(get_observability_service),
 ):
-    return await service.promote_quarantine_item(request.node_id)
+    logger.info(
+        "observability_endpoint_graph_quarantine_promote_requested",
+        operation="graph_quarantine_promote",
+        node_id=request.node_id,
+    )
+    result = await service.promote_quarantine_item(request.node_id)
+    logger.info(
+        "observability_endpoint_graph_quarantine_promote_completed",
+        operation="graph_quarantine_promote",
+        node_id=request.node_id,
+        status=result.get("status"),
+    )
+    return result
 
 
 class UserSummaryResponse(BaseModel):
@@ -245,8 +305,23 @@ async def audit_events(
     offset: int = 0,
     service: ObservabilityService = Depends(get_observability_service),
 ):
+    logger.info(
+        "observability_endpoint_audit_events_requested",
+        operation="audit_events_query",
+        user_id=user_id,
+        tool=tool,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
     events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
     total = service.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+    logger.info(
+        "observability_endpoint_audit_events_completed",
+        operation="audit_events_query",
+        total=total,
+        row_count=len(events),
+    )
     return {"total": total, "events": events}
 
 
@@ -265,11 +340,26 @@ async def request_pipeline_dashboard(
     include_details: bool = False,
     service: ObservabilityService = Depends(get_observability_service),
 ):
-    return service.get_request_pipeline_dashboard(
+    logger.info(
+        "observability_endpoint_request_pipeline_dashboard_requested",
+        operation="request_pipeline_dashboard",
         request_id=request_id,
         limit=limit,
         include_details=include_details,
     )
+    result = service.get_request_pipeline_dashboard(
+        request_id=request_id,
+        limit=limit,
+        include_details=include_details,
+    )
+    logger.info(
+        "observability_endpoint_request_pipeline_dashboard_completed",
+        operation="request_pipeline_dashboard",
+        request_id=request_id,
+        found=result.get("found"),
+        total_events=((result.get("summary") or {}).get("total_events")),
+    )
+    return result
 
 
 @router.get("/audit/export", summary="Exporta eventos de auditoria")
@@ -285,6 +375,16 @@ async def export_audit_events(
     offset: int = 0,
     service: ObservabilityService = Depends(get_observability_service),
 ):
+    logger.info(
+        "observability_endpoint_audit_export_requested",
+        operation="audit_export",
+        format=format,
+        user_id=user_id,
+        tool=tool,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
     events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
     field_list = [f.strip() for f in fields.split(",")] if fields else []
     field_list = [f for f in field_list if f]
@@ -307,6 +407,13 @@ async def export_audit_events(
 
     if format.lower() == "json":
         payload = json.dumps(rows, ensure_ascii=True)
+        logger.info(
+            "observability_endpoint_audit_export_completed",
+            operation="audit_export",
+            format="json",
+            row_count=len(rows),
+            field_count=len(field_list),
+        )
         return Response(content=payload, media_type="application/json")
 
     output = StringIO()
@@ -315,6 +422,13 @@ async def export_audit_events(
     for row in rows:
         normalized = {k: _normalize_export_value(v) for k, v in row.items()}
         writer.writerow(normalized)
+    logger.info(
+        "observability_endpoint_audit_export_completed",
+        operation="audit_export",
+        format="csv",
+        row_count=len(rows),
+        field_count=len(field_list),
+    )
     return Response(content=output.getvalue(), media_type="text/csv")
 
 
@@ -360,9 +474,9 @@ async def record_ux_metric(
     item: UxMetricItem, service: ObservabilityService = Depends(get_observability_service)
 ):
     """Registra uma métrica de UX para análise de desempenho do chat."""
-    # Por enquanto, apenas loga a métrica. Em produção, poderia ser armazenada em banco de dados
     logger.info(
-        "ux_metric_recorded",
+        "observability_endpoint_ux_metric_recorded",
+        operation="ux_metric_record",
         ttft_ms=item.ttft_ms,
         latency_ms=item.latency_ms,
         outcome=item.outcome,

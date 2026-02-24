@@ -38,30 +38,32 @@ class ObservabilityRepository:
         self._pp_handler = pp_handler
 
     async def get_system_health(self) -> dict[str, Any]:
-        logger.debug("Buscando saúde agregada do sistema via repositório.")
+        logger.debug("observability_repo_system_health_requested")
         try:
             return self._monitor.get_system_health()
         except Exception as e:
-            logger.error("Erro no repositório ao buscar saúde do sistema", exc_info=e)
+            logger.exception("observability_repo_system_health_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao buscar a saúde do sistema.") from e
 
     async def check_all_components(self) -> dict[str, dict[str, Any]]:
-        logger.debug("Disparando health check de todos os componentes via repositório.")
+        logger.debug("observability_repo_check_all_components_requested")
         try:
             results = await self._monitor.check_all_components()
             return {name: r.to_dict() for name, r in results.items()}
         except Exception as e:
-            logger.error("Erro no repositório ao executar health checks", exc_info=e)
+            logger.exception("observability_repo_check_all_components_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao executar os health checks.") from e
 
     async def get_component_health(self, component: str) -> dict[str, Any]:
-        logger.debug("Checando saúde de componente via repositório", component=component)
+        logger.debug("observability_repo_component_health_requested", component=component)
         try:
             result = await self._monitor.check_component(component)
             return result.to_dict()
         except Exception as e:
-            logger.error(
-                "Erro no repositório ao verificar componente", component=component, exc_info=e
+            logger.exception(
+                "observability_repo_component_health_failed",
+                component=component,
+                error=str(e),
             )
             raise ObservabilityRepositoryError(
                 f"Falha ao verificar health do componente '{component}'."
@@ -77,11 +79,15 @@ class ObservabilityRepository:
         return await self.get_component_health("poison_pill_handler")
 
     def get_quarantined_messages(self, queue: str | None = None) -> list[QuarantinedMessage]:
-        logger.debug("Buscando mensagens em quarentena via repositório", queue=queue)
+        logger.debug("observability_repo_quarantine_messages_requested", queue=queue)
         return self._pp_handler.get_quarantined_messages(queue=queue)
 
     def release_from_quarantine(self, message_id: str, allow_retry: bool) -> QuarantinedMessage:
-        logger.debug("Liberando mensagem da quarentena via repositório", message_id=message_id)
+        logger.debug(
+            "observability_repo_quarantine_release_requested",
+            message_id=message_id,
+            allow_retry=allow_retry,
+        )
         msg = self._pp_handler.release_from_quarantine(message_id, allow_retry)
         if not msg:
             raise ObservabilityRepositoryError(
@@ -90,19 +96,19 @@ class ObservabilityRepository:
         return msg
 
     def cleanup_expired_quarantine(self) -> int:
-        logger.debug("Limpando mensagens expiradas da quarentena via repositório")
+        logger.debug("observability_repo_quarantine_cleanup_requested")
         try:
             return self._pp_handler.cleanup_expired_quarantine()
         except Exception as e:
-            logger.error("Erro no repositório ao limpar quarentena expirada", exc_info=e)
+            logger.exception("observability_repo_quarantine_cleanup_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao limpar quarentena expirada.") from e
 
     def get_poison_pill_stats(self, queue: str | None = None) -> dict[str, Any]:
-        logger.debug("Buscando estatísticas de poison pills via repositório", queue=queue)
+        logger.debug("observability_repo_poison_pill_stats_requested", queue=queue)
         return self._pp_handler.get_failure_stats(queue=queue)
 
     def get_metrics_summary(self) -> dict[str, Any]:
-        logger.debug("Coletando resumo de métricas do sistema via repositório.")
+        logger.debug("observability_repo_metrics_summary_requested")
         from app.core.agents import get_multi_agent_system
         from app.core.llm import get_circuit_breaker_snapshot, get_llm_pool_summary
 
@@ -255,7 +261,7 @@ class ObservabilityRepository:
                 "mentions_count": mentions_count,
             }
         except Exception as e:
-            logger.error("Erro ao executar auditoria do grafo", exc_info=e)
+            logger.exception("observability_repo_graph_audit_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao executar auditoria do grafo.") from e
 
     async def get_graph_quarantine_items(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -268,7 +274,11 @@ class ObservabilityRepository:
             )
             return rows
         except Exception as e:
-            logger.error("Erro ao listar itens de quarentena do grafo", exc_info=e)
+            logger.exception(
+                "observability_repo_graph_quarantine_list_failed",
+                limit=limit,
+                error=str(e),
+            )
             raise ObservabilityRepositoryError(
                 "Falha ao listar itens de quarentena do grafo."
             ) from e
@@ -312,7 +322,11 @@ class ObservabilityRepository:
                     "type": rel_type,
                 }
         except Exception as e:
-            logger.error("Erro ao promover item de quarentena", exc_info=e)
+            logger.exception(
+                "observability_repo_graph_quarantine_promote_failed",
+                node_id=node_id,
+                error=str(e),
+            )
             raise ObservabilityRepositoryError("Falha ao promover item de quarentena.") from e
 
     def record_audit_event(self, event: dict[str, Any]) -> None:
@@ -348,7 +362,7 @@ class ObservabilityRepository:
             s.commit()
         except Exception as e:
             s.rollback()
-            logger.error("Erro ao registrar evento de auditoria", exc_info=e)
+            logger.exception("observability_repo_audit_event_record_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao registrar evento de auditoria.") from e
         finally:
             s.close()
@@ -408,7 +422,16 @@ class ObservabilityRepository:
                 for r in rows
             ]
         except Exception as e:
-            logger.error("Erro ao consultar eventos de auditoria", exc_info=e)
+            logger.exception(
+                "observability_repo_audit_events_query_failed",
+                user_id=user_id,
+                tool=tool,
+                status=status,
+                endpoint=endpoint,
+                limit=limit,
+                offset=offset,
+                error=str(e),
+            )
             raise ObservabilityRepositoryError("Falha ao consultar eventos de auditoria.") from e
         finally:
             s.close()
@@ -445,7 +468,13 @@ class ObservabilityRepository:
                 for r in rows
             ]
         except Exception as e:
-            logger.error("Erro ao consultar eventos de auditoria por trace_id", exc_info=e)
+            logger.exception(
+                "observability_repo_audit_events_by_trace_id_failed",
+                trace_id=trace_id,
+                limit=limit,
+                offset=offset,
+                error=str(e),
+            )
             raise ObservabilityRepositoryError(
                 "Falha ao consultar eventos de auditoria por trace_id."
             ) from e
@@ -482,7 +511,13 @@ class ObservabilityRepository:
                 q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
             return int(q.count())
         except Exception as e:
-            logger.error("Erro ao contar eventos de auditoria", exc_info=e)
+            logger.exception(
+                "observability_repo_audit_events_count_failed",
+                user_id=user_id,
+                tool=tool,
+                status=status,
+                error=str(e),
+            )
             raise ObservabilityRepositoryError("Falha ao contar eventos de auditoria.") from e
         finally:
             s.close()
@@ -498,7 +533,7 @@ async def get_observability_repository(
     return ObservabilityRepository(monitor, pp_handler)
 
 
-# Compat: função utilitária direta para registrar eventos de auditoria
+# Helper direto para registrar eventos de auditoria
 def record_audit_event_direct(event: dict[str, Any]) -> None:
     s = db.get_session_direct()
     try:
@@ -533,6 +568,6 @@ def record_audit_event_direct(event: dict[str, Any]) -> None:
             s.rollback()
         except Exception:
             pass
-        logger.error("Erro ao registrar evento de auditoria (direct)", exc_info=e)
+        logger.exception("observability_repo_audit_event_record_direct_failed", error=str(e))
     finally:
         s.close()

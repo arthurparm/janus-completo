@@ -46,53 +46,88 @@ class ObservabilityService:
         self._repo = repo
 
     async def get_system_health(self) -> dict[str, Any]:
-        logger.info("Buscando saúde agregada do sistema via serviço.")
+        logger.info("observability_system_health_requested", operation="system_health")
         try:
             return await self._repo.get_system_health()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao buscar saúde do sistema", exc_info=e)
+            logger.exception(
+                "observability_system_health_failed",
+                operation="system_health",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao buscar a saúde do sistema.") from e
 
     async def check_all_components(self) -> dict[str, dict[str, Any]]:
-        logger.info("Disparando health check de todos os componentes via serviço.")
+        logger.info("observability_check_all_components_requested", operation="check_all_components")
         try:
             return await self._repo.check_all_components()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao executar health checks", exc_info=e)
+            logger.exception(
+                "observability_check_all_components_failed",
+                operation="check_all_components",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao executar os health checks.") from e
 
     async def get_llm_router_health(self) -> dict[str, Any]:
-        logger.info("Checando saúde do LLM Router via serviço.")
+        logger.info("observability_llm_router_health_requested", operation="llm_router_health")
         try:
             return await self._repo.get_llm_router_health()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao checar LLM Router", exc_info=e)
+            logger.exception(
+                "observability_llm_router_health_failed",
+                operation="llm_router_health",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao buscar saúde do LLM Router.") from e
 
     async def get_multi_agent_system_health(self) -> dict[str, Any]:
-        logger.info("Checando saúde do Multi-Agent System via serviço.")
+        logger.info(
+            "observability_multi_agent_health_requested",
+            operation="multi_agent_system_health",
+        )
         try:
             return await self._repo.get_multi_agent_system_health()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao checar Multi-Agent System", exc_info=e)
+            logger.exception(
+                "observability_multi_agent_health_failed",
+                operation="multi_agent_system_health",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao buscar saúde do sistema multi-agente.") from e
 
     async def get_poison_pill_handler_health(self) -> dict[str, Any]:
-        logger.info("Checando saúde do Poison Pill Handler via serviço.")
+        logger.info(
+            "observability_poison_pill_health_requested",
+            operation="poison_pill_handler_health",
+        )
         try:
             return await self._repo.get_poison_pill_handler_health()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao checar Poison Pill Handler", exc_info=e)
+            logger.exception(
+                "observability_poison_pill_health_failed",
+                operation="poison_pill_handler_health",
+                error=str(e),
+            )
             raise ObservabilityServiceError(
                 "Falha ao buscar saúde do handler de poison pills."
             ) from e
 
     def get_quarantined_messages(self, queue: str | None = None) -> list[QuarantinedMessage]:
-        logger.info("Buscando mensagens em quarentena via serviço", queue=queue)
+        logger.info(
+            "observability_quarantine_messages_requested",
+            operation="quarantine_messages",
+            queue=queue,
+        )
         return self._repo.get_quarantined_messages(queue=queue)
 
     def release_from_quarantine(self, message_id: str, allow_retry: bool) -> QuarantinedMessage:
-        logger.info("Liberando mensagem da quarentena via serviço", message_id=message_id)
+        logger.info(
+            "observability_quarantine_release_requested",
+            operation="quarantine_release",
+            message_id=message_id,
+            allow_retry=allow_retry,
+        )
         try:
             msg = self._repo.release_from_quarantine(message_id, allow_retry)
             if not msg:
@@ -101,28 +136,48 @@ class ObservabilityService:
                 )
             return msg
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao liberar mensagem", exc_info=e)
+            logger.exception(
+                "observability_quarantine_release_failed",
+                operation="quarantine_release",
+                message_id=message_id,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao liberar mensagem da quarentena.") from e
 
     def cleanup_expired_quarantine(self) -> dict[str, Any]:
-        logger.info("Limpando mensagens expiradas da quarentena via serviço.")
+        logger.info(
+            "observability_quarantine_cleanup_requested",
+            operation="quarantine_cleanup",
+        )
         try:
             removed = self._repo.cleanup_expired_quarantine()
             return {"removed": removed}
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao limpar quarentena expirada", exc_info=e)
+            logger.exception(
+                "observability_quarantine_cleanup_failed",
+                operation="quarantine_cleanup",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao limpar a quarentena expirada.") from e
 
     def get_poison_pill_stats(self, queue: str | None = None) -> dict[str, Any]:
-        logger.info("Buscando estatísticas de poison pills via serviço", queue=queue)
+        logger.info(
+            "observability_poison_pill_stats_requested",
+            operation="poison_pill_stats",
+            queue=queue,
+        )
         return self._repo.get_poison_pill_stats(queue=queue)
 
     def get_metrics_summary(self) -> dict[str, Any]:
-        logger.info("Coletando resumo de métricas do sistema via serviço.")
+        logger.info("observability_metrics_summary_requested", operation="metrics_summary")
         try:
             return self._repo.get_metrics_summary()
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao gerar resumo de métricas", exc_info=e)
+            logger.exception(
+                "observability_metrics_summary_failed",
+                operation="metrics_summary",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
 
     @staticmethod
@@ -222,6 +277,12 @@ class ObservabilityService:
             1,
             int(min_events or getattr(settings, "OQ_SLO_MIN_EVENTS_PER_DOMAIN", 20) or 20),
         )
+        logger.info(
+            "observability_domain_slo_report_requested",
+            operation="domain_slo_report",
+            window_minutes=wm,
+            min_events=me,
+        )
         start_ts = now_ts - (wm * 60.0)
         thresholds = self._get_domain_slo_thresholds()
 
@@ -237,7 +298,13 @@ class ObservabilityService:
                 offset=0,
             )
         except ObservabilityRepositoryError as e:
-            logger.error("Erro ao coletar eventos para OQ-002", exc_info=e)
+            logger.exception(
+                "observability_domain_slo_events_query_failed",
+                operation="domain_slo_report",
+                window_minutes=wm,
+                min_events=me,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao coletar eventos para SLO por domÃ­nio.") from e
 
         by_domain: dict[str, list[dict[str, Any]]] = {k: [] for k in thresholds.keys()}
@@ -358,6 +425,11 @@ class ObservabilityService:
         min_events: int | None = None,
     ) -> dict[str, Any]:
         if not bool(getattr(settings, "AI_ANOMALY_DETECTION_ENABLED", True)):
+            logger.info(
+                "observability_predictive_anomaly_report_skipped",
+                operation="predictive_anomaly_report",
+                reason="feature_flag_disabled",
+            )
             return {
                 "status": "disabled",
                 "risk": {
@@ -376,6 +448,13 @@ class ObservabilityService:
             int(bucket_minutes or getattr(settings, "AI_ANOMALY_BUCKET_MINUTES", 10) or 10),
         )
         me = max(5, int(min_events or getattr(settings, "AI_ANOMALY_MIN_EVENTS", 30) or 30))
+        logger.info(
+            "observability_predictive_anomaly_report_requested",
+            operation="predictive_anomaly_report",
+            window_hours=wh,
+            bucket_minutes=bm,
+            min_events=me,
+        )
         start_ts = now_ts - (wh * 3600.0)
 
         try:
@@ -390,7 +469,14 @@ class ObservabilityService:
                 offset=0,
             )
         except ObservabilityRepositoryError as e:
-            logger.error("Erro ao coletar eventos para AI-014", exc_info=e)
+            logger.exception(
+                "observability_predictive_anomaly_events_query_failed",
+                operation="predictive_anomaly_report",
+                window_hours=wh,
+                bucket_minutes=bm,
+                min_events=me,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao coletar eventos de auditoria.") from e
 
         queue_snapshots: list[dict[str, Any]] = []
@@ -434,54 +520,118 @@ class ObservabilityService:
         return report
 
     async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
-        logger.info("Coletando métricas agregadas por usuário", user_id=user_id)
+        logger.info(
+            "observability_user_metrics_requested",
+            operation="user_metrics",
+            user_id=user_id,
+        )
         try:
             return await self._repo.get_user_metrics(user_id)
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao gerar métricas por usuário", exc_info=e)
+            logger.exception(
+                "observability_user_metrics_failed",
+                operation="user_metrics",
+                user_id=user_id,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
 
     def get_user_activity(self, user_id: str) -> dict[str, Any]:
-        logger.info("Coletando atividade agregada por usuário", user_id=user_id)
+        logger.info(
+            "observability_user_activity_requested",
+            operation="user_activity",
+            user_id=user_id,
+        )
         try:
             return self._repo.get_user_activity(user_id)
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao gerar atividade por usuário", exc_info=e)
+            logger.exception(
+                "observability_user_activity_failed",
+                operation="user_activity",
+                user_id=user_id,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao gerar atividade por usuário.") from e
 
     async def get_graph_audit_report(self) -> dict[str, Any]:
-        logger.info("Executando auditoria de grafo via serviço.")
+        logger.info("observability_graph_audit_requested", operation="graph_audit_report")
         try:
-            return await self._repo.get_graph_audit_report()
+            report = await self._repo.get_graph_audit_report()
+            logger.info(
+                "observability_graph_audit_completed",
+                operation="graph_audit_report",
+                quarantine_count=report.get("quarantine_count"),
+                mentions_count=report.get("mentions_count"),
+                relationship_types_present=len(report.get("relationship_types_present") or []),
+            )
+            return report
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao auditar grafo", exc_info=e)
+            logger.exception(
+                "observability_graph_audit_failed",
+                operation="graph_audit_report",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao auditar o grafo.") from e
 
     async def get_graph_quarantine_items(self, limit: int = 100) -> list[dict[str, Any]]:
-        logger.info("Listando itens em quarentena do grafo via serviço.", limit=limit)
+        logger.info(
+            "observability_graph_quarantine_list_requested",
+            operation="graph_quarantine_list",
+            limit=limit,
+        )
         try:
-            return await self._repo.get_graph_quarantine_items(limit)
+            items = await self._repo.get_graph_quarantine_items(limit)
+            logger.info(
+                "observability_graph_quarantine_list_completed",
+                operation="graph_quarantine_list",
+                limit=limit,
+                row_count=len(items),
+            )
+            return items
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao listar itens de quarentena", exc_info=e)
+            logger.exception(
+                "observability_graph_quarantine_list_failed",
+                operation="graph_quarantine_list",
+                limit=limit,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao listar itens de quarentena.") from e
 
     async def promote_quarantine_item(self, node_id: int) -> dict[str, Any]:
-        logger.info("Promovendo item da quarentena do grafo via serviço.", node_id=node_id)
+        logger.info(
+            "observability_graph_quarantine_promote_requested",
+            operation="graph_quarantine_promote",
+            node_id=node_id,
+        )
         try:
-            return await self._repo.promote_quarantine_item(node_id)
+            result = await self._repo.promote_quarantine_item(node_id)
+            logger.info(
+                "observability_graph_quarantine_promote_completed",
+                operation="graph_quarantine_promote",
+                node_id=node_id,
+                status=result.get("status"),
+            )
+            return result
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao promover item de quarentena", exc_info=e)
+            logger.exception(
+                "observability_graph_quarantine_promote_failed",
+                operation="graph_quarantine_promote",
+                node_id=node_id,
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao promover item de quarentena.") from e
 
     def record_audit_event(self, event: dict[str, Any]) -> None:
-        logger.info(
-            "Registrando evento de auditoria via serviço",
-            **{k: v for k, v in event.items() if k != "detail"},
-        )
+        safe_event = {k: v for k, v in event.items() if k not in {"detail", "details_json"}}
+        logger.info("observability_audit_event_record_requested", operation="record_audit_event", **safe_event)
         try:
             self._repo.record_audit_event(event)
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao registrar evento de auditoria", exc_info=e)
+            logger.exception(
+                "observability_audit_event_record_failed",
+                operation="record_audit_event",
+                error=str(e),
+            )
             # Não propaga como fatal para não quebrar requisições; registra apenas o erro.
             pass
 
@@ -497,18 +647,25 @@ class ObservabilityService:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         logger.info(
-            "Consultando eventos de auditoria via serviço",
+            "observability_audit_events_query_requested",
+            operation="audit_events_query",
             user_id=user_id,
             tool=tool,
             status=status,
             endpoint=endpoint,
+            limit=limit,
+            offset=offset,
         )
         try:
             return self._repo.get_audit_events(
                 user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
             )
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositório ao consultar eventos de auditoria", exc_info=e)
+            logger.exception(
+                "observability_audit_events_query_failed",
+                operation="audit_events_query",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao consultar eventos de auditoria.") from e
 
     def get_audit_events_count(
@@ -519,13 +676,36 @@ class ObservabilityService:
         start_ts: float | None,
         end_ts: float | None,
     ) -> int:
+        logger.info(
+            "observability_audit_events_count_requested",
+            operation="audit_events_count",
+            user_id=user_id,
+            tool=tool,
+            status=status,
+        )
         try:
-            return self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+            count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+            logger.info(
+                "observability_audit_events_count_completed",
+                operation="audit_events_count",
+                count=count,
+            )
+            return count
         except ObservabilityRepositoryError as e:
-            logger.error("Erro no repositÇürio ao contar eventos de auditoria", exc_info=e)
+            logger.exception(
+                "observability_audit_events_count_failed",
+                operation="audit_events_count",
+                error=str(e),
+            )
             raise ObservabilityServiceError("Falha ao contar eventos de auditoria.") from e
 
     def get_llm_usage_summary(self, start_ts: float | None, end_ts: float | None) -> dict[str, Any]:
+        logger.info(
+            "observability_llm_usage_summary_requested",
+            operation="llm_usage_summary",
+            start_ts=start_ts,
+            end_ts=end_ts,
+        )
         o = self._repo.get_audit_events(
             None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0
         )
@@ -550,7 +730,11 @@ class ObservabilityService:
                     s_out += int(dj.get("output_tokens") or 0)
                     s_cost += float(dj.get("cost_usd") or 0.0)
                 except Exception as e:
-                    logger.debug("log_debug", message=f"Failed to parse usage details: {e}")
+                    logger.debug(
+                        "observability_llm_usage_details_parse_failed",
+                        operation="llm_usage_summary",
+                        error=str(e),
+                    )
             return {
                 "calls": c,
                 "avg_input_tokens": (s_in / c) if c else 0,
@@ -560,12 +744,20 @@ class ObservabilityService:
 
         a_o = agg(o)
         a_g = agg(g)
-        return {
+        summary = {
             "openai": a_o,
             "gemini": a_g,
             "total_calls": a_o["calls"] + a_g["calls"],
             "window": {"start_ts": start_ts, "end_ts": end_ts},
         }
+        logger.info(
+            "observability_llm_usage_summary_completed",
+            operation="llm_usage_summary",
+            total_calls=summary["total_calls"],
+            openai_calls=a_o["calls"],
+            gemini_calls=a_g["calls"],
+        )
+        return summary
 
     @staticmethod
     def _normalize_counter_key(value: Any) -> str:
@@ -599,20 +791,37 @@ class ObservabilityService:
         request_id = str(request_id or "").strip()
         if not request_id:
             raise ObservabilityServiceError("request_id cannot be empty.")
+        logger.info(
+            "observability_request_pipeline_dashboard_requested",
+            operation="request_pipeline_dashboard",
+            request_id=request_id,
+            limit=limit,
+            include_details=include_details,
+        )
 
         try:
             events = self._repo.get_audit_events_by_trace_id(
                 trace_id=request_id, limit=limit, offset=0
             )
         except ObservabilityRepositoryError as e:
-            logger.error(
-                "Erro no repositório ao montar dashboard por request_id",
+            logger.exception(
+                "observability_request_pipeline_dashboard_failed",
+                operation="request_pipeline_dashboard",
                 request_id=request_id,
-                exc_info=e,
+                limit=limit,
+                include_details=include_details,
+                error=str(e),
             )
             raise ObservabilityServiceError("Falha ao montar dashboard por request_id.") from e
 
         if not events:
+            logger.info(
+                "observability_request_pipeline_dashboard_completed",
+                operation="request_pipeline_dashboard",
+                request_id=request_id,
+                found=False,
+                event_count=0,
+            )
             return {
                 "request_id": request_id,
                 "found": False,
@@ -671,7 +880,7 @@ class ObservabilityService:
                 item["details"] = details
             timeline.append(item)
 
-        return {
+        result = {
             "request_id": request_id,
             "found": True,
             "summary": {
@@ -686,6 +895,16 @@ class ObservabilityService:
             },
             "timeline": timeline,
         }
+        logger.info(
+            "observability_request_pipeline_dashboard_completed",
+            operation="request_pipeline_dashboard",
+            request_id=request_id,
+            found=True,
+            event_count=len(events_sorted),
+            timeline_count=len(timeline),
+            duration_ms=duration_ms,
+        )
+        return result
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço
