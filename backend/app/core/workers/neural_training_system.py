@@ -35,6 +35,53 @@ logger = structlog.get_logger(__name__)
 _PROMPT_CACHE: dict[str, str] = {}
 
 
+def _experience_to_dict(exp: Any) -> dict[str, Any]:
+    """Normaliza experiências para dicts (dict / Pydantic model / objeto leve)."""
+    if isinstance(exp, dict):
+        return exp
+
+    model_dump = getattr(exp, "model_dump", None)
+    if callable(model_dump):
+        data = model_dump(mode="python")
+        if isinstance(data, dict):
+            return data
+
+    legacy_dict = getattr(exp, "dict", None)
+    if callable(legacy_dict):
+        data = legacy_dict()
+        if isinstance(data, dict):
+            return data
+
+    metadata = getattr(exp, "metadata", None)
+    metadata_dict: dict[str, Any]
+    if isinstance(metadata, dict):
+        metadata_dict = metadata
+    elif metadata is not None:
+        md_dump = getattr(metadata, "model_dump", None)
+        if callable(md_dump):
+            dumped = md_dump(mode="python")
+            metadata_dict = dumped if isinstance(dumped, dict) else {}
+        else:
+            md_legacy = getattr(metadata, "dict", None)
+            if callable(md_legacy):
+                dumped = md_legacy()
+                metadata_dict = dumped if isinstance(dumped, dict) else {}
+            else:
+                metadata_dict = {}
+    else:
+        metadata_dict = {}
+
+    normalized = {
+        "content": getattr(exp, "content", ""),
+        "metadata": metadata_dict,
+    }
+    if hasattr(exp, "prompt"):
+        normalized["prompt"] = getattr(exp, "prompt")
+    if hasattr(exp, "completion"):
+        normalized["completion"] = getattr(exp, "completion")
+    return normalized
+
+
 def _load_prompt_template(prompt_name: str) -> str:
     if prompt_name in _PROMPT_CACHE:
         return _PROMPT_CACHE[prompt_name]
@@ -136,7 +183,9 @@ class DatasetPreparator:
     tipos de modelos.
     """
 
-    def prepare_for_llm_finetuning(self, experiences: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def prepare_for_llm_finetuning(
+        self, experiences: list[dict[str, Any] | Experience]
+    ) -> list[dict[str, str]]:
         """
         Prepara dataset para fine-tuning de LLM (formato chat/completion).
 
@@ -148,7 +197,8 @@ class DatasetPreparator:
         """
         dataset = []
 
-        for exp in experiences:
+        for raw_exp in experiences:
+            exp = _experience_to_dict(raw_exp)
             # Suporte para dados já formatados (ex: vindos de arquivo JSONL)
             if "prompt" in exp and "completion" in exp:
                 dataset.append(exp)
@@ -185,7 +235,7 @@ class DatasetPreparator:
         return dataset
 
     def prepare_for_classification(
-        self, experiences: list[dict[str, Any]]
+        self, experiences: list[dict[str, Any] | Experience]
     ) -> tuple[list[str], list[str]]:
         """
         Prepara dataset para treinamento de classificador.
@@ -196,7 +246,8 @@ class DatasetPreparator:
         texts = []
         labels = []
 
-        for exp in experiences:
+        for raw_exp in experiences:
+            exp = _experience_to_dict(raw_exp)
             content = exp.get("content", "")
             exp_type = exp.get("metadata", {}).get("type", "unknown")
 
@@ -206,14 +257,17 @@ class DatasetPreparator:
         logger.info("log_info", message=f"[DatasetPreparator] Preparados {len(texts)} exemplos para classificação")
         return texts, labels
 
-    def prepare_for_prediction(self, experiences: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def prepare_for_prediction(
+        self, experiences: list[dict[str, Any] | Experience]
+    ) -> list[dict[str, Any]]:
         """
         Prepara dataset para predição de próximas ações.
 
         Cria pares de (contexto histórico) -> (próxima ação)
         """
         # Ordena por timestamp
-        sorted_exps = sorted(experiences, key=lambda x: x.get("metadata", {}).get("timestamp", 0))
+        normalized = [_experience_to_dict(exp) for exp in experiences]
+        sorted_exps = sorted(normalized, key=lambda x: x.get("metadata", {}).get("timestamp", 0))
 
         dataset = []
         window_size = 5  # Usa últimas 5 ações como contexto
