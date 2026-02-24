@@ -1,0 +1,46 @@
+﻿{
+  "repository_type": "monorepo",
+  "project_name": "janus-completo",
+  "parts": [
+    {
+      "part_id": "frontend",
+      "part_name": "Frontend Angular",
+      "project_type_id": "web",
+      "root_path": "frontend",
+      "entry_point": "frontend/src/main.ts",
+      "tech_stack": ["Angular 20", "TypeScript", "RxJS", "TailwindCSS", "Vitest"],
+      "requires_api_scan": true,
+      "requires_data_models": true,
+      "requires_state_management": true,
+      "requires_ui_components": true
+    },
+    {
+      "part_id": "backend",
+      "part_name": "Backend FastAPI",
+      "project_type_id": "backend",
+      "root_path": "backend",
+      "entry_point": "backend/app/main.py",
+      "tech_stack": ["Python 3.11", "FastAPI", "SQLAlchemy", "RabbitMQ", "Redis", "Neo4j", "Qdrant", "PostgreSQL"],
+      "requires_api_scan": true,
+      "requires_data_models": true,
+      "requires_state_management": false,
+      "requires_ui_components": false
+    }
+  ],
+  "integration_points": [
+    {
+      "from": "frontend",
+      "to": "backend",
+      "type": "REST",
+      "path": "/api/v1/*",
+      "details": "Chamadas HTTP via BackendApiService"
+    },
+    {
+      "from": "frontend",
+      "to": "backend",
+      "type": "SSE",
+      "path": "/api/v1/chat/stream/{conversation_id}",
+      "details": "Streaming de respostas do chat"
+    }
+  ]
+}

@@ -106,7 +106,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
-| OQ-003 | Tracing distribuido fim-a-fim com correlacao front/back/worker | P1 | M | ideia |
+| OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | ideia |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
 | OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
 | OQ-006 | Contract tests para endpoints criticos e SSE | P0 | M | feito (2026-02-13) |
@@ -471,9 +471,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 **Evidencias de fechamento (2026-02-21):**
 - Backlog priorizado 1 a 6 concluido (SG-011, SG-012, OQ-012, AI-011, AI-012, DX-011).
 - Testes unitarios da sprint executados sem falhas (22 passed): `test_sg011_security_config.py`, `test_oq012_data_retention.py`, `test_ai011_intent_routing.py`, `test_ai012_semantic_reranker.py`.
-- Feature flags ativas e com rollback simples por configuracao em `janus/app/config.py`:
+- Feature flags ativas e com rollback simples por configuracao em `backend/app/config.py`:
   `AI_INTENT_ROUTING_ENABLED`, `AI_INTENT_RISK_ESCALATION_ENABLED`, `RAG_RERANK_ENABLED`, `RAG_RERANK_BACKEND`, `RAG_RERANK_TOP_K`.
-- Documentacao operacional atualizada via DX-011 em `docs/qa/api-endpoint-matrix.md` e `docs/qa/api-test-playbook.md`.
+- Documentacao operacional atualizada via DX-011 em `documentation/qa/api-endpoint-matrix.md` e `documentation/qa/api-test-playbook.md`.
 
 ### [SPR-002] Sprint de prioridades - Operacao previsivel + Qualidade mensuravel
 - Janela: 2026-03-09 a 2026-03-20

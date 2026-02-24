@@ -1,0 +1,76 @@
+"""
+Secret Management Module - Production Safety.
+
+This module ensures that the Janus application does not start in 'production' mode
+with insecure default passwords. This is a critical security measure.
+"""
+import structlog
+from pydantic import SecretStr
+
+from app.config import settings
+
+logger = structlog.get_logger(__name__)
+
+# Known insecure defaults that MUST be changed in production.
+# Values are normalized to lowercase/trim during checks.
+INSECURE_DEFAULTS: dict[str, set[str]] = {
+    "NEO4J_PASSWORD": {"password", "change_me_neo4j_password"},
+    "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password"},
+    "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password"},
+    "AUTH_JWT_SECRET": {
+        "",
+        "none",
+        "null",
+        "changeme",
+        "change_me",
+        "dev_secret_change_me",
+        "janus_dev_secret",
+    },
+}
+
+
+class InsecureConfigurationError(Exception):
+    """Raised when critical production secrets are left at insecure defaults."""
+    pass
+
+
+def validate_production_secrets():
+    """
+    Checks if the application is running in 'production' mode and validates
+    that no critical secrets are left at their insecure default values.
+
+    Raises:
+        InsecureConfigurationError: If the environment is 'production' and
+            any secret is still set to a known insecure default.
+    """
+    if settings.ENVIRONMENT.lower() != "production":
+        logger.info("Skipping secret validation (non-production environment).",
+                    environment=settings.ENVIRONMENT)
+        return
+
+    logger.info("Validating production secrets...")
+
+    insecure_found = []
+    for setting_name, insecure_values in INSECURE_DEFAULTS.items():
+        current_value = getattr(settings, setting_name, None)
+
+        # Handle SecretStr
+        if isinstance(current_value, SecretStr):
+            current_value = current_value.get_secret_value()
+
+        normalized = str(current_value or "").strip().lower()
+        if normalized in insecure_values:
+            insecure_found.append(setting_name)
+            logger.error("log_error", message=f"Insecure default detected for: {setting_name}",
+                         setting=setting_name)
+
+    if insecure_found:
+        error_msg = (
+            f"CRITICAL: Cannot start in 'production' with insecure default values for: "
+            f"{', '.join(insecure_found)}. "
+            f"Please set these environment variables to secure values."
+        )
+        logger.critical(error_msg)
+        raise InsecureConfigurationError(error_msg)
+
+    logger.info("All production secrets are secure.")

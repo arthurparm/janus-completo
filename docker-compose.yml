@@ -3,23 +3,22 @@ name: janus-completo
 services:
   janus-api:
     build:
-      context: ./janus
+      context: ./backend
       dockerfile: docker/Dockerfile
     image: janus-completo-janus-api:latest
     container_name: janus_api
     env_file:
-      - ./janus/app/.env
+      - ./backend/app/.env
     init: true
     ports:
       - "8000:8000"
     volumes:
-      - ./janus/app:/app/app
-      - ./janus/workspace:/app/workspace
-      - ./janus/scripts:/app/scripts
-      - ./janus/tests:/app/tests
-      - ./janus/data:/app/data
+      - ./backend/app:/app/app
+      - ./backend/workspace:/app/workspace
+      - ./backend/scripts:/app/scripts
+      - ./backend/tests:/app/tests
+      - ./backend/data:/app/data
       - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
-      - ./janus/app/serviceAccountKey.json:/app/app/serviceAccountKey.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: [ "sh", "-lc", "/opt/venv/bin/python /app/scripts/sync_prompts.py && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug" ]
@@ -55,7 +54,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - ./janus/data/redis:/data
+      - ./backend/data/redis:/data
     networks:
       - janus-net
     healthcheck:
@@ -76,13 +75,13 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  front:
+  frontend:
     build:
-      context: ./front
+      context: ./frontend
       dockerfile: docker/Dockerfile
     container_name: janus_front
     volumes:
-      - ./front:/app
+      - ./frontend:/app
       - /app/node_modules
     environment:
       - VITE_SUPABASE_URL=https://tfunopczianlvppoabmz.supabase.co
@@ -119,7 +118,7 @@ services:
       - "127.0.0.1:7474:7474"
       - "127.0.0.1:7687:7687"
     volumes:
-      - ./janus/data/neo4j:/data
+      - ./backend/data/neo4j:/data
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
@@ -152,7 +151,7 @@ services:
     ports:
       - "127.0.0.1:6333:6333"
     volumes:
-      - ./janus/data/qdrant:/qdrant/storage
+      - ./backend/data/qdrant:/qdrant/storage
     networks:
       - janus-net
     healthcheck:
@@ -175,14 +174,14 @@ services:
 
   ollama:
     build:
-      context: ./janus
+      context: ./backend
       dockerfile: docker/ollama.Dockerfile
     container_name: janus_ollama
     ports:
       - "127.0.0.1:11435:11434"
     volumes:
-      - ./janus/data/ollama:/root/.ollama
-      - ./janus/scripts/init-ollama.sh:/init-ollama.sh
+      - ./backend/data/ollama:/root/.ollama
+      - ./backend/scripts/init-ollama.sh:/init-ollama.sh
     networks:
       - janus-net
     entrypoint: [ "/bin/sh", "-lc", "tr -d '\r' < /init-ollama.sh > /tmp/init.sh && /bin/sh /tmp/init.sh" ]
@@ -205,9 +204,9 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./janus/data/postgres:/var/lib/postgresql/data
+      - ./backend/data/postgres:/var/lib/postgresql/data
     env_file:
-      - ./janus/app/.env
+      - ./backend/app/.env
     networks:
       - janus-net
     healthcheck:
@@ -235,9 +234,9 @@ services:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     volumes:
-      - ./janus/data/rabbitmq:/var/lib/rabbitmq
+      - ./backend/data/rabbitmq:/var/lib/rabbitmq
     env_file:
-      - ./janus/app/.env
+      - ./backend/app/.env
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
@@ -268,8 +267,8 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./janus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./janus/prometheus/alerts:/etc/prometheus/alerts:ro
+      - ./backend/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./backend/prometheus/alerts:/etc/prometheus/alerts:ro
     networks:
       - janus-net
     depends_on:
@@ -287,23 +286,53 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: janus_alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./backend/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    networks:
+      - janus-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   grafana:
     image: grafana/grafana:10.4.2
     container_name: janus_grafana
     ports:
       - "127.0.0.1:3000:3000"
     env_file:
-      - ./janus/app/.env
+      - ./backend/app/.env
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     volumes:
-      - ./janus/grafana/provisioning:/etc/grafana/provisioning
-      - ./janus/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./backend/grafana/provisioning:/etc/grafana/provisioning
+      - ./backend/grafana/dashboards:/var/lib/grafana/dashboards
     networks:
       - janus-net
     depends_on:
       prometheus:
+        condition: service_started
+      alertmanager:
         condition: service_started
     deploy:
       resources:
@@ -322,7 +351,7 @@ services:
     container_name: janus_otel_collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./janus/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./backend/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
       - "127.0.0.1:4317:4317" # OTLP gRPC receiver
       - "127.0.0.1:4318:4318" # OTLP HTTP receiver

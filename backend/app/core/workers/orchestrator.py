@@ -1,0 +1,172 @@
+"""
+Orquestrador de Workers
+
+Centraliza a inicialização de todos os workers e tarefas em background
+usando imports lazy para evitar ciclos de importação.
+"""
+import structlog
+from dataclasses import dataclass
+from typing import Any
+
+from app.config import settings
+
+logger = structlog.get_logger(__name__)
+
+WORKER_NAMES: list[str] = [
+    "memory_maintenance",
+    "knowledge_consolidation",
+    "agent_tasks",
+    "neural_training",
+    "reflexion",
+    "meta_agent",
+    "failure_consumer",
+    "auto_scaler",
+    "auto_healer",
+    "router",
+    "code_agent",
+    "red_team_agent",
+    "professor_agent",
+    "sandbox_agent",
+    "thinker_agent",
+    "distillation",
+    "autonomy",
+    "google_productivity",
+    "debate_proponent",
+    "debate_critic",
+    "codex_worker",
+]
+
+
+def get_orchestrator_worker_names() -> list[str]:
+    return list(WORKER_NAMES)
+
+
+@dataclass(frozen=True)
+class DisabledWorkerHandle:
+    """Representa um worker intencionalmente desativado por configuração."""
+
+    reason: str = "disabled_by_config"
+    detail: str | None = None
+
+
+async def start_all_workers():
+    """
+    Inicia todos os workers assíncronos do sistema.
+    Retorna a lista de tarefas/consumidores iniciados.
+    """
+    # Imports lazy para evitar ciclos entre módulos de workers/monitoring
+    from app.core.monitoring import start_auto_healer
+    from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
+    from app.core.workers.async_consolidation_worker import start_consolidation_worker
+    from app.core.workers.auto_scaler import start_auto_scaler
+    from app.core.workers.autonomy_worker import start_autonomy_worker
+    from app.core.workers.code_agent_worker import start_code_agent_worker
+    from app.core.workers.codex_worker import start_codex_worker
+    from app.core.workers.distillation_worker import start_distillation_worker
+    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
+    from app.core.workers.debate_critic_worker import start_debate_critic_worker
+    from app.core.workers.meta_agent_worker import (
+        start_failure_event_consumer,
+        start_meta_agent_worker,
+    )
+    from app.core.workers.neural_training_worker import start_neural_training_worker
+    from app.core.workers.professor_agent_worker import start_professor_agent_worker
+    from app.core.workers.red_team_agent_worker import start_red_team_agent_worker
+    from app.core.workers.reflexion_worker import start_reflexion_worker
+    from app.core.workers.router_worker import start_router_worker
+    from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
+    from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
+    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
+
+    logger.info("Iniciando orquestrador de workers...")
+
+    workers: list[Any] = []
+
+    # Worker de manutenção de memória (Generative Memory)
+    await memory_maintenance_worker.start()
+    workers.append(memory_maintenance_worker.task)
+
+    # Worker de consolidação de conhecimento
+    consolidation_worker = await start_consolidation_worker()
+    workers.append(consolidation_worker)
+
+    # Worker de tarefas de agente
+    agent_worker = await start_agent_tasks_worker()
+    workers.append(agent_worker)
+
+    # Worker de treinamento neural
+    neural_worker = await start_neural_training_worker()
+    workers.append(neural_worker)
+
+    # Worker de Reflexion (consome janus.tasks.reflexion)
+    reflexion_worker = await start_reflexion_worker()
+    workers.append(reflexion_worker)
+
+    # Worker de ciclo do Meta-Agente
+    meta_agent_worker = await start_meta_agent_worker()
+    workers.append(meta_agent_worker)
+
+    # Meta-Agent orientado a eventos (consome janus.failure.detected)
+    failure_consumer = await start_failure_event_consumer()
+    workers.append(failure_consumer)
+
+    # Auto-Scaler de filas (background task)
+    auto_scaler_task = await start_auto_scaler()
+    workers.append(auto_scaler_task)
+
+    # Auto-Healer de componentes (background task)
+    healer_task = await start_auto_healer()
+    workers.append(healer_task)
+
+    # === Novos workers do Parlamento ===
+    router_task = await start_router_worker()
+    workers.append(router_task)
+
+    code_agent_task = await start_code_agent_worker()
+    workers.append(code_agent_task)
+
+    red_team_task = await start_red_team_agent_worker()
+    workers.append(red_team_task)
+
+    professor_agent_task = await start_professor_agent_worker()
+    workers.append(professor_agent_task)
+
+    sandbox_agent_task = await start_sandbox_agent_worker()
+    workers.append(sandbox_agent_task)
+
+    thinker_agent_task = await start_thinker_agent_worker()
+    workers.append(thinker_agent_task)
+
+    distillation_task = await start_distillation_worker()
+    workers.append(distillation_task)
+
+    # AutonomyWorker (batimento cardíaco de intenção)
+    autonomy_task = await start_autonomy_worker()
+    workers.append(autonomy_task)
+
+    if getattr(settings, "ENABLE_GOOGLE_PRODUCTIVITY_WORKER", False):
+        from app.core.workers.google_productivity_worker import start_google_productivity_consumer
+
+        google_productivity_task = await start_google_productivity_consumer()
+        workers.append(google_productivity_task)
+    else:
+        workers.append(
+            DisabledWorkerHandle(
+                detail="ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false",
+            )
+        )
+        logger.info("Worker google_productivity desativado por configuracao.")
+
+    # Debate System Workers
+    debate_proponent = await start_debate_proponent_worker()
+    workers.append(debate_proponent)
+
+    debate_critic = await start_debate_critic_worker()
+    workers.append(debate_critic)
+
+    # Codex Worker (CLI Tools)
+    codex_worker = await start_codex_worker()
+    workers.append(codex_worker)
+
+    logger.info("log_info", message=f"✓ {len(workers)} workers iniciados pelo orquestrador.")
+    return workers
