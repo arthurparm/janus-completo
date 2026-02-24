@@ -1,0 +1,42 @@
+Starting security scan on backend/app...
+
+=== SECURITY SCAN REPORT ===
+
+File: backend/app/api/v1/endpoints/workspace.py
+  - Endpoint 'add_artifact' might be missing AuthZ (get_current_user).
+  - Endpoint 'add_artifact' might be missing Rate Limiting (@limiter.limit).
+  - Endpoint 'get_artifact' might be missing AuthZ (get_current_user).
+  - Endpoint 'get_artifact' might be missing Rate Limiting (@limiter.limit).
+  - Endpoint 'send_message' might be missing AuthZ (get_current_user).
+  - Endpoint 'send_message' might be missing Rate Limiting (@limiter.limit).
+  - Endpoint 'get_messages_for' might be missing AuthZ (get_current_user).
+  - Endpoint 'get_messages_for' might be missing Rate Limiting (@limiter.limit).
+  - Endpoint 'shutdown_system' might be missing AuthZ (get_current_user).
+  - Endpoint 'shutdown_system' might be missing Rate Limiting (@limiter.limit).
+File: backend/app/api/v1/endpoints/meta.py
+  - Endpoint 'get_status' might be missing AuthZ (get_current_user).
+  - Endpoint 'get_status' might be missing Rate Limiting (@limiter.limit).
+File: backend/app/core/llm/rate_limiter.py
+  - Line 215: Potential PII logging ('token')
+  - Line 242: Potential PII logging ('token')
+  - Line 269: Potential PII logging ('token')
+  - Line 271: Potential PII logging ('token')
+File: backend/app/core/llm/client.py
+  - Line 241: Potential PII logging ('token')
+File: backend/app/core/autonomy/policy_engine.py
+  - Line 207: Potential PII logging ('token')
+File: backend/app/core/security/secret_validator.py
+  - Line 47: Potential PII logging ('secret')
+  - Line 51: Potential PII logging ('secret')
+  - Line 76: Potential PII logging ('secret')
+File: backend/app/core/prompts/modules/context_compression.py
+  - Line 112: Potential PII logging ('token')
+File: backend/app/core/tools/productivity_tools.py
+  - Line 42: Potential PII logging ('email')
+File: backend/app/services/prompt_composer_service.py
+  - Line 123: Potential PII logging ('token')
+File: backend/app/services/system_user_service.py
+  - Line 27: Potential PII logging ('password')
+  - Line 27: Potential PII logging ('email')
+
+Found issues in 10 files.
