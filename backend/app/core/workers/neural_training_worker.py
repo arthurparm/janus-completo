@@ -11,7 +11,7 @@ from typing import Any
 from app.core.infrastructure.message_broker import get_broker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage
-from app.repositories.learning_repository import LearningRepository
+from app.repositories.learning_repository import get_learning_repository
 
 logger = structlog.get_logger(__name__)
 
@@ -28,7 +28,7 @@ async def process_neural_training_task(task: TaskMessage) -> None:
         model_name: str | None = payload.get("model_name")
         training_params: dict[str, Any] | None = payload.get("training_params") or {}
 
-        repo = LearningRepository()
+        repo = get_learning_repository()
         summary = await repo.run_training_process(
             dataset_version=dataset_version,
             model_name=model_name,

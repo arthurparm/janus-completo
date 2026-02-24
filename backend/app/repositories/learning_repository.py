@@ -20,6 +20,16 @@ TrainingSession = dict[str, Any]
 
 logger = structlog.get_logger(__name__)
 
+_LEARNING_EXPERIMENTS_TOTAL = Counter(
+    "learning_experiments_total", "Total de experimentos de treinamento", ["status"]
+)
+_LEARNING_EXPERIMENT_DURATION = Histogram(
+    "learning_experiment_duration_seconds", "Duração dos experimentos de treinamento"
+)
+_LEARNING_DATASET_EXAMPLES = Gauge(
+    "learning_dataset_examples_count", "Número de exemplos no dataset de treino"
+)
+
 
 class LearningRepository:
     """
@@ -39,16 +49,10 @@ class LearningRepository:
             "dataset": {"version": None, "num_examples": 0, "hash": None, "last_modified": None},
         }
 
-        # Metrics
-        self._experiments_total = Counter(
-            "learning_experiments_total", "Total de experimentos de treinamento", ["status"]
-        )
-        self._experiment_duration = Histogram(
-            "learning_experiment_duration_seconds", "Duração dos experimentos de treinamento"
-        )
-        self._dataset_examples = Gauge(
-            "learning_dataset_examples_count", "Número de exemplos no dataset de treino"
-        )
+        # Metrics (module singletons to avoid duplicated Prometheus timeseries)
+        self._experiments_total = _LEARNING_EXPERIMENTS_TOTAL
+        self._experiment_duration = _LEARNING_EXPERIMENT_DURATION
+        self._dataset_examples = _LEARNING_DATASET_EXAMPLES
 
     def get_all_models(self) -> list[ModelInfo]:
         """Lista modelos treinados lendo do filesystem (workspace/models)."""
@@ -330,5 +334,8 @@ class LearningRepository:
 
 
 # Padrão de Injeção de Dependência: Getter para o repositório
+_learning_repository = LearningRepository()
+
+
 def get_learning_repository() -> LearningRepository:
-    return LearningRepository()
+    return _learning_repository
