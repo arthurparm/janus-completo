@@ -84,6 +84,8 @@ class ConversationService:
         except ChatServiceError:
             raise
         except Exception as e:
+            if "conversation not found" in str(e).lower():
+                raise ConversationNotFoundError(str(e)) from e
             logger.error("log_error", message=f"Unexpected error getting history for conversation {conversation_id}: {e}",
                 exc_info=True,
             )
@@ -143,6 +145,8 @@ class ConversationService:
         except ChatServiceError:
             raise
         except Exception as e:
+            if "conversation not found" in str(e).lower():
+                raise ConversationNotFoundError(str(e)) from e
             logger.error("log_error", message=f"Unexpected error getting paginated history for conversation {conversation_id}: {e}",
                 exc_info=True,
             )

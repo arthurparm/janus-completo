@@ -1,0 +1,144 @@
+{
+  "fixtures": [
+    {
+      "operation_id": "local_register_api_v1_auth_local_register_post",
+      "scenario_name": "bootstrap_local_register",
+      "order": 10,
+      "json_body": {
+        "email": "{{runtime.unique}}@example.com",
+        "password": "JanusE2E123!",
+        "username": "user_{{runtime.unique}}",
+        "full_name": "Janus E2E Runner",
+        "terms": true
+      },
+      "expected_statuses": [200, 409, 422],
+      "extract": {
+        "auth.local.user_id": "user.id"
+      },
+      "destructive": false,
+      "notes": "Creates local user used by subsequent bootstrap/login scenarios."
+    },
+    {
+      "operation_id": "local_login_api_v1_auth_local_login_post",
+      "scenario_name": "bootstrap_local_login",
+      "order": 20,
+      "json_body": {
+        "email": "{{runtime.unique}}@example.com",
+        "password": "JanusE2E123!"
+      },
+      "expected_statuses": [200, 401, 422],
+      "extract": {
+        "auth.local.access_token": "access_token",
+        "auth.local.user_id": "user.id"
+      }
+    },
+    {
+      "operation_id": "start_chat_api_v1_chat_start_post",
+      "scenario_name": "bootstrap_chat_start",
+      "order": 40,
+      "json_body": {
+        "user_id": "{{auth.local.user_id}}",
+        "project_id": "e2e-project",
+        "title": "E2E Chat Session"
+      },
+      "expected_statuses": [200, 422],
+      "extract": {
+        "chat.conversation_id": "conversation_id"
+      }
+    },
+    {
+      "operation_id": "send_message_api_v1_chat_message_post",
+      "scenario_name": "chat_message_contract_probe_invalid_payload",
+      "order": 50,
+      "json_body": {
+        "conversation_id": "{{chat.conversation_id}}"
+      },
+      "expected_statuses": [200, 422]
+    },
+    {
+      "operation_id": "chat_history_api_v1_chat__conversation_id__history_get",
+      "scenario_name": "chat_history_missing_conversation_contract_probe",
+      "order": 52,
+      "path_params": {
+        "conversation_id": "99999999"
+      },
+      "expected_statuses": [404, 422]
+    },
+    {
+      "operation_id": "chat_history_paginated_api_v1_chat__conversation_id__history_paginated_get",
+      "scenario_name": "chat_history_paginated_missing_conversation_contract_probe",
+      "order": 53,
+      "path_params": {
+        "conversation_id": "99999999"
+      },
+      "query": {
+        "limit": 10,
+        "offset": 0
+      },
+      "expected_statuses": [404, 422]
+    },
+    {
+      "operation_id": "firebase_exchange_api_v1_auth_firebase_exchange_post",
+      "scenario_name": "firebase_exchange_external_unavailable_contract_probe",
+      "order": 70,
+      "json_body": {
+        "token": "dummy-firebase-token"
+      },
+      "expected_statuses": [200, 401, 422, 503]
+    },
+    {
+      "operation_id": "supabase_exchange_api_v1_auth_supabase_exchange_post",
+      "scenario_name": "supabase_exchange_external_unavailable_contract_probe",
+      "order": 71,
+      "json_body": {
+        "access_token": "dummy-supabase-token"
+      },
+      "expected_statuses": [200, 401, 422, 503]
+    },
+    {
+      "operation_id": "record_ux_metric_api_v1_observability_metrics_ux_post",
+      "scenario_name": "bootstrap_ux_metric",
+      "order": 60,
+      "json_body": {
+        "ttft_ms": 120.5,
+        "latency_ms": 680.2,
+        "outcome": "success",
+        "retries": 0,
+        "provider": "deepseek",
+        "model": "deepseek-chat",
+        "timestamp": 1730000000.0
+      },
+      "expected_statuses": [200, 422]
+    },
+    {
+      "operation_id": "trigger_indexing_api_v1_knowledge_index_post",
+      "scenario_name": "knowledge_index_long_running_probe",
+      "order": 200,
+      "timeout_seconds": 45,
+      "expected_statuses": [200, 202]
+    },
+    {
+      "operation_id": "get_request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
+      "scenario_name": "dashboard_not_found_probe",
+      "order": 120,
+      "path_params": {
+        "request_id": "req-missing-e2e"
+      },
+      "query": {
+        "limit": 10,
+        "include_details": false
+      },
+      "expected_statuses": [200, 404, 422]
+    },
+    {
+      "operation_id": "delete_tool_api_v1_tools__tool_name__delete",
+      "scenario_name": "delete_nonexistent_tool_contract_probe",
+      "order": 900,
+      "path_params": {
+        "tool_name": "tool-does-not-exist-e2e"
+      },
+      "expected_statuses": [200, 404, 409, 422],
+      "destructive": true
+    }
+  ]
+}

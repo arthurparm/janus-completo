@@ -340,7 +340,7 @@ async def rag_productivity_search(
             db="qdrant",
             started_at=started_at,
             confidence=0.0,
-            error_code=type(e).__name__,
+            error_code=e.__class__.__name__,
         )
         return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
 
@@ -739,4 +739,3 @@ async def rag_hybrid_search(
             snippets.append(t[:300])
     answer = "\n\n".join(snippets) if snippets else "Nenhum trecho relevante encontrado."
     return RAGHybridResponse(answer=answer, citations=citations)
-

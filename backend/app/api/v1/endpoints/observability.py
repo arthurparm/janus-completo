@@ -249,8 +249,10 @@ class UserSummaryResponse(BaseModel):
     "/user_summary", response_model=UserSummaryResponse, summary="Resumo de uso por usuário"
 )
 async def user_summary(user_id: str, request: Request):
-    chat_repo = request.app.state.chat_repo
-    items = chat_repo.list_conversations(user_id=user_id, project_id=None, limit=1000)
+    chat_repo = getattr(request.app.state, "chat_repo", None)
+    items = []
+    if chat_repo is not None:
+        items = chat_repo.list_conversations(user_id=user_id, project_id=None, limit=1000)
     conversations_count = len(items)
     last_updated = None
     for it in items:

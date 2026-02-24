@@ -1,12 +1,12 @@
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
-from app.services.llm_service import LLMService, get_llm_service
+from app.services.llm_service import LLMService, LLMServiceError, get_llm_service
 
 router = APIRouter(tags=["LLM"])
 logger = structlog.get_logger(__name__)
@@ -166,8 +166,12 @@ async def get_circuit_breaker_status(service: LLMService = Depends(get_llm_servi
 )
 async def reset_circuit_breaker(provider: str, service: LLMService = Depends(get_llm_service)):
     """Delega o reset do circuit breaker para o LLMService."""
-    # LLMServiceError (para provider não encontrado) é tratado pelo handler central.
-    new_state = service.reset_circuit_breaker(provider)
+    try:
+        new_state = service.reset_circuit_breaker(provider)
+    except LLMServiceError as e:
+        detail = str(e)
+        status_code = 404 if "não encontrado" in detail.lower() or "not found" in detail.lower() else 500
+        raise HTTPException(status_code=status_code, detail=detail) from e
     return {"message": f"Circuit breaker resetado para: {provider}", "new_state": new_state}
 
 

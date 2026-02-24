@@ -230,7 +230,13 @@ class ObservabilityRepository:
             rel_types_registered = [row.get("name") for row in registered_rows]
 
             unregistered_rows = await db.query(
-                "MATCH ()-[r]->() WITH DISTINCT type(r) AS rel MATCH (t:RelationshipType) RETURN rel WHERE NOT rel IN collect(t.name)",
+                "MATCH ()-[r]->() "
+                "WITH DISTINCT type(r) AS rel "
+                "OPTIONAL MATCH (t:RelationshipType) "
+                "WITH rel, collect(t.name) AS registered "
+                "WHERE NOT rel IN registered "
+                "RETURN rel "
+                "ORDER BY rel",
                 operation="audit_unregistered_rel_types",
             )
             rel_types_unregistered = [row.get("rel") for row in unregistered_rows]

@@ -266,9 +266,10 @@ async def reset_circuit_breaker():
     Útil quando o Qdrant recupera após falhas temporárias.
     """
     try:
-        from app.core.memory.memory_core import reset_memory_circuit_breaker
+        from app.core.memory.memory_core import get_memory_db
 
-        await reset_memory_circuit_breaker()
+        memory_db = await get_memory_db()
+        memory_db.reset_circuit_breaker()
         return {"message": "Circuit breaker resetado com sucesso"}
     except Exception as e:
         logger.error("Erro ao resetar circuit breaker", exc_info=e)
