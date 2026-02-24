@@ -47,9 +47,9 @@ if os.path.isdir("/app/app"):
 else:
     log_file = os.path.join(os.getcwd(), "janus.log")
 
-print(f"[DEBUG_INIT] Log file selected: {log_file} (CWD: {os.getcwd()})")
 setup_logging(log_file=log_file)
 logger = structlog.get_logger(__name__)
+logger.debug("log_file_selected", log_file=log_file, cwd=os.getcwd())
 
 
 @asynccontextmanager
