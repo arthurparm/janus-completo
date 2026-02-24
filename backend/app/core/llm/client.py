@@ -495,7 +495,7 @@ async def get_llm_client(
     exclude_providers: list[str] | None = None,
     config: dict[str, Any] | None = None,
 ) -> LLMClient:
-    """Retorna um cliente unificado, mantendo compatibilidade com get_llm()."""
+    """Retorna um cliente unificado (LLMClient) a partir do roteador de modelos."""
     cache_key = f"{role.value}_{priority.value}"
     llm = await get_llm(
         role=role,

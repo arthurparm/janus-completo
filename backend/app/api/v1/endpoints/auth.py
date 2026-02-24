@@ -105,8 +105,7 @@ class LocalRegisterRequest(BaseModel):
 class LocalLoginRequest(BaseModel):
     email: str | None = None
     username: str | None = None
-    # Login accepts legacy short passwords; strength is enforced on register/reset.
-    password: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=8)
 
 
 class LocalResetRequest(BaseModel):

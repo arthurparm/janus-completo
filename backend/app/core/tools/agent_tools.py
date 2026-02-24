@@ -37,7 +37,7 @@ from app.services.tool_service import ToolService
 
 logger = logging.getLogger(__name__)
 
-# Usar WORKSPACE_ROOT das configurações com fallback para compatibilidade
+# Usa WORKSPACE_ROOT das configurações como raiz canônica do workspace
 WORKSPACE_ROOT = Path(settings.WORKSPACE_ROOT).resolve()
 ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".csv"}
 MAX_FILE_SIZE = 1024 * 1024  # 1 MB

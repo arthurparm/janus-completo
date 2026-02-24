@@ -104,12 +104,12 @@ def _parse_security_assessment(response_text: str) -> tuple[str, list[dict[str, 
     if not findings and _is_vulnerable(response_text):
         findings = [
             {
-                "id": "legacy-vulnerability-signal",
+                "id": "heuristic-vulnerability-signal",
                 "severity": "high",
                 "cwe": "UNKNOWN",
                 "file": "",
                 "line": 0,
-                "title": "Legacy vulnerability signal detected",
+                "title": "Heuristic vulnerability signal detected",
                 "evidence": response_text[:1000],
                 "fix_hint": "",
                 "status": "open",
@@ -246,4 +246,3 @@ async def start_red_team_agent_worker():
     )
     logger.info("Red Team Agent Worker iniciado.")
     return consumer_task
-

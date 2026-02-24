@@ -20,7 +20,7 @@ class DistillationService:
 
     # Regex para detecção de segredos comuns (API Keys, Tokens)
     SECRET_PATTERNS = [
-        r"sk-[a-zA-Z0-9]{48}",  # OpenAI legacy
+        r"sk-[a-zA-Z0-9]{48}",  # OpenAI classic key prefix
         r"sk-proj-[a-zA-Z0-9-_]{20,}",  # OpenAI project
         r"(api_key|access_token|secret|token)[-_'\"]?\s*[:=]\s*['\"]?[a-zA-Z0-9-_]{20,}['\"]?",  # Genérico
         r"Bearer [a-zA-Z0-9-_]{20,}",  # Auth Headers

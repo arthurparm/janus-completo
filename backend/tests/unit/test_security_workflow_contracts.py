@@ -38,6 +38,20 @@ def test_parse_security_assessment_uses_structured_json_payload():
     assert findings[0]["cwe"] == "CWE-89"
 
 
+def test_parse_security_assessment_uses_heuristic_vulnerability_signal_when_unstructured():
+    response_text = "CRITICAL vulnerability detected: SQL injection present and unsafe query path"
+
+    with patch("app.core.workers.red_team_agent_worker._is_vulnerable", return_value=True):
+        decision, findings, summary = _parse_security_assessment(response_text)
+
+    assert decision == "rejected"
+    assert summary == response_text
+    assert len(findings) == 1
+    assert findings[0]["id"] == "heuristic-vulnerability-signal"
+    assert findings[0]["title"] == "Heuristic vulnerability signal detected"
+    assert findings[0]["severity"] == "high"
+
+
 @pytest.mark.asyncio
 async def test_red_team_worker_persists_structured_security_fields():
     state = TaskState(

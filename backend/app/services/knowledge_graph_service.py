@@ -271,7 +271,7 @@ class KnowledgeGraphService:
         # Fallback se APOC não estiver disponível (query nativa mais simples)
         # cypher_native = ... (omitted for brevity, assume APOC or standard traversal)
         
-        # Usando travessia padrão Cypher para garantir compatibilidade sem APOC
+        # Usa travessia padrão Cypher para operar sem dependência de APOC
         cypher_standard = """
         MATCH (n:Entity)
         WHERE n.name IN $names
