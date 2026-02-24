@@ -438,8 +438,8 @@ def quick_log_reflection(hours: int = 6) -> EnhancedReflectionReport:
     Usage:
         from app.core.memory.log_aware_reflector import quick_log_reflection
         report = quick_log_reflection(hours=6)
-        print(f"Health: {report.overall_health_score}")
-        print(f"Errors: {report.error_patterns}")
+        # report.overall_health_score
+        # report.error_patterns
     """
     reflector = LogAwareReflector()
     return reflector.analyze_all_sources(hours_back=hours)

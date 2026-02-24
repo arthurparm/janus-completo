@@ -354,7 +354,7 @@ def quick_lab_test(code: str, purpose: str = "quick_test") -> LabResult:
 
     Usage:
         result = quick_lab_test("print('Hello from Lab!')")
-        print(result.test_output)
+        # result.test_output
     """
     manager = JanusLabManager()
     config = manager.spawn_lab(purpose=purpose)

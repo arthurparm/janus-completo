@@ -335,7 +335,7 @@ async def dream(hours: int = 24, dry_run: bool = False) -> SafeEvolutionSession:
     Usage:
         from app.core.evolution.safe_evolution_manager import dream
         session = await dream(hours=24, dry_run=False)
-        print(f"Evolved: {session.total_evolved}")
+        # session.total_evolved
     """
     from app.repositories.llm_repository import LLMRepository
     from app.repositories.tool_repository import ToolRepository

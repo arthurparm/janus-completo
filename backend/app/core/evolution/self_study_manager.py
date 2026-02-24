@@ -222,7 +222,7 @@ async def quick_self_reflection(memory_core) -> dict[str, Any]:
     Usage:
         from app.core.evolution.self_study_manager import quick_self_reflection
         report = await quick_self_reflection(memory_db)
-        print(report)
+        # inspect `report` as needed
     """
     reflector = ReflectorAgent(memory_core)
     report = await reflector.analyze_recent_experiences(hours_back=24)
