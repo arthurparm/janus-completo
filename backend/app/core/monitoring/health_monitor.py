@@ -178,6 +178,8 @@ class HealthMonitor:
 
         check_info = self.health_checks[component]
         check_func = check_info["func"]
+        is_critical = bool(check_info["is_critical"])
+        timeout_s = get_timeout_recommendation(component, default_seconds=10.0)
 
         start_time = asyncio.get_event_loop().time()
         try:
@@ -186,10 +188,11 @@ class HealthMonitor:
                 asyncio.to_thread(check_func)
                 if not asyncio.iscoroutinefunction(check_func)
                 else check_func(),
-                timeout=10.0,
+                timeout=timeout_s,
             )
 
             duration = asyncio.get_event_loop().time() - start_time
+            record_latency(component, duration)
 
             # Interpretar resultado
             status = HealthStatus(result.get("status", "healthy"))
@@ -216,13 +219,29 @@ class HealthMonitor:
 
         except TimeoutError:
             duration = asyncio.get_event_loop().time() - start_time
-            logger.error("log_error", message=f"Health check timeout para {component}")
+            record_latency(component, duration)
+            if is_critical:
+                logger.error(
+                    "health_check_timeout_critical",
+                    component=component,
+                    timeout_seconds=timeout_s,
+                    duration_seconds=duration,
+                )
+                result_status = HealthStatus.UNHEALTHY
+            else:
+                logger.warning(
+                    "health_check_timeout_non_critical",
+                    component=component,
+                    timeout_seconds=timeout_s,
+                    duration_seconds=duration,
+                )
+                result_status = HealthStatus.DEGRADED
 
             return HealthCheckResult(
                 component=component,
-                status=HealthStatus.UNHEALTHY,
+                status=result_status,
                 message="Health check timeout",
-                details={"timeout_seconds": 10.0},
+                details={"timeout_seconds": timeout_s},
                 checked_at=datetime.now(),
                 duration_seconds=duration,
                 error="Timeout",
@@ -230,7 +249,15 @@ class HealthMonitor:
 
         except Exception as e:
             duration = asyncio.get_event_loop().time() - start_time
-            logger.error("log_error", message=f"Erro no health check de {component}: {e}", exc_info=True)
+            record_latency(component, duration)
+            logger.error(
+                "health_check_failed",
+                component=component,
+                timeout_seconds=timeout_s,
+                duration_seconds=duration,
+                error=str(e),
+                exc_info=True,
+            )
 
             return HealthCheckResult(
                 component=component,
@@ -257,7 +284,11 @@ class HealthMonitor:
 
         for component, result in zip(tasks.keys(), completed):
             if isinstance(result, Exception):
-                logger.error("log_error", message=f"Exceção ao verificar {component}: {result}")
+                logger.error(
+                    "health_check_execution_exception",
+                    component=component,
+                    error=str(result),
+                )
                 results[component] = HealthCheckResult(
                     component=component,
                     status=HealthStatus.UNHEALTHY,
