@@ -1,0 +1,103 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - alert [ref=e103]:
+    - generic [ref=e104]: ⚠ JANUS OFFLINE / MODO DEMONSTRAÇÃO — BACKEND DESCONECTADO — SISTEMA OPERANDO EM ESTADO DE FUNCIONALIDADE REDUZIDA — ALGUNS RECURSOS PODEM ESTAR INDISPONÍVEIS ⚠
+  - main [ref=e4]:
+    - generic [ref=e106]:
+      - generic [ref=e109]:
+        - generic [ref=e110] [cursor=pointer]:
+          - img "Janus" [ref=e113]
+          - generic [ref=e125]: JANUSAI
+        - generic "Status do Sistema" [ref=e129] [cursor=pointer]:
+          - generic [ref=e133]: SYSTEM
+        - navigation "Navegacao principal" [ref=e134]:
+          - link "Inicio" [ref=e135] [cursor=pointer]:
+            - /url: /
+          - button "Sair" [ref=e136] [cursor=pointer]
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - paragraph [ref=e140]: JANUS // CONVERSAS
+            - heading "Converse com o Janus sem friccao" [level=1] [ref=e141]
+            - paragraph [ref=e142]: Escolha uma conversa ou envie sua primeira pergunta. O modo avancado fica opcional.
+          - generic [ref=e143]:
+            - button "add Nova conversa" [ref=e144] [cursor=pointer]:
+              - generic [ref=e145]: add
+              - text: Nova conversa
+            - button "Atualizar" [ref=e146] [cursor=pointer]
+        - generic [ref=e147]:
+          - complementary "Lista de conversas" [ref=e148]:
+            - generic [ref=e149]:
+              - generic [ref=e150]:
+                - paragraph [ref=e151]: HISTORICO
+                - heading "Conversas" [level=2] [ref=e152]
+              - generic [ref=e154]: "1"
+            - generic [ref=e155]:
+              - generic [ref=e156]: search
+              - textbox "Buscar conversas" [ref=e157]:
+                - /placeholder: Buscar por titulo ou id
+              - button "refresh" [ref=e158] [cursor=pointer]:
+                - generic [ref=e159]: refresh
+            - list [ref=e160]:
+              - listitem [ref=e161]:
+                - 'button "Nova Conversa Responda em uma frase curta: qual a função desta tela? ID 18 22:43" [ref=e213] [cursor=pointer]':
+                  - generic [ref=e163]:
+                    - generic [ref=e164]: Nova Conversa
+                    - generic [ref=e165]: "Responda em uma frase curta: qual a função desta tela?"
+                  - generic [ref=e166]:
+                    - generic [ref=e167]: ID 18
+                    - generic [ref=e168]: 22:43
+          - region "Chat" [ref=e169]:
+            - generic [ref=e170]:
+              - generic [ref=e171]:
+                - img "Janus" [ref=e174]
+                - generic [ref=e186]:
+                  - paragraph [ref=e187]: CONVERSA ATIVA
+                  - heading "Nova Conversa" [level=2] [ref=e188]
+                  - paragraph [ref=e189]: ID 18
+              - generic [ref=e190]:
+                - generic [ref=e192]: Conectando
+                - generic [ref=e194]: 3 msgs
+                - generic [ref=e196]: Modo simples
+                - button "Abrir painel avancado" [ref=e197] [cursor=pointer]
+            - generic [ref=e214]:
+              - article [ref=e215]:
+                - generic [ref=e217]: U
+                - generic [ref=e218]:
+                  - generic [ref=e219]:
+                    - generic [ref=e220]: UX Smoke QA
+                    - generic [ref=e221]: 22:43
+                  - paragraph [ref=e223]: "Responda em uma frase curta: qual a função desta tela?"
+              - article [ref=e224]:
+                - img "Janus" [ref=e228]
+                - generic [ref=e240]:
+                  - generic [ref=e241]:
+                    - generic [ref=e242]: Janus
+                    - generic [ref=e243]: 22:43
+                  - paragraph [ref=e246]: "[Erro no streaming: connection_error]"
+                  - generic [ref=e248]:
+                    - group "Ações de feedback da resposta" [ref=e249]:
+                      - button "Gostei desta resposta" [ref=e250] [cursor=pointer]: 👍
+                      - button "Não gostei desta resposta" [ref=e251] [cursor=pointer]: 👎
+                    - button "Adicionar comentário" [ref=e252] [cursor=pointer]
+              - article [ref=e253]:
+                - img "Janus" [ref=e257]
+                - generic [ref=e269]:
+                  - generic [ref=e270]:
+                    - generic [ref=e271]: Janus
+                    - generic [ref=e272]: 22:43
+                  - paragraph [ref=e274]: "Erro no streaming: Sistema inoperável: nenhum LLM disponível."
+                  - generic [ref=e276]:
+                    - group "Ações de feedback da resposta" [ref=e277]:
+                      - button "Gostei desta resposta" [ref=e278] [cursor=pointer]: 👍
+                      - button "Não gostei desta resposta" [ref=e279] [cursor=pointer]: 👎
+                    - button "Adicionar comentário" [ref=e280] [cursor=pointer]
+            - generic [ref=e206]:
+              - paragraph [ref=e207]: "Modo simples ativo: foco na conversa. O Janus escolhe automaticamente a melhor estrategia."
+              - textbox "Descreva a tarefa ou envie uma pergunta..." [ref=e208]
+              - generic [ref=e209]:
+                - button "Limpar" [ref=e210] [cursor=pointer]
+                - button "send Enviar" [ref=e211] [cursor=pointer]:
+                  - generic [ref=e212]: send
+                  - text: Enviar

@@ -1,60 +1,338 @@
 ###
-# SPRINT 13: Meta-Agente - A Consciência Proativa
-# Testes do supervisor autônomo com análise diagnóstica e heartbeat
-###
+    # SPRINT 13: Observabilidade Operacional
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Observability
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Health Check do Meta-Agente
-GET {{host}}{{api_v1_prefix}}/meta-agent/health
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 2. Executar Análise Manual do Sistema
-POST {{host}}{{api_v1_prefix}}/meta-agent/analyze
-Content-Type: application/json
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Observability] GET /api/v1/observability/activity/user
+# - [Observability] GET /api/v1/observability/audit/events
+# - [Observability] GET /api/v1/observability/audit/export
+# - [Observability] GET /api/v1/observability/errors/taxonomy
+# - [Observability] GET /api/v1/observability/graph/audit
+# - [Observability] GET /api/v1/observability/graph/quarantine
+# - [Observability] POST /api/v1/observability/graph/quarantine/promote
+# - [Observability] POST /api/v1/observability/health/check-all
+# - [Observability] GET /api/v1/observability/health/components/llm_router
+# - [Observability] GET /api/v1/observability/health/components/multi_agent_system
+# - [Observability] GET /api/v1/observability/health/components/poison_pill_handler
+# - [Observability] GET /api/v1/observability/health/system
+# - [Observability] GET /api/v1/observability/llm/usage
+# - [Observability] GET /api/v1/observability/metrics/summary
+# - [Observability] GET /api/v1/observability/metrics/user
+# - [Observability] POST /api/v1/observability/metrics/ux
+# - [Observability] POST /api/v1/observability/poison-pills/cleanup
+# - [Observability] GET /api/v1/observability/poison-pills/quarantined
+# - [Observability] POST /api/v1/observability/poison-pills/release
+# - [Observability] GET /api/v1/observability/poison-pills/stats
+# - [Observability] GET /api/v1/observability/requests/{request_id}/dashboard
+# - [Observability] GET /api/v1/observability/user_summary
 
-###
-# 3. Obter Relatório Mais Recente
-GET {{host}}{{api_v1_prefix}}/meta-agent/report/latest
+############################################
+# 1) Observabilidade operacional (happy path)
+############################################
+# @name s13_health_system
+GET {{host}}{{api_v1_prefix}}/observability/health/system
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("observability/health/system: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 4. Verificar Status do Heartbeat
-GET {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/status
+# @name s13_health_check_all
+POST {{host}}{{api_v1_prefix}}/observability/health/check-all
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("observability/health/check-all: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_health_llm_router
+GET {{host}}{{api_v1_prefix}}/observability/health/components/llm_router
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs health llm_router: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 5. Iniciar Heartbeat (Intervalo 60 min)
-POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
-Content-Type: application/json
-
-{
-  "interval_minutes": 60
-}
-
-###
-# 6. Iniciar Heartbeat (Intervalo 30 min)
-POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
-Content-Type: application/json
-
-{
-  "interval_minutes": 30
-}
-
-###
-# 7. Parar Heartbeat
-POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/stop
-Content-Type: application/json
-
-###
-# 8. Executar Nova Análise Após Mudanças no Sistema
-POST {{host}}{{api_v1_prefix}}/meta-agent/analyze
-Content-Type: application/json
-
-###
-# 9. Verificar Relatório Atualizado
-GET {{host}}{{api_v1_prefix}}/meta-agent/report/latest
+# @name s13_health_multi_agent
+GET {{host}}{{api_v1_prefix}}/observability/health/components/multi_agent_system
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs health multi_agent_system: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_health_poison_pill
+GET {{host}}{{api_v1_prefix}}/observability/health/components/poison_pill_handler
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs health poison_pill_handler: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_metrics_summary
+GET {{host}}{{api_v1_prefix}}/observability/metrics/summary
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs metrics/summary: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_llm_usage
+GET {{host}}{{api_v1_prefix}}/observability/llm/usage
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs llm/usage: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_slo_domains
+GET {{host}}{{api_v1_prefix}}/observability/slo/domains?window_minutes=15&min_events=10
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs slo/domains: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_predictive_anomalies
+GET {{host}}{{api_v1_prefix}}/observability/anomalies/predictive?window_hours=6&bucket_minutes=15&min_events=10
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs anomalies/predictive: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_audit_events
+GET {{host}}{{api_v1_prefix}}/observability/audit/events?limit=20&offset=0
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs audit/events: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_audit_export_json
+GET {{host}}{{api_v1_prefix}}/observability/audit/export?format=json&limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs audit/export: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_errors_taxonomy
+GET {{host}}{{api_v1_prefix}}/observability/errors/taxonomy
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs errors/taxonomy: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_user_summary
+GET {{host}}{{api_v1_prefix}}/observability/user_summary?user_id={{actor_user_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs user_summary: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_user_metrics
+GET {{host}}{{api_v1_prefix}}/observability/metrics/user?user_id={{actor_user_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs metrics/user: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_user_activity
+GET {{host}}{{api_v1_prefix}}/observability/activity/user?user_id={{actor_user_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs activity/user: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_poison_quarantined
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/quarantined
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs poison quarantined: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_poison_stats
+GET {{host}}{{api_v1_prefix}}/observability/poison-pills/stats
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs poison stats: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_graph_audit
+GET {{host}}{{api_v1_prefix}}/observability/graph/audit
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs graph/audit: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_graph_quarantine
+GET {{host}}{{api_v1_prefix}}/observability/graph/quarantine?limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs graph/quarantine: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_ux_metric
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/observability/metrics/ux
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "ttft_ms": 120,
+#   "latency_ms": 900,
+#   "outcome": "success",
+#   "retries": 0,
+#   "provider": "openai",
+#   "model": "gpt-4o-mini",
+#   "timestamp": {{$timestamp}}
+# }
+#
+# > {% client.test("obs metrics/ux: 200", function() { client.assert(response.status === 200); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s13_request_dashboard_missing
+GET {{host}}{{api_v1_prefix}}/observability/requests/request-id-inexistente/dashboard?limit=50&include_details=false
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("obs request dashboard missing: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s13_poison_release_invalid
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/observability/poison-pills/release
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "message_id": "missing-message",
+#   "allow_retry": false
+# }
+#
+# > {% client.test("obs poison release invalid: 404 ou 500", function() { client.assert([404,500].includes(response.status)); }); %}
+#
+###
+# @name s13_graph_promote_invalid
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/observability/graph/quarantine/promote
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "node_id": 999999
+# }
+#
+# > {% client.test("obs graph promote invalid: 404/400/500", function() { client.assert([400,404,500].includes(response.status)); }); %}
+#
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

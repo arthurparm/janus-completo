@@ -1,0 +1,36 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - paragraph [ref=e13]: JANUS // PORTAL SEGURO
+        - heading "VERIFICACAO DE ACESSO" [level=1] [ref=e14]
+        - paragraph [ref=e15]: Entrada segura para o nucleo operacional do Janus.
+        - generic [ref=e16]: CANAL CRIPTOGRAFADO ATIVO
+      - form "Login" [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: Email de acesso
+          - textbox "Email de acesso" [ref=e21]:
+            - /placeholder: voce@janus.ai
+        - generic [ref=e22]:
+          - generic [ref=e23]: Senha de acesso
+          - generic [ref=e24]:
+            - textbox "Senha de acesso" [ref=e25]:
+              - /placeholder: "********"
+            - button "MOSTRAR" [ref=e26] [cursor=pointer]
+        - generic [ref=e27]:
+          - generic [ref=e28] [cursor=pointer]:
+            - checkbox "Manter sessao" [checked] [ref=e29]
+            - generic [ref=e30]: Manter sessao
+          - button "Recuperar acesso" [ref=e31] [cursor=pointer]
+        - button "ENTRAR NO JANUS login" [disabled] [ref=e32]:
+          - generic [ref=e33]: ENTRAR NO JANUS
+          - generic [ref=e34]: login
+        - generic [ref=e35]:
+          - button "Entrar com Google" [ref=e36] [cursor=pointer]
+          - button "Entrar com GitHub" [ref=e37] [cursor=pointer]
+        - generic [ref=e38]:
+          - generic [ref=e39]: Sem credenciais?
+          - link "Criar conta" [ref=e40] [cursor=pointer]:
+            - /url: /registro

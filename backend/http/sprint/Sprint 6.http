@@ -1,156 +1,274 @@
 ###
-# SPRINT 6: Action Module - Gateway Dinâmico de Ferramentas
-# Testes completos de registro, categorização e criação dinâmica de ferramentas
-###
+    # SPRINT 6: Motor LLM e Avaliacao Experimental (LLM + Evaluation)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: LLM, Evaluation
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Listar Todas as Ferramentas Registradas
-GET {{host}}{{api_v1_prefix}}/tools/
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 2. Listar Ferramentas por Categoria (FILESYSTEM)
-GET {{host}}{{api_v1_prefix}}/tools/?category=FILESYSTEM
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Evaluation] GET /api/v1/evaluation/experiments
+# - [Evaluation] POST /api/v1/evaluation/experiments
+# - [Evaluation] POST /api/v1/evaluation/experiments/{experiment_id}/arms
+# - [Evaluation] POST /api/v1/evaluation/experiments/{experiment_id}/results
+# - [Evaluation] GET /api/v1/evaluation/experiments/{experiment_id}/winner
+# - [LLM] POST /api/v1/llm/ab/set-experiment
+# - [LLM] GET /api/v1/llm/budget/summary
+# - [LLM] POST /api/v1/llm/cache/invalidate
+# - [LLM] GET /api/v1/llm/cache/status
+# - [LLM] GET /api/v1/llm/circuit-breakers
+# - [LLM] POST /api/v1/llm/circuit-breakers/{provider}/reset
+# - [LLM] GET /api/v1/llm/health
+# - [LLM] POST /api/v1/llm/invoke
+# - [LLM] GET /api/v1/llm/pricing/providers
+# - [LLM] GET /api/v1/llm/providers
+# - [LLM] POST /api/v1/llm/response-cache/invalidate
+# - [LLM] GET /api/v1/llm/response-cache/status
+
+############################################
+# 1) LLM + Evaluation (happy path)
+############################################
+# @name s6_llm_providers
+GET {{host}}{{api_v1_prefix}}/llm/providers
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/providers: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 3. Listar Ferramentas por Categoria (COMPUTATION)
-GET {{host}}{{api_v1_prefix}}/tools/?category=COMPUTATION
+# @name s6_llm_health
+GET {{host}}{{api_v1_prefix}}/llm/health
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/health: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 4. Listar Ferramentas por Nível de Permissão (READ_ONLY)
-GET {{host}}{{api_v1_prefix}}/tools/?permission_level=READ_ONLY
+# @name s6_llm_cache_status
+GET {{host}}{{api_v1_prefix}}/llm/cache/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/cache/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 5. Criar Ferramenta Dinâmica a partir de Função Python
-POST {{host}}{{api_v1_prefix}}/tools/create/from-function
-Content-Type: application/json
-
-{
-  "name": "custom_calculator",
-  "description": "Calcula operações matemáticas customizadas entre dois números",
-  "code": "def execute(x: float, y: float, operation: str) -> float:\n    if operation == 'add':\n        return x + y\n    elif operation == 'multiply':\n        return x * y\n    elif operation == 'power':\n        return x ** y\n    else:\n        raise ValueError('Operação inválida')",
-  "function_name": "execute",
-  "category": "COMPUTATION",
-  "permission_level": "SAFE",
-  "tags": [
-    "math",
-    "calculator"
-  ]
-}
-
-###
-# 6. Criar Ferramenta Dinâmica a partir de API HTTP
-POST {{host}}{{api_v1_prefix}}/tools/create/from-api
-Content-Type: application/json
-
-{
-  "name": "get_current_time",
-  "description": "Obtém a hora atual de uma API externa de fuso horário",
-  "endpoint_url": "https://worldtimeapi.org/api/timezone/America/Sao_Paulo",
-  "method": "GET",
-  "category": "API",
-  "rate_limit_per_minute": 20
-}
-
-###
-# 7. Obter Detalhes de uma Ferramenta Específica
-GET {{host}}{{api_v1_prefix}}/tools/execute_python_code
+# @name s6_llm_response_cache_status
+GET {{host}}{{api_v1_prefix}}/llm/response-cache/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/response-cache/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 8. Obter Estatísticas de Uso de Ferramentas
-GET {{host}}{{api_v1_prefix}}/tools/stats/usage
+# @name s6_llm_cb_status
+GET {{host}}{{api_v1_prefix}}/llm/circuit-breakers
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/circuit-breakers: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Listar Categorias Disponíveis
-GET {{host}}{{api_v1_prefix}}/tools/categories/list
+# @name s6_llm_invoke
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/llm/invoke
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "prompt": "Diga ola em uma frase",
+#   "role": "orchestrator",
+#   "priority": "fast_and_cheap",
+#   "timeout_seconds": 10
+# }
+#
+# > {% client.test("llm/invoke: 200 ou 5xx", function() { client.assert([200,500,503].includes(response.status)); }); %}
+#
+###
+# @name s6_llm_pricing
+GET {{host}}{{api_v1_prefix}}/llm/pricing/providers
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/pricing/providers: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 10. Listar Níveis de Permissão
-GET {{host}}{{api_v1_prefix}}/tools/permissions/list
+# @name s6_llm_budget
+GET {{host}}{{api_v1_prefix}}/llm/budget/summary
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("llm/budget/summary: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 11. Obter Detalhes da Ferramenta Customizada
-GET {{host}}{{api_v1_prefix}}/tools/custom_calculator
+# @name s6_eval_create_experiment
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/evaluation/experiments
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "name": "exp-llm-{{$timestamp}}",
+#   "user_id": "{{actor_user_id}}"
+# }
+#
+# > {%
+# client.test("evaluation/experiments create: 200", function() { client.assert(response.status === 200); });
+# const b = response.body.json();
+# client.global.set("experiment_id", String(b.id));
+# %}
+#
+###
+# @name s6_eval_add_arm
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/evaluation/experiments/{{experiment_id}}/arms
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "name": "arm-a",
+#   "model_spec": "openai:gpt-4o-mini"
+# }
+#
+# > {%
+# client.test("evaluation add arm: 200", function() { client.assert(response.status === 200); });
+# const b = response.body.json();
+# client.global.set("arm_id", String(b.id));
+# %}
+#
+###
+# @name s6_eval_add_result
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/evaluation/experiments/{{experiment_id}}/results
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "arm_id": {{arm_id}},
+#   "metric_name": "accuracy",
+#   "metric_value": 0.87
+# }
+#
+# > {% client.test("evaluation add result: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s6_eval_winner
+GET {{host}}{{api_v1_prefix}}/evaluation/experiments/{{experiment_id}}/winner?metric_name=accuracy
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
+> {% client.test("evaluation winner: 200", function() { client.assert(response.status === 200); }); %}
+
+############################################
+# 2) Edge cases
+############################################
+# @name s6_llm_invoke_invalid_payload
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/llm/invoke
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "prompt": "teste",
+#   "role": "papel_invalido",
+#   "priority": "nao_existe"
+# }
+#
+# > {% client.test("llm/invoke invalido: 422 ou 500", function() { client.assert([422,500].includes(response.status)); }); %}
+#
 ###
-# 12. Remover Ferramenta Dinâmica
-DELETE {{host}}{{api_v1_prefix}}/tools/custom_calculator
-
+# @name s6_llm_reset_unknown_provider
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/llm/circuit-breakers/provider_inexistente/reset
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("llm reset provider invalido: 404 ou 500", function() { client.assert([404,500].includes(response.status)); }); %}
+#
 ###
-# 13. Iniciar AutonomyLoop com Plano Customizado
-POST {{host}}{{api_v1_prefix}}/autonomy/start
-Content-Type: application/json
-
-{
-  "interval_seconds": 15,
-  "auto_confirm": true,
-  "max_actions_per_cycle": 5,
-  "max_seconds_per_cycle": 30,
-  "allowlist": ["get_current_datetime", "list_directory"],
-  "blocklist": [],
-  "plan": [
-    { "tool": "get_current_datetime", "args": {} },
-    { "tool": "list_directory", "args": { "path": "/app/workspace/models" } }
-  ]
-}
-
-###
-# 14. Obter Status do AutonomyLoop
-GET {{host}}{{api_v1_prefix}}/autonomy/status
+# @name s6_eval_winner_missing_exp
+GET {{host}}{{api_v1_prefix}}/evaluation/experiments/999999/winner?metric_name=accuracy
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 15. Obter Plano Atual do AutonomyLoop
-GET {{host}}{{api_v1_prefix}}/autonomy/plan
-Accept: application/json
+> {% client.test("evaluation winner exp inexistente: 200/404", function() { client.assert([200,404].includes(response.status)); }); %}
 
-###
-# 16. Atualizar Plano em Runtime
-PUT {{host}}{{api_v1_prefix}}/autonomy/plan
-Content-Type: application/json
-
-{
-  "plan": [
-    { "tool": "get_current_datetime", "args": {} },
-    { "tool": "list_directory", "args": { "path": "/app/workspace" } }
-  ]
-}
-
-###
-# 17. Tentar Atualizar Plano com Ferramenta Inexistente (Erro 422 esperado)
-PUT {{host}}{{api_v1_prefix}}/autonomy/plan
-Content-Type: application/json
-
-{
-  "plan": [
-    { "tool": "nonexistent_tool", "args": {} }
-  ]
-}
-
-###
-# 17b. Tentar Atualizar Plano com Ferramenta Bloqueada (Erro 422 esperado)
-PUT {{host}}{{api_v1_prefix}}/autonomy/plan
-Content-Type: application/json
-
-{
-  "plan": [
-    { "tool": "list_directory", "args": {} }
-  ]
-}
-
-> Pré-condição: iniciar com `blocklist` contendo `list_directory`.
-
-###
-# 18. Parar AutonomyLoop
-POST {{host}}{{api_v1_prefix}}/autonomy/stop
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

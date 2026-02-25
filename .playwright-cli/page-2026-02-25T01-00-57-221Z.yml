@@ -1,0 +1,65 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e9]:
+        - generic [ref=e10] [cursor=pointer]:
+          - img "Janus" [ref=e13]
+          - generic [ref=e25]: JANUSAI
+        - generic "Status do Sistema" [ref=e29] [cursor=pointer]:
+          - generic [ref=e33]: SYSTEM
+        - navigation "Navegacao principal" [ref=e34]:
+          - link "Inicio" [ref=e35] [cursor=pointer]:
+            - /url: /
+          - button "Sair" [ref=e36] [cursor=pointer]
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - paragraph [ref=e40]: JANUS // CONVERSAS
+            - heading "Converse com o Janus sem friccao" [level=1] [ref=e41]
+            - paragraph [ref=e42]: Escolha uma conversa ou envie sua primeira pergunta. O modo avancado fica opcional.
+          - generic [ref=e43]:
+            - button "add Nova conversa" [ref=e44] [cursor=pointer]:
+              - generic [ref=e45]: add
+              - text: Nova conversa
+            - button "Atualizar" [ref=e46] [cursor=pointer]
+        - generic [ref=e47]:
+          - complementary "Lista de conversas" [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]:
+                - paragraph [ref=e51]: HISTORICO
+                - heading "Conversas" [level=2] [ref=e52]
+              - generic [ref=e54]: "0"
+            - generic [ref=e55]:
+              - generic [ref=e56]: search
+              - textbox "Buscar conversas" [ref=e57]:
+                - /placeholder: Buscar por titulo ou id
+              - button "refresh" [ref=e58] [cursor=pointer]:
+                - generic [ref=e59]: refresh
+            - paragraph [ref=e60]: Nenhuma conversa encontrada.
+          - region "Chat" [ref=e61]:
+            - generic [ref=e62]:
+              - generic [ref=e63]:
+                - img "Janus" [ref=e66]
+                - generic [ref=e78]:
+                  - paragraph [ref=e79]: CONVERSA ATIVA
+                  - heading "Nova conversa" [level=2] [ref=e80]
+                  - paragraph [ref=e81]: ID sem selecao
+              - generic [ref=e82]:
+                - generic [ref=e84]: Aguardando
+                - generic [ref=e86]: 0 msgs
+                - generic [ref=e88]: Modo simples
+                - button "Abrir painel avancado" [ref=e89] [cursor=pointer]
+            - generic [ref=e91]:
+              - heading "Selecione uma conversa" [level=3] [ref=e92]
+              - paragraph [ref=e93]: Escolha uma conversa na coluna lateral ou crie uma nova para comecar.
+              - button "Nova conversa" [ref=e95] [cursor=pointer]
+            - generic [ref=e96]:
+              - paragraph [ref=e97]: "Modo simples ativo: foco na conversa. O Janus escolhe automaticamente a melhor estrategia."
+              - textbox "Descreva a tarefa ou envie uma pergunta..." [ref=e98]
+              - generic [ref=e99]:
+                - button "Limpar" [ref=e100] [cursor=pointer]
+                - button "send Enviar" [ref=e101] [cursor=pointer]:
+                  - generic [ref=e102]: send
+                  - text: Enviar

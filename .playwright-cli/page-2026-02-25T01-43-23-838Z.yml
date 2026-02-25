@@ -1,0 +1,78 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - alert [ref=e103]:
+    - generic [ref=e104]: ⚠ JANUS OFFLINE / MODO DEMONSTRAÇÃO — BACKEND DESCONECTADO — SISTEMA OPERANDO EM ESTADO DE FUNCIONALIDADE REDUZIDA — ALGUNS RECURSOS PODEM ESTAR INDISPONÍVEIS ⚠
+  - main [ref=e4]:
+    - generic [ref=e106]:
+      - generic [ref=e109]:
+        - generic [ref=e110] [cursor=pointer]:
+          - img "Janus" [ref=e113]
+          - generic [ref=e125]: JANUSAI
+        - generic "Status do Sistema" [ref=e129] [cursor=pointer]:
+          - generic [ref=e133]: SYSTEM
+        - navigation "Navegacao principal" [ref=e134]:
+          - link "Inicio" [ref=e135] [cursor=pointer]:
+            - /url: /
+          - button "Sair" [ref=e136] [cursor=pointer]
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - paragraph [ref=e140]: JANUS // CONVERSAS
+            - heading "Converse com o Janus sem friccao" [level=1] [ref=e141]
+            - paragraph [ref=e142]: Escolha uma conversa ou envie sua primeira pergunta. O modo avancado fica opcional.
+          - generic [ref=e143]:
+            - button "add Nova conversa" [ref=e144] [cursor=pointer]:
+              - generic [ref=e145]: add
+              - text: Nova conversa
+            - button "Atualizar" [ref=e146] [cursor=pointer]
+        - generic [ref=e147]:
+          - complementary "Lista de conversas" [ref=e148]:
+            - generic [ref=e149]:
+              - generic [ref=e150]:
+                - paragraph [ref=e151]: HISTORICO
+                - heading "Conversas" [level=2] [ref=e152]
+              - generic [ref=e154]: "1"
+            - generic [ref=e155]:
+              - generic [ref=e156]: search
+              - textbox "Buscar conversas" [ref=e157]:
+                - /placeholder: Buscar por titulo ou id
+              - button "refresh" [ref=e158] [cursor=pointer]:
+                - generic [ref=e159]: refresh
+            - list [ref=e160]:
+              - listitem [ref=e161]:
+                - button "Nova Conversa Sem mensagens ainda ID 18 21 de jan." [ref=e162] [cursor=pointer]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164]: Nova Conversa
+                    - generic [ref=e165]: Sem mensagens ainda
+                  - generic [ref=e166]:
+                    - generic [ref=e167]: ID 18
+                    - generic [ref=e168]: 21 de jan.
+          - region "Chat" [ref=e169]:
+            - generic [ref=e170]:
+              - generic [ref=e171]:
+                - img "Janus" [ref=e174]
+                - generic [ref=e186]:
+                  - paragraph [ref=e187]: CONVERSA ATIVA
+                  - heading "Nova Conversa" [level=2] [ref=e188]
+                  - paragraph [ref=e189]: ID 18
+              - generic [ref=e190]:
+                - generic [ref=e192]: Aguardando
+                - generic [ref=e194]: 0 msgs
+                - generic [ref=e196]: Modo simples
+                - button "Abrir painel avancado" [ref=e197] [cursor=pointer]
+            - generic [ref=e199]:
+              - heading "Nenhuma mensagem ainda" [level=3] [ref=e200]
+              - paragraph [ref=e201]: Envie a primeira pergunta para iniciar esta conversa.
+              - generic [ref=e202]:
+                - button "Resuma esta conversa em 5 pontos." [ref=e203] [cursor=pointer]
+                - button "Quais sao os proximos passos recomendados para este tema?" [ref=e204] [cursor=pointer]
+                - button "Me explique de forma simples, sem jargao tecnico." [ref=e205] [cursor=pointer]
+            - generic [ref=e206]:
+              - paragraph [ref=e207]: "Modo simples ativo: foco na conversa. O Janus escolhe automaticamente a melhor estrategia."
+              - textbox "Descreva a tarefa ou envie uma pergunta..." [ref=e208]
+              - generic [ref=e209]:
+                - button "Limpar" [ref=e210] [cursor=pointer]
+                - button "send Enviar" [ref=e211] [cursor=pointer]:
+                  - generic [ref=e212]: send
+                  - text: Enviar

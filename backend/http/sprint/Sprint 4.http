@@ -1,116 +1,248 @@
 ###
-# SPRINT 4: Sandbox Python Seguro e Ciclo ReAct
-# Testes completos de execução segura de código Python
-###
+    # SPRINT 4: Ferramentas Dinamicas e Reflexion (Tools + Reflexion)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Tools, Reflexion
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Executar Código Python Simples
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
 
-{
-  "code": "result = 2 + 2\nprint(f'A soma é: {result}')"
-}
-
-###
-# 2. Executar Expressão Python
-POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
-Content-Type: application/json
-
-{
-  "expression": "sum([1, 2, 3, 4, 5])"
-}
-
-###
-# 3. Executar Código com Imports Permitidos
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
-
-{
-  "code": "import math\nresult = math.sqrt(16)\nprint(f'Raiz quadrada de 16: {result}')"
-}
-
-###
-# 4. Executar Código com JSON
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
-
-{
-  "code": "import json\ndata = {'name': 'Janus', 'version': '1.0'}\nprint(json.dumps(data, indent=2))"
-}
-
-###
-# 5. Executar Código com Collections
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
-
-{
-  "code": "from collections import Counter\nwords = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple']\ncount = Counter(words)\nprint(count)"
-}
-
-###
-# 6. Executar Expressão Matemática Complexa
-POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
-Content-Type: application/json
-
-{
-  "expression": "[x**2 for x in range(10) if x % 2 == 0]"
-}
-
-###
-# 7. Executar Código com Statistics
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
-
-{
-  "code": "import statistics\ndata = [1.5, 2.5, 3.5, 4.5, 5.5]\nmean = statistics.mean(data)\nmedian = statistics.median(data)\nprint(f'Média: {mean}, Mediana: {median}')"
-}
-
-###
-# 8. Testar Código com Datetime
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
-
-{
-  "code": "from datetime import datetime, timedelta\nnow = datetime.now()\ntomorrow = now + timedelta(days=1)\nprint(f'Hoje: {now.strftime(\"%Y-%m-%d\")}')\nprint(f'Amanhã: {tomorrow.strftime(\"%Y-%m-%d\")}')"
-}
-
-###
-# 9. Listar Capacidades do Sandbox
-GET {{host}}{{api_v1_prefix}}/sandbox/capabilities
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Reflexion] GET /api/v1/reflexion/config
+# - [Reflexion] POST /api/v1/reflexion/execute
+# - [Reflexion] GET /api/v1/reflexion/health
+# - [Reflexion] POST /api/v1/reflexion/reset-circuit-breaker
+# - [Reflexion] GET /api/v1/reflexion/summary/post_sprint
+# - [Tools] GET /api/v1/tools/
+# - [Tools] GET /api/v1/tools/categories/list
+# - [Tools] POST /api/v1/tools/create/from-api
+# - [Tools] POST /api/v1/tools/create/from-function
+# - [Tools] GET /api/v1/tools/permissions/list
+# - [Tools] GET /api/v1/tools/stats/usage
+# - [Tools] DELETE /api/v1/tools/{tool_name}
+# - [Tools] GET /api/v1/tools/{tool_name}
+
+############################################
+# 1) Tools + Reflexion (happy path)
+############################################
+# @name s4_tools_list
+GET {{host}}{{api_v1_prefix}}/tools/
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("tools/list: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 10. Executar Código que Deve Falhar (Import Não Permitido)
-# Este teste deve retornar erro de forma controlada
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
+# @name s4_tools_categories
+GET {{host}}{{api_v1_prefix}}/tools/categories/list
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "code": "import os\nprint(os.listdir('/'))"
-}
-
-###
-# 11. Avaliar Expressão com List Comprehension
-POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
-Content-Type: application/json
-
-{
-  "expression": "[x for x in range(20) if x % 3 == 0]"
-}
+> {% client.test("tools/categories: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 12. Executar Código com Context Variables
-POST {{host}}{{api_v1_prefix}}/sandbox/execute
-Content-Type: application/json
+# @name s4_tools_permissions
+GET {{host}}{{api_v1_prefix}}/tools/permissions/list
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "code": "result = base_value * multiplier\nprint(f'Resultado: {result}')",
-  "context": {
-    "base_value": 10,
-    "multiplier": 5
-  }
-}
+> {% client.test("tools/permissions: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s4_tool_create_function
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/tools/create/from-function
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "name": "custom_demo_tool",
+#   "description": "Soma dois inteiros",
+#   "code": "def execute(a: int, b: int) -> int:\n    return a + b",
+#   "function_name": "execute",
+#   "category": "custom",
+#   "permission_level": "safe",
+#   "tags": ["demo"]
+# }
+#
+# > {% client.test("create tool function: 201 ou 400", function() { client.assert([201,400].includes(response.status)); }); %}
+#
+###
+# @name s4_tool_get
+GET {{host}}{{api_v1_prefix}}/tools/custom_demo_tool
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("get tool: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
+
+###
+# @name s4_tools_stats
+GET {{host}}{{api_v1_prefix}}/tools/stats/usage
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("tools stats: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s4_reflexion_config
+GET {{host}}{{api_v1_prefix}}/reflexion/config
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("reflexion/config: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s4_reflexion_health
+GET {{host}}{{api_v1_prefix}}/reflexion/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("reflexion/health: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
+
+###
+# @name s4_reflexion_execute
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/reflexion/execute
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "task": "Explique uma estrategia simples para tratar poison pills",
+#   "max_iterations": 2,
+#   "max_time_seconds": 60,
+#   "success_threshold": 0.6
+# }
+#
+# > {% client.test("reflexion/execute: 200 ou 500", function() { client.assert([200,500].includes(response.status)); }); %}
+#
+###
+# @name s4_reflexion_summary
+GET {{host}}{{api_v1_prefix}}/reflexion/summary/post_sprint?limit=5&timeframe_seconds=3600
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("reflexion summary: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s4_tool_delete
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# DELETE {{host}}{{api_v1_prefix}}/tools/custom_demo_tool
+# Accept: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("delete tool: 204 ou 404", function() { client.assert([204,404].includes(response.status)); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s4_tool_create_invalid
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/tools/create/from-function
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "name": "bad_tool",
+#   "description": "Codigo invalido",
+#   "code": "def execute(:",
+#   "function_name": "execute"
+# }
+#
+# > {% client.test("create tool invalido: 400 ou 422", function() { client.assert([400,422].includes(response.status)); }); %}
+#
+###
+# @name s4_reflexion_invalid_payload
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/reflexion/execute
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "task": "",
+#   "max_iterations": 0
+# }
+#
+# > {% client.test("reflexion payload invalido: 422", function() { client.assert(response.status === 422); }); %}
+#
+### OPTIONAL-DESTRUCTIVE
+# POST {{host}}{{api_v1_prefix}}/reflexion/reset-circuit-breaker
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

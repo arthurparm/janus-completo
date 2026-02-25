@@ -31,7 +31,13 @@
     "@angular/compiler": "$@angular/compiler",
     "@angular/compiler-cli": "$@angular/compiler-cli",
     "@angular/core": "$@angular/core",
+    "@angular-devkit/core": {
+      "ajv": "8.18.0"
+    },
     "@angular/forms": "$@angular/forms",
+    "@modelcontextprotocol/sdk": {
+      "ajv": "8.18.0"
+    },
     "@angular/platform-browser": "$@angular/platform-browser",
     "@angular/platform-browser-dynamic": "$@angular/platform-browser-dynamic",
     "@angular/router": "$@angular/router"

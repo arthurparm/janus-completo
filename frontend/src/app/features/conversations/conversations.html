@@ -190,6 +190,78 @@
                         }
                       </div>
                     }
+                    @if (msg.role === 'assistant' && !msg.streaming) {
+                      <div class="message-feedback">
+                        <div class="feedback-row">
+                          @if (feedbackState(msg).submitted && !feedbackState(msg).error) {
+                            <div class="feedback-pill success" aria-live="polite">
+                              <span class="material-icons">check_circle</span>
+                              <span>{{ feedbackState(msg).serverMessage || 'Feedback enviado' }}</span>
+                            </div>
+                          } @else {
+                            <div class="feedback-actions-inline" role="group" aria-label="Ações de feedback da resposta">
+                              <button
+                                ui-button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                (click)="sendThumbsUp(msg)"
+                                [disabled]="feedbackState(msg).submitting || feedbackState(msg).submitted"
+                                aria-label="Gostei desta resposta">
+                                👍
+                              </button>
+                              <button
+                                ui-button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                (click)="sendThumbsDown(msg)"
+                                [disabled]="feedbackState(msg).submitting || feedbackState(msg).submitted"
+                                aria-label="Não gostei desta resposta">
+                                👎
+                              </button>
+                            </div>
+                          }
+                          <button
+                            class="feedback-comment-toggle"
+                            type="button"
+                            (click)="toggleFeedbackComment(msg.id)"
+                            [disabled]="feedbackState(msg).submitting"
+                            [attr.aria-expanded]="feedbackState(msg).commentOpen"
+                            [attr.aria-controls]="'feedback-comment-' + msg.id">
+                            {{ feedbackState(msg).commentOpen ? 'Ocultar comentário' : 'Adicionar comentário' }}
+                          </button>
+                        </div>
+                        @if (feedbackState(msg).commentOpen) {
+                          <div class="feedback-comment-box" [id]="'feedback-comment-' + msg.id">
+                            <textarea
+                              rows="2"
+                              placeholder="O que faltou? O que melhoraria? (opcional)"
+                              [value]="feedbackCommentDraft(msg.id)"
+                              (input)="onFeedbackCommentInput(msg.id, $event)">
+                            </textarea>
+                            <div class="feedback-comment-actions">
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="sendThumbsUp(msg)" [disabled]="feedbackState(msg).submitting">Enviar 👍</button>
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="sendThumbsDown(msg)" [disabled]="feedbackState(msg).submitting">Enviar 👎</button>
+                            </div>
+                          </div>
+                        }
+                        @if (feedbackState(msg).error) {
+                          <div class="feedback-error-row">
+                            <p class="muted feedback-status error">{{ feedbackState(msg).error }}</p>
+                            <button
+                              ui-button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              (click)="feedbackState(msg).rating === 'negative' ? sendThumbsDown(msg) : sendThumbsUp(msg)"
+                              [disabled]="feedbackState(msg).submitting">
+                              Tentar novamente
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
                   </div>
                 </article>
               }
@@ -271,219 +343,732 @@
 
       @if (showAdvanced()) {
       <aside class="convo-panel convo-rail" aria-label="Contexto">
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Explicacao da resposta</h3>
+        <header class="rail-header">
+          <div>
+            <p class="eyebrow">PAINEL AVANCADO</p>
+            <h3>Contexto, cliente e autonomia</h3>
+            <p class="muted rail-subtitle">Use as abas para reduzir ruído e focar na etapa atual da conversa.</p>
           </div>
-          @if (latestAssistantMessage(); as latest) {
-            <div class="explain-card">
-              <div class="explain-grid">
-                <span class="metric-pill">Fontes: {{ latest.citations?.length || 0 }}</span>
-                <span class="metric-pill">Confianca: {{ understandingConfidence(latest.understanding) }}</span>
-                <span class="metric-pill">Latencia: {{ formatLatency(latest.latency_ms) }}</span>
+          <div class="segmented-tabs" role="tablist" aria-label="Abas do painel avançado">
+            <button
+              id="advanced-tab-insights"
+              type="button"
+              role="tab"
+              class="segmented-tab"
+              [class.active]="advancedRailTab() === 'insights'"
+              [attr.aria-selected]="advancedRailTab() === 'insights'"
+              [attr.tabindex]="advancedRailTab() === 'insights' ? 0 : -1"
+              aria-controls="advanced-tabpanel-insights"
+              (keydown)="onAdvancedRailTabKeydown($event)"
+              (click)="setAdvancedRailTab('insights')">
+              Insights
+            </button>
+            <button
+              id="advanced-tab-cliente"
+              type="button"
+              role="tab"
+              class="segmented-tab"
+              [class.active]="advancedRailTab() === 'cliente'"
+              [attr.aria-selected]="advancedRailTab() === 'cliente'"
+              [attr.tabindex]="advancedRailTab() === 'cliente' ? 0 : -1"
+              aria-controls="advanced-tabpanel-cliente"
+              (keydown)="onAdvancedRailTabKeydown($event)"
+              (click)="setAdvancedRailTab('cliente')">
+              Cliente
+            </button>
+            <button
+              id="advanced-tab-autonomia"
+              type="button"
+              role="tab"
+              class="segmented-tab"
+              [class.active]="advancedRailTab() === 'autonomia'"
+              [attr.aria-selected]="advancedRailTab() === 'autonomia'"
+              [attr.tabindex]="advancedRailTab() === 'autonomia' ? 0 : -1"
+              aria-controls="advanced-tabpanel-autonomia"
+              (keydown)="onAdvancedRailTabKeydown($event)"
+              (click)="setAdvancedRailTab('autonomia')">
+              Autonomia
+            </button>
+          </div>
+        </header>
+
+        @if (advancedRailTab() === 'insights') {
+          <div id="advanced-tabpanel-insights" class="rail-tab-panel" role="tabpanel" aria-labelledby="advanced-tab-insights">
+            <section class="rail-section">
+              <div class="panel-head">
+                <h3>Explicacao da resposta</h3>
               </div>
-              @if (latest.provider || latest.model) {
-                <p class="muted">Modelo: {{ latest.provider || '--' }} / {{ latest.model || '--' }}</p>
-              }
-              @if (latest.understanding?.summary) {
-                <p class="muted">{{ latest.understanding?.summary }}</p>
-              }
-            </div>
-          } @else {
-            <p class="muted">Envie uma mensagem para visualizar fontes, confianca e latencia.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Thought stream</h3>
-            <ui-badge variant="info">{{ thoughtStream().length }}</ui-badge>
-          </div>
-          @if (thoughtStream().length) {
-            <ul class="thought-list">
-              @for (item of thoughtStream(); track item.id) {
-                <li class="thought-item" [class.agent]="item.kind === 'agent'" [class.stream]="item.kind === 'stream'" [class.system]="item.kind === 'system'">
-                  <div class="thought-head">
-                    <span class="thought-icon material-icons">{{ thoughtIcon(item) }}</span>
-                    <strong>{{ item.title }}</strong>
-                    <span class="muted">{{ formatTime(item.timestamp) }}</span>
+              @if (latestAssistantMessage(); as latest) {
+                <div class="explain-card">
+                  <div class="explain-grid">
+                    <span class="metric-pill">Fontes: {{ latest.citations?.length || 0 }}</span>
+                    <span class="metric-pill">Confianca: {{ understandingConfidence(latest.understanding) }}</span>
+                    <span class="metric-pill">Latencia: {{ formatLatency(latest.latency_ms) }}</span>
                   </div>
-                  <p>{{ item.text }}</p>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="muted">Ainda sem atividade em tempo real.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Trace tecnico</h3>
-            <button ui-button variant="ghost" size="sm" (click)="toggleTrace()">
-              {{ showTrace() ? 'Ocultar' : 'Carregar' }}
-            </button>
-          </div>
-          @if (showTrace()) {
-            @if (traceSteps().length) {
-              <ul class="trace-list">
-                @for (step of traceSteps(); track step.stepId) {
-                  <li class="trace-item">
-                    <div class="trace-header">
-                      <span class="agent-badge">{{ step.agent }}</span>
-                      <span class="trace-time">{{ formatTime(step.timestamp * 1000) }}</span>
-                    </div>
-                    <div class="trace-content">
-                      <strong>{{ step.type }}</strong>
-                      <p>{{ step.content }}</p>
-                    </div>
-                  </li>
-                }
-              </ul>
-            } @else {
-              <p class="muted">Nenhum rastro tecnico disponivel.</p>
-            }
-          } @else {
-            <p class="muted">Ative para carregar a trilha detalhada por etapa.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Documentos</h3>
-            <ui-badge variant="neutral">{{ docs().length }}</ui-badge>
-          </div>
-          @if (contextLoading()) {
-            <app-skeleton variant="text" [count]="3"></app-skeleton>
-          } @else if (docs().length) {
-            <ul class="rail-list">
-              @for (doc of docs(); track doc.doc_id) {
-                <li class="rail-item">
-                  <div>
-                    <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
-                    <span class="muted">{{ doc.chunks }} blocos</span>
-                  </div>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="muted">Sem documentos vinculados.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Memoria da conversa</h3>
-            <ui-badge variant="neutral">{{ conversationMemory().length }}</ui-badge>
-          </div>
-          @if (contextLoading()) {
-            <app-skeleton variant="text" [count]="3"></app-skeleton>
-          } @else if (conversationMemory().length) {
-            <ul class="rail-list">
-              @for (item of conversationMemory(); track item.ts_ms) {
-                <li class="rail-item">
-                  <p>{{ item.content }}</p>
-                  <span class="muted">{{ formatDate(item.ts_ms) }}</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="muted">Sem memoria vinculada a esta conversa.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Memoria do usuario</h3>
-            <ui-badge variant="neutral">{{ userMemory().length }}</ui-badge>
-          </div>
-          @if (contextLoading()) {
-            <app-skeleton variant="text" [count]="3"></app-skeleton>
-          } @else if (userMemory().length) {
-            <ul class="rail-list">
-              @for (item of userMemory(); track item.ts_ms) {
-                <li class="rail-item">
-                  <p>{{ item.content }}</p>
-                  <span class="muted">{{ formatDate(item.ts_ms) }}</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="muted">Sem memoria de usuario recente.</p>
-          }
-        </section>
-
-        <section class="rail-section">
-          <div class="panel-head">
-            <h3>Autonomia</h3>
-            <button ui-button variant="ghost" size="sm" type="button" (click)="refreshAutonomy()" [disabled]="autonomyLoading() || autonomySaving()">
-              Atualizar
-            </button>
-          </div>
-          @if (autonomyError()) {
-            <div class="inline-alert" role="alert">
-              <span class="material-icons">error_outline</span>
-              {{ autonomyError() }}
-            </div>
-          }
-          @if (autonomyLoading()) {
-            <app-skeleton variant="text" [count]="4"></app-skeleton>
-          } @else {
-            <div class="autonomy-status">
-              <span class="metric-pill">Loop: {{ autonomyStatus()?.active ? 'Ativo' : 'Inativo' }}</span>
-              <span class="metric-pill">Ciclos: {{ autonomyStatus()?.cycle_count ?? 0 }}</span>
-              <span class="metric-pill">Risco: {{ autonomyStatus()?.config?.risk_profile || 'balanced' }}</span>
-            </div>
-            <div class="autonomy-actions">
-              <button ui-button variant="default" size="sm" type="button" (click)="toggleAutonomyLoop()" [disabled]="autonomySaving()">
-                {{ autonomyStatus()?.active ? 'Parar loop' : 'Iniciar loop' }}
-              </button>
-            </div>
-            <div class="autonomy-split">
-              <div>
-                <div class="panel-head">
-                  <h4>Metas estrategicas</h4>
-                  <ui-badge variant="neutral">{{ autonomyActiveGoals().length }}</ui-badge>
+                  @if (latest.provider || latest.model) {
+                    <p class="muted">Modelo: {{ latest.provider || '--' }} / {{ latest.model || '--' }}</p>
+                  }
+                  @if (latest.understanding?.summary) {
+                    <p class="muted">{{ latest.understanding?.summary }}</p>
+                  }
                 </div>
-                @if (autonomyActiveGoals().length) {
-                  <ul class="rail-list compact">
-                    @for (goal of autonomyActiveGoals(); track goal.id) {
-                      <li class="rail-item">
-                        <p class="item-title">{{ goal.title }}</p>
-                        <span class="muted">{{ goalStatusLabel(goal) }}</span>
-                        <div class="goal-actions">
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'completed')" [disabled]="autonomySaving()">Concluir</button>
+              } @else {
+                <p class="muted">Envie uma mensagem para visualizar fontes, confianca e latencia.</p>
+              }
+            </section>
+
+            <section class="rail-section">
+              <div class="panel-head">
+                <h3>Thought stream</h3>
+                <ui-badge variant="info">{{ thoughtStream().length }}</ui-badge>
+              </div>
+              @if (thoughtStream().length) {
+                <ul class="thought-list">
+                  @for (item of thoughtStream(); track item.id) {
+                    <li class="thought-item" [class.agent]="item.kind === 'agent'" [class.stream]="item.kind === 'stream'" [class.system]="item.kind === 'system'">
+                      <div class="thought-head">
+                        <span class="thought-icon material-icons">{{ thoughtIcon(item) }}</span>
+                        <strong>{{ item.title }}</strong>
+                        <span class="muted">{{ formatTime(item.timestamp) }}</span>
+                      </div>
+                      <p>{{ item.text }}</p>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="muted">Ainda sem atividade em tempo real.</p>
+              }
+            </section>
+
+            <section class="rail-section">
+              <div class="panel-head">
+                <h3>Trace tecnico</h3>
+                <button ui-button variant="ghost" size="sm" (click)="toggleTrace()">
+                  {{ showTrace() ? 'Ocultar' : 'Carregar' }}
+                </button>
+              </div>
+              @if (showTrace()) {
+                @if (traceSteps().length) {
+                  <ul class="trace-list">
+                    @for (step of traceSteps(); track step.stepId) {
+                      <li class="trace-item">
+                        <div class="trace-header">
+                          <span class="agent-badge">{{ step.agent }}</span>
+                          <span class="trace-time">{{ formatTime(step.timestamp * 1000) }}</span>
+                        </div>
+                        <div class="trace-content">
+                          <strong>{{ step.type }}</strong>
+                          <p>{{ step.content }}</p>
                         </div>
                       </li>
                     }
                   </ul>
                 } @else {
-                  <p class="muted">Sem metas ativas.</p>
+                  <p class="muted">Nenhum rastro tecnico disponivel.</p>
                 }
-              </div>
-              <div>
-                <div class="panel-head">
-                  <h4>Ferramentas ativas</h4>
-                  <ui-badge variant="neutral">{{ autonomyEnabledTools().length }}</ui-badge>
+              } @else {
+                <p class="muted">Ative para carregar a trilha detalhada por etapa.</p>
+              }
+            </section>
+          </div>
+        }
+
+        @if (advancedRailTab() === 'cliente') {
+          <div id="advanced-tabpanel-cliente" class="rail-tab-panel" role="tabpanel" aria-labelledby="advanced-tab-cliente">
+            <section class="rail-section customer-tools">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">RECURSOS DO CLIENTE</p>
+                  <h3>Documentos, memoria e RAG</h3>
+                  <p class="muted">Anexe contexto, recupere memória e rode consultas RAG sem sair da conversa.</p>
                 </div>
-                @if (autonomyEnabledTools().length) {
-                  <div class="tool-chips">
-                    @for (tool of autonomyEnabledTools(); track tool.name) {
-                      <span class="chip">{{ tool.name }}</span>
+              </div>
+
+              <div class="segmented-tabs customer-tabs" role="tablist" aria-label="Abas de recursos do cliente">
+                <button
+                  id="customer-tab-docs"
+                  type="button"
+                  role="tab"
+                  class="segmented-tab customer docs"
+                  [class.active]="customerTab() === 'docs'"
+                  [attr.aria-selected]="customerTab() === 'docs'"
+                  [attr.tabindex]="customerTab() === 'docs' ? 0 : -1"
+                  aria-controls="customer-tabpanel-docs"
+                  (keydown)="onCustomerTabKeydown($event)"
+                  (click)="setCustomerTab('docs')">
+                  Docs
+                </button>
+                <button
+                  id="customer-tab-memoria"
+                  type="button"
+                  role="tab"
+                  class="segmented-tab customer memoria"
+                  [class.active]="customerTab() === 'memoria'"
+                  [attr.aria-selected]="customerTab() === 'memoria'"
+                  [attr.tabindex]="customerTab() === 'memoria' ? 0 : -1"
+                  aria-controls="customer-tabpanel-memoria"
+                  (keydown)="onCustomerTabKeydown($event)"
+                  (click)="setCustomerTab('memoria')">
+                  Memoria
+                </button>
+                <button
+                  id="customer-tab-rag"
+                  type="button"
+                  role="tab"
+                  class="segmented-tab customer rag"
+                  [class.active]="customerTab() === 'rag'"
+                  [attr.aria-selected]="customerTab() === 'rag'"
+                  [attr.tabindex]="customerTab() === 'rag' ? 0 : -1"
+                  aria-controls="customer-tabpanel-rag"
+                  (keydown)="onCustomerTabKeydown($event)"
+                  (click)="setCustomerTab('rag')">
+                  RAG
+                </button>
+              </div>
+
+              @if (customerTab() === 'docs') {
+                <div id="customer-tabpanel-docs" class="rail-tab-panel nested" role="tabpanel" aria-labelledby="customer-tab-docs">
+                  <div class="customer-card accent-docs">
+                    <div class="panel-head">
+                      <div>
+                        <h4>Ingestao de documentos</h4>
+                        <p class="muted section-help">Vincule uma URL ou envie um arquivo para enriquecer o contexto desta conversa.</p>
+                      </div>
+                      <ui-badge variant="neutral">{{ docs().length }}</ui-badge>
+                    </div>
+                    @if (docsNotice(); as notice) {
+                      <div class="section-notice" [class.is-success]="notice.kind === 'success'" [class.is-info]="notice.kind === 'info'" [class.is-warning]="notice.kind === 'warning'" [class.is-error]="notice.kind === 'error'" role="status" aria-live="polite">
+                        <span class="material-icons">{{ notice.kind === 'success' ? 'check_circle' : notice.kind === 'error' ? 'error_outline' : 'info' }}</span>
+                        <span>{{ notice.message }}</span>
+                      </div>
+                    }
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Vincular URL</label>
+                        <p class="muted section-help compact">Use para importar conteúdo público e indexar na conversa atual.</p>
+                        <div class="inline-form">
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            [value]="docLinkUrl()"
+                            (input)="onDocLinkInput($event)" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="linkDocumentUrl()" [disabled]="docLinkLoading()">
+                            {{ docLinkLoading() ? 'Vinculando...' : 'Vincular' }}
+                          </button>
+                        </div>
+                        @if (docLinkError()) {
+                          <p class="muted field-error" [class.is-business]="isBusinessDocError(docLinkError())">{{ docLinkError() }}</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Upload de arquivo</label>
+                        <p class="muted section-help compact">Arquivos ficam vinculados à conversa e entram no contexto das próximas respostas.</p>
+                        <div class="inline-form file-form">
+                          <input type="file" (change)="onDocFileSelected($event)" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="uploadSelectedDoc()" [disabled]="docUploadInFlight() || !selectedUploadFile()">
+                            {{ docUploadInFlight() ? 'Enviando...' : 'Upload' }}
+                          </button>
+                        </div>
+                        @if (selectedUploadFile()) {
+                          <p class="muted">Arquivo: {{ selectedUploadFile()?.name }}</p>
+                        }
+                        @if (docUploadProgress() !== null) {
+                          <div class="progress-row" aria-label="Progresso do upload">
+                            <div class="progress-track">
+                              <div class="progress-fill" [style.width.%]="docUploadProgress() || 0"></div>
+                            </div>
+                            <span class="muted">{{ docUploadProgress() }}%</span>
+                          </div>
+                          <p class="muted section-help compact">Progresso do envio e processamento inicial do arquivo.</p>
+                        }
+                        @if (docUploadError()) {
+                          <p class="muted field-error" [class.is-business]="isBusinessDocError(docUploadError())">{{ docUploadError() }}</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Buscar em documentos</label>
+                        <p class="muted section-help compact">Recupere trechos indexados por similaridade para validar contexto rapidamente.</p>
+                        <div class="inline-form">
+                          <input
+                            type="text"
+                            placeholder="Buscar por conteúdo/index..."
+                            [value]="docSearchQuery()"
+                            (input)="onDocSearchInput($event)"
+                            (keydown.enter)="searchDocs()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="searchDocs()" [disabled]="docSearchLoading()">
+                            {{ docSearchLoading() ? 'Buscando...' : 'Buscar' }}
+                          </button>
+                        </div>
+                        @if (docSearchError()) {
+                          <p class="muted field-error">{{ docSearchError() }}</p>
+                        }
+                        @if (docSearchResults().length) {
+                          <ul class="rail-list compact">
+                            @for (item of docSearchResults(); track item.id) {
+                              <li class="rail-item compact-item doc-search-item">
+                                <div class="rail-title">
+                                  <span class="item-title">{{ item.file_name || item.doc_id }}</span>
+                                  <span class="muted">{{ item.score ? (item.score * 100).toFixed(0) + '%' : '--' }}</span>
+                                </div>
+                                <span class="muted doc-meta-line">doc {{ item.doc_id }} · chunk {{ item.index ?? '--' }}</span>
+                                @if (item['content']) {
+                                  <p class="doc-snippet">{{ item['content'] }}</p>
+                                }
+                              </li>
+                            }
+                          </ul>
+                        } @else if (docSearchQuery().trim() && !docSearchLoading() && !docSearchError()) {
+                          <p class="muted">Nenhum trecho encontrado para esta busca.</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="panel-head compact-head">
+                        <h4>Biblioteca da conversa</h4>
+                        <ui-badge variant="neutral">{{ docs().length }}</ui-badge>
+                      </div>
+                      @if (contextLoading()) {
+                        <app-skeleton variant="text" [count]="3"></app-skeleton>
+                      } @else if (docs().length) {
+                        <ul class="rail-list compact doc-library-list">
+                          @for (doc of docs(); track doc.doc_id) {
+                            <li class="rail-item compact-item doc-library-item">
+                              <div class="rail-title doc-action-row">
+                                <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
+                                <button ui-button variant="ghost" size="sm" type="button" (click)="deleteDoc(doc.doc_id)" [disabled]="deletingDocIds()[doc.doc_id]">
+                                  {{ deletingDocIds()[doc.doc_id] ? 'Excluindo...' : 'Excluir' }}
+                                </button>
+                              </div>
+                              <span class="muted doc-meta-line">{{ doc.chunks }} blocos · conv {{ doc.conversation_id || 'global' }}</span>
+                            </li>
+                          }
+                        </ul>
+                      } @else {
+                        <p class="muted">Sem documentos vinculados a esta conversa.</p>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+
+              @if (customerTab() === 'memoria') {
+                <div id="customer-tabpanel-memoria" class="rail-tab-panel nested" role="tabpanel" aria-labelledby="customer-tab-memoria">
+                  <div class="customer-card accent-memory">
+                    <div class="panel-head">
+                      <div>
+                        <h4>Memoria generativa</h4>
+                        <p class="muted section-help">Guarde fatos importantes do cliente e recupere contexto recorrente.</p>
+                      </div>
+                      <ui-badge variant="neutral">{{ generativeMemoryResults().length }}</ui-badge>
+                    </div>
+                    @if (memoryNotice(); as notice) {
+                      <div class="section-notice" [class.is-success]="notice.kind === 'success'" [class.is-info]="notice.kind === 'info'" [class.is-warning]="notice.kind === 'warning'" [class.is-error]="notice.kind === 'error'" role="status" aria-live="polite">
+                        <span class="material-icons">{{ notice.kind === 'success' ? 'check_circle' : notice.kind === 'error' ? 'error_outline' : 'info' }}</span>
+                        <span>{{ notice.message }}</span>
+                      </div>
+                    }
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Adicionar memória</label>
+                        <textarea
+                          rows="2"
+                          placeholder="Fato, preferência ou contexto importante do cliente..."
+                          [value]="memoryDraft()"
+                          (input)="onMemoryDraftInput($event)">
+                        </textarea>
+                        <div class="memory-config-group">
+                          <p class="field-label">Configurações</p>
+                          <div class="inline-form memory-config-form">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              step="1"
+                              placeholder="Importância 0-10 (opcional)"
+                              [value]="memoryImportance() ?? ''"
+                              (input)="onMemoryImportanceInput($event)" />
+                            <select [value]="memoryType()" (change)="onMemoryTypeChange($event)">
+                              <option value="episodic">Episódica</option>
+                              <option value="semantic">Semântica</option>
+                              <option value="procedural">Procedural</option>
+                            </select>
+                            <button ui-button variant="ghost" size="sm" type="button" (click)="addMemory()" [disabled]="memoryAddLoading()">
+                              {{ memoryAddLoading() ? 'Salvando...' : 'Adicionar' }}
+                            </button>
+                          </div>
+                        </div>
+                        @if (memoryAddError()) {
+                          <p class="muted field-error">{{ memoryAddError() }}</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Buscar memória generativa</label>
+                        <div class="inline-form">
+                          <input
+                            type="text"
+                            placeholder="Ex.: preferências do cliente"
+                            [value]="memorySearchQuery()"
+                            (input)="onMemorySearchQueryInput($event)"
+                            (keydown.enter)="searchGenerativeMemory()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="searchGenerativeMemory()" [disabled]="memorySearchLoading()">
+                            {{ memorySearchLoading() ? 'Buscando...' : 'Buscar' }}
+                          </button>
+                        </div>
+                        @if (memorySearchError()) {
+                          <p class="muted field-error">{{ memorySearchError() }}</p>
+                        }
+                        @if (generativeMemoryResults().length) {
+                          <ul class="rail-list compact">
+                            @for (item of generativeMemoryResults(); track $index) {
+                              <li class="rail-item compact-item memory-list-item">
+                                <p class="memory-content">{{ item.content }}</p>
+                                <span class="muted memory-meta-line">{{ memoryTypeLabel(item.type) }}</span>
+                              </li>
+                            }
+                          </ul>
+                        } @else if (memorySearchQuery().trim() && !memorySearchLoading() && !memorySearchError()) {
+                          <p class="muted">Nenhuma memória encontrada para a busca atual.</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="panel-head compact-head">
+                        <h4>Memória da conversa</h4>
+                        <ui-badge variant="neutral">{{ conversationMemory().length }}</ui-badge>
+                      </div>
+                      @if (contextLoading()) {
+                        <app-skeleton variant="text" [count]="3"></app-skeleton>
+                      } @else if (conversationMemory().length) {
+                        <ul class="rail-list compact">
+                          @for (item of conversationMemory(); track item.ts_ms) {
+                            <li class="rail-item compact-item memory-list-item">
+                              <p class="memory-content">{{ item.content }}</p>
+                              <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>
+                            </li>
+                          }
+                        </ul>
+                      } @else {
+                        <p class="muted">Sem memória vinculada a esta conversa.</p>
+                      }
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="panel-head compact-head">
+                        <h4>Memória do usuário</h4>
+                        <ui-badge variant="neutral">{{ userMemory().length }}</ui-badge>
+                      </div>
+                      @if (contextLoading()) {
+                        <app-skeleton variant="text" [count]="3"></app-skeleton>
+                      } @else if (userMemory().length) {
+                        <ul class="rail-list compact">
+                          @for (item of userMemory(); track item.ts_ms) {
+                            <li class="rail-item compact-item memory-list-item">
+                              <p class="memory-content">{{ item.content }}</p>
+                              <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>
+                            </li>
+                          }
+                        </ul>
+                      } @else {
+                        <p class="muted">Sem memória de usuário recente.</p>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+
+              @if (customerTab() === 'rag') {
+                <div id="customer-tabpanel-rag" class="rail-tab-panel nested" role="tabpanel" aria-labelledby="customer-tab-rag">
+                  <div class="customer-card accent-rag">
+                    <div class="panel-head">
+                      <div>
+                        <h4>Consulta RAG</h4>
+                        <p class="muted section-help">Use o modo certo para buscar em documentos, memória ou contexto pessoal.</p>
+                      </div>
+                      <ui-badge [variant]="ragLoading() ? 'warning' : 'info'">{{ ragLoading() ? 'Executando' : 'Pronto' }}</ui-badge>
+                    </div>
+                    @if (ragNotice(); as notice) {
+                      <div class="section-notice" [class.is-success]="notice.kind === 'success'" [class.is-info]="notice.kind === 'info'" [class.is-warning]="notice.kind === 'warning'" [class.is-error]="notice.kind === 'error'" role="status" aria-live="polite">
+                        <span class="material-icons">{{ notice.kind === 'success' ? 'check_circle' : notice.kind === 'error' ? 'error_outline' : 'info' }}</span>
+                        <span>{{ notice.message }}</span>
+                      </div>
+                    }
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Modo de consulta</label>
+                        <select [value]="ragMode()" (change)="onRagModeChange($event)">
+                          <option value="hybrid_search">Híbrido (Vetor + Grafo)</option>
+                          <option value="search">Busca vetorial</option>
+                          <option value="user-chat">Chat pessoal (v1)</option>
+                          <option value="user_chat">Chat pessoal (v2)</option>
+                          <option value="productivity">Produtividade</option>
+                        </select>
+                        <p class="muted rag-mode-hint">{{ ragModeHint(ragMode()) }}</p>
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="stack-gap-sm">
+                        <label class="field-label">Consulta</label>
+                        <div class="inline-form">
+                          <input
+                            type="text"
+                            placeholder="Pergunte sobre contexto, docs ou conversa..."
+                            [value]="ragQuery()"
+                            (input)="onRagQueryInput($event)"
+                            (keydown.enter)="runRagQuery()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="runRagQuery()" [disabled]="ragLoading()">
+                            {{ ragLoading() ? 'Consultando...' : 'Executar' }}
+                          </button>
+                        </div>
+                        @if (ragError()) {
+                          <p class="muted field-error">{{ ragError() }}</p>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="customer-subcard">
+                      <div class="panel-head compact-head">
+                        <h4>Resultado</h4>
+                        @if (ragResult(); as rr) {
+                          <ui-badge variant="neutral">{{ ragModeLabel(rr.mode) }}</ui-badge>
+                        }
+                      </div>
+
+                      @if (ragResult(); as rr) {
+                        <div class="rag-result-card">
+                          <div class="rag-result-head">
+                            <span class="metric-pill">Modo: {{ ragModeLabel(rr.mode) }}</span>
+                            <span class="metric-pill">Fontes: {{ rr.citations?.length || 0 }}</span>
+                            <span class="metric-pill">Resultados: {{ rr.results?.length || 0 }}</span>
+                          </div>
+                          <div class="rag-view-tabs" role="tablist" aria-label="Visualização do resultado RAG">
+                            <button
+                              id="rag-view-tab-resposta"
+                              type="button"
+                              role="tab"
+                              class="rag-view-tab"
+                              [class.active]="ragResultViewTab() === 'resposta'"
+                              [attr.aria-selected]="ragResultViewTab() === 'resposta'"
+                              [attr.tabindex]="ragResultViewTab() === 'resposta' ? 0 : -1"
+                              aria-controls="rag-view-panel-resposta"
+                              (keydown)="onRagResultTabKeydown($event)"
+                              (click)="setRagResultViewTab('resposta')">
+                              Resposta
+                            </button>
+                            <button
+                              id="rag-view-tab-fontes"
+                              type="button"
+                              role="tab"
+                              class="rag-view-tab"
+                              [class.active]="ragResultViewTab() === 'fontes'"
+                              [attr.aria-selected]="ragResultViewTab() === 'fontes'"
+                              [attr.tabindex]="ragResultViewTab() === 'fontes' ? 0 : -1"
+                              aria-controls="rag-view-panel-fontes"
+                              (keydown)="onRagResultTabKeydown($event)"
+                              (click)="setRagResultViewTab('fontes')">
+                              Fontes
+                            </button>
+                            <button
+                              id="rag-view-tab-raw"
+                              type="button"
+                              role="tab"
+                              class="rag-view-tab"
+                              [class.active]="ragResultViewTab() === 'raw'"
+                              [attr.aria-selected]="ragResultViewTab() === 'raw'"
+                              [attr.tabindex]="ragResultViewTab() === 'raw' ? 0 : -1"
+                              aria-controls="rag-view-panel-raw"
+                              (keydown)="onRagResultTabKeydown($event)"
+                              (click)="setRagResultViewTab('raw')">
+                              Raw
+                            </button>
+                          </div>
+
+                          @if (ragResultViewTab() === 'resposta') {
+                            <div id="rag-view-panel-resposta" class="rag-view-panel" role="tabpanel" aria-labelledby="rag-view-tab-resposta">
+                              @if (rr.answer) {
+                                <div class="markdown-content" [innerHTML]="rr.answer | markdown"></div>
+                              } @else if (rr.results?.length) {
+                                <p class="muted rag-result-empty">Esta consulta retornou dados estruturados. Abra a aba <strong>Raw</strong> para inspecionar o resultado.</p>
+                              } @else {
+                                <p class="muted rag-result-empty">Nenhuma resposta textual retornada para esta consulta.</p>
+                              }
+                            </div>
+                          }
+
+                          @if (ragResultViewTab() === 'fontes') {
+                            <div id="rag-view-panel-fontes" class="rag-view-panel" role="tabpanel" aria-labelledby="rag-view-tab-fontes">
+                              @if (rr.citations?.length) {
+                                <ul class="rail-list compact rag-section-list">
+                                  @for (cite of rr.citations || []; track $index) {
+                                    <li class="rail-item compact-item">
+                                      <span class="item-title">{{ cite.file_path || cite.title || cite.doc_id || 'fonte' }}</span>
+                                      <span class="muted">score {{ citationScore(cite) }}</span>
+                                    </li>
+                                  }
+                                </ul>
+                              } @else {
+                                <p class="muted rag-result-empty">Sem fontes/citações para esta consulta.</p>
+                              }
+                            </div>
+                          }
+
+                          @if (ragResultViewTab() === 'raw') {
+                            <div id="rag-view-panel-raw" class="rag-view-panel" role="tabpanel" aria-labelledby="rag-view-tab-raw">
+                              @if (rr.results?.length) {
+                                <details class="rag-raw-details">
+                                  <summary>Raw (JSON)</summary>
+                                  <ul class="rail-list compact rag-section-list">
+                                    @for (row of rr.results || []; track $index) {
+                                      <li class="rail-item compact-item">
+                                        <pre>{{ row | json }}</pre>
+                                      </li>
+                                    }
+                                  </ul>
+                                </details>
+                              } @else {
+                                <p class="muted rag-result-empty">Sem payload bruto para exibir.</p>
+                              }
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <p class="muted">Execute uma consulta para visualizar resposta, fontes e resultado bruto.</p>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </section>
+          </div>
+        }
+
+        @if (advancedRailTab() === 'autonomia') {
+          <div id="advanced-tabpanel-autonomia" class="rail-tab-panel" role="tabpanel" aria-labelledby="advanced-tab-autonomia">
+            <section class="rail-section">
+              <div class="panel-head">
+                <div>
+                  <h3>Autonomia</h3>
+                  <p class="muted">Controle do loop, metas em andamento e ferramentas disponíveis.</p>
+                </div>
+                <button ui-button variant="ghost" size="sm" type="button" (click)="refreshAutonomy()" [disabled]="autonomyLoading() || autonomySaving()">
+                  Atualizar
+                </button>
+              </div>
+              @if (autonomyError()) {
+                <div class="inline-alert" role="alert">
+                  <span class="material-icons">error_outline</span>
+                  {{ autonomyError() }}
+                </div>
+              }
+              @if (autonomyNotice(); as notice) {
+                <div class="section-notice" [class.is-success]="notice.kind === 'success'" [class.is-info]="notice.kind === 'info'" [class.is-warning]="notice.kind === 'warning'" [class.is-error]="notice.kind === 'error'" role="status" aria-live="polite">
+                  <span class="material-icons">{{ notice.kind === 'success' ? 'check_circle' : notice.kind === 'error' ? 'error_outline' : 'info' }}</span>
+                  <span>{{ notice.message }}</span>
+                </div>
+              }
+              @if (autonomyLoading()) {
+                <app-skeleton variant="text" [count]="4"></app-skeleton>
+              } @else {
+                <div class="autonomy-card">
+                  <div class="autonomy-status">
+                    <span class="metric-pill">Loop: {{ autonomyStatus()?.active ? 'Ativo' : 'Inativo' }}</span>
+                    <span class="metric-pill">Ciclos: {{ autonomyStatus()?.cycle_count ?? 0 }}</span>
+                    <span class="metric-pill">Risco: {{ autonomyStatus()?.config?.risk_profile || 'balanced' }}</span>
+                  </div>
+                  <div class="autonomy-actions">
+                    <button ui-button variant="default" size="sm" type="button" (click)="toggleAutonomyLoop()" [disabled]="autonomySaving()">
+                      {{ autonomyStatus()?.active ? 'Parar loop' : 'Iniciar loop' }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="goal-create-card">
+                  <div class="panel-head">
+                    <div>
+                      <h4>Criar nova meta</h4>
+                      <p class="muted section-help">Defina um objetivo curto para o loop autônomo acompanhar.</p>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Título da meta"
+                    [value]="goalCreateTitle()"
+                    (input)="onGoalCreateTitleInput($event)" />
+                  <textarea
+                    rows="2"
+                    placeholder="Descrição (opcional)"
+                    [value]="goalCreateDescription()"
+                    (input)="onGoalCreateDescriptionInput($event)">
+                  </textarea>
+                  <div class="goal-create-actions">
+                    <button ui-button variant="ghost" size="sm" type="button" (click)="createGoal()" [disabled]="goalCreateLoading() || autonomySaving()">
+                      {{ goalCreateLoading() ? 'Criando...' : 'Criar meta' }}
+                    </button>
+                  </div>
+                  @if (goalCreateError()) {
+                    <p class="muted field-error">{{ goalCreateError() }}</p>
+                  }
+                </div>
+
+                <div class="autonomy-split">
+                  <div class="autonomy-panel-subcard">
+                    <div class="panel-head">
+                      <h4>Metas ativas</h4>
+                      <ui-badge variant="neutral">{{ autonomyActiveGoals().length }}</ui-badge>
+                    </div>
+                    @if (autonomyActiveGoals().length) {
+                      <ul class="rail-list compact">
+                        @for (goal of autonomyActiveGoals(); track goal.id) {
+                          <li class="rail-item">
+                            <p class="item-title">{{ goal.title }}</p>
+                            <span class="muted">{{ goalStatusLabel(goal) }}</span>
+                            <div class="goal-actions">
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'completed')" [disabled]="autonomySaving()">Concluir</button>
+                            </div>
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="muted">Sem metas ativas.</p>
                     }
                   </div>
-                } @else {
-                  <p class="muted">Nenhuma ferramenta ativa encontrada.</p>
-                }
-              </div>
-            </div>
-          }
-        </section>
+                  <div class="autonomy-panel-subcard">
+                    <div class="panel-head">
+                      <h4>Ferramentas ativas</h4>
+                      <ui-badge variant="neutral">{{ autonomyEnabledTools().length }}</ui-badge>
+                    </div>
+                    @if (autonomyEnabledTools().length) {
+                      <div class="tool-chips">
+                        @for (tool of autonomyEnabledTools(); track tool.name) {
+                          <span class="chip">{{ tool.name }}</span>
+                        }
+                      </div>
+                    } @else {
+                      <p class="muted">Nenhuma ferramenta ativa encontrada.</p>
+                    }
+                  </div>
+                </div>
+              }
+            </section>
+          </div>
+        }
       </aside>
       }
     </div>
   </div>
 </section>
-
-

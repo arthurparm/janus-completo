@@ -1,213 +1,241 @@
 ###
-# SPRINT 2: Memória Episódica (Qdrant)
-# Testes completos de armazenamento e recuperação de experiências
-###
+    # SPRINT 2: Runtime Base, Filas e Operacao (System, Workers, Tasks)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: System, Workers, Tasks, Admin, unknown(system/overview)
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Adicionar Experiência na Memória - Sucesso com Ferramenta
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
 
-{
-  "type": "action_success",
-  "content": "Executei com sucesso a ferramenta search_web para buscar informações sobre Python",
-  "metadata": {
-    "tool_used": "search_web",
-    "query": "Python tutorial",
-    "result_count": 5
-  }
-}
-
-###
-# 2. Adicionar Experiência de Erro
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "action_failure",
-  "content": "Falha ao executar write_file: permissão negada no diretório /root",
-  "metadata": {
-    "tool_used": "write_file",
-    "error_type": "PermissionError",
-    "severity": "high"
-  }
-}
-
-###
-# 3. Adicionar Experiência de Aprendizado
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "lesson_learned",
-  "content": "Aprendi que ao usar execute_python_code, devo sempre validar a sintaxe antes de executar para evitar SyntaxError",
-  "metadata": {
-    "context": "reflexion",
-    "iteration": 3
-  }
-}
-
-###
-# 4. Adicionar Experiência de Raciocínio
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "reasoning",
-  "content": "Planejei a solução dividindo o problema em 3 etapas: análise, processamento e validação",
-  "metadata": {
-    "reasoning_type": "plan",
-    "steps": 3
-  }
-}
-
-###
-# 5. Adicionar Experiência de Cálculo
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "action_success",
-  "content": "Calculei com sucesso a média de [10, 20, 30, 40, 50] resultando em 30.0",
-  "metadata": {
-    "tool_used": "execute_python_expression",
-    "operation": "mean"
-  }
-}
-
-###
-# 6. Adicionar Experiência de Reflexion
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "reflexion_iteration",
-  "content": "Após revisar minha abordagem, identifiquei que posso otimizar usando caching para reduzir chamadas repetidas",
-  "metadata": {
-    "iteration": 2,
-    "score": 0.85
-  }
-}
-
-###
-# 7. Buscar Experiências Relacionadas a "Python"
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=Python
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 8. Buscar Experiências de Falhas e Erros
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=falha%20erro%20problema
-Accept: application/json
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Admin] PATCH /api/v1/admin/config
+# - [System] POST /api/v1/system/db/migrate
+# - [System] GET /api/v1/system/db/validate
+# - [System] GET /api/v1/system/health/services
+# - [System] GET /api/v1/system/status
+# - [System] GET /api/v1/system/status/user
+# - [Tasks] POST /api/v1/tasks/consolidation
+# - [Tasks] GET /api/v1/tasks/health/rabbitmq
+# - [Tasks] GET /api/v1/tasks/queue/{queue_name}
+# - [Tasks] GET /api/v1/tasks/queue/{queue_name}/policy
+# - [Tasks] POST /api/v1/tasks/queue/{queue_name}/policy/reconcile
+# - [Tasks] GET /api/v1/tasks/queue/{queue_name}/policy/validate
+# - [Workers] POST /api/v1/workers/start-all
+# - [Workers] GET /api/v1/workers/status
+# - [Workers] POST /api/v1/workers/stop-all
+# - [unknown] GET /api/v1/system/overview
 
-###
-# 9. Buscar Experiências de Sucesso com Ferramentas
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=ferramenta%20sucesso%20executei
-Accept: application/json
-
-###
-# 10. Buscar Experiências de Aprendizado
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=aprendi%20lição
-Accept: application/json
-
-###
-# 11. Buscar Experiências de Reflexion
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=reflexion%20otimizar
-Accept: application/json
-
-###
-# 12. Buscar Experiências Genéricas
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=experiência
-Accept: application/json
-
-###
-# 13. Adicionar Experiência de Multi-Agent Collaboration
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "collaboration",
-  "content": "Coordenei com sucesso 3 agentes especializados para resolver tarefa complexa de análise de dados",
-  "metadata": {
-    "agents": [
-      "data_analyst",
-      "code_executor",
-      "validator"
-    ],
-    "task_type": "data_analysis",
-    "duration_seconds": 45
-  }
-}
-
-###
-# 14. Adicionar Experiência de Meta-Agent
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "meta_optimization",
-  "content": "Meta-agente identificou padrão de falhas repetitivas em operações de arquivo e sugeriu implementação de retry automático",
-  "metadata": {
-    "pattern": "file_operation_failures",
-    "suggestion": "implement_auto_retry",
-    "confidence": 0.92
-  }
-}
-
-###
-# 15. Buscar Todas as Experiências Recentes
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=agente%20sistema
-Accept: application/json
-
-###
-# 16. Adicionar Experiência com Metadados Complexos
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "neural_training",
-  "content": "Treinamento do modelo de classificação completado com acurácia de 87% após 5 épocas",
-  "metadata": {
-    "model_name": "intent_classifier_v1",
-    "accuracy": 0.87,
-    "epochs": 5,
-    "training_samples": 1000,
-    "validation_samples": 200,
-    "training_time_seconds": 320
-  }
-}
-
-###
-# 17. Buscar Experiências de Treinamento Neural
-GET {{host}}{{api_v1_prefix}}/memory/recall?query=treinamento%20modelo%20neural
-Accept: application/json
-
-###
-# 18. Verificar Sistema (Health Check via System Status)
+############################################
+# 1) System + Workers + Tasks (happy path)
+############################################
+# @name s2_system_status
 GET {{host}}{{api_v1_prefix}}/system/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("system/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 19. Adicionar Experiência com PII (email/telefone) — deve ser mascarada
-POST {{host}}{{api_v1_prefix}}/memory/memorize
-Content-Type: application/json
-
-{
-  "type": "user_interaction",
-  "content": "Usuário forneceu email john.doe@example.com e telefone +55 (11) 98765-4321",
-  "metadata": {"origin": "http_tests"}
-}
-
-###
-# 20. Recall Filtrado (status=failure)
-GET {{host}}{{api_v1_prefix}}/memory/recall/filtered?query=erro&status=failure&limit=5&min_score=0.3
+# @name s2_system_overview
+GET {{host}}{{api_v1_prefix}}/system/overview
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("system/overview: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 21. Falhas Recentes (janela padrão de cota)
-GET {{host}}{{api_v1_prefix}}/memory/recall/recent_failures?limit=5&min_score=0.3
+# @name s2_system_health_services
+GET {{host}}{{api_v1_prefix}}/system/health/services
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
+> {% client.test("system/health/services: 200", function() { client.assert(response.status === 200); }); %}
 
+###
+# @name s2_workers_status_before
+GET {{host}}{{api_v1_prefix}}/workers/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("workers/status before: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s2_workers_start_all
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/workers/start-all
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("workers/start-all: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+###
+# @name s2_rabbit_health
+GET {{host}}{{api_v1_prefix}}/tasks/health/rabbitmq
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("tasks/health/rabbitmq: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
+
+###
+# @name s2_consolidation_publish
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "mode": "batch",
+#   "limit": 5
+# }
+#
+# > {% client.test("tasks/consolidation: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s2_queue_info
+GET {{host}}{{api_v1_prefix}}/tasks/queue/{{queue_name}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("queue info: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s2_queue_policy
+GET {{host}}{{api_v1_prefix}}/tasks/queue/{{queue_name}}/policy
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("queue policy: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s2_queue_policy_validate
+GET {{host}}{{api_v1_prefix}}/tasks/queue/{{queue_name}}/policy/validate
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("queue policy validate: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s2_outbox_stats
+GET {{host}}{{api_v1_prefix}}/tasks/outbox/stats
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("outbox stats: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
+
+###
+# @name s2_workers_stop_all
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/workers/stop-all
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("workers/stop-all: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s2_workers_start_duplicate
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/workers/start-all
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("workers/start duplicate: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+###
+# @name s2_queue_missing
+GET {{host}}{{api_v1_prefix}}/tasks/queue/fila-inexistente
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("queue inexistente: 404 ou 500", function() { client.assert([404,500].includes(response.status)); }); %}
+
+### OPTIONAL-DESTRUCTIVE
+# @name s2_queue_policy_reconcile_optional
+# POST {{host}}{{api_v1_prefix}}/tasks/queue/{{queue_name}}/policy/reconcile
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "force_delete": false
+# }
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

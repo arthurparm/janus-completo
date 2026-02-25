@@ -1,86 +1,273 @@
 ###
-# SPRINT 10: Cérebro Híbrido e Resiliência de APIs
-# Testes completos do LLM Manager com fallback automático e circuit breakers
-###
+    # SPRINT 10: Aprendizado e Produtividade (Learning + Productivity)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Learning, Productivity
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Invocar LLM com Estratégia Local Only
-# NOTA: Primeira invocação pode demorar 20-30s (carregamento do modelo)
-POST {{host}}{{api_v1_prefix}}/llm/invoke
-Content-Type: application/json
 
-{
-  "prompt": "Explique em uma frase o que é um circuit breaker",
-  "role": "orchestrator",
-  "priority": "local_only",
-  "timeout_seconds": 45
-}
-
-###
-# 2. Invocar LLM com Estratégia Fast and Cheap
-POST {{host}}{{api_v1_prefix}}/llm/invoke
-Content-Type: application/json
-
-{
-  "prompt": "Liste 3 vantagens de usar modelos de linguagem locais",
-  "role": "orchestrator",
-  "priority": "fast_and_cheap",
-  "timeout_seconds": 30
-}
-
-###
-# 3. Invocar LLM com Estratégia High Quality
-POST {{host}}{{api_v1_prefix}}/llm/invoke
-Content-Type: application/json
-
-{
-  "prompt": "Escreva um algoritmo recursivo para calcular o fatorial de um número",
-  "role": "code_generator",
-  "priority": "high_quality",
-  "timeout_seconds": 60
-}
-
-###
-# 4. Invocar LLM - Knowledge Curator Role
-POST {{host}}{{api_v1_prefix}}/llm/invoke
-Content-Type: application/json
-
-{
-  "prompt": "Resuma os principais conceitos de aprendizado de máquina",
-  "role": "knowledge_curator",
-  "priority": "fast_and_cheap",
-  "timeout_seconds": 30
-}
-
-###
-# 5. Obter Status do Cache de LLMs
-GET {{host}}{{api_v1_prefix}}/llm/cache/status
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 6. Obter Status dos Circuit Breakers
-GET {{host}}{{api_v1_prefix}}/llm/circuit-breakers
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Learning] GET /api/v1/learning/dataset/preview
+# - [Learning] GET /api/v1/learning/dataset/version
+# - [Learning] POST /api/v1/learning/evaluate
+# - [Learning] GET /api/v1/learning/experiments
+# - [Learning] GET /api/v1/learning/experiments/{experiment_id}
+# - [Learning] POST /api/v1/learning/harvest
+# - [Learning] GET /api/v1/learning/health
+# - [Learning] GET /api/v1/learning/models
+# - [Learning] GET /api/v1/learning/models/{model_id}
+# - [Learning] GET /api/v1/learning/stats
+# - [Learning] POST /api/v1/learning/train
+# - [Learning] GET /api/v1/learning/training/status
+# - [Productivity] GET /api/v1/productivity/calendar/events
+# - [Productivity] POST /api/v1/productivity/calendar/events/add
+# - [Productivity] GET /api/v1/productivity/limits/status
+# - [Productivity] GET /api/v1/productivity/mail/messages
+# - [Productivity] POST /api/v1/productivity/mail/messages/send
+# - [Productivity] GET /api/v1/productivity/notes
+# - [Productivity] POST /api/v1/productivity/notes/add
+# - [Productivity] POST /api/v1/productivity/oauth/google/callback
+# - [Productivity] POST /api/v1/productivity/oauth/google/refresh
+# - [Productivity] GET /api/v1/productivity/oauth/google/start
+# - [Productivity] POST /api/v1/productivity/oauth/google/start
+
+############################################
+# 1) Learning + Productivity (happy path parcial / tolerante a ambiente)
+############################################
+# @name s10_learning_health
+GET {{host}}{{api_v1_prefix}}/learning/health
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/health: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7. Listar Provedores Configurados
-GET {{host}}{{api_v1_prefix}}/llm/providers
+# @name s10_learning_stats
+GET {{host}}{{api_v1_prefix}}/learning/stats
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/stats: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 8. Health Check do Sistema de LLMs
-GET {{host}}{{api_v1_prefix}}/llm/health
+# @name s10_learning_dataset_version
+GET {{host}}{{api_v1_prefix}}/learning/dataset/version
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/dataset/version: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Invalidar Cache Completo
-POST {{host}}{{api_v1_prefix}}/llm/cache/invalidate
-Content-Type: application/json
+# @name s10_learning_dataset_preview
+GET {{host}}{{api_v1_prefix}}/learning/dataset/preview?limit=5
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/dataset/preview: 200 ou 500", function() { client.assert([200,500].includes(response.status)); }); %}
 
 ###
-# 10. Resetar Circuit Breaker de um Provedor
-POST {{host}}{{api_v1_prefix}}/llm/circuit-breakers/openai/reset
-Content-Type: application/json
+# @name s10_learning_harvest
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/learning/harvest
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "limit": 25,
+#   "query": "observability"
+# }
+#
+# > {% client.test("learning/harvest: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s10_learning_train
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/learning/train
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "model_type": "CLASSIFIER",
+#   "model_name": "janus-s10-{{$timestamp}}",
+#   "training_config": {
+#     "epochs": 1,
+#     "batch_size": 4,
+#     "learning_rate": 0.001,
+#     "validation_split": 0.2,
+#     "early_stopping": true,
+#     "save_checkpoints": false
+#   }
+# }
+#
+# > {% client.test("learning/train: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+###
+# @name s10_learning_training_status
+GET {{host}}{{api_v1_prefix}}/learning/training/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/training/status: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s10_learning_models
+GET {{host}}{{api_v1_prefix}}/learning/models
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/models: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s10_learning_experiments
+GET {{host}}{{api_v1_prefix}}/learning/experiments
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/experiments: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s10_productivity_limits
+GET {{host}}{{api_v1_prefix}}/productivity/limits/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("productivity/limits/status: 200/401", function() { client.assert([200,401].includes(response.status)); }); %}
+
+###
+# @name s10_productivity_notes_add
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/productivity/notes/add
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+# X-User-Id: {{actor_user_id}}
+#
+# {
+#   "user_id": {{user_id_int}},
+#   "note": {"title": "Sprint10", "content": "Nota E2E"},
+#   "index": true
+# }
+#
+# > {% client.test("productivity/notes/add: 200/403", function() { client.assert([200,403].includes(response.status)); }); %}
+#
+###
+# @name s10_productivity_notes_list
+GET {{host}}{{api_v1_prefix}}/productivity/notes?user_id={{user_id_int}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+X-User-Id: {{actor_user_id}}
+
+> {% client.test("productivity/notes: 200/403", function() { client.assert([200,403].includes(response.status)); }); %}
+
+###
+# @name s10_productivity_oauth_start_get
+GET {{host}}{{api_v1_prefix}}/productivity/oauth/google/start?user_id={{user_id_int}}&scope=calendar
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+X-User-Id: {{actor_user_id}}
+
+> {% client.test("productivity oauth start(GET): 200/400/403", function() { client.assert([200,400,403].includes(response.status)); }); %}
+
+############################################
+# 2) Edge cases
+############################################
+# @name s10_learning_train_invalid
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/learning/train
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "model_type": "CLASSIFIER",
+#   "training_config": {"epochs": 0}
+# }
+#
+# > {% client.test("learning/train payload invalido: 422", function() { client.assert(response.status === 422); }); %}
+#
+###
+# @name s10_learning_model_missing
+GET {{host}}{{api_v1_prefix}}/learning/models/model-inexistente
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("learning/models/{id} inexistente: 404", function() { client.assert(response.status === 404); }); %}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

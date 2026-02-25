@@ -1,176 +1,309 @@
 ###
-# SPRINT 1: Message Broker e Task Management
-# Testes completos dos endpoints de gerenciamento de tarefas e RabbitMQ
-###
+    # SPRINT 1: Identidade e Acesso (Auth, Users, Profiles, Consents)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Auth, Users, Profiles, Consents
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Health Check do Sistema - Status Geral
-GET {{host}}{{api_v1_prefix}}/system/status
+@s1_email = sprint1@example.com
+@s1_user_id = 1
+@s1_token = 
+
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 2. Health Check do RabbitMQ
-GET {{host}}{{api_v1_prefix}}/tasks/health/rabbitmq
-Accept: application/json
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Auth] POST /api/v1/auth/firebase/exchange
+# - [Auth] POST /api/v1/auth/local/login
+# - [Auth] GET /api/v1/auth/local/me
+# - [Auth] POST /api/v1/auth/local/register
+# - [Auth] POST /api/v1/auth/local/request-reset
+# - [Auth] POST /api/v1/auth/local/reset
+# - [Auth] POST /api/v1/auth/supabase/exchange
+# - [Auth] POST /api/v1/auth/token
+# - [Consents] GET /api/v1/consents/
+# - [Consents] POST /api/v1/consents/
+# - [Consents] POST /api/v1/consents/{consent_id}/revoke
+# - [Profiles] POST /api/v1/profiles/
+# - [Profiles] GET /api/v1/profiles/{user_id}
+# - [Users] POST /api/v1/users/
+# - [Users] GET /api/v1/users/{user_id}
+# - [Users] GET /api/v1/users/{user_id}/consents
+# - [Users] POST /api/v1/users/{user_id}/consents
+# - [Users] DELETE /api/v1/users/{user_id}/consents/{scope}
+# - [Users] POST /api/v1/users/{user_id}/roles
 
-###
-# 3. Publicar Tarefa de Consolidação - Modo Batch
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+############################################
+# 1) Auth local: registro, login e self-profile
+############################################
+# @name s1_local_register
+POST {{host}}{{api_v1_prefix}}/auth/local/register
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "mode": "batch",
-  "limit": 10
+  "email": "sprint1_{{$timestamp}}@example.com",
+  "password": "StrongPass123!",
+  "username": "sprint1_{{$timestamp}}",
+  "full_name": "Sprint One",
+  "terms": true
 }
 
+> {%
+client.test("local/register: 200 ou 409", function() {
+  client.assert([200,409].includes(response.status));
+});
+if (response.status === 200) {
+  const b = response.body.json();
+  client.global.set("s1_token", b.token);
+  client.global.set("s1_user_id", String(b.user.id));
+  if (b.user.email) client.global.set("s1_email", b.user.email);
+}
+%}
+
 ###
-# 4. Publicar Tarefa de Consolidação - Modo Batch (50 experiências)
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# @name s1_local_login
+POST {{host}}{{api_v1_prefix}}/auth/local/login
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "mode": "batch",
-  "limit": 50
+  "email": "{{s1_email}}",
+  "password": "StrongPass123!"
 }
 
+> {%
+client.test("local/login: 200", function() { client.assert(response.status === 200); });
+const b = response.body.json();
+client.global.set("s1_token", b.token);
+client.global.set("s1_user_id", String(b.user.id));
+client.global.set("user_id_int", String(b.user.id));
+client.global.set("user_id_str", String(b.user.id));
+%}
+
 ###
-# 5. Publicar Tarefa de Consolidação - Modo Single
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# @name s1_local_me_with_user_token
+GET {{host}}{{api_v1_prefix}}/auth/local/me
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+
+> {%
+client.test("local/me com token da sprint: 200", function() { client.assert(response.status === 200); });
+const b = response.body.json();
+client.global.set("s1_user_id", String(b.id));
+client.global.set("user_id_int", String(b.id));
+client.global.set("user_id_str", String(b.id));
+%}
+
+############################################
+# 2) Users + Profiles + Consents (happy path)
+############################################
+# @name s1_users_create
+POST {{host}}{{api_v1_prefix}}/users/
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "mode": "single",
-  "experience_id": "exp_001",
-  "experience_content": "Executei com sucesso a ferramenta search_web para buscar informações sobre Python",
-  "metadata": {
-    "tool_used": "search_web",
-    "query": "Python tutorial",
-    "result_count": 5
-  }
+  "email": "extra_{{$timestamp}}@example.com",
+  "display_name": "Extra User"
 }
 
+> {%
+client.test("users/create: 200", function() { client.assert(response.status === 200); });
+const b = response.body.json();
+client.global.set("s1_extra_user_id", String(b.id));
+%}
+
 ###
-# 6. Publicar Tarefa de Consolidação - Modo Single (experiência de erro)
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# @name s1_profile_upsert
+POST {{host}}{{api_v1_prefix}}/profiles/
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "mode": "single",
-  "experience_id": "exp_002",
-  "experience_content": "Falha ao executar write_file: permissão negada no diretório /root",
-  "metadata": {
-    "tool_used": "write_file",
-    "error_type": "PermissionError",
-    "severity": "high"
-  }
+  "user_id": {{user_id_int}},
+  "timezone": "America/Sao_Paulo",
+  "language": "pt-BR",
+  "style_prefs": "conciso"
 }
 
-###
-# 7. Obter Informações da Fila de Consolidação
-GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation
-Accept: application/json
+> {% client.test("profiles/upsert: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7.1. Obter Política/Argumentos da Fila
-GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy
+# @name s1_profile_get
+GET {{host}}{{api_v1_prefix}}/profiles/{{user_id_int}}
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("profiles/get: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7.2. Validar Política da Fila (TTL, max-length)
-GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy/validate
-Accept: application/json
-
-###
-# 7.3. Reconciliação da Política (deleta e recria se divergente)
-POST {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation/policy/reconcile
+# @name s1_users_add_consent
+POST {{host}}{{api_v1_prefix}}/users/{{user_id_int}}/consents
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
 
 {
-  "force_delete": true
+  "scope": "notes.read",
+  "granted": true
 }
 
+> {% client.test("users/consents add: 200", function() { client.assert(response.status === 200); }); %}
+
 ###
-# 8. Obter Informações de Fila Customizada (se existir)
-GET {{host}}{{api_v1_prefix}}/tasks/queue/default
+# @name s1_users_list_consents
+GET {{host}}{{api_v1_prefix}}/users/{{user_id_int}}/consents
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
+
+> {% client.test("users/consents list: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Métricas Prometheus - Message Broker
-GET {{host}}/metrics
-Accept: text/plain
-
-###
-# 10. Publicar Múltiplas Tarefas em Sequência - Batch Processing
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# @name s1_consents_grant_table
+POST {{host}}{{api_v1_prefix}}/consents/
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
 
 {
-  "mode": "batch",
-  "limit": 20
+  "user_id": "{{s1_user_id}}",
+  "scope": "mail.read",
+  "resource": "gmail",
+  "notes": "Sprint 1 E2E"
 }
 
+> {%
+client.test("consents/grant: 200", function() { client.assert(response.status === 200); });
+const b = response.body.json();
+client.global.set("consent_id", String(b.id));
+%}
+
 ###
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
+# @name s1_consents_list
+GET {{host}}{{api_v1_prefix}}/consents/?user_id={{s1_user_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
+
+> {% client.test("consents/list: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s1_consents_revoke
+POST {{host}}{{api_v1_prefix}}/consents/{{consent_id}}/revoke
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
+
+> {% client.test("consents/revoke: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s1_users_revoke_scope
+DELETE {{host}}{{api_v1_prefix}}/users/{{user_id_int}}/consents/notes.read
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
+
+> {% client.test("users/consents revoke: 200", function() { client.assert(response.status === 200); }); %}
+
+############################################
+# 3) Edge cases (minimo 2)
+############################################
+# @name s1_login_invalid
+POST {{host}}{{api_v1_prefix}}/auth/local/login
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "mode": "batch",
-  "limit": 30
+  "email": "naoexiste@example.com",
+  "password": "StrongPass123!"
 }
 
-###
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
-Content-Type: application/json
-
-{
-  "mode": "batch",
-  "limit": 15
-}
+> {% client.test("login invalido: 401", function() { client.assert(response.status === 401); }); %}
 
 ###
-# 11. Verificar Status do Sistema Após Múltiplas Publicações
-GET {{host}}{{api_v1_prefix}}/system/status
+# @name s1_revoke_invalid_scope
+DELETE {{host}}{{api_v1_prefix}}/users/{{user_id_int}}/consents/escopo.invalido
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{s1_token}}
+X-User-Id: {{s1_user_id}}
 
-###
-# 12. Verificar Saúde do RabbitMQ Após Carga
-GET {{host}}{{api_v1_prefix}}/tasks/health/rabbitmq
-Accept: application/json
+> {% client.test("revoke escopo invalido: 400", function() { client.assert(response.status === 400); }); %}
 
-###
-# 13. Verificar Profundidade da Fila de Consolidação
-GET {{host}}{{api_v1_prefix}}/tasks/queue/janus.knowledge.consolidation
-Accept: application/json
-
-###
-# 14. Teste de Consolidação com Metadados Complexos
-POST {{host}}{{api_v1_prefix}}/tasks/consolidation
-Content-Type: application/json
-
-{
-  "mode": "single",
-  "experience_id": "exp_complex_001",
-  "experience_content": "Após 3 iterações de reflexion, consegui otimizar o algoritmo de busca reduzindo o tempo de execução em 40%",
-  "metadata": {
-    "tool_used": "reflexion",
-    "iterations": 3,
-    "improvement": 0.4,
-    "context": "optimization",
-    "tags": [
-      "performance",
-      "reflexion",
-      "success"
-    ]
-  }
-}
-
-###
-# 15. Teste Final - Status Geral do Sistema
-GET {{host}}{{api_v1_prefix}}/system/status
-Accept: application/json
-
-
-### RESULTADO ATUAL
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

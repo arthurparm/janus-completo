@@ -1,94 +1,304 @@
 ###
-# SPRINT 9: Neural Training - Infraestrutura de Aprendizagem Autônoma
-# Testes completos de coleta de dados e treinamento de modelos
-###
+    # SPRINT 9: Conhecimento Semantico e Grafo (Knowledge)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Knowledge
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
+
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Knowledge] GET /api/v1/knowledge/classes/implementations
+# - [Knowledge] DELETE /api/v1/knowledge/clear
+# - [Knowledge] POST /api/v1/knowledge/concepts/reindex
+# - [Knowledge] POST /api/v1/knowledge/concepts/related
+# - [Knowledge] POST /api/v1/knowledge/consolidate
+# - [Knowledge] POST /api/v1/knowledge/consolidate/document
+# - [Knowledge] GET /api/v1/knowledge/entities
+# - [Knowledge] GET /api/v1/knowledge/entity/{entity_name}/relationships
+# - [Knowledge] GET /api/v1/knowledge/files/importing
+# - [Knowledge] GET /api/v1/knowledge/functions/calling
+# - [Knowledge] GET /api/v1/knowledge/health
+# - [Knowledge] GET /api/v1/knowledge/health/detailed
+# - [Knowledge] POST /api/v1/knowledge/health/reset-circuit-breaker
+# - [Knowledge] POST /api/v1/knowledge/index
+# - [Knowledge] GET /api/v1/knowledge/node-types
+# - [Knowledge] GET /api/v1/knowledge/quarantine
+# - [Knowledge] POST /api/v1/knowledge/quarantine/promote
+# - [Knowledge] POST /api/v1/knowledge/query
+# - [Knowledge] POST /api/v1/knowledge/query/code
+# - [Knowledge] POST /api/v1/knowledge/relationship-types/register
+# - [Knowledge] GET /api/v1/knowledge/stats
+
+############################################
+# 1) Knowledge (happy path)
+############################################
+# @name s9_knowledge_health
+GET {{host}}{{api_v1_prefix}}/knowledge/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/health: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 1. Coletar Dados para Treinamento (Data Harvesting)
-POST {{host}}{{api_v1_prefix}}/learning/harvest
+# @name s9_knowledge_health_detailed
+GET {{host}}{{api_v1_prefix}}/knowledge/health/detailed
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/health/detailed: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s9_knowledge_index
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/knowledge/index
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("knowledge/index: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s9_knowledge_stats
+GET {{host}}{{api_v1_prefix}}/knowledge/stats
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/stats: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s9_knowledge_entities
+GET {{host}}{{api_v1_prefix}}/knowledge/entities
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/entities: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s9_entity_relationships
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/write_file/relationships?direction=both&max_depth=2&limit=10&skip=0
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/entity relationships: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s9_knowledge_query
+POST {{host}}{{api_v1_prefix}}/knowledge/query
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "query": "action_success",
-  "limit": 100,
-  "min_score": 0.7
+  "query": "Quais componentes existem para observability?",
+  "limit": 5
 }
 
+> {% client.test("knowledge/query: 200", function() { client.assert(response.status === 200); }); %}
+
 ###
-# 2. Coletar Dados de Falhas para Análise
-POST {{host}}{{api_v1_prefix}}/learning/harvest
+# @name s9_knowledge_query_code
+POST {{host}}{{api_v1_prefix}}/knowledge/query/code
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "query": "action_failure",
-  "limit": 50,
-  "min_score": 0.6
+  "question": "Onde ficam os endpoints de observability?",
+  "limit": 5,
+  "citation_limit": 5
 }
 
+> {% client.test("knowledge/query/code: 200", function() { client.assert(response.status === 200); }); %}
+
 ###
-# 3. Iniciar Treinamento de Modelo - Fine-tuning LLM
-POST {{host}}{{api_v1_prefix}}/learning/train
+# @name s9_concepts_related
+POST {{host}}{{api_v1_prefix}}/knowledge/concepts/related
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "model_type": "LLM_FINETUNING",
-  "training_config": {
-    "epochs": 3,
-    "batch_size": 8,
-    "learning_rate": 0.0001
-  },
-  "data_source": "episodic_memory"
+  "concept": "LangChain",
+  "max_depth": 2,
+  "limit": 5,
+  "skip": 0
 }
 
-###
-# 4. Iniciar Treinamento de Modelo - Classificador
-POST {{host}}{{api_v1_prefix}}/learning/train
-Content-Type: application/json
-
-{
-  "model_type": "CLASSIFIER",
-  "training_config": {
-    "epochs": 5,
-    "batch_size": 16,
-    "learning_rate": 0.001
-  },
-  "data_source": "episodic_memory"
-}
+> {% client.test("knowledge/concepts/related: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 5. Obter Status de Treinamento em Andamento
-GET {{host}}{{api_v1_prefix}}/learning/training/status
+# @name s9_concepts_reindex
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/knowledge/concepts/reindex
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "batch_size": 20
+# }
+#
+# > {% client.test("knowledge/concepts/reindex: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s9_knowledge_node_types
+GET {{host}}{{api_v1_prefix}}/knowledge/node-types
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/node-types: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 6. Listar Modelos Treinados
-GET {{host}}{{api_v1_prefix}}/learning/models
+# @name s9_knowledge_functions_calling
+GET {{host}}{{api_v1_prefix}}/knowledge/functions/calling?name=run_agent_async
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/functions/calling: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7. Obter Detalhes de um Modelo Específico
-GET {{host}}{{api_v1_prefix}}/learning/models/janus-classifier-v2
+# @name s9_knowledge_files_importing
+GET {{host}}{{api_v1_prefix}}/knowledge/files/importing?module=resilience.py
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/files/importing: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 8. Avaliar Performance de Modelo
-POST {{host}}{{api_v1_prefix}}/learning/evaluate
-Content-Type: application/json
-
-{
-  "model_id": "janus-classifier-v2",
-  "test_data_limit": 50
-}
-
-###
-# 9. Obter Estatísticas de Treinamento
-GET {{host}}{{api_v1_prefix}}/learning/stats
+# @name s9_knowledge_classes_implementations
+GET {{host}}{{api_v1_prefix}}/knowledge/classes/implementations?protocol=AgentExecutor
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/classes/implementations: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 10. Health Check do Sistema de Neural Training
-GET {{host}}{{api_v1_prefix}}/learning/health
+# @name s9_knowledge_consolidate
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/knowledge/consolidate
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "mode": "batch",
+#   "limit": 5,
+#   "min_score": 0.0,
+#   "metadata": {"trigger": "sprint9"}
+# }
+#
+# > {% client.test("knowledge/consolidate: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s9_knowledge_quarantine_list
+GET {{host}}{{api_v1_prefix}}/knowledge/quarantine?limit=20
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/quarantine: 200", function() { client.assert(response.status === 200); }); %}
+
+############################################
+# 2) Edge cases
+############################################
+# @name s9_relationships_invalid_direction
+GET {{host}}{{api_v1_prefix}}/knowledge/entity/Foo/relationships?direction=sideways&max_depth=2&limit=5&skip=0
+Accept: application/problem+json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge relationships direction invalido: 422", function() { client.assert(response.status === 422); }); %}
+
+###
+# @name s9_classes_implementations_missing_param
+GET {{host}}{{api_v1_prefix}}/knowledge/classes/implementations
+Accept: application/problem+json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("knowledge/classes/implementations sem protocol: 422", function() { client.assert(response.status === 422); }); %}
+
+### OPTIONAL-DESTRUCTIVE
+# DELETE {{host}}{{api_v1_prefix}}/knowledge/clear
+# Accept: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

@@ -1,0 +1,167 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-24T18:03:03Z",
+    "phase": "auth",
+    "sprint": "Sprint 7.http",
+    "file": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 7.http"
+  },
+  "summary": {
+    "total_requests": 2,
+    "pass": 0,
+    "warn_log_evidence_weak": 2,
+    "fail_5xx": 0,
+    "fail_transport": 0,
+    "fail_log_evidence_missing": 0,
+    "blocked_by_env_expected": 0
+  },
+  "results": [
+    {
+      "phase": "auth",
+      "sprint": "Sprint 7.http",
+      "request_name": "auth_local_me_preflight",
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/local/me",
+      "request_id": "qa-sprint-auth-sprint-0021-1dcada3c",
+      "http_status": 200,
+      "duration_ms": 7.25,
+      "assert_expected_statuses": [
+        200
+      ],
+      "http_class": "pass_success",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak",
+      "response_echo_request_id": "qa-sprint-auth-sprint-0021-1dcada3c",
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 147,
+        "json_keys": [
+          "id",
+          "email",
+          "username",
+          "display_name",
+          "roles",
+          "permissions"
+        ]
+      },
+      "file_path": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 7.http",
+      "line_no": 40,
+      "request_headers": {
+        "Accept": "application/json",
+        "X-Request-ID": "qa-sprint-auth-sprint-0021-1dcada3c",
+        "User-Agent": "Janus-HTTP-Test/2.0.0",
+        "Authorization": "<redacted>"
+      }
+    },
+    {
+      "phase": "auth",
+      "sprint": "Sprint 7.http",
+      "request_name": "s7_chat_health",
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/chat/health",
+      "request_id": "qa-sprint-auth-sprint-0022-69b90d10",
+      "http_status": 200,
+      "duration_ms": 6.83,
+      "assert_expected_statuses": [
+        200,
+        503
+      ],
+      "http_class": "pass_success",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak",
+      "response_echo_request_id": "qa-sprint-auth-sprint-0022-69b90d10",
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 102,
+        "json_keys": [
+          "status",
+          "repository_accessible",
+          "non_destructive_probe",
+          "total_conversations"
+        ]
+      },
+      "file_path": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 7.http",
+      "line_no": 82,
+      "request_headers": {
+        "Accept": "application/json",
+        "X-Request-ID": "qa-sprint-auth-sprint-0022-69b90d10",
+        "User-Agent": "Janus-HTTP-Test/2.0.0",
+        "Authorization": "<redacted>"
+      }
+    }
+  ],
+  "log_evidence": [
+    {
+      "request_id": "qa-sprint-auth-sprint-0021-1dcada3c",
+      "phase": "auth",
+      "suite": "sprint",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+        "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-sprint-auth-sprint-0021-1dcada3c"
+    },
+    {
+      "request_id": "qa-sprint-auth-sprint-0022-69b90d10",
+      "phase": "auth",
+      "suite": "sprint",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/chat/health HTTP/1.1\" 200 OK"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-sprint-auth-sprint-0022-69b90d10"
+    }
+  ],
+  "bootstrap_auth": {
+    "ok": true,
+    "email": "qa_11e1d1a9ee@example.com",
+    "password": "JanusE2E123!",
+    "username": "qa_11e1d1a9ee",
+    "token": "eyJ1c2VyX2lkIjoyNCwiZXhwIjoxNzcxOTU5NzY5fQ.Kk6QGCqSLUCzhwlLfVB-jHgxh_GLFqIODGr0-0sfK3o",
+    "user_id": "24",
+    "register_status_code": 200,
+    "login_status_code": 200,
+    "register_body": {
+      "token": "eyJ1c2VyX2lkIjoyNCwiZXhwIjoxNzcxOTU5NzY5fQ.Kk6QGCqSLUCzhwlLfVB-jHgxh_GLFqIODGr0-0sfK3o",
+      "user": {
+        "id": "24",
+        "email": "qa_11e1d1a9ee@example.com",
+        "username": "qa_11e1d1a9ee",
+        "display_name": "Janus QA Runner",
+        "roles": [
+          "user"
+        ],
+        "permissions": [
+          "read"
+        ]
+      }
+    },
+    "login_body": {
+      "token": "eyJ1c2VyX2lkIjoyNCwiZXhwIjoxNzcxOTU5NzY5fQ.Kk6QGCqSLUCzhwlLfVB-jHgxh_GLFqIODGr0-0sfK3o",
+      "user": {
+        "id": "24",
+        "email": "qa_11e1d1a9ee@example.com",
+        "username": "qa_11e1d1a9ee",
+        "display_name": "Janus QA Runner",
+        "roles": [
+          "user"
+        ],
+        "permissions": [
+          "read"
+        ]
+      }
+    },
+    "request_ids": {
+      "register": "qa-sprint-bootstrap-register-11e1d1a9ee",
+      "login": "qa-sprint-bootstrap-login-11e1d1a9ee"
+    }
+  }
+}

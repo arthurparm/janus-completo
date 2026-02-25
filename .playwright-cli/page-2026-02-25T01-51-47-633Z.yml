@@ -1,0 +1,140 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e9]:
+        - generic [ref=e10] [cursor=pointer]:
+          - img "Janus" [ref=e13]
+          - generic [ref=e25]: JANUSAI
+        - generic "Status do Sistema" [ref=e29] [cursor=pointer]:
+          - generic [ref=e33]: SYSTEM
+        - navigation "Navegacao principal" [ref=e34]:
+          - link "Inicio" [ref=e35] [cursor=pointer]:
+            - /url: /
+          - button "Sair" [ref=e36] [cursor=pointer]
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - paragraph [ref=e40]: JANUS // CONVERSAS
+            - heading "Converse com o Janus sem friccao" [level=1] [ref=e41]
+            - paragraph [ref=e42]: Escolha uma conversa ou envie sua primeira pergunta. O modo avancado fica opcional.
+          - generic [ref=e43]:
+            - button "add Nova conversa" [ref=e44] [cursor=pointer]:
+              - generic [ref=e45]: add
+              - text: Nova conversa
+            - button "Atualizar" [ref=e46] [cursor=pointer]
+        - generic [ref=e47]:
+          - complementary "Lista de conversas" [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]:
+                - paragraph [ref=e51]: HISTORICO
+                - heading "Conversas" [level=2] [ref=e52]
+              - generic [ref=e54]: "2"
+            - generic [ref=e55]:
+              - generic [ref=e56]: search
+              - textbox "Buscar conversas" [ref=e57]:
+                - /placeholder: Buscar por titulo ou id
+              - button "refresh" [ref=e58] [cursor=pointer]:
+                - generic [ref=e59]: refresh
+            - list [ref=e60]:
+              - listitem [ref=e61]:
+                - 'button "Nova Conversa Responda em uma frase curta: qual a função desta tela? ID 19 21 de jan." [ref=e62] [cursor=pointer]':
+                  - generic [ref=e63]:
+                    - generic [ref=e64]: Nova Conversa
+                    - generic [ref=e65]: "Responda em uma frase curta: qual a função desta tela?"
+                  - generic [ref=e66]:
+                    - generic [ref=e67]: ID 19
+                    - generic [ref=e68]: 21 de jan.
+              - listitem [ref=e69]:
+                - 'button "Nova Conversa Responda em uma frase curta: qual a função desta tela? ID 18 21 de jan." [ref=e70] [cursor=pointer]':
+                  - generic [ref=e71]:
+                    - generic [ref=e72]: Nova Conversa
+                    - generic [ref=e73]: "Responda em uma frase curta: qual a função desta tela?"
+                  - generic [ref=e74]:
+                    - generic [ref=e75]: ID 18
+                    - generic [ref=e76]: 21 de jan.
+          - region "Chat" [ref=e77]:
+            - generic [ref=e78]:
+              - generic [ref=e79]:
+                - img "Janus" [ref=e82]
+                - generic [ref=e94]:
+                  - paragraph [ref=e95]: CONVERSA ATIVA
+                  - heading "Nova conversa" [level=2] [ref=e96]
+                  - paragraph [ref=e97]: ID sem selecao
+              - generic [ref=e98]:
+                - generic [ref=e100]: Aguardando
+                - generic [ref=e102]: 0 msgs
+                - generic [ref=e104]: Modo avancado
+                - button "Voltar ao simples" [ref=e105] [cursor=pointer]
+            - generic [ref=e107]:
+              - heading "Selecione uma conversa" [level=3] [ref=e108]
+              - paragraph [ref=e109]: Escolha uma conversa na coluna lateral ou crie uma nova para comecar.
+              - button "Nova conversa" [ref=e111] [cursor=pointer]
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - generic [ref=e114]:
+                  - generic [ref=e115]: Role
+                  - combobox "Role" [ref=e116]:
+                    - option "Orchestrator" [selected]
+                    - option "Reasoner"
+                    - option "Code Generator"
+                    - option "Knowledge Curator"
+                    - option "Security Auditor"
+                - generic [ref=e117]:
+                  - generic [ref=e118]: Prioridade
+                  - combobox "Prioridade" [ref=e119]:
+                    - option "Fast + Cheap" [selected]
+                    - option "High Quality"
+                    - option "Local Only"
+                - generic [ref=e120]:
+                  - checkbox "Streaming" [checked] [ref=e121]
+                  - generic [ref=e122]: Streaming
+              - paragraph [ref=e123]: Role e prioridade ajustam a estrategia de resposta. Se tiver duvida, mantenha o padrao.
+              - textbox "Descreva a tarefa ou envie uma pergunta..." [ref=e124]
+              - generic [ref=e125]:
+                - button "Limpar" [ref=e126] [cursor=pointer]
+                - button "send Enviar" [ref=e127] [cursor=pointer]:
+                  - generic [ref=e128]: send
+                  - text: Enviar
+          - complementary "Contexto" [ref=e129]:
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - paragraph [ref=e132]: PAINEL AVANCADO
+                - heading "Contexto, cliente e autonomia" [level=3] [ref=e133]
+                - paragraph [ref=e134]: Use as abas para reduzir ruído e focar na etapa atual da conversa.
+              - tablist "Abas do painel avançado" [ref=e135]:
+                - tab "Insights" [ref=e136] [cursor=pointer]
+                - tab "Cliente" [ref=e137] [cursor=pointer]
+                - tab "Autonomia" [selected] [ref=e138] [cursor=pointer]
+            - tabpanel "Autonomia" [ref=e139]:
+              - generic [ref=e140]:
+                - generic [ref=e141]:
+                  - generic [ref=e142]:
+                    - heading "Autonomia" [level=3] [ref=e143]
+                    - paragraph [ref=e144]: Controle do loop, metas em andamento e ferramentas disponíveis.
+                  - button "Atualizar" [ref=e145] [cursor=pointer]
+                - generic [ref=e146]:
+                  - generic [ref=e147]:
+                    - generic [ref=e148]: "Loop: Inativo"
+                    - generic [ref=e149]: "Ciclos: 0"
+                    - generic [ref=e150]: "Risco: balanced"
+                  - button "Iniciar loop" [ref=e152] [cursor=pointer]
+                - generic [ref=e153]:
+                  - generic [ref=e155]:
+                    - heading "Criar nova meta" [level=4] [ref=e156]
+                    - paragraph [ref=e157]: Defina um objetivo curto para o loop autônomo acompanhar.
+                  - textbox "Título da meta" [ref=e158]
+                  - textbox "Descrição (opcional)" [ref=e159]
+                  - button "Criar meta" [ref=e161] [cursor=pointer]
+                - generic [ref=e162]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164]:
+                      - heading "Metas ativas" [level=4] [ref=e165]
+                      - generic [ref=e167]: "0"
+                    - paragraph [ref=e168]: Sem metas ativas.
+                  - generic [ref=e169]:
+                    - generic [ref=e170]:
+                      - heading "Ferramentas ativas" [level=4] [ref=e171]
+                      - generic [ref=e173]: "0"
+                    - paragraph [ref=e174]: Nenhuma ferramenta ativa encontrada.
