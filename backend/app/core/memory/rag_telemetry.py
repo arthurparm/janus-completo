@@ -70,16 +70,21 @@ def emit_step_telemetry(
         extra=extra,
     )
 
-    logger.info(
-        "rag_step_telemetry",
-        endpoint=endpoint,
-        step=payload["step"],
-        source=payload["source"],
-        db=payload["db"],
-        latency_ms=payload["latency_ms"],
-        confidence=payload["confidence"],
-        error_code=payload["error_code"],
-    )
+    log_fields: dict[str, Any] = {
+        "endpoint": endpoint,
+        "step": payload["step"],
+        "source": payload["source"],
+        "db": payload["db"],
+        "latency_ms": payload["latency_ms"],
+        "confidence": payload["confidence"],
+        "error_code": payload["error_code"],
+    }
+    if extra:
+        for key, value in extra.items():
+            if isinstance(key, str) and key:
+                log_fields[key] = value
+
+    logger.info("rag_step_telemetry", **log_fields)
 
     try:
         record_audit_event_direct(

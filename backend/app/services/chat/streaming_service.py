@@ -58,6 +58,7 @@ class StreamingService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        identity_source: str = "unknown",
     ):
         role = role or ModelRole.ORCHESTRATOR
         priority = priority or ModelPriority.HIGH_QUALITY
@@ -127,7 +128,12 @@ class StreamingService:
         relevant_memories = None
         if self._rag_service:
             relevant_memories = await self._rag_service.retrieve_context(
-                message, user_id=user_id, conversation_id=conversation_id
+                message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                caller_endpoint="/api/v1/chat/stream/{conversation_id}",
+                transport="sse",
+                identity_source=identity_source,
             )
 
         prompt = await self._prompt_service.build_prompt(

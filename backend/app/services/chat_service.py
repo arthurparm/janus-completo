@@ -166,6 +166,7 @@ class ChatService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        identity_source: str = "unknown",
     ) -> dict[str, Any]:
         return await self._message_orchestration_service.send_message(
             conversation_id=conversation_id,
@@ -175,6 +176,7 @@ class ChatService:
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            identity_source=identity_source,
         )
 
     def get_history(
@@ -263,6 +265,7 @@ class ChatService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        identity_source: str = "unknown",
     ):
         async for chunk in self._streaming_service.stream_message(
             conversation_id=conversation_id,
@@ -272,6 +275,7 @@ class ChatService:
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            identity_source=identity_source,
         ):
             yield chunk
 

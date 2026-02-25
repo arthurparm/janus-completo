@@ -83,13 +83,25 @@ async def test_retrieve_context_emits_skip_telemetry_when_user_missing(monkeypat
     monkeypatch.setattr(rag_module, "emit_step_telemetry", _fake_emit)
 
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
-    context = await service.retrieve_context("find context", user_id=None, conversation_id="c-1")
+    context = await service.retrieve_context(
+        "find context",
+        user_id=None,
+        conversation_id="c-1",
+        caller_endpoint="/api/v1/chat/stream/{conversation_id}",
+        transport="sse",
+        identity_source="unknown",
+    )
 
     assert context is None
     assert emitted
     event = emitted[-1]
     assert event["step"] == "retrieve_context"
     assert event["error_code"] == "SKIPPED_MISSING_USER_ID"
+    assert event["endpoint"] == "/api/v1/chat/stream/{conversation_id}"
+    assert event["extra"]["transport"] == "sse"
+    assert event["extra"]["identity_source"] == "unknown"
+    assert event["extra"]["user_id_present"] is False
+    assert event["extra"]["conversation_id_present"] is True
 
 
 @pytest.mark.asyncio

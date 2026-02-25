@@ -72,6 +72,7 @@ class MessageOrchestrationService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        identity_source: str = "unknown",
     ) -> dict[str, Any]:
         try:
             conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
@@ -97,7 +98,12 @@ class MessageOrchestrationService:
         relevant_memories = None
         if self._rag_service:
             relevant_memories = await self._rag_service.retrieve_context(
-                message, user_id=user_id, conversation_id=conversation_id
+                message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                caller_endpoint="/api/v1/chat/message",
+                transport="rest",
+                identity_source=identity_source,
             )
 
         prompt = await self._prompt_service.build_prompt(
@@ -111,7 +117,13 @@ class MessageOrchestrationService:
         try:
             if self._rag_service:
                 await self._rag_service.maybe_index_message(
-                    text=message, user_id=user_id, conversation_id=conversation_id, role="user"
+                    text=message,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    role="user",
+                    caller_endpoint="/api/v1/chat/message",
+                    transport="rest",
+                    identity_source=identity_source,
                 )
         except Exception as e:
             logger.warning("log_warning", message=f"Failed to index user message for {conversation_id}: {e}")
@@ -368,7 +380,12 @@ class MessageOrchestrationService:
             if self._rag_service:
                 try:
                     relevant_memories = await self._rag_service.retrieve_context(
-                        message, user_id=user_id, conversation_id=conversation_id
+                        message,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        caller_endpoint="/api/v1/chat/message",
+                        transport="rest",
+                        identity_source=identity_source,
                     )
                 except Exception as e:
                     logger.warning(
@@ -421,6 +438,9 @@ class MessageOrchestrationService:
                     user_id=user_id,
                     conversation_id=conversation_id,
                     role="assistant",
+                    caller_endpoint="/api/v1/chat/message",
+                    transport="rest",
+                    identity_source=identity_source,
                 )
             except Exception as e:
                 logger.warning(
