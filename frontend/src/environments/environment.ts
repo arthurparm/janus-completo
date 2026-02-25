@@ -6,11 +6,11 @@ export const environment = {
   // Tailscale Funnel Configuration - Acesso público via Tailscale
   tailscale: {
     enabled: true, // Tailscale Funnel ativado para acesso público
-    apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api', // URL pública Tailscale Funnel
-    frontendUrl: 'http://localhost:4200'
+    apiUrl: '/api', // Usa o proxy local do frontend (funciona via localhost e via Tailscale IP)
+    frontendUrl: 'http://localhost:4300'
   },
   // Default API URL - Tailscale Funnel para desenvolvimento
-  apiUrl: 'https://desktop-hjndm9g.tail041209.ts.net/api',
+  apiUrl: '/api',
   firebase: {
     apiKey: "AIzaSyBbxotMnYYpYsczUteKkx0yWiNFXf8_Y70",
     authDomain: "orbisfracta.firebaseapp.com",

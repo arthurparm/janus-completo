@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, timer, of } from 'rxjs';
 import { catchError, map, switchMap, shareReplay, retry } from 'rxjs/operators';
-import { environment } from '../../../environments/environment';
 import { AppLoggerService } from './app-logger.service';
+import { API_BASE_URL } from '../../services/api.config';
 
 export interface SystemStatusResponse {
   app_name: string;
@@ -31,7 +31,8 @@ export interface ServiceHealthResponse {
   providedIn: 'root',
 })
 export class SystemStatusService {
-  private apiUrl = `${environment.apiUrl || '/api/v1'}`;
+  // Reuse the same API base used by the chat/auth flows (defaults to `/api` behind the frontend proxy).
+  private apiUrl = `${API_BASE_URL}/v1/system`;
   
   // Cache shareReplay para evitar múltiplas chamadas simultâneas
   private statusCache$: Observable<SystemStatusResponse> | null = null;

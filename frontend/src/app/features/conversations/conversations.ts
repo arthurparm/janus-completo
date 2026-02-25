@@ -300,6 +300,7 @@ export class ConversationsComponent {
 
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
+  private streamingConversationId: string | null = null
   private scrollQueued = false
   private responseStartedAt: number | null = null
   private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
@@ -1116,7 +1117,31 @@ export class ConversationsComponent {
   // Hook into selectConversation to clear/reload trace
   private selectConversation(id: string | null): void {
     if (id === this.selectedId()) return
+
+    // During "create conversation + send first message", router param updates can arrive mid-stream.
+    // Avoid tearing down the active stream/UI state for that transient navigation synchronization.
+    if (!id && this.sending() && this.streamingMessageId && this.streamingConversationId) {
+      return
+    }
+
     this.selectedId.set(id)
+
+    const preserveActiveStreamForTarget = Boolean(
+      id &&
+      this.sending() &&
+      this.streamingMessageId &&
+      this.streamingConversationId === id
+    )
+
+    if (preserveActiveStreamForTarget && id) {
+      this.eventsService.connect(id)
+      this.loadContext(id)
+      if (this.showTrace()) {
+        this.loadTrace(id)
+      }
+      return
+    }
+
     this.messages.set([])
     this.events.set([])
     this.docs.set([])
@@ -1142,6 +1167,7 @@ export class ConversationsComponent {
     this.responseStartedAt = null
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
 
     if (!id) {
       this.eventsService.disconnect()
@@ -1356,6 +1382,7 @@ export class ConversationsComponent {
   private startStreaming(conversationId: string, message: string): void {
     this.streamingBuffer = ''
     this.streamingMessageId = this.createId()
+    this.streamingConversationId = conversationId
     this.appendMessage({
       id: this.streamingMessageId,
       role: 'assistant',
@@ -1440,6 +1467,7 @@ export class ConversationsComponent {
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
     this.sending.set(false)
     const modelParts = [done.provider, done.model].filter(Boolean)
     const modelLabel = modelParts.length ? ` (${modelParts.join(' / ')})` : ''
@@ -1469,6 +1497,7 @@ export class ConversationsComponent {
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
     this.sending.set(false)
     this.appendThought('system', 'Falha no streaming', reason || 'erro desconhecido')
   }
