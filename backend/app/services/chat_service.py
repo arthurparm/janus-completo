@@ -266,6 +266,9 @@ class ChatService:
         user_id: str | None = None,
         project_id: str | None = None,
         identity_source: str = "unknown",
+        requested_role: str | None = None,
+        routing_decision: Any | None = None,
+        route_applied: bool | None = None,
     ):
         async for chunk in self._streaming_service.stream_message(
             conversation_id=conversation_id,
@@ -276,6 +279,9 @@ class ChatService:
             user_id=user_id,
             project_id=project_id,
             identity_source=identity_source,
+            requested_role=requested_role,
+            routing_decision=routing_decision,
+            route_applied=route_applied,
         ):
             yield chunk
 

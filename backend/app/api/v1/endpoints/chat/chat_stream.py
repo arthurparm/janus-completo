@@ -147,6 +147,9 @@ async def stream_message(
             user_id=user_id,
             project_id=project_id,
             identity_source=identity_ctx.identity_source,
+            requested_role=role,
+            routing_decision=routing_decision,
+            route_applied=route_applied,
         )
     except ConversationNotFoundError:
         raise HTTPException(

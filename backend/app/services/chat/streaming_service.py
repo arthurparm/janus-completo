@@ -68,6 +68,9 @@ class StreamingService:
         user_id: str | None = None,
         project_id: str | None = None,
         identity_source: str = "unknown",
+        requested_role: str | None = None,
+        routing_decision: Any | None = None,
+        route_applied: bool | None = None,
     ):
         role = role or ModelRole.ORCHESTRATOR
         priority = priority or ModelPriority.HIGH_QUALITY
@@ -565,8 +568,35 @@ class StreamingService:
                 citations = []
                 citations_retrieval_failed = True
 
-            pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
             result_understanding = result.get("understanding") if isinstance(result, dict) else None
+            if not isinstance(result_understanding, dict):
+                result_understanding = dict(understanding or {})
+                result["understanding"] = result_understanding
+
+            if routing_decision is not None and hasattr(routing_decision, "to_dict"):
+                try:
+                    result_understanding["routing"] = {
+                        "requested_role": requested_role,
+                        "selected_role": role.value,
+                        "route_applied": bool(route_applied),
+                        **routing_decision.to_dict(),
+                    }
+                except Exception:
+                    pass
+
+                try:
+                    if getattr(routing_decision, "risk_level", None) == "high":
+                        result_understanding["requires_confirmation"] = True
+                        result_understanding["confirmation_reason"] = "high_risk"
+                        if "alto risco" not in str(result.get("response", "")).lower():
+                            result["response"] = (
+                                "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\n"
+                                f"{result.get('response', '')}"
+                            )
+                except Exception:
+                    pass
+
+            pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
             pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
                 user_id=str(user_id) if user_id is not None else None,
                 message=message,
