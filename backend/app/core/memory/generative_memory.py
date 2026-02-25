@@ -175,7 +175,11 @@ class GenerativeMemoryService:
         try:
             collection_name = await aget_or_create_collection(f"user_{user_id}")
             client = get_async_qdrant_client()
-            vec = await aembed_text(experience.content)
+            try:
+                vec = await aembed_text(experience.content)
+            except Exception:
+                # Keep user timeline/population working even if embedding provider is degraded.
+                vec = [0.0] * 1536
             ts_candidate = meta.get("ts_ms") or meta.get("timestamp")
             try:
                 ts_ms = int(float(ts_candidate)) if ts_candidate is not None else int(time.time() * 1000)

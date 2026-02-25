@@ -184,15 +184,25 @@ class UserPreferenceMemoryService:
 
         points: list[Any] = []
         if query:
-            vec = await aembed_text(query)
-            res = await client.query_points(
-                collection_name=collection_name,
-                query=vec,
-                limit=max(limit * 3, limit),
-                with_payload=True,
-                query_filter=qfilter,
-            )
-            points = getattr(res, "points", res) or []
+            try:
+                vec = await aembed_text(query)
+                res = await client.query_points(
+                    collection_name=collection_name,
+                    query=vec,
+                    limit=max(limit * 3, limit),
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+                points = getattr(res, "points", res) or []
+            except Exception as exc:
+                logger.warning("user_preference_query_embed_failed", error=str(exc))
+                scroll_limit = min(200, max(limit * 5, limit))
+                points, _ = await client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=qfilter,
+                    limit=scroll_limit,
+                    with_payload=True,
+                )
         else:
             scroll_limit = min(200, max(limit * 5, limit))
             points, _ = await client.scroll(
