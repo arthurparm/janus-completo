@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import json
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -15,6 +16,7 @@ from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
 from app.core.tools.action_module import action_registry
 from app.models.schemas import TaskState, TaskStateEvent
 from app.repositories.autonomy_repository import AutonomyRepository
+from app.services.autonomy_lock_service import AutonomyLockService
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 from app.services.optimization_service import OptimizationService
@@ -65,6 +67,7 @@ class AutonomyService:
         goal_manager: GoalManager | None = None,
         repo: AutonomyRepository | None = None,
         collaboration_service: CollaborationService | None = None,
+        lock_service: AutonomyLockService | None = None,
     ):
         self._optimization_service = optimization_service
         self._llm_service = llm_service
@@ -78,8 +81,18 @@ class AutonomyService:
         self._last_cycle_at: float | None = None
         self._repo = repo or AutonomyRepository()
         self._collaboration_service = collaboration_service
+        self._lock_service = lock_service or AutonomyLockService()
         self._current_run_id: int | None = None
         self._core_tools_bootstrapped = False
+        self._lease_scope_key = "global"
+        self._lease_owner_id: str | None = None
+        self._lease_ttl_seconds: int = 180
+        self._runtime_lock: dict[str, Any] = {
+            "scope_key": self._lease_scope_key,
+            "owner_id": None,
+            "expires_at": None,
+            "lease_held": False,
+        }
 
     def _ensure_core_tools_registered(self) -> None:
         """Carrega agent_tools uma vez para disparar o registro no action_registry."""
@@ -97,11 +110,56 @@ class AutonomyService:
     def _is_active(self) -> bool:
         return self._autonomy_task is not None and not self._autonomy_task.done()
 
+    def _refresh_runtime_lock_status(
+        self,
+        *,
+        scope_key: str | None = None,
+        owner_id: str | None = None,
+        expires_at: datetime | None = None,
+        lease_held: bool | None = None,
+    ) -> None:
+        if scope_key is not None:
+            self._runtime_lock["scope_key"] = scope_key
+        if owner_id is not None:
+            self._runtime_lock["owner_id"] = owner_id
+        if lease_held is not None:
+            self._runtime_lock["lease_held"] = bool(lease_held)
+        self._runtime_lock["expires_at"] = expires_at.isoformat() if expires_at else None
+
     async def start(self, config: AutonomyConfig) -> bool:
         if self._is_active():
             logger.warning("Tentativa de iniciar AutonomyLoop já ativo.")
             return False
         self._config = config
+        self._lease_scope_key = self._lock_service.make_scope_key(
+            user_id=self._config.user_id,
+            project_id=self._config.project_id,
+        )
+        self._lease_owner_id = self._lock_service.make_owner_id()
+        self._lease_ttl_seconds = max(30, int(self._config.interval_seconds) * 3)
+        lease_ok, lease_state = self._lock_service.try_acquire(
+            scope_key=self._lease_scope_key,
+            owner_id=self._lease_owner_id,
+            ttl_seconds=self._lease_ttl_seconds,
+            metadata={
+                "user_id": self._config.user_id,
+                "project_id": self._config.project_id,
+                "interval_seconds": self._config.interval_seconds,
+            },
+        )
+        self._refresh_runtime_lock_status(
+            scope_key=lease_state.scope_key,
+            owner_id=lease_state.owner_id,
+            expires_at=lease_state.expires_at,
+            lease_held=lease_ok,
+        )
+        if not lease_ok:
+            logger.warning(
+                "autonomy_lease_acquire_failed",
+                scope_key=self._lease_scope_key,
+                owner_id=self._lease_owner_id,
+            )
+            return False
         self._policy = PolicyEngine(
             PolicyConfig(
                 risk_profile=config.risk_profile,
@@ -175,6 +233,28 @@ class AutonomyService:
                 self._repo.stop_run(self._current_run_id)
         except Exception as e:
             logger.warning("Erro ao finalizar run no repositório", exc_info=e)
+        try:
+            if self._lease_owner_id:
+                released = self._lock_service.release(
+                    scope_key=self._lease_scope_key,
+                    owner_id=self._lease_owner_id,
+                )
+                self._refresh_runtime_lock_status(
+                    scope_key=self._lease_scope_key,
+                    owner_id=self._lease_owner_id,
+                    expires_at=None,
+                    lease_held=False,
+                )
+                self._runtime_lock["owner_id"] = None
+                self._lease_owner_id = None
+                logger.info(
+                    "autonomy_lease_released",
+                    scope_key=self._lease_scope_key,
+                    owner_id=self._lease_owner_id,
+                    released=released,
+                )
+        except Exception as e:
+            logger.warning("autonomy_lease_release_failed", error=str(e), exc_info=e)
 
         logger.info("AutonomyLoop parado")
         return True
@@ -197,6 +277,7 @@ class AutonomyService:
                 "project_id": self._config.project_id,
                 "plan": self._config.plan,
             },
+            "runtime_lock": dict(self._runtime_lock),
         }
 
     def update_plan(self, plan: list[dict[str, Any]]) -> None:
@@ -252,7 +333,12 @@ class AutonomyService:
             if self._goal_manager:
                 current_goal = self._goal_manager.get_next_goal()
                 if current_goal and current_goal.status == GoalStatus.PENDING:
-                    self._goal_manager.update_goal_status(current_goal.id, GoalStatus.IN_PROGRESS)
+                    self._goal_manager.update_goal_status(
+                        current_goal.id,
+                        GoalStatus.IN_PROGRESS,
+                        reason="autonomy_loop_selected",
+                        actor="autonomy_loop",
+                    )
         except Exception as e:
             logger.error("Erro ao buscar/atualizar meta no GoalManager", exc_info=e)
             current_goal = None
@@ -344,6 +430,8 @@ class AutonomyService:
         metrics: dict[str, Any],
         plan: list[dict[str, Any]],
         step: dict[str, Any],
+        enqueue_ledger_id: int | None = None,
+        idempotency_key: str | None = None,
     ) -> str:
         if not self._collaboration_service:
             raise AutonomyServiceError("CollaborationService ausente para modo enqueue_router")
@@ -381,6 +469,8 @@ class AutonomyService:
                     "goal_id": goal.id,
                     "execution_mode": "enqueue_router",
                     "autonomy_run_id": self._current_run_id,
+                    "enqueue_ledger_id": enqueue_ledger_id,
+                    "idempotency_key": idempotency_key,
                 },
             },
         )
@@ -415,6 +505,32 @@ class AutonomyService:
                         self._repo.increment_cycles(self._current_run_id)
                 except Exception as e:
                     logger.warning("Falha ao incrementar ciclos no repositório", exc_info=e)
+
+                if self._lease_owner_id:
+                    try:
+                        renewed, lease_state = self._lock_service.renew(
+                            scope_key=self._lease_scope_key,
+                            owner_id=self._lease_owner_id,
+                            ttl_seconds=self._lease_ttl_seconds,
+                        )
+                        self._refresh_runtime_lock_status(
+                            scope_key=lease_state.scope_key,
+                            owner_id=lease_state.owner_id,
+                            expires_at=lease_state.expires_at,
+                            lease_held=renewed and lease_state.lease_held,
+                        )
+                        if not renewed:
+                            logger.error(
+                                "autonomy_lease_lost",
+                                scope_key=self._lease_scope_key,
+                                owner_id=self._lease_owner_id,
+                            )
+                            self._running = False
+                            break
+                    except Exception as e:
+                        logger.error("autonomy_lease_renew_failed", error=str(e), exc_info=e)
+                        self._running = False
+                        break
 
                 await asyncio.sleep(max(1, int(self._config.interval_seconds)))
         except asyncio.CancelledError:
@@ -462,18 +578,54 @@ class AutonomyService:
                 return
 
             step_name = str(step.get("tool", "")).strip()
+            idempotency_key = (
+                f"goal:{current_goal.id}:run:{self._current_run_id or 'none'}:cycle:{cycle}"
+            )
+            enqueue_ledger = self._repo.create_or_get_enqueue_ledger(
+                run_id=self._current_run_id,
+                goal_id=current_goal.id,
+                cycle=cycle,
+                selected_tool=step_name or None,
+                idempotency_key=idempotency_key,
+            )
+            if (
+                str(getattr(enqueue_ledger, "publish_status", "")).lower() == "published"
+                and getattr(enqueue_ledger, "task_id", None)
+            ):
+                logger.info(
+                    "autonomy_enqueue_idempotent_skip",
+                    goal_id=current_goal.id,
+                    cycle=cycle,
+                    task_id=enqueue_ledger.task_id,
+                    idempotency_key=idempotency_key,
+                )
+                self._record_history_step(
+                    cycle=cycle,
+                    tool="autonomy_enqueue",
+                    input_preview=f"goal={current_goal.id} selected_tool={step_name or 'unknown'}",
+                    result_preview=f"idempotent_skip task_id={enqueue_ledger.task_id}",
+                    success=True,
+                    error=None,
+                    duration_seconds=time.perf_counter() - step_t0,
+                )
+                return
+
             task_id = await self._enqueue_taskstate(
                 goal=current_goal,
                 metrics=metrics,
                 plan=plan,
                 step=step,
+                enqueue_ledger_id=getattr(enqueue_ledger, "id", None),
+                idempotency_key=idempotency_key,
             )
+            self._repo.mark_enqueue_published(getattr(enqueue_ledger, "id", 0), task_id)
             input_preview = (
                 f"goal={current_goal.id}:{current_goal.title[:80]} "
                 f"selected_tool={step_name or 'unknown'}"
             )[:300]
             result_preview = (
-                f"task_id={task_id} next_agent_role=router selected_tool={step_name or 'unknown'}"
+                f"task_id={task_id} next_agent_role=router selected_tool={step_name or 'unknown'} "
+                f"ledger_id={getattr(enqueue_ledger, 'id', None)}"
             )[:500]
             self._record_history_step(
                 cycle=cycle,
@@ -487,9 +639,19 @@ class AutonomyService:
         except Exception as e:
             if current_goal:
                 try:
-                    self._goal_manager.update_goal_status(current_goal.id, GoalStatus.PENDING)
+                    self._goal_manager.update_goal_status(
+                        current_goal.id,
+                        GoalStatus.PENDING,
+                        reason="enqueue_publish_failed",
+                        actor="autonomy_loop",
+                    )
                 except Exception:
                     pass
+            try:
+                if "enqueue_ledger" in locals() and getattr(enqueue_ledger, "id", None):
+                    self._repo.mark_enqueue_failed(enqueue_ledger.id, str(e))
+            except Exception:
+                pass
             self._record_history_step(
                 cycle=cycle,
                 tool="autonomy_enqueue",

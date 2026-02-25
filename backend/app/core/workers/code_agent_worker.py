@@ -96,14 +96,21 @@ async def process_code_task(task: TaskMessage) -> None:
             if settings.CODER_SELF_HEALING_ENABLED:
                 validation_result = _validate_code_syntax(code)
                 if validation_result["valid"]:
-                    logger.info("log_info", message=f"Code validated on iteration {iteration + 1}/{max_iterations}",
-                        extra={"task_id": state.task_id},
+                    logger.info(
+                        "code_agent_validation_passed",
+                        task_id=state.task_id,
+                        iteration=iteration + 1,
+                        max_iterations=max_iterations,
                     )
                     break
                 else:
                     compilation_error = validation_result["error"]
-                    logger.warning("log_warning", message=f"Code validation failed on iteration {iteration + 1}, retrying...",
-                        extra={"task_id": state.task_id, "error": compilation_error[:200]},
+                    logger.warning(
+                        "code_agent_validation_failed_retrying",
+                        task_id=state.task_id,
+                        iteration=iteration + 1,
+                        max_iterations=max_iterations,
+                        error_preview=(compilation_error or "")[:200],
                     )
             else:
                 break  # No self-healing, skip validation loop
@@ -121,6 +128,7 @@ async def process_code_task(task: TaskMessage) -> None:
         )
 
         # Red Team Intercept: Todo código deve ser auditado antes de revisão ou execução
+        state.status = "in_progress"
         state.next_agent_role = "red_team"
 
         service = CollaborationService(CollaborationRepository())
@@ -136,7 +144,7 @@ async def process_code_task(task: TaskMessage) -> None:
             },
         )
     except Exception as e:
-        logger.error("log_error", message=f"CodeAgent falhou: {e}", exc_info=True)
+        logger.error("code_agent_failed", error=str(e), exc_info=True)
         raise
 
 

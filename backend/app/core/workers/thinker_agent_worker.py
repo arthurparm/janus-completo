@@ -69,6 +69,7 @@ async def process_thinker_task(task: TaskMessage) -> None:
         )
 
         # O próximo passo é SEMPRE o CoderAgent para executar o plano
+        state.status = "in_progress"
         state.next_agent_role = "coder"
 
         service = CollaborationService(CollaborationRepository())
@@ -78,7 +79,7 @@ async def process_thinker_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error("log_error", message=f"ThinkerAgent falhou: {e}", exc_info=True)
+        logger.error("thinker_agent_failed", error=str(e), exc_info=True)
         raise
 
 

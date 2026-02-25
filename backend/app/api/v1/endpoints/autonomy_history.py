@@ -34,6 +34,20 @@ class StepItem(BaseModel):
     created_at: str | None
 
 
+class EnqueueLedgerItem(BaseModel):
+    id: int
+    run_id: int | None
+    goal_id: str
+    task_id: str | None
+    cycle: int
+    selected_tool: str | None
+    idempotency_key: str
+    publish_status: str
+    publish_error: str | None
+    created_at: str | None
+    updated_at: str | None
+
+
 @router.get("/runs", response_model=list[RunSummary], summary="Lista execuções do AutonomyLoop")
 async def list_runs(
     user_id: str | None = None,
@@ -97,4 +111,33 @@ async def list_steps(
             created_at=str(s.created_at),
         )
         for s in steps
+    ]
+
+
+@router.get(
+    "/runs/{run_id}/enqueues",
+    response_model=list[EnqueueLedgerItem],
+    summary="Lista enqueues de uma execução de autonomia",
+)
+async def list_enqueues(
+    run_id: int,
+    limit: int = 100,
+    repo: AutonomyRepository = Depends(get_autonomy_repo),
+):
+    rows = repo.list_enqueues(run_id=run_id, limit=limit)
+    return [
+        EnqueueLedgerItem(
+            id=int(r.id),
+            run_id=int(r.run_id) if r.run_id is not None else None,
+            goal_id=str(r.goal_id),
+            task_id=str(r.task_id) if r.task_id else None,
+            cycle=int(r.cycle or 0),
+            selected_tool=str(r.selected_tool) if r.selected_tool else None,
+            idempotency_key=str(r.idempotency_key),
+            publish_status=str(r.publish_status),
+            publish_error=str(r.publish_error) if r.publish_error else None,
+            created_at=str(r.created_at) if r.created_at else None,
+            updated_at=str(r.updated_at) if r.updated_at else None,
+        )
+        for r in rows
     ]

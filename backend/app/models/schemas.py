@@ -338,6 +338,7 @@ class TaskState(BaseModel):
     next_agent_role: str | None = None
     data_payload: AgentPayload = Field(default_factory=AgentPayload)
     history: list[TaskStateEvent] = Field(default_factory=list)
+    # Canonical statuses used by Parliament/autonomy: in_progress, completed, failed, blocked, cancelled
     status: str = Field(default="in_progress")
     retries: int = Field(default=0)
     meta: dict[str, Any] = Field(default_factory=dict)

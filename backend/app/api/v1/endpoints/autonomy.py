@@ -36,6 +36,7 @@ class AutonomyStatusResponse(BaseModel):
     cycle_count: int
     last_cycle_at: float | None
     config: dict[str, Any]
+    runtime_lock: dict[str, Any] | None = None
 
 
 class PlanUpdateRequest(BaseModel):
@@ -160,6 +161,13 @@ async def start_autonomy(
     )
     ok = await service.start(config)
     if not ok:
+        status_payload = service.get_status()
+        runtime_lock = status_payload.get("runtime_lock") or {}
+        if not status_payload.get("active") and runtime_lock.get("owner_id"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="AutonomyLoop lease indisponível (outra instância está ativa neste escopo).",
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="AutonomyLoop já está ativo."
         )

@@ -47,6 +47,7 @@ from app.repositories.prompt_repository import PromptRepository
 from app.services.agent_service import AgentService
 from app.services.assistant_service import AssistantService
 from app.services.autonomy_service import AutonomyService
+from app.services.autonomy_lock_service import AutonomyLockService
 from app.services.chat_service import ChatService
 from app.services.collaboration_service import CollaborationService
 from app.services.context_service import ContextService
@@ -369,6 +370,7 @@ class Kernel:
                 self.llm_service,
                 self.goal_manager,
                 collaboration_service=self.collaboration_service,
+                lock_service=AutonomyLockService(),
             )
 
             # Chat Stack
