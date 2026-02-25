@@ -60,7 +60,24 @@ def _normalize_legacy_structlog_event(_, __, event_dict: dict[str, Any]):
     event = event_dict.get("event")
     message = event_dict.get("message")
 
-    if event in _LEGACY_LOG_EVENTS:
+    # Some callsites pass a structured dict as the positional event:
+    #   logger.info({"event": "...", "foo": "bar"})
+    # structlog stores that dict under event_dict["event"].
+    # Normalize it by flattening into the top-level event payload.
+    if isinstance(event, dict):
+        nested = event
+        nested_event = nested.get("event")
+        for key, value in nested.items():
+            if key == "event":
+                continue
+            event_dict.setdefault(str(key), value)
+        if isinstance(nested_event, str) and nested_event.strip():
+            event_dict["event"] = nested_event
+        else:
+            event_dict["event"] = "structured_log_event"
+        event = event_dict.get("event")
+
+    if isinstance(event, str) and event in _LEGACY_LOG_EVENTS:
         if message is not None:
             event_dict["event"] = str(message)
             event_dict["legacy_event"] = str(event)

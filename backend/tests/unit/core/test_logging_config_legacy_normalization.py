@@ -27,3 +27,16 @@ def test_normalize_legacy_structlog_event_noop_for_modern_events():
 
     assert out["event"] == "router_terminal_sink"
     assert "legacy_event" not in out
+
+
+def test_normalize_legacy_structlog_event_flattens_dict_event():
+    event_dict = {
+        "event": {"event": "write_file_success", "path": "/tmp/x", "bytes": 12},
+        "level": "info",
+    }
+    out = _normalize_legacy_structlog_event(None, None, event_dict)
+
+    assert out["event"] == "write_file_success"
+    assert out["path"] == "/tmp/x"
+    assert out["bytes"] == 12
+    assert out["level"] == "info"
