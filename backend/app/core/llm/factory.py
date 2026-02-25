@@ -52,6 +52,19 @@ logger = structlog.get_logger(__name__)
 # Pool de executores por provedor
 _llm_executors: dict[str, ThreadPoolExecutor] = {}
 
+# OpenAI-compatible models that only support default temperature.
+_MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset(
+    {"o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o3-mini-2025-01-31", "gpt-5"}
+)
+
+
+def _model_supports_temperature(model_name: str) -> bool:
+    model_lower = (model_name or "").strip().lower()
+    for no_temp_model in _MODELS_WITHOUT_TEMPERATURE_SUPPORT:
+        if model_lower == no_temp_model or model_lower.startswith(f"{no_temp_model}-"):
+            return False
+    return True
+
 
 def _get_executor(provider_key: str) -> ThreadPoolExecutor:
     max_workers = int(getattr(settings, "LLM_EXECUTOR_MAX_WORKERS", 4) or 4)
@@ -253,12 +266,16 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 # Ensure client dependencies are initialized
                 _get_openai_client()
 
-                llm = ChatOpenAI(
-                    model=model,
-                    temperature=0,
-                    api_key=getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)(),
-                    http_client=_openai_http_client,
-                )
+                kwargs = {
+                    "model": model,
+                    "api_key": getattr(
+                        settings.OPENAI_API_KEY, "get_secret_value", lambda: None
+                    )(),
+                    "http_client": _openai_http_client,
+                }
+                if _model_supports_temperature(model):
+                    kwargs["temperature"] = 0
+                llm = ChatOpenAI(**kwargs)
                 _add_to_pool("openai", model, llm)
             elif provider == "google_gemini":
                 if not _validate_gemini_key(

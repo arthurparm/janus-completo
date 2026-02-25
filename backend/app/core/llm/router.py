@@ -95,9 +95,18 @@ def _normalize(values):
     return [(v - min_v) / (max_v - min_v) for v in values]
 
 
-# Models that don't support temperature parameter (o1, o3 series)
+# Models that don't support custom temperature in Chat Completions.
+# Includes o1/o3 families and GPT-5 family variants.
 MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset(
-    {"o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o3-mini-2025-01-31"}
+    {
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3",
+        "o3-mini",
+        "o3-mini-2025-01-31",
+        "gpt-5",
+    }
 )
 
 

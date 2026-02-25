@@ -258,9 +258,9 @@ class AppSettings(BaseSettings):
     GEMINI_COST_PER_1K_OUTPUT_USD: float = 1.5
     OLLAMA_COST_PER_1K_INPUT_USD: float = 0.0
     OLLAMA_COST_PER_1K_OUTPUT_USD: float = 0.0
-    DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00027
-    DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00110
-    DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.00007
+    DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00028
+    DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00042
+    DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.000028
     XAI_COST_PER_1K_INPUT_USD: float = 0.00020
     XAI_COST_PER_1K_OUTPUT_USD: float = 0.00050
     OPENROUTER_COST_PER_1K_INPUT_USD: float = 0.0
@@ -309,14 +309,14 @@ class AppSettings(BaseSettings):
     }
     DEEPSEEK_MODEL_PRICING: dict[str, dict[str, float]] = {
         "deepseek-chat": {
-            "input_per_1k_usd": 0.00027,
-            "output_per_1k_usd": 0.00110,
-            "cache_read_per_1k_usd": 0.00007,
+            "input_per_1k_usd": 0.00028,
+            "output_per_1k_usd": 0.00042,
+            "cache_read_per_1k_usd": 0.000028,
         },
         "deepseek-reasoner": {
-            "input_per_1k_usd": 0.00055,
-            "output_per_1k_usd": 0.00219,
-            "cache_read_per_1k_usd": 0.00014,
+            "input_per_1k_usd": 0.00028,
+            "output_per_1k_usd": 0.00042,
+            "cache_read_per_1k_usd": 0.000028,
         },
     }
     XAI_MODEL_PRICING: dict[str, dict[str, float]] = {

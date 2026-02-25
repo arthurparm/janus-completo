@@ -42,6 +42,7 @@ _provider_stats: dict[str, ProviderStats] = {
     "google_gemini": ProviderStats(),
     "ollama": ProviderStats(),
     "deepseek": ProviderStats(),
+    "xai": ProviderStats(),
 }
 
 _model_stats: dict[str, dict[str, ModelStats]] = {
@@ -49,6 +50,7 @@ _model_stats: dict[str, dict[str, ModelStats]] = {
     "google_gemini": {},
     "ollama": {},
     "deepseek": {},
+    "xai": {},
 }
 
 # Pricing por provedor (valores padrão via settings; Ollama ~ 0)
@@ -70,6 +72,10 @@ _provider_pricing: dict[str, ProviderPricing] = {
         output_per_1k_usd=settings.DEEPSEEK_COST_PER_1K_OUTPUT_USD,
         cache_read_per_1k_usd=settings.DEEPSEEK_COST_PER_1K_CACHE_READ_USD,
     ),
+    "xai": ProviderPricing(
+        input_per_1k_usd=settings.XAI_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.XAI_COST_PER_1K_OUTPUT_USD,
+    ),
 }
 
 # Orçamentos mensais por provedor
@@ -78,6 +84,7 @@ _provider_budgets_usd: dict[str, float] = {
     "google_gemini": settings.GEMINI_MONTHLY_BUDGET_USD,
     "ollama": settings.OLLAMA_MONTHLY_BUDGET_USD,
     "deepseek": settings.DEEPSEEK_MONTHLY_BUDGET_USD,
+    "xai": settings.XAI_MONTHLY_BUDGET_USD,
 }
 
 # Rastreamento de gastos acumulados
@@ -86,6 +93,7 @@ _provider_spend_usd: dict[str, float] = {
     "google_gemini": 0.0,
     "ollama": 0.0,
     "deepseek": 0.0,
+    "xai": 0.0,
 }
 
 # Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
@@ -94,6 +102,7 @@ _model_penalty_factors: dict[str, dict[str, float]] = {
     "google_gemini": {},
     "ollama": {},
     "deepseek": {},
+    "xai": {},
 }
 
 # EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
@@ -166,7 +175,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
     Used for Dynamic Budget Guardrails.
     """
     # Only consider cloud providers with positive budgets
-    cloud_providers = ["openai", "google_gemini", "deepseek"]
+    cloud_providers = ["openai", "google_gemini", "deepseek", "xai"]
 
     total_budget = sum(_provider_budgets_usd.get(p, 0.0) for p in cloud_providers)
 
