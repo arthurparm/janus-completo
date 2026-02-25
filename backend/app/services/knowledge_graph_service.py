@@ -1,7 +1,10 @@
-import structlog
 import asyncio
-from typing import Any
+from collections import OrderedDict
 from datetime import datetime
+from typing import Any
+
+import structlog
+from prometheus_client import Counter
 
 from app.db.graph import get_graph_db
 from app.core.infrastructure.resilience import CircuitOpenError
@@ -9,6 +12,27 @@ from app.core.memory.graph_guardian import graph_guardian
 from app.models.schemas import EntityType, RelationType, KnowledgeEntity, KnowledgeRelationship, Experience
 
 logger = structlog.get_logger(__name__)
+
+_GRAPH_ENTITIES_NORMALIZED_TOTAL = Counter(
+    "graph_entities_normalized_total",
+    "Total de entidades normalizadas antes da persistencia no grafo",
+)
+_GRAPH_ENTITY_ALIAS_ADDED_TOTAL = Counter(
+    "graph_entity_alias_added_total",
+    "Total de aliases adicionados em nós Entity",
+)
+_GRAPH_RELATIONSHIPS_DEDUPED_IN_BATCH_TOTAL = Counter(
+    "graph_relationships_deduped_in_batch_total",
+    "Total de relacionamentos deduplicados dentro do mesmo lote de extração",
+)
+_GRAPH_RELATIONSHIPS_FALLBACK_GENERIC_TOTAL = Counter(
+    "graph_relationships_fallback_generic_total",
+    "Total de relacionamentos mapeados para o fallback genérico RELATED_TO",
+)
+_GRAPH_RELATIONSHIPS_QUARANTINED_TOTAL = Counter(
+    "graph_relationships_quarantined_total",
+    "Total de relacionamentos enviados para quarentena",
+)
 
 
 class KnowledgeGraphService:
@@ -107,98 +131,133 @@ class KnowledgeGraphService:
 
         entities = extracted_data.get("entities", [])
         relationships = extracted_data.get("relationships", [])
+        prepared_entities = self._prepare_entities_batch(entities)
+        prepared_relationships = self._prepare_relationships_batch(relationships)
 
         created_entities_count = 0
         created_relationships_count = 0
 
-        # Mapeamento local de IDs temporários (do LLM) para eementos reais
-        # O LLM pode retornar IDs arbitrários. Precisamos normalizar.
-
         # 1. Persistir Entidades
-        for idx, ent in enumerate(entities):
+        for idx, ent in enumerate(prepared_entities):
             try:
-                # Normalização e Validação
-                name = ent.get("name", "").strip()
-                type_str = ent.get("type", "unknown").lower()
-
-                if not name or len(name) < 2:
-                    continue
-
-                # Tentar mapear string para Enum
-                try:
-                    entity_type = EntityType(type_str)
-                except ValueError:
-                    entity_type = EntityType.CONCEPT  # Fallback seguro
-
-                # Criar nó
-                properties = {
-                    "name": name,
-                    "description": ent.get("description", ""),
-                    "source_experience": experience_id,
-                    "confidence": ent.get("confidence", 0.5),
-                    "created_at": datetime.now().isoformat(),
-                }
-
-                # Merge (cria ou atualiza se já existir pelo nome)
-                # Nota: Idealmente usaríamos um ID único, mas para consolidação de conhecimento
-                # fusão por nome é frequentemente desejada.
-                query = f"""
-                MERGE (e:Entity {{name: $name}})
-                ON CREATE SET e.type = $type, e += $props
-                ON MATCH SET e.last_seen = $now
-                RETURN elementId(e) as id
+                now = datetime.now().isoformat()
+                query = """
+                MERGE (e:Entity {canonical_name: $canonical_name})
+                ON CREATE SET
+                    e.type = $type,
+                    e.name = $display_name,
+                    e.description = $description,
+                    e.source_experience = $exp_id,
+                    e.source_experiences = CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END,
+                    e.confidence = $confidence,
+                    e.created_at = $now,
+                    e.canonical_name = $canonical_name
+                ON MATCH SET
+                    e.last_seen = $now,
+                    e.canonical_name = coalesce(e.canonical_name, $canonical_name),
+                    e.type = coalesce(e.type, $type),
+                    e.source_experience = coalesce(e.source_experience, $exp_id),
+                    e.confidence = coalesce(e.confidence, $confidence),
+                    e.description = CASE
+                        WHEN coalesce(e.description, '') = '' AND coalesce($description, '') <> '' THEN $description
+                        ELSE e.description
+                    END
+                WITH e,
+                     CASE
+                        WHEN e.aliases IS NULL THEN CASE WHEN coalesce(e.name, '') = '' THEN [] ELSE [e.name] END
+                        ELSE e.aliases
+                     END AS current_aliases,
+                     [a IN $aliases WHERE a IS NOT NULL AND trim(a) <> ''] AS alias_candidates,
+                     CASE
+                        WHEN e.source_experiences IS NULL THEN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END
+                        ELSE e.source_experiences
+                     END AS current_source_experiences
+                WITH e, current_aliases, alias_candidates, current_source_experiences,
+                     size([a IN alias_candidates WHERE NOT a IN current_aliases]) AS alias_added_count
+                SET e.aliases = reduce(acc = current_aliases, a IN alias_candidates |
+                    CASE WHEN a IN acc THEN acc ELSE acc + a END
+                )
+                SET e.source_experiences = reduce(acc = current_source_experiences, x IN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END |
+                    CASE WHEN x IN acc THEN acc ELSE acc + x END
+                )
+                RETURN elementId(e) as id, alias_added_count
                 """
 
-                await db.query(
+                result = await db.query(
                     query,
                     {
-                        "name": name,
-                        "type": entity_type.value,
-                        "props": properties,
-                        "now": datetime.now().isoformat(),
+                        "canonical_name": ent["canonical_name"],
+                        "display_name": ent["display_name"],
+                        "aliases": ent["aliases"],
+                        "type": ent["type"],
+                        "description": ent.get("description", ""),
+                        "confidence": ent.get("confidence", 0.5),
+                        "exp_id": experience_id,
+                        "now": now,
                     },
                 )
 
+                if result:
+                    try:
+                        alias_added = int(result[0].get("alias_added_count", 0) or 0)
+                        if alias_added > 0:
+                            _GRAPH_ENTITY_ALIAS_ADDED_TOTAL.inc(alias_added)
+                    except Exception:
+                        pass
                 created_entities_count += 1
 
             except CircuitOpenError as e:
-                remaining = max(0, len(entities) - idx)
+                remaining = max(0, len(prepared_entities) - idx)
                 logger.warning(
                     "Circuit breaker aberto durante persistencia de entidades; "
                     f"abortando lote (restantes={remaining}): {e}"
                 )
                 break
             except Exception as e:
-                logger.error("log_error", message=f"Erro ao persistir entidade '{ent.get('name')}': {e}", exc_info=True)
+                logger.error(
+                    "log_error",
+                    message=f"Erro ao persistir entidade '{ent.get('display_name')}': {e}",
+                    exc_info=True,
+                )
 
         # 2. Persistir Relacionamentos
-        for idx, rel in enumerate(relationships):
+        for idx, rel in enumerate(prepared_relationships):
             try:
-                source_name = rel.get("source", "").strip()
-                target_name = rel.get("target", "").strip()
-                rel_type_str = rel.get("relation", "RELATED_TO").upper().replace(" ", "_")
-
-                if not source_name or not target_name:
-                    continue
-
                 # Validação via Graph Guardian (Quarentena)
                 if self._should_quarantine(rel):
+                    _GRAPH_RELATIONSHIPS_QUARANTINED_TOTAL.inc()
                     await self._send_to_quarantine(rel, experience_id, "Policy Violation")
                     continue
 
-                # Validar tipo de relacionamento
-                try:
-                    relation_type = RelationType(rel_type_str)
-                except ValueError:
-                    # Se não for um tipo conhecido, marca como genérico 'RELATED_TO'
-                    # ou tenta inferir.
-                    relation_type = RelationType.RELATED_TO
+                relation_type, used_generic_fallback = self._coerce_relation_type(rel.get("normalized_type"))
+                if used_generic_fallback:
+                    _GRAPH_RELATIONSHIPS_FALLBACK_GENERIC_TOTAL.inc()
 
-                # Criar aresta
-                # Assume que nós já existem (pelo passo 1) ou cria placeholders
                 query = f"""
-                MATCH (source:Entity {{name: $source_name}})
-                MATCH (target:Entity {{name: $target_name}})
+                MATCH (source:Entity)
+                WHERE source.canonical_name = $source_canonical
+                   OR source.name = $source_canonical
+                   OR source.name = $source_name
+                WITH source,
+                     CASE
+                        WHEN source.canonical_name = $source_canonical THEN 0
+                        WHEN source.name = $source_canonical THEN 1
+                        ELSE 2
+                     END AS source_rank
+                ORDER BY source_rank ASC
+                LIMIT 1
+                MATCH (target:Entity)
+                WHERE target.canonical_name = $target_canonical
+                   OR target.name = $target_canonical
+                   OR target.name = $target_name
+                WITH source, target,
+                     CASE
+                        WHEN target.canonical_name = $target_canonical THEN 0
+                        WHEN target.name = $target_canonical THEN 1
+                        ELSE 2
+                     END AS target_rank
+                ORDER BY target_rank ASC
+                LIMIT 1
                 MERGE (source)-[r:{relation_type.value}]->(target)
                 ON CREATE SET r.weight = $weight, r.source_exp = $exp_id, r.created_at = $now
                 ON MATCH SET r.weight = r.weight + 0.1, r.last_seen = $now
@@ -208,8 +267,10 @@ class KnowledgeGraphService:
                 result = await db.query(
                     query,
                     {
-                        "source_name": source_name,
-                        "target_name": target_name,
+                        "source_name": rel["source"],
+                        "target_name": rel["target"],
+                        "source_canonical": rel["source_canonical"],
+                        "target_canonical": rel["target_canonical"],
                         "weight": rel.get("weight", 0.5),
                         "exp_id": experience_id,
                         "now": datetime.now().isoformat(),
@@ -220,11 +281,16 @@ class KnowledgeGraphService:
                     created_relationships_count += 1
                 else:
                     # Se falhou, pode ser que um dos nós não exista (ex: erro de digitação do LLM)
-                    logger.warning("log_warning", message=f"Relacionamento ignorado (nós não encontrados): {source_name} -> {target_name}"
+                    logger.warning(
+                        "log_warning",
+                        message=(
+                            "Relacionamento ignorado (nós não encontrados): "
+                            f"{rel.get('source')} -> {rel.get('target')}"
+                        ),
                     )
 
             except CircuitOpenError as e:
-                remaining = max(0, len(relationships) - idx)
+                remaining = max(0, len(prepared_relationships) - idx)
                 logger.warning(
                     "Circuit breaker aberto durante persistencia de relacionamentos; "
                     f"abortando lote (restantes={remaining}): {e}"
@@ -235,15 +301,144 @@ class KnowledgeGraphService:
 
         return created_entities_count, created_relationships_count
 
+    def _prepare_entities_batch(self, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        for ent in entities or []:
+            raw_name = str(ent.get("name") or "").strip()
+            if len(raw_name) < 2:
+                continue
+            raw_type = str(ent.get("type") or "unknown")
+            try:
+                normalized = graph_guardian.validate_and_normalize_entity(raw_name, raw_type, ent)
+            except Exception as exc:
+                logger.warning(
+                    "log_warning",
+                    message=f"Entidade ignorada por erro de normalização '{raw_name}': {exc}",
+                )
+                continue
+
+            canonical_name = str(normalized.get("name") or "").strip()
+            if not canonical_name:
+                continue
+
+            if raw_name != canonical_name:
+                _GRAPH_ENTITIES_NORMALIZED_TOTAL.inc()
+
+            schema_type = self._coerce_entity_type(normalized.get("type"))
+            item = grouped.get(canonical_name)
+            description = str(ent.get("description") or "").strip()
+            confidence = float(ent.get("confidence", 0.5) or 0.5)
+            if item is None:
+                grouped[canonical_name] = {
+                    "canonical_name": canonical_name,
+                    "display_name": raw_name,
+                    "aliases": [raw_name],
+                    "type": schema_type.value,
+                    "description": description,
+                    "confidence": confidence,
+                }
+                continue
+
+            if raw_name and raw_name not in item["aliases"]:
+                item["aliases"].append(raw_name)
+            if description and not item.get("description"):
+                item["description"] = description
+            try:
+                item["confidence"] = max(float(item.get("confidence", 0.5) or 0.5), confidence)
+            except Exception:
+                item["confidence"] = item.get("confidence", 0.5)
+        return list(grouped.values())
+
+    def _prepare_relationships_batch(self, relationships: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: OrderedDict[tuple[str, str, str], dict[str, Any]] = OrderedDict()
+        deduped_in_batch = 0
+
+        for rel in relationships or []:
+            source_name = str(rel.get("source") or "").strip()
+            target_name = str(rel.get("target") or "").strip()
+            raw_rel_type = str(rel.get("relation") or "RELATED_TO")
+            if not source_name or not target_name:
+                continue
+
+            normalized = graph_guardian.validate_and_normalize_relationship(
+                source_name, target_name, raw_rel_type, rel.get("properties")
+            )
+            if not normalized:
+                # Mantemos o item inválido de fora; a validação já faz logging.
+                continue
+
+            source_canonical = str(normalized.get("from") or "").strip()
+            target_canonical = str(normalized.get("to") or "").strip()
+            normalized_type = str(normalized.get("type") or "").strip()
+            if not source_canonical or not target_canonical or not normalized_type:
+                continue
+
+            key = (source_canonical, normalized_type, target_canonical)
+            if key in grouped:
+                deduped_in_batch += 1
+                existing = grouped[key]
+                try:
+                    existing["weight"] = max(
+                        float(existing.get("weight", 0.5) or 0.5),
+                        float(rel.get("weight", 0.5) or 0.5),
+                    )
+                except Exception:
+                    pass
+                continue
+
+            grouped[key] = {
+                "source": source_name,
+                "target": target_name,
+                "source_canonical": source_canonical,
+                "target_canonical": target_canonical,
+                "relation": raw_rel_type,
+                "normalized_type": normalized_type,
+                "weight": rel.get("weight", 0.5),
+                "properties": rel.get("properties") or {},
+            }
+
+        if deduped_in_batch > 0:
+            _GRAPH_RELATIONSHIPS_DEDUPED_IN_BATCH_TOTAL.inc(deduped_in_batch)
+
+        return list(grouped.values())
+
+    def _coerce_entity_type(self, type_str: Any) -> EntityType:
+        raw = str(type_str or "").strip()
+        if not raw:
+            return EntityType.CONCEPT
+        try:
+            return EntityType(raw)
+        except ValueError:
+            pass
+        normalized = raw.lower()
+        try:
+            return EntityType(normalized)
+        except ValueError:
+            return EntityType.CONCEPT
+
+    def _coerce_relation_type(self, normalized_rel_type: Any) -> tuple[RelationType, bool]:
+        raw = str(normalized_rel_type or "").strip().upper().replace(" ", "_").replace("-", "_")
+        if not raw:
+            return RelationType.RELATED_TO, True
+        if raw == "RELATES_TO":
+            return RelationType.RELATED_TO, False
+        try:
+            return RelationType(raw), False
+        except ValueError:
+            return RelationType.RELATED_TO, True
+
     def _should_quarantine(self, rel: dict[str, Any]) -> bool:
         """Verifica se o relacionamento deve ir para quarentena."""
         # Integração com GraphGuardian
-        source = rel.get("source")
-        target = rel.get("target")
-        relation = rel.get("relation")
+        source = str(rel.get("source") or "")
+        target = str(rel.get("target") or "")
+        relation = str(rel.get("normalized_type") or rel.get("relation") or "")
+
+        normalized_source = graph_guardian.normalize_entity_name(source)
+        normalized_target = graph_guardian.normalize_entity_name(target)
 
         # Exemplo de regra simples
-        if source == target:
+        if normalized_source and normalized_source == normalized_target:
             return True  # Auto-referência suspeita
 
         # Validação de política
@@ -274,6 +469,8 @@ class KnowledgeGraphService:
         cypher = f"""
         MATCH (start:Entity)
         WHERE start.name IN $names
+           OR start.canonical_name IN $names
+           OR any(a IN coalesce(start.aliases, []) WHERE a IN $names)
         CALL apoc.path.subgraphAll(start, {{
             maxLevel: $hops,
             limit: 50
@@ -289,6 +486,8 @@ class KnowledgeGraphService:
         cypher_standard = """
         MATCH (n:Entity)
         WHERE n.name IN $names
+           OR n.canonical_name IN $names
+           OR any(a IN coalesce(n.aliases, []) WHERE a IN $names)
         OPTIONAL MATCH (n)-[r]-(m)
         RETURN collect(distinct n) + collect(distinct m) as nodes, collect(distinct r) as edges
         LIMIT 100
@@ -350,12 +549,16 @@ class KnowledgeGraphService:
             cypher_explicit = """
             MATCH (n:Entity)
             WHERE n.name IN $names
+               OR n.canonical_name IN $names
+               OR any(a IN coalesce(n.aliases, []) WHERE a IN $names)
             OPTIONAL MATCH (n)-[r]-(m:Entity)
             RETURN 
                 n.name as source_name, 
+                n.canonical_name as source_canonical_name,
                 n.type as source_type, 
                 type(r) as rel_type, 
                 m.name as target_name, 
+                m.canonical_name as target_canonical_name,
                 m.type as target_type
             LIMIT 100
             """
@@ -370,22 +573,37 @@ class KnowledgeGraphService:
                 t_name = row.get("target_name")
                 
                 if s_name:
-                    nodes_map[s_name] = {"id": s_name, "label": s_name, "type": row.get("source_type", "Entity")}
+                    source_id = row.get("source_canonical_name") or s_name
+                    nodes_map[source_id] = {"id": source_id, "label": s_name, "type": row.get("source_type", "Entity")}
                 
                 if t_name:
-                    nodes_map[t_name] = {"id": t_name, "label": t_name, "type": row.get("target_type", "Entity")}
+                    target_id = row.get("target_canonical_name") or t_name
+                    nodes_map[target_id] = {"id": target_id, "label": t_name, "type": row.get("target_type", "Entity")}
                     
                 if s_name and t_name and row.get("rel_type"):
+                    source_id = row.get("source_canonical_name") or s_name
+                    target_id = row.get("target_canonical_name") or t_name
                     edges_list.append({
                         "data": {
-                            "source": s_name,
-                            "target": t_name,
+                            "source": source_id,
+                            "target": target_id,
                             "label": row.get("rel_type")
                         }
                     })
             
             # Formatar output final
-            final_nodes = [{"data": {**v, "color": "#4F46E5" if v["id"] in node_names else "#9CA3AF"}} for v in nodes_map.values()]
+            requested_names = set(node_names)
+            final_nodes = [
+                {
+                    "data": {
+                        **v,
+                        "color": "#4F46E5"
+                        if (v["id"] in requested_names or v.get("label") in requested_names)
+                        else "#9CA3AF",
+                    }
+                }
+                for v in nodes_map.values()
+            ]
             
             return {
                 "nodes": final_nodes,
