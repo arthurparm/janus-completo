@@ -1756,12 +1756,17 @@ export class ConversationsComponent {
 
   private isConversationMemory(item: MemoryItem, conversationId: string): boolean {
     const metadata = item.metadata || {}
-    const sessionId = String(metadata.session_id || '')
-    const threadId = String(metadata['thread_id'] || '')
-    const convoId = String(metadata['conversation_id'] || '')
-    const taskId = String(metadata['task_id'] || '')
+    const target = String(conversationId || '').trim()
+    if (!target) return false
+    const sessionId = String(metadata.session_id || '').trim()
+    const threadId = String(metadata['thread_id'] || '').trim()
+    const convoId = String(metadata['conversation_id'] || '').trim()
+    const taskId = String(metadata['task_id'] || '').trim()
     const compositeId = String(item.composite_id || '')
-    return [sessionId, threadId, convoId, taskId, compositeId].some((value) => value.includes(conversationId))
+    if ([sessionId, threadId, convoId, taskId].some((value) => value === target)) return true
+    if (!compositeId) return false
+    const compositeTokens = compositeId.split(/[:/|]/g).map((part) => part.trim()).filter(Boolean)
+    return compositeTokens.some((part) => part === target)
   }
 
   private coerceDateInputToMs(value: unknown): number | null {

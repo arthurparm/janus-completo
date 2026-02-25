@@ -183,6 +183,7 @@ class UserPreferenceMemoryService:
         qfilter = qdrant_models.Filter(must=must)
 
         points: list[Any] = []
+        used_vector_query = False
         if query:
             try:
                 vec = await aembed_text(query)
@@ -194,6 +195,7 @@ class UserPreferenceMemoryService:
                     query_filter=qfilter,
                 )
                 points = getattr(res, "points", res) or []
+                used_vector_query = True
             except Exception as exc:
                 logger.warning("user_preference_query_embed_failed", error=str(exc))
                 scroll_limit = min(200, max(limit * 5, limit))
@@ -225,6 +227,13 @@ class UserPreferenceMemoryService:
             key=lambda item: self._preference_rank(item),
             reverse=True,
         )
+        if query and not used_vector_query:
+            qnorm = str(query).lower()
+            ranked = [
+                item for item in ranked
+                if qnorm in str(item.get("instruction_text") or "").lower()
+                or qnorm in str(item.get("content") or "").lower()
+            ]
         return ranked[:limit]
 
     def format_preference_context(self, items: list[dict[str, Any]]) -> str | None:
