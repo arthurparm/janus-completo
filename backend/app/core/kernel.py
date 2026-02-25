@@ -368,6 +368,7 @@ class Kernel:
                 self.optimization_service,
                 self.llm_service,
                 self.goal_manager,
+                collaboration_service=self.collaboration_service,
             )
 
             # Chat Stack

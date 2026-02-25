@@ -316,6 +316,8 @@ class AgentPayload(BaseModel):
     audit_passed: bool | None = None
     security_feedback: str | None = None
     security_findings: list[dict[str, Any]] = Field(default_factory=list)
+    # Contract v1 for autonomy enqueue context: goal, metrics, plan, selected_step, mode, autonomy_run_id
+    autonomy: dict[str, Any] | None = None
     code: str | None = None  # Legacy/Generic
     response: str | None = None  # Legacy/Generic
 
