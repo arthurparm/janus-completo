@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core'
 import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_MAX_RETRIES, SSE_RETRY_MAX_SECONDS } from './api.config'
-import { ChatUnderstanding, Citation } from './backend-api.service'
+import { ChatAgentState, ChatConfirmationState, ChatUnderstanding, Citation, CitationStatus } from './backend-api.service'
 import { AppLoggerService } from '../core/services/app-logger.service'
 import { buildChatStreamAuthHeaders } from './chat-auth-headers.util'
 
@@ -12,12 +12,36 @@ export interface StreamDone {
   provider?: string
   model?: string
   citations?: Citation[]
+  citation_status?: CitationStatus
   understanding?: ChatUnderstanding
+  confirmation?: ChatConfirmationState
+  agent_state?: ChatAgentState
 }
 
 export interface StreamError {
   error: string
+  code?: string
+  category?: string
+  retryable?: boolean
+  http_status?: number | null
   attempt: number
+}
+
+export interface StreamCognitiveStatus {
+  state: string
+  confidence_band?: string
+  requires_confirmation?: boolean
+  reason?: string
+  timestamp?: number
+}
+
+export interface StreamToolStatus {
+  phase?: string
+  tool_name?: string
+  status?: string
+  pending_action_id?: number
+  risk_level?: string
+  message?: string
 }
 
 export interface StartParams {
@@ -46,6 +70,8 @@ export class ChatStreamService {
   private partials$ = new Subject<{ text: string }>()
   private done$ = new Subject<StreamDone>()
   private errors$ = new Subject<StreamError>()
+  private cognitive$ = new Subject<StreamCognitiveStatus>()
+  private toolStatus$ = new Subject<StreamToolStatus>()
   private attempt = 0
   private startTs = 0
   private ttftCaptured = false
@@ -56,6 +82,8 @@ export class ChatStreamService {
   partials(): Observable<{ text: string }> { return this.partials$.asObservable() }
   done(): Observable<StreamDone> { return this.done$.asObservable() }
   errors(): Observable<StreamError> { return this.errors$.asObservable() }
+  cognitive(): Observable<StreamCognitiveStatus> { return this.cognitive$.asObservable() }
+  toolStatus(): Observable<StreamToolStatus> { return this.toolStatus$.asObservable() }
 
   start(params: StartParams): void {
     this.logger.debug('[ChatStreamService] Iniciando stream', params)
@@ -125,13 +153,21 @@ export class ChatStreamService {
 
       if (!response.ok) {
         const bodyText = await this.safeReadErrorBody(response)
+        const parsedError = this.parseChatErrorBody(bodyText)
         this.logger.error('[ChatStreamService] HTTP error no stream', {
           status: response.status,
           bodyText,
         })
-        const reason = this.mapHttpErrorReason(response.status, bodyText)
-        const retryable = !(response.status === 401 || response.status === 403 || response.status === 404 || response.status === 413 || response.status === 422)
-        this.handleError(reason, retryable)
+        const reason = parsedError.message || this.mapHttpErrorReason(response.status, bodyText)
+        const retryable = typeof parsedError.retryable === 'boolean'
+          ? parsedError.retryable
+          : !(response.status === 401 || response.status === 403 || response.status === 404 || response.status === 413 || response.status === 422)
+        this.handleError(reason, retryable, {
+          code: parsedError.code,
+          category: parsedError.category,
+          retryable,
+          http_status: response.status,
+        })
         return
       }
 
@@ -194,6 +230,8 @@ export class ChatStreamService {
         this.logger.debug('[ChatStreamService] Heartbeat recebido')
         return
       case 'ack':
+      case 'cognitive_status':
+      case 'tool_status':
       case 'partial':
       case 'token':
       case 'done':
@@ -260,6 +298,26 @@ export class ChatStreamService {
     }
   }
 
+  private parseChatErrorBody(bodyText: string): { code?: string; message?: string; category?: string; retryable?: boolean } {
+    if (!bodyText) return {}
+    try {
+      const parsed = JSON.parse(bodyText) as any
+      const detail = parsed?.detail ?? parsed
+      const canonical = detail?.error ?? detail
+      const message = typeof canonical?.message === 'string'
+        ? canonical.message
+        : (typeof detail === 'string' ? detail : undefined)
+      return {
+        code: typeof canonical?.code === 'string' ? canonical.code : undefined,
+        message,
+        category: typeof canonical?.category === 'string' ? canonical.category : undefined,
+        retryable: typeof canonical?.retryable === 'boolean' ? canonical.retryable : undefined,
+      }
+    } catch {
+      return {}
+    }
+  }
+
   private mapHttpErrorReason(status: number, bodyText: string): string {
     if (status === 401) return 'unauthorized'
     if (status === 403) return 'access_denied'
@@ -310,14 +368,39 @@ export class ChatStreamService {
           provider: parsed?.provider,
           model: parsed?.model,
           citations: parsed?.citations,
+          citation_status: parsed?.citation_status,
           understanding: parsed?.understanding,
+          confirmation: parsed?.confirmation,
+          agent_state: parsed?.agent_state,
         })
         this.stop()
         return
       }
       if (kind === 'error') {
-        const parsed = JSON.parse(data || '{}') as { error?: string }
-        this.handleError(String(parsed?.error || 'error'))
+        const parsed = JSON.parse(data || '{}') as { error?: string; message?: string; code?: string; category?: string; retryable?: boolean; http_status?: number | null }
+        this.handleError(
+          String(parsed?.message || parsed?.error || 'error'),
+          parsed?.retryable !== false,
+          {
+            code: typeof parsed?.code === 'string' ? parsed.code : undefined,
+            category: typeof parsed?.category === 'string' ? parsed.category : undefined,
+            http_status: typeof parsed?.http_status === 'number' ? parsed.http_status : (parsed?.http_status ?? undefined),
+            retryable: parsed?.retryable,
+          }
+        )
+        return
+      }
+      if (kind === 'cognitive_status') {
+        const parsed = JSON.parse(data || '{}') as StreamCognitiveStatus
+        this.cognitive$.next(parsed || { state: 'unknown' })
+        if (parsed?.state === 'streaming_response') {
+          this.status$.next('streaming')
+        }
+        return
+      }
+      if (kind === 'tool_status') {
+        const parsed = JSON.parse(data || '{}') as StreamToolStatus
+        this.toolStatus$.next(parsed || {})
         return
       }
       if (kind === 'ack' || kind === 'message') {
@@ -330,9 +413,20 @@ export class ChatStreamService {
     }
   }
 
-  private handleError(reason: string, retryable = true): void {
+  private handleError(
+    reason: string,
+    retryable = true,
+    meta?: { code?: string; category?: string; retryable?: boolean; http_status?: number | null },
+  ): void {
     this.attempt += 1
-    this.errors$.next({ error: reason, attempt: this.attempt })
+    this.errors$.next({
+      error: reason,
+      attempt: this.attempt,
+      code: meta?.code,
+      category: meta?.category,
+      retryable: meta?.retryable,
+      http_status: meta?.http_status,
+    })
 
     if (!retryable) {
       this.status$.next('error')

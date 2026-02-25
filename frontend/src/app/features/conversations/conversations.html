@@ -89,6 +89,12 @@
             <ui-badge [variant]="streamBadge().variant">{{ streamBadge().label }}</ui-badge>
             <ui-badge variant="neutral">{{ messages().length }} msgs</ui-badge>
             <ui-badge [variant]="isSimpleMode() ? 'neutral' : 'info'">{{ isSimpleMode() ? 'Modo simples' : 'Modo avancado' }}</ui-badge>
+            @if (latestCognitiveState()) {
+              <ui-badge variant="info">{{ latestCognitiveState() }}</ui-badge>
+            }
+            @if (latestToolStatus()) {
+              <ui-badge variant="warning">{{ latestToolStatus() }}</ui-badge>
+            }
             <button ui-button variant="ghost" size="sm" type="button" (click)="toggleAdvanced()">
               {{ showAdvanced() ? 'Voltar ao simples' : 'Abrir painel avancado' }}
             </button>
@@ -137,6 +143,9 @@
                         @if (msg.latency_ms) {
                           <span class="runtime-chip">{{ formatLatency(msg.latency_ms) }}</span>
                         }
+                        @if (messageAgentState(msg)) {
+                          <span class="runtime-chip">{{ messageAgentState(msg) }}</span>
+                        }
                       </div>
                     }
                     <div class="message-text markdown-content" [innerHTML]="msg.text | markdown"></div>
@@ -163,6 +172,46 @@
                         }
                       </div>
                     }
+                    @if (msg.role === 'assistant') {
+                      @if (messageConfirmation(msg); as confirmation) {
+                        <div class="understanding-card confirmation-card">
+                          <div class="understanding-head">
+                            <span class="understanding-label">Confirmação de ação</span>
+                            <span class="understanding-intent">{{ confirmation.reason || 'requires_confirmation' }}</span>
+                            @if (confirmation.pending_action_id) {
+                              <span class="muted">#{{ confirmation.pending_action_id }}</span>
+                            }
+                          </div>
+                          <p>{{ messageRiskSummary(msg) }}</p>
+                          @if (confirmation.pending_action_id && confirmation.required !== false) {
+                            <div class="confirmation-actions">
+                              <button
+                                ui-button
+                                variant="default"
+                                size="sm"
+                                type="button"
+                                [disabled]="isPendingActionBusy(confirmation.pending_action_id)"
+                                (click)="approvePendingActionForMessage(msg)">
+                                Aprovar
+                              </button>
+                              <button
+                                ui-button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                [disabled]="isPendingActionBusy(confirmation.pending_action_id)"
+                                (click)="rejectPendingActionForMessage(msg)">
+                                Rejeitar
+                              </button>
+                            </div>
+                          } @else if (confirmation.required !== false) {
+                            <span class="understanding-flag">Pendência sem ID estruturado (fallback legado)</span>
+                          } @else {
+                            <span class="understanding-flag">Confirmação processada</span>
+                          }
+                        </div>
+                      }
+                    }
                     @if (msg.citations?.length) {
                       <div class="citation-list">
                         @for (cite of msg.citations; track $index) {
@@ -187,6 +236,14 @@
                               }
                             </div>
                           </details>
+                        }
+                      </div>
+                    }
+                    @if (msg.role === 'assistant' && msg.citation_status && (!msg.citations?.length || msg.citation_status.status !== 'present')) {
+                      <div class="citation-status-inline">
+                        <ui-badge [variant]="citationStatusVariant(msg.citation_status)">{{ citationStatusLabel(msg.citation_status) }}</ui-badge>
+                        @if (msg.citation_status.reason) {
+                          <span class="muted">{{ msg.citation_status.reason }}</span>
                         }
                       </div>
                     }

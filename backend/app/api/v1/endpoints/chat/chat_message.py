@@ -13,6 +13,14 @@ from app.services.chat_service import (
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
+from app.services.chat.chat_citation_service import build_citation_status, map_citation_hits
+from app.services.chat.chat_contracts import (
+    build_agent_state,
+    build_confirmation_payload,
+    chat_http_error_detail,
+    extract_pending_action_id_from_text,
+    normalize_understanding_payload,
+)
 
 from .deps import (
     is_chat_auth_enforced,
@@ -24,7 +32,7 @@ from .models import (
     ChatStartRequest,
     ChatStartResponse,
 )
-from .policies import confidence_band, confidence_confirmation_threshold, requires_mandatory_citations
+from .policies import confidence_band, confidence_confirmation_threshold
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -46,7 +54,13 @@ async def start_chat(
     if user_id is None and is_chat_auth_enforced():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            detail=chat_http_error_detail(
+                code="CHAT_AUTH_REQUIRED",
+                message="Authentication required",
+                category="auth",
+                retryable=False,
+                http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
         )
     conversation_id = await service.start_conversation_async(
         request.persona, user_id, request.project_id
@@ -73,7 +87,14 @@ async def send_message(
         priority = ModelPriority(payload.priority)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid role or priority"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=chat_http_error_detail(
+                code="CHAT_INVALID_ROLE_OR_PRIORITY",
+                message="Invalid role or priority",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ),
         )
 
     identity_ctx = resolve_authenticated_user_context(
@@ -86,7 +107,13 @@ async def send_message(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            detail=chat_http_error_detail(
+                code="CHAT_AUTH_REQUIRED",
+                message="Authentication required",
+                category="auth",
+                retryable=False,
+                http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
         )
     if routing_decision:
         logger.info(
@@ -111,23 +138,53 @@ async def send_message(
             identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=chat_http_error_detail(
+                code="CHAT_CONVERSATION_NOT_FOUND",
+                message="Conversation not found",
+                category="not_found",
+                retryable=False,
+                http_status=status.HTTP_404_NOT_FOUND,
+            ),
+        )
     except MessageTooLargeError as e:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e)
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=chat_http_error_detail(
+                code="CHAT_MESSAGE_TOO_LARGE",
+                message=str(e),
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            ),
         )
     except ChatServiceError as e:
         if "Access denied" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                detail=chat_http_error_detail(
+                    code="CHAT_ACCESS_DENIED",
+                    message="Access denied",
+                    category="authz",
+                    retryable=False,
+                    http_status=status.HTTP_403_FORBIDDEN,
+                ),
             )
         logger.error("chat_message_service_error", error=str(e))
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=chat_http_error_detail(
+                code="CHAT_INVOCATION_ERROR",
+                message="Internal server error",
+                category="internal",
+                retryable=True,
+                http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ),
         )
 
     citations: list[dict[str, Any]] = []
+    citations_retrieval_failed = False
     try:
         filters: dict[str, Any] = {"status_not": "duplicate"}
         if result.get("conversation_id"):
@@ -137,38 +194,25 @@ async def send_message(
         vec_results = await memory.recall_filtered(
             query=payload.message, filters=filters, limit=5, min_score=0.1
         )
-        for item in vec_results:
-            meta = item.get("metadata") or {}
-            content = (
-                item.get("content") or item.get("payload", {}).get("content") or item.get("page_content")
-            )
-            line_start = (
-                meta.get("line_start")
-                or meta.get("start_line")
-                or meta.get("line")
-                or meta.get("line_no")
-            )
-            line_end = meta.get("line_end") or meta.get("end_line")
-            citations.append(
-                {
-                    "id": item.get("id"),
-                    "title": meta.get("title"),
-                    "url": meta.get("url"),
-                    "doc_id": meta.get("doc_id"),
-                    "file_path": meta.get("file_path"),
-                    "type": meta.get("type"),
-                    "origin": meta.get("origin"),
-                    "line_start": line_start,
-                    "line_end": line_end,
-                    "line": line_start,
-                    "score": item.get("score"),
-                    "snippet": content,
-                }
-            )
+        citations = map_citation_hits(vec_results)
     except Exception as e:
         logger.warning("chat_message_citations_failed", error=str(e))
         citations = []
+        citations_retrieval_failed = True
     result["citations"] = citations
+    result["citation_status"] = build_citation_status(
+        message=payload.message,
+        citations=citations,
+        retrieval_failed=citations_retrieval_failed,
+    )
+    pending_action_id = None
+    try:
+        if result.get("pending_action_id") is not None:
+            pending_action_id = int(result.get("pending_action_id"))
+    except Exception:
+        pending_action_id = None
+    if pending_action_id is None:
+        pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
 
     understanding = result.get("understanding")
     if isinstance(understanding, dict):
@@ -192,7 +236,7 @@ async def send_message(
                 "Antes de executar essa acao, confirme se devo prosseguir."
             )
 
-    if requires_mandatory_citations(payload.message) and not citations:
+    if result.get("citation_status", {}).get("status") == "missing_required":
         result["response"] = (
             "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
             "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
@@ -218,5 +262,28 @@ async def send_message(
                     "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\n"
                     f"{result.get('response', '')}"
                 )
+
+    confirmation_payload = build_confirmation_payload(
+        pending_action_id=pending_action_id,
+        reason=(
+            str((understanding or {}).get("confirmation_reason"))
+            if isinstance(understanding, dict)
+            else None
+        ),
+    )
+    normalized_understanding = normalize_understanding_payload(
+        understanding if isinstance(understanding, dict) else None,
+        confirmation=confirmation_payload,
+    )
+    if normalized_understanding:
+        result["understanding"] = normalized_understanding
+    if confirmation_payload:
+        result["confirmation"] = confirmation_payload
+    agent_state = build_agent_state(
+        understanding=normalized_understanding if isinstance(normalized_understanding, dict) else None,
+        confirmation=confirmation_payload,
+    )
+    if agent_state:
+        result["agent_state"] = agent_state
 
     return ChatMessageResponse(**result)

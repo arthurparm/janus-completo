@@ -1,0 +1,51 @@
+{
+  "response": "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.",
+  "provider": "janus",
+  "model": "agent",
+  "role": "assistant",
+  "conversation_id": "conv-123",
+  "citations": [],
+  "citation_status": {
+    "mode": "optional",
+    "status": "not_applicable",
+    "count": 0,
+    "reason": null
+  },
+  "understanding": {
+    "intent": "action_request",
+    "summary": "execute deploy em produção",
+    "confidence": 0.78,
+    "confidence_band": "medium",
+    "low_confidence": false,
+    "requires_confirmation": true,
+    "confirmation_reason": "high_risk",
+    "risk": {
+      "level": "high",
+      "source": "heuristic",
+      "summary": "Ação classificada como alto risco; confirmação obrigatória.",
+      "requires_confirmation": true
+    },
+    "confirmation": {
+      "required": true,
+      "reason": "high_risk",
+      "source": "pending_actions_sql",
+      "pending_action_id": 123,
+      "approve_endpoint": "/api/v1/pending_actions/action/123/approve",
+      "reject_endpoint": "/api/v1/pending_actions/action/123/reject"
+    }
+  },
+  "confirmation": {
+    "required": true,
+    "reason": "high_risk",
+    "source": "pending_actions_sql",
+    "pending_action_id": 123,
+    "approve_endpoint": "/api/v1/pending_actions/action/123/approve",
+    "reject_endpoint": "/api/v1/pending_actions/action/123/reject"
+  },
+  "agent_state": {
+    "state": "waiting_confirmation",
+    "requires_confirmation": true,
+    "reason": "high_risk"
+  }
+}
+

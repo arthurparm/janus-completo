@@ -128,6 +128,7 @@ def test_chat_message_uses_anonymous_fallback_without_actor_or_payload_user():
     assert isinstance(svc.last_message_user_id, str)
     assert svc.last_message_user_id.startswith("anon:")
     assert resp.json()["understanding"]["intent"] == "question"
+    assert resp.json()["citation_status"]["status"] in {"not_applicable", "retrieval_failed", "present"}
 
 
 def test_chat_message_requires_citations_for_code_or_docs_queries():
@@ -147,6 +148,7 @@ def test_chat_message_requires_citations_for_code_or_docs_queries():
     assert resp.status_code == 200
     data = resp.json()
     assert data["citations"] == []
+    assert data["citation_status"]["status"] == "missing_required"
     assert "Nao encontrei citacoes rastreaveis" in data["response"]
 
 
@@ -186,6 +188,9 @@ def test_chat_message_low_confidence_requires_confirmation(monkeypatch):
     assert "baixa confianca" in data["response"]
     assert data["understanding"]["requires_confirmation"] is True
     assert data["understanding"]["confirmation_reason"] == "low_confidence"
+    assert data["understanding"]["confirmation"]["required"] is True
+    assert data["confirmation"]["required"] is True
+    assert data["agent_state"]["state"] in {"waiting_confirmation", "low_confidence"}
 
 
 def test_chat_message_citations_include_clickable_source_metadata():
@@ -225,6 +230,8 @@ def test_chat_message_citations_include_clickable_source_metadata():
     data = resp.json()
     assert len(data["citations"]) == 1
     citation = data["citations"][0]
+    assert citation["source_type"] == "code"
+    assert citation["type"] == "code"
     assert citation["line_start"] == 42
     assert citation["line_end"] == 44
     assert citation["line"] == 42
@@ -290,14 +297,16 @@ def test_chat_stream_rejects_invalid_role_or_priority():
         params={"message": "hello", "role": "invalid", "priority": "fast_and_cheap"},
     )
     assert resp.status_code == 422
-    assert resp.json()["detail"] == "Invalid role or priority"
+    assert resp.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
+    assert resp.json()["detail"]["message"] == "Invalid role or priority"
 
     resp2 = client.get(
         "/api/v1/chat/stream/conv-1",
         params={"message": "hello", "role": "orchestrator", "priority": "invalid"},
     )
     assert resp2.status_code == 422
-    assert resp2.json()["detail"] == "Invalid role or priority"
+    assert resp2.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
+    assert resp2.json()["detail"]["message"] == "Invalid role or priority"
 
 
 def test_chat_stream_reject_disallowed_origin(monkeypatch):

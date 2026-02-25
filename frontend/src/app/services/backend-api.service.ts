@@ -211,6 +211,45 @@ export interface ChatMessageRequest {
   user_id?: string;
   project_id?: string;
 }
+export interface CitationStatus {
+  mode: 'required' | 'optional' | string;
+  status: 'present' | 'missing_required' | 'not_applicable' | 'retrieval_failed' | string;
+  count: number;
+  reason?: string | null;
+}
+export interface ChatRoutingState {
+  requested_role?: string;
+  selected_role?: string;
+  route_applied?: boolean;
+  intent?: string;
+  risk_level?: string;
+  confidence?: number;
+  [key: string]: unknown;
+}
+export interface ChatRiskState {
+  level?: 'low' | 'medium' | 'high' | string;
+  source?: string;
+  summary?: string;
+  requires_confirmation?: boolean;
+  [key: string]: unknown;
+}
+export interface ChatConfirmationState {
+  required: boolean;
+  status?: string;
+  reason?: string;
+  source?: string;
+  pending_action_id?: number;
+  approve_endpoint?: string;
+  reject_endpoint?: string;
+  [key: string]: unknown;
+}
+export interface ChatAgentState {
+  state: 'thinking' | 'using_tool' | 'waiting_confirmation' | 'low_confidence' | 'streaming_response' | 'completed' | 'error' | string;
+  confidence_band?: 'high' | 'medium' | 'low' | string;
+  requires_confirmation?: boolean;
+  reason?: string;
+  [key: string]: unknown;
+}
 export interface ChatUnderstanding {
   intent: string;
   summary: string;
@@ -220,15 +259,22 @@ export interface ChatUnderstanding {
   requires_confirmation?: boolean;
   confirmation_reason?: string;
   signals?: string[];
+  routing?: ChatRoutingState;
+  risk?: ChatRiskState;
+  confirmation?: ChatConfirmationState;
+  [key: string]: unknown;
 }
 export interface ChatMessage {
   role: string;
   text: string;
   timestamp: number;
   citations?: Citation[]
+  citation_status?: CitationStatus;
   reasoning?: string;
   ui?: { type: string; data: any };
   understanding?: ChatUnderstanding;
+  confirmation?: ChatConfirmationState;
+  agent_state?: ChatAgentState;
 }
 
 export interface Tool {
@@ -254,8 +300,11 @@ export interface ChatMessageResponse {
   role: string;
   conversation_id: string;
   citations: Citation[];
+  citation_status?: CitationStatus;
   ui?: { type: string; data: any };
   understanding?: ChatUnderstanding;
+  confirmation?: ChatConfirmationState;
+  agent_state?: ChatAgentState;
 }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ChatListItem {

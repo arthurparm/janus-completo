@@ -10,6 +10,7 @@ from app.services.chat_service import (
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.trace_service import TraceService, get_trace_service
+from app.services.chat.chat_contracts import chat_http_error_detail
 
 from .deps import (
     acquire_sse_slot,
@@ -42,7 +43,14 @@ async def stream_message(
         priority_enum = ModelPriority(priority)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid role or priority"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=chat_http_error_detail(
+                code="CHAT_INVALID_ROLE_OR_PRIORITY",
+                message="Invalid role or priority",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ),
         )
 
     if routing_decision:
@@ -66,7 +74,14 @@ async def stream_message(
             message_size = len(message)
         if message_size > 10 * 1024:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Message too large"
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=chat_http_error_detail(
+                    code="CHAT_MESSAGE_TOO_LARGE",
+                    message="Message too large",
+                    category="validation",
+                    retryable=False,
+                    http_status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                ),
             )
 
     slot_user: str | None = None
@@ -81,7 +96,13 @@ async def stream_message(
         if user_id is None and is_chat_auth_enforced():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+                detail=chat_http_error_detail(
+                    code="CHAT_AUTH_REQUIRED",
+                    message="Authentication required",
+                    category="auth",
+                    retryable=False,
+                    http_status=status.HTTP_401_UNAUTHORIZED,
+                ),
             )
         if not project_id:
             project_id = actor_project_id(http)
@@ -94,13 +115,25 @@ async def stream_message(
         except ConversationNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found",
+                detail=chat_http_error_detail(
+                    code="CHAT_CONVERSATION_NOT_FOUND",
+                    message="Conversation not found",
+                    category="not_found",
+                    retryable=False,
+                    http_status=status.HTTP_404_NOT_FOUND,
+                ),
             )
         except Exception as e:
             if "Access denied" in str(e):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                    detail=chat_http_error_detail(
+                        code="CHAT_ACCESS_DENIED",
+                        message="Access denied",
+                        category="authz",
+                        retryable=False,
+                        http_status=status.HTTP_403_FORBIDDEN,
+                    ),
                 )
             raise
 
@@ -116,7 +149,16 @@ async def stream_message(
             identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=chat_http_error_detail(
+                code="CHAT_CONVERSATION_NOT_FOUND",
+                message="Conversation not found",
+                category="not_found",
+                retryable=False,
+                http_status=status.HTTP_404_NOT_FOUND,
+            ),
+        )
 
     headers = {
         "Content-Type": "text/event-stream; charset=utf-8",
@@ -155,17 +197,38 @@ async def get_conversation_trace(
     if user_id is None and is_chat_auth_enforced():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            detail=chat_http_error_detail(
+                code="CHAT_AUTH_REQUIRED",
+                message="Authentication required",
+                category="auth",
+                retryable=False,
+                http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
         )
     try:
         chat_service.get_history(conversation_id, user_id=user_id, project_id=actor_project_id(http))
     except ConversationNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=chat_http_error_detail(
+                code="CHAT_CONVERSATION_NOT_FOUND",
+                message="Conversation not found",
+                category="not_found",
+                retryable=False,
+                http_status=status.HTTP_404_NOT_FOUND,
+            ),
+        )
     except Exception as e:
         if "Access denied" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                detail=chat_http_error_detail(
+                    code="CHAT_ACCESS_DENIED",
+                    message="Access denied",
+                    category="authz",
+                    retryable=False,
+                    http_status=status.HTTP_403_FORBIDDEN,
+                ),
             )
         raise
     return service.get_trace_history(conversation_id)
@@ -194,20 +257,38 @@ async def stream_agent_events(
         if user_id is None and is_chat_auth_enforced():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+                detail=chat_http_error_detail(
+                    code="CHAT_AUTH_REQUIRED",
+                    message="Authentication required",
+                    category="auth",
+                    retryable=False,
+                    http_status=status.HTTP_401_UNAUTHORIZED,
+                ),
             )
         try:
             service.get_history(conversation_id, user_id=user_id)
         except ConversationNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found",
+                detail=chat_http_error_detail(
+                    code="CHAT_CONVERSATION_NOT_FOUND",
+                    message="Conversation not found",
+                    category="not_found",
+                    retryable=False,
+                    http_status=status.HTTP_404_NOT_FOUND,
+                ),
             )
         except Exception as e:
             if "Access denied" in str(e):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                    detail=chat_http_error_detail(
+                        code="CHAT_ACCESS_DENIED",
+                        message="Access denied",
+                        category="authz",
+                        retryable=False,
+                        http_status=status.HTTP_403_FORBIDDEN,
+                    ),
                 )
             raise
         slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
@@ -217,7 +298,14 @@ async def stream_agent_events(
     except Exception as e:
         logger.error("chat_event_stream_start_failed", error=str(e))
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=chat_http_error_detail(
+                code="CHAT_EVENT_STREAM_START_FAILED",
+                message="Internal server error",
+                category="internal",
+                retryable=True,
+                http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ),
         )
 
     headers = {

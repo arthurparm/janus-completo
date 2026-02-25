@@ -12,14 +12,18 @@ import { AgentEvent, AgentEventsService } from '../../core/services/agent-events
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
 import {
   BackendApiService,
+  ChatAgentState,
+  ChatConfirmationState,
   ChatMessage,
   ChatUnderstanding,
   ConversationMeta,
+  CitationStatus,
   DocListItem,
   DocSearchResultItem,
   FeedbackQuickResponse,
   GenerativeMemoryItem,
   MemoryItem,
+  PendingAction,
   Citation,
   AutonomyStatusResponse,
   Goal,
@@ -46,6 +50,9 @@ interface ChatMessageView {
   timestamp: number
   citations?: Citation[]
   understanding?: ChatUnderstanding
+  citation_status?: CitationStatus
+  confirmation?: ChatConfirmationState
+  agent_state?: ChatAgentState
   latency_ms?: number
   provider?: string
   model?: string
@@ -160,6 +167,9 @@ export class ConversationsComponent {
   readonly selectedRole = signal('orchestrator')
   readonly selectedPriority = signal('fast_and_cheap')
   readonly streamingEnabled = signal(true)
+  readonly latestCognitiveState = signal<string>('')
+  readonly latestToolStatus = signal<string>('')
+  readonly pendingActionLoading = signal<Record<number, boolean>>({})
   readonly showAdvanced = signal(false)
   readonly advancedRailTab = signal<AdvancedRailTab>('cliente')
   readonly customerTab = signal<CustomerTab>('docs')
@@ -351,6 +361,26 @@ export class ConversationsComponent {
     this.stream.errors()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((err) => this.handleStreamError(err.error))
+
+    this.stream.cognitive()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((evt) => {
+        const state = String(evt?.state || '')
+        this.latestCognitiveState.set(state)
+        if (state) {
+          this.appendThought('agent', 'Estado cognitivo', `Estado: ${state}${evt.reason ? ` (${evt.reason})` : ''}`)
+        }
+      })
+
+    this.stream.toolStatus()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((evt) => {
+        const label = [evt.status, evt.tool_name].filter(Boolean).join(' · ')
+        this.latestToolStatus.set(label)
+        if (label) {
+          this.appendThought('agent', 'Ferramenta', label)
+        }
+      })
 
     this.eventsService.events$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -1492,7 +1522,10 @@ export class ConversationsComponent {
             text: cleanText,
             timestamp: now,
             citations: resp.citations || [],
+            citation_status: resp.citation_status,
             understanding: resp.understanding,
+            confirmation: resp.confirmation ?? resp.understanding?.confirmation,
+            agent_state: resp.agent_state,
             latency_ms: latencyMs,
             provider: resp.provider,
             model: resp.model
@@ -1524,7 +1557,10 @@ export class ConversationsComponent {
       this.updateMessage(this.streamingMessageId, {
         streaming: false,
         citations: done.citations || [],
+        citation_status: done.citation_status,
         understanding: done.understanding,
+        confirmation: done.confirmation ?? done.understanding?.confirmation,
+        agent_state: done.agent_state,
         latency_ms: latencyMs,
         provider: done.provider,
         model: done.model
@@ -1632,7 +1668,10 @@ export class ConversationsComponent {
       text: this.sanitizeChatText(msg.text),
       timestamp: msg.timestamp,
       citations: msg.citations || [],
+      citation_status: (raw['citation_status'] as CitationStatus | undefined),
       understanding: msg.understanding,
+      confirmation: (raw['confirmation'] as ChatConfirmationState | undefined) ?? msg.understanding?.confirmation,
+      agent_state: (raw['agent_state'] as ChatAgentState | undefined),
       latency_ms: Number.isFinite(latencyMsRaw) && latencyMsRaw > 0 ? latencyMsRaw : undefined,
       provider: typeof raw['provider'] === 'string' ? String(raw['provider']) : undefined,
       model: typeof raw['model'] === 'string' ? String(raw['model']) : undefined
@@ -1686,6 +1725,120 @@ export class ConversationsComponent {
       timestamp: Number(timestamp || Date.now())
     }
     this.thoughtStream.update((items) => [item, ...items].slice(0, 40))
+  }
+
+  messageAgentState(msg: ChatMessageView): string {
+    const explicit = String(msg.agent_state?.state || '').trim()
+    if (explicit) return explicit
+    if (msg.streaming) return 'streaming_response'
+    if (msg.understanding?.requires_confirmation) return 'waiting_confirmation'
+    if (msg.understanding?.low_confidence) return 'low_confidence'
+    return ''
+  }
+
+  messageConfirmation(msg: ChatMessageView): ChatConfirmationState | null {
+    const conf = msg.confirmation || msg.understanding?.confirmation
+    if (conf && (conf.required || msg.understanding?.requires_confirmation)) return conf
+    if (msg.understanding?.requires_confirmation) {
+      return {
+        required: true,
+        reason: msg.understanding.confirmation_reason || 'requires_confirmation'
+      }
+    }
+    return null
+  }
+
+  messageRiskSummary(msg: ChatMessageView): string {
+    const risk = msg.understanding?.risk
+    if (risk?.summary) return String(risk.summary)
+    const reason = this.messageConfirmation(msg)?.reason
+    if (reason === 'high_risk') return 'Ação classificada como alto risco; confirmação obrigatória.'
+    if (reason === 'low_confidence') return 'Baixa confiança para executar ação; confirme antes de prosseguir.'
+    return 'Ação requer confirmação antes de prosseguir.'
+  }
+
+  citationStatusLabel(status?: CitationStatus): string {
+    const s = String(status?.status || '')
+    if (s === 'present') return `Fontes: ${status?.count ?? 0}`
+    if (s === 'missing_required') return 'Sem citação rastreável (obrigatória)'
+    if (s === 'retrieval_failed') return 'Falha ao recuperar citações'
+    return 'Sem citação'
+  }
+
+  citationStatusVariant(status?: CitationStatus): 'success' | 'warning' | 'error' | 'neutral' {
+    const s = String(status?.status || '')
+    if (s === 'present') return 'success'
+    if (s === 'missing_required') return 'warning'
+    if (s === 'retrieval_failed') return 'error'
+    return 'neutral'
+  }
+
+  isPendingActionBusy(actionId?: number): boolean {
+    if (typeof actionId !== 'number') return false
+    return Boolean(this.pendingActionLoading()[actionId])
+  }
+
+  approvePendingActionForMessage(msg: ChatMessageView): void {
+    const conf = this.messageConfirmation(msg)
+    const actionId = conf?.pending_action_id
+    if (typeof actionId !== 'number') return
+    this.setPendingActionBusy(actionId, true)
+    const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
+    this.api.approvePendingAction(action)
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        this.setPendingActionBusy(actionId, false)
+        if (!resp) {
+          this.updateMessage(msg.id, { error: true, text: `${msg.text}\n\n[Falha ao aprovar ação pendente]` })
+          return
+        }
+        this.updateMessage(msg.id, {
+          confirmation: { ...(conf || { required: true }), required: false, pending_action_id: actionId, reason: conf?.reason, status: 'approved' },
+          agent_state: { state: 'completed', reason: 'approved' }
+        })
+        this.appendMessage({
+          id: this.createId(),
+          role: 'system',
+          text: `Ação pendente #${actionId} aprovada. ${resp.message || ''}`.trim(),
+          timestamp: Date.now()
+        })
+      })
+  }
+
+  rejectPendingActionForMessage(msg: ChatMessageView): void {
+    const conf = this.messageConfirmation(msg)
+    const actionId = conf?.pending_action_id
+    if (typeof actionId !== 'number') return
+    this.setPendingActionBusy(actionId, true)
+    const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
+    this.api.rejectPendingAction(action)
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        this.setPendingActionBusy(actionId, false)
+        if (!resp) {
+          this.updateMessage(msg.id, { error: true, text: `${msg.text}\n\n[Falha ao rejeitar ação pendente]` })
+          return
+        }
+        this.updateMessage(msg.id, {
+          confirmation: { ...(conf || { required: true }), required: false, pending_action_id: actionId, reason: conf?.reason, status: 'rejected' },
+          agent_state: { state: 'completed', reason: 'rejected' }
+        })
+        this.appendMessage({
+          id: this.createId(),
+          role: 'system',
+          text: `Ação pendente #${actionId} rejeitada. ${resp.message || ''}`.trim(),
+          timestamp: Date.now()
+        })
+      })
+  }
+
+  private setPendingActionBusy(actionId: number, busy: boolean): void {
+    this.pendingActionLoading.update((curr) => {
+      const next = { ...curr }
+      if (busy) next[actionId] = true
+      else delete next[actionId]
+      return next
+    })
   }
 
   private restoreAdvancedModePreference(): void {

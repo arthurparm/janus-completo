@@ -5,6 +5,7 @@ Executes ReAct (Reasoning + Acting) loop with tool execution fallbacks.
 
 import asyncio
 import os
+import re
 import structlog
 from typing import Any
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
@@ -13,6 +14,7 @@ from app.core.infrastructure.fallback_chain import FallbackChain
 from app.core.exceptions.chat_exceptions import LLMInvocationError, ToolExecutionError
 
 logger = structlog.get_logger(__name__)
+_PENDING_ACTION_ID_RE = re.compile(r"Pending action id:\s*(\d+)", re.IGNORECASE)
 
 
 class ChatAgentLoop:
@@ -129,6 +131,8 @@ class ChatAgentLoop:
         total_out_tokens = 0
         final_response_text = ""
         last_result = {}
+        pending_action_id: int | None = None
+        pending_tool_name: str | None = None
         policy = self._build_policy()
         policy.reset_cycle_quota()
 
@@ -261,6 +265,13 @@ class ChatAgentLoop:
             # Add tool results to prompt
             for output in tool_outputs:
                 current_prompt += f"\nSystem: Tool Output ({output['name']}):\n{output['result']}"
+                try:
+                    match = _PENDING_ACTION_ID_RE.search(str(output.get("result") or ""))
+                    if match:
+                        pending_action_id = int(match.group(1))
+                        pending_tool_name = str(output.get("name") or "") or None
+                except Exception:
+                    pass
 
                 # Publish tool completion
                 if self.event_publisher:
@@ -295,7 +306,7 @@ class ChatAgentLoop:
                 f"*Estou sempre aprendendo a ser mais eficiente!* 🤖"
             )
 
-        return {
+        result_payload = {
             "response": final_response_text,
             "provider": last_result.get("provider", "janus"),
             "model": last_result.get("model", "agent"),
@@ -304,6 +315,11 @@ class ChatAgentLoop:
             "total_in_tokens": total_in_tokens,
             "total_out_tokens": total_out_tokens,
         }
+        if pending_action_id is not None:
+            result_payload["pending_action_id"] = pending_action_id
+            if pending_tool_name:
+                result_payload["pending_tool_name"] = pending_tool_name
+        return result_payload
 
     async def _invoke_llm_with_fallback(
         self,
