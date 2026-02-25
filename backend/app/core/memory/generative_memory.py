@@ -1,12 +1,17 @@
 import asyncio
 import math
 import re
+import time
 from datetime import datetime, UTC, timedelta
 from typing import Any, List
+from uuid import uuid4
 
 import structlog
+from qdrant_client import models as qdrant_models
 
+from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.memory_core import get_memory_db
+from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 from app.services.llm_service import LLMService
 from app.repositories.llm_repository import get_llm_repository
@@ -43,6 +48,11 @@ class GenerativeMemoryService:
         3. Saves to Graph DB (Neo4j) as linked stream.
         """
         metadata = metadata or {}
+        # Keep conversation/session identifiers aligned for downstream timeline filters.
+        if metadata.get("conversation_id") and not metadata.get("session_id"):
+            metadata["session_id"] = metadata.get("conversation_id")
+        if metadata.get("session_id") and not metadata.get("conversation_id"):
+            metadata["conversation_id"] = metadata.get("session_id")
         
         # 1. Calculate Importance
         if metadata.get("importance") is None:
@@ -64,6 +74,7 @@ class GenerativeMemoryService:
         # 3. Save to Vector DB (Qdrant)
         memory_core = await get_memory_db()
         await memory_core.amemorize(experience)
+        await self._mirror_to_user_collection(experience)
         
         # 4. Save to Graph DB (Neo4j) - Memory Stream
         kg_service = get_knowledge_graph_service()
@@ -73,15 +84,30 @@ class GenerativeMemoryService:
         logger.info("Memory added to generative stream", id=experience.id, importance=metadata["importance"])
         return experience
 
-    async def retrieve_memories(self, query: str, limit: int = 10) -> List[ScoredExperience]:
+    async def retrieve_memories(
+        self,
+        query: str,
+        limit: int = 10,
+        *,
+        type_filter: str | None = None,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+    ) -> List[ScoredExperience]:
         """
         Retrieves memories based on Park et al. scoring formula.
         """
         memory_core = await get_memory_db()
-        
+
         # 1. Get Candidates (Relevance) - Vector Search
         # We fetch more than limit to allow re-ranking
-        candidates = await memory_core.arecall(query, limit=limit * 3)
+        candidate_limit = max(limit * 5, limit)
+        filters = self._build_retrieval_filters(
+            type_filter=type_filter, user_id=user_id, conversation_id=conversation_id
+        )
+        if filters:
+            candidates = await memory_core.arecall_filtered(query, filters=filters, limit=candidate_limit)
+        else:
+            candidates = await memory_core.arecall(query, limit=candidate_limit)
         
         # 2. Score and Rank
         scored_memories = []
@@ -123,6 +149,68 @@ class GenerativeMemoryService:
         scored_memories.sort(key=lambda x: x.score, reverse=True)
         
         return scored_memories[:limit]
+
+    def _build_retrieval_filters(
+        self,
+        *,
+        type_filter: str | None,
+        user_id: str | None,
+        conversation_id: str | None,
+    ) -> dict[str, Any]:
+        filters: dict[str, Any] = {}
+        if type_filter:
+            filters["type"] = str(type_filter)
+        if user_id:
+            filters["metadata.user_id"] = str(user_id)
+        if conversation_id:
+            filters["metadata.conversation_id"] = str(conversation_id)
+        return filters
+
+    async def _mirror_to_user_collection(self, experience: Experience) -> None:
+        """Mirror generative memories into user-scoped collection for UI timeline panels."""
+        meta = experience.metadata if isinstance(experience.metadata, dict) else experience.metadata.model_dump()
+        user_id = str(meta.get("user_id") or "").strip()
+        if not user_id:
+            return
+        try:
+            collection_name = await aget_or_create_collection(f"user_{user_id}")
+            client = get_async_qdrant_client()
+            vec = await aembed_text(experience.content)
+            ts_candidate = meta.get("ts_ms") or meta.get("timestamp")
+            try:
+                ts_ms = int(float(ts_candidate)) if ts_candidate is not None else int(time.time() * 1000)
+            except Exception:
+                ts_ms = int(time.time() * 1000)
+
+            payload_meta = dict(meta)
+            payload_meta.setdefault("user_id", user_id)
+            payload_meta.setdefault("timestamp", ts_ms)
+            payload_meta.setdefault("ts_ms", ts_ms)
+            if payload_meta.get("conversation_id") and not payload_meta.get("session_id"):
+                payload_meta["session_id"] = payload_meta.get("conversation_id")
+            if payload_meta.get("session_id") and not payload_meta.get("conversation_id"):
+                payload_meta["conversation_id"] = payload_meta.get("session_id")
+
+            point = qdrant_models.PointStruct(
+                id=str(uuid4()),
+                vector=vec,
+                payload={
+                    "content": experience.content,
+                    "type": experience.type,
+                    "timestamp": experience.timestamp,
+                    "ts_ms": ts_ms,
+                    "composite_id": f"gen:{user_id}:{experience.id}",
+                    "metadata": payload_meta,
+                },
+            )
+            await client.upsert(collection_name=collection_name, points=[point])
+        except Exception as exc:
+            logger.warning(
+                "generative_memory_user_mirror_failed",
+                error=str(exc),
+                experience_id=experience.id,
+                user_id=user_id,
+            )
 
     async def _calculate_importance(self, content: str, use_local: bool = False) -> float:
         """

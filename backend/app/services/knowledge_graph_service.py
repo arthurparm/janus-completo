@@ -43,6 +43,21 @@ class KnowledgeGraphService:
             "importance": experience.metadata.importance or 0.0,
             "created_at": datetime.now().isoformat(),
         }
+        try:
+            meta = experience.metadata.model_dump() if hasattr(experience.metadata, "model_dump") else dict(experience.metadata or {})
+        except Exception:
+            meta = {}
+        if meta:
+            props["origin"] = meta.get("origin")
+            props["metadata_type"] = meta.get("type")
+            props["memory_subtype"] = meta.get("memory_subtype")
+            props["preference_kind"] = meta.get("preference_kind")
+            props["preference_scope"] = meta.get("scope")
+            props["preference_confidence"] = meta.get("confidence")
+            props["user_id"] = str(meta.get("user_id")) if meta.get("user_id") is not None else None
+            props["conversation_id"] = str(meta.get("conversation_id")) if meta.get("conversation_id") is not None else None
+            if meta.get("instruction_text"):
+                props["instruction_text"] = str(meta.get("instruction_text"))[:500]
 
         params = {"props": props}
         

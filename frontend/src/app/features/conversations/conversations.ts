@@ -905,9 +905,14 @@ export class ConversationsComponent {
     this.clearNotice('memory')
     this.memoryAddLoading.set(true)
     const importance = this.memoryImportance()
+    const userId = this.userIdString()
+    const conversationId = this.selectedId() || undefined
     this.api.addGenerativeMemory(content, {
       type: this.memoryType(),
-      importance: typeof importance === 'number' ? importance : undefined
+      importance: typeof importance === 'number' ? importance : undefined,
+      userId,
+      conversationId,
+      sessionId: conversationId
     })
       .pipe(catchError((err) => {
         this.memoryAddError.set(this.extractErrorMessage(err, 'Falha ao adicionar memória.'))
@@ -936,7 +941,10 @@ export class ConversationsComponent {
     this.memorySearchError.set('')
     this.clearNotice('memory')
     this.memorySearchLoading.set(true)
-    this.api.getGenerativeMemories(query, this.memorySearchLimit())
+    this.api.getGenerativeMemories(query, this.memorySearchLimit(), {
+      userId: this.userIdString(),
+      conversationId: this.selectedId() || undefined
+    })
       .pipe(catchError((err) => {
         this.memorySearchError.set(this.extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
         this.memorySearchLoading.set(false)

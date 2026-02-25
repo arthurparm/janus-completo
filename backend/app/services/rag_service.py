@@ -16,6 +16,7 @@ from app.repositories.chat_repository import ChatRepository
 from app.services.semantic_reranker_service import get_semantic_reranker
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
+from app.services.user_preference_memory_service import user_preference_memory_service
 
 logger = structlog.get_logger(__name__)
 
@@ -185,6 +186,15 @@ class RAGService:
             return None
 
         try:
+            try:
+                await user_preference_memory_service.maybe_capture_from_message(
+                    message=message,
+                    user_id=str(user_id),
+                    conversation_id=conversation_id,
+                )
+            except Exception as pref_exc:
+                logger.warning("user_preference_capture_failed_in_rag", error=str(pref_exc))
+
             vec = await aembed_text(message)
             collection_name = await aget_or_create_collection(f"user_{user_id}")
             client = get_async_qdrant_client()
@@ -227,6 +237,17 @@ class RAGService:
                         "score": score,
                     }
                 )
+            preference_items: list[dict[str, Any]] = []
+            try:
+                preference_items = await user_preference_memory_service.list_preferences(
+                    user_id=str(user_id),
+                    query=message,
+                    limit=min(5, max(1, limit)),
+                    active_only=True,
+                )
+            except Exception as pref_exc:
+                logger.warning("user_preference_retrieve_failed_in_rag", error=str(pref_exc))
+
             rerank_applied = False
             rerank_method = "none"
             rerank_candidate_count = len(memories)
@@ -236,10 +257,17 @@ class RAGService:
                 rerank_applied = rerank_result.applied
                 rerank_method = rerank_result.method
                 rerank_candidate_count = int(rerank_result.candidate_count)
+            memories = [
+                item for item in memories
+                if str((item.get("metadata") or {}).get("type") or "").lower() != "user_preference"
+            ]
+            preference_context = user_preference_memory_service.format_preference_context(preference_items)
+            generic_context = self._format_memories(memories)
+            combined_context = self._combine_memory_context(preference_context, generic_context)
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
             scores = [m.get("score") for m in memories]
-            if memories:
+            if combined_context:
                 _RAG_RESULTS.labels("retrieve_context").inc(len(memories))
                 logger.info("RAG enrichment: retrieved %d relevant memories", len(memories))
                 _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
@@ -258,9 +286,10 @@ class RAGService:
                         "rerank_method": rerank_method,
                         "rerank_candidate_count": int(rerank_candidate_count),
                         "rerank_top_k": int(limit),
+                        "user_preferences_count": len(preference_items),
                     },
                 )
-                return self._format_memories(memories)
+                return combined_context
 
             _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
             self._emit_step_telemetry(
@@ -278,6 +307,7 @@ class RAGService:
                     "rerank_method": "none",
                     "rerank_candidate_count": int(rerank_candidate_count),
                     "rerank_top_k": int(limit),
+                    "user_preferences_count": len(preference_items),
                 },
             )
             return None
@@ -297,6 +327,13 @@ class RAGService:
             logger.warning("Failed to retrieve memories for prompt enrichment", error=str(e))
             # We don't raise here to prevent blocking the chat response if memory fails
             return None
+
+    def _combine_memory_context(
+        self, preference_context: str | None, generic_context: str | None
+    ) -> str | None:
+        if preference_context and generic_context:
+            return f"{preference_context}\n\n{generic_context}"
+        return preference_context or generic_context
 
     async def maybe_index_message(
         self,

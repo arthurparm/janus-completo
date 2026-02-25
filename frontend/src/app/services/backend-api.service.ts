@@ -354,9 +354,34 @@ export interface DocSearchResponse {
 export interface GenerativeMemoryItem {
   id?: string;
   content: string;
+  score?: number;
   type?: string;
   created_at?: string | number;
   updated_at?: string | number;
+  metadata?: {
+    importance?: number | string;
+    user_id?: string;
+    conversation_id?: string;
+    session_id?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface UserPreferenceMemoryItem {
+  id?: string;
+  content: string;
+  ts_ms?: number;
+  preference_kind?: 'do' | 'dont' | string;
+  instruction_text?: string;
+  scope?: string;
+  confidence?: number;
+  user_id?: string;
+  conversation_id?: string;
+  session_id?: string;
+  active?: boolean;
+  origin?: string;
+  dedupe_key?: string;
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -1404,19 +1429,52 @@ export class BackendApiService {
     )
   }
 
-  getGenerativeMemories(query: string, limit: number = 10): Observable<GenerativeMemoryItem[]> {
+  getGenerativeMemories(
+    query: string,
+    limit: number = 10,
+    filters: { type?: string; userId?: string; conversationId?: string } = {}
+  ): Observable<GenerativeMemoryItem[]> {
     const qs = new URLSearchParams()
     qs.set('query', query)
     qs.set('limit', String(limit))
+    if (filters.type) qs.set('type', String(filters.type))
+    if (filters.userId) qs.set('user_id', String(filters.userId))
+    if (filters.conversationId) qs.set('conversation_id', String(filters.conversationId))
     return this.http.get<GenerativeMemoryItem[]>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`))
   }
 
-  addGenerativeMemory(content: string, opts: { importance?: number; type?: string } = {}): Observable<GenerativeMemoryItem> {
+  addGenerativeMemory(
+    content: string,
+    opts: { importance?: number; type?: string; userId?: string; conversationId?: string; sessionId?: string } = {}
+  ): Observable<GenerativeMemoryItem> {
     const qs = new URLSearchParams()
     qs.set('content', content)
     if (typeof opts.importance === 'number') qs.set('importance', String(opts.importance))
     if (opts.type) qs.set('type', String(opts.type))
+    if (opts.userId) qs.set('user_id', String(opts.userId))
+    if (opts.conversationId) qs.set('conversation_id', String(opts.conversationId))
+    if (opts.sessionId) qs.set('session_id', String(opts.sessionId))
     return this.http.post<GenerativeMemoryItem>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`), {})
+  }
+
+  getUserPreferences(params: {
+    userId?: string
+    conversationId?: string
+    query?: string
+    limit?: number
+    activeOnly?: boolean
+  } = {}): Observable<UserPreferenceMemoryItem[]> {
+    const qs = new URLSearchParams()
+    if (params.userId) qs.set('user_id', String(params.userId))
+    if (params.conversationId) qs.set('conversation_id', String(params.conversationId))
+    if (params.query) qs.set('query', String(params.query))
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    if (typeof params.activeOnly === 'boolean') qs.set('active_only', String(params.activeOnly))
+    const headers = params.userId ? this.headersFor(params.userId) : undefined
+    return this.http.get<UserPreferenceMemoryItem[]>(
+      this.buildUrl(`/api/v1/memory/preferences${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
   }
 
   // Documents API
