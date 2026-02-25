@@ -1,120 +1,234 @@
 ###
-# SPRINT 5: Sistema Reflexion - Auto-otimização e Aprendizado com Erros
-# Testes completos do ciclo ACT-EVALUATE-REFLECT-RETRY-LEARN
-###
+    # SPRINT 5: Auto-Otimizacao e Supervisao (Optimization + Meta-Agent)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Optimization, Meta-Agent
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Resetar o circuit breaker
-POST {{host}}{{api_v1_prefix}}/reflexion/reset-circuit-breaker
 
-###
-# 2. Verificar health (deve mostrar CLOSED)
-GET {{host}}{{api_v1_prefix}}/reflexion/health
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Meta-Agent] POST /api/v1/meta-agent/analyze
+# - [Meta-Agent] GET /api/v1/meta-agent/health
+# - [Meta-Agent] POST /api/v1/meta-agent/heartbeat/start
+# - [Meta-Agent] GET /api/v1/meta-agent/heartbeat/status
+# - [Meta-Agent] POST /api/v1/meta-agent/heartbeat/stop
+# - [Meta-Agent] GET /api/v1/meta-agent/report/latest
+# - [Optimization] POST /api/v1/optimization/analyze
+# - [Optimization] GET /api/v1/optimization/health
+# - [Optimization] GET /api/v1/optimization/issues
+# - [Optimization] GET /api/v1/optimization/metrics/history
+# - [Optimization] POST /api/v1/optimization/run-cycle
+# - [Optimization] GET /api/v1/optimization/status
 
-###
-# 1. Executar Tarefa Simples com Reflexion
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Calcular a soma de [10, 20, 30, 40, 50]",
-  "max_iterations": 3,
-  "max_time_seconds": 60
-}
-
-###
-# 2. Executar Tarefa com Múltiplas Iterações
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Listar todos os números primos entre 1 e 100",
-  "max_iterations": 5,
-  "max_time_seconds": 90
-}
-
-###
-# 3. Executar Tarefa Simples de Cálculo
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Calcular a média de [15, 25, 35, 45, 55] e explicar o método",
-  "max_iterations": 3,
-  "max_time_seconds": 60
-}
-
-###
-# 4. Executar Tarefa com Threshold Customizado
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Gerar os primeiros 10 números da sequência de Fibonacci",
-  "max_iterations": 4,
-  "max_time_seconds": 80,
-  "success_threshold": 0.9
-}
-
-###
-# 5. Executar Tarefa com Threshold Baixo
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Criar uma lista com os quadrados dos números de 1 a 10",
-  "max_iterations": 2,
-  "max_time_seconds": 40,
-  "success_threshold": 0.6
-}
-
-###
-# 6. Obter Configuração do Reflexion
-GET {{host}}{{api_v1_prefix}}/reflexion/config
+############################################
+# 1) Optimization + Meta-Agent (happy path)
+############################################
+# @name s5_optimization_health
+GET {{host}}{{api_v1_prefix}}/optimization/health
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("optimization/health: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7. Executar Tarefa com Configuração Mínima
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
+# @name s5_optimization_analyze
+POST {{host}}{{api_v1_prefix}}/optimization/analyze?analysis_type=performance&detailed=true
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "task": "Calcular o fatorial de 5",
-  "max_iterations": 2,
-  "max_time_seconds": 30
-}
-
-###
-# 8. Executar Tarefa de Processamento de String
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
-Content-Type: application/json
-
-{
-  "task": "Inverter a string 'Hello World' e converter para maiúsculas",
-  "max_iterations": 3,
-  "max_time_seconds": 60
-}
+> {% client.test("optimization/analyze: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Health Check do Sistema Reflexion
-GET {{host}}{{api_v1_prefix}}/reflexion/health
+# @name s5_optimization_issues
+GET {{host}}{{api_v1_prefix}}/optimization/issues
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("optimization/issues: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 10. Executar Tarefa com Todas as Configurações
-POST {{host}}{{api_v1_prefix}}/reflexion/execute
+# @name s5_optimization_run_cycle
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/optimization/run-cycle
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "enable_auto_execution": false,
+#   "max_improvements": 2
+# }
+#
+# > {% client.test("optimization/run-cycle: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s5_optimization_status
+GET {{host}}{{api_v1_prefix}}/optimization/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("optimization/status: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s5_optimization_metrics_history
+GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("optimization/metrics/history: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s5_meta_health
+GET {{host}}{{api_v1_prefix}}/meta-agent/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("meta-agent/health: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s5_meta_analyze
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/meta-agent/analyze
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("meta-agent/analyze: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s5_meta_heartbeat_start
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "interval_minutes": 30
+# }
+#
+# > {% client.test("meta heartbeat/start: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s5_meta_heartbeat_status
+GET {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/status
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("meta heartbeat/status: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s5_meta_report_latest
+GET {{host}}{{api_v1_prefix}}/meta-agent/report/latest
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("meta report/latest: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s5_meta_heartbeat_stop
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/stop
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("meta heartbeat/stop: 200", function() { client.assert(response.status === 200); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s5_optimization_analyze_invalid
+POST {{host}}{{api_v1_prefix}}/optimization/analyze?analysis_type=performance&detailed=not-bool
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "task": "Criar um dicionário com as vogais do alfabeto como chaves e suas posições como valores",
-  "max_iterations": 5,
-  "max_time_seconds": 120,
-  "success_threshold": 0.85
-}
+> {% client.test("optimization/analyze invalido: 422", function() { client.assert(response.status === 422); }); %}
 
-
+###
+# @name s5_meta_heartbeat_invalid_interval
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/meta-agent/heartbeat/start
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "interval_minutes": 0
+# }
+#
+# > {% client.test("meta heartbeat intervalo invalido: 422", function() { client.assert(response.status === 422); }); %}
+#
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

@@ -21,6 +21,16 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import requests
+from qa_request_support import (
+    DockerLogCorrelator,
+    bootstrap_local_auth,
+    classify_gate,
+    classify_http_status,
+    generate_request_id,
+    isoformat_utc,
+    save_json as save_json_shared,
+    utc_now,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +39,7 @@ DEFAULT_REPORT_JSON = ROOT / "outputs" / "qa" / "all_api_e2e_report.json"
 DEFAULT_REPORT_MD = ROOT / "outputs" / "qa" / "all_api_e2e_report.md"
 DEFAULT_FAILURES_JSON = ROOT / "outputs" / "qa" / "all_api_e2e_failures.json"
 DEFAULT_OPENAPI_SNAPSHOT = ROOT / "outputs" / "qa" / "openapi_snapshot.json"
+DEFAULT_DUAL_OUTPUT_DIR = ROOT / "outputs" / "qa" / "api_e2e_dual_mode"
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 RE_TEMPLATE = re.compile(r"\{\{([^}]+)\}\}")
@@ -409,7 +420,14 @@ def infer_context_from_response(endpoint: Endpoint, body: Any, ctx: ContextStore
             ctx.set(f"observability.{key}", str(val))
 
 
-def build_request(endpoint: Endpoint, openapi: dict[str, Any], ctx: ContextStore, fixture: dict[str, Any] | None) -> tuple[str, dict[str, Any], dict[str, str], Any, str | None]:
+def build_request(
+    endpoint: Endpoint,
+    openapi: dict[str, Any],
+    ctx: ContextStore,
+    fixture: dict[str, Any] | None,
+    *,
+    allow_auto_auth: bool = True,
+) -> tuple[str, dict[str, Any], dict[str, str], Any, str | None]:
     path = endpoint.path
     query: dict[str, Any] = {}
     headers: dict[str, str] = {}
@@ -451,7 +469,7 @@ def build_request(endpoint: Endpoint, openapi: dict[str, Any], ctx: ContextStore
 
     # Default bearer token after login (unless auth endpoints)
     token = ctx.get("auth.local.access_token")
-    if token and "authorization" not in {k.lower() for k in headers}:
+    if allow_auto_auth and token and "authorization" not in {k.lower() for k in headers}:
         if not endpoint.path.startswith("/api/v1/auth/"):
             headers["Authorization"] = f"Bearer {token}"
 
@@ -576,65 +594,68 @@ def render_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Run one runtime probe for every /api/v1 endpoint in OpenAPI.")
-    ap.add_argument("--base-url", default="http://localhost:8000")
-    ap.add_argument("--openapi-url", default="http://localhost:8000/openapi.json")
-    ap.add_argument("--fixtures", default=str(DEFAULT_FIXTURES))
-    ap.add_argument("--report-json", default=str(DEFAULT_REPORT_JSON))
-    ap.add_argument("--report-md", default=str(DEFAULT_REPORT_MD))
-    ap.add_argument("--failures-json", default=str(DEFAULT_FAILURES_JSON))
-    ap.add_argument("--openapi-snapshot", default=str(DEFAULT_OPENAPI_SNAPSHOT))
-    ap.add_argument("--timeout", type=float, default=30.0)
-    ap.add_argument("--stop-on-first-failure", action="store_true")
-    ap.add_argument("--seed-user-id", default="seed-admin")
-    ap.add_argument("--limit", type=int, default=0, help="Debug: limit number of probes (0 = all)")
-    ap.add_argument("--max-429-retries", type=int, default=4)
-    ap.add_argument(
-        "--min-interval-ms",
-        type=float,
-        default=1500.0,
-        help="Minimum gap between requests in milliseconds (safe default for 60 req/min per-IP limiter with background traffic).",
-    )
-    ap.add_argument("--progress-every", type=int, default=25)
-    ap.add_argument(
-        "--fail-on-429",
-        action="store_true",
-        help="Return non-zero if any request required a 429 retry.",
-    )
-    args = ap.parse_args()
+def _new_summary_bucket() -> dict[str, int]:
+    return {
+        "pass_success": 0,
+        "pass_contract_rejection": 0,
+        "pass_expected_auth_rejection": 0,
+        "pass_expected_contract_rejection": 0,
+        "blocked_by_env_expected": 0,
+        "fail_unexpected_status": 0,
+        "fail_server_5xx": 0,
+        "fail_transport": 0,
+    }
 
+
+def _run_phase(
+    args: argparse.Namespace,
+    *,
+    phase: str,
+    boot: dict[str, Any] | None = None,
+    request_id_seq_start: int = 0,
+) -> tuple[dict[str, Any], int]:
     ctx = ContextStore()
     ctx.set("auth.local.user_id", args.seed_user_id)
-    session = requests.Session()
+    allow_auto_auth = phase != "unauth"
+    if boot and boot.get("ok"):
+        if boot.get("token"):
+            ctx.set("auth.local.access_token", boot["token"])
+        if boot.get("user_id"):
+            ctx.set("auth.local.user_id", boot["user_id"])
 
+    session = requests.Session()
     openapi = fetch_openapi(args.openapi_url, args.timeout)
-    save_json(Path(args.openapi_snapshot), openapi)
     endpoints = iter_endpoints(openapi)
     fixtures = load_fixtures(Path(args.fixtures))
-
-    indexed = {(e.method, e.path, e.operation_id): e for e in endpoints}
-
-    # Keep only endpoints present in live OpenAPI; ignore stale fixtures.
-    rows = list(indexed.values())
+    rows = list({(e.method, e.path, e.operation_id): e for e in endpoints}.values())
     rows.sort(key=lambda e: (fixture_order(fixtures.get(e.operation_id)), module_priority(e.module), e.module, e.path, e.method))
     if args.limit > 0:
         rows = rows[: args.limit]
 
+    correlator = None
+    if args.with_log_correlation:
+        correlator = DockerLogCorrelator(
+            service=args.log_service,
+            container=args.log_container,
+            grace_log_ms=args.grace_log_ms,
+            since_padding_sec=args.log_since_padding_sec,
+            include_weak_fallback=True,
+        )
+
     probe_results: list[dict[str, Any]] = []
+    log_evidence_rows: list[dict[str, Any]] = []
     executed_unique = set()
     last_request_started_at = 0.0
     total_429_retries = 0
+    seq = request_id_seq_start
 
     total_rows = len(rows)
     for idx, endpoint in enumerate(rows, start=1):
+        seq += 1
         fixture = fixtures.get(endpoint.operation_id)
         expected_statuses = collect_expected_statuses(endpoint, fixture)
         if args.progress_every > 0 and (idx == 1 or idx % args.progress_every == 0 or idx == total_rows):
-            print(
-                f"[progress] {idx}/{total_rows} {endpoint.method} {endpoint.path} ({endpoint.operation_id})",
-                flush=True,
-            )
+            print(f"[{phase}] {idx}/{total_rows} {endpoint.method} {endpoint.path} ({endpoint.operation_id})", flush=True)
 
         now = time.perf_counter()
         min_gap_seconds = max(0.0, args.min_interval_ms / 1000.0)
@@ -645,11 +666,27 @@ def main() -> int:
 
         started = time.perf_counter()
         last_request_started_at = started
+        t0_dt = utc_now()
         request_meta: dict[str, Any] = {}
+        request_id = generate_request_id(args.request_id_prefix, phase, "api", seq)
         try:
-            path, query, headers, body, content_type = build_request(endpoint, openapi, ctx, fixture)
+            path, query, headers, body, content_type = build_request(
+                endpoint,
+                openapi,
+                ctx,
+                fixture,
+                allow_auto_auth=allow_auto_auth,
+            )
             url = args.base_url.rstrip("/") + path
+            headers = dict(headers)
+            headers["X-Request-ID"] = request_id
+            headers.setdefault("User-Agent", f"Janus-API-E2E-All/{getattr(args, 'client_version', '2.1.0')}")
+            if phase == "unauth":
+                headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+
             request_meta = {
+                "phase": phase,
+                "request_id": request_id,
                 "query": query,
                 "headers": sanitize_headers(headers),
                 "has_body": body is not None,
@@ -676,20 +713,25 @@ def main() -> int:
                 retry_count += 1
                 total_429_retries += 1
                 backoff = retry_after_seconds(resp, retry_count)
-                print(
-                    f"[retry429] {endpoint.method} {endpoint.path} attempt={retry_count} backoff={backoff:.2f}s",
-                    flush=True,
-                )
+                print(f"[retry429:{phase}] {endpoint.method} {endpoint.path} attempt={retry_count} backoff={backoff:.2f}s", flush=True)
                 time.sleep(backoff)
                 try:
                     resp.close()
                 except Exception:
                     pass
                 last_request_started_at = time.perf_counter()
+                t0_dt = utc_now()
                 resp = session.request(endpoint.method, url, **req_kwargs)
 
             duration_ms = round((time.perf_counter() - started) * 1000.0, 2)
-            result_class = classify_status(resp.status_code, expected_statuses)
+            note_text = str((fixture or {}).get("notes", ""))
+            result_class = classify_http_status(
+                resp.status_code,
+                expected_statuses,
+                phase=phase,
+                path=endpoint.path,
+                notes=note_text,
+            )
             if is_streaming:
                 summary = {
                     "status_code": resp.status_code,
@@ -701,7 +743,6 @@ def main() -> int:
 
             payload = None
             if not is_streaming:
-                # Fixture-driven extraction
                 if fixture and isinstance(fixture.get("extract"), dict):
                     try:
                         payload = resp.json()
@@ -712,7 +753,6 @@ def main() -> int:
                             val = extract_json_path(payload, str(json_path))
                             if val is not None:
                                 ctx.set(ctx_key, val)
-                # Heuristics
                 if payload is None:
                     try:
                         payload = resp.json()
@@ -720,12 +760,40 @@ def main() -> int:
                         payload = None
                 if payload is not None:
                     infer_context_from_response(endpoint, payload, ctx)
+
+            response_echo_request_id = resp.headers.get("X-Request-ID")
+            log_match = None
+            if correlator:
+                log_match = correlator.correlate(
+                    request_id=request_id,
+                    method=endpoint.method,
+                    path=path,
+                    phase=phase,
+                    suite="api",
+                    t0=t0_dt,
+                    response_echo_request_id=response_echo_request_id,
+                )
+                log_evidence_rows.append(
+                    {
+                        "request_id": log_match.request_id,
+                        "phase": log_match.phase,
+                        "suite": log_match.suite,
+                        "log_source": log_match.log_source,
+                        "match_type": log_match.match_type,
+                        "matched_lines": log_match.matched_lines,
+                        "error_lines": log_match.error_lines,
+                        "response_echo_request_id": log_match.response_echo_request_id,
+                    }
+                )
+
             try:
                 resp.close()
             except Exception:
                 pass
 
+            log_evidence = log_match.match_type if log_match else "not_collected"
             row = {
+                "phase": phase,
                 "operation_id": endpoint.operation_id,
                 "module": endpoint.module,
                 "method": endpoint.method,
@@ -737,12 +805,40 @@ def main() -> int:
                 "duration_ms": duration_ms,
                 "request": request_meta,
                 "response_summary": summary,
+                "response_echo_request_id": response_echo_request_id,
+                "log_evidence": log_evidence,
+                "log_error_lines": (log_match.error_lines if log_match else []),
+                "gate_class": classify_gate(result_class, log_evidence if args.with_log_correlation else "strong"),
             }
             if retry_count:
                 row["request"]["retry_429_count"] = retry_count
         except requests.RequestException as exc:
             duration_ms = round((time.perf_counter() - started) * 1000.0, 2)
+            log_match = None
+            if correlator:
+                log_match = correlator.correlate(
+                    request_id=request_id,
+                    method=endpoint.method,
+                    path=endpoint.path,
+                    phase=phase,
+                    suite="api",
+                    t0=t0_dt,
+                    response_echo_request_id=None,
+                )
+                log_evidence_rows.append(
+                    {
+                        "request_id": log_match.request_id,
+                        "phase": log_match.phase,
+                        "suite": log_match.suite,
+                        "log_source": log_match.log_source,
+                        "match_type": log_match.match_type,
+                        "matched_lines": log_match.matched_lines,
+                        "error_lines": log_match.error_lines,
+                        "response_echo_request_id": None,
+                    }
+                )
             row = {
+                "phase": phase,
                 "operation_id": endpoint.operation_id,
                 "module": endpoint.module,
                 "method": endpoint.method,
@@ -751,36 +847,39 @@ def main() -> int:
                 "expected_statuses": expected_statuses,
                 "result_class": "fail_transport",
                 "duration_ms": duration_ms,
-                "request": request_meta,
+                "request": {**request_meta, "request_id": request_id},
                 "error": str(exc),
+                "log_evidence": log_match.match_type if log_match else "not_collected",
+                "log_error_lines": (log_match.error_lines if log_match else []),
+                "gate_class": classify_gate("fail_transport", (log_match.match_type if log_match else "strong")),
             }
 
         probe_results.append(row)
         executed_unique.add((endpoint.method, endpoint.path))
-
-        if args.stop_on_first_failure and row["result_class"].startswith("fail_"):
+        if args.stop_on_first_failure and str(row["result_class"]).startswith("fail_"):
             break
 
-    summary_counts = {
-        "pass_success": 0,
-        "pass_contract_rejection": 0,
-        "fail_unexpected_status": 0,
-        "fail_server_5xx": 0,
-        "fail_transport": 0,
-    }
+    summary_counts = _new_summary_bucket()
+    gate_summary = {"pass": 0, "fail_5xx": 0, "fail_transport": 0, "fail_log_evidence_missing": 0, "warn_log_evidence_weak": 0}
     for row in probe_results:
         rc = row["result_class"]
         summary_counts[rc] = summary_counts.get(rc, 0) + 1
-
-    failures = [r for r in probe_results if r["result_class"].startswith("fail_")]
+        gc = row.get("gate_class", "pass")
+        gate_summary[gc] = gate_summary.get(gc, 0) + 1
+    failures = [r for r in probe_results if str(r["result_class"]).startswith("fail_")]
+    reportable_failures = [
+        r for r in probe_results if r.get("gate_class") in {"fail_5xx", "fail_transport", "fail_log_evidence_missing"}
+    ]
 
     report = {
         "metadata": {
-            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "generated_at": isoformat_utc(utc_now()),
+            "phase": phase,
             "base_url": args.base_url,
             "openapi_url": args.openapi_url,
             "fixtures": str(Path(args.fixtures)),
             "timeout_seconds": args.timeout,
+            "with_log_correlation": bool(args.with_log_correlation),
         },
         "summary": {
             "openapi_total_endpoints": len(endpoints),
@@ -788,27 +887,193 @@ def main() -> int:
             "total_probes": len(probe_results),
             "total_429_retries": total_429_retries,
             **summary_counts,
+            **{f"gate_{k}": v for k, v in gate_summary.items()},
         },
         "results": probe_results,
         "failures": failures,
+        "failures_reportable": reportable_failures,
+        "log_evidence": log_evidence_rows,
+        "bootstrap_auth": boot,
         "context_keys": sorted(_flatten_keys(ctx.data)),
     }
+    return report, seq
 
-    save_json(Path(args.report_json), report)
-    save_json(Path(args.failures_json), failures)
-    Path(args.report_md).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.report_md).write_text(render_markdown(report))
 
-    s = report["summary"]
-    print(
-        "[summary] openapi_total={openapi_total_endpoints} executed={executed_unique_endpoints} "
-        "success={pass_success} contract_reject={pass_contract_rejection} "
-        "unexpected={fail_unexpected_status} server5xx={fail_server_5xx} transport={fail_transport} "
-        "retries429={total_429_retries}".format(**s)
+def _render_markdown_dual(report: dict[str, Any]) -> str:
+    lines = ["# API E2E All Endpoints Report (Dual Mode)", ""]
+    for phase_name, phase in (report.get("phases") or {}).items():
+        s = phase["summary"]
+        lines.extend(
+            [
+                f"## {phase_name}",
+                "",
+                f"- total_probes: `{s.get('total_probes', 0)}`",
+                f"- pass_success: `{s.get('pass_success', 0)}`",
+                f"- blocked_by_env_expected: `{s.get('blocked_by_env_expected', 0)}`",
+                f"- fail_server_5xx: `{s.get('fail_server_5xx', 0)}`",
+                f"- fail_transport: `{s.get('fail_transport', 0)}`",
+                f"- gate_fail_log_evidence_missing: `{s.get('gate_fail_log_evidence_missing', 0)}`",
+                "",
+            ]
+        )
+    lines.append("## Failures Reportable")
+    rows = report.get("failures_reportable", [])
+    if not rows:
+        lines.append("- None")
+    else:
+        for row in rows[:250]:
+            lines.append(
+                f"- `{row.get('phase')} {row['method']} {row['path']}` -> "
+                f"`{row.get('actual_status', 'transport')}` [{row.get('gate_class')}]"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Run one runtime probe for every /api/v1 endpoint in OpenAPI.")
+    ap.add_argument("--base-url", default="http://localhost:8000")
+    ap.add_argument("--openapi-url", default="http://localhost:8000/openapi.json")
+    ap.add_argument("--fixtures", default=str(DEFAULT_FIXTURES))
+    ap.add_argument("--report-json", default=str(DEFAULT_REPORT_JSON))
+    ap.add_argument("--report-md", default=str(DEFAULT_REPORT_MD))
+    ap.add_argument("--failures-json", default=str(DEFAULT_FAILURES_JSON))
+    ap.add_argument("--openapi-snapshot", default=str(DEFAULT_OPENAPI_SNAPSHOT))
+    ap.add_argument("--dual-output-dir", default=str(DEFAULT_DUAL_OUTPUT_DIR))
+    ap.add_argument("--timeout", type=float, default=30.0)
+    ap.add_argument("--stop-on-first-failure", action="store_true")
+    ap.add_argument("--seed-user-id", default="seed-admin")
+    ap.add_argument("--limit", type=int, default=0, help="Debug: limit number of probes (0 = all)")
+    ap.add_argument("--max-429-retries", type=int, default=4)
+    ap.add_argument(
+        "--min-interval-ms",
+        type=float,
+        default=1500.0,
+        help="Minimum gap between requests in milliseconds (safe default for 60 req/min per-IP limiter with background traffic).",
     )
-    if failures:
+    ap.add_argument("--progress-every", type=int, default=25)
+    ap.add_argument("--fail-on-429", action="store_true", help="Return non-zero if any request required a 429 retry.")
+    ap.add_argument("--auth-mode", choices=["none", "bootstrap", "dual"], default="dual")
+    ap.add_argument("--with-log-correlation", action="store_true")
+    ap.add_argument("--log-service", default="janus-api")
+    ap.add_argument("--log-container", default="janus_api")
+    ap.add_argument("--log-evidence-required", action="store_true", default=False)
+    ap.add_argument("--gate-mode", choices=["server5xx_or_logs"], default="server5xx_or_logs")
+    ap.add_argument("--request-id-prefix", default="qa-api")
+    ap.add_argument("--serial", action="store_true", default=True)
+    ap.add_argument("--grace-log-ms", type=int, default=400)
+    ap.add_argument("--log-since-padding-sec", type=int, default=1)
+    ap.add_argument("--client-version", default="2.1.0")
+    args = ap.parse_args()
+
+    # Keep snapshot behavior
+    try:
+        openapi = fetch_openapi(args.openapi_url, args.timeout)
+        save_json(Path(args.openapi_snapshot), openapi)
+    except Exception as exc:
+        print(f"[openapi] failed to fetch snapshot: {exc}", flush=True)
         return 1
-    if args.fail_on_429 and total_429_retries > 0:
+
+    reports_by_phase: dict[str, Any] = {}
+    seq = 0
+    boot = None
+
+    if args.auth_mode in {"none", "dual"}:
+        phase_report, seq = _run_phase(args, phase="unauth", boot=None, request_id_seq_start=seq)
+        reports_by_phase["unauth"] = phase_report
+
+    if args.auth_mode in {"bootstrap", "dual"}:
+        boot = bootstrap_local_auth(
+            base_url=args.base_url,
+            timeout=min(args.timeout, 20.0),
+            request_id_prefix=f"{args.request_id_prefix}-bootstrap",
+        )
+        if args.auth_mode == "bootstrap":
+            phase_report, seq = _run_phase(args, phase="auth", boot=boot, request_id_seq_start=seq)
+            reports_by_phase["auth"] = phase_report
+        else:
+            if boot.get("ok"):
+                phase_report, seq = _run_phase(args, phase="auth", boot=boot, request_id_seq_start=seq)
+            else:
+                phase_report = {
+                    "metadata": {"generated_at": isoformat_utc(utc_now()), "phase": "auth", "base_url": args.base_url},
+                    "summary": {"openapi_total_endpoints": 0, "executed_unique_endpoints": 0, "total_probes": 0, **_new_summary_bucket()},
+                    "results": [],
+                    "failures": [],
+                    "failures_reportable": [],
+                    "log_evidence": [],
+                    "bootstrap_auth": boot,
+                    "status": "blocked_bootstrap_auth",
+                }
+            reports_by_phase["auth"] = phase_report
+
+    if len(reports_by_phase) == 1:
+        phase_name = next(iter(reports_by_phase))
+        report = reports_by_phase[phase_name]
+        save_json(Path(args.report_json), report)
+        save_json(Path(args.failures_json), report.get("failures_reportable") or report.get("failures") or [])
+        Path(args.report_md).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.report_md).write_text(render_markdown(report))
+        dual_dir = Path(args.dual_output_dir)
+        dual_dir.mkdir(parents=True, exist_ok=True)
+        save_json_shared(dual_dir / f"{phase_name}.json", report)
+        if report.get("failures_reportable"):
+            return 1
+        if args.fail_on_429 and report.get("summary", {}).get("total_429_retries", 0) > 0:
+            return 2
+        return 0
+
+    merged_results: list[dict[str, Any]] = []
+    merged_failures: list[dict[str, Any]] = []
+    merged_reportable: list[dict[str, Any]] = []
+    merged_logs: list[dict[str, Any]] = []
+    combined_summary = {"openapi_total_endpoints": 0, "executed_unique_endpoints": 0, "total_probes": 0, "total_429_retries": 0, **_new_summary_bucket()}
+    for phase_name, phase_report in reports_by_phase.items():
+        s = phase_report.get("summary", {})
+        for k, v in s.items():
+            if isinstance(v, int):
+                combined_summary[k] = combined_summary.get(k, 0) + v
+        combined_summary["openapi_total_endpoints"] = max(combined_summary.get("openapi_total_endpoints", 0), s.get("openapi_total_endpoints", 0))
+        combined_summary["executed_unique_endpoints"] = max(combined_summary.get("executed_unique_endpoints", 0), s.get("executed_unique_endpoints", 0))
+        merged_results.extend(phase_report.get("results", []))
+        merged_failures.extend(phase_report.get("failures", []))
+        merged_reportable.extend(phase_report.get("failures_reportable", []))
+        merged_logs.extend(phase_report.get("log_evidence", []))
+
+    final_report = {
+        "metadata": {
+            "generated_at": isoformat_utc(utc_now()),
+            "base_url": args.base_url,
+            "openapi_url": args.openapi_url,
+            "fixtures": str(Path(args.fixtures)),
+            "auth_mode": args.auth_mode,
+            "with_log_correlation": bool(args.with_log_correlation),
+        },
+        "summary": combined_summary,
+        "phases": reports_by_phase,
+        "results": merged_results,
+        "failures": merged_failures,
+        "failures_reportable": merged_reportable,
+        "log_evidence": merged_logs,
+        "bootstrap_auth": boot,
+    }
+
+    dual_dir = Path(args.dual_output_dir)
+    dual_dir.mkdir(parents=True, exist_ok=True)
+    for phase_name, phase_report in reports_by_phase.items():
+        save_json_shared(dual_dir / f"{phase_name}.json", phase_report)
+    save_json(Path(args.report_json), final_report)
+    save_json(Path(args.failures_json), merged_reportable)
+    Path(args.report_md).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.report_md).write_text(_render_markdown_dual(final_report))
+
+    s = final_report["summary"]
+    print(
+        "[summary:dual] probes={total_probes} success={pass_success} blocked_env={blocked_by_env_expected} "
+        "server5xx={fail_server_5xx} transport={fail_transport} gate_log_missing={gate_fail_log_evidence_missing}".format(**s)
+    )
+    if merged_reportable:
+        return 1
+    if args.fail_on_429 and s.get("total_429_retries", 0) > 0:
         return 2
     return 0
 

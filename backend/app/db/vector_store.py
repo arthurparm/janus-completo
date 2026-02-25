@@ -2,6 +2,7 @@ import structlog
 import requests
 import urllib3
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import PayloadSchemaType
 
 from app.config import settings
@@ -82,7 +83,16 @@ async def aget_or_create_collection(
         collection_info = await async_client.get_collection(collection_name=collection_name)
         if collection_info.config.params.vectors.size != vector_size:
             logger.warning("log_warning", message=f"Tamanho do vetor da coleção '{collection_name}' difere do solicitado.")
-    except Exception:
+    except UnexpectedResponse as get_error:
+        if get_error.status_code != 404:
+            logger.error(
+                "log_error",
+                message=f"Falha ao consultar coleção async '{collection_name}': {get_error}",
+                exc_info=True,
+            )
+            raise ConnectionError(
+                f"Não foi possível consultar a coleção async: {get_error}"
+            ) from get_error
         logger.warning("log_warning", message=f"Coleção '{collection_name}' não encontrada. Criando via async...")
         try:
             await async_client.create_collection(
@@ -106,6 +116,26 @@ async def aget_or_create_collection(
                 ),
             )
             logger.info("log_info", message=f"Coleção '{collection_name}' criada via async.")
+        except UnexpectedResponse as create_error:
+            # Corrida concorrente: duas requests fazem get(404) e uma perde no create(409).
+            if create_error.status_code == 409:
+                logger.info(
+                    "log_info",
+                    message=f"Coleção '{collection_name}' já foi criada por outra requisição (409). Continuando.",
+                )
+            else:
+                logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
+                )
+                raise ConnectionError(
+                    f"Não foi possível criar a coleção async: {create_error}"
+                ) from create_error
+        except Exception as create_error:
+            logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
+            )
+            raise ConnectionError(
+                f"Não foi possível criar a coleção async: {create_error}"
+            ) from create_error
+        try:
             # Criar índices de payload para metadados importantes
             await async_client.create_payload_index(
                 collection_name=collection_name,
@@ -135,12 +165,21 @@ async def aget_or_create_collection(
                 logger.warning("log_warning", message=f"Failed to create async 'status' index for {collection_name}: {e}")
             logger.info("log_info", message=f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async."
             )
-        except Exception as create_error:
-            logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
+        except Exception as index_error:
+            logger.warning(
+                "log_warning",
+                message=f"Falha ao garantir índices de payload para '{collection_name}' via async: {index_error}",
+                exc_info=True,
             )
-            raise ConnectionError(
-                f"Não foi possível criar a coleção async: {create_error}"
-            ) from create_error
+    except Exception as get_error:
+        logger.error(
+            "log_error",
+            message=f"Falha inesperada ao consultar coleção async '{collection_name}': {get_error}",
+            exc_info=True,
+        )
+        raise ConnectionError(
+            f"Não foi possível consultar a coleção async: {get_error}"
+        ) from get_error
     return collection_name
 
 

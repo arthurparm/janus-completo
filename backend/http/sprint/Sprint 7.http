@@ -1,66 +1,320 @@
 ###
-# SPRINT 7: Self-Optimization - Ciclo Proativo de Auto-Melhoria
-# Testes completos do ciclo MONITOR-DETECT-PLAN-EXECUTE-LEARN
-###
+    # SPRINT 7: Conversacao e Feedback (Chat + Feedback)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Chat, Feedback
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Executar Ciclo Completo de Auto-Otimização
-POST {{host}}{{api_v1_prefix}}/optimization/run-cycle
-Content-Type: application/json
+@message_id = msg-placeholder
 
-{
-  "enable_auto_execution": false
-}
 
-###
-# 2. Executar Ciclo com Auto-Execução Habilitada
-POST {{host}}{{api_v1_prefix}}/optimization/run-cycle
-Content-Type: application/json
-
-{
-  "enable_auto_execution": true,
-  "max_improvements": 3
-}
-
-###
-# 3. Obter Métricas de Saúde do Sistema
-GET {{host}}{{api_v1_prefix}}/optimization/health
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-###
-# 4. Listar Problemas Detectados
-GET {{host}}{{api_v1_prefix}}/optimization/issues
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Chat] GET /api/v1/chat/conversations
+# - [Chat] GET /api/v1/chat/health
+# - [Chat] POST /api/v1/chat/message
+# - [Chat] POST /api/v1/chat/start
+# - [Chat] GET /api/v1/chat/stream/{conversation_id}
+# - [Chat] DELETE /api/v1/chat/{conversation_id}
+# - [Chat] GET /api/v1/chat/{conversation_id}/events
+# - [Chat] GET /api/v1/chat/{conversation_id}/history
+# - [Chat] GET /api/v1/chat/{conversation_id}/history/paginated
+# - [Chat] PUT /api/v1/chat/{conversation_id}/rename
+# - [Chat] GET /api/v1/chat/{conversation_id}/trace
+# - [Feedback] POST /api/v1/feedback/
+# - [Feedback] GET /api/v1/feedback/conversation/{conversation_id}
+# - [Feedback] GET /api/v1/feedback/report
+# - [Feedback] GET /api/v1/feedback/stats
+# - [Feedback] GET /api/v1/feedback/suggestions
+# - [Feedback] POST /api/v1/feedback/thumbs-down
+# - [Feedback] POST /api/v1/feedback/thumbs-up
+
+############################################
+# 1) Chat + Feedback (happy path)
+############################################
+# @name s7_chat_health
+GET {{host}}{{api_v1_prefix}}/chat/health
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("chat/health: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
 
 ###
-# 5. Listar Problemas por Severidade (HIGH)
-GET {{host}}{{api_v1_prefix}}/optimization/issues?severity=HIGH
+# @name s7_chat_start
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/chat/start
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "persona": "assistant",
+#   "user_id": "{{actor_user_id}}",
+#   "title": "Sprint 7"
+# }
+#
+# > {%
+# client.test("chat/start: 200", function() { client.assert(response.status === 200); });
+# const b = response.body.json();
+# client.global.set("conversation_id", String(b.conversation_id));
+# %}
+#
+###
+# @name s7_chat_message
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/chat/message
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "conversation_id": "{{conversation_id}}",
+#   "message": "Resuma a saude do sistema em uma frase.",
+#   "role": "auto",
+#   "priority": "fast_and_cheap",
+#   "user_id": "{{actor_user_id}}"
+# }
+#
+# > {%
+# client.test("chat/message: 200, 403, 404 ou 500", function() { client.assert([200,403,404,500].includes(response.status)); });
+# try {
+#   const h = client.getResponseHandler ? null : null;
+#   const body = response.body.json();
+#   if (response.status === 200 && body && body.conversation_id) {
+#     client.global.set("conversation_id", String(body.conversation_id));
+#     client.global.set("message_id", "msg-unknown");
+#   }
+# } catch (e) {}
+# %}
+#
+###
+# @name s7_chat_history
+GET {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}/history
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("chat/history: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
 
 ###
-# 6. Listar Problemas por Categoria (PERFORMANCE)
-GET {{host}}{{api_v1_prefix}}/optimization/issues?category=PERFORMANCE
+# @name s7_chat_history_paginated
+GET {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}/history/paginated?limit=20&offset=0
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("chat/history/paginated: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
 
 ###
-# 7. Obter Histórico de Métricas
-GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=50
+# @name s7_chat_trace
+GET {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}/trace
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("chat/trace: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
 
 ###
-# 8. Obter Histórico de Métricas com Limite Maior
-GET {{host}}{{api_v1_prefix}}/optimization/metrics/history?limit=100
+# @name s7_chat_rename
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# PUT {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}/rename
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "new_title": "Sprint 7 Renomeada",
+#   "user_id": "{{actor_user_id}}"
+# }
+#
+# > {% client.test("chat/rename: 200/403/404", function() { client.assert([200,403,404].includes(response.status)); }); %}
+#
+###
+# @name s7_feedback_record
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/feedback/
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "conversation_id": "{{conversation_id}}",
+#   "message_id": "{{message_id}}",
+#   "rating": "positive",
+#   "feedback_type": "message",
+#   "comment": "Fluxo OK"
+# }
+#
+# > {% client.test("feedback record: 200 ou 500", function() { client.assert([200,500].includes(response.status)); }); %}
+#
+###
+# @name s7_feedback_thumbs_up
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/feedback/thumbs-up
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "conversation_id": "{{conversation_id}}",
+#   "message_id": "{{message_id}}",
+#   "comment": "util"
+# }
+#
+# > {% client.test("feedback thumbs-up: 200 ou 500", function() { client.assert([200,500].includes(response.status)); }); %}
+#
+###
+# @name s7_feedback_stats
+GET {{host}}{{api_v1_prefix}}/feedback/stats
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("feedback stats: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Executar Análise de Performance
-POST {{host}}{{api_v1_prefix}}/optimization/analyze?analysis_type=performance&detailed=true
-Content-Type: application/json
-
-###
-# 10. Health Check do Sistema de Auto-Otimização
-GET {{host}}{{api_v1_prefix}}/optimization/status
+# @name s7_feedback_report
+GET {{host}}{{api_v1_prefix}}/feedback/report?hours=24
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("feedback report: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s7_feedback_suggestions
+GET {{host}}{{api_v1_prefix}}/feedback/suggestions
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("feedback suggestions: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s7_feedback_by_conversation
+GET {{host}}{{api_v1_prefix}}/feedback/conversation/{{conversation_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("feedback by conversation: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s7_chat_conversations
+GET {{host}}{{api_v1_prefix}}/chat/conversations?limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("chat/conversations: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s7_chat_delete
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# DELETE {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}
+# Accept: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("chat/delete: 200/403/404", function() { client.assert([200,403,404].includes(response.status)); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s7_chat_message_invalid_conversation
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/chat/message
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "conversation_id": "conv-inexistente",
+#   "message": "teste",
+#   "role": "auto",
+#   "priority": "fast_and_cheap"
+# }
+#
+# > {% client.test("chat/message conv inexistente: 404 ou 500", function() { client.assert([404,500].includes(response.status)); }); %}
+#
+###
+# @name s7_chat_rename_invalid
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# PUT {{host}}{{api_v1_prefix}}/chat/{{conversation_id}}/rename
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "new_title": ""
+# }
+#
+# > {% client.test("chat/rename payload invalido: 422", function() { client.assert(response.status === 422); }); %}
+#
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

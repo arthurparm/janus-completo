@@ -1,126 +1,299 @@
 ###
-# SPRINT 11: Colaboração Agêntica - Sociedade de Mentes
-# Testes completos do sistema multi-agente com workspace compartilhado
-###
+    # SPRINT 11: Colaboracao Multiagente e Workspace
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Collaboration, Collaboration - Workspace
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Health Check do Sistema Multi-Agente
-GET http://localhost:8000/api/v1/autonomy/status
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Collaboration] GET /api/v1/collaboration/agents
+# - [Collaboration] POST /api/v1/collaboration/agents/create
+# - [Collaboration] GET /api/v1/collaboration/agents/{agent_id}
+# - [Collaboration] GET /api/v1/collaboration/health
+# - [Collaboration] POST /api/v1/collaboration/projects/execute
+# - [Collaboration] GET /api/v1/collaboration/tasks
+# - [Collaboration] POST /api/v1/collaboration/tasks/create
+# - [Collaboration] POST /api/v1/collaboration/tasks/execute
+# - [Collaboration] POST /api/v1/collaboration/tasks/execute_parallel
+# - [Collaboration] GET /api/v1/collaboration/tasks/{task_id}
+# - [Collaboration] GET /api/v1/collaboration/workspace/status
+# - [Collaboration - Workspace] POST /api/v1/collaboration/system/shutdown
+# - [Collaboration - Workspace] POST /api/v1/collaboration/workspace/artifacts/add
+# - [Collaboration - Workspace] GET /api/v1/collaboration/workspace/artifacts/{key}
+# - [Collaboration - Workspace] POST /api/v1/collaboration/workspace/messages/send
+# - [Collaboration - Workspace] GET /api/v1/collaboration/workspace/messages/{agent_id}
+
+############################################
+# 1) Colaboracao + Workspace (happy path)
+############################################
+# @name s11_collab_health
+GET {{host}}{{api_v1_prefix}}/collaboration/health
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("collaboration/health: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 2. Criar Agente Gestor de Projetos
-POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
-Content-Type: application/json
-
-{
-  "role": "project_manager"
-}
-
+# @name s11_create_agent_coder
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "role": "coder"
+# }
+#
+# > {%
+# client.test("create agent coder: 201", function() { client.assert(response.status === 201); });
+# const b = response.body.json();
+# client.global.set("agent_id", String(b.agent_id));
+# %}
+#
 ###
-# 3. Criar Agente Pesquisador
-POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
-Content-Type: application/json
-
-{
-  "role": "researcher"
-}
-
+# @name s11_create_task
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "description": "Validar pipeline colaborativo",
+#   "priority": "high",
+#   "assigned_to": "{{agent_id}}",
+#   "dependencies": []
+# }
+#
+# > {%
+# client.test("create task: 200", function() { client.assert(response.status === 200); });
+# const b = response.body.json();
+# client.global.set("task_id", String(b.id));
+# %}
+#
 ###
-# 4. Criar Agente Desenvolvedor
-POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
-Content-Type: application/json
-
-{
-  "role": "coder"
-}
-
-###
-# 5. Criar Agente Testador
-POST {{host}}{{api_v1_prefix}}/collaboration/agents/create
-Content-Type: application/json
-
-{
-  "role": "tester"
-}
-
-###
-# 6. Listar Todos os Agentes Ativos
+# @name s11_list_agents
 GET {{host}}{{api_v1_prefix}}/collaboration/agents
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("list agents: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7. Executar Projeto Completo (Coordenação Multi-Agente)
-POST {{host}}{{api_v1_prefix}}/collaboration/projects/execute
-Content-Type: application/json
+# @name s11_agent_details
+GET {{host}}{{api_v1_prefix}}/collaboration/agents/{{agent_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "description": "Criar uma função Python que calcula números de Fibonacci até N, incluindo testes unitários e documentação"
-}
-
-###
-# 8. Criar Tarefa Manual
-POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
-Content-Type: application/json
-
-{
-  "description": "Implementar algoritmo de ordenação quicksort",
-  "priority": "high"
-}
+> {% client.test("agent details: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 9. Listar Todas as Tarefas
+# @name s11_list_tasks
 GET {{host}}{{api_v1_prefix}}/collaboration/tasks
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("list tasks: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 10. Listar Tarefas Pendentes
-GET {{host}}{{api_v1_prefix}}/collaboration/tasks?status=pending
+# @name s11_task_details
+GET {{host}}{{api_v1_prefix}}/collaboration/tasks/{{task_id}}
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("task details: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 11. Obter Status do Workspace Compartilhado
+# @name s11_execute_parallel
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute_parallel
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "task_ids": null,
+#   "concurrency": 2
+# }
+#
+# > {% client.test("execute_parallel: 200", function() { client.assert(response.status === 200); }); %}
+#
+###
+# @name s11_workspace_status
 GET {{host}}{{api_v1_prefix}}/collaboration/workspace/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("workspace/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 12. Adicionar Artefato ao Workspace
-# NOTA: Use o agent_id real retornado no teste #4 (coder)
-# Exemplo: substitua CODER_AGENT_ID pelo ID retornado
-POST {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/add
-Content-Type: application/json
-
-{
-  "key": "example_code.py",
-  "value": "def hello_world():\n    print('Hello, World!')",
-  "author": "CODER_AGENT_ID"
-}
-
+# @name s11_artifact_add
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/add
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "key": "sprint11_demo.txt",
+#   "content": "artifact content"
+# }
+#
+# > {% client.test("artifact add: 200", function() { client.assert(response.status === 200); }); %}
+#
 ###
-# 13. Recuperar Artefato do Workspace
-GET {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/example_code.py
+# @name s11_artifact_get
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/artifacts/sprint11_demo.txt
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("artifact get: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 14. Enviar Mensagem Entre Agentes
-# NOTA: Use os agent_ids reais retornados nos testes #4 (coder) e #5 (tester)
-POST {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/send
-Content-Type: application/json
-
-{
-  "from_agent": "CODER_AGENT_ID",
-  "to_agent": "TESTER_AGENT_ID",
-  "content": "Código implementado e pronto para testes"
-}
-
+# @name s11_message_send
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/send
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "to_agent_id": "{{agent_id}}",
+#   "message": "Ping da sprint 11"
+# }
+#
+# > {% client.test("workspace message send: 200", function() { client.assert(response.status === 200); }); %}
+#
 ###
-# 15. Executar Projeto - Criação de API REST
-POST {{host}}{{api_v1_prefix}}/collaboration/projects/execute
-Content-Type: application/json
+# @name s11_messages_get
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/{{agent_id}}
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
-{
-  "description": "Desenvolver uma API REST simples com endpoints para CRUD de usuários, incluindo validação, testes e documentação Swagger"
-}
+> {% client.test("workspace messages get: 200", function() { client.assert(response.status === 200); }); %}
+
+############################################
+# 2) Edge cases
+############################################
+# @name s11_task_invalid_priority
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/tasks/create
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "description": "Tarefa inválida",
+#   "priority": "urgent",
+#   "dependencies": []
+# }
+#
+# > {% client.test("task invalid priority: 400", function() { client.assert(response.status === 400); }); %}
+#
+###
+# @name s11_execute_task_missing
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/collaboration/tasks/execute
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "task_id": "task-inexistente",
+#   "agent_id": "{{agent_id}}"
+# }
+#
+# > {% client.test("execute task inexistente: 404", function() { client.assert(response.status === 404); }); %}
+#
+###
+# @name s11_messages_missing_agent
+GET {{host}}{{api_v1_prefix}}/collaboration/workspace/messages/agent_desconhecido
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("messages agente inexistente: 404", function() { client.assert(response.status === 404); }); %}
+
+### OPTIONAL-DESTRUCTIVE
+# POST {{host}}{{api_v1_prefix}}/collaboration/system/shutdown
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

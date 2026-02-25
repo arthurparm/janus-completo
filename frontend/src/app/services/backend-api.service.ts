@@ -351,6 +351,57 @@ export interface DocSearchResponse {
   results: DocSearchResultItem[];
 }
 
+export interface GenerativeMemoryItem {
+  id?: string;
+  content: string;
+  type?: string;
+  created_at?: string | number;
+  updated_at?: string | number;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface RagSearchResponse {
+  answer: string;
+  citations: Citation[];
+}
+
+export interface RagUserChatResponse {
+  answer: string;
+  citations: Citation[];
+}
+
+export interface RagUserChatV2Result {
+  id?: string;
+  score?: number;
+  role?: string;
+  session_id?: string;
+  timestamp?: number;
+  [key: string]: unknown;
+}
+
+export interface RagUserChatV2Response {
+  results: RagUserChatV2Result[];
+}
+
+export interface RagHybridResponse {
+  answer: string;
+  citations: Citation[];
+}
+
+export interface FeedbackQuickRequest {
+  conversation_id: string;
+  message_id: string;
+  comment?: string;
+  user_id?: string;
+}
+
+export interface FeedbackQuickResponse {
+  id: string;
+  rating: string;
+  message: string;
+}
+
 // Goals
 export interface Goal {
   id: string
@@ -1353,6 +1404,21 @@ export class BackendApiService {
     )
   }
 
+  getGenerativeMemories(query: string, limit: number = 10): Observable<GenerativeMemoryItem[]> {
+    const qs = new URLSearchParams()
+    qs.set('query', query)
+    qs.set('limit', String(limit))
+    return this.http.get<GenerativeMemoryItem[]>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`))
+  }
+
+  addGenerativeMemory(content: string, opts: { importance?: number; type?: string } = {}): Observable<GenerativeMemoryItem> {
+    const qs = new URLSearchParams()
+    qs.set('content', content)
+    if (typeof opts.importance === 'number') qs.set('importance', String(opts.importance))
+    if (opts.type) qs.set('type', String(opts.type))
+    return this.http.post<GenerativeMemoryItem>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`), {})
+  }
+
   // Documents API
   listDocuments(conversationId?: string, userId?: string): Observable<DocListResponse> {
     const qs = new URLSearchParams();
@@ -1383,16 +1449,149 @@ export class BackendApiService {
     )
   }
 
-  searchDocuments(query: string, minScore?: number, docId?: string): Observable<DocSearchResponse> {
+  searchDocuments(query: string, minScore?: number, docId?: string, userId?: string): Observable<DocSearchResponse> {
     const qs = new URLSearchParams()
     qs.set('query', query)
     if (minScore !== undefined) qs.set('min_score', String(minScore))
     if (docId) qs.set('doc_id', docId)
-    return this.http.get<DocSearchResponse>(this.buildUrl(`/api/v1/documents/search?${qs.toString()}`))
+    if (userId) qs.set('user_id', String(userId))
+    const headers = userId ? this.headersFor(userId) : undefined
+    return this.http.get<DocSearchResponse>(
+      this.buildUrl(`/api/v1/documents/search?${qs.toString()}`),
+      headers ? { headers } : undefined
+    )
   }
 
-  deleteDocument(docId: string): Observable<{ status: string; doc_id: string }> {
-    return this.http.delete<{ status: string; doc_id: string }>(this.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}`))
+  deleteDocument(docId: string, userId?: string): Observable<{ status: string; doc_id: string }> {
+    const qs = new URLSearchParams()
+    if (userId) qs.set('user_id', String(userId))
+    const headers = userId ? this.headersFor(userId) : undefined
+    return this.http.delete<{ status: string; doc_id: string }>(
+      this.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  // RAG API
+  ragSearch(params: {
+    query: string
+    type?: string
+    origin?: string
+    doc_id?: string
+    file_path?: string
+    limit?: number
+    min_score?: number
+  }): Observable<RagSearchResponse> {
+    const qs = new URLSearchParams()
+    qs.set('query', params.query)
+    if (params.type) qs.set('type', params.type)
+    if (params.origin) qs.set('origin', params.origin)
+    if (params.doc_id) qs.set('doc_id', params.doc_id)
+    if (params.file_path) qs.set('file_path', params.file_path)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.min_score != null) qs.set('min_score', String(params.min_score))
+    return this.http.get<RagSearchResponse>(this.buildUrl(`/api/v1/rag/search?${qs.toString()}`))
+  }
+
+  ragUserChat(params: {
+    query: string
+    user_id: string
+    session_id?: string
+    role?: string
+    limit?: number
+    min_score?: number
+  }): Observable<RagUserChatResponse> {
+    const qs = new URLSearchParams()
+    qs.set('query', params.query)
+    qs.set('user_id', params.user_id)
+    if (params.session_id) qs.set('session_id', params.session_id)
+    if (params.role) qs.set('role', params.role)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.min_score != null) qs.set('min_score', String(params.min_score))
+    return this.http.get<RagUserChatResponse>(this.buildUrl(`/api/v1/rag/user-chat?${qs.toString()}`))
+  }
+
+  ragUserChatV2(params: {
+    query: string
+    user_id?: string
+    session_id?: string
+    start_ts_ms?: number
+    end_ts_ms?: number
+    limit?: number
+    min_score?: number
+  }): Observable<RagUserChatV2Response> {
+    const qs = new URLSearchParams()
+    qs.set('query', params.query)
+    if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.session_id) qs.set('session_id', params.session_id)
+    if (params.start_ts_ms != null) qs.set('start_ts_ms', String(params.start_ts_ms))
+    if (params.end_ts_ms != null) qs.set('end_ts_ms', String(params.end_ts_ms))
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.min_score != null) qs.set('min_score', String(params.min_score))
+    const headers = params.user_id ? this.headersFor(params.user_id) : undefined
+    return this.http.get<RagUserChatV2Response>(
+      this.buildUrl(`/api/v1/rag/user_chat?${qs.toString()}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  ragHybridSearch(params: {
+    query: string
+    user_id?: string
+    limit?: number
+    min_score?: number
+  }): Observable<RagHybridResponse> {
+    const qs = new URLSearchParams()
+    qs.set('query', params.query)
+    if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.min_score != null) qs.set('min_score', String(params.min_score))
+    const headers = params.user_id ? this.headersFor(params.user_id) : undefined
+    return this.http.get<RagHybridResponse>(
+      this.buildUrl(`/api/v1/rag/hybrid_search?${qs.toString()}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  ragProductivitySearch(params: {
+    query: string
+    user_id: string
+    limit?: number
+    min_score?: number
+  }): Observable<RagSearchResponse> {
+    const qs = new URLSearchParams()
+    qs.set('query', params.query)
+    qs.set('user_id', params.user_id)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.min_score != null) qs.set('min_score', String(params.min_score))
+    const headers = this.headersFor(params.user_id)
+    return this.http.get<RagSearchResponse>(this.buildUrl(`/api/v1/rag/productivity?${qs.toString()}`), { headers })
+  }
+
+  thumbsUpFeedback(req: FeedbackQuickRequest): Observable<FeedbackQuickResponse> {
+    const qs = new URLSearchParams()
+    if (req.user_id) qs.set('user_id', String(req.user_id))
+    return this.http.post<FeedbackQuickResponse>(
+      this.buildUrl(`/api/v1/feedback/thumbs-up${qs.toString() ? '?' + qs.toString() : ''}`),
+      {
+        conversation_id: req.conversation_id,
+        message_id: req.message_id,
+        comment: req.comment,
+      }
+    )
+  }
+
+  thumbsDownFeedback(req: FeedbackQuickRequest): Observable<FeedbackQuickResponse> {
+    const qs = new URLSearchParams()
+    if (req.user_id) qs.set('user_id', String(req.user_id))
+    return this.http.post<FeedbackQuickResponse>(
+      this.buildUrl(`/api/v1/feedback/thumbs-down${qs.toString() ? '?' + qs.toString() : ''}`),
+      {
+        conversation_id: req.conversation_id,
+        message_id: req.message_id,
+        comment: req.comment,
+      }
+    )
   }
 
   getKnowledgeStats(): Observable<KnowledgeStats> {

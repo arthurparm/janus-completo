@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { firstValueFrom, forkJoin, of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
+import { Observable } from 'rxjs'
 
 import { AuthService } from '../../core/auth/auth.service'
 import { AgentEvent, AgentEventsService } from '../../core/services/agent-events.service'
@@ -15,10 +16,17 @@ import {
   ChatUnderstanding,
   ConversationMeta,
   DocListItem,
+  DocSearchResultItem,
+  FeedbackQuickResponse,
+  GenerativeMemoryItem,
   MemoryItem,
   Citation,
   AutonomyStatusResponse,
   Goal,
+  RagHybridResponse,
+  RagSearchResponse,
+  RagUserChatResponse,
+  RagUserChatV2Response,
   Tool
 } from '../../services/backend-api.service'
 import { Header } from '../../core/layout/header/header'
@@ -32,6 +40,7 @@ type ChatRole = 'user' | 'assistant' | 'system' | 'event'
 
 interface ChatMessageView {
   id: string
+  backendMessageId?: string
   role: ChatRole
   text: string
   timestamp: number
@@ -52,6 +61,36 @@ interface ThoughtStreamItem {
   title: string
   text: string
   timestamp: number
+}
+
+type RagMode = 'search' | 'user-chat' | 'user_chat' | 'hybrid_search' | 'productivity'
+type AdvancedRailTab = 'insights' | 'cliente' | 'autonomia'
+type CustomerTab = 'docs' | 'memoria' | 'rag'
+type TabGroup = 'advancedRail' | 'customer' | 'ragResult'
+type RailNoticeKind = 'success' | 'info' | 'warning' | 'error'
+type RailNoticeSection = 'docs' | 'memory' | 'rag' | 'autonomy'
+type RagResultViewTab = 'resposta' | 'fontes' | 'raw'
+
+interface FeedbackUiState {
+  rating?: 'positive' | 'negative'
+  commentOpen?: boolean
+  submitting?: boolean
+  submitted?: boolean
+  error?: string
+  serverMessage?: string
+}
+
+interface RagUiResult {
+  mode: RagMode
+  answer?: string
+  citations?: Citation[]
+  results?: Record<string, unknown>[]
+}
+
+interface RailNotice {
+  kind: RailNoticeKind
+  message: string
+  visible: boolean
 }
 
 interface RoleOption {
@@ -107,6 +146,13 @@ export class ConversationsComponent {
   readonly events = signal<AgentEvent[]>([])
   readonly docs = signal<DocListItem[]>([])
   readonly memoryUser = signal<MemoryItem[]>([])
+  readonly docSearchResults = signal<DocSearchResultItem[]>([])
+  readonly generativeMemoryResults = signal<GenerativeMemoryItem[]>([])
+  readonly ragResult = signal<RagUiResult | null>(null)
+  readonly docsNotice = signal<RailNotice | null>(null)
+  readonly memoryNotice = signal<RailNotice | null>(null)
+  readonly ragNotice = signal<RailNotice | null>(null)
+  readonly autonomyNotice = signal<RailNotice | null>(null)
 
   readonly selectedId = signal<string | null>(null)
   readonly streamStatus = signal('idle')
@@ -115,6 +161,8 @@ export class ConversationsComponent {
   readonly selectedPriority = signal('fast_and_cheap')
   readonly streamingEnabled = signal(true)
   readonly showAdvanced = signal(false)
+  readonly advancedRailTab = signal<AdvancedRailTab>('cliente')
+  readonly customerTab = signal<CustomerTab>('docs')
   readonly copiedCitation = signal('')
   readonly autonomyLoading = signal(false)
   readonly autonomySaving = signal(false)
@@ -122,6 +170,45 @@ export class ConversationsComponent {
   readonly autonomyGoals = signal<Goal[]>([])
   readonly autonomyTools = signal<Tool[]>([])
   readonly autonomyError = signal('')
+  readonly goalCreateTitle = signal('')
+  readonly goalCreateDescription = signal('')
+  readonly goalCreateLoading = signal(false)
+  readonly goalCreateError = signal('')
+
+  readonly docUploadInFlight = signal(false)
+  readonly docUploadProgress = signal<number | null>(null)
+  readonly docUploadError = signal('')
+  readonly docLinkUrl = signal('')
+  readonly docLinkLoading = signal(false)
+  readonly docLinkError = signal('')
+  readonly docSearchQuery = signal('')
+  readonly docSearchLoading = signal(false)
+  readonly docSearchError = signal('')
+  readonly deletingDocIds = signal<Record<string, boolean>>({})
+
+  readonly memoryDraft = signal('')
+  readonly memoryImportance = signal<number | null>(null)
+  readonly memoryType = signal('episodic')
+  readonly memoryAddLoading = signal(false)
+  readonly memoryAddError = signal('')
+  readonly memorySearchQuery = signal('')
+  readonly memorySearchLimit = signal(5)
+  readonly memorySearchLoading = signal(false)
+  readonly memorySearchError = signal('')
+
+  readonly ragMode = signal<RagMode>('hybrid_search')
+  readonly ragQuery = signal('')
+  readonly ragLoading = signal(false)
+  readonly ragError = signal('')
+  readonly ragResultViewTab = signal<RagResultViewTab>('resposta')
+
+  readonly feedbackStateByMessageId = signal<Record<string, FeedbackUiState>>({})
+  readonly feedbackCommentDraftByMessageId = signal<Record<string, string>>({})
+
+  readonly selectedUploadFile = signal<File | null>(null)
+  private readonly advancedRailTabOrder: AdvancedRailTab[] = ['insights', 'cliente', 'autonomia']
+  private readonly customerTabOrder: CustomerTab[] = ['docs', 'memoria', 'rag']
+  private readonly ragResultTabOrder: RagResultViewTab[] = ['resposta', 'fontes', 'raw']
 
   readonly roleOptions: RoleOption[] = [
     { value: 'orchestrator', label: 'Orchestrator' },
@@ -215,6 +302,7 @@ export class ConversationsComponent {
   private streamingMessageId: string | null = null
   private scrollQueued = false
   private responseStartedAt: number | null = null
+  private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
   readonly quickPrompts = [
     'Resuma esta conversa em 5 pontos.',
     'Quais sao os proximos passos recomendados para este tema?',
@@ -223,6 +311,7 @@ export class ConversationsComponent {
 
   constructor() {
     this.restoreAdvancedModePreference()
+    this.restoreRailTabPreferences()
     this.loadConversations()
 
     this.route.paramMap
@@ -260,6 +349,8 @@ export class ConversationsComponent {
       })
 
     this.destroyRef.onDestroy(() => {
+      this.noticeTimers.forEach((timer) => clearTimeout(timer))
+      this.noticeTimers.clear()
       this.eventsService.disconnect()
       this.stream.stop()
     })
@@ -477,6 +568,472 @@ export class ConversationsComponent {
     this.prompt.setValue(text)
   }
 
+  setAdvancedRailTab(tab: AdvancedRailTab): void {
+    this.advancedRailTab.set(tab)
+    this.persistRailTabPreference(this.advancedRailTabStorageKey, tab)
+  }
+
+  onAdvancedRailTabKeydown(event: KeyboardEvent): void {
+    this.moveTabSelection<AdvancedRailTab>(
+      event,
+      this.advancedRailTab(),
+      this.advancedRailTabOrder,
+      (tab) => this.setAdvancedRailTab(tab),
+      'advancedRail'
+    )
+  }
+
+  setCustomerTab(tab: CustomerTab): void {
+    this.customerTab.set(tab)
+    this.persistRailTabPreference(this.customerTabStorageKey, tab)
+  }
+
+  onCustomerTabKeydown(event: KeyboardEvent): void {
+    this.moveTabSelection<CustomerTab>(
+      event,
+      this.customerTab(),
+      this.customerTabOrder,
+      (tab) => this.setCustomerTab(tab),
+      'customer'
+    )
+  }
+
+  onDocLinkInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    this.docLinkUrl.set(target?.value || '')
+  }
+
+  onDocSearchInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    this.docSearchQuery.set(target?.value || '')
+  }
+
+  onMemoryDraftInput(event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null
+    this.memoryDraft.set(target?.value || '')
+  }
+
+  onMemoryImportanceInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    const raw = target?.value?.trim() || ''
+    if (!raw) {
+      this.memoryImportance.set(null)
+      return
+    }
+    const n = Number(raw)
+    this.memoryImportance.set(Number.isFinite(n) ? n : null)
+  }
+
+  onMemoryTypeChange(event: Event): void {
+    const target = event.target as HTMLSelectElement | null
+    this.memoryType.set(target?.value || 'episodic')
+  }
+
+  onMemorySearchQueryInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    this.memorySearchQuery.set(target?.value || '')
+  }
+
+  onRagQueryInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    this.ragQuery.set(target?.value || '')
+  }
+
+  onRagModeChange(event: Event): void {
+    const target = event.target as HTMLSelectElement | null
+    const value = (target?.value || 'hybrid_search') as RagMode
+    this.ragMode.set(value)
+  }
+
+  ragModeLabel(mode: RagMode): string {
+    if (mode === 'hybrid_search') return 'Híbrido (Vetor + Grafo)'
+    if (mode === 'search') return 'Busca vetorial'
+    if (mode === 'user-chat') return 'Chat pessoal (v1)'
+    if (mode === 'user_chat') return 'Chat pessoal (v2)'
+    return 'Produtividade'
+  }
+
+  ragModeHint(mode: RagMode): string {
+    if (mode === 'hybrid_search') return 'Combina busca vetorial e grafo para contexto mais completo.'
+    if (mode === 'search') return 'Busca vetorial direta em documentos e memória indexada.'
+    if (mode === 'user-chat') return 'Consulta contexto pessoal legado (v1).'
+    if (mode === 'user_chat') return 'Consulta contexto pessoal atual (v2).'
+    return 'Consulta dados de produtividade do usuário.'
+  }
+
+  memoryTypeLabel(value: string | null | undefined): string {
+    if (value === 'episodic') return 'Episódica'
+    if (value === 'semantic') return 'Semântica'
+    if (value === 'procedural') return 'Procedural'
+    return value || 'Memória'
+  }
+
+  setRagResultViewTab(tab: RagResultViewTab): void {
+    this.ragResultViewTab.set(tab)
+  }
+
+  onRagResultTabKeydown(event: KeyboardEvent): void {
+    this.moveTabSelection<RagResultViewTab>(
+      event,
+      this.ragResultViewTab(),
+      this.ragResultTabOrder,
+      (tab) => this.setRagResultViewTab(tab),
+      'ragResult'
+    )
+  }
+
+  ragHasAnswer(): boolean {
+    return Boolean(this.ragResult()?.answer?.trim())
+  }
+
+  ragHasSources(): boolean {
+    return Boolean(this.ragResult()?.citations?.length)
+  }
+
+  ragHasRows(): boolean {
+    return Boolean(this.ragResult()?.results?.length)
+  }
+
+  isBusinessDocError(message: string | null | undefined): boolean {
+    const value = String(message || '').toLowerCase()
+    return value.includes('quota') || value.includes('limite') || value.includes('maior')
+  }
+
+  onGoalCreateTitleInput(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    this.goalCreateTitle.set(target?.value || '')
+  }
+
+  onGoalCreateDescriptionInput(event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null
+    this.goalCreateDescription.set(target?.value || '')
+  }
+
+  onDocFileSelected(event: Event): void {
+    const target = event.target as HTMLInputElement | null
+    const file = target?.files?.[0] || null
+    this.selectedUploadFile.set(file)
+    this.docUploadError.set('')
+  }
+
+  uploadSelectedDoc(): void {
+    const file = this.selectedUploadFile()
+    if (!file) {
+      this.docUploadError.set('Selecione um arquivo para upload.')
+      return
+    }
+    const userId = this.userIdString()
+    this.docUploadError.set('')
+    this.clearNotice('docs')
+    this.docUploadInFlight.set(true)
+    this.docUploadProgress.set(0)
+    this.api.uploadDocument(file, this.selectedId() || undefined, userId || undefined)
+      .pipe(catchError((err) => {
+        this.docUploadError.set(this.extractErrorMessage(err, 'Falha no upload do documento.'))
+        this.docUploadInFlight.set(false)
+        this.docUploadProgress.set(null)
+        return of(null)
+      }))
+      .subscribe((evt) => {
+        if (!evt) return
+        if (typeof evt.progress === 'number') {
+          this.docUploadProgress.set(evt.progress)
+        }
+        if (evt.response) {
+          const status = String(evt.response.status || '')
+          if (status === 'file_too_large') {
+            this.docUploadError.set('Arquivo maior que o limite permitido.')
+          } else if (status === 'quota_exceeded') {
+            this.docUploadError.set('Quota de documentos excedida para este usuário.')
+          } else {
+            this.docUploadError.set('')
+            this.setNotice('docs', 'success', 'Upload concluído.')
+          }
+          this.docUploadInFlight.set(false)
+          this.docUploadProgress.set(status ? 100 : null)
+          this.selectedUploadFile.set(null)
+          this.refreshConversationContext()
+        }
+      })
+  }
+
+  linkDocumentUrl(): void {
+    const url = this.docLinkUrl().trim()
+    const conversationId = this.selectedId()
+    if (!url) {
+      this.docLinkError.set('Informe uma URL para vincular.')
+      return
+    }
+    if (!conversationId) {
+      this.docLinkError.set('Selecione ou crie uma conversa antes de vincular URL.')
+      return
+    }
+    this.docLinkError.set('')
+    this.clearNotice('docs')
+    this.docLinkLoading.set(true)
+    this.api.linkUrl(conversationId, url, this.userIdString() || undefined)
+      .pipe(catchError((err) => {
+        this.docLinkError.set(this.extractErrorMessage(err, 'Falha ao vincular URL.'))
+        this.docLinkLoading.set(false)
+        return of(null)
+      }))
+      .subscribe((resp) => {
+        if (!resp) return
+        this.docLinkLoading.set(false)
+        if (resp.status === 'file_too_large') {
+          this.docLinkError.set('Conteúdo remoto acima do limite.')
+        } else if (resp.status === 'quota_exceeded') {
+          this.docLinkError.set('Quota de documentos excedida.')
+        } else {
+          this.docLinkUrl.set('')
+          this.docLinkError.set('')
+          this.setNotice('docs', 'success', 'Documento vinculado.')
+        }
+        this.refreshConversationContext()
+      })
+  }
+
+  searchDocs(): void {
+    const query = this.docSearchQuery().trim()
+    if (!query) {
+      this.docSearchError.set('Digite um termo para buscar documentos.')
+      this.docSearchResults.set([])
+      return
+    }
+    this.docSearchError.set('')
+    this.clearNotice('docs')
+    this.docSearchLoading.set(true)
+    this.api.searchDocuments(query, undefined, undefined, this.userIdString())
+      .pipe(catchError((err) => {
+        this.docSearchError.set(this.extractErrorMessage(err, 'Falha ao buscar documentos.'))
+        this.docSearchLoading.set(false)
+        return of({ results: [] as DocSearchResultItem[] })
+      }))
+      .subscribe((resp) => {
+        this.docSearchResults.set(resp.results || [])
+        this.docSearchLoading.set(false)
+        if ((resp.results || []).length > 0) {
+          this.setNotice('docs', 'info', 'Busca concluída.')
+        }
+      })
+  }
+
+  deleteDoc(docId: string): void {
+    if (!docId) return
+    if (typeof window !== 'undefined' && !window.confirm('Excluir este documento?')) return
+    this.deletingDocIds.update((curr) => ({ ...curr, [docId]: true }))
+    this.api.deleteDocument(docId, this.userIdString())
+      .pipe(catchError((err) => {
+        this.docSearchError.set(this.extractErrorMessage(err, 'Falha ao excluir documento.'))
+        this.deletingDocIds.update((curr) => {
+          const next = { ...curr }
+          delete next[docId]
+          return next
+        })
+        return of(null)
+      }))
+      .subscribe((resp) => {
+        this.deletingDocIds.update((curr) => {
+          const next = { ...curr }
+          delete next[docId]
+          return next
+        })
+        if (!resp) return
+        this.docs.update((items) => items.filter((d) => d.doc_id !== docId))
+        this.docSearchResults.update((items) => items.filter((d) => String(d.doc_id) !== docId))
+        this.setNotice('docs', 'success', 'Documento removido.')
+      })
+  }
+
+  addMemory(): void {
+    const content = this.memoryDraft().trim()
+    if (!content) {
+      this.memoryAddError.set('Digite uma memória para adicionar.')
+      return
+    }
+    this.memoryAddError.set('')
+    this.clearNotice('memory')
+    this.memoryAddLoading.set(true)
+    const importance = this.memoryImportance()
+    this.api.addGenerativeMemory(content, {
+      type: this.memoryType(),
+      importance: typeof importance === 'number' ? importance : undefined
+    })
+      .pipe(catchError((err) => {
+        this.memoryAddError.set(this.extractErrorMessage(err, 'Falha ao adicionar memória.'))
+        this.memoryAddLoading.set(false)
+        return of(null)
+      }))
+      .subscribe((resp) => {
+        if (!resp) return
+        this.memoryDraft.set('')
+        this.memoryAddLoading.set(false)
+        this.setNotice('memory', 'success', 'Memória adicionada.')
+        this.refreshConversationContext()
+        if (this.memorySearchQuery().trim()) {
+          this.searchGenerativeMemory()
+        }
+      })
+  }
+
+  searchGenerativeMemory(): void {
+    const query = this.memorySearchQuery().trim()
+    if (!query) {
+      this.memorySearchError.set('Digite um termo para buscar memória generativa.')
+      this.generativeMemoryResults.set([])
+      return
+    }
+    this.memorySearchError.set('')
+    this.clearNotice('memory')
+    this.memorySearchLoading.set(true)
+    this.api.getGenerativeMemories(query, this.memorySearchLimit())
+      .pipe(catchError((err) => {
+        this.memorySearchError.set(this.extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
+        this.memorySearchLoading.set(false)
+        return of([] as GenerativeMemoryItem[])
+      }))
+      .subscribe((items) => {
+        const next = items || []
+        this.generativeMemoryResults.set(next)
+        this.memorySearchLoading.set(false)
+        this.setNotice('memory', 'info', next.length ? 'Busca concluída.' : 'Consulta concluída sem resultados.')
+      })
+  }
+
+  runRagQuery(): void {
+    const query = this.ragQuery().trim()
+    if (!query) {
+      this.ragError.set('Digite uma consulta para executar no RAG.')
+      this.ragResult.set(null)
+      return
+    }
+    const mode = this.ragMode()
+    const userId = this.userIdString()
+    const conversationId = this.selectedId() || undefined
+    this.ragError.set('')
+    this.clearNotice('rag')
+    this.ragResultViewTab.set('resposta')
+    this.ragLoading.set(true)
+
+    let request$: Observable<unknown>
+
+    if (mode === 'search') {
+      request$ = this.api.ragSearch({ query, limit: 5 })
+    } else if (mode === 'user-chat') {
+      if (!userId) {
+        this.ragLoading.set(false)
+        this.ragError.set('Usuário autenticado necessário para RAG user-chat.')
+        this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
+        return
+      }
+      request$ = this.api.ragUserChat({ query, user_id: userId, session_id: conversationId, limit: 5 })
+    } else if (mode === 'user_chat') {
+      request$ = this.api.ragUserChatV2({ query, user_id: userId || undefined, session_id: conversationId, limit: 5 })
+    } else if (mode === 'productivity') {
+      if (!userId) {
+        this.ragLoading.set(false)
+        this.ragError.set('Usuário autenticado necessário para RAG productivity.')
+        this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
+        return
+      }
+      request$ = this.api.ragProductivitySearch({ query, user_id: userId, limit: 5 })
+    } else {
+      request$ = this.api.ragHybridSearch({ query, user_id: userId || undefined, limit: 5 })
+    }
+
+    request$
+      .pipe(catchError((err) => {
+        this.ragError.set(this.extractErrorMessage(err, 'Falha ao executar consulta RAG.'))
+        this.ragLoading.set(false)
+        return of(null)
+      }))
+      .subscribe((resp: unknown) => {
+        this.ragLoading.set(false)
+        if (!resp) {
+          this.ragResult.set(null)
+          return
+        }
+        if (typeof resp === 'object' && resp !== null && 'results' in resp) {
+          const v2 = resp as RagUserChatV2Response
+          const results = (v2.results || []) as Record<string, unknown>[]
+          this.ragResult.set({ mode, results })
+          this.setNotice('rag', 'info', results.length ? 'Consulta RAG concluída.' : 'Consulta concluída sem resultados.')
+          return
+        }
+        if (typeof resp === 'object' && resp !== null && 'answer' in resp) {
+          const standard = resp as RagSearchResponse | RagUserChatResponse | RagHybridResponse
+          const answer = standard.answer || ''
+          const citations = standard.citations || []
+          this.ragResult.set({ mode, answer, citations })
+          const hasAnswer = Boolean(answer.trim())
+          const hasCitations = citations.length > 0
+          this.setNotice('rag', 'info', hasAnswer || hasCitations ? 'Consulta RAG concluída.' : 'Consulta concluída sem resultados.')
+          return
+        }
+        this.ragResult.set({ mode, results: [] })
+        this.setNotice('rag', 'info', 'Consulta concluída sem resultados.')
+      })
+  }
+
+  feedbackState(message: ChatMessageView): FeedbackUiState {
+    return this.feedbackStateByMessageId()[message.id] || {}
+  }
+
+  feedbackCommentDraft(messageId: string): string {
+    return this.feedbackCommentDraftByMessageId()[messageId] || ''
+  }
+
+  onFeedbackCommentInput(messageId: string, event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null
+    const value = target?.value || ''
+    this.feedbackCommentDraftByMessageId.update((curr) => ({ ...curr, [messageId]: value }))
+  }
+
+  toggleFeedbackComment(messageId: string): void {
+    this.feedbackStateByMessageId.update((curr) => {
+      const prev = curr[messageId] || {}
+      return { ...curr, [messageId]: { ...prev, commentOpen: !prev.commentOpen } }
+    })
+  }
+
+  sendThumbsUp(msg: ChatMessageView): void {
+    this.submitFeedback(msg, 'positive')
+  }
+
+  sendThumbsDown(msg: ChatMessageView): void {
+    this.submitFeedback(msg, 'negative')
+  }
+
+  createGoal(): void {
+    const title = this.goalCreateTitle().trim()
+    const description = this.goalCreateDescription().trim()
+    if (!title) {
+      this.goalCreateError.set('Informe um título para a meta.')
+      return
+    }
+    this.goalCreateError.set('')
+    this.clearNotice('autonomy')
+    this.goalCreateLoading.set(true)
+    this.api.createGoal({
+      title,
+      description,
+      priority: 2
+    })
+      .pipe(catchError((err) => {
+        this.goalCreateError.set(this.extractErrorMessage(err, 'Falha ao criar meta.'))
+        this.goalCreateLoading.set(false)
+        return of(null)
+      }))
+      .subscribe((goal) => {
+        this.goalCreateLoading.set(false)
+        if (!goal) return
+        this.goalCreateTitle.set('')
+        this.goalCreateDescription.set('')
+        this.autonomyGoals.update((items) => [goal, ...items])
+        this.setNotice('autonomy', 'success', 'Meta criada.')
+      })
+  }
+
   refreshAutonomy(): void {
     this.loadAutonomyContext()
   }
@@ -485,6 +1042,7 @@ export class ConversationsComponent {
     if (this.autonomySaving()) return
     this.autonomySaving.set(true)
     this.autonomyError.set('')
+    this.clearNotice('autonomy')
     const active = Boolean(this.autonomyStatus()?.active)
     const request$ = active
       ? this.api.stopAutonomy()
@@ -500,6 +1058,7 @@ export class ConversationsComponent {
       }))
       .subscribe(() => {
         this.autonomySaving.set(false)
+        this.setNotice('autonomy', 'success', active ? 'Loop autônomo interrompido.' : 'Loop autônomo iniciado.')
         this.loadAutonomyContext()
       })
   }
@@ -508,6 +1067,7 @@ export class ConversationsComponent {
     if (!goal?.id || this.autonomySaving()) return
     this.autonomySaving.set(true)
     this.autonomyError.set('')
+    this.clearNotice('autonomy')
     this.api.updateGoalStatus(goal.id, status)
       .pipe(catchError((err) => {
         this.autonomyError.set(this.extractErrorMessage(err, 'Falha ao atualizar meta.'))
@@ -516,6 +1076,7 @@ export class ConversationsComponent {
       .subscribe((updated) => {
         if (updated) {
           this.autonomyGoals.update((items) => items.map((item) => item.id === updated.id ? updated : item))
+          this.setNotice('autonomy', 'success', 'Status da meta atualizado.')
         }
         this.autonomySaving.set(false)
       })
@@ -532,6 +1093,8 @@ export class ConversationsComponent {
   readonly showTrace = signal(false)
   readonly thoughtStream = signal<ThoughtStreamItem[]>([])
   private readonly advancedModeStorageKey = 'janus.conversations.show_advanced_mode'
+  private readonly advancedRailTabStorageKey = 'janus.conversations.advanced_rail_tab'
+  private readonly customerTabStorageKey = 'janus.conversations.customer_tab'
 
   // ... (inside class)
 
@@ -558,9 +1121,22 @@ export class ConversationsComponent {
     this.events.set([])
     this.docs.set([])
     this.memoryUser.set([])
+    this.docSearchResults.set([])
+    this.generativeMemoryResults.set([])
+    this.ragResult.set(null)
+    this.ragError.set('')
+    this.ragResultViewTab.set('resposta')
+    this.docSearchError.set('')
+    this.memorySearchError.set('')
+    this.clearNotice('docs')
+    this.clearNotice('memory')
+    this.clearNotice('rag')
+    this.clearNotice('autonomy')
     this.traceSteps.set([]) // Clear trace
     this.thoughtStream.set([])
     this.copiedCitation.set('')
+    this.feedbackStateByMessageId.set({})
+    this.feedbackCommentDraftByMessageId.set({})
     this.stream.stop()
     this.sending.set(false)
     this.responseStartedAt = null
@@ -629,6 +1205,128 @@ export class ConversationsComponent {
     this.loadAutonomyContext()
   }
 
+  private refreshConversationContext(): void {
+    const id = this.selectedId()
+    if (!id) return
+    this.loadContext(id)
+  }
+
+  private userIdString(): string | undefined {
+    const id = this.user()?.id
+    return id != null ? String(id) : undefined
+  }
+
+  private setNotice(section: RailNoticeSection, kind: RailNoticeKind, message: string, autoHideMs = 2800): void {
+    const setter = this.noticeSignal(section)
+    const existingTimer = this.noticeTimers.get(section)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+      this.noticeTimers.delete(section)
+    }
+    setter.set({ kind, message, visible: true })
+    if (kind === 'error') return
+    const timer = setTimeout(() => {
+      setter.set(null)
+      this.noticeTimers.delete(section)
+    }, autoHideMs)
+    this.noticeTimers.set(section, timer)
+  }
+
+  private clearNotice(section: RailNoticeSection): void {
+    const existingTimer = this.noticeTimers.get(section)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+      this.noticeTimers.delete(section)
+    }
+    this.noticeSignal(section).set(null)
+  }
+
+  private noticeSignal(section: RailNoticeSection) {
+    if (section === 'docs') return this.docsNotice
+    if (section === 'memory') return this.memoryNotice
+    if (section === 'rag') return this.ragNotice
+    return this.autonomyNotice
+  }
+
+  private moveTabSelection<T extends string>(
+    event: KeyboardEvent,
+    current: T,
+    order: readonly T[],
+    setter: (tab: T) => void,
+    group: TabGroup
+  ): void {
+    const key = event.key
+    const currentIndex = order.indexOf(current)
+    if (currentIndex < 0) return
+
+    let nextIndex = currentIndex
+    if (key === 'ArrowRight') nextIndex = (currentIndex + 1) % order.length
+    else if (key === 'ArrowLeft') nextIndex = (currentIndex - 1 + order.length) % order.length
+    else if (key === 'Home') nextIndex = 0
+    else if (key === 'End') nextIndex = order.length - 1
+    else if (key === 'Enter' || key === ' ') nextIndex = currentIndex
+    else return
+
+    event.preventDefault()
+    const nextTab = order[nextIndex]
+    setter(nextTab)
+
+    if (typeof document === 'undefined') return
+    const targetId = this.tabDomId(group, nextTab)
+    document.getElementById(targetId)?.focus()
+  }
+
+  private tabDomId(group: TabGroup, tab: string): string {
+    if (group === 'advancedRail') return `advanced-tab-${tab}`
+    if (group === 'customer') return `customer-tab-${tab}`
+    return `rag-view-tab-${tab}`
+  }
+
+  private submitFeedback(msg: ChatMessageView, rating: 'positive' | 'negative'): void {
+    if (msg.role !== 'assistant') return
+    const conversationId = this.selectedId()
+    if (!conversationId) return
+    const state = this.feedbackState(msg)
+    if (state.submitting || state.submitted) return
+    const messageId = String(msg.backendMessageId || msg.id)
+    const userId = this.userIdString()
+    const comment = this.feedbackCommentDraft(msg.id).trim() || undefined
+
+    this.feedbackStateByMessageId.update((curr) => ({
+      ...curr,
+      [msg.id]: { ...(curr[msg.id] || {}), rating, submitting: true, error: '', serverMessage: '' }
+    }))
+
+    const request$ = rating === 'positive'
+      ? this.api.thumbsUpFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
+      : this.api.thumbsDownFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
+
+    request$
+      .pipe(catchError((err) => {
+        const errorMsg = this.extractErrorMessage(err, 'Falha ao enviar feedback.')
+        this.feedbackStateByMessageId.update((curr) => ({
+          ...curr,
+          [msg.id]: { ...(curr[msg.id] || {}), rating, submitting: false, submitted: false, error: errorMsg }
+        }))
+        return of(null as FeedbackQuickResponse | null)
+      }))
+      .subscribe((resp) => {
+        if (!resp) return
+        this.feedbackStateByMessageId.update((curr) => ({
+          ...curr,
+          [msg.id]: {
+            ...(curr[msg.id] || {}),
+            rating,
+            submitting: false,
+            submitted: true,
+            error: '',
+            serverMessage: resp.message || 'Feedback enviado.',
+            commentOpen: false
+          }
+        }))
+      })
+  }
+
   private async ensureConversationId(forceCreate = false): Promise<string | null> {
     const current = this.selectedId()
     if (current && !forceCreate) return current
@@ -691,8 +1389,13 @@ export class ConversationsComponent {
         } else {
           const now = Date.now()
           const cleanText = this.sanitizeChatText(resp.response)
+          const raw = resp as unknown as Record<string, unknown>
+          const backendMessageId = typeof raw['message_id'] === 'string'
+            ? String(raw['message_id'])
+            : (typeof raw['id'] === 'string' ? String(raw['id']) : undefined)
           this.appendMessage({
             id: this.createId(),
+            backendMessageId,
             role: 'assistant',
             text: cleanText,
             timestamp: now,
@@ -813,8 +1516,12 @@ export class ConversationsComponent {
   private mapMessage(msg: ChatMessage): ChatMessageView {
     const raw = msg as unknown as Record<string, unknown>
     const latencyMsRaw = Number(raw['latency_ms'])
+    const backendMessageId = typeof raw['message_id'] === 'string'
+      ? String(raw['message_id'])
+      : (typeof raw['id'] === 'string' ? String(raw['id']) : undefined)
     return {
       id: this.createId(),
+      backendMessageId,
       role: (msg.role as ChatRole) || 'assistant',
       text: this.sanitizeChatText(msg.text),
       timestamp: msg.timestamp,
@@ -885,9 +1592,33 @@ export class ConversationsComponent {
     }
   }
 
+  private restoreRailTabPreferences(): void {
+    try {
+      const advanced = localStorage.getItem(this.advancedRailTabStorageKey)
+      if (advanced === 'insights' || advanced === 'cliente' || advanced === 'autonomia') {
+        this.advancedRailTab.set(advanced)
+      }
+      const customer = localStorage.getItem(this.customerTabStorageKey)
+      if (customer === 'docs' || customer === 'memoria' || customer === 'rag') {
+        this.customerTab.set(customer)
+      }
+    } catch {
+      this.advancedRailTab.set('cliente')
+      this.customerTab.set('docs')
+    }
+  }
+
   private persistAdvancedModePreference(enabled: boolean): void {
     try {
       localStorage.setItem(this.advancedModeStorageKey, enabled ? '1' : '0')
+    } catch {
+      // no-op
+    }
+  }
+
+  private persistRailTabPreference(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value)
     } catch {
       // no-op
     }

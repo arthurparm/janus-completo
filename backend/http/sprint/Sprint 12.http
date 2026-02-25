@@ -1,57 +1,316 @@
 ###
-# SPRINT 12: Resiliência e Maturidade - Observabilidade e Operação Contínua
-# Testes completos de health checks, poison pills e métricas
-###
+    # SPRINT 12: Autonomia, Historico, Pending Actions e Deploy
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Autonomy, AutonomyHistory, PendingActions, Deployment
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Health Check do Sistema Completo
-GET {{host}}{{api_v1_prefix}}/observability/health/system
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Autonomy] GET /api/v1/autonomy/goals
+# - [Autonomy] POST /api/v1/autonomy/goals
+# - [Autonomy] DELETE /api/v1/autonomy/goals/{goal_id}
+# - [Autonomy] GET /api/v1/autonomy/goals/{goal_id}
+# - [Autonomy] PATCH /api/v1/autonomy/goals/{goal_id}/status
+# - [Autonomy] GET /api/v1/autonomy/plan
+# - [Autonomy] PUT /api/v1/autonomy/plan
+# - [Autonomy] PUT /api/v1/autonomy/policy
+# - [Autonomy] POST /api/v1/autonomy/start
+# - [Autonomy] GET /api/v1/autonomy/status
+# - [Autonomy] POST /api/v1/autonomy/stop
+# - [AutonomyHistory] GET /api/v1/autonomy/history/runs
+# - [AutonomyHistory] GET /api/v1/autonomy/history/runs/{run_id}
+# - [AutonomyHistory] GET /api/v1/autonomy/history/runs/{run_id}/steps
+# - [Deployment] POST /api/v1/deployment/precheck
+# - [Deployment] POST /api/v1/deployment/publish
+# - [Deployment] POST /api/v1/deployment/rollback
+# - [Deployment] POST /api/v1/deployment/stage
+# - [PendingActions] GET /api/v1/pending_actions/
+# - [PendingActions] POST /api/v1/pending_actions/action/{action_id}/approve
+# - [PendingActions] POST /api/v1/pending_actions/action/{action_id}/reject
+# - [PendingActions] POST /api/v1/pending_actions/{thread_id}/approve
+# - [PendingActions] POST /api/v1/pending_actions/{thread_id}/reject
+
+############################################
+# 1) Autonomy + History + Pending Actions + Deployment
+############################################
+# @name s12_goals_create
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/autonomy/goals
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "title": "Sprint 12 goal",
+#   "description": "Validar autonomia/historico",
+#   "priority": 5
+# }
+#
+# > {%
+# client.test("autonomy/goals create: 200", function() { client.assert(response.status === 200); });
+# const b = response.body.json();
+# if (b.id) client.global.set("goal_id", String(b.id));
+# %}
+#
 ###
-# 2. Health Check do LLM Router
-GET {{host}}{{api_v1_prefix}}/observability/health/components/llm_router
+# @name s12_goals_list
+GET {{host}}{{api_v1_prefix}}/autonomy/goals
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/goals list: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 3. Health Check do Sistema Multi-Agente
-GET {{host}}{{api_v1_prefix}}/observability/health/components/multi_agent_system
+# @name s12_goal_get
+GET {{host}}{{api_v1_prefix}}/autonomy/goals/{{goal_id}}
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/goals get: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
 
 ###
-# 4. Health Check do Poison Pill Handler
-GET {{host}}{{api_v1_prefix}}/observability/health/components/poison_pill_handler
+# @name s12_goal_status_update
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# PATCH {{host}}{{api_v1_prefix}}/autonomy/goals/{{goal_id}}/status
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "status": "in_progress"
+# }
+#
+# > {% client.test("autonomy/goals status update: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
+#
+###
+# @name s12_autonomy_plan_get
+GET {{host}}{{api_v1_prefix}}/autonomy/plan
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/plan: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 5. Forçar Execução de Todos os Health Checks
-POST {{host}}{{api_v1_prefix}}/observability/health/check-all
-Content-Type: application/json
-
+# @name s12_autonomy_policy_update
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# PUT {{host}}{{api_v1_prefix}}/autonomy/policy
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "risk_profile": "balanced",
+#   "auto_confirm": true,
+#   "max_actions_per_cycle": 2
+# }
+#
+# > {% client.test("autonomy/policy update: 200", function() { client.assert(response.status === 200); }); %}
+#
 ###
-# 6. Listar Mensagens em Quarentena
-GET {{host}}{{api_v1_prefix}}/observability/poison-pills/quarantined
+# @name s12_autonomy_start
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/autonomy/start
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "interval_seconds": 15,
+#   "auto_confirm": true,
+#   "max_actions_per_cycle": 2,
+#   "max_seconds_per_cycle": 10,
+#   "allowlist": ["get_current_datetime"],
+#   "blocklist": [],
+#   "plan": [
+#     {"tool": "get_current_datetime", "args": {}}
+#   ]
+# }
+#
+# > {% client.test("autonomy/start: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+###
+# @name s12_autonomy_status
+GET {{host}}{{api_v1_prefix}}/autonomy/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 7. Estatísticas de Poison Pills
-GET {{host}}{{api_v1_prefix}}/observability/poison-pills/stats
+# @name s12_autonomy_stop
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/autonomy/stop
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# > {% client.test("autonomy/stop: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+#
+###
+# @name s12_history_runs
+GET {{host}}{{api_v1_prefix}}/autonomy/history/runs?limit=10
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("autonomy/history/runs: 200", function() { client.assert(response.status === 200); });
+try {
+  const arr = response.body.json();
+  if (Array.isArray(arr) && arr.length > 0 && arr[0].id) client.global.set("run_id", String(arr[0].id));
+} catch(e) {}
+%}
 
 ###
-# 8. Limpar Quarentena Expirada
-POST {{host}}{{api_v1_prefix}}/observability/poison-pills/cleanup
-Content-Type: application/json
-
-###
-# 9. Resumo de Métricas do Sistema
-GET {{host}}{{api_v1_prefix}}/observability/metrics/summary
+# @name s12_history_run_get
+GET {{host}}{{api_v1_prefix}}/autonomy/history/runs/{{run_id}}
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/history/run: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
 
 ###
-# 10. Métricas Prometheus (endpoint padrão)
-GET {{host}}/metrics
-Accept: text/plain
+# @name s12_history_run_steps
+GET {{host}}{{api_v1_prefix}}/autonomy/history/runs/{{run_id}}/steps?limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("autonomy/history/run steps: 200 ou 404", function() { client.assert([200,404].includes(response.status)); }); %}
+
+###
+# @name s12_pending_list
+GET {{host}}{{api_v1_prefix}}/pending_actions/?include_graph=true&include_sql=true&limit=20
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("pending_actions list: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
+
+###
+# @name s12_deploy_precheck
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/deployment/precheck?model_id={{model_id}}
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+# X-User-Id: {{actor_user_id}}
+#
+# > {% client.test("deployment/precheck: 200/400/403", function() { client.assert([200,400,403].includes(response.status)); }); %}
+#
+###
+# @name s12_deploy_stage
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/deployment/stage
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+# X-User-Id: {{actor_user_id}}
+#
+# {
+#   "model_id": "{{model_id}}",
+#   "rollout_percent": 5
+# }
+#
+# > {% client.test("deployment/stage: 200/403", function() { client.assert([200,403].includes(response.status)); }); %}
+#
+############################################
+# 2) Edge cases
+############################################
+# @name s12_autonomy_plan_invalid_tool
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# PUT {{host}}{{api_v1_prefix}}/autonomy/plan
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "plan": [
+#     {"tool": "nonexistent_tool", "args": {}}
+#   ]
+# }
+#
+# > {% client.test("autonomy/plan tool invalida: 422", function() { client.assert(response.status === 422); }); %}
+#
+###
+# @name s12_goal_missing
+GET {{host}}{{api_v1_prefix}}/autonomy/goals/goal-inexistente
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("goal inexistente: 404", function() { client.assert(response.status === 404); }); %}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

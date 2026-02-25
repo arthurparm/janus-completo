@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-24T18:02:27Z",
+    "phase": "unauth",
+    "sprint": "Sprint 1.http",
+    "file": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 1.http"
+  },
+  "summary": {
+    "total_requests": 2,
+    "pass": 0,
+    "warn_log_evidence_weak": 2,
+    "fail_5xx": 0,
+    "fail_transport": 0,
+    "fail_log_evidence_missing": 0,
+    "blocked_by_env_expected": 0
+  },
+  "results": [
+    {
+      "phase": "unauth",
+      "sprint": "Sprint 1.http",
+      "request_name": "auth_local_me_preflight",
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/local/me",
+      "request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb",
+      "http_status": 401,
+      "duration_ms": 15.49,
+      "assert_expected_statuses": [
+        200
+      ],
+      "http_class": "pass_expected_auth_rejection",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak",
+      "response_echo_request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb",
+      "response_summary": {
+        "status_code": 401,
+        "content_type": "application/json",
+        "content_length": 25,
+        "json_keys": [
+          "detail"
+        ]
+      },
+      "file_path": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 1.http",
+      "line_no": 42,
+      "request_headers": {
+        "Accept": "application/json",
+        "X-Request-ID": "qa-sprint-unauth-sprint-0001-91fcbfeb",
+        "User-Agent": "Janus-HTTP-Test/2.0.0"
+      }
+    },
+    {
+      "phase": "unauth",
+      "sprint": "Sprint 1.http",
+      "request_name": "s1_local_register",
+      "method": "POST",
+      "url": "http://localhost:8000/api/v1/auth/local/register",
+      "request_id": "qa-sprint-unauth-sprint-0002-269a74e4",
+      "http_status": 200,
+      "duration_ms": 150.23,
+      "assert_expected_statuses": [
+        200,
+        409
+      ],
+      "http_class": "pass_success",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak",
+      "response_echo_request_id": "qa-sprint-unauth-sprint-0002-269a74e4",
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 258,
+        "json_keys": [
+          "token",
+          "user"
+        ]
+      },
+      "file_path": "/Users/arthurparaiso/Desktop/janus-completo/backend/http/sprint/Sprint 1.http",
+      "line_no": 85,
+      "request_headers": {
+        "Content-Type": "application/json",
+        "X-Request-ID": "qa-sprint-unauth-sprint-0002-269a74e4",
+        "User-Agent": "Janus-HTTP-Test/2.0.0"
+      }
+    }
+  ],
+  "log_evidence": [
+    {
+      "request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb",
+      "phase": "unauth",
+      "suite": "sprint",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb"
+    },
+    {
+      "request_id": "qa-sprint-unauth-sprint-0002-269a74e4",
+      "phase": "unauth",
+      "suite": "sprint",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:40993 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-sprint-unauth-sprint-0002-269a74e4"
+    }
+  ],
+  "bootstrap_auth": null
+}

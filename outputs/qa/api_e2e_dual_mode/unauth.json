@@ -1,0 +1,221 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-24T18:02:25Z",
+    "phase": "unauth",
+    "base_url": "http://localhost:8000",
+    "openapi_url": "http://localhost:8000/openapi.json",
+    "fixtures": "/Users/arthurparaiso/Desktop/janus-completo/tooling/api_e2e_fixtures.json",
+    "timeout_seconds": 30.0,
+    "with_log_correlation": true
+  },
+  "summary": {
+    "openapi_total_endpoints": 230,
+    "executed_unique_endpoints": 3,
+    "total_probes": 3,
+    "total_429_retries": 0,
+    "pass_success": 3,
+    "pass_contract_rejection": 0,
+    "pass_expected_auth_rejection": 0,
+    "pass_expected_contract_rejection": 0,
+    "blocked_by_env_expected": 0,
+    "fail_unexpected_status": 0,
+    "fail_server_5xx": 0,
+    "fail_transport": 0,
+    "gate_pass": 1,
+    "gate_fail_5xx": 0,
+    "gate_fail_transport": 0,
+    "gate_fail_log_evidence_missing": 0,
+    "gate_warn_log_evidence_weak": 2
+  },
+  "results": [
+    {
+      "phase": "unauth",
+      "operation_id": "local_register_api_v1_auth_local_register_post",
+      "module": "Auth",
+      "method": "POST",
+      "path": "/api/v1/auth/local/register",
+      "scenario_name": "bootstrap_local_register",
+      "expected_statuses": [
+        200,
+        409,
+        422
+      ],
+      "actual_status": 200,
+      "result_class": "pass_success",
+      "duration_ms": 295.17,
+      "request": {
+        "phase": "unauth",
+        "request_id": "qa-api-unauth-api-0001-9295e643",
+        "query": {},
+        "headers": {
+          "X-Request-ID": "qa-api-unauth-api-0001-9295e643",
+          "User-Agent": "Janus-API-E2E-All/2.1.0"
+        },
+        "has_body": true,
+        "content_type": "application/json",
+        "body_keys": [
+          "email",
+          "password",
+          "username",
+          "full_name",
+          "terms"
+        ]
+      },
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 261,
+        "json_type": "dict",
+        "json_keys": [
+          "token",
+          "user"
+        ]
+      },
+      "response_echo_request_id": "qa-api-unauth-api-0001-9295e643",
+      "log_evidence": "strong",
+      "log_error_lines": [],
+      "gate_class": "pass"
+    },
+    {
+      "phase": "unauth",
+      "operation_id": "local_login_api_v1_auth_local_login_post",
+      "module": "Auth",
+      "method": "POST",
+      "path": "/api/v1/auth/local/login",
+      "scenario_name": "bootstrap_local_login",
+      "expected_statuses": [
+        200,
+        401,
+        422
+      ],
+      "actual_status": 200,
+      "result_class": "pass_success",
+      "duration_ms": 175.12,
+      "request": {
+        "phase": "unauth",
+        "request_id": "qa-api-unauth-api-0002-8aa7631e",
+        "query": {},
+        "headers": {
+          "X-Request-ID": "qa-api-unauth-api-0002-8aa7631e",
+          "User-Agent": "Janus-API-E2E-All/2.1.0"
+        },
+        "has_body": true,
+        "content_type": "application/json",
+        "body_keys": [
+          "email",
+          "password"
+        ]
+      },
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 261,
+        "json_type": "dict",
+        "json_keys": [
+          "token",
+          "user"
+        ]
+      },
+      "response_echo_request_id": "qa-api-unauth-api-0002-8aa7631e",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak"
+    },
+    {
+      "phase": "unauth",
+      "operation_id": "start_chat_api_v1_chat_start_post",
+      "module": "Chat",
+      "method": "POST",
+      "path": "/api/v1/chat/start",
+      "scenario_name": "bootstrap_chat_start",
+      "expected_statuses": [
+        200,
+        422
+      ],
+      "actual_status": 200,
+      "result_class": "pass_success",
+      "duration_ms": 56.88,
+      "request": {
+        "phase": "unauth",
+        "request_id": "qa-api-unauth-api-0003-51f747fd",
+        "query": {},
+        "headers": {
+          "X-Request-ID": "qa-api-unauth-api-0003-51f747fd",
+          "User-Agent": "Janus-API-E2E-All/2.1.0"
+        },
+        "has_body": true,
+        "content_type": "application/json",
+        "body_keys": [
+          "user_id",
+          "project_id",
+          "title"
+        ]
+      },
+      "response_summary": {
+        "status_code": 200,
+        "content_type": "application/json",
+        "content_length": 24,
+        "json_type": "dict",
+        "json_keys": [
+          "conversation_id"
+        ]
+      },
+      "response_echo_request_id": "qa-api-unauth-api-0003-51f747fd",
+      "log_evidence": "weak",
+      "log_error_lines": [],
+      "gate_class": "warn_log_evidence_weak"
+    }
+  ],
+  "failures": [],
+  "failures_reportable": [],
+  "log_evidence": [
+    {
+      "request_id": "qa-api-unauth-api-0001-9295e643",
+      "phase": "unauth",
+      "suite": "api",
+      "log_source": "docker-compose",
+      "match_type": "strong",
+      "matched_lines": [
+        "janus_api  | {\"event\": \"AUTH_JWT_SECRET ausente fora de produ\\u00e7\\u00e3o; usando segredo ef\\u00eamero apenas nesta execu\\u00e7\\u00e3o.\", \"logger\": \"app.core.infrastructure.auth\", \"level\": \"warning\", \"timestamp\": \"2026-02-24T18:02:21.751171Z\", \"trace_id\": \"qa-api-unauth-api-0001-9295e643\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-api-unauth-api-0001-9295e643"
+    },
+    {
+      "request_id": "qa-api-unauth-api-0002-8aa7631e",
+      "phase": "unauth",
+      "suite": "api",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:62200 - \"POST /api/v1/auth/local/login HTTP/1.1\" 200 OK"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-api-unauth-api-0002-8aa7631e"
+    },
+    {
+      "request_id": "qa-api-unauth-api-0003-51f747fd",
+      "phase": "unauth",
+      "suite": "api",
+      "log_source": "docker-compose",
+      "match_type": "weak",
+      "matched_lines": [
+        "janus_api  | INFO:     192.168.65.1:62200 - \"POST /api/v1/chat/start HTTP/1.1\" 200 OK"
+      ],
+      "error_lines": [],
+      "response_echo_request_id": "qa-api-unauth-api-0003-51f747fd"
+    }
+  ],
+  "bootstrap_auth": null,
+  "context_keys": [
+    "auth",
+    "auth.local",
+    "auth.local.access_token",
+    "auth.local.user_id",
+    "chat",
+    "chat.conversation_id",
+    "runtime",
+    "runtime.ts_epoch",
+    "runtime.unique"
+  ]
+}

@@ -1,0 +1,729 @@
+[
+  {
+    "request_id": "qa-api-unauth-api-0001-9295e643",
+    "phase": "unauth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"AUTH_JWT_SECRET ausente fora de produ\\u00e7\\u00e3o; usando segredo ef\\u00eamero apenas nesta execu\\u00e7\\u00e3o.\", \"logger\": \"app.core.infrastructure.auth\", \"level\": \"warning\", \"timestamp\": \"2026-02-24T18:02:21.751171Z\", \"trace_id\": \"qa-api-unauth-api-0001-9295e643\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-unauth-api-0001-9295e643"
+  },
+  {
+    "request_id": "qa-api-unauth-api-0002-8aa7631e",
+    "phase": "unauth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:62200 - \"POST /api/v1/auth/local/login HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-unauth-api-0002-8aa7631e"
+  },
+  {
+    "request_id": "qa-api-unauth-api-0003-51f747fd",
+    "phase": "unauth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:62200 - \"POST /api/v1/chat/start HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-unauth-api-0003-51f747fd"
+  },
+  {
+    "request_id": "qa-api-auth-api-0001-5572983c",
+    "phase": "auth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:29728 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:35488 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-auth-api-0001-5572983c"
+  },
+  {
+    "request_id": "qa-api-auth-api-0002-bc46f3db",
+    "phase": "auth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:29728 - \"POST /api/v1/auth/local/login HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:35488 - \"POST /api/v1/auth/local/login HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-auth-api-0002-bc46f3db"
+  },
+  {
+    "request_id": "qa-api-auth-api-0003-9f124ef6",
+    "phase": "auth",
+    "suite": "api",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:35488 - \"POST /api/v1/chat/start HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-api-auth-api-0003-9f124ef6"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0001-91fcbfeb"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0002-269a74e4",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0002-269a74e4"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0003-b31b7850",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0003-b31b7850"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0004-74425e99",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Verificando sa\\u00fade do m\\u00f3dulo de aprendizado.\", \"logger\": \"app.services.learning_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:27.864452Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0004-74425e99\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0004-74425e99"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0005-8e59cfc0",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0005-8e59cfc0"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0006-53d73c69",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/collaboration/health HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0006-53d73c69"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0007-45f1e741",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0007-45f1e741"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0008-1b5ee3c2",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/autonomy/goals HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0008-1b5ee3c2"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0009-c345a5f5",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0009-c345a5f5"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0010-ca85ae80",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"operation\": \"system_health\", \"event\": \"observability_system_health_requested\", \"logger\": \"app.services.observability_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:32.161190Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0010-ca85ae80\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0010-ca85ae80"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0011-d78d06a3",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0011-d78d06a3"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0012-e660873f",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Recebida requisi\\u00e7\\u00e3o de status do sistema.\", \"logger\": \"app.api.v1.endpoints.system_status\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:33.597577Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0012-e660873f\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"event\": \"Coletando status do sistema.\", \"logger\": \"app.services.system_status_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:33.597845Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0012-e660873f\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0012-e660873f"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0013-aeb94e41",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0013-aeb94e41"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0014-a39944a9",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Buscando contexto atual via servi\\u00e7o.\", \"logger\": \"app.services.context_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:35.009304Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0014-a39944a9\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"event\": \"[GET_CURRENT_CONTEXT] Iniciando obten\\u00e7\\u00e3o de contexto atual\", \"logger\": \"app.core.infrastructure.context_manager\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:35.009587Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0014-a39944a9\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"message\": \"[GET_CURRENT_CONTEXT] \\u2713 Contexto obtido - 2026-02-24 18:02:35 UTC, Linux\", \"event\": \"log_info\", \"logger\": \"app.core.infrastructure.context_manager\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:35.009768Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0014-a39944a9\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0014-a39944a9"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0015-d62df377",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0015-d62df377"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0016-5eae4272",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Listing tools via service.\", \"logger\": \"app.services.tool_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:36.407302Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0016-5eae4272\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0016-5eae4272"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0017-fea8d137",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0017-fea8d137"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0018-84e1bce1",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Orquestrando busca de sa\\u00fade do sistema via servi\\u00e7o.\", \"logger\": \"app.services.optimization_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:37.845899Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0018-84e1bce1\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0018-84e1bce1"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0019-0f5464c6",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0019-0f5464c6"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0020-97fc7ac8",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Listando provedores de LLMs via servi\\u00e7o.\", \"logger\": \"app.services.llm_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:39.281366Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0020-97fc7ac8\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0020-97fc7ac8"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0021-9d0d30a0",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized",
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0021-9d0d30a0"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0022-11de1475",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/chat/health HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0022-11de1475"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0023-4fb8a049",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0023-4fb8a049"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0024-ec18c1ad",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/documents/status/doc-placeholder HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0024-ec18c1ad"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0025-d4f5f8ce",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:40993 - \"GET /api/v1/auth/local/me HTTP/1.1\" 401 Unauthorized"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0025-d4f5f8ce"
+  },
+  {
+    "request_id": "qa-sprint-unauth-sprint-0026-50cf73bc",
+    "phase": "unauth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"operation\": \"neo4j_query\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.2423102855682373, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:43.937059Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0026-50cf73bc\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 242, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:43.937291Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0026-50cf73bc\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.05250835418701172, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:43.989927Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0026-50cf73bc\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 52, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:43.990273Z\", \"trace_id\": \"qa-sprint-unauth-sprint-0026-50cf73bc\", \"user_id\": \"-\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-unauth-sprint-0026-50cf73bc"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0001-c250ff99",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0001-c250ff99"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0002-be7c73f8",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:54359 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"POST /api/v1/auth/local/register HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0002-be7c73f8"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0003-67689401",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0003-67689401"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0004-4fb54c36",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Verificando sa\\u00fade do m\\u00f3dulo de aprendizado.\", \"logger\": \"app.services.learning_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:51.481034Z\", \"trace_id\": \"qa-sprint-auth-sprint-0004-4fb54c36\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0004-4fb54c36"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0005-7ecf6cf3",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0005-7ecf6cf3"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0006-e040d14f",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/collaboration/health HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0006-e040d14f"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0007-1ab0ade1",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0007-1ab0ade1"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0008-4d805c04",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/autonomy/goals HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0008-4d805c04"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0009-1f266f32",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0009-1f266f32"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0010-df749a30",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"operation\": \"system_health\", \"event\": \"observability_system_health_requested\", \"logger\": \"app.services.observability_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:55.207099Z\", \"trace_id\": \"qa-sprint-auth-sprint-0010-df749a30\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0010-df749a30"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0011-a2df9822",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0011-a2df9822"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0012-1896801b",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Recebida requisi\\u00e7\\u00e3o de status do sistema.\", \"logger\": \"app.api.v1.endpoints.system_status\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:56.445466Z\", \"trace_id\": \"qa-sprint-auth-sprint-0012-1896801b\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"event\": \"Coletando status do sistema.\", \"logger\": \"app.services.system_status_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:56.445696Z\", \"trace_id\": \"qa-sprint-auth-sprint-0012-1896801b\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0012-1896801b"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0013-2fe34a63",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0013-2fe34a63"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0014-223fdd2d",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Buscando contexto atual via servi\\u00e7o.\", \"logger\": \"app.services.context_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:57.894642Z\", \"trace_id\": \"qa-sprint-auth-sprint-0014-223fdd2d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"event\": \"[GET_CURRENT_CONTEXT] Iniciando obten\\u00e7\\u00e3o de contexto atual\", \"logger\": \"app.core.infrastructure.context_manager\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:57.894847Z\", \"trace_id\": \"qa-sprint-auth-sprint-0014-223fdd2d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"message\": \"[GET_CURRENT_CONTEXT] \\u2713 Contexto obtido - 2026-02-24 18:02:57 UTC, Linux\", \"event\": \"log_info\", \"logger\": \"app.core.infrastructure.context_manager\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:57.895027Z\", \"trace_id\": \"qa-sprint-auth-sprint-0014-223fdd2d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0014-223fdd2d"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0015-6c6bfb6b",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0015-6c6bfb6b"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0016-6d46ad3f",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Listing tools via service.\", \"logger\": \"app.services.tool_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:02:59.172028Z\", \"trace_id\": \"qa-sprint-auth-sprint-0016-6d46ad3f\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0016-6d46ad3f"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0017-ecf4a51a",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0017-ecf4a51a"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0018-1a664aa3",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Orquestrando busca de sa\\u00fade do sistema via servi\\u00e7o.\", \"logger\": \"app.services.optimization_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:00.380063Z\", \"trace_id\": \"qa-sprint-auth-sprint-0018-1a664aa3\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0018-1a664aa3"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0019-3ddfe508",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0019-3ddfe508"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0020-1e9349d6",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"event\": \"Listando provedores de LLMs via servi\\u00e7o.\", \"logger\": \"app.services.llm_service\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:01.640206Z\", \"trace_id\": \"qa-sprint-auth-sprint-0020-1e9349d6\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0020-1e9349d6"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0021-1dcada3c",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0021-1dcada3c"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0022-69b90d10",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/chat/health HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0022-69b90d10"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0023-b9fc32f2",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK",
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0023-b9fc32f2"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0024-07b3ab0d",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"message\": \"Cole\\u00e7\\u00e3o 'user_24' n\\u00e3o encontrada. Criando via async...\", \"event\": \"log_warning\", \"logger\": \"app.db.vector_store\", \"level\": \"warning\", \"timestamp\": \"2026-02-24T18:03:04.183439Z\", \"trace_id\": \"qa-sprint-auth-sprint-0024-07b3ab0d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"message\": \"Cole\\u00e7\\u00e3o 'user_24' criada via async.\", \"event\": \"log_info\", \"logger\": \"app.db.vector_store\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:04.225973Z\", \"trace_id\": \"qa-sprint-auth-sprint-0024-07b3ab0d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"message\": \"\\u00cdndices de payload para 'user_24' criados em metadata.type e metadata.timestamp via async.\", \"event\": \"log_info\", \"logger\": \"app.db.vector_store\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:04.477465Z\", \"trace_id\": \"qa-sprint-auth-sprint-0024-07b3ab0d\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0024-07b3ab0d"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0025-62cb7547",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "weak",
+    "matched_lines": [
+      "janus_api  | INFO:     192.168.65.1:55727 - \"GET /api/v1/auth/local/me HTTP/1.1\" 200 OK"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0025-62cb7547"
+  },
+  {
+    "request_id": "qa-sprint-auth-sprint-0026-4147d2e3",
+    "phase": "auth",
+    "suite": "sprint",
+    "log_source": "docker-compose",
+    "match_type": "strong",
+    "matched_lines": [
+      "janus_api  | {\"operation\": \"neo4j_query\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.004727840423583984, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:05.821360Z\", \"trace_id\": \"qa-sprint-auth-sprint-0026-4147d2e3\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 5, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:05.821629Z\", \"trace_id\": \"qa-sprint-auth-sprint-0026-4147d2e3\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"state\": \"CLOSED\", \"execution_time_seconds\": 0.00440216064453125, \"failure_count\": 0, \"event\": \"circuit_breaker_call_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:05.826163Z\", \"trace_id\": \"qa-sprint-auth-sprint-0026-4147d2e3\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}",
+      "janus_api  | {\"operation\": \"neo4j_query\", \"attempt\": 1, \"max_attempts\": 3, \"elapsed_ms\": 4, \"event\": \"resilient_attempt_success\", \"logger\": \"app.core.infrastructure.resilience\", \"level\": \"info\", \"timestamp\": \"2026-02-24T18:03:05.826351Z\", \"trace_id\": \"qa-sprint-auth-sprint-0026-4147d2e3\", \"user_id\": \"24\", \"session_id\": \"-\", \"conversation_id\": \"-\", \"project_id\": \"-\"}"
+    ],
+    "error_lines": [],
+    "response_echo_request_id": "qa-sprint-auth-sprint-0026-4147d2e3"
+  }
+]

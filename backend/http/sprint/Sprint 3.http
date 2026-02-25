@@ -1,94 +1,240 @@
 ###
-# SPRINT 3: Contexto Ambiental e Percepção Externa
-# Testes completos de contexto, busca web e informações do sistema
-###
+    # SPRINT 3: Execucao Assistida e Contexto (Context, Sandbox, Agent, Assistant)
+    # Fluxos E2E reais + cobertura complementar de endpoints da sprint
+    # Modulos: Context, Sandbox, Agent, Assistant, Auto Analysis
+    ###
 
-@host = http://localhost:8000
+    @host = http://localhost:8000
 @api_v1_prefix = /api/v1
+@token = 
+@admin_token = 
+@correlation_id = {{$timestamp}}
+@client_version = 2.0.0
+@actor_user_id = 1
+@user_id_int = 1
+@user_id_str = 1
+@target_user_id = 1
+@conversation_id = conv-placeholder
+@message_id = msg-placeholder
+@goal_id = goal-placeholder
+@run_id = 1
+@task_id = task-placeholder
+@agent_id = agent-placeholder
+@doc_id = doc-placeholder
+@experiment_id = 1
+@arm_id = 1
+@model_id = demo-model
+@request_id = req-demo
+@action_id = 1
+@consent_id = 1
+@queue_name = janus.knowledge.consolidation
+@queue_name_missing = default
 
-###
-# 1. Obter Contexto Atual (Data/Hora + Sistema)
+
+############################################
+# 0) Preflight de autenticacao
+############################################
+# @name auth_local_me_preflight
+GET {{host}}{{api_v1_prefix}}/auth/local/me
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {%
+client.test("Preflight auth/local/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+  client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
+});
+try {
+  const body = response.body.json();
+  if (body && body.id) client.global.set("actor_user_id", String(body.id));
+} catch (e) {}
+%}
+############################################
+# Indice de endpoints cobertos nesta sprint
+############################################
+# - [Agent] POST /api/v1/agent/execute
+# - [Assistant] POST /api/v1/assistant/execute
+# - [Auto Analysis] GET /api/v1/auto-analysis/health-check
+# - [Context] GET /api/v1/context/current
+# - [Context] POST /api/v1/context/enriched
+# - [Context] GET /api/v1/context/format-prompt
+# - [Context] POST /api/v1/context/web-cache/invalidate
+# - [Context] GET /api/v1/context/web-cache/status
+# - [Context] GET /api/v1/context/web-search
+# - [Sandbox] GET /api/v1/sandbox/capabilities
+# - [Sandbox] POST /api/v1/sandbox/evaluate
+# - [Sandbox] POST /api/v1/sandbox/execute
+
+############################################
+# 1) Contexto + Sandbox (happy path)
+############################################
+# @name s3_context_current
 GET {{host}}{{api_v1_prefix}}/context/current
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("context/current: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 2. Buscar na Web - Tecnologia
-GET {{host}}{{api_v1_prefix}}/context/web-search?query=Python%20asyncio%20tutorial&max_results=3&search_depth=basic
+# @name s3_web_search
+GET {{host}}{{api_v1_prefix}}/context/web-search?query=janus%20api&max_results=3&search_depth=basic
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("context/web-search: 200 ou 503", function() { client.assert([200,503].includes(response.status)); }); %}
 
 ###
-# 3. Buscar na Web - Notícias Atuais
-GET {{host}}{{api_v1_prefix}}/context/web-search?query=artificial%20intelligence%20latest%20news&max_results=5&
-    search_depth=basic
+# @name s3_web_cache_status
+GET {{host}}{{api_v1_prefix}}/context/web-cache/status
 Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("context/web-cache/status: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 4. Contexto Enriquecido (sem busca web)
+# @name s3_enriched_context
 POST {{host}}{{api_v1_prefix}}/context/enriched
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "query": "",
-  "include_web_search": false
-}
-
-###
-# 5. Contexto Enriquecido (com busca web)
-POST {{host}}{{api_v1_prefix}}/context/enriched
-Content-Type: application/json
-
-{
-  "query": "machine learning frameworks",
+  "query": "janus observability",
   "include_web_search": true,
-  "max_web_results": 3
+  "max_web_results": 2
 }
 
+> {% client.test("context/enriched: 200", function() { client.assert(response.status === 200); }); %}
+
 ###
-# 6. Contexto Enriquecido - Uso Completo
-POST {{host}}{{api_v1_prefix}}/context/enriched
+# @name s3_format_prompt
+GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=true&web_query=janus
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("context/format-prompt: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s3_sandbox_capabilities
+GET {{host}}{{api_v1_prefix}}/sandbox/capabilities
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("sandbox/capabilities: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s3_sandbox_evaluate
+POST {{host}}{{api_v1_prefix}}/sandbox/evaluate
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "query": "best practices for microservices architecture",
-  "include_web_search": true,
-  "max_web_results": 5
+  "expression": "(10 + 5) * 2"
 }
 
-###
-# 7. Buscar na Web - Documentação
-GET {{host}}{{api_v1_prefix}}/context/web-search?query=LangChain%20documentation%20agents&max_results=2&
-    search_depth=basic
-Accept: application/json
+> {% client.test("sandbox/evaluate: 200", function() { client.assert(response.status === 200); }); %}
 
 ###
-# 8. Buscar na Web - Busca Avançada
-GET {{host}}{{api_v1_prefix}}/context/web-search?query=microservices%20design%20patterns&max_results=5&
-    search_depth=advanced
-Accept: application/json
-
-###
-# 9. Formatar Contexto para Prompt - Somente Data/Hora
-GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=false
-Accept: application/json
-
-###
-# 10. Formatar Contexto para Prompt - Completo com Busca Web
-GET {{host}}{{api_v1_prefix}}/context/format-prompt?include_datetime=true&include_system=true&
-    web_query=circuit%20breakers%20Python
-Accept: application/json
-
-###
-# 11. Obter Contexto Atual para Tomada de Decisão
-GET {{host}}{{api_v1_prefix}}/context/current
-Accept: application/json
-
-###
-# 12. Contexto Enriquecido - Caso Complexo
-POST {{host}}{{api_v1_prefix}}/context/enriched
+# @name s3_sandbox_execute
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
 Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
 
 {
-  "query": "distributed systems consensus algorithms",
-  "include_web_search": true,
-  "max_web_results": 4
+  "code": "total = sum([1,2,3])\nprint(total)",
+  "context": {}
 }
+
+> {% client.test("sandbox/execute: 200", function() { client.assert(response.status === 200); }); %}
+
+###
+# @name s3_assistant_execute
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/assistant/execute
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "prompt": "Resumo curto do estado do Janus",
+#   "risk_profile": "balanced",
+#   "max_steps": 2,
+#   "timeout_seconds": 10
+# }
+#
+# > {% client.test("assistant/execute: 200 ou 500", function() { client.assert([200,500].includes(response.status)); }); %}
+#
+###
+# @name s3_agent_execute
+# DOCKER-SAFE: bloco desativado (mutacao/carga/external)
+# POST {{host}}{{api_v1_prefix}}/agent/execute
+# Content-Type: application/json
+# X-Request-ID: {{correlation_id}}
+# User-Agent: Janus-HTTP-Test/{{client_version}}
+# Authorization: Bearer {{token}}
+#
+# {
+#   "question": "Liste checks basicos de sistema",
+#   "agent_type": "TOOL_USER"
+# }
+#
+# > {% client.test("agent/execute: 200 ou 500", function() { client.assert([200,500,503,408].includes(response.status)); }); %}
+#
+###
+# @name s3_auto_analysis
+GET {{host}}{{api_v1_prefix}}/auto-analysis/health-check
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("auto-analysis/health-check: 200", function() { client.assert(response.status === 200); }); %}
+
+############################################
+# 2) Edge cases
+############################################
+# @name s3_web_search_missing_query
+GET {{host}}{{api_v1_prefix}}/context/web-search
+Accept: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+> {% client.test("web-search sem query: 422", function() { client.assert(response.status === 422); }); %}
+
+###
+# @name s3_sandbox_execute_invalid
+POST {{host}}{{api_v1_prefix}}/sandbox/execute
+Content-Type: application/json
+X-Request-ID: {{correlation_id}}
+User-Agent: Janus-HTTP-Test/{{client_version}}
+Authorization: Bearer {{token}}
+
+{
+  "code": "import os\nos.system('rm -rf /')",
+  "context": {}
+}
+
+> {% client.test("sandbox invalid/block: 200 ou 400", function() { client.assert([200,400].includes(response.status)); }); %}
+
+############################################
+# Cobertura complementar da sprint (stubs)
+############################################

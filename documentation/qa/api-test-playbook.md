@@ -157,3 +157,45 @@ CI workflow: `.github/workflows/quality-gates.yml`
 - Coverage report generated automatically for all discovered `/api/v1/*` endpoints.
 - JSON + Markdown report artifacts produced with module-level coverage summary.
 - Docker evidence snapshot generated in the same run (compose status + API log tail).
+
+## Full Process Validation (API + Sprint HTTP + Docker Logs)
+
+Runner de validacao completa com:
+- probes de todos os endpoints `/api/v1/*` via OpenAPI,
+- execucao dos requests ativos em `backend/http/sprint/Sprint 1.http` a `Sprint 13.http`,
+- duas fases no mesmo fluxo (`unauth` e `auth` com bootstrap local),
+- correlacao de logs do Docker por `X-Request-ID` (mapeado em `trace_id/request_id`).
+
+### Comando unico (completo)
+
+```bash
+python tooling/run_full_process_validation.py
+```
+
+### Smoke rapido (desenvolvimento)
+
+```bash
+python tooling/run_full_process_validation.py \
+  --api-limit 10 \
+  --sprint-limit-requests 3
+```
+
+### Gate e interpretacao
+
+Gate atual (reportavel):
+- `5xx`,
+- falha de transporte,
+- ausencia de evidencia de log (`match_type=missing`).
+
+Rejeicoes de contrato/autorizacao esperadas (`401/403/422`) sao reportadas, mas nao derrubam o run quando classificadas como esperadas.
+
+### Artefatos gerados
+
+- `outputs/qa/full_process_validation_report.json`
+- `outputs/qa/full_process_validation_report.md`
+- `outputs/qa/full_process_validation_failures.json`
+- `outputs/qa/full_process_validation_log_evidence.json`
+- `outputs/qa/api_e2e_dual_mode/unauth.json`
+- `outputs/qa/api_e2e_dual_mode/auth.json`
+- `outputs/qa/sprint_http_runs/Sprint *.unauth.json`
+- `outputs/qa/sprint_http_runs/Sprint *.auth.json`
