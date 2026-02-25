@@ -116,6 +116,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
 | OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | feito (2026-02-21, automacao entregue; inventario atual 230/231) |
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
+| OQ-013 | Refatorar ObservabilityService em dominios especificos | P2 | M | ideia |
 
 ---
 
@@ -135,6 +136,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | PX-010 | Internacionalizacao completa e consistencia terminologica | P3 | M | ideia |
 | PX-011 | Simplificar UX do chat para modo usuario (modo simples padrao + painel avancado opcional) | P0 | S | em andamento (2026-02-13) |
 | PX-012 | Mensagens de erro de auth mais claras (401/422) + fluxo de reset guiado | P1 | S | planejado |
+| PX-013 | Decompor ConversationsComponent e extrair Store | P1 | M | ideia |
 
 ---
 
@@ -506,6 +508,30 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Gate de qualidade (baseline offline) bloqueando merge quando houver regressao acima do limite.
 - Politica de roteamento MR-002 com regras, fallback e observabilidade documentados.
 - Evidencia de validacao com 0 erros criticos em log nos cenarios da sprint.
+
+---
+
+### [OQ-013] Refatorar ObservabilityService em dominios especificos
+- Problema atual: `backend/app/services/observability_service.py` centraliza health checks, metricas, auditoria, SLOs e anomalias (~1200 linhas).
+- Solucao proposta: Dividir em `HealthService`, `MetricsService`, `AuditService`, `AnomalyService`.
+- Impacto esperado: Menor acoplamento, facilidade de teste e manutencao.
+- Riscos: Refatoracao de muitos metodos usados por endpoints diversos.
+- Dependencias: Testes de unidade existentes.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [PX-013] Decompor ConversationsComponent e extrair Store
+- Problema atual: `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas) mistura UI, API, Estado e Logica de Negocio.
+- Solucao proposta: Criar `ConversationStore` (SignalStore/Service) para estado e logica; quebrar UI em `ChatArea`, `ConversationList`, `Rail`.
+- Impacto esperado: Componentes menores, testaveis e reutilizaveis.
+- Riscos: Regressao em funcionalidades de chat e realtime.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
 
 ---
 

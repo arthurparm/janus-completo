@@ -93,3 +93,44 @@ Esta auditoria focou na análise estática do código fonte (`backend/` e `front
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `backend-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-05-24
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+Esta auditoria revisou o estado atual do código após a Sprint 1 e parte da Sprint 2.
+
+### 1. Simplificação e Refatoração (Backend)
+
+*   **Melhoria (Resolved)**: `ChatService` foi refatorado e reduzido para ~287 linhas, agindo agora como uma Facade para serviços especializados (`ConversationService`, `MessageOrchestrationService`, etc.).
+*   **Complexidade (Novo)**: `backend/app/services/observability_service.py` cresceu para ~1200 linhas, acumulando responsabilidades de health check, métricas, logs, SLOs e anomalias. (Adicionado OQ-013)
+*   **Dívida Técnica (Persistente)**: `backend/app/services/tool_service_improved.py` continua duplicado e sem uso aparente. Deve ser removido.
+
+### 2. Simplificação e Refatoração (Frontend)
+
+*   **Complexidade (Novo)**: `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas) mistura responsabilidades de UI, gerenciamento de estado e lógica de negócios. Requer extração de Store e componentes menores. (Adicionado PX-013)
+*   **God Object (Persistente)**: `frontend/src/app/services/backend-api.service.ts` (~1600 linhas) centraliza todas as chamadas de API.
+
+### 3. Segurança e Configuração
+
+*   **Melhoria (Resolved)**: `AUTH_RESET_RETURN_TOKEN` agora defaults para `False` em `config.py`, mitigando o risco de vazamento de tokens de reset de senha.
+*   **Risco (Persistente)**: Segredos padrão (`change_me_...`) ainda existem em `backend/app/config.py` como defaults, embora `ENVIRONMENT` production force erro se `AUTH_JWT_SECRET` não estiver setado.
+
+### 4. Confiabilidade e Lógica
+
+*   **Fragilidade (Crítico/Persistente)**: Apesar de `OQ-012` estar marcado como "feito", o arquivo `backend/app/db/sync_events.py` ainda utiliza `loop.create_task` dentro de handlers síncronos do SQLAlchemy. Isso pode causar falhas silenciosas se o event loop não estiver disponível ou for encerrado prematuramente.
+
+## Próximos Passos
+
+1.  **Imediato (P0/P1)**:
+    *   Remover `backend/app/services/tool_service_improved.py`.
+    *   Reinvestigar a correção de `OQ-012` para garantir execução assíncrona robusta (usando background tasks ou filas).
+2.  **Curto Prazo (P1)**:
+    *   Iniciar refatoração do `ConversationsComponent` (Frontend) para `ConversationStore`.
+3.  **Médio Prazo (P2)**:
+    *   Refatorar `ObservabilityService` em micro-serviços de domínio.
