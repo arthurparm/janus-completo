@@ -734,7 +734,7 @@
                             @for (item of generativeMemoryResults(); track $index) {
                               <li class="rail-item compact-item memory-list-item">
                                 <p class="memory-content">{{ item.content }}</p>
-                                <span class="muted memory-meta-line">{{ memoryTypeLabel(item.type) }}</span>
+                                <span class="muted memory-meta-line">{{ generativeMemoryMetaLine(item) }}</span>
                               </li>
                             }
                           </ul>

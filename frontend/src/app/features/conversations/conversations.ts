@@ -263,9 +263,18 @@ export class ConversationsComponent {
     const conversationId = this.selectedId()
     const items = this.memoryUser()
     if (!conversationId) return []
-    return items.filter((item) => this.isConversationMemory(item, conversationId))
+    return items
+      .filter((item) => this.isConversationMemory(item, conversationId))
+      .slice(0, 6)
   })
-  readonly userMemory = computed(() => this.memoryUser())
+  readonly userMemory = computed(() => {
+    const conversationId = this.selectedId()
+    const items = this.memoryUser()
+    const filtered = conversationId
+      ? items.filter((item) => !this.isConversationMemory(item, conversationId))
+      : items
+    return filtered.slice(0, 6)
+  })
   readonly autonomyActiveGoals = computed(() => this.autonomyGoals()
     .filter((goal) => goal.status === 'pending' || goal.status === 'in_progress')
     .slice(0, 6))
@@ -668,6 +677,45 @@ export class ConversationsComponent {
     if (value === 'semantic') return 'Semântica'
     if (value === 'procedural') return 'Procedural'
     return value || 'Memória'
+  }
+
+  generativeMemoryMetaLine(item: GenerativeMemoryItem): string {
+    const parts = [this.memoryTypeLabel(item.type)]
+
+    const meta = item.metadata || {}
+    const rawImportance = typeof meta === 'object'
+      ? (meta as Record<string, unknown>)['importance']
+      : undefined
+    const importance = typeof rawImportance === 'number'
+      ? rawImportance
+      : typeof rawImportance === 'string'
+        ? Number(rawImportance)
+        : NaN
+    if (Number.isFinite(importance)) {
+      parts.push(`Importância ${Math.round(importance)}`)
+    }
+
+    const scoreValue = item['score']
+    const score = typeof scoreValue === 'number'
+      ? scoreValue
+      : typeof scoreValue === 'string'
+        ? Number(scoreValue)
+        : NaN
+    if (Number.isFinite(score)) {
+      parts.push(`Score ${score.toFixed(2)}`)
+    }
+
+    const timestamp = this.coerceDateInputToMs(item.created_at ?? item.updated_at)
+    if (timestamp) {
+      parts.push(new Date(timestamp).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }))
+    }
+
+    return parts.join(' · ')
   }
 
   setRagResultViewTab(tab: RagResultViewTab): void {
@@ -1221,7 +1269,7 @@ export class ConversationsComponent {
         map((resp) => resp.items || []),
         catchError(() => of([]))
       ),
-      memory: this.api.getMemoryTimeline({ limit: 6, user_id: userId }).pipe(
+      memory: this.api.getMemoryTimeline({ limit: 24, user_id: userId }).pipe(
         catchError(() => of([] as MemoryItem[]))
       )
     }).subscribe((result) => {
@@ -1706,6 +1754,21 @@ export class ConversationsComponent {
     const taskId = String(metadata['task_id'] || '')
     const compositeId = String(item.composite_id || '')
     return [sessionId, threadId, convoId, taskId, compositeId].some((value) => value.includes(conversationId))
+  }
+
+  private coerceDateInputToMs(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value > 10_000_000_000 ? value : value * 1000
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const numeric = Number(value)
+      if (Number.isFinite(numeric)) {
+        return numeric > 10_000_000_000 ? numeric : numeric * 1000
+      }
+      const parsed = Date.parse(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return null
   }
 
   private extractErrorMessage(error: unknown, fallback: string): string {
