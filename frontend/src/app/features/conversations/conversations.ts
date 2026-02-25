@@ -301,6 +301,7 @@ export class ConversationsComponent {
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
   private streamingConversationId: string | null = null
+  private pendingConversationRouteId: string | null = null
   private scrollQueued = false
   private responseStartedAt: number | null = null
   private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
@@ -364,7 +365,7 @@ export class ConversationsComponent {
     this.error.set('')
     this.sending.set(true)
 
-    const conversationId = await this.ensureConversationId()
+    const conversationId = await this.ensureConversationId(false, false)
     if (!conversationId) {
       this.error.set('Falha ao criar conversa.')
       this.sending.set(false)
@@ -1353,7 +1354,10 @@ export class ConversationsComponent {
       })
   }
 
-  private async ensureConversationId(forceCreate = false): Promise<string | null> {
+  private async ensureConversationId(
+    forceCreate = false,
+    navigateImmediately = true
+  ): Promise<string | null> {
     const current = this.selectedId()
     if (current && !forceCreate) return current
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
@@ -1372,7 +1376,12 @@ export class ConversationsComponent {
       }
       this.conversations.update((items) => [meta, ...items])
       this.selectedId.set(conversationId)
-      this.router.navigate(['/conversations', conversationId], { replaceUrl: true })
+      if (navigateImmediately) {
+        this.pendingConversationRouteId = null
+        this.router.navigate(['/conversations', conversationId], { replaceUrl: true })
+      } else {
+        this.pendingConversationRouteId = conversationId
+      }
       return conversationId
     } catch {
       return null
@@ -1435,6 +1444,7 @@ export class ConversationsComponent {
           this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
         }
         this.sending.set(false)
+        this.flushPendingConversationNavigation(conversationId)
         this.queueScroll()
       })
   }
@@ -1475,6 +1485,7 @@ export class ConversationsComponent {
     this.appendThought('stream', 'Resposta concluida', `Streaming finalizado${modelLabel}. Citacoes: ${citationsCount}.`)
     this.queueScroll()
     this.loadConversations()
+    this.flushPendingConversationNavigation(done.conversation_id || this.selectedId())
   }
 
   private handleStreamError(reason: string): void {
@@ -1500,6 +1511,16 @@ export class ConversationsComponent {
     this.streamingConversationId = null
     this.sending.set(false)
     this.appendThought('system', 'Falha no streaming', reason || 'erro desconhecido')
+    this.flushPendingConversationNavigation(this.selectedId())
+  }
+
+  private flushPendingConversationNavigation(targetId?: string | null): void {
+    const pendingId = this.pendingConversationRouteId
+    if (!pendingId) return
+    const nextId = targetId || pendingId
+    if (!nextId || pendingId !== nextId) return
+    this.pendingConversationRouteId = null
+    this.router.navigate(['/conversations', nextId], { replaceUrl: true })
   }
 
   private appendMessage(message: ChatMessageView): void {
