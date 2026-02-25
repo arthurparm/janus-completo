@@ -1731,21 +1731,20 @@ export class ConversationsComponent {
     const explicit = String(msg.agent_state?.state || '').trim()
     if (explicit) return explicit
     if (msg.streaming) return 'streaming_response'
-    if (msg.understanding?.requires_confirmation) return 'waiting_confirmation'
+    const confirmation = this.messageConfirmation(msg)
+    if (confirmation?.required && typeof confirmation.pending_action_id === 'number') return 'waiting_confirmation'
     if (msg.understanding?.low_confidence) return 'low_confidence'
     return ''
   }
 
   messageConfirmation(msg: ChatMessageView): ChatConfirmationState | null {
     const conf = msg.confirmation || msg.understanding?.confirmation
-    if (conf && (conf.required || msg.understanding?.requires_confirmation)) return conf
-    if (msg.understanding?.requires_confirmation) {
-      return {
-        required: true,
-        reason: msg.understanding.confirmation_reason || 'requires_confirmation'
-      }
-    }
-    return null
+    if (!conf) return null
+    const hasPendingAction = typeof conf.pending_action_id === 'number'
+    const hasEndpoints = typeof conf.approve_endpoint === 'string' && typeof conf.reject_endpoint === 'string'
+    if (!hasPendingAction && !hasEndpoints) return null
+    if (conf.required === false && !hasPendingAction && !hasEndpoints) return null
+    return conf
   }
 
   messageRiskSummary(msg: ChatMessageView): string {

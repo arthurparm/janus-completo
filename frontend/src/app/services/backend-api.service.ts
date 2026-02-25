@@ -236,11 +236,11 @@ export interface ChatRiskState {
 export interface ChatConfirmationState {
   required: boolean;
   status?: string;
-  reason?: string;
+  reason?: string | null;
   source?: string;
-  pending_action_id?: number;
-  approve_endpoint?: string;
-  reject_endpoint?: string;
+  pending_action_id?: number | null;
+  approve_endpoint?: string | null;
+  reject_endpoint?: string | null;
   [key: string]: unknown;
 }
 export interface ChatAgentState {
@@ -257,7 +257,7 @@ export interface ChatUnderstanding {
   confidence_band?: 'high' | 'medium' | 'low' | string;
   low_confidence?: boolean;
   requires_confirmation?: boolean;
-  confirmation_reason?: string;
+  confirmation_reason?: string | null;
   signals?: string[];
   routing?: ChatRoutingState;
   risk?: ChatRiskState;
@@ -1135,9 +1135,12 @@ export class BackendApiService {
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
+          citation_status: m?.citation_status,
           reasoning: m?.reasoning,
           ui: m?.ui,
-          understanding: m?.understanding
+          understanding: m?.understanding,
+          confirmation: m?.confirmation,
+          agent_state: m?.agent_state,
         }))
         return { conversation_id: String(resp?.conversation_id || conversation_id), messages: mapped } as ChatHistoryResponse
       })
@@ -1174,9 +1177,12 @@ export class BackendApiService {
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
+          citation_status: m?.citation_status,
           reasoning: m?.reasoning,
           ui: m?.ui,
-          understanding: m?.understanding
+          understanding: m?.understanding,
+          confirmation: m?.confirmation,
+          agent_state: m?.agent_state,
         }))
 
         return {
@@ -1214,9 +1220,12 @@ export class BackendApiService {
             text: this.normalizeChatText(lm?.text),
             timestamp: lm?.timestamp != null ? Number(lm.timestamp) : 0,
             citations: lm?.citations,
+            citation_status: lm?.citation_status,
             reasoning: lm?.reasoning,
             ui: lm?.ui,
-            understanding: lm?.understanding
+            understanding: lm?.understanding,
+            confirmation: lm?.confirmation,
+            agent_state: lm?.agent_state,
           } : undefined
           return {
             conversation_id: String(it?.conversation_id || ''),

@@ -23,6 +23,7 @@ from app.services.chat.chat_contracts import (
     build_confirmation_payload,
     chat_sse_error_payload,
     extract_pending_action_id_from_text,
+    maybe_create_fallback_pending_action,
     normalize_understanding_payload,
 )
 from app.services.chat.conversation_service import ConversationService
@@ -566,10 +567,23 @@ class StreamingService:
 
             pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
             result_understanding = result.get("understanding") if isinstance(result, dict) else None
+            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+                user_id=str(user_id) if user_id is not None else None,
+                message=message,
+                conversation_id=conversation_id,
+                existing_pending_action_id=pending_action_id,
+                understanding=result_understanding if isinstance(result_understanding, dict) else None,
+            )
+            if (
+                fallback_reason
+                and isinstance(result_understanding, dict)
+                and not result_understanding.get("confirmation_reason")
+            ):
+                result_understanding["confirmation_reason"] = fallback_reason
             confirmation_payload = build_confirmation_payload(
                 pending_action_id=pending_action_id,
                 reason=(
-                    str((result_understanding or {}).get("confirmation_reason"))
+                    (result_understanding or {}).get("confirmation_reason")
                     if isinstance(result_understanding, dict)
                     else None
                 ),

@@ -19,6 +19,7 @@ from app.services.chat.chat_contracts import (
     build_confirmation_payload,
     chat_http_error_detail,
     extract_pending_action_id_from_text,
+    maybe_create_fallback_pending_action,
     normalize_understanding_payload,
 )
 
@@ -263,10 +264,20 @@ async def send_message(
                     f"{result.get('response', '')}"
                 )
 
+    pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+        user_id=str(user_id) if user_id is not None else None,
+        message=payload.message,
+        conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+        existing_pending_action_id=pending_action_id,
+        understanding=understanding if isinstance(understanding, dict) else None,
+    )
+    if fallback_reason and isinstance(understanding, dict) and not understanding.get("confirmation_reason"):
+        understanding["confirmation_reason"] = fallback_reason
+
     confirmation_payload = build_confirmation_payload(
         pending_action_id=pending_action_id,
         reason=(
-            str((understanding or {}).get("confirmation_reason"))
+            (understanding or {}).get("confirmation_reason")
             if isinstance(understanding, dict)
             else None
         ),

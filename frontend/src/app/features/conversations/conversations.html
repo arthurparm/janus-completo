@@ -164,7 +164,7 @@
                           <span class="muted">{{ understandingConfidence(msg.understanding) }}</span>
                         </div>
                         <p>{{ msg.understanding?.summary }}</p>
-                        @if (msg.understanding?.requires_confirmation) {
+                        @if (msg.understanding?.low_confidence) {
                           <span class="understanding-flag">Acao com confirmacao sugerida</span>
                           <button ui-button variant="ghost" size="sm" type="button" (click)="confirmLowConfidence()">
                             Confirmar antes de executar
