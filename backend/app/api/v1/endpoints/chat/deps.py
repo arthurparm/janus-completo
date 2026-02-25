@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 from collections import defaultdict
+from dataclasses import dataclass
 
 from fastapi import HTTPException, Request, status
 
@@ -49,6 +50,254 @@ def anonymous_user_id(http: Request | None) -> str | None:
 
 def resolve_user_id(http: Request | None, explicit_user_id: str | None) -> str | None:
     return explicit_user_id or actor_user_id(http) or anonymous_user_id(http)
+
+
+def _chat_auth_enforced() -> bool:
+    return str(os.getenv("CHAT_AUTH_ENFORCE_REQUIRED", "0")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def is_chat_auth_enforced() -> bool:
+    return _chat_auth_enforced()
+
+
+def _chat_transition_warn() -> bool:
+    return str(os.getenv("CHAT_AUTH_TRANSITION_WARN", "1")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _auth_header_present(http: Request | None) -> bool:
+    try:
+        return bool((http.headers.get("authorization") or "").strip()) if http else False
+    except Exception:
+        return False
+
+
+def _x_user_id_header(http: Request | None) -> str | None:
+    try:
+        v = http.headers.get("X-User-Id") if http else None
+        return str(v).strip() if v else None
+    except Exception:
+        return None
+
+
+def _chat_http_error(status_code: int, detail: str, code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "message": detail,
+            "code": code,
+        },
+    )
+
+
+@dataclass
+class ChatIdentityResolution:
+    user_id: str | None
+    identity_source: str
+    auth_present: bool
+    authenticated: bool
+
+
+def resolve_authenticated_user_context(
+    http: Request | None,
+    explicit_user_id: str | None,
+    *,
+    allow_anonymous_fallback: bool = False,
+    endpoint_label: str = "/api/v1/chat",
+) -> ChatIdentityResolution:
+    """Resolve chat identity with support for transition mode and enforcement mode.
+
+    identity_source:
+    - explicit: explicit user_id param/body accepted
+    - actor: authenticated actor (bearer)
+    - header: X-User-Id fallback accepted in transition
+    - anonymous: anonymous fallback accepted in transition
+    - unknown: unresolved
+    """
+    enforce = _chat_auth_enforced()
+    warn = _chat_transition_warn()
+    auth_present = _auth_header_present(http)
+    actor = actor_user_id(http)
+    xuid = _x_user_id_header(http)
+    explicit = str(explicit_user_id).strip() if explicit_user_id else None
+
+    # Strict mode: require authenticated actor (Authorization-derived)
+    if enforce:
+        if actor and auth_present:
+            if explicit and explicit != actor:
+                # Ignore mismatched client-claimed user and trust authenticated actor.
+                return ChatIdentityResolution(
+                    user_id=actor,
+                    identity_source="actor",
+                    auth_present=True,
+                    authenticated=True,
+                )
+            if explicit and explicit == actor:
+                return ChatIdentityResolution(
+                    user_id=actor,
+                    identity_source="explicit",
+                    auth_present=True,
+                    authenticated=True,
+                )
+            return ChatIdentityResolution(
+                user_id=actor,
+                identity_source="actor",
+                auth_present=True,
+                authenticated=True,
+            )
+        return ChatIdentityResolution(
+            user_id=None,
+            identity_source="unknown",
+            auth_present=auth_present or bool(xuid),
+            authenticated=False,
+        )
+
+    # Transition mode: preserve compatibility, but emit deprecation-worthy resolutions.
+    if actor and auth_present:
+        if explicit and explicit == actor:
+            return ChatIdentityResolution(
+                user_id=actor,
+                identity_source="explicit",
+                auth_present=True,
+                authenticated=True,
+            )
+        return ChatIdentityResolution(
+            user_id=actor,
+            identity_source="actor",
+            auth_present=True,
+            authenticated=True,
+        )
+
+    if explicit:
+        if warn:
+            import structlog
+
+            structlog.get_logger(__name__).warning(
+                "chat_identity_deprecated_explicit_user_id",
+                endpoint=endpoint_label,
+            )
+        return ChatIdentityResolution(
+            user_id=explicit,
+            identity_source="explicit",
+            auth_present=auth_present,
+            authenticated=False,
+        )
+
+    if actor:
+        # actor set without auth header usually means dev X-User-Id trust path.
+        source = "header" if xuid else "actor"
+        if warn and source == "header":
+            import structlog
+
+            structlog.get_logger(__name__).warning(
+                "chat_identity_deprecated_x_user_id_header",
+                endpoint=endpoint_label,
+            )
+        return ChatIdentityResolution(
+            user_id=actor,
+            identity_source=source,
+            auth_present=auth_present or bool(xuid),
+            authenticated=False,
+        )
+
+    if xuid:
+        if warn:
+            import structlog
+
+            structlog.get_logger(__name__).warning(
+                "chat_identity_deprecated_x_user_id_header",
+                endpoint=endpoint_label,
+            )
+        return ChatIdentityResolution(
+            user_id=xuid,
+            identity_source="header",
+            auth_present=True,
+            authenticated=False,
+        )
+
+    if allow_anonymous_fallback:
+        anon = anonymous_user_id(http)
+        if anon:
+            if warn:
+                import structlog
+
+                structlog.get_logger(__name__).warning(
+                    "chat_identity_deprecated_anonymous_fallback",
+                    endpoint=endpoint_label,
+                )
+            return ChatIdentityResolution(
+                user_id=anon,
+                identity_source="anonymous",
+                auth_present=False,
+                authenticated=False,
+            )
+
+    if warn:
+        try:
+            import structlog
+
+            structlog.get_logger(__name__).warning(
+                "chat_identity_missing_transition_mode",
+                endpoint=endpoint_label,
+            )
+        except Exception:
+            pass
+    return ChatIdentityResolution(
+        user_id=None,
+        identity_source="unknown",
+        auth_present=False,
+        authenticated=False,
+    )
+
+
+def require_actor_user_id(http: Request | None) -> str:
+    """Strict helper: always require authenticated actor when enforcement is enabled.
+
+    In transition mode, preserves compatibility by delegating to resolution without anonymous fallback.
+    """
+    ctx = resolve_authenticated_user_context(
+        http,
+        explicit_user_id=None,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat",
+    )
+    if ctx.user_id:
+        return ctx.user_id
+    raise _chat_http_error(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        code="CHAT_AUTH_REQUIRED",
+    )
+
+
+def resolve_authenticated_user_id(http: Request | None, explicit_user_id: str | None) -> str:
+    """Resolve user id for chat endpoints, enforcing auth when configured.
+
+    In transition mode, may return explicit/header-based identity and optionally anonymous (if caller uses
+    `resolve_authenticated_user_context(..., allow_anonymous_fallback=True)` instead).
+    """
+    ctx = resolve_authenticated_user_context(
+        http,
+        explicit_user_id=explicit_user_id,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat",
+    )
+    if ctx.user_id:
+        return ctx.user_id
+    raise _chat_http_error(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        code="CHAT_AUTH_REQUIRED",
+    )
 
 
 async def acquire_sse_slot(user_id: str | None) -> str:

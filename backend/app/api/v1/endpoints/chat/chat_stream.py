@@ -11,7 +11,14 @@ from app.services.chat_service import (
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.trace_service import TraceService, get_trace_service
 
-from .deps import acquire_sse_slot, actor_project_id, actor_user_id, ensure_origin_allowed, release_sse_slot
+from .deps import (
+    acquire_sse_slot,
+    actor_project_id,
+    ensure_origin_allowed,
+    is_chat_auth_enforced,
+    release_sse_slot,
+    resolve_authenticated_user_context,
+)
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -64,10 +71,38 @@ async def stream_message(
 
     slot_user: str | None = None
     try:
-        if not user_id:
-            user_id = actor_user_id(http)
+        identity_ctx = resolve_authenticated_user_context(
+            http,
+            user_id,
+            allow_anonymous_fallback=False,
+            endpoint_label="/api/v1/chat/stream",
+        )
+        user_id = identity_ctx.user_id
+        if user_id is None and is_chat_auth_enforced():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            )
         if not project_id:
             project_id = actor_project_id(http)
+        try:
+            service.get_history(
+                conversation_id,
+                user_id=user_id,
+                project_id=project_id,
+            )
+        except ConversationNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation not found",
+            )
+        except Exception as e:
+            if "Access denied" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                )
+            raise
 
         slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
         gen = service.stream_message(
@@ -78,6 +113,7 @@ async def stream_message(
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
@@ -106,7 +142,32 @@ async def stream_message(
 async def get_conversation_trace(
     conversation_id: str,
     service: TraceService = Depends(get_trace_service),
+    chat_service: ChatService = Depends(get_chat_service),
+    http: Request = None,
 ):
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        None,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat/trace",
+    )
+    user_id = identity_ctx.user_id
+    if user_id is None and is_chat_auth_enforced():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+        )
+    try:
+        chat_service.get_history(conversation_id, user_id=user_id, project_id=actor_project_id(http))
+    except ConversationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except Exception as e:
+        if "Access denied" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+            )
+        raise
     return service.get_trace_history(conversation_id)
 
 
@@ -123,14 +184,38 @@ async def stream_agent_events(
 
     slot_user: str | None = None
     try:
-        if not user_id:
-            user_id = actor_user_id(http)
+        identity_ctx = resolve_authenticated_user_context(
+            http,
+            user_id,
+            allow_anonymous_fallback=False,
+            endpoint_label="/api/v1/chat/events",
+        )
+        user_id = identity_ctx.user_id
+        if user_id is None and is_chat_auth_enforced():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            )
+        try:
+            service.get_history(conversation_id, user_id=user_id)
+        except ConversationNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation not found",
+            )
+        except Exception as e:
+            if "Access denied" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+                )
+            raise
         slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("log_error", message=f"Error starting event stream: {e}")
+        logger.error("chat_event_stream_start_failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
         )

@@ -14,7 +14,10 @@ from app.services.chat_service import (
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
 
-from .deps import resolve_user_id
+from .deps import (
+    is_chat_auth_enforced,
+    resolve_authenticated_user_context,
+)
 from .models import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -33,7 +36,18 @@ async def start_chat(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    user_id = resolve_user_id(http, request.user_id)
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        request.user_id,
+        allow_anonymous_fallback=True,
+        endpoint_label="/api/v1/chat/start",
+    )
+    user_id = identity_ctx.user_id
+    if user_id is None and is_chat_auth_enforced():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+        )
     conversation_id = await service.start_conversation_async(
         request.persona, user_id, request.project_id
     )
@@ -62,7 +76,18 @@ async def send_message(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid role or priority"
         )
 
-    user_id = resolve_user_id(http, payload.user_id)
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        payload.user_id,
+        allow_anonymous_fallback=True,
+        endpoint_label="/api/v1/chat/message",
+    )
+    user_id = identity_ctx.user_id
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+        )
     if routing_decision:
         logger.info(
             "chat.intent_routing",
@@ -83,6 +108,7 @@ async def send_message(
             timeout_seconds=payload.timeout_seconds,
             user_id=user_id,
             project_id=payload.project_id,
+            identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
@@ -92,8 +118,11 @@ async def send_message(
         )
     except ChatServiceError as e:
         if "Access denied" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-        logger.error("ChatServiceError on /chat/message", exc_info=e)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+            )
+        logger.error("chat_message_service_error", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
         )
@@ -137,7 +166,7 @@ async def send_message(
                 }
             )
     except Exception as e:
-        logger.warning("log_warning", message=f"Failed to retrieve citations for message: {e}")
+        logger.warning("chat_message_citations_failed", error=str(e))
         citations = []
     result["citations"] = citations
 
