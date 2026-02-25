@@ -29,7 +29,6 @@ WORKER_NAMES: list[str] = [
     "sandbox_agent",
     "thinker_agent",
     "distillation",
-    "autonomy",
     "google_productivity",
     "debate_proponent",
     "debate_critic",
@@ -59,7 +58,6 @@ async def start_all_workers():
     from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
     from app.core.workers.async_consolidation_worker import start_consolidation_worker
     from app.core.workers.auto_scaler import start_auto_scaler
-    from app.core.workers.autonomy_worker import start_autonomy_worker
     from app.core.workers.code_agent_worker import start_code_agent_worker
     from app.core.workers.codex_worker import start_codex_worker
     from app.core.workers.distillation_worker import start_distillation_worker
@@ -139,10 +137,6 @@ async def start_all_workers():
 
     distillation_task = await start_distillation_worker()
     workers.append(distillation_task)
-
-    # AutonomyWorker (batimento cardíaco de intenção)
-    autonomy_task = await start_autonomy_worker()
-    workers.append(autonomy_task)
 
     if getattr(settings, "ENABLE_GOOGLE_PRODUCTIVITY_WORKER", False):
         from app.core.workers.google_productivity_worker import start_google_productivity_consumer

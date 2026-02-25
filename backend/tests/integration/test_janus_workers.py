@@ -104,8 +104,8 @@ class TestAutonomyWorker:
     def test_autonomy_worker_import(self):
         """Test AutonomyWorker can be imported."""
         try:
-            from app.core.workers.autonomy_worker import start_autonomy_loop
-            assert start_autonomy_loop is not None
+            from app.core.workers.autonomy_worker import start_autonomy_worker
+            assert start_autonomy_worker is not None
             print("✓ AutonomyWorker import available")
         except Exception as e:
             print(f"⚠ AutonomyWorker import: {e}")

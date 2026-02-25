@@ -218,5 +218,8 @@ async def start_autonomy_worker(interval_seconds: int | None = None) -> asyncio.
     Inicia o AutonomyWorker em background com batimento cardíaco.
     Retorna a asyncio.Task do loop contínuo.
     """
+    logger.warning(
+        "[AutonomyWorker] LEGACY/DEPRECATED: use AutonomyService (/api/v1/autonomy/*) em modo enqueue_router"
+    )
     task = asyncio.create_task(_autonomy_heartbeat_loop(interval_seconds=interval_seconds))
     return task
