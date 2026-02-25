@@ -3,24 +3,44 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_MAX_RETRIES, SSE_RETRY_MAX_SECONDS } from './api.config'
 import { ChatUnderstanding, Citation } from './backend-api.service'
 import { AppLoggerService } from '../core/services/app-logger.service'
+import { buildChatStreamAuthHeaders } from './chat-auth-headers.util'
 
 type StreamStatus = 'idle' | 'connecting' | 'open' | 'streaming' | 'retrying' | 'closed' | 'error'
 
 export interface StreamDone {
-  conversation_id?: string;
-  provider?: string;
-  model?: string;
-  citations?: Citation[];
-  understanding?: ChatUnderstanding;
+  conversation_id?: string
+  provider?: string
+  model?: string
+  citations?: Citation[]
+  understanding?: ChatUnderstanding
 }
-export interface StreamError { error: string; attempt: number }
-export interface StartParams { conversationId: string; text: string; role?: string; priority?: string; timeoutSeconds?: number }
+
+export interface StreamError {
+  error: string
+  attempt: number
+}
+
+export interface StartParams {
+  conversationId: string
+  text: string
+  role?: string
+  priority?: string
+  timeoutSeconds?: number
+  projectId?: string
+}
+
+interface ParsedSseEvent {
+  event: string
+  data: string
+}
 
 @Injectable({ providedIn: 'root' })
 export class ChatStreamService {
   private readonly logger = inject(AppLoggerService)
-  private es?: EventSource
+  private abortController?: AbortController
+  private streamSeq = 0
   private lastUrl?: string
+  private lastProjectId?: string
   private status$ = new BehaviorSubject<StreamStatus>('idle')
   private typing$ = new BehaviorSubject<boolean>(false)
   private partials$ = new Subject<{ text: string }>()
@@ -46,6 +66,8 @@ export class ChatStreamService {
     this.startTs = Date.now()
     this.ttftCaptured = false
     this.streamMode = null
+    this.lastProjectId = params.projectId
+
     const role = params.role || 'orchestrator'
     const priority = params.priority || 'fast_and_cheap'
     const qs = new URLSearchParams({
@@ -53,90 +75,199 @@ export class ChatStreamService {
       role,
       priority,
     })
-    if (typeof params.timeoutSeconds !== 'undefined') qs.set('timeout_seconds', String(params.timeoutSeconds))
+    if (typeof params.timeoutSeconds !== 'undefined') {
+      qs.set('timeout_seconds', String(params.timeoutSeconds))
+    }
     const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(params.conversationId)}?${qs.toString()}`
     this.logger.debug('[ChatStreamService] URL construída', { url })
-    this.open(url)
+    this.open(url, params.projectId)
   }
 
   stop(): void {
-    if (this.es) { this.es.close(); this.es = undefined }
+    const ctrl = this.abortController
+    this.abortController = undefined
+    if (ctrl) {
+      try {
+        ctrl.abort()
+      } catch {
+        /* noop */
+      }
+    }
     this.status$.next('closed')
     this.typing$.next(false)
   }
 
-  private open(url: string): void {
+  private open(url: string, projectId?: string): void {
     this.lastUrl = url
-    this.logger.debug('[ChatStreamService] Abrindo EventSource', { url })
-    this.es = new EventSource(url)
+    this.lastProjectId = projectId
+    const seq = ++this.streamSeq
+    const controller = new AbortController()
+    this.abortController = controller
+    void this.consumeStream(url, controller, seq, projectId)
+  }
 
-    this.es.onopen = () => {
-      this.logger.info('[ChatStreamService] EventSource conectado com sucesso')
-      this.status$.next('open')
-    }
+  private async consumeStream(
+    url: string,
+    controller: AbortController,
+    seq: number,
+    projectId?: string,
+  ): Promise<void> {
+    this.logger.debug('[ChatStreamService] Abrindo fetch-SSE', { url, seq })
+    try {
+      const headers = buildChatStreamAuthHeaders({ projectId })
+      headers.set('Accept', 'text/event-stream')
 
-    this.es.onerror = (error) => {
-      this.logger.error('[ChatStreamService] EventSource erro', error)
-      this.handleError('connection_error')
-    }
-
-    this.es.onmessage = (ev) => {
-      this.logger.debug('[ChatStreamService] Mensagem recebida', { data: ev.data })
-      this.handleMessage('message', ev.data)
-    }
-
-    this.es.addEventListener('start', () => {
-      this.logger.debug('[ChatStreamService] Evento start recebido')
-      this.status$.next('open')
-    })
-
-    this.es.addEventListener('ack', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Evento ack recebido', { data: ev.data })
-      this.handleMessage('ack', ev.data)
-    })
-
-    this.es.addEventListener('partial', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Evento partial recebido', { data: ev.data })
-      this.handleMessage('partial', ev.data)
-    })
-
-    this.es.addEventListener('token', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Evento token recebido', { data: ev.data })
-      this.handleMessage('token', ev.data)
-    })
-
-    this.es.addEventListener('done', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Evento done recebido', { data: ev.data })
-      this.handleMessage('done', ev.data)
-    })
-
-    this.es.addEventListener('error', (ev: MessageEvent) => {
-      this.logger.error('[ChatStreamService] Evento error recebido', { data: ev.data })
-      this.handleMessage('error', ev.data)
-    })
-
-    this.es.addEventListener('heartbeat', (_ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Heartbeat recebido')
-      /* keep-alive noop */
-    })
-
-    this.es.addEventListener('protocol', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Evento protocol recebido', { data: ev.data })
-      /* future: inspect version */
-    })
-
-    this.es.addEventListener('message', (ev: MessageEvent) => {
-      this.logger.debug('[ChatStreamService] Mensagem genérica recebida', { type: ev.type, data: ev.data })
-    })
-
-    this.logger.debug('[ChatStreamService] EventSource configurado com listeners')
-
-    setTimeout(() => {
-      this.logger.debug('[ChatStreamService] Status após 5 segundos', {
-        status: this.status$.value,
-        readyState: this.es?.readyState,
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
       })
-    }, 5000)
+
+      if (!response.ok) {
+        const bodyText = await this.safeReadErrorBody(response)
+        this.logger.error('[ChatStreamService] HTTP error no stream', {
+          status: response.status,
+          bodyText,
+        })
+        const reason = this.mapHttpErrorReason(response.status, bodyText)
+        const retryable = !(response.status === 401 || response.status === 403 || response.status === 404 || response.status === 413 || response.status === 422)
+        this.handleError(reason, retryable)
+        return
+      }
+
+      if (!response.body) {
+        this.handleError('empty_stream_body')
+        return
+      }
+
+      this.logger.info('[ChatStreamService] Stream conectado com sucesso', { seq })
+      this.status$.next('open')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parsed = this.extractEvents(buffer)
+        buffer = parsed.remaining
+        for (const evt of parsed.events) {
+          this.dispatchSseEvent(evt.event, evt.data)
+          if (seq !== this.streamSeq || controller.signal.aborted) return
+        }
+      }
+
+      buffer += decoder.decode()
+      const trailing = this.extractEvents(buffer, true)
+      for (const evt of trailing.events) {
+        this.dispatchSseEvent(evt.event, evt.data)
+      }
+
+      if (!controller.signal.aborted && this.status$.value !== 'closed') {
+        this.handleError('stream_closed')
+      }
+    } catch (error) {
+      if (controller.signal.aborted || seq !== this.streamSeq) {
+        return
+      }
+      this.logger.error('[ChatStreamService] Erro em fetch-SSE', error)
+      this.handleError('connection_error')
+    } finally {
+      if (this.abortController === controller) {
+        this.abortController = undefined
+      }
+    }
+  }
+
+  private dispatchSseEvent(event: string, data: string): void {
+    switch (event) {
+      case 'start':
+        this.logger.debug('[ChatStreamService] Evento start recebido')
+        this.status$.next('open')
+        return
+      case 'protocol':
+        this.logger.debug('[ChatStreamService] Evento protocol recebido', { data })
+        return
+      case 'heartbeat':
+        this.logger.debug('[ChatStreamService] Heartbeat recebido')
+        return
+      case 'ack':
+      case 'partial':
+      case 'token':
+      case 'done':
+      case 'error':
+      case 'message':
+        this.handleMessage(event, data)
+        return
+      default:
+        this.logger.debug('[ChatStreamService] Evento SSE desconhecido', { event, data })
+    }
+  }
+
+  private extractEvents(input: string, flush = false): { events: ParsedSseEvent[]; remaining: string } {
+    const normalized = input.replace(/\r\n/g, '\n')
+    const events: ParsedSseEvent[] = []
+    let cursor = 0
+
+    while (true) {
+      const sep = normalized.indexOf('\n\n', cursor)
+      if (sep === -1) break
+      const block = normalized.slice(cursor, sep)
+      cursor = sep + 2
+      const evt = this.parseSseBlock(block)
+      if (evt) events.push(evt)
+    }
+
+    let remaining = normalized.slice(cursor)
+    if (flush && remaining.trim()) {
+      const evt = this.parseSseBlock(remaining)
+      if (evt) events.push(evt)
+      remaining = ''
+    }
+
+    return { events, remaining }
+  }
+
+  private parseSseBlock(block: string): ParsedSseEvent | null {
+    const lines = block.split('\n')
+    let event = 'message'
+    const dataLines: string[] = []
+
+    for (const rawLine of lines) {
+      const line = rawLine ?? ''
+      if (!line) continue
+      if (line.startsWith(':')) continue
+      if (line.startsWith('event:')) {
+        event = line.slice('event:'.length).trim() || 'message'
+        continue
+      }
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trimStart())
+      }
+    }
+
+    if (event === 'message' && dataLines.length === 0) return null
+    return { event, data: dataLines.join('\n') }
+  }
+
+  private async safeReadErrorBody(response: Response): Promise<string> {
+    try {
+      return (await response.text()) || ''
+    } catch {
+      return ''
+    }
+  }
+
+  private mapHttpErrorReason(status: number, bodyText: string): string {
+    if (status === 401) return 'unauthorized'
+    if (status === 403) return 'access_denied'
+    if (status === 404) return 'conversation_not_found'
+    if (status === 413) return 'message_too_large'
+    if (status === 422) return 'invalid_request'
+    if (bodyText) return `http_${status}`
+    return 'http_error'
   }
 
   private handleMessage(kind: string, data: string): void {
@@ -151,12 +282,12 @@ export class ChatStreamService {
         this.streamMode = 'partial'
       }
       if (kind === 'partial') {
-        this.logger.debug('[ChatStreamService] Processando partial message')
         this.status$.next('streaming')
         this.typing$.next(true)
         const parsed = JSON.parse(data || '{}') as { text?: string }
-        this.logger.debug('[ChatStreamService] Partial parsed', parsed)
-        if (!this.ttftCaptured) { this.ttftCaptured = true }
+        if (!this.ttftCaptured) {
+          this.ttftCaptured = true
+        }
         const rawText = parsed?.text
         let text = ''
         if (typeof rawText === 'string') {
@@ -168,21 +299,12 @@ export class ChatStreamService {
             text = String(rawText)
           }
         }
-        this.logger.debug('[ChatStreamService] Enviando partial text', { text })
         this.partials$.next({ text })
         return
       }
       if (kind === 'done') {
-        this.logger.debug('[ChatStreamService] Processando done message')
         this.typing$.next(false)
-        const parsed = JSON.parse(data || '{}') as {
-          conversation_id?: string;
-          provider?: string;
-          model?: string;
-          citations?: Citation[];
-          understanding?: ChatUnderstanding;
-        }
-        this.logger.debug('[ChatStreamService] Done parsed', parsed)
+        const parsed = JSON.parse(data || '{}') as StreamDone
         this.done$.next({
           conversation_id: parsed?.conversation_id,
           provider: parsed?.provider,
@@ -194,13 +316,11 @@ export class ChatStreamService {
         return
       }
       if (kind === 'error') {
-        this.logger.debug('[ChatStreamService] Processando error message')
         const parsed = JSON.parse(data || '{}') as { error?: string }
         this.handleError(String(parsed?.error || 'error'))
         return
       }
-      if (kind === 'ack') {
-        this.logger.debug('[ChatStreamService] Processando ack message')
+      if (kind === 'ack' || kind === 'message') {
         return
       }
       this.logger.warn('[ChatStreamService] Tipo de mensagem não reconhecido', { kind })
@@ -210,14 +330,30 @@ export class ChatStreamService {
     }
   }
 
-  private handleError(reason: string): void {
+  private handleError(reason: string, retryable = true): void {
     this.attempt += 1
     this.errors$.next({ error: reason, attempt: this.attempt })
+
+    if (!retryable) {
+      this.status$.next('error')
+      this.typing$.next(false)
+      const ctrl = this.abortController
+      if (ctrl) {
+        try { ctrl.abort() } catch { /* noop */ }
+        this.abortController = undefined
+      }
+      this.logger.error('[ChatStreamService] Erro não recuperável no stream', { reason })
+      return
+    }
+
     if (this.attempt >= Math.max(1, SSE_MAX_RETRIES)) {
       this.status$.next('error')
       this.typing$.next(false)
-      const es = this.es
-      if (es) { es.close(); this.es = undefined }
+      const ctrl = this.abortController
+      if (ctrl) {
+        try { ctrl.abort() } catch { /* noop */ }
+        this.abortController = undefined
+      }
       this.logger.error('[ChatStreamService] Máximo de tentativas de reconexão atingido', { reason })
       return
     }
@@ -229,13 +365,17 @@ export class ChatStreamService {
     const jitter = Math.random() * 0.5
     const wait = (backoff + jitter) * 1000
     this.status$.next('retrying')
-    const es = this.es
-    if (es) { es.close(); this.es = undefined }
+    const ctrl = this.abortController
+    if (ctrl) {
+      try { ctrl.abort() } catch { /* noop */ }
+      this.abortController = undefined
+    }
     const url = this.lastUrl
+    const projectId = this.lastProjectId
     setTimeout(() => {
       if (!url) return
       this.status$.next('connecting')
-      this.open(url)
+      this.open(url, projectId)
     }, wait)
   }
 }

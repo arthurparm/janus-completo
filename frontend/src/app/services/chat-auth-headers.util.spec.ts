@@ -1,0 +1,33 @@
+import { AUTH_TOKEN_KEY } from './api.config'
+import { buildChatStreamAuthHeaders } from './chat-auth-headers.util'
+
+describe('buildChatStreamAuthHeaders', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('deve montar headers com bearer, x-user-id e x-project-id', () => {
+    const payload = btoa(JSON.stringify({ user_id: 42 }))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '')
+    const fakeToken = `${payload}.ignored.signature`
+    localStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
+
+    const headers = buildChatStreamAuthHeaders({ projectId: 'p-1' })
+
+    expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
+    expect(headers.get('X-User-Id')).toBe('42')
+    expect(headers.get('X-Project-Id')).toBe('p-1')
+  })
+
+  it('deve retornar headers vazios sem token', () => {
+    const headers = buildChatStreamAuthHeaders()
+    expect(headers.get('Authorization')).toBeNull()
+    expect(headers.get('X-User-Id')).toBeNull()
+  })
+})
