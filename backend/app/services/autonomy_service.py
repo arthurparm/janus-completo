@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 import time
 from dataclasses import dataclass, field
@@ -78,6 +79,20 @@ class AutonomyService:
         self._last_cycle_at: float | None = None
         self._repo = repo or AutonomyRepository()
         self._current_run_id: int | None = None
+        self._core_tools_bootstrapped = False
+
+    def _ensure_core_tools_registered(self) -> None:
+        """Carrega agent_tools uma vez para disparar o registro no action_registry."""
+        if self._core_tools_bootstrapped and action_registry.get_tool("get_current_datetime"):
+            return
+        try:
+            importlib.import_module("app.core.tools.agent_tools")
+            self._core_tools_bootstrapped = True
+        except Exception as e:
+            logger.warning(
+                "[AutonomyLoop] Falha ao carregar registro de ferramentas base",
+                exc_info=e,
+            )
 
     def _is_active(self) -> bool:
         return self._autonomy_task is not None and not self._autonomy_task.done()
@@ -99,6 +114,7 @@ class AutonomyService:
         )
         self._running = True
         AUTONOMY_ACTIVE.set(1)
+        self._ensure_core_tools_registered()
 
         try:
             existing_run = self._repo.get_active_run(
@@ -303,6 +319,7 @@ class AutonomyService:
                 ]
 
         # Executar
+        self._ensure_core_tools_registered()
         self._policy.reset_cycle_quota()
 
         for step_idx, step in enumerate(plan):
@@ -394,9 +411,22 @@ class AutonomyService:
                     rt.append_log(f"Executando: {tool_name}", "info")
 
                     # Invoke
-                    result = (
-                        await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
-                    )
+                    # Ferramentas sem args (ex.: get_current_datetime) quebram quando recebem
+                    # payload posicional vazio (""). Para args={} preferimos invoke/ainvoke({})
+                    # e mantemos o comportamento legado para payloads não vazios.
+                    if isinstance(args, dict) and not args:
+                        if hasattr(tool, "ainvoke"):
+                            result = await tool.ainvoke({})
+                        elif hasattr(tool, "invoke"):
+                            result = tool.invoke({})
+                        else:
+                            result = (
+                                await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
+                            )
+                    else:
+                        result = (
+                            await tool.arun(payload) if hasattr(tool, "arun") else tool.run(payload)
+                        )
                     success = True
                     step_success = True
 
@@ -467,11 +497,23 @@ class AutonomyService:
                     if fallback_tool:
                         try:
                             # Tenta fallback (sem retries complexos por enquanto)
-                            fallback_res = (
-                                await fallback_tool.arun(args)
-                                if hasattr(fallback_tool, "arun")
-                                else fallback_tool.run(args)
-                            )
+                            if isinstance(args, dict) and not args:
+                                if hasattr(fallback_tool, "ainvoke"):
+                                    fallback_res = await fallback_tool.ainvoke({})
+                                elif hasattr(fallback_tool, "invoke"):
+                                    fallback_res = fallback_tool.invoke({})
+                                else:
+                                    fallback_res = (
+                                        await fallback_tool.arun(args)
+                                        if hasattr(fallback_tool, "arun")
+                                        else fallback_tool.run(args)
+                                    )
+                            else:
+                                fallback_res = (
+                                    await fallback_tool.arun(args)
+                                    if hasattr(fallback_tool, "arun")
+                                    else fallback_tool.run(args)
+                                )
                             logger.info("log_info", message=f"[AutonomyLoop] Fallback executado com sucesso")
                             step_success = True
                         except Exception as e:
