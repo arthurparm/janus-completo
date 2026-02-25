@@ -34,10 +34,55 @@ class _FakeOptimizationService:
 class _FakeRepo:
     def __init__(self):
         self.steps: list[dict] = []
+        self._ledger_by_key: dict[str, SimpleNamespace] = {}
+        self._next_ledger_id = 1
 
     def add_step(self, **kwargs):
         self.steps.append(kwargs)
         return SimpleNamespace(id=1)
+
+    def create_or_get_enqueue_ledger(
+        self,
+        *,
+        run_id: int | None,
+        goal_id: str,
+        cycle: int,
+        selected_tool: str | None,
+        idempotency_key: str,
+    ):
+        if idempotency_key in self._ledger_by_key:
+            return self._ledger_by_key[idempotency_key]
+        row = SimpleNamespace(
+            id=self._next_ledger_id,
+            run_id=run_id,
+            goal_id=goal_id,
+            cycle=cycle,
+            selected_tool=selected_tool,
+            idempotency_key=idempotency_key,
+            publish_status="pending",
+            task_id=None,
+            publish_error=None,
+        )
+        self._next_ledger_id += 1
+        self._ledger_by_key[idempotency_key] = row
+        return row
+
+    def mark_enqueue_published(self, ledger_id: int, task_id: str):
+        for row in self._ledger_by_key.values():
+            if row.id == ledger_id:
+                row.publish_status = "published"
+                row.task_id = task_id
+                row.publish_error = None
+                return row
+        return None
+
+    def mark_enqueue_failed(self, ledger_id: int, error: str):
+        for row in self._ledger_by_key.values():
+            if row.id == ledger_id:
+                row.publish_status = "failed"
+                row.publish_error = error
+                return row
+        return None
 
 
 class _FakeGoalManager:
@@ -48,7 +93,7 @@ class _FakeGoalManager:
     def get_next_goal(self):
         return self._goal
 
-    def update_goal_status(self, goal_id: str, status: str):
+    def update_goal_status(self, goal_id: str, status: str, **_kwargs):
         self.status_updates.append((goal_id, status))
         if self._goal and self._goal.id == goal_id:
             self._goal.status = status
@@ -110,6 +155,44 @@ def test_autonomy_status_includes_execution_mode():
     service = AutonomyService(optimization_service=_FakeOptimizationService())
     status = service.get_status()
     assert status["config"]["execution_mode"] == "enqueue_router"
+    assert "runtime_lock" in status
+
+
+@pytest.mark.asyncio
+async def test_autonomy_service_enqueue_router_skips_duplicate_published_ledger():
+    goal = Goal(id="g3", title="Meta duplicada", description="Teste idempotencia")
+    goal_manager = _FakeGoalManager(goal)
+    repo = _FakeRepo()
+    collab = SimpleNamespace(pass_task=AsyncMock(return_value="task-dup"))
+
+    # Pre-seed the deterministic ledger key for cycle 1 of run 44
+    key = "goal:g3:run:44:cycle:1"
+    repo._ledger_by_key[key] = SimpleNamespace(
+        id=99,
+        run_id=44,
+        goal_id="g3",
+        cycle=1,
+        selected_tool="get_system_info",
+        idempotency_key=key,
+        publish_status="published",
+        task_id="task-existing",
+        publish_error=None,
+    )
+
+    service = AutonomyService(
+        optimization_service=_FakeOptimizationService(),
+        llm_service=None,
+        goal_manager=goal_manager,
+        repo=repo,
+        collaboration_service=collab,
+    )
+    service._current_run_id = 44
+
+    await service._run_cycle_enqueue()
+
+    collab.pass_task.assert_not_awaited()
+    assert repo.steps[-1]["success"] is True
+    assert "idempotent_skip" in repo.steps[-1]["result_preview"]
 
 
 class _DummyAutonomyService:

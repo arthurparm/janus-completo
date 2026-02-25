@@ -95,20 +95,20 @@ class TestAutoScaler:
 
 
 # ============================================================================
-# TEST 6: AutonomyWorker
+# TEST 6: AutonomyLoopService
 # ============================================================================
 
-class TestAutonomyWorker:
-    """Tests for AutonomyWorker."""
+class TestAutonomyLoopService:
+    """Tests for AutonomyLoop/AutonomyService entrypoints."""
 
-    def test_autonomy_worker_import(self):
-        """Test AutonomyWorker can be imported."""
+    def test_autonomy_service_import(self):
+        """Test AutonomyService can be imported."""
         try:
-            from app.core.workers.autonomy_worker import start_autonomy_worker
-            assert start_autonomy_worker is not None
-            print("✓ AutonomyWorker import available")
+            from app.services.autonomy_service import AutonomyService
+            assert AutonomyService is not None
+            print("✓ AutonomyService import available")
         except Exception as e:
-            print(f"⚠ AutonomyWorker import: {e}")
+            print(f"⚠ AutonomyService import: {e}")
 
 
 # ============================================================================
@@ -408,7 +408,7 @@ async def run_all_tests():
         TestNeuralTrainingSystem(),
         TestDataHarvester(),
         TestAutoScaler(),
-        TestAutonomyWorker(),
+        TestAutonomyLoopService(),
         TestKnowledgeConsolidator(),
         TestMetaAgentWorker(),
         TestSandboxAgentWorker(),
