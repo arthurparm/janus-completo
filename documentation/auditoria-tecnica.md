@@ -93,3 +93,48 @@ Esta auditoria focou na análise estática do código fonte (`backend/` e `front
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `backend-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-23
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+Esta auditoria contínua focou em identificar novas vulnerabilidades de segurança e oportunidades de refatoração, validando também o estado dos achados anteriores.
+
+### 1. Simplificação e Dívida Técnica (Backend)
+
+*   **Duplicação de Código (Crítica e Persistente)**: O arquivo `backend/app/services/tool_service_improved.py` permanece no repositório sendo idêntico a `backend/app/services/tool_service.py`. Deve ser removido imediatamente para evitar confusão.
+    *   **Evidência**: Leitura de ambos os arquivos confirma conteúdo idêntico.
+*   **God Object em Observabilidade**: O `backend/app/services/observability_service.py` acumula responsabilidades de Health Check, Metrics, Audit Logs, Anomaly Detection e SLO Reports. Deve ser refatorado em serviços menores (`HealthService`, `MetricsService`, `AuditService`).
+    *   **Evidência**: Arquivo extenso com múltiplos domínios misturados.
+
+### 2. Segurança e Vulnerabilidades
+
+*   **Endpoints de Workspace Desprotegidos**: Os endpoints em `backend/app/api/v1/endpoints/workspace.py` (ex: `/system/shutdown`, `/workspace/artifacts/add`) dependem de `get_collaboration_service` que não aplica autenticação ou autorização. Qualquer cliente na rede pode desligar o sistema.
+    *   **Evidência**: `shutdown_system` não possui `Depends(get_current_user)` ou verificação de role ADMIN.
+*   **Confiança Indevida em Header de Identidade**: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` se `AUTH_TRUST_X_USER_ID_HEADER` for True (default). Isso permite bypass de autenticação trivial se o gateway não sanitizar esse header.
+    *   **Risco**: Impersonação total de qualquer usuário.
+*   **Rate Limit Fail-Open**: O middleware `RateLimitMiddleware` (`backend/app/core/infrastructure/rate_limit_middleware.py`) falha "aberto" (permite requisição) se o Redis estiver indisponível ou script Lua falhar, a menos que `FAIL_CLOSED` seja ativado.
+    *   **Evidência**: Código `except Exception: return await call_next(request)` em blocos de verificação.
+*   **Risco de PII em Logs de Eventos**: `ChatEventPublisher` (`backend/app/services/chat_event_publisher.py`) e `ChatService` podem logar conteúdo de mensagens em nível INFO/DEBUG sem redação adequada.
+
+### 3. Confiabilidade e Lógica Frágil
+
+*   **Dispatch Assíncrono Inseguro (DataRetention)**: O problema de `loop.create_task` em `sync_events.py` persiste. A limpeza de dados do usuário (LGPD) pode ser perdida se o processo reiniciar.
+    *   **Recomendação**: Substituir por publicação em fila persistente (RabbitMQ) para garantir execução assíncrona durável (Item OQ-013 adicionado).
+
+## Próximos Passos
+
+1.  **Imediato (P0)**:
+    *   Proteger endpoints de `workspace.py` com `Depends(require_admin)`.
+    *   Revisar e documentar o risco de `X-User-Id` em produção.
+    *   Remover arquivo morto `tool_service_improved.py`.
+
+2.  **Curto Prazo (P1)**:
+    *   Refatorar `ObservabilityService` para reduzir complexidade.
+    *   Migrar trigger de `DataRetentionService` para message broker.
+    *   Sanitizar logs de `ChatEventPublisher`.
