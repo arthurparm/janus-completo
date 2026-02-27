@@ -93,3 +93,38 @@ Esta auditoria focou na análise estática do código fonte (`backend/` e `front
 2.  **Médio Prazo (P2)**:
     *   Implementar Job Cron para limpeza de logs de auditoria > 90 dias.
     *   Refatorar `backend-api.service.ts` em serviços de domínio (`AuthService`, `ChatService`).
+
+---
+
+# Auditoria Técnica - Janus
+
+**Data:** 2026-02-27
+**Responsável:** Jules (AI Software Engineer)
+
+## Achados do Dia
+
+Esta auditoria baseia-se nas últimas modificações e no estado atual do sistema para rastrear a qualidade, lógica, e segurança:
+
+### 1. Simplificação e Dívida Técnica
+*   **Acesso Inconsistente a Configurações**: A classe `ChatAgentLoop` (`backend/app/services/chat_agent_loop.py`) utiliza chamadas diretas a `os.getenv` para ler variáveis de ambiente de risco (ex: `CHAT_TOOL_RISK_PROFILE`, `CHAT_TOOL_AUTO_CONFIRM`, etc.) em vez de usar o `app.config.settings` do Pydantic.
+    *   **Evidência**: Múltiplas linhas como `risk_profile = os.getenv("CHAT_TOOL_RISK_PROFILE", RiskProfile.BALANCED)` em `backend/app/services/chat_agent_loop.py`.
+*   **Componentes de Frontend Monolíticos**: O componente de visualização principal (`frontend/src/app/features/conversations/conversations.ts`) atingiu mais de ~1682 linhas de código, acoplando lógica pesada à renderização, violando o SRP.
+    *   **Evidência**: `wc -l frontend/src/app/features/conversations/conversations.ts` retornando `1682`.
+
+### 2. Segurança e Vulnerabilidades
+*   **Ausência de Rate Limiting e Decoradores em Autenticação**: Os endpoints de login e requests sensíveis em `backend/app/api/v1/endpoints/auth.py` carecem de proteções explícitas de `@limiter.limit`.
+    *   **Risco**: A ausência de limits específicos nas rotas de login eleva o risco de ataques de força-bruta em larga escala ou account takeover.
+
+### 3. LGPD e Privacidade
+*   **Log de Preview do Conteúdo de Chat (PII Risk)**: O serviço de eventos `backend/app/services/chat_event_publisher.py` publica snippets (`preview`) das mensagens do chat via `content_preview=payload["content"][:100]`. Considerando o escopo natural dos chats, isso implica provável registro de PII.
+    *   **Risco**: Violações da política de LGPD se PII vazar em sistemas de monitoramento (ex: grafana, logs centrais) sem mecanismo de Opt-out ou purga associada.
+
+## Próximos Passos
+
+1.  **Imediato (P0/P1)**:
+    *   Sanitizar a propriedade `content_preview` em `ChatEventPublisher` ou removê-la para mitigar a exposição de PII/LGPD.
+    *   Implementar `@limiter.limit` (Rate Limiting) explícito e restrito nos endpoints de `auth.py`.
+
+2.  **Médio Prazo (P2)**:
+    *   Refatorar o acesso a configurações do `ChatAgentLoop` transferindo as definições para `app.config.Settings` com validação de tipos via Pydantic.
+    *   Decompor a view do frontend `conversations.ts` usando componentes menores.

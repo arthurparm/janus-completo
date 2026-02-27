@@ -525,3 +525,47 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
+
+### [MR-014] Padronizar acesso a configuracoes no ChatAgentLoop
+- Problema atual: A classe `ChatAgentLoop` em `backend/app/services/chat_agent_loop.py` acessa variaveis de ambiente usando `os.getenv` (ex: `CHAT_TOOL_RISK_PROFILE`, `CHAT_TOOL_AUTO_CONFIRM`, etc.) ignorando o uso do objeto centralizado `app.config.settings`.
+- Solucao proposta: Substituir chamadas diretas a `os.getenv` por atributos gerenciados via Pydantic Settings em `app.config.settings`.
+- Impacto esperado: Maior estabilidade em testes e em diferentes ambientes, centralizacao de valores padrao e validacao antecipada pelo Pydantic.
+- Riscos: Quebra de funcionalidade caso chaves ou defaults divirjam entre `os.getenv` e o `config.py`.
+- Dependencias: Atualizacao do `config.py`.
+- Prioridade: P1
+- Esforco: S
+- Dono: Dev Team
+- Status: ideia
+
+### [SG-014] Falta de Rate Limiting em rotas de Auth
+- Problema atual: Os endpoints em `backend/app/api/v1/endpoints/auth.py` (como login e request-reset) não possuem decoradores `@limiter.limit`.
+- Solucao proposta: Aplicar rate limiting nesses endpoints para mitigar ataques de forca bruta.
+- Impacto esperado: Aumento da resiliência contra ataques externos automatizados.
+- Riscos: Falso positivo com usuários legítimos tentando logar rapidamente.
+- Dependencias: Middleware de Rate Limiting.
+- Prioridade: P0
+- Esforco: S
+- Dono: Security Team
+- Status: ideia
+
+### [FE3-016] Refatorar Componente Conversations (Alta Complexidade)
+- Problema atual: O componente `frontend/src/app/features/conversations/conversations.ts` possui aproximadamente 1700 linhas, sendo excessivamente complexo.
+- Solucao proposta: Decompor o componente em componentes menores focados (SRP) e extrair a lógica de estado para a store/services apropriados.
+- Impacto esperado: Facilidade de manutenção, reuso de UI, melhoria nos testes unitários.
+- Riscos: Regressões funcionais na tela de conversas durante a refatoração.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: FE Team
+- Status: ideia
+
+### [OQ-013] Risco de Vazamento (PII) no ChatEventPublisher
+- Problema atual: O serviço `ChatEventPublisher` (`backend/app/services/chat_event_publisher.py`) publica fragmentos do conteudo (`content_preview=payload["content"][:100]`) nos logs/eventos de telemetria sem sanitização.
+- Solucao proposta: Aplicar máscara de redação PII (via `app.core.memory.security._PII_PATTERNS`) antes de enviar o payload para os sistemas de observabilidade/logs.
+- Impacto esperado: Redução do risco de violação da LGPD por registro de dados pessoais identificáveis nas ferramentas de monitoramento.
+- Riscos: Redução marginal na facilidade de debugar eventos de chat puros.
+- Dependencias: Regex ou Serviço de Mascaramento PII.
+- Prioridade: P1
+- Esforco: S
+- Dono: Security Team
+- Status: ideia
