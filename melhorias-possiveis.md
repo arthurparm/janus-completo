@@ -525,3 +525,62 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
+
+---
+
+## 13) Descobertas Recentes de Auditoria Técnica (2026-02-28)
+
+### [SEC-001] Remover Confiança Explícita no Cabeçalho X-User-Id
+- Problema atual: A infraestrutura confia por padrão no cabeçalho `X-User-Id` (`AUTH_TRUST_X_USER_ID_HEADER=True`) em `backend/app/core/infrastructure/auth.py`, permitindo impersonation de contas e bypass total de autenticação.
+- Solução proposta: Forçar desativação de `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT token obrigatoriamente, exceto em redes estritamente confiáveis e documentadas.
+- Impacto esperado: Remoção imediata de vetor crítico de ataque de escalonamento de privilégios e spoofing de identidade.
+- Riscos: Quebra de chamadas internas legado que dependem desse cabeçalho e não foram migradas para Service Accounts.
+- Dependências: Levantamento de uso do cabeçalho por serviços internos.
+- Prioridade: P0
+- Esforço: S
+- Dono: A definir
+- Status: Planejado
+
+### [SEC-002] Adicionar Autenticação Rigorosa e Rate Limit nos Endpoints de Autenticação e Workspace
+- Problema atual: Endpoints críticos (`workspace.py`) não forçam autenticação (`add_artifact`, `shutdown_system`), expondo a aplicação. Endpoints de autenticação (`auth.py`) como login e refresh não possuem rate limiting (`@limiter.limit`), permitindo ataques de força bruta.
+- Solução proposta: Envolver endpoints de workspace com o middleware/dependência apropriada de Auth. Adicionar `limiter.limit` com cotas restritas (ex: 5/min) para login/refresh.
+- Impacto esperado: Mitigação de negação de serviço, brute-force contra contas e uso não-autorizado do workspace.
+- Riscos: Limitação acidental de usuários reais durante surtos de requisições.
+- Dependências: Infraestrutura de Redis para rate limit operacional.
+- Prioridade: P0
+- Esforço: S
+- Dono: A definir
+- Status: Planejado
+
+### [LGP-001] Redução de Logging de PII em Serviços Críticos
+- Problema atual: Serviços logando conteúdo sensível sem sanitização. Ex: `ChatCommandHandler` (log de feedback em `args`), `ChatEventPublisher` (log do preview de mensagens), `CollaborationService` (log de artefatos e conversas), e `productivity_tools.py` (log de e-mails/metadados).
+- Solução proposta: Utilizar o módulo de sanitização `backend/app/core/memory/security.py` ou logs estruturados truncados/anônimos. Substituir `logger.info(raw_content)` por metadados descritivos.
+- Impacto esperado: Compliance imediato com as regras de minimização de dados da LGPD; prevenção de vazamento de dados corporativos ou PIIs em logs centrais de infraestrutura.
+- Riscos: Redução de visibilidade em debugs de conteúdo específico de usuário.
+- Dependências: Atualização nas configurações de log e serviços que invocam `logging`.
+- Prioridade: P1
+- Esforço: M
+- Dono: A definir
+- Status: Planejado
+
+### [ARC-001] Refatoração de God Objects e Componentes Complexos
+- Problema atual: O sistema possui componentes hipertrofiados, violando SRP e prejudicando manutenção: `observability_service.py` (~1200 linhas, consolida metrics, audit, anomalias e health), `backend-api.service.ts` (~1638 linhas), `conversations.ts` (~1700 linhas).
+- Solução proposta: Extrair responsabilidades de `observability_service` em serviços menores (e.g. `MetricsService`, `HealthService`, `AuditService`). Quebrar o `backend-api.service.ts` em clientes de domínio específicos (AuthAPI, ChatAPI, ToolsAPI).
+- Impacto esperado: Facilidade na cobertura de testes, manutenção concorrente e diminuição do tempo de onboarding técnico.
+- Riscos: Regressão na disponibilidade das funcionalidades se a refatoração não for bem acoplada ao sistema de injeção de dependência atual.
+- Dependências: Testes regressivos cobrindo o comportamento original perfeitamente.
+- Prioridade: P1
+- Esforço: L
+- Dono: A definir
+- Status: Planejado
+
+### [ARC-002] Uso do Container de Configuração Unificada
+- Problema atual: `ChatAgentLoop` e outros artefatos menores lêem configurações usando `os.getenv` diretamente, criando dispersão na gestão e falhando em validações centralizadas (ex: conversão de tipos ou defaults de segurança).
+- Solução proposta: Substituir todos os `os.getenv()` perdidos no núcleo do código pelo consumo explícito de `app.config.settings`.
+- Impacto esperado: Consistência na carga de configuração de ambiente e fail-fast imediato se uma variável obrigatória estiver mal-formatada ou ausente.
+- Riscos: Nenhum.
+- Dependências: Mapeamento de todos os usos de `os.getenv` na aplicação.
+- Prioridade: P2
+- Esforço: S
+- Dono: A definir
+- Status: Planejado
