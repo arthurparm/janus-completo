@@ -97,6 +97,13 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Remover valores hardcoded de senhas no config.py (NEO4J, POSTGRES, RABBITMQ) | P0 | S | planejado |
+| SG-015 | Adicionar rate limiting nos endpoints criticos (ex: /api/v1/auth) | P1 | S | planejado |
+| SG-016 | Adicionar autenticação e autorização (AuthZ) em endpoints de /workspace | P1 | M | planejado |
+| SG-017 | Bloquear X-User-Id header falso em config padrão (AUTH_TRUST_X_USER_ID_HEADER) | P0 | S | planejado |
+| SG-018 | Ofuscar conteúdo de logs sensiveis com PII em ChatService e EventPublisher | P0 | S | planejado |
+| SG-019 | Remover globals `_notes` e `_calendar_events` inseguros e utilizar DB criptografado | P1 | M | planejado |
+| SG-020 | Gerar lock file com pip-tools/poetry para corrigir dependencias com rangings amplos | P2 | S | planejado |
 
 ---
 
