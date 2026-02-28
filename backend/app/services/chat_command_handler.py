@@ -191,7 +191,9 @@ Sua opinião é muito importante para nós! 🙏"""
         """Show info about Janus."""
         return """🤖 **Sobre o Janus**
 
-Sou o Janus, seu assistente de IA avançado.
+Sou o Janus, sua interface única de assistência.
+
+Eu mantenho uma identidade única na conversa e posso usar motores de IA internamente quando necessário.
 
 **Capacidades:**
 • 💬 Conversação natural
