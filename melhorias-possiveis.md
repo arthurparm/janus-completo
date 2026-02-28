@@ -135,6 +135,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | PX-010 | Internacionalizacao completa e consistencia terminologica | P3 | M | ideia |
 | PX-011 | Simplificar UX do chat para modo usuario (modo simples padrao + painel avancado opcional) | P0 | S | em andamento (2026-02-13) |
 | PX-012 | Mensagens de erro de auth mais claras (401/422) + fluxo de reset guiado | P1 | S | planejado |
+| PX-013 | Reforcar identidade Janus-first no chat (prompts + sanitizacao + /about) | P0 | S | concluido (2026-02-28) |
 
 ---
 
@@ -506,6 +507,17 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Gate de qualidade (baseline offline) bloqueando merge quando houver regressao acima do limite.
 - Politica de roteamento MR-002 com regras, fallback e observabilidade documentados.
 - Evidencia de validacao com 0 erros criticos em log nos cenarios da sprint.
+
+**Evidencias parciais (2026-02-28):**
+- PX-013 concluido: prompts `system_identity` e `system_identity_enforcement` atualizados, sanitizacao refinada para contexto de autoidentificacao e comando `/about` alinhado a narrativa Janus-first.
+- Testes focados da rodada executados com sucesso (8 passed):
+  `qa/test_chat_agent_loop_content_safety.py`,
+  `backend/tests/unit/test_identity_sanitizer.py`,
+  `backend/tests/unit/test_chat_about_identity.py`.
+- Execucao isolada de `qa/test_chat_endpoint_contract.py` com falhas preexistentes no dublê de servico (3 failed) sem relacao direta com PX-013:
+  `test_chat_message_low_confidence_requires_confirmation`,
+  `test_chat_stream_contract_headers_events_and_actor_fallback_user`,
+  `test_chat_events_contract_headers_event_and_actor_fallback_user`.
 
 ---
 
