@@ -98,6 +98,15 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
 
+| SG-014 | Proteger endpoints de workspace com AuthZ | P0 | S | ideia |
+| SG-015 | Aplicar rate limit em endpoints de login/refresh auth | P1 | S | ideia |
+| SG-016 | Validar senhas default no config.py (NEO4J/POSTGRES/RABBITMQ) | P0 | S | ideia |
+| SG-017 | Remover trust default de X-User-Id header ou adicionar validacao | P0 | S | ideia |
+| SG-018 | Adicionar requirements.lock e fixar versoes de dependencias | P1 | S | ideia |
+| SG-019 | Redact PII logs em ChatCommandHandler e ChatEventPublisher | P1 | S | ideia |
+| SG-020 | Remover log de voz explicito no Daemon | P1 | S | ideia |
+| SG-021 | Aplicar rotacao automatica em janus.log e purging policy | P1 | S | ideia |
+| SG-022 | Mover in-memory states (productivity_tools) para persistent store | P2 | M | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
