@@ -97,6 +97,13 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
+| SG-014 | Mitigacao de bypass de autenticacao via cabecalho X-User-Id | P0 | M | ideia |
+| SG-015 | PII em logs de servicos (ChatService, Daemon, etc.) | P1 | S | ideia |
+| SG-016 | Falta de Rate Limiting em endpoints publicos e de autenticacao | P1 | S | ideia |
+| SG-017 | Endpoints de Workspace sem AuthZ | P0 | S | ideia |
+| SG-018 | Validacao de credenciais padrao em producao | P1 | S | ideia |
+| SG-019 | Ausencia de Lock File para Dependencias e Conflitos de Modulos | P2 | M | ideia |
+| SG-020 | Exposicao de Logs e Arquivos no Servico de Colaboracao | P1 | S | ideia |
 
 ---
 
@@ -525,3 +532,81 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
+
+### [SG-014] Mitigacao de bypass de autenticacao via cabecalho X-User-Id
+- Problema atual: O sistema confia no cabecalho X-User-Id enviado pelo cliente sem validacao adequada (quando AUTH_TRUST_X_USER_ID_HEADER=True), permitindo bypass de autenticacao e personificacao.
+- Solucao proposta: Remover ou depreciar o uso direto de request.headers.get("X-User-Id") e usar tokens JWT assinados com validacao forte de identidade.
+- Impacto esperado: Evitar que usuarios mal-intencionados assumam a identidade de outros usuarios no sistema.
+- Riscos: Quebrar integracoes internas que dependam do repasse desse cabecalho (ex: proxies reversos).
+- Dependencias: Mapeamento de todos os clientes internos/externos.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-015] PII em logs de servicos (ChatService, Daemon, etc.)
+- Problema atual: Diversos servicos utilizam logger.info vazando informacoes sensiveis como PII, conteudos de mensagens e metadados de e-mails.
+- Solucao proposta: Implementar uma camada de sanitizacao (redaction) baseada nos padroes ja existentes em core/memory/security.py para mascarar PII antes do log.
+- Impacto esperado: Estar em conformidade com as exigencias da LGPD em relacao a logs e armazenamento de dados.
+- Riscos: Redacao excessiva (falsos positivos) dificultando o debug operacional.
+- Dependencias: Padronizacao do uso do logger estruturado.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-016] Falta de Rate Limiting em endpoints publicos e de autenticacao
+- Problema atual: Endpoints criticos (ex: /api/v1/auth/local/login) nao possuem limitacao de taxa (@limiter.limit), ficando expostos a ataques de forca bruta.
+- Solucao proposta: Adicionar os decorators adequados de rate limiting aos endpoints publicos e sensiveis.
+- Impacto esperado: Reduzir a superficie de ataque contra abusos e exaustao de recursos.
+- Riscos: Bloqueio de usuarios legitimos por politicas restritivas ou picos de uso.
+- Dependencias: Configuracao e disponibilidade do Redis para contabilizacao.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-017] Endpoints de Workspace sem AuthZ
+- Problema atual: Os endpoints do workspace dependem de get_collaboration_service, que nao verifica autenticacao forte, expondo acoes como add_artifact e shutdown_system.
+- Solucao proposta: Implementar dependencias de seguranca padrao (ex: get_current_user) em todos os endpoints de workspace e collaboration.
+- Impacto esperado: Bloquear acesso nao autorizado as funcionalidades sensiveis do workspace.
+- Riscos: Quebra de scripts ou frontends que atualmente nao enviam credenciais validas para estes servicos.
+- Dependencias: Atualizacao e teste do frontend/clientes.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-018] Validacao de credenciais padrao em producao
+- Problema atual: Valores hardcoded em configuracoes (como NEO4J_PASSWORD, POSTGRES_PASSWORD) podem ser mantidos em ambientes de producao acidentalmente.
+- Solucao proposta: Adicionar verificacoes na inicializacao (startup) para falhar criticamente caso senhas default inseguras estejam sendo usadas e o ambiente seja de producao.
+- Impacto esperado: Impedir deploy acidental de instancias vulneraveis.
+- Riscos: Bloqueio incorreto se a verificacao do ambiente de producao falhar.
+- Dependencias: Definicao clara da variavel de ambiente que determina producao (ex: ENV=prod).
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+
+### [SG-019] Ausencia de Lock File para Dependencias e Conflitos de Modulos
+- Problema atual: O arquivo `backend/requirements.txt` especifica ranges amplos de versoes e as vezes faltam dependencias criticas (ex: `asyncpg`) ou necessitam atualizacao manual no CI. Isso expoe o ambiente a quebras por vulnerabilidades em versoes de transito.
+- Solucao proposta: Utilizar um gerenciador mais seguro (como Poetry) ou ao menos `pip-tools` (`pip-compile`) para manter um `requirements.lock` auditavel. Alem disso, fixar o modulo `asyncpg` explicitamente.
+- Impacto esperado: Estabilidade e isolamento contra ataques a cadeia de suprimentos (supply-chain).
+- Riscos: Dificuldade de atualizacao manual no futuro.
+- Dependencias: Validacao da migracao do formato de requisitos.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Exposicao de Logs e Arquivos no Servico de Colaboracao
+- Problema atual: O `CollaborationService` e o `Productivity_tools.py` realizam logging de metadados, artefatos ou eventos de calendario sem tratar adequadamente conteudo PII (ex: destinatarios de e-mail).
+- Solucao proposta: Aplicar funcoes de mascaramento baseadas em `_PII_PATTERNS` a todos os servicos que geram logs ou retem dados na memoria volatil, especialmente ferramentas de produtividade e colaboracao.
+- Impacto esperado: Prevenir vazamento de dados corporativos ou de clientes nos logs centrais do sistema.
+- Riscos: Reduzir a granularidade de informacao util para auditoria ou suporte.
+- Dependencias: Modificacao das classes ou modulos correspondentes.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
