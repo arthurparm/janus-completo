@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
+from app.core.routing import RouteIntent, RouteTarget, get_knowledge_routing_policy
 from app.services.memory_service import MemoryService, get_memory_service
 
 try:
@@ -610,28 +611,46 @@ async def rag_hybrid_search(
             error_code="SKIPPED_MISSING_USER_ID",
         )
         return RAGHybridResponse(answer="", citations=[])
+    route_decision = get_knowledge_routing_policy().resolve(
+        RouteIntent.RAG_HYBRID_SEARCH,
+        user_id=uid,
+        include_graph=True,
+        query=query,
+    )
+    route_meta = {
+        "route.rule_id": route_decision.rule_id,
+        "route.primary": route_decision.primary.value,
+        "route.fallback": route_decision.fallback,
+    }
+    route_targets = {route_decision.primary, *route_decision.secondary}
+    vector_enabled = RouteTarget.QDRANT in route_targets
+    graph_enabled = RouteTarget.NEO4J in route_targets
 
     import time as _t
 
     _start = _t.perf_counter()
     vector_error_code: str | None = None
-    cm = _tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext()
-    try:
-        with cm:  # type: ignore
-            # Exclui duplicados na busca vetorial híbrida
-            results_vec = await service.recall_filtered(
-                query=query,
-                filters={"metadata.user_id": uid, "status_not": "duplicate"},
-                limit=limit,
-                min_score=min_score,
-            )
-        _RAG_REQ.labels("hybrid", "success").inc()
-        _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
-    except Exception as e:
-        _RAG_REQ.labels("hybrid", "error").inc()
-        _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
-        vector_error_code = type(e).__name__
-        results_vec = []
+    results_vec: list[dict[str, Any]] = []
+    if vector_enabled:
+        cm = _tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext()
+        try:
+            with cm:  # type: ignore
+                # Exclui duplicados na busca vetorial híbrida
+                results_vec = await service.recall_filtered(
+                    query=query,
+                    filters={"metadata.user_id": uid, "status_not": "duplicate"},
+                    limit=limit,
+                    min_score=min_score,
+                )
+            _RAG_REQ.labels("hybrid", "success").inc()
+            _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
+        except Exception as e:
+            _RAG_REQ.labels("hybrid", "error").inc()
+            _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
+            vector_error_code = type(e).__name__
+            results_vec = []
+    else:
+        vector_error_code = "SKIPPED_BY_ROUTE_POLICY"
     try:
         _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(results_vec))
         for r in results_vec:
@@ -647,19 +666,23 @@ async def rag_hybrid_search(
         started_at=_start,
         scores=[r.get("score") for r in results_vec if isinstance(r, dict)],
         error_code=vector_error_code,
-        extra={"result_count": len(results_vec)},
+        extra={"result_count": len(results_vec), **route_meta},
     )
     from app.db.graph import get_graph_db
     from app.repositories.knowledge_repository import KnowledgeRepository
 
     graph_start = time.perf_counter()
     graph_error_code: str | None = None
-    try:
-        kr = KnowledgeRepository(await get_graph_db())
-        concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
-    except Exception as e:
-        graph_error_code = type(e).__name__
-        concepts = []
+    concepts: list[dict[str, Any]] = []
+    if graph_enabled:
+        try:
+            kr = KnowledgeRepository(await get_graph_db())
+            concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
+        except Exception as e:
+            graph_error_code = type(e).__name__
+            concepts = []
+    else:
+        graph_error_code = "SKIPPED_BY_ROUTE_POLICY"
     graph_scores: list[float] = []
     for c in concepts:
         try:
@@ -674,7 +697,7 @@ async def rag_hybrid_search(
         started_at=graph_start,
         scores=graph_scores,
         error_code=graph_error_code,
-        extra={"result_count": len(concepts)},
+        extra={"result_count": len(concepts), **route_meta},
     )
     citations: list[dict[str, Any]] = []
     for r in results_vec:

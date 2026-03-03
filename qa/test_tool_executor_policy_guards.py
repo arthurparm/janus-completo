@@ -8,7 +8,7 @@ from pydantic import BaseModel
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 import app.services.tool_executor_service as tool_module
-from app.core.autonomy.policy_engine import PolicyDecision
+from app.core.autonomy.policy_engine import PolicyDecision, SimulationResult
 from app.services.tool_executor_service import ToolExecutorService
 
 
@@ -41,6 +41,19 @@ class DummyPolicy:
             allowed=self._tool_allowed,
             require_confirmation=self._require_confirmation,
             reason=self._tool_reason,
+        )
+
+
+class _DestructiveSimulationPolicy(DummyPolicy):
+    def simulate_tool_call(self, _name: str, _args: dict) -> SimulationResult:
+        return SimulationResult(
+            is_destructive=True,
+            expected_impact="May alter system state",
+            affected_resources=["/tmp/prod-data"],
+            reversible=False,
+            final_risk_level="high",
+            summary="Simulation indicates destructive operation",
+            generated_at="2026-03-03T00:00:00+00:00",
         )
 
 
@@ -344,3 +357,50 @@ async def test_execute_tool_calls_audits_cycle_limit(monkeypatch):
     assert len(events) == 1
     assert events[0]["status"] == "blocked"
     assert events[0]["detail"]["reason"] == "policy_cycle_limit"
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_requires_confirmation_for_destructive_simulation(monkeypatch):
+    events = []
+    created = {}
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            return "must-not-run"
+
+    class DummyPendingRepo:
+        def create(self, **kwargs):
+            created.update(kwargs)
+            return SimpleNamespace(id=777)
+
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = _DestructiveSimulationPolicy(tool_allowed=True)
+
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "delete_records", "args": {"path": "/tmp/prod-data"}}],
+        policy=policy,
+        user_id="u-dry-run",
+    )
+
+    assert outputs[0]["name"] == "delete_records"
+    assert "Dry-run simulation completed" in outputs[0]["result"]
+    assert "Pending action id: 777" in outputs[0]["result"]
+    assert created.get("simulation_summary_json")
+    assert created.get("simulation_version") == "v1"
+    assert any(ev.get("status") == "pending_confirmation" for ev in events)

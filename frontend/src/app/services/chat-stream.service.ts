@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_MAX_RETRIES, SSE_RETRY_MAX_SECONDS } from './api.config'
 import { ChatAgentState, ChatConfirmationState, ChatUnderstanding, Citation, CitationStatus } from './backend-api.service'
 import { AppLoggerService } from '../core/services/app-logger.service'
-import { buildChatStreamAuthHeaders } from './chat-auth-headers.util'
+import { buildChatStreamAuthHeaders, generateRequestId } from './chat-auth-headers.util'
 
 type StreamStatus = 'idle' | 'connecting' | 'open' | 'streaming' | 'retrying' | 'closed' | 'error'
 
@@ -65,6 +65,7 @@ export class ChatStreamService {
   private streamSeq = 0
   private lastUrl?: string
   private lastProjectId?: string
+  private lastRequestId?: string
   private status$ = new BehaviorSubject<StreamStatus>('idle')
   private typing$ = new BehaviorSubject<boolean>(false)
   private partials$ = new Subject<{ text: string }>()
@@ -95,6 +96,7 @@ export class ChatStreamService {
     this.ttftCaptured = false
     this.streamMode = null
     this.lastProjectId = params.projectId
+    this.lastRequestId = generateRequestId()
 
     const role = params.role || 'orchestrator'
     const priority = params.priority || 'fast_and_cheap'
@@ -108,7 +110,7 @@ export class ChatStreamService {
     }
     const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(params.conversationId)}?${qs.toString()}`
     this.logger.debug('[ChatStreamService] URL construída', { url })
-    this.open(url, params.projectId)
+    this.open(url, params.projectId, this.lastRequestId)
   }
 
   stop(): void {
@@ -125,13 +127,14 @@ export class ChatStreamService {
     this.typing$.next(false)
   }
 
-  private open(url: string, projectId?: string): void {
+  private open(url: string, projectId?: string, requestId?: string): void {
     this.lastUrl = url
     this.lastProjectId = projectId
+    this.lastRequestId = requestId || this.lastRequestId || generateRequestId()
     const seq = ++this.streamSeq
     const controller = new AbortController()
     this.abortController = controller
-    void this.consumeStream(url, controller, seq, projectId)
+    void this.consumeStream(url, controller, seq, projectId, this.lastRequestId)
   }
 
   private async consumeStream(
@@ -139,10 +142,11 @@ export class ChatStreamService {
     controller: AbortController,
     seq: number,
     projectId?: string,
+    requestId?: string,
   ): Promise<void> {
     this.logger.debug('[ChatStreamService] Abrindo fetch-SSE', { url, seq })
     try {
-      const headers = buildChatStreamAuthHeaders({ projectId })
+      const headers = buildChatStreamAuthHeaders({ projectId, requestId })
       headers.set('Accept', 'text/event-stream')
 
       const response = await fetch(url, {
@@ -474,10 +478,11 @@ export class ChatStreamService {
     }
     const url = this.lastUrl
     const projectId = this.lastProjectId
+    const requestId = this.lastRequestId
     setTimeout(() => {
       if (!url) return
       this.status$.next('connecting')
-      this.open(url, projectId)
+      this.open(url, projectId, requestId)
     }, wait)
   }
 }

@@ -19,6 +19,7 @@ from app.core.monitoring.chat_metrics import (
     CHAT_SPEND_USD_TOTAL,
     CHAT_TOKENS_TOTAL,
 )
+from app.core.routing import RouteIntent, get_knowledge_routing_policy
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.chat.message_helpers import (
@@ -96,7 +97,21 @@ class MessageOrchestrationService:
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
         relevant_memories = None
+        knowledge_route = None
         if self._rag_service:
+            knowledge_route = get_knowledge_routing_policy().resolve(
+                RouteIntent.CHAT_CONTEXT_RETRIEVAL,
+                user_id=user_id,
+                include_graph=False,
+                query=message,
+            )
+            logger.info(
+                "chat.knowledge_routing_decision",
+                conversation_id=conversation_id,
+                rule_id=knowledge_route.rule_id,
+                primary=knowledge_route.primary.value,
+                fallback=knowledge_route.fallback,
+            )
             relevant_memories = await self._rag_service.retrieve_context(
                 message,
                 user_id=user_id,
@@ -104,6 +119,7 @@ class MessageOrchestrationService:
                 caller_endpoint="/api/v1/chat/message",
                 transport="rest",
                 identity_source=identity_source,
+                route_decision=knowledge_route,
             )
 
         prompt = await self._prompt_service.build_prompt(

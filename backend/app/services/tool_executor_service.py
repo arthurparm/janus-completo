@@ -4,13 +4,19 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 from typing import Any
 
 import structlog
 from pydantic import ValidationError
 
 from app.config import settings
-from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
+from app.core.autonomy.policy_engine import (
+    PolicyConfig,
+    PolicyEngine,
+    RiskProfile,
+    SimulationResult,
+)
 from app.core.security.redaction import redact_sensitive_payload
 from app.core.tools import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
@@ -229,6 +235,53 @@ class ToolExecutorService:
                 error=str(e),
             )
 
+    def _simulation_to_storage(self, simulation: SimulationResult | None) -> tuple[str | None, str | None]:
+        if simulation is None:
+            return None, None
+        payload = {
+            "is_destructive": bool(simulation.is_destructive),
+            "expected_impact": simulation.expected_impact,
+            "affected_resources": list(simulation.affected_resources or []),
+            "reversible": bool(simulation.reversible),
+            "final_risk_level": simulation.final_risk_level,
+            "summary": simulation.summary,
+            "generated_at": simulation.generated_at,
+        }
+        return json.dumps(payload, ensure_ascii=False), str(simulation.simulation_version or "v1")
+
+    def _create_pending_action(
+        self,
+        *,
+        user_id: str | None,
+        tool_name: str,
+        safe_args: dict[str, Any] | Any,
+        simulation: SimulationResult | None = None,
+    ) -> int | None:
+        if not user_id:
+            return None
+        try:
+            from app.repositories.pending_action_repository import PendingActionRepository
+
+            simulation_summary_json, simulation_version = self._simulation_to_storage(simulation)
+            repo = PendingActionRepository()
+            pending = repo.create(
+                user_id=str(user_id),
+                tool_name=tool_name,
+                args_json=json.dumps(safe_args, ensure_ascii=False),
+                run_id=None,
+                cycle=None,
+                simulation_summary_json=simulation_summary_json,
+                simulation_generated_at=(
+                    datetime.fromisoformat(str(simulation.generated_at))
+                    if simulation and simulation.generated_at
+                    else None
+                ),
+                simulation_version=simulation_version,
+            )
+            return getattr(pending, "id", None)
+        except Exception:
+            return None
+
     async def execute_tool_calls(
         self,
         calls: list[dict[str, Any]],
@@ -317,27 +370,52 @@ class ToolExecutorService:
                 continue
             args = normalized_args
             safe_args = redact_sensitive_payload(args)
+            simulation: SimulationResult | None = None
+            simulate_tool = getattr(effective_policy, "simulate_tool_call", None)
+            if callable(simulate_tool):
+                try:
+                    simulation = simulate_tool(name, args)
+                except Exception as sim_error:
+                    logger.warning(
+                        "tool_simulation_failed",
+                        tool_name=name,
+                        error=str(sim_error),
+                    )
 
             decision = effective_policy.validate_tool_call(name, args, user_id=user_id)
+            if simulation and simulation.is_destructive:
+                pending_id = self._create_pending_action(
+                    user_id=user_id,
+                    tool_name=name,
+                    safe_args=safe_args,
+                    simulation=simulation,
+                )
+                msg = (
+                    "Tool flagged as destructive. Dry-run simulation completed; "
+                    "manual confirmation is required before execution."
+                )
+                if pending_id:
+                    msg += f" Pending action id: {pending_id}."
+                self._audit_pre_execution_event(
+                    tool_name=name,
+                    status="pending_confirmation",
+                    reason="destructive_simulation_requires_confirmation",
+                    user_id=user_id,
+                    detail={
+                        "pending_id": pending_id,
+                        "simulation_risk_level": simulation.final_risk_level,
+                        "simulation_summary": simulation.summary,
+                    },
+                )
+                outputs.append({"name": name, "result": msg})
+                continue
             if decision.require_confirmation:
-                pending_id = None
-                if user_id:
-                    try:
-                        from app.repositories.pending_action_repository import (
-                            PendingActionRepository,
-                        )
-
-                        repo = PendingActionRepository()
-                        pending = repo.create(
-                            user_id=str(user_id),
-                            tool_name=name,
-                            args_json=json.dumps(safe_args, ensure_ascii=False),
-                            run_id=None,
-                            cycle=None,
-                        )
-                        pending_id = getattr(pending, "id", None)
-                    except Exception:
-                        pending_id = None
+                pending_id = self._create_pending_action(
+                    user_id=user_id,
+                    tool_name=name,
+                    safe_args=safe_args,
+                    simulation=simulation,
+                )
                 msg = "Tool requires confirmation before execution."
                 if pending_id:
                     msg += f" Pending action id: {pending_id}."

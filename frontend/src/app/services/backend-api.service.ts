@@ -178,6 +178,7 @@ export interface PendingAction {
   created_at?: string;
   risk_level?: 'low' | 'medium' | 'high' | string;
   risk_summary?: string;
+  simulation?: Record<string, unknown> | null;
 }
 
 // Poison pill stats
@@ -672,6 +673,17 @@ export class BackendApiService {
     })
   }
 
+  private _traceparent(): string {
+    const hex = (size: number) => {
+      let out = ''
+      for (let i = 0; i < size; i += 1) {
+        out += Math.floor(Math.random() * 16).toString(16)
+      }
+      return out
+    }
+    return `00-${hex(32)}-${hex(16)}-01`
+  }
+
   private _projectId?: string
   private _sessionId?: string
   private _conversationId?: string
@@ -688,7 +700,10 @@ export class BackendApiService {
   clearContext() { this._projectId = undefined; this._sessionId = undefined; this._conversationId = undefined }
 
   private headersFor(userId?: number | string): Record<string, string> {
-    const h: Record<string, string> = { 'X-Request-ID': this._reqId() }
+    const h: Record<string, string> = {
+      'X-Request-ID': this._reqId(),
+      traceparent: this._traceparent(),
+    }
     if (typeof userId !== 'undefined') h['X-User-Id'] = String(userId)
     if (this._projectId) h['X-Project-Id'] = this._projectId
     if (this._sessionId) h['X-Session-Id'] = this._sessionId

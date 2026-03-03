@@ -23,11 +23,15 @@ describe('buildChatStreamAuthHeaders', () => {
     expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
     expect(headers.get('X-User-Id')).toBe('42')
     expect(headers.get('X-Project-Id')).toBe('p-1')
+    expect(headers.get('X-Request-ID')).toBeTruthy()
+    expect(headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
   })
 
-  it('deve retornar headers vazios sem token', () => {
+  it('deve retornar headers de rastreio mesmo sem token', () => {
     const headers = buildChatStreamAuthHeaders()
     expect(headers.get('Authorization')).toBeNull()
     expect(headers.get('X-User-Id')).toBeNull()
+    expect(headers.get('X-Request-ID')).toBeTruthy()
+    expect(headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
   })
 })
