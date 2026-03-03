@@ -22,21 +22,23 @@ fi
 
 echo "Pulling required models..."
 
-# Pull qwen2.5:14b
-if ! curl -sf http://localhost:11434/api/tags | grep -q '"model":"qwen2.5:14b"'; then
-    echo "Pulling qwen2.5:14b..."
-    ollama pull qwen2.5:14b
-else
-    echo "Model qwen2.5:14b already exists"
-fi
+ORCH_MODEL="${OLLAMA_ORCHESTRATOR_MODEL:-qwen2.5:14b}"
+CODER_MODEL="${OLLAMA_CODER_MODEL:-qwen2.5-coder:14b}"
+CURATOR_MODEL="${OLLAMA_CURATOR_MODEL:-qwen2.5:14b}"
 
-# Pull qwen2.5-coder:14b
-if ! curl -sf http://localhost:11434/api/tags | grep -q '"model":"qwen2.5-coder:14b"'; then
-    echo "Pulling qwen2.5-coder:14b..."
-    ollama pull qwen2.5-coder:14b
-else
-    echo "Model qwen2.5-coder:14b already exists"
-fi
+pull_if_missing() {
+    model="$1"
+    if ! curl -sf http://localhost:11434/api/tags | grep -q "\"model\":\"$model\""; then
+        echo "Pulling $model..."
+        ollama pull "$model"
+    else
+        echo "Model $model already exists"
+    fi
+}
+
+pull_if_missing "$ORCH_MODEL"
+pull_if_missing "$CODER_MODEL"
+pull_if_missing "$CURATOR_MODEL"
 
 echo "All models pulled successfully!"
 echo "Ollama is ready to serve requests"
