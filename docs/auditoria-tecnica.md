@@ -47,3 +47,29 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 
 **Próximos passos:**
 - Substituir imports engessados pelas referências dinâmicas no file system manager. Refatorar as classes monolíticas aplicando injeção de dependência e divisão por domínio.
+
+## Achados do dia (2026-03-03)
+
+### 5. Configurações Vulneráveis e Despadronizadas
+**Descrição:** Observou-se que credenciais estão sendo definidas diretamente no código com valores default inseguros, o que pode resultar em exploração em caso de má configuração do ambiente. Além disso, classes estão acessando variáveis de ambiente sem passar pelo Pydantic Settings, reduzindo previsibilidade.
+**Evidências:**
+- `backend/app/config.py`: Variáveis `NEO4J_PASSWORD`, `POSTGRES_PASSWORD` e `RABBITMQ_PASSWORD` possuem valores hardcoded (ex: `"change_me_neo4j_password"`).
+- `backend/app/services/chat_agent_loop.py`: Acesso direto a `os.getenv` em vez de utilizar `app.config.settings` (ex: `os.getenv("CHAT_TOOL_RISK_PROFILE")`).
+
+**Próximos passos:**
+- Remover valores default no `config.py` para credenciais e exigir injeção nas variáveis de ambiente.
+- Refatorar `chat_agent_loop.py` para depender do `Settings`.
+- Inserir itens SG-018 e OQ-015 no roadmap (`melhorias-possiveis.md`).
+
+### 6. Isolamento e Dependências no Build / Testes
+**Descrição:** O pipeline de build do backend e os testes do frontend apresentam riscos de quebra pela falta de restrições em ferramentas do ecossistema e estado compartilhado entre requisições.
+**Evidências:**
+- `backend/requirements.txt`: Dependências possuem ranges amplos (sem `requirements.lock` via pip-tools ou poetry), o que pode introduzir falhas silently se packages secundários atualizarem, e falta fixar `asyncpg` corretamente (apesar de estar no requirements de testes/base com condicional, não há lock determinístico).
+- `backend/app/core/tools/productivity_tools.py`: Variáveis em escopo global de módulo (`_notes`, `_calendar_events`) vazam estado entre usuários e causam perda de dados em restarts.
+- `frontend/src/app/core/auth/auth.service.spec.ts`: Testes unitários falham esporadicamente (timeouts/unhandled open requests) por não mockarem corretamente o `HttpClient` na chamada `loginWithPassword`.
+
+**Próximos passos:**
+- Congelar versões introduzindo pip-compile (lockfile).
+- Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
+- Refatorar testes do `AuthService` com `HttpTestingController`.
+- Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
