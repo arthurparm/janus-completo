@@ -304,7 +304,7 @@ pyobjc-framework-vision==12.1 ; python_version >= "3.11" and python_version < "3
 pyobjc-framework-webkit==12.1 ; python_version >= "3.11" and python_version < "3.13" and platform_system == "Darwin"
 pyobjc==12.1 ; python_version >= "3.11" and python_version < "3.13" and platform_system == "Darwin"
 pyparsing==3.3.1 ; python_version >= "3.11" and python_version < "3.13"
-pypdf==6.7.4 ; python_version >= "3.11" and python_version < "3.13"
+pypdf==6.7.5 ; python_version >= "3.11" and python_version < "3.13"
 pypiwin32==223 ; python_version >= "3.11" and python_version < "3.13" and platform_system == "Windows"
 pyreadline3==3.5.4 ; python_version >= "3.11" and python_version < "3.13" and sys_platform == "win32"
 python-dotenv==1.2.1 ; python_version >= "3.11" and python_version < "3.13"

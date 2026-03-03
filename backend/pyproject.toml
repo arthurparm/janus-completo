@@ -76,7 +76,7 @@ firebase-admin = "^6.5.0"
 langchain-text-splitters = "1.0.0"
 protobuf = "6.33.5"
 pyasn1 = "0.6.2"
-pypdf = "6.7.4"
+pypdf = "6.7.5"
 pydantic-ai-slim = {version = "1.56.0", extras = ["google", "groq", "openai", "retries"]}
 langgraph-checkpoint = "4.0.1"
 
