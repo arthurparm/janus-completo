@@ -40,7 +40,8 @@
     },
     "@angular/platform-browser": "$@angular/platform-browser",
     "@angular/platform-browser-dynamic": "$@angular/platform-browser-dynamic",
-    "@angular/router": "$@angular/router"
+    "@angular/router": "$@angular/router",
+    "rollup": "4.59.0"
   },
   "private": true,
   "dependencies": {
@@ -48,7 +49,7 @@
     "@angular/cdk": "^20.0.0",
     "@angular/common": "^20.0.0",
     "@angular/compiler": "^20.0.0",
-    "@angular/core": "^20.0.0",
+    "@angular/core": "^20.3.17",
     "@angular/fire": "^20.0.1",
     "@angular/forms": "^20.0.0",
     "@angular/material": "^20.0.0",
