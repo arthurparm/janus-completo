@@ -45,7 +45,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
 | MR-001 | Telemetria obrigatoria por etapa (`source`, `db`, `latency_ms`, `confidence`, `error_code`) | P0 | M | feito (2026-02-13) |
-| MR-002 | Politica de roteamento explicita entre Postgres, vetor e grafo | P0 | M | parcial |
+| MR-002 | Politica de roteamento explicita entre Postgres, vetor e grafo | P0 | M | concluido (2026-03-03) |
 | MR-003 | Threshold de confianca com fluxo de confirmacao do usuario | P0 | S | feito (2026-02-13) |
 | MR-004 | CitaÃ§Ãµes obrigatorias em respostas baseadas em documento/codigo | P0 | M | feito (2026-02-13) |
 | MR-005 | Reranking semantico com features de qualidade por tipo de consulta | P1 | M | ideia |
@@ -68,7 +68,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|
 | AG-001 | Planejamento hierarquico com decomposicao de metas em tarefas verificaveis | P1 | M | ideia |
 | AG-002 | Politica de ferramenta por perfil de risco e escopo | P0 | M | parcial |
-| AG-003 | Simulacao antes de execucao de acoes destrutivas | P0 | S | ideia |
+| AG-003 | Simulacao antes de execucao de acoes destrutivas | P0 | S | concluido (2026-03-03) |
 | AG-004 | Auto-critica por rodada com memoria de erros recorrentes | P1 | M | ideia |
 | AG-005 | Detecao de loop e escape automatico com estrategia alternativa | P1 | S | ideia |
 | AG-006 | Multi-agente com papeis fixos (executor, reviewer, auditor) | P2 | M | ideia |
@@ -106,7 +106,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
-| OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | ideia |
+| OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
 | OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
 | OQ-006 | Contract tests para endpoints criticos e SSE | P0 | M | feito (2026-02-13) |
@@ -160,7 +160,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
-| DX-001 | Comando unico de setup local (devcontainer/script cross-platform) | P1 | S | ideia |
+| DX-001 | Comando unico de setup local (devcontainer/script cross-platform) | P1 | S | concluido (2026-03-03) |
 | DX-002 | Seed de dados e cenarios de teste reproduziveis | P1 | M | feito (2026-02-13) |
 | DX-003 | Lint/type/test gates padronizados em CI | P0 | S | feito (2026-02-13) |
 | DX-004 | Templates de PR orientados a risco e evidencia | P1 | S | ideia |
@@ -171,7 +171,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
-| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | concluido (2026-03-03) |
 
 ---
 
@@ -537,3 +537,80 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
+
+### [SG-014] Vazamento de PII em logs de Chat e Collaboration
+- Problema atual: Os serviços `ChatCommandHandler` (argumentos do usuário), `ChatEventPublisher` (conteúdo da mensagem) e `CollaborationService` (artefatos e mensagens) loggam conteúdo sensível que constitui risco de PII/LGPD.
+- Solucao proposta: Aplicar redação (PII redaction) antes de loggar, ou usar logs estruturados com restrição de acesso e ofuscação de dados textuais.
+- Impacto esperado: Conformidade com LGPD e prevenção de vazamento de dados sensíveis em logs plain text.
+- Riscos: Perda parcial de contexto para debugging se ofuscação for agressiva.
+- Dependencias: Módulo `app.core.memory.security` para usar regex de PII já existentes.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-013] Rate Limiting Fail-Closed
+- Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open.
+- Solucao proposta: Configurar a política do Rate Limit para modo `fail-open`, permitindo a requisição prosseguir com degradação graciosa caso o Redis caia.
+- Impacto esperado: Maior disponibilidade do sistema (Availability > 99.9%) caso o serviço de cache fique indisponível temporariamente.
+- Riscos: Possível sobrecarga da API durante interrupção do Redis.
+- Dependencias: Ajuste na injeção do rate limiter.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-015] Fuga de Autenticação em Workspaces API
+- Problema atual: Endpoints em `backend/app/api/v1/endpoints/workspace.py` usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ.
+- Solucao proposta: Adicionar dependência de autenticação (ex: `Depends(get_current_user)`) aos endpoints do workspace.
+- Impacto esperado: Prevenir que usuários anônimos manipulem workspaces e desliguem o sistema.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-016] Vulnerabilidade do Header X-User-Id
+- Problema atual: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` por padrão, possibilitando Bypass/Impersonation.
+- Solucao proposta: Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT/Token robusto.
+- Impacto esperado: Correção de vulnerabilidade crítica de spoofing de usuário.
+- Riscos: Quebra de compatibilidade em ambientes internos que confiam no header sem token.
+- Dependencias: Ajuste de configuração em `config.py`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [PX-013] Refatoração de God Objects e Componentes Complexos
+- Problema atual: `observability_service.py` (~1200 linhas) e `frontend/src/app/services/backend-api.service.ts` (~1638 linhas) e `conversations.ts` (~1700 linhas) concentram lógica excessiva.
+- Solucao proposta: Quebrar o serviço de observabilidade em (Health, Metrics, Audit, Anomaly) e particionar os componentes Frontend aplicando SRP e NgRx/Store.
+- Impacto esperado: Menor complexidade ciclomática, testes mais simples e manutenção sustentável.
+- Riscos: Regressões durante o processo de split de classes.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: ideia
+
+### [SG-017] Endpoint de Auth exposto a brute-force
+- Problema atual: `backend/app/api/v1/endpoints/auth.py` (login/refresh) não possuem rate limiter.
+- Solucao proposta: Decorar a rota de login com `@limiter.limit("5/minute")` para prevenir ataques de dicionário e brute-force.
+- Impacto esperado: Maior resiliência contra ataques de força bruta.
+- Riscos: Bloqueio acidental de IPs em caso de NAT/Proxy (necessário extrair IP real).
+- Dependencias: O Rate Limit com Redis.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-014] Hardcoded Paths e Criação Precoce de Diretórios
+- Problema atual: Trabalhadores assíncronos e testes quebram por `PermissionError` em caminhos como `/app/workspace` e `.mkdir()` fora de contexto em `NeuralTrainer`.
+- Solucao proposta: Usar sempre `app.core.infrastructure.filesystem_manager.WORKSPACE_DIR` e garantir que o `mkdir` ocorre apenas na hora da execução (e.g. `_save_model`).
+- Impacto esperado: Compatibilidade cross-environment (Docker/Local/CI) robusta.
+- Riscos: Quebra momentânea de caminhos estáticos assumidos.
+- Dependencias: filesystem_manager.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia

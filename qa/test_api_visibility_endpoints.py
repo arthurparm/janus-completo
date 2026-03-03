@@ -306,6 +306,9 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
         user_id = "u-1"
         tool_name = "codex_exec"
         args_json = '{"prompt":"hello"}'
+        simulation_summary_json = '{"summary":"dry-run ok","final_risk_level":"medium"}'
+        simulation_generated_at = datetime(2026, 2, 12, 10, 29, 0)
+        simulation_version = "v1"
         status = "pending"
         created_at = datetime(2026, 2, 12, 10, 30, 0)
 
@@ -328,6 +331,8 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
     assert data[0]["action_id"] == 101
     assert data[0]["tool_name"] == "codex_exec"
     assert data[0]["status"] == "pending"
+    assert data[0]["simulation"]["summary"] == "dry-run ok"
+    assert data[0]["simulation"]["simulation_version"] == "v1"
 
 
 def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):

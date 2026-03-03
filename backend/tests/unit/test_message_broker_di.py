@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import MessageBroker
 
 
@@ -52,3 +53,33 @@ async def test_message_broker_di_defaults():
             mock_connect.assert_called_once()
             call_args = mock_connect.call_args
             assert call_args[0][0] == expected_url
+
+
+def test_merge_trace_headers_adds_request_id_and_traceparent_from_context():
+    broker = MessageBroker(config=MockSettings(), connection_factory=AsyncMock())
+    token = TRACE_ID.set("req-123")
+    try:
+        merged = broker._merge_trace_headers({})
+    finally:
+        TRACE_ID.reset(token)
+
+    assert merged["x-request-id"] == "req-123"
+    assert merged["correlation_id"] == "req-123"
+    assert isinstance(merged.get("traceparent"), str)
+    assert merged["traceparent"].startswith("00-")
+
+
+def test_merge_trace_headers_preserves_explicit_trace_headers():
+    broker = MessageBroker(config=MockSettings(), connection_factory=AsyncMock())
+    given = {
+        "x-request-id": "req-custom",
+        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+        "tracestate": "vendor=value",
+    }
+
+    merged = broker._merge_trace_headers(given)
+
+    assert merged["x-request-id"] == "req-custom"
+    assert merged["correlation_id"] == "req-custom"
+    assert merged["traceparent"] == given["traceparent"]
+    assert merged["tracestate"] == given["tracestate"]

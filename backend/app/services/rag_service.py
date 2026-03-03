@@ -11,6 +11,7 @@ from app.core.embeddings.embedding_manager import aembed_text
 from app.core.llm import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
+from app.core.routing import RouteDecision, RouteIntent, RouteTarget, get_knowledge_routing_policy
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.repositories.chat_repository import ChatRepository
 from app.services.semantic_reranker_service import get_semantic_reranker
@@ -135,14 +136,27 @@ class RAGService:
         caller_endpoint: str = "/chat/rag",
         transport: str = "unknown",
         identity_source: str = "unknown",
+        route_decision: RouteDecision | None = None,
     ) -> Optional[str]:
         """Retrieves relevant memories for the current message."""
         start = time.perf_counter()
+        resolved_route = route_decision or get_knowledge_routing_policy().resolve(
+            RouteIntent.CHAT_CONTEXT_RETRIEVAL,
+            user_id=user_id,
+            include_graph=False,
+            query=message,
+        )
+        route_meta = {
+            "route.rule_id": resolved_route.rule_id,
+            "route.primary": resolved_route.primary.value,
+            "route.fallback": resolved_route.fallback,
+        }
         telemetry_base = {
             "transport": transport,
             "identity_source": identity_source,
             "user_id_present": bool(user_id),
             "conversation_id_present": bool(conversation_id),
+            **route_meta,
         }
         if not self._memory:
             _RAG_SKIPPED.labels("retrieve_context", "no_memory_service").inc()
@@ -181,6 +195,19 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_MISSING_USER_ID",
+                extra=telemetry_base,
+            )
+            return None
+        if resolved_route.primary != RouteTarget.QDRANT:
+            _RAG_SKIPPED.labels("retrieve_context", "route_not_supported").inc()
+            _RAG_OPS.labels("retrieve_context", "skipped").inc()
+            self._emit_step_telemetry(
+                endpoint=caller_endpoint,
+                step="retrieve_context",
+                started_at=start,
+                db=resolved_route.primary.value,
+                confidence=0.0,
+                error_code="SKIPPED_ROUTE_UNSUPPORTED",
                 extra=telemetry_base,
             )
             return None

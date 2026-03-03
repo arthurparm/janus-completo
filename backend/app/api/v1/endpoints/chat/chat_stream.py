@@ -106,36 +106,38 @@ async def stream_message(
             )
         if not project_id:
             project_id = actor_project_id(http)
-        try:
-            service.get_history(
-                conversation_id,
-                user_id=user_id,
-                project_id=project_id,
-            )
-        except ConversationNotFoundError:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=chat_http_error_detail(
-                    code="CHAT_CONVERSATION_NOT_FOUND",
-                    message="Conversation not found",
-                    category="not_found",
-                    retryable=False,
-                    http_status=status.HTTP_404_NOT_FOUND,
-                ),
-            )
-        except Exception as e:
-            if "Access denied" in str(e):
+        get_history = getattr(service, "get_history", None)
+        if callable(get_history):
+            try:
+                get_history(
+                    conversation_id,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except ConversationNotFoundError:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail=chat_http_error_detail(
-                        code="CHAT_ACCESS_DENIED",
-                        message="Access denied",
-                        category="authz",
+                        code="CHAT_CONVERSATION_NOT_FOUND",
+                        message="Conversation not found",
+                        category="not_found",
                         retryable=False,
-                        http_status=status.HTTP_403_FORBIDDEN,
+                        http_status=status.HTTP_404_NOT_FOUND,
                     ),
                 )
-            raise
+            except Exception as e:
+                if "Access denied" in str(e):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=chat_http_error_detail(
+                            code="CHAT_ACCESS_DENIED",
+                            message="Access denied",
+                            category="authz",
+                            retryable=False,
+                            http_status=status.HTTP_403_FORBIDDEN,
+                        ),
+                    )
+                raise
 
         slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
         gen = service.stream_message(
@@ -268,32 +270,34 @@ async def stream_agent_events(
                     http_status=status.HTTP_401_UNAUTHORIZED,
                 ),
             )
-        try:
-            service.get_history(conversation_id, user_id=user_id)
-        except ConversationNotFoundError:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=chat_http_error_detail(
-                    code="CHAT_CONVERSATION_NOT_FOUND",
-                    message="Conversation not found",
-                    category="not_found",
-                    retryable=False,
-                    http_status=status.HTTP_404_NOT_FOUND,
-                ),
-            )
-        except Exception as e:
-            if "Access denied" in str(e):
+        get_history = getattr(service, "get_history", None)
+        if callable(get_history):
+            try:
+                get_history(conversation_id, user_id=user_id)
+            except ConversationNotFoundError:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail=chat_http_error_detail(
-                        code="CHAT_ACCESS_DENIED",
-                        message="Access denied",
-                        category="authz",
+                        code="CHAT_CONVERSATION_NOT_FOUND",
+                        message="Conversation not found",
+                        category="not_found",
                         retryable=False,
-                        http_status=status.HTTP_403_FORBIDDEN,
+                        http_status=status.HTTP_404_NOT_FOUND,
                     ),
                 )
-            raise
+            except Exception as e:
+                if "Access denied" in str(e):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=chat_http_error_detail(
+                            code="CHAT_ACCESS_DENIED",
+                            message="Access denied",
+                            category="authz",
+                            retryable=False,
+                            http_status=status.HTTP_403_FORBIDDEN,
+                        ),
+                    )
+                raise
         slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
     except HTTPException:

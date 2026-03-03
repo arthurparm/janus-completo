@@ -10,7 +10,7 @@ fastapi = "*"
 uvicorn = { extras = ["standard"], version = "*" }
 pydantic = ">=2.0.0,<3.0.0"
 pydantic-settings = "*"
-python-multipart = "*"
+python-multipart = "0.0.22"
 
 # Databases / Storage
 neo4j = ">=5.19.0"
@@ -18,19 +18,17 @@ qdrant-client = ">=1.9.2"
 redis = ">=5.0.0"
 
 # LangChain ecosystem
-langchain = ">=0.1.20"
-langchain-openai = ">=0.1.6"
-langsmith = ">=0.1.57,<0.2.0"
-langchain-community = "*"
-langchain-core = "*"
-langgraph = "*"
-langgraph-checkpoint-postgres = "*"
-pydantic-ai = "*"
+langchain = "1.2.10"
+langchain-openai = "1.1.10"
+langsmith = ">=0.3.45,<1.0.0"
+langchain-community = "0.4.1"
+langchain-core = "1.2.17"
+langgraph = "1.0.10"
+langgraph-checkpoint-postgres = "3.0.4"
 neo4j-graphrag = "*"
-langchain-neo4j = ">=0.0.3"
-langchain-google-genai = ">=0.1.0"
-langchain-groq = "*"
-langchain-ollama = "*"
+langchain-google-genai = "4.2.1"
+langchain-groq = "1.1.2"
+langchain-ollama = "1.0.1"
 
 # Observability
 structlog = "*"
@@ -57,7 +55,7 @@ onnxruntime = ">=1.17.0"
 numpy = ">=1.26.0,<2.0.0"
 
 # Security
-cryptography = ">=41.0.0"
+cryptography = "46.0.5"
 psycopg2-binary = "*"
 asyncpg = "*"
 psycopg = { extras = ["binary"], version = "*" }
@@ -75,6 +73,12 @@ openwakeword = "^0.5.1"
 scipy = "^1.11.0"
 
 firebase-admin = "^6.5.0"
+langchain-text-splitters = "1.0.0"
+protobuf = "6.33.5"
+pyasn1 = "0.6.2"
+pypdf = "6.7.5"
+pydantic-ai-slim = {version = "1.56.0", extras = ["google", "groq", "openai", "retries"]}
+langgraph-checkpoint = "4.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

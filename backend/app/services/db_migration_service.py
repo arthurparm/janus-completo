@@ -139,6 +139,24 @@ class DBMigrationService:
                 self._constraint_exists(s, "users", "unique_user_external_id"),
             )
             add(
+                "pending_actions",
+                "simulation_summary_json",
+                "column",
+                self._column_exists(s, "pending_actions", "simulation_summary_json"),
+            )
+            add(
+                "pending_actions",
+                "simulation_generated_at",
+                "column",
+                self._column_exists(s, "pending_actions", "simulation_generated_at"),
+            )
+            add(
+                "pending_actions",
+                "simulation_version",
+                "column",
+                self._column_exists(s, "pending_actions", "simulation_version"),
+            )
+            add(
                 consent_table,
                 "unique_user_privacy_scope_consent",
                 "constraint",
@@ -212,6 +230,15 @@ class DBMigrationService:
                     )
                 )
                 applied.append("users.unique_user_external_id")
+            if not self._column_exists(s, "pending_actions", "simulation_summary_json"):
+                s.execute(text("ALTER TABLE pending_actions ADD COLUMN simulation_summary_json TEXT NULL"))
+                applied.append("pending_actions.simulation_summary_json")
+            if not self._column_exists(s, "pending_actions", "simulation_generated_at"):
+                s.execute(text("ALTER TABLE pending_actions ADD COLUMN simulation_generated_at TIMESTAMP NULL"))
+                applied.append("pending_actions.simulation_generated_at")
+            if not self._column_exists(s, "pending_actions", "simulation_version"):
+                s.execute(text("ALTER TABLE pending_actions ADD COLUMN simulation_version VARCHAR(20) NULL"))
+                applied.append("pending_actions.simulation_version")
             if not self._index_exists(s, "profiles", "idx_profile_user"):
                 s.execute(text("CREATE INDEX idx_profile_user ON profiles (user_id)"))
                 applied.append("profiles.idx_profile_user")
