@@ -183,9 +183,13 @@ export class ChatStreamService {
       const decoder = new TextDecoder('utf-8')
       let buffer = ''
 
-      while (true) {
+      let streamOpen = true
+      while (streamOpen) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) {
+          streamOpen = false
+          continue
+        }
         buffer += decoder.decode(value, { stream: true })
         const parsed = this.extractEvents(buffer)
         buffer = parsed.remaining
@@ -249,9 +253,13 @@ export class ChatStreamService {
     const events: ParsedSseEvent[] = []
     let cursor = 0
 
-    while (true) {
+    let hasSeparator = true
+    while (hasSeparator) {
       const sep = normalized.indexOf('\n\n', cursor)
-      if (sep === -1) break
+      if (sep === -1) {
+        hasSeparator = false
+        continue
+      }
       const block = normalized.slice(cursor, sep)
       cursor = sep + 2
       const evt = this.parseSseBlock(block)

@@ -182,22 +182,24 @@ def build_confirmation_payload(
     reason: str | None,
 ) -> dict[str, Any] | None:
     normalized_reason = _normalize_confirmation_reason(reason)
-    # Demo contract: only surface actionable confirmation when a real pending action exists.
-    if pending_action_id is None:
+    if pending_action_id is None and normalized_reason is None:
         return None
     payload: dict[str, Any] = {
         "required": True,
         "reason": normalized_reason or "requires_confirmation",
     }
-    if pending_action_id is not None:
-        payload.update(
-            {
-                "source": "pending_actions_sql",
-                "pending_action_id": pending_action_id,
-                "approve_endpoint": f"/api/v1/pending_actions/action/{pending_action_id}/approve",
-                "reject_endpoint": f"/api/v1/pending_actions/action/{pending_action_id}/reject",
-            }
-        )
+    if pending_action_id is None:
+        payload["source"] = "heuristic"
+        return payload
+
+    payload.update(
+        {
+            "source": "pending_actions_sql",
+            "pending_action_id": pending_action_id,
+            "approve_endpoint": f"/api/v1/pending_actions/action/{pending_action_id}/approve",
+            "reject_endpoint": f"/api/v1/pending_actions/action/{pending_action_id}/reject",
+        }
+    )
     return payload
 
 
