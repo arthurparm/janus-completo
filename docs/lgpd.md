@@ -20,3 +20,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. Estender a camada de ofuscação (`app.core.memory.security`) para injetar um redator diretamente nas configurações do `structlog` (`logging_config.py`).
 2. Programar limpeza cronológica (Job diário) do `DataRetentionService`.
 3. Adicionar política de Log Rotation aos volumes configurados nos containers ou injetados na runtime do sistema operacional.
+
+## 4. Checklist de Conformidade e Gaps
+
+* [ ] **Vazamento PII (`ChatEventPublisher`)**: Ocultar conteúdos de "content_preview" vazados inadvertidamente via fallback de exceções.
+* [ ] **Vazamento PII (`CollaborationService`)**: Mascarar payload sensível em artefatos e metas de descrição de projeto durante logs de orquestração.
+* [ ] **Vazamento PII (`ProductivityTools`)**: Evitar retenção In-Memory (volátil) longa de globais de anotações e contatos, persistir mascarado em banco criptografado.
+* [ ] **Vazamento PII (`Janus Daemon`)**: Ofuscar a transcrição de voz nos arquivos de logs de sistema de interações do `Daemon`.
+* [ ] **Rotação Log (`janus.log`)**: Garantir expurgo estruturado dos logs com rodízio por dia.

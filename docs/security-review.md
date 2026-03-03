@@ -34,3 +34,23 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média
 - **Descrição:** Configuração de flag (`AUTH_RESET_RETURN_TOKEN`) permite expor diretamente o Token em fluxos de Reset.
 - **Ação Recomendada:** Remover ou restringir severamente o uso dessa flag a ambientes puros de teste, certificando a injeção de config em prod.
+
+### 6. Rate Limiting Fail-Closed (Disponibilidade)
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`
+- **Gravidade:** Alta
+- **Descrição:** A arquitetura do Rate Limit atual retorna 503 (Service Unavailable) e bloqueia o tráfego se a conexão com o Redis for perdida, causando interrupção global da aplicação.
+- **Ação Recomendada:** Modificar a política para Fail-Open, garantindo degradação graciosa caso o cache fique indisponível, mitigando Single Point of Failure.
+
+### 7. Riscos em Dependências Não Fixadas
+- **Caminho:** `backend/requirements.txt`
+- **Gravidade:** Média
+- **Descrição:** As dependências do projeto estão com escopos largos sem arquivos de lock rígido, correndo risco de quebra e introdução de vulnerabilidades na cadeia de suprimento.
+- **Ação Recomendada:** Introduzir `pip-compile` ou `uv` lock file para manter integridade das bibliotecas de produção.
+
+## Checklist e Gaps de Segurança
+
+* [ ] **AuthZ em Workspaces**: Bloquear acessos anônimos para endpoints críticos em `workspace.py` (adicionar `Depends(get_current_user)`).
+* [ ] **Proteção contra Brute Force**: Habilitar `@limiter.limit` em `backend/app/api/v1/endpoints/auth.py` (login/refresh).
+* [ ] **Hardcoded Secrets Defaults**: Garantir bloqueio estrito de valores fallback em `config.py` (ex: `NEO4J_PASSWORD`, `POSTGRES_PASSWORD`).
+* [ ] **Remoção de PII**: Evitar logar payloads integrais de requests e prever sanitização em todos os logs críticos de domínio.
+* [ ] **Lock de Dependências**: Implementar geração de arquivo de lock file na etapa de CI.
