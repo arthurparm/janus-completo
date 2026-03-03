@@ -45,7 +45,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
 | MR-001 | Telemetria obrigatoria por etapa (`source`, `db`, `latency_ms`, `confidence`, `error_code`) | P0 | M | feito (2026-02-13) |
-| MR-002 | Politica de roteamento explicita entre Postgres, vetor e grafo | P0 | M | parcial |
+| MR-002 | Politica de roteamento explicita entre Postgres, vetor e grafo | P0 | M | concluido (2026-03-03) |
 | MR-003 | Threshold de confianca com fluxo de confirmacao do usuario | P0 | S | feito (2026-02-13) |
 | MR-004 | CitaÃ§Ãµes obrigatorias em respostas baseadas em documento/codigo | P0 | M | feito (2026-02-13) |
 | MR-005 | Reranking semantico com features de qualidade por tipo de consulta | P1 | M | ideia |
@@ -68,7 +68,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|
 | AG-001 | Planejamento hierarquico com decomposicao de metas em tarefas verificaveis | P1 | M | ideia |
 | AG-002 | Politica de ferramenta por perfil de risco e escopo | P0 | M | parcial |
-| AG-003 | Simulacao antes de execucao de acoes destrutivas | P0 | S | ideia |
+| AG-003 | Simulacao antes de execucao de acoes destrutivas | P0 | S | concluido (2026-03-03) |
 | AG-004 | Auto-critica por rodada com memoria de erros recorrentes | P1 | M | ideia |
 | AG-005 | Detecao de loop e escape automatico com estrategia alternativa | P1 | S | ideia |
 | AG-006 | Multi-agente com papeis fixos (executor, reviewer, auditor) | P2 | M | ideia |
@@ -106,7 +106,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
-| OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | ideia |
+| OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
 | OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
 | OQ-006 | Contract tests para endpoints criticos e SSE | P0 | M | feito (2026-02-13) |
@@ -160,7 +160,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
-| DX-001 | Comando unico de setup local (devcontainer/script cross-platform) | P1 | S | ideia |
+| DX-001 | Comando unico de setup local (devcontainer/script cross-platform) | P1 | S | concluido (2026-03-03) |
 | DX-002 | Seed de dados e cenarios de teste reproduziveis | P1 | M | feito (2026-02-13) |
 | DX-003 | Lint/type/test gates padronizados em CI | P0 | S | feito (2026-02-13) |
 | DX-004 | Templates de PR orientados a risco e evidencia | P1 | S | ideia |
@@ -171,7 +171,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-009 | Ferramenta interna para gerar datasets de avaliacao | P2 | M | ideia |
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
-| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | ideia |
+| DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | concluido (2026-03-03) |
 
 ---
 

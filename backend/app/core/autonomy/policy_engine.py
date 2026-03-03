@@ -1,6 +1,8 @@
 import os
 import time
+import json
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -26,6 +28,7 @@ class PolicyConfig:
     command_allowlist: set[str] = field(default_factory=set)
     restricted_command_tools: set[str] = field(default_factory=set)
     command_blocklist_tokens: set[str] = field(default_factory=set)
+    require_simulation_for_destructive: bool = True
     max_actions_per_cycle: int = 20
     max_seconds_per_cycle: int = 60
 
@@ -73,6 +76,17 @@ class PolicyConfig:
         self.command_blocklist_tokens = {
             str(item).strip().lower() for item in self.command_blocklist_tokens if str(item).strip()
         }
+        self.require_simulation_for_destructive = (
+            str(
+                os.getenv(
+                    "CHAT_TOOL_REQUIRE_SIMULATION_FOR_DESTRUCTIVE",
+                    str(self.require_simulation_for_destructive),
+                )
+            )
+            .strip()
+            .lower()
+            in {"1", "true", "yes", "on"}
+        )
 
 
 @dataclass
@@ -80,6 +94,18 @@ class PolicyDecision:
     allowed: bool
     require_confirmation: bool = False
     reason: str | None = None
+
+
+@dataclass
+class SimulationResult:
+    is_destructive: bool
+    expected_impact: str
+    affected_resources: list[str]
+    reversible: bool
+    final_risk_level: str
+    summary: str
+    generated_at: str
+    simulation_version: str = "v1"
 
 
 class PolicyEngine:
@@ -105,6 +131,27 @@ class PolicyEngine:
             "jailbreak",
             "developer mode",
         ]
+        self._destructive_keywords = (
+            "delete",
+            "drop",
+            "truncate",
+            "remove",
+            "rm ",
+            "wipe",
+            "format",
+            "shutdown",
+            "reboot",
+            "kill ",
+            "destroy",
+        )
+        self._irreversible_keywords = (
+            "delete",
+            "drop",
+            "truncate",
+            "wipe",
+            "format",
+            "rm -rf",
+        )
 
     def reset_cycle_quota(self):
         # Reset atômico não é garantido sem lock, mas reduz race condition em uso típico
@@ -288,3 +335,48 @@ class PolicyEngine:
 
         self._actions_in_cycle += 1
         return PolicyDecision(allowed=True)
+
+    def simulate_tool_call(
+        self,
+        tool_name: str,
+        input_args: dict[str, Any] | None = None,
+    ) -> SimulationResult:
+        tool_name_norm = str(tool_name or "").strip().lower()
+        args_json = json.dumps(input_args or {}, ensure_ascii=False, default=str).lower()
+        combined = f"{tool_name_norm} {args_json}"
+        is_destructive = any(keyword in combined for keyword in self._destructive_keywords)
+        affected_resources = self._infer_affected_resources(input_args)
+        reversible = not any(keyword in combined for keyword in self._irreversible_keywords)
+        risk_level = "high" if is_destructive else "low"
+        expected_impact = (
+            "May alter or remove system/application state."
+            if is_destructive
+            else "Read-only or low-impact operation."
+        )
+        summary = (
+            "Simulation indicates destructive behavior; manual confirmation required."
+            if is_destructive
+            else "Simulation indicates non-destructive behavior."
+        )
+        return SimulationResult(
+            is_destructive=is_destructive,
+            expected_impact=expected_impact,
+            affected_resources=affected_resources,
+            reversible=reversible,
+            final_risk_level=risk_level,
+            summary=summary,
+            generated_at=datetime.now(UTC).isoformat(),
+        )
+
+    def _infer_affected_resources(self, input_args: dict[str, Any] | None) -> list[str]:
+        if not isinstance(input_args, dict):
+            return []
+        resources: list[str] = []
+        for key in ("path", "file_path", "target", "resource", "collection", "table", "queue_name"):
+            value = input_args.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text and text not in resources:
+                resources.append(text)
+        return resources
