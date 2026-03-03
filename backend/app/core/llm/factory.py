@@ -224,13 +224,15 @@ def create_ollama_llm(
     if settings.OLLAMA_NUM_BATCH:
         mk["num_batch"] = settings.OLLAMA_NUM_BATCH
     if settings.OLLAMA_GPU_LAYERS:
-        mk["gpu_layer"] = settings.OLLAMA_GPU_LAYERS
+        # Ollama option key is num_gpu (number of layers offloaded to GPU).
+        mk["num_gpu"] = settings.OLLAMA_GPU_LAYERS
     if settings.OLLAMA_KEEP_ALIVE:
         mk["keep_alive"] = settings.OLLAMA_KEEP_ALIVE
     if model_kwargs:
         for key, value in model_kwargs.items():
             if value is not None:
-                mk[key] = value
+                normalized_key = "num_gpu" if key == "gpu_layer" else key
+                mk[normalized_key] = value
 
     return ChatOllama(
         base_url=settings.OLLAMA_HOST,

@@ -48,7 +48,8 @@ python tooling/dev.py down
 
 ### Full Stack (recommended)
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
 ### Frontend Local
@@ -156,18 +157,22 @@ From `documentation/deployment-guide.md`.
 
 Start stack:
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
 Status:
 ```bash
-docker compose ps
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 ps
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 ps
 ```
 
 Logs:
 ```bash
-docker compose logs -f janus-api
-docker compose logs -f frontend
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 logs -f janus-api
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 logs -f neo4j
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 logs -f qdrant
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 logs -f ollama
 ```
 
 Health checks:
@@ -224,7 +229,8 @@ python backend/scripts/eval_technical_qa.py \
 
 ### Ops Validation Job (manual in CI)
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 
 # wait for API health
 for i in {1..90}; do
@@ -235,7 +241,8 @@ for i in {1..90}; do
   sleep 2
 done
 
-docker compose ps
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 ps
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 ps
 python tooling/generate_api_matrix.py
 python tooling/generate_api_coverage_report.py \
   --collect-docker-evidence \
@@ -272,7 +279,8 @@ Primary source: `documentation/qa/api-test-playbook.md`.
 
 ### Full API QA sequence
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 curl -sf http://localhost:8000/health
 python tooling/generate_api_matrix.py
 python test_scenario1_apis.py
@@ -398,7 +406,8 @@ powershell -File tooling/start_services.ps1
 
 Equivalent direct command used by the script:
 ```bash
-docker compose up -d neo4j postgres redis qdrant rabbitmq ollama
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d redis rabbitmq postgres
 ```
 
 Run local backend setup + launch (Windows):

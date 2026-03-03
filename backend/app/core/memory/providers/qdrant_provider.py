@@ -37,9 +37,18 @@ class QdrantProvider:
         if client:
             self.client = client
         else:
-            self.client = AsyncQdrantClient(
-                host=self.settings.QDRANT_HOST, port=self.settings.QDRANT_PORT
-            )
+            qdrant_api_key = getattr(self.settings, "QDRANT_API_KEY", None)
+            if hasattr(qdrant_api_key, "get_secret_value"):
+                qdrant_api_key = qdrant_api_key.get_secret_value()
+
+            client_kwargs: dict[str, Any] = {
+                "host": self.settings.QDRANT_HOST,
+                "port": self.settings.QDRANT_PORT,
+            }
+            if qdrant_api_key:
+                client_kwargs["api_key"] = qdrant_api_key
+
+            self.client = AsyncQdrantClient(**client_kwargs)
 
         self.collection_name = VectorCollection.EPISODIC_MEMORY.value
         self._vector_size = int(getattr(self.settings, "MEMORY_VECTOR_SIZE", 1536))

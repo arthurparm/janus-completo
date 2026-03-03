@@ -65,6 +65,7 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 ### Operations
 
 - [Deployment Guide](./deployment-guide.md)
+- [Deployment Split PC1/PC2](./deployment-split-pc1-pc2.md)
 - [Contribution Guide](./contribution-guide.md)
 - [API Endpoint Matrix (Live)](./qa/api-endpoint-matrix.md)
 - [API Test Playbook](./qa/api-test-playbook.md)
@@ -83,7 +84,8 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 ### Full stack (recommended)
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
 ### Frontend only

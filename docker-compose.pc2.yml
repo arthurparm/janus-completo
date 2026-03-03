@@ -1,0 +1,128 @@
+services:
+  neo4j:
+    image: neo4j:5.19-community
+    container_name: janus_neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-2G}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX:-8G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE:-8G}
+    volumes:
+      - janus_neo4j_data:/data
+    restart: unless-stopped
+    mem_limit: 24g
+    cpus: "8.0"
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      interval: 10s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - janus-pc2-net
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.2
+    container_name: janus_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - janus_qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    mem_limit: 16g
+    cpus: "6.0"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - janus-pc2-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: janus_ollama
+    ports:
+      - "11434:11434"
+    gpus: all
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-120m}
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-1}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-128}
+    volumes:
+      - janus_ollama_data:/root/.ollama
+    restart: unless-stopped
+    mem_limit: 20g
+    cpus: "8.0"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - janus-pc2-net
+
+  ollama-model-init:
+    image: ollama/ollama:latest
+    container_name: janus_ollama_model_init
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
+      - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
+      - OLLAMA_CURATOR_MODEL=${OLLAMA_CURATOR_MODEL:-ministral-3:14b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        set -e
+        echo "Waiting Ollama..."
+        for i in $(seq 1 60); do
+          if ollama list >/dev/null 2>&1; then
+            break
+          fi
+          sleep 2
+        done
+        echo "Pulling models..."
+        ollama pull "$OLLAMA_ORCHESTRATOR_MODEL"
+        ollama pull "$OLLAMA_CODER_MODEL"
+        ollama pull "$OLLAMA_CURATOR_MODEL"
+        ollama list
+    restart: "no"
+    networks:
+      - janus-pc2-net
+
+networks:
+  janus-pc2-net:
+    driver: bridge
+
+volumes:
+  janus_neo4j_data:
+  janus_qdrant_data:
+  janus_ollama_data:

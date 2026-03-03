@@ -76,7 +76,32 @@ def cmd_setup() -> None:
 
 
 def cmd_up() -> None:
-    run(["docker", "compose", "up", "-d"], cwd=REPO_ROOT)
+    run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.pc2.yml",
+            "--env-file",
+            ".env.pc2",
+            "up",
+            "-d",
+        ],
+        cwd=REPO_ROOT,
+    )
+    run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.pc1.yml",
+            "--env-file",
+            ".env.pc1",
+            "up",
+            "-d",
+        ],
+        cwd=REPO_ROOT,
+    )
     wait_for_health(HEALTH_URLS)
 
 
@@ -91,7 +116,30 @@ def cmd_qa() -> None:
 
 
 def cmd_down() -> None:
-    run(["docker", "compose", "down"], cwd=REPO_ROOT)
+    run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.pc1.yml",
+            "--env-file",
+            ".env.pc1",
+            "down",
+        ],
+        cwd=REPO_ROOT,
+    )
+    run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.pc2.yml",
+            "--env-file",
+            ".env.pc2",
+            "down",
+        ],
+        cwd=REPO_ROOT,
+    )
 
 
 def parse_args() -> argparse.Namespace:

@@ -412,6 +412,10 @@ class LLMClient:
                         mk["num_ctx"] = self.settings.OLLAMA_NUM_CTX
                     if getattr(self.settings, "OLLAMA_NUM_THREAD", None):
                         mk["num_thread"] = self.settings.OLLAMA_NUM_THREAD
+                    if getattr(self.settings, "OLLAMA_NUM_BATCH", None):
+                        mk["num_batch"] = self.settings.OLLAMA_NUM_BATCH
+                    if getattr(self.settings, "OLLAMA_GPU_LAYERS", None):
+                        mk["num_gpu"] = self.settings.OLLAMA_GPU_LAYERS
                     if getattr(self.settings, "OLLAMA_KEEP_ALIVE", None):
                         mk["keep_alive"] = self.settings.OLLAMA_KEEP_ALIVE
 

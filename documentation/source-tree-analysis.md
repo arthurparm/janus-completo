@@ -33,7 +33,8 @@ janus-completo/
 |  |- docker/Dockerfile
 |  |- pyproject.toml
 |  |- qa/
-|- docker-compose.yml              # stack local completa
+|- docker-compose.pc1.yml          # stack oficial PC1 (api + dados leves)
+|- docker-compose.pc2.yml          # stack oficial PC2 (neo4j/qdrant/ollama)
 |- tooling/                        # automacao operacional no host
 |- qa/                          # testes de integracao e validacoes extras
 |- _bmad/                          # workflows BMAD instalados no projeto
@@ -78,7 +79,7 @@ Schema de dados para SQLAlchemy/Pydantic e contratos internos.
 
 - **Frontend:** `frontend/src/main.ts`
 - **Backend:** `backend/app/main.py`
-- **Infra local:** `docker-compose.yml`
+- **Infra local:** `docker-compose.pc1.yml` + `docker-compose.pc2.yml`
 
 ## Padroes de Organizacao
 
@@ -88,7 +89,7 @@ Schema de dados para SQLAlchemy/Pydantic e contratos internos.
 
 ## Arquivos de Configuracao Relevantes
 
-- `docker-compose.yml`
+- `docker-compose.pc1.yml`, `docker-compose.pc2.yml`
 - `frontend/angular.json`, `frontend/package.json`, `frontend/proxy*.json`
 - `backend/pyproject.toml`, `backend/requirements.txt`
 - `backend/app/config.py`

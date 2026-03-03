@@ -231,10 +231,14 @@ async def get_llm(
                 batch_val = _coerce_int(config.get("num_batch"))
                 if batch_val is not None:
                     ollama_kwargs_override["num_batch"] = batch_val
-            if "gpu_layer" in config:
-                gpu_val = _coerce_int(config.get("gpu_layer"))
+            gpu_override_keys = ("num_gpu", "gpu_layers", "gpu_layer")
+            for gpu_key in gpu_override_keys:
+                if gpu_key not in config:
+                    continue
+                gpu_val = _coerce_int(config.get(gpu_key))
                 if gpu_val is not None:
-                    ollama_kwargs_override["gpu_layer"] = gpu_val
+                    ollama_kwargs_override["num_gpu"] = gpu_val
+                    break
             if "keep_alive" in config:
                 keep_alive = config.get("keep_alive")
                 if keep_alive is not None:

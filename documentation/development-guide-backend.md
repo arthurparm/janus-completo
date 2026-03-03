@@ -1,32 +1,31 @@
-﻿# Development Guide - Backend (`backend`)
+# Development Guide - Backend (`backend`)
 
 ## Pre-requisitos
 
 - Python 3.11
-- Poetry/uv (dependendo do fluxo local)
-- Docker + Docker Compose (recomendado)
+- Docker + Docker Compose
 
-## Setup Recomendado (Stack Completa)
+## Setup Recomendado (PC1 + PC2)
 
 Na raiz do repositorio:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
-Servicos principais expostos:
+Servicos principais:
 
 - API: `http://localhost:8000`
-- Front (container): `http://localhost:4300`
-- Grafana: `http://localhost:3000`
-- Prometheus: `http://localhost:9090`
+- Neo4j (PC2): `bolt://<pc2-tailscale-ip>:7687`
+- Qdrant (PC2): `http://<pc2-tailscale-ip>:6333`
+- Ollama (PC2): `http://<pc2-tailscale-ip>:11434`
 
 ## Setup Local API (alternativo)
 
 ```bash
 cd backend
-# instalar deps
-# iniciar API
+pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -45,23 +44,9 @@ cd backend
 pytest
 ```
 
-Suites adicionais no repositorio:
-
-- `qa/` (raiz)
-- `backend/tests/` (unit, integration, e2e, smoke)
-
 ## Operacao e Health
 
 - `GET /healthz`
 - `GET /health`
 - `GET /api/v1/system/status`
 - `GET /api/v1/workers/status`
-
-## Observacoes
-
-- Worker orchestration pode iniciar automaticamente (`START_ORCHESTRATOR_WORKERS_ON_STARTUP`).
-- Configuracoes de custo/LLM estao em `backend/app/config.py`.
-
----
-
-_Gerado pelo workflow BMAD `document-project`_

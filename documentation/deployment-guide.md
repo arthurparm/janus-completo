@@ -1,61 +1,70 @@
-﻿# Deployment Guide
+# Deployment Guide
 
 ## Visao Geral
 
-A entrega local/servidor e baseada em `docker-compose.yml` com servicos de API, frontend e infraestrutura de dados/observabilidade.
+O deploy oficial do projeto usa dois stacks separados:
 
-## Servicos Provisionados
+- `PC1`: `docker-compose.pc1.yml` (API + Postgres + Redis + RabbitMQ)
+- `PC2`: `docker-compose.pc2.yml` (Neo4j + Qdrant + Ollama)
 
-- `janus-api` (FastAPI)
-- `frontend` (Angular dev server containerizado)
-- `redis`, `postgres`, `rabbitmq`, `neo4j`, `qdrant`, `ollama`
-- `prometheus`, `grafana`, `otel-collector`
+Nao ha suporte operacional para `docker-compose.yml` legado.
 
-## Comandos
-
-### Subir stack
+## Ordem de Subida
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
-### Ver status
+## Validacao Rapida
+
+PC2:
 
 ```bash
-docker compose ps
+curl -sf http://localhost:11434/api/tags
+curl -sf http://localhost:6333/collections
 ```
 
-### Logs
+PC1:
 
 ```bash
-docker compose logs -f janus-api
-docker compose logs -f frontend
+curl -sf http://localhost:8000/health
 ```
 
-### Health checks
+## Rede: somente Tailscale no PC2
 
-- API: `http://localhost:8000/health`
-- Front (container): `http://localhost:4300`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`
+Servicos do PC2 devem ficar acessiveis apenas via `tailscale0`:
 
-## Variaveis e Segredos
+- Neo4j `7687`
+- Qdrant `6333`
+- Ollama `11434`
 
-- Arquivo `backend/app/.env` e usado por multiplos servicos.
-- Template para bootstrap local: `backend/app/.env.example`
-- Chaves de API/credenciais nao devem ser hardcoded em ambientes versionados.
+Exemplo com `ufw` (ajuste conforme seu host):
 
-## Operacao Basica (v1)
+```bash
+sudo ufw deny 7687/tcp
+sudo ufw deny 6333/tcp
+sudo ufw deny 11434/tcp
+sudo ufw allow in on tailscale0 to any port 7687 proto tcp
+sudo ufw allow in on tailscale0 to any port 6333 proto tcp
+sudo ufw allow in on tailscale0 to any port 11434 proto tcp
+sudo ufw reload
+```
 
-- Runbook de bootstrap, alerting e backup/restore local:
-  - `documentation/ops/ops-basics-v1.md`
+## Credenciais e Volumes
 
-## Pipeline e Boas Praticas
+Se houve troca de senha em Neo4j/Postgres, resetar volumes para alinhar credenciais:
 
-- Executar testes automatizados antes do deploy.
-- Versionar imagens em ambiente de CI/CD (evitar `latest` em producao).
-- Separar compose de desenvolvimento e compose de producao.
+```bash
+# PC2 (Neo4j)
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 down -v
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
 
----
+# PC1 (Postgres)
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 down -v
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
+```
 
-_Gerado pelo workflow BMAD `document-project`_
+## Referencia
+
+Fluxo operacional detalhado: `documentation/deployment-split-pc1-pc2.md`.

@@ -64,7 +64,7 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 ## Visao de Desenvolvimento
 
 - **Frontend:** `cd frontend && npm install && npm start`
-- **Backend (container):** `docker compose up -d`
+- **Backend (container, PC2 + PC1):** `docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d && docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d`
 - **Backend (local):** `cd backend && uvicorn app.main:app --reload`
 - **Testes principais:** `cd frontend && npm run test` e `cd backend && pytest`
 
@@ -75,6 +75,7 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 - `documentation/architecture-backend.md` - arquitetura do backend
 - `documentation/integration-architecture.md` - contratos de integracao entre partes
 - `documentation/source-tree-analysis.md` - arvore comentada
+- `documentation/deployment-split-pc1-pc2.md` - deploy oficial PC1/PC2
 
 ---
 

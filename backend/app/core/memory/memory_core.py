@@ -39,9 +39,18 @@ class MemoryCore:
 
         # Components
         if client is None:
-            client = AsyncQdrantClient(
-                host=self.settings.QDRANT_HOST, port=self.settings.QDRANT_PORT
-            )
+            qdrant_api_key = getattr(self.settings, "QDRANT_API_KEY", None)
+            if hasattr(qdrant_api_key, "get_secret_value"):
+                qdrant_api_key = qdrant_api_key.get_secret_value()
+
+            client_kwargs: dict[str, Any] = {
+                "host": self.settings.QDRANT_HOST,
+                "port": self.settings.QDRANT_PORT,
+            }
+            if qdrant_api_key:
+                client_kwargs["api_key"] = qdrant_api_key
+
+            client = AsyncQdrantClient(**client_kwargs)
         self.provider = QdrantProvider(client=client, circuit_breaker=circuit_breaker)
         self.cache = MemoryLocalCache()
         self.collection_name = self.provider.collection_name

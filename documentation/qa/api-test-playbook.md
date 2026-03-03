@@ -34,7 +34,8 @@ Provide a repeatable flow to:
 ### 1) Start stack
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
 Optional infra-only startup (PowerShell):

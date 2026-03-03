@@ -190,7 +190,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Start stack
-        run: docker compose up -d
+        run: docker compose -f docker-compose.pc1.yml --env-file .env.pc1.example up -d
 
       - name: Wait API health
         run: |
@@ -202,7 +202,7 @@ jobs:
             sleep 2
           done
           echo "API did not become healthy in time"
-          docker compose ps
+          docker compose -f docker-compose.pc1.yml --env-file .env.pc1.example ps
           exit 1
 
       - name: Setup Python

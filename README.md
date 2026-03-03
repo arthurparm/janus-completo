@@ -66,8 +66,11 @@ API Documentation at: `http://localhost:8000/docs`
 ### Full Stack (Docker)
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
+
+Order is mandatory: start `PC2` first, then `PC1`.
 
 ## Documentation
 
@@ -78,6 +81,7 @@ Comprehensive documentation is available in the `documentation/` directory:
 - [Architecture - Backend](documentation/architecture-backend.md)
 - [Integration Architecture](documentation/integration-architecture.md)
 - [Deployment Guide](documentation/deployment-guide.md)
+- [Deployment Split PC1/PC2](documentation/deployment-split-pc1-pc2.md)
 - [API Endpoint Matrix (Live)](documentation/qa/api-endpoint-matrix.md)
 - [API Test Playbook](documentation/qa/api-test-playbook.md)
 - [Domain SLOs and Alerts](documentation/qa/domain-slo-alerts.md)
