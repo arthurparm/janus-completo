@@ -614,3 +614,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: ideia
+
+### [SG-018] Vulnerabilidade OS Command Injection
+- Problema atual: `backend/app/core/tools/launcher_tools.py` permite RCE e injeção de comandos devido ao uso inseguro de `subprocess.Popen` com o argumento `shell=True`.
+- Solucao proposta: Substituir por um array de argumentos em formato de lista (ex: `subprocess.Popen(["start", '""', app_name])`) ou outra alternativa da stdlib sem shell string execution.
+- Impacto esperado: Remoção imediata de risco crítico mapeado por linter (Bandit B602).
+- Riscos: Quebra de compatibilidade em certos Windows App execution paths.
+- Dependencias: Nenhuma
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-019] Vazamento contínuo de PII e estado global inseguro (Produtividade)
+- Problema atual: `backend/app/core/tools/productivity_tools.py` possui listas de notas/calendário armazenadas globalmente em memória (`_notes`, `_calendar_events`) vazando contexto através de requests. Além disso, o logger grava emails e ids abertos.
+- Solucao proposta: Remover as globais para um repositório restrito por sessão/DB e ofuscar IDs, e-mails, e assuntos no logger do `send_email`.
+- Impacto esperado: Conformidade com LGPD e eliminação de falhas de isolamento no state application.
+- Riscos: Redução de velocidade na execução destas ferramentas caso banco/cache esteja lento.
+- Dependencias: Camada de mascaramento em `logging_config.py`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
