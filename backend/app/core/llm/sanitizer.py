@@ -15,7 +15,8 @@ class ContentSanitizer:
         """Applies identity enforcement and removes model disclosures.
 
         - Removes snippets like "As an AI/large language model".
-        - Replaces model/provider names with "Janus".
+        - Rewrites self-identification with provider/model names to the Janus identity.
+        - Preserves technical references that are not self-identification.
         """
         try:
             if not getattr(self.settings, "IDENTITY_ENFORCEMENT_ENABLED", False):
@@ -24,35 +25,47 @@ class ContentSanitizer:
             sanitized = text
             # Remove common disclaimers (English/Portuguese)
             patterns_remove = [
-                r"(?i)\bAs an? (?:AI|(?:large )?language model)[^\.\n]*[\.\n]?",
-                r"(?i)\bI am an? (?:AI|(?:large )?language model)[^\.\n]*[\.\n]?",
-                r"(?i)\bAs a model[^\.\n]*[\.\n]?",
-                r"(?i)\bComo (?:um|uma) (?:modelo de linguagem|IA)[^\.\n]*[\.\n]?",
-                r"(?i)\bSou (?:um|uma) (?:modelo de linguagem|IA)[^\.\n]*[\.\n]?",
+                r"(?i)\bAs an? (?:AI|(?:large )?language model)\b(?:,\s*)?",
+                r"(?i)\bI am an? (?:AI|(?:large )?language model)\b(?:,\s*)?",
+                r"(?i)\bAs a model\b(?:,\s*)?",
+                r"(?i)\bComo (?:um|uma) (?:modelo de linguagem|IA)\b(?:,\s*)?",
+                r"(?i)\bSou (?:um|uma) (?:modelo de linguagem|IA)\b(?:,\s*)?",
             ]
             for pat in patterns_remove:
                 sanitized = re.sub(pat, "", sanitized)
 
-            # Replace model/provider names with identity
             identity = getattr(self.settings, "AGENT_IDENTITY_NAME", None) or getattr(
                 self.settings, "APP_NAME", "Janus"
             )
-            patterns_replace = [
-                r"(?i)\bGPT[- ]?\d(?:\.\d)?\b",
-                r"(?i)\bChatGPT\b",
-                r"(?i)\bClaude(?:[- ]?\d+)?\b",
-                r"(?i)\bLlama(?:[- ]?\d+)?\b",
-                r"(?i)\bMistral(?:[- ]?\d+)?\b",
-                r"(?i)\bGemini\b",
-                r"(?i)\bOpenAI\b",
-                r"(?i)\bAnthropic\b",
-                r"(?i)\bGoogle(?:\s+Gemini)?\b",
-                r"(?i)\bCohere\b",
-                r"(?i)\bHugging\s*Face\b",
-                r"(?i)\bBedrock\b",
+            provider_token = (
+                r"(?:chatgpt|gpt(?:[- ]?\d+(?:\.\d+)?(?:[-a-z0-9\.]*)?)?|"
+                r"claude(?:[- ]?[a-z0-9\.]+)?|llama(?:[- ]?[a-z0-9\.]+)?|"
+                r"mistral(?:[- ]?[a-z0-9\.]+)?|gemini(?:[- ]?[a-z0-9\.]+)?|"
+                r"openai|anthropic|google(?:\s+gemini)?|cohere|hugging\s*face|"
+                r"bedrock|deepseek|ollama)"
+            )
+            provider_regex = re.compile(provider_token, re.IGNORECASE)
+
+            def _replace_provider_with_identity(match: re.Match[str]) -> str:
+                return provider_regex.sub(identity, match.group(0))
+
+            # Replace provider/model mentions only in self-identification contexts.
+            self_context_patterns = [
+                re.compile(
+                    rf"(?i)\b(?:i am|i'm|we are|eu sou|sou|n[oó]s somos)\b"
+                    rf"[^.\n]{{0,120}}\b{provider_token}\b"
+                ),
+                re.compile(
+                    rf"(?i)\b(?:my|meu|minha)\s+"
+                    rf"(?:model|modelo|provider|provedor)\b[^.\n]{{0,120}}\b{provider_token}\b"
+                ),
+                re.compile(
+                    rf"(?i)\b(?:powered by|baseado em|rodando em|executando com)\b"
+                    rf"[^.\n]{{0,80}}\b{provider_token}\b"
+                ),
             ]
-            for pat in patterns_replace:
-                sanitized = re.sub(pat, identity, sanitized)
+            for pat in self_context_patterns:
+                sanitized = pat.sub(_replace_provider_with_identity, sanitized)
 
             # Remove sensitive internal information (budgets, costs, provider details)
             patterns_sensitive = [
@@ -63,8 +76,6 @@ class ContentSanitizer:
                 # Budget mentions
                 r"(?i)orçamento\s+(?:mensal|diário|total)[^.]*\.",
                 r"(?i)budget[^.]*\.",
-                # Specific provider mentions in architecture context
-                r"(?i)(?:uso|utilizo|usando|powered by)\s+(?:DeepSeek|Ollama|Qdrant|Neo4j)[^.]*\.",
             ]
             for pat in patterns_sensitive:
                 sanitized = re.sub(pat, "[informação interna]", sanitized)

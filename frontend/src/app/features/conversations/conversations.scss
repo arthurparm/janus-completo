@@ -1355,6 +1355,26 @@
   scroll-padding-inline: 4px;
 }
 
+.confirmation-card {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.citation-status-inline {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .rag-view-tab {
   appearance: none;
   border: 1px solid transparent;

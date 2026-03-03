@@ -316,6 +316,8 @@ class AgentPayload(BaseModel):
     audit_passed: bool | None = None
     security_feedback: str | None = None
     security_findings: list[dict[str, Any]] = Field(default_factory=list)
+    # Contract v1 for autonomy enqueue context: goal, metrics, plan, selected_step, mode, autonomy_run_id
+    autonomy: dict[str, Any] | None = None
     code: str | None = None  # Legacy/Generic
     response: str | None = None  # Legacy/Generic
 
@@ -336,6 +338,7 @@ class TaskState(BaseModel):
     next_agent_role: str | None = None
     data_payload: AgentPayload = Field(default_factory=AgentPayload)
     history: list[TaskStateEvent] = Field(default_factory=list)
+    # Canonical statuses used by Parliament/autonomy: in_progress, completed, failed, blocked, cancelled
     status: str = Field(default="in_progress")
     retries: int = Field(default=0)
     meta: dict[str, Any] = Field(default_factory=dict)

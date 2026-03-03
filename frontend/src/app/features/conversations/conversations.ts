@@ -12,14 +12,18 @@ import { AgentEvent, AgentEventsService } from '../../core/services/agent-events
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
 import {
   BackendApiService,
+  ChatAgentState,
+  ChatConfirmationState,
   ChatMessage,
   ChatUnderstanding,
   ConversationMeta,
+  CitationStatus,
   DocListItem,
   DocSearchResultItem,
   FeedbackQuickResponse,
   GenerativeMemoryItem,
   MemoryItem,
+  PendingAction,
   Citation,
   AutonomyStatusResponse,
   Goal,
@@ -46,6 +50,9 @@ interface ChatMessageView {
   timestamp: number
   citations?: Citation[]
   understanding?: ChatUnderstanding
+  citation_status?: CitationStatus
+  confirmation?: ChatConfirmationState
+  agent_state?: ChatAgentState
   latency_ms?: number
   provider?: string
   model?: string
@@ -160,6 +167,9 @@ export class ConversationsComponent {
   readonly selectedRole = signal('orchestrator')
   readonly selectedPriority = signal('fast_and_cheap')
   readonly streamingEnabled = signal(true)
+  readonly latestCognitiveState = signal<string>('')
+  readonly latestToolStatus = signal<string>('')
+  readonly pendingActionLoading = signal<Record<number, boolean>>({})
   readonly showAdvanced = signal(false)
   readonly advancedRailTab = signal<AdvancedRailTab>('cliente')
   readonly customerTab = signal<CustomerTab>('docs')
@@ -263,9 +273,18 @@ export class ConversationsComponent {
     const conversationId = this.selectedId()
     const items = this.memoryUser()
     if (!conversationId) return []
-    return items.filter((item) => this.isConversationMemory(item, conversationId))
+    return items
+      .filter((item) => this.isConversationMemory(item, conversationId))
+      .slice(0, 6)
   })
-  readonly userMemory = computed(() => this.memoryUser())
+  readonly userMemory = computed(() => {
+    const conversationId = this.selectedId()
+    const items = this.memoryUser()
+    const filtered = conversationId
+      ? items.filter((item) => !this.isConversationMemory(item, conversationId))
+      : items
+    return filtered.slice(0, 6)
+  })
   readonly autonomyActiveGoals = computed(() => this.autonomyGoals()
     .filter((goal) => goal.status === 'pending' || goal.status === 'in_progress')
     .slice(0, 6))
@@ -300,6 +319,8 @@ export class ConversationsComponent {
 
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
+  private streamingConversationId: string | null = null
+  private pendingConversationRouteId: string | null = null
   private scrollQueued = false
   private responseStartedAt: number | null = null
   private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
@@ -341,6 +362,26 @@ export class ConversationsComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((err) => this.handleStreamError(err.error))
 
+    this.stream.cognitive()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((evt) => {
+        const state = String(evt?.state || '')
+        this.latestCognitiveState.set(state)
+        if (state) {
+          this.appendThought('agent', 'Estado cognitivo', `Estado: ${state}${evt.reason ? ` (${evt.reason})` : ''}`)
+        }
+      })
+
+    this.stream.toolStatus()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((evt) => {
+        const label = [evt.status, evt.tool_name].filter(Boolean).join(' · ')
+        this.latestToolStatus.set(label)
+        if (label) {
+          this.appendThought('agent', 'Ferramenta', label)
+        }
+      })
+
     this.eventsService.events$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => {
@@ -363,7 +404,7 @@ export class ConversationsComponent {
     this.error.set('')
     this.sending.set(true)
 
-    const conversationId = await this.ensureConversationId()
+    const conversationId = await this.ensureConversationId(false, false)
     if (!conversationId) {
       this.error.set('Falha ao criar conversa.')
       this.sending.set(false)
@@ -668,6 +709,45 @@ export class ConversationsComponent {
     return value || 'Memória'
   }
 
+  generativeMemoryMetaLine(item: GenerativeMemoryItem): string {
+    const parts = [this.memoryTypeLabel(item.type)]
+
+    const meta = item.metadata || {}
+    const rawImportance = typeof meta === 'object'
+      ? (meta as Record<string, unknown>)['importance']
+      : undefined
+    const importance = typeof rawImportance === 'number'
+      ? rawImportance
+      : typeof rawImportance === 'string'
+        ? Number(rawImportance)
+        : NaN
+    if (Number.isFinite(importance)) {
+      parts.push(`Importância ${Math.round(importance)}`)
+    }
+
+    const scoreValue = item['score']
+    const score = typeof scoreValue === 'number'
+      ? scoreValue
+      : typeof scoreValue === 'string'
+        ? Number(scoreValue)
+        : NaN
+    if (Number.isFinite(score)) {
+      parts.push(`Score ${score.toFixed(2)}`)
+    }
+
+    const timestamp = this.coerceDateInputToMs(item.created_at ?? item.updated_at)
+    if (timestamp) {
+      parts.push(new Date(timestamp).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }))
+    }
+
+    return parts.join(' · ')
+  }
+
   setRagResultViewTab(tab: RagResultViewTab): void {
     this.ragResultViewTab.set(tab)
   }
@@ -855,9 +935,14 @@ export class ConversationsComponent {
     this.clearNotice('memory')
     this.memoryAddLoading.set(true)
     const importance = this.memoryImportance()
+    const userId = this.userIdString()
+    const conversationId = this.selectedId() || undefined
     this.api.addGenerativeMemory(content, {
       type: this.memoryType(),
-      importance: typeof importance === 'number' ? importance : undefined
+      importance: typeof importance === 'number' ? importance : undefined,
+      userId,
+      conversationId,
+      sessionId: conversationId
     })
       .pipe(catchError((err) => {
         this.memoryAddError.set(this.extractErrorMessage(err, 'Falha ao adicionar memória.'))
@@ -886,7 +971,10 @@ export class ConversationsComponent {
     this.memorySearchError.set('')
     this.clearNotice('memory')
     this.memorySearchLoading.set(true)
-    this.api.getGenerativeMemories(query, this.memorySearchLimit())
+    this.api.getGenerativeMemories(query, this.memorySearchLimit(), {
+      userId: this.userIdString(),
+      conversationId: this.selectedId() || undefined
+    })
       .pipe(catchError((err) => {
         this.memorySearchError.set(this.extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
         this.memorySearchLoading.set(false)
@@ -1116,7 +1204,31 @@ export class ConversationsComponent {
   // Hook into selectConversation to clear/reload trace
   private selectConversation(id: string | null): void {
     if (id === this.selectedId()) return
+
+    // During "create conversation + send first message", router param updates can arrive mid-stream.
+    // Avoid tearing down the active stream/UI state for that transient navigation synchronization.
+    if (!id && this.sending() && this.streamingMessageId && this.streamingConversationId) {
+      return
+    }
+
     this.selectedId.set(id)
+
+    const preserveActiveStreamForTarget = Boolean(
+      id &&
+      this.sending() &&
+      this.streamingMessageId &&
+      this.streamingConversationId === id
+    )
+
+    if (preserveActiveStreamForTarget && id) {
+      this.eventsService.connect(id)
+      this.loadContext(id)
+      if (this.showTrace()) {
+        this.loadTrace(id)
+      }
+      return
+    }
+
     this.messages.set([])
     this.events.set([])
     this.docs.set([])
@@ -1142,6 +1254,7 @@ export class ConversationsComponent {
     this.responseStartedAt = null
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
 
     if (!id) {
       this.eventsService.disconnect()
@@ -1194,7 +1307,7 @@ export class ConversationsComponent {
         map((resp) => resp.items || []),
         catchError(() => of([]))
       ),
-      memory: this.api.getMemoryTimeline({ limit: 6, user_id: userId }).pipe(
+      memory: this.api.getMemoryTimeline({ limit: 24, user_id: userId }).pipe(
         catchError(() => of([] as MemoryItem[]))
       )
     }).subscribe((result) => {
@@ -1327,7 +1440,10 @@ export class ConversationsComponent {
       })
   }
 
-  private async ensureConversationId(forceCreate = false): Promise<string | null> {
+  private async ensureConversationId(
+    forceCreate = false,
+    navigateImmediately = true
+  ): Promise<string | null> {
     const current = this.selectedId()
     if (current && !forceCreate) return current
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
@@ -1346,7 +1462,12 @@ export class ConversationsComponent {
       }
       this.conversations.update((items) => [meta, ...items])
       this.selectedId.set(conversationId)
-      this.router.navigate(['/conversations', conversationId], { replaceUrl: true })
+      if (navigateImmediately) {
+        this.pendingConversationRouteId = null
+        this.router.navigate(['/conversations', conversationId], { replaceUrl: true })
+      } else {
+        this.pendingConversationRouteId = conversationId
+      }
       return conversationId
     } catch {
       return null
@@ -1356,6 +1477,7 @@ export class ConversationsComponent {
   private startStreaming(conversationId: string, message: string): void {
     this.streamingBuffer = ''
     this.streamingMessageId = this.createId()
+    this.streamingConversationId = conversationId
     this.appendMessage({
       id: this.streamingMessageId,
       role: 'assistant',
@@ -1400,7 +1522,10 @@ export class ConversationsComponent {
             text: cleanText,
             timestamp: now,
             citations: resp.citations || [],
+            citation_status: resp.citation_status,
             understanding: resp.understanding,
+            confirmation: resp.confirmation ?? resp.understanding?.confirmation,
+            agent_state: resp.agent_state,
             latency_ms: latencyMs,
             provider: resp.provider,
             model: resp.model
@@ -1408,6 +1533,7 @@ export class ConversationsComponent {
           this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
         }
         this.sending.set(false)
+        this.flushPendingConversationNavigation(conversationId)
         this.queueScroll()
       })
   }
@@ -1431,7 +1557,10 @@ export class ConversationsComponent {
       this.updateMessage(this.streamingMessageId, {
         streaming: false,
         citations: done.citations || [],
+        citation_status: done.citation_status,
         understanding: done.understanding,
+        confirmation: done.confirmation ?? done.understanding?.confirmation,
+        agent_state: done.agent_state,
         latency_ms: latencyMs,
         provider: done.provider,
         model: done.model
@@ -1440,6 +1569,7 @@ export class ConversationsComponent {
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
     this.sending.set(false)
     const modelParts = [done.provider, done.model].filter(Boolean)
     const modelLabel = modelParts.length ? ` (${modelParts.join(' / ')})` : ''
@@ -1447,6 +1577,7 @@ export class ConversationsComponent {
     this.appendThought('stream', 'Resposta concluida', `Streaming finalizado${modelLabel}. Citacoes: ${citationsCount}.`)
     this.queueScroll()
     this.loadConversations()
+    this.flushPendingConversationNavigation(done.conversation_id || this.selectedId())
   }
 
   private handleStreamError(reason: string): void {
@@ -1469,8 +1600,19 @@ export class ConversationsComponent {
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
+    this.streamingConversationId = null
     this.sending.set(false)
     this.appendThought('system', 'Falha no streaming', reason || 'erro desconhecido')
+    this.flushPendingConversationNavigation(this.selectedId())
+  }
+
+  private flushPendingConversationNavigation(targetId?: string | null): void {
+    const pendingId = this.pendingConversationRouteId
+    if (!pendingId) return
+    const nextId = targetId || pendingId
+    if (!nextId || pendingId !== nextId) return
+    this.pendingConversationRouteId = null
+    this.router.navigate(['/conversations', nextId], { replaceUrl: true })
   }
 
   private appendMessage(message: ChatMessageView): void {
@@ -1526,7 +1668,10 @@ export class ConversationsComponent {
       text: this.sanitizeChatText(msg.text),
       timestamp: msg.timestamp,
       citations: msg.citations || [],
+      citation_status: (raw['citation_status'] as CitationStatus | undefined),
       understanding: msg.understanding,
+      confirmation: (raw['confirmation'] as ChatConfirmationState | undefined) ?? msg.understanding?.confirmation,
+      agent_state: (raw['agent_state'] as ChatAgentState | undefined),
       latency_ms: Number.isFinite(latencyMsRaw) && latencyMsRaw > 0 ? latencyMsRaw : undefined,
       provider: typeof raw['provider'] === 'string' ? String(raw['provider']) : undefined,
       model: typeof raw['model'] === 'string' ? String(raw['model']) : undefined
@@ -1580,6 +1725,119 @@ export class ConversationsComponent {
       timestamp: Number(timestamp || Date.now())
     }
     this.thoughtStream.update((items) => [item, ...items].slice(0, 40))
+  }
+
+  messageAgentState(msg: ChatMessageView): string {
+    const explicit = String(msg.agent_state?.state || '').trim()
+    if (explicit) return explicit
+    if (msg.streaming) return 'streaming_response'
+    const confirmation = this.messageConfirmation(msg)
+    if (confirmation?.required && typeof confirmation.pending_action_id === 'number') return 'waiting_confirmation'
+    if (msg.understanding?.low_confidence) return 'low_confidence'
+    return ''
+  }
+
+  messageConfirmation(msg: ChatMessageView): ChatConfirmationState | null {
+    const conf = msg.confirmation || msg.understanding?.confirmation
+    if (!conf) return null
+    const hasPendingAction = typeof conf.pending_action_id === 'number'
+    const hasEndpoints = typeof conf.approve_endpoint === 'string' && typeof conf.reject_endpoint === 'string'
+    if (!hasPendingAction && !hasEndpoints) return null
+    if (conf.required === false && !hasPendingAction && !hasEndpoints) return null
+    return conf
+  }
+
+  messageRiskSummary(msg: ChatMessageView): string {
+    const risk = msg.understanding?.risk
+    if (risk?.summary) return String(risk.summary)
+    const reason = this.messageConfirmation(msg)?.reason
+    if (reason === 'high_risk') return 'Ação classificada como alto risco; confirmação obrigatória.'
+    if (reason === 'low_confidence') return 'Baixa confiança para executar ação; confirme antes de prosseguir.'
+    return 'Ação requer confirmação antes de prosseguir.'
+  }
+
+  citationStatusLabel(status?: CitationStatus): string {
+    const s = String(status?.status || '')
+    if (s === 'present') return `Fontes: ${status?.count ?? 0}`
+    if (s === 'missing_required') return 'Sem citação rastreável (obrigatória)'
+    if (s === 'retrieval_failed') return 'Falha ao recuperar citações'
+    return 'Sem citação'
+  }
+
+  citationStatusVariant(status?: CitationStatus): 'success' | 'warning' | 'error' | 'neutral' {
+    const s = String(status?.status || '')
+    if (s === 'present') return 'success'
+    if (s === 'missing_required') return 'warning'
+    if (s === 'retrieval_failed') return 'error'
+    return 'neutral'
+  }
+
+  isPendingActionBusy(actionId?: number): boolean {
+    if (typeof actionId !== 'number') return false
+    return Boolean(this.pendingActionLoading()[actionId])
+  }
+
+  approvePendingActionForMessage(msg: ChatMessageView): void {
+    const conf = this.messageConfirmation(msg)
+    const actionId = conf?.pending_action_id
+    if (typeof actionId !== 'number') return
+    this.setPendingActionBusy(actionId, true)
+    const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
+    this.api.approvePendingAction(action)
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        this.setPendingActionBusy(actionId, false)
+        if (!resp) {
+          this.updateMessage(msg.id, { error: true, text: `${msg.text}\n\n[Falha ao aprovar ação pendente]` })
+          return
+        }
+        this.updateMessage(msg.id, {
+          confirmation: { ...(conf || { required: true }), required: false, pending_action_id: actionId, reason: conf?.reason, status: 'approved' },
+          agent_state: { state: 'completed', reason: 'approved' }
+        })
+        this.appendMessage({
+          id: this.createId(),
+          role: 'system',
+          text: `Ação pendente #${actionId} aprovada. ${resp.message || ''}`.trim(),
+          timestamp: Date.now()
+        })
+      })
+  }
+
+  rejectPendingActionForMessage(msg: ChatMessageView): void {
+    const conf = this.messageConfirmation(msg)
+    const actionId = conf?.pending_action_id
+    if (typeof actionId !== 'number') return
+    this.setPendingActionBusy(actionId, true)
+    const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
+    this.api.rejectPendingAction(action)
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        this.setPendingActionBusy(actionId, false)
+        if (!resp) {
+          this.updateMessage(msg.id, { error: true, text: `${msg.text}\n\n[Falha ao rejeitar ação pendente]` })
+          return
+        }
+        this.updateMessage(msg.id, {
+          confirmation: { ...(conf || { required: true }), required: false, pending_action_id: actionId, reason: conf?.reason, status: 'rejected' },
+          agent_state: { state: 'completed', reason: 'rejected' }
+        })
+        this.appendMessage({
+          id: this.createId(),
+          role: 'system',
+          text: `Ação pendente #${actionId} rejeitada. ${resp.message || ''}`.trim(),
+          timestamp: Date.now()
+        })
+      })
+  }
+
+  private setPendingActionBusy(actionId: number, busy: boolean): void {
+    this.pendingActionLoading.update((curr) => {
+      const next = { ...curr }
+      if (busy) next[actionId] = true
+      else delete next[actionId]
+      return next
+    })
   }
 
   private restoreAdvancedModePreference(): void {
@@ -1650,12 +1908,32 @@ export class ConversationsComponent {
 
   private isConversationMemory(item: MemoryItem, conversationId: string): boolean {
     const metadata = item.metadata || {}
-    const sessionId = String(metadata.session_id || '')
-    const threadId = String(metadata['thread_id'] || '')
-    const convoId = String(metadata['conversation_id'] || '')
-    const taskId = String(metadata['task_id'] || '')
+    const target = String(conversationId || '').trim()
+    if (!target) return false
+    const sessionId = String(metadata.session_id || '').trim()
+    const threadId = String(metadata['thread_id'] || '').trim()
+    const convoId = String(metadata['conversation_id'] || '').trim()
+    const taskId = String(metadata['task_id'] || '').trim()
     const compositeId = String(item.composite_id || '')
-    return [sessionId, threadId, convoId, taskId, compositeId].some((value) => value.includes(conversationId))
+    if ([sessionId, threadId, convoId, taskId].some((value) => value === target)) return true
+    if (!compositeId) return false
+    const compositeTokens = compositeId.split(/[:/|]/g).map((part) => part.trim()).filter(Boolean)
+    return compositeTokens.some((part) => part === target)
+  }
+
+  private coerceDateInputToMs(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value > 10_000_000_000 ? value : value * 1000
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const numeric = Number(value)
+      if (Number.isFinite(numeric)) {
+        return numeric > 10_000_000_000 ? numeric : numeric * 1000
+      }
+      const parsed = Date.parse(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return null
   }
 
   private extractErrorMessage(error: unknown, fallback: string): string {

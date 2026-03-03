@@ -128,6 +128,7 @@ async def process_sandbox_task(task: TaskMessage) -> None:
                     "timestamp": datetime.utcnow().timestamp(),
                 }
             )
+            state.status = "in_progress"
             state.next_agent_role = "coder"
             service = CollaborationService(CollaborationRepository())
             await service.pass_task(state)
@@ -147,8 +148,10 @@ async def process_sandbox_task(task: TaskMessage) -> None:
 
         # Decisão: dor -> volta para coder; sucesso -> router
         if stderr:
+            state.status = "in_progress"
             state.next_agent_role = "coder"
         else:
+            state.status = "completed"
             state.next_agent_role = "router"
 
         service = CollaborationService(CollaborationRepository())
@@ -158,7 +161,7 @@ async def process_sandbox_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error("log_error", message=f"SandboxAgent falhou: {e}", exc_info=True)
+        logger.error("sandbox_agent_failed", error=str(e), exc_info=True)
         raise
 
 

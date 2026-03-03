@@ -5,10 +5,12 @@ from typing import Any
 import structlog
 from fastapi import Request
 
+from app.core.autonomy.taskstate_status import is_terminal_status, normalize_task_status
 from app.core.agents import AgentRole
 from app.repositories.collaboration_repository import (
     CollaborationRepository,
 )
+from app.repositories.autonomy_goal_repository import AutonomyGoalRepository
 
 from app.core.agents.structures import Task, TaskPriority, TaskStatus
 
@@ -205,6 +207,18 @@ class CollaborationService:
             task_state.static_context_hash = context_hash
             logger.debug("Static context cached for task", task_id=task_state.task_id)
 
+        # Hook central para fechamento automático de metas originadas pelo AutonomyLoop.
+        # Falhas neste hook nunca devem impedir o roteamento/publicação da tarefa.
+        try:
+            self._try_finalize_autonomy_goal_from_taskstate(task_state)
+        except Exception as e:
+            logger.warning(
+                "autonomy_goal_completion_hook_failed",
+                task_id=task_state.task_id,
+                error=str(e),
+                exc_info=e,
+            )
+
         role = (task_state.next_agent_role or "router").lower()
         # Mapear filas por papel
         if role in ("coder", "code", "code_agent"):
@@ -297,7 +311,7 @@ class CollaborationService:
                         origin_agent = ar
                         break
             except Exception as e:
-                logger.warning("log_warning", message=f"Falha ao determinar agente de origem: {e}")
+                logger.warning("collaboration_origin_agent_resolution_failed", error=str(e))
                 origin_agent = None
             meta = {
                 "source_task_id": task_state.task_id,
@@ -331,6 +345,66 @@ class CollaborationService:
         await broker.publish(queue_name=queue, message=msg)
         logger.info("TaskState publicado", queue=queue, task_id=task_state.task_id, next_role=role)
         return queue
+
+    def maybe_finalize_autonomy_goal(self, task_state: TaskState) -> None:
+        try:
+            self._try_finalize_autonomy_goal_from_taskstate(task_state)
+        except Exception as e:
+            logger.warning(
+                "autonomy_goal_completion_hook_failed",
+                task_id=task_state.task_id,
+                error=str(e),
+                exc_info=e,
+            )
+
+    def _try_finalize_autonomy_goal_from_taskstate(self, task_state: TaskState) -> None:
+        status = normalize_task_status(getattr(task_state, "status", None))
+        if not is_terminal_status(status):
+            return
+
+        meta = task_state.meta or {}
+        autonomy_meta = meta.get("autonomy")
+        if not isinstance(autonomy_meta, dict):
+            return
+
+        goal_id = str(autonomy_meta.get("goal_id") or "").strip()
+        if not goal_id:
+            return
+
+        if autonomy_meta.get("goal_completion_hook_applied"):
+            return
+
+        try:
+            from app.core.autonomy.goal_manager import GoalStatus
+        except Exception as e:
+            logger.warning(
+                "autonomy_goal_completion_hook_import_failed",
+                task_id=task_state.task_id,
+                goal_id=goal_id,
+                error=str(e),
+            )
+            return
+
+        target_status = GoalStatus.COMPLETED if status == "completed" else GoalStatus.FAILED
+        goal_repo = AutonomyGoalRepository()
+        updated = goal_repo.transition_status(
+            goal_id,
+            target_status,
+            reason=f"terminal_task_status:{status}",
+            task_id=task_state.task_id,
+            actor="collaboration_hook",
+        )
+        autonomy_meta["goal_completion_hook_applied"] = True
+        autonomy_meta["goal_completion_from_task_status"] = status
+        task_state.meta["autonomy"] = autonomy_meta
+        logger.info(
+            "autonomy_goal_auto_finalized",
+            task_id=task_state.task_id,
+            goal_id=goal_id,
+            task_status=status,
+            goal_status=target_status,
+            updated=bool(updated),
+        )
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço

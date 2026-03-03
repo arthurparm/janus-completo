@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import Any
 
 import structlog
 from prometheus_client import Counter, Gauge
 
 from app.models.schemas import QueueName
+from app.models.schemas import TaskMessage
 from app.repositories.outbox_repository import OutboxEventRecord, OutboxRepository
 from app.core.infrastructure.message_broker import get_broker
 
@@ -75,7 +77,21 @@ class OutboxService:
         try:
             queue_name = self._resolve_queue(item.event_type)
             broker = await get_broker()
-            await broker.publish(queue_name=queue_name, message=item.payload_json)
+            message: Any = item.payload_json
+            publish_kwargs: dict[str, Any] = {}
+            if item.event_type == "knowledge_consolidation":
+                # O consumidor da fila espera TaskMessage(**payload). O outbox persiste apenas o
+                # payload de negócio, então precisamos embrulhar no envelope canônico da fila.
+                task_message = TaskMessage(
+                    task_id=f"outbox-{item.id}",
+                    task_type="knowledge_consolidation",
+                    payload=item.payload_json if isinstance(item.payload_json, dict) else {"raw": item.payload_json},
+                    timestamp=datetime.utcnow().timestamp(),
+                )
+                message = task_message.model_dump()
+                publish_kwargs["use_msgpack"] = True
+
+            await broker.publish(queue_name=queue_name, message=message, **publish_kwargs)
             self._repo.mark_sent(item.id)
             OUTBOX_DISPATCH_TOTAL.labels(status="sent", event_type=item.event_type).inc()
             return True, "sent"

@@ -133,7 +133,7 @@ async def process_red_team_task(task: TaskMessage) -> None:
         # Force the processing role at worker boundary, regardless of upstream payload.
         state.current_agent_role = RED_TEAM_ROLE
 
-        logger.info("log_info", message=f"Red Team analisando tarefa {state.task_id}...")
+        logger.info("red_team_analysis_started", task_id=state.task_id)
 
         # Retrieve relevant context (generated code and fallback context).
         code_snippets = getattr(state.data_payload, "code_snippets", {})
@@ -156,6 +156,7 @@ async def process_red_team_task(task: TaskMessage) -> None:
                     notes="Skipped: No code found.",
                 )
             )
+            state.status = "in_progress"
             state.next_agent_role = "professor"
             await collab_service.pass_task(state)
             return
@@ -186,7 +187,7 @@ async def process_red_team_task(task: TaskMessage) -> None:
             state.blocked_reason = "blocking_security_findings" if has_blocking else None
 
             if decision == "rejected":
-                logger.warning("log_warning", message=f"VULNERABILIDADE DETECTADA na tarefa {state.task_id}!")
+                logger.warning("red_team_vulnerability_detected", task_id=state.task_id)
                 state.history.append(
                     TaskStateEvent(
                         agent_role=RED_TEAM_ROLE,
@@ -196,9 +197,10 @@ async def process_red_team_task(task: TaskMessage) -> None:
                     )
                 )
                 state.data_payload.security_feedback = f"[RED TEAM FEEDBACK]\n{summary}"
+                state.status = "in_progress"
                 state.next_agent_role = "coder"
             else:
-                logger.info("log_info", message=f"Codigo aprovado pelo Red Team na tarefa {state.task_id}.")
+                logger.info("red_team_code_approved", task_id=state.task_id)
                 state.history.append(
                     TaskStateEvent(
                         agent_role=RED_TEAM_ROLE,
@@ -208,12 +210,13 @@ async def process_red_team_task(task: TaskMessage) -> None:
                     )
                 )
                 state.data_payload.security_feedback = None
+                state.status = "in_progress"
                 state.next_agent_role = "professor"
 
             await collab_service.pass_task(state)
 
         except Exception as e:
-            logger.error("log_error", message=f"Falha na auditoria de seguranca: {e}")
+            logger.error("red_team_audit_failed", error=str(e))
             # Fail closed: reject and route back to coder.
             state.security_cycle_count += 1
             state.security_decision = "error"
@@ -228,11 +231,12 @@ async def process_red_team_task(task: TaskMessage) -> None:
                 )
             )
             state.data_payload.security_feedback = f"[SYSTEM ERROR] Security audit failed: {e}"
+            state.status = "in_progress"
             state.next_agent_role = "coder"
             await collab_service.pass_task(state)
 
     except Exception as e:
-        logger.error("log_error", message=f"Erro critico no RedTeamAgentWorker: {e}", exc_info=True)
+        logger.error("red_team_worker_failed", error=str(e), exc_info=True)
         raise
 
 

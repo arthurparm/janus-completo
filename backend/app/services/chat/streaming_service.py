@@ -17,6 +17,15 @@ from app.core.monitoring.chat_metrics import (
     CHAT_TOKENS_TOTAL,
 )
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
+from app.services.chat.chat_citation_service import build_citation_status, map_citation_hits
+from app.services.chat.chat_contracts import (
+    build_agent_state,
+    build_confirmation_payload,
+    chat_sse_error_payload,
+    extract_pending_action_id_from_text,
+    maybe_create_fallback_pending_action,
+    normalize_understanding_payload,
+)
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat.message_helpers import (
     build_understanding_payload,
@@ -58,6 +67,10 @@ class StreamingService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        identity_source: str = "unknown",
+        requested_role: str | None = None,
+        routing_decision: Any | None = None,
+        route_applied: bool | None = None,
     ):
         role = role or ModelRole.ORCHESTRATOR
         priority = priority or ModelPriority.HIGH_QUALITY
@@ -71,7 +84,14 @@ class StreamingService:
         try:
             if message and len(message.encode("utf-8")) > max_bytes:
                 err = json.dumps(
-                    {"error": "Message too large", "code": "MessageTooLarge"}, ensure_ascii=False
+                    chat_sse_error_payload(
+                        code="CHAT_MESSAGE_TOO_LARGE",
+                        message="Message too large",
+                        category="validation",
+                        retryable=False,
+                        http_status=413,
+                    ),
+                    ensure_ascii=False,
                 )
                 yield f"event: error\ndata: {err}\n\n"
                 return
@@ -86,13 +106,28 @@ class StreamingService:
             )
         except ChatRepositoryError:
             err = json.dumps(
-                {"error": "Conversation not found", "code": "ConversationNotFound"},
+                chat_sse_error_payload(
+                    code="CHAT_CONVERSATION_NOT_FOUND",
+                    message="Conversation not found",
+                    category="not_found",
+                    retryable=False,
+                    http_status=404,
+                ),
                 ensure_ascii=False,
             )
             yield f"event: error\ndata: {err}\n\n"
             return
         except ChatServiceError as e:
-            err = json.dumps({"error": str(e), "code": "AccessDenied"}, ensure_ascii=False)
+            err = json.dumps(
+                chat_sse_error_payload(
+                    code="CHAT_ACCESS_DENIED",
+                    message=str(e),
+                    category="authz",
+                    retryable=False,
+                    http_status=403,
+                ),
+                ensure_ascii=False,
+            )
             yield f"event: error\ndata: {err}\n\n"
             return
 
@@ -120,6 +155,14 @@ class StreamingService:
         self._repo.add_message(conversation_id, role="user", text=message)
         ack = json.dumps({"conversation_id": conversation_id}, ensure_ascii=False)
         yield f"event: ack\ndata: {ack}\n\n"
+        yield (
+            "event: cognitive_status\ndata: "
+            + json.dumps(
+                {"state": "thinking", "timestamp": int(_time.time() * 1000)},
+                ensure_ascii=False,
+            )
+            + "\n\n"
+        )
 
         persona = conv.get("persona") or "assistant"
         history = self._repo.get_recent_messages(conversation_id, limit=20)
@@ -127,7 +170,12 @@ class StreamingService:
         relevant_memories = None
         if self._rag_service:
             relevant_memories = await self._rag_service.retrieve_context(
-                message, user_id=user_id, conversation_id=conversation_id
+                message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                caller_endpoint="/api/v1/chat/stream/{conversation_id}",
+                transport="sse",
+                identity_source=identity_source,
             )
 
         prompt = await self._prompt_service.build_prompt(
@@ -171,12 +219,21 @@ class StreamingService:
                 "provider": "janus",
                 "model": "discovery",
                 "citations": [],
+                "citation_status": build_citation_status(message=message, citations=[]),
             }
             _, ui = split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
-            if understanding:
-                done_payload["understanding"] = understanding
+            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
+            if normalized_understanding:
+                done_payload["understanding"] = normalized_understanding
+            agent_state = build_agent_state(
+                stream_phase="completed",
+                understanding=normalized_understanding,
+                confirmation=None,
+            )
+            if agent_state:
+                done_payload["agent_state"] = agent_state
             done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {done}\n\n"
             return
@@ -216,12 +273,21 @@ class StreamingService:
                 "provider": "janus",
                 "model": "tools_docs",
                 "citations": [],
+                "citation_status": build_citation_status(message=message, citations=[]),
             }
             _, ui = split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
-            if understanding:
-                done_payload["understanding"] = understanding
+            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
+            if normalized_understanding:
+                done_payload["understanding"] = normalized_understanding
+            agent_state = build_agent_state(
+                stream_phase="completed",
+                understanding=normalized_understanding,
+                confirmation=None,
+            )
+            if agent_state:
+                done_payload["agent_state"] = agent_state
             done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {done}\n\n"
             return
@@ -241,7 +307,16 @@ class StreamingService:
                 ttft = _time.time() - start_t_overall
                 limit = float(timeout_seconds or default_timeout)
                 if limit > 0 and ttft > limit:
-                    err = json.dumps({"error": "TTFT timeout", "code": "TTFTTimeout"}, ensure_ascii=False)
+                    err = json.dumps(
+                        chat_sse_error_payload(
+                            code="CHAT_STREAM_TIMEOUT",
+                            message="TTFT timeout",
+                            category="timeout",
+                            retryable=True,
+                            details={"phase": "ttft"},
+                        ),
+                        ensure_ascii=False,
+                    )
                     try:
                         from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
 
@@ -273,12 +348,21 @@ class StreamingService:
                 "provider": "janus",
                 "model": "capabilities",
                 "citations": [],
+                "citation_status": build_citation_status(message=message, citations=[]),
             }
             _, ui = split_ui(assistant_text)
             if ui:
                 done_payload["ui"] = ui
-            if understanding:
-                done_payload["understanding"] = understanding
+            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
+            if normalized_understanding:
+                done_payload["understanding"] = normalized_understanding
+            agent_state = build_agent_state(
+                stream_phase="completed",
+                understanding=normalized_understanding,
+                confirmation=None,
+            )
+            if agent_state:
+                done_payload["agent_state"] = agent_state
             done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {done}\n\n"
             return
@@ -300,7 +384,15 @@ class StreamingService:
             current_provider = pre.get("provider")
             current_model = pre.get("model")
             if self._llm.is_provider_open(current_provider or ""):
-                err = json.dumps({"error": "Circuit open", "code": "CircuitOpen"}, ensure_ascii=False)
+                err = json.dumps(
+                    chat_sse_error_payload(
+                        code="CHAT_CIRCUIT_OPEN",
+                        message="Circuit open",
+                        category="availability",
+                        retryable=True,
+                    ),
+                    ensure_ascii=False,
+                )
                 try:
                     from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
 
@@ -356,7 +448,15 @@ class StreamingService:
             current_provider = result.get("provider")
 
             if self._cb_should_block(current_provider):
-                err = json.dumps({"error": "Circuit open", "code": "CircuitOpen"}, ensure_ascii=False)
+                err = json.dumps(
+                    chat_sse_error_payload(
+                        code="CHAT_CIRCUIT_OPEN",
+                        message="Circuit open",
+                        category="availability",
+                        retryable=True,
+                    ),
+                    ensure_ascii=False,
+                )
                 try:
                     from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
 
@@ -403,6 +503,7 @@ class StreamingService:
                 pass
 
             citations: list[dict[str, Any]] = []
+            citations_retrieval_failed = False
             try:
                 from qdrant_client import models as qdrant_models
 
@@ -450,46 +551,116 @@ class StreamingService:
                     query_filter=query_filter,
                 )
                 hits = getattr(res, "points", res) or []
+                mapped_hits: list[dict[str, Any]] = []
                 for hit in hits:
                     payload = getattr(hit, "payload", {}) or {}
-                    meta = payload.get("metadata") or {}
-                    line_start = (
-                        meta.get("line_start")
-                        or meta.get("start_line")
-                        or meta.get("line")
-                        or meta.get("line_no")
-                    )
-                    line_end = meta.get("line_end") or meta.get("end_line")
-                    citations.append(
+                    mapped_hits.append(
                         {
                             "id": getattr(hit, "id", None),
-                            "title": meta.get("title"),
-                            "url": meta.get("url"),
-                            "doc_id": meta.get("doc_id"),
-                            "file_path": meta.get("file_path"),
-                            "type": meta.get("type"),
-                            "origin": meta.get("origin"),
-                            "line_start": line_start,
-                            "line_end": line_end,
-                            "line": line_start,
                             "score": float(getattr(hit, "score", 0.0) or 0.0),
-                            "snippet": payload.get("content"),
+                            "payload": payload,
+                            "metadata": payload.get("metadata") or {},
+                            "content": payload.get("content"),
                         }
                     )
+                citations = map_citation_hits(mapped_hits)
             except Exception:
                 citations = []
+                citations_retrieval_failed = True
 
+            result_understanding = result.get("understanding") if isinstance(result, dict) else None
+            if not isinstance(result_understanding, dict):
+                result_understanding = dict(understanding or {})
+                result["understanding"] = result_understanding
+
+            if routing_decision is not None and hasattr(routing_decision, "to_dict"):
+                try:
+                    result_understanding["routing"] = {
+                        "requested_role": requested_role,
+                        "selected_role": role.value,
+                        "route_applied": bool(route_applied),
+                        **routing_decision.to_dict(),
+                    }
+                except Exception:
+                    pass
+
+                try:
+                    if getattr(routing_decision, "risk_level", None) == "high":
+                        result_understanding["requires_confirmation"] = True
+                        result_understanding["confirmation_reason"] = "high_risk"
+                        if "alto risco" not in str(result.get("response", "")).lower():
+                            result["response"] = (
+                                "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\n"
+                                f"{result.get('response', '')}"
+                            )
+                except Exception:
+                    pass
+
+            pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
+            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+                user_id=str(user_id) if user_id is not None else None,
+                message=message,
+                conversation_id=conversation_id,
+                existing_pending_action_id=pending_action_id,
+                understanding=result_understanding if isinstance(result_understanding, dict) else None,
+            )
+            if (
+                fallback_reason
+                and isinstance(result_understanding, dict)
+                and not result_understanding.get("confirmation_reason")
+            ):
+                result_understanding["confirmation_reason"] = fallback_reason
+            confirmation_payload = build_confirmation_payload(
+                pending_action_id=pending_action_id,
+                reason=(
+                    (result_understanding or {}).get("confirmation_reason")
+                    if isinstance(result_understanding, dict)
+                    else None
+                ),
+            )
+            normalized_understanding = normalize_understanding_payload(
+                result_understanding or understanding,
+                confirmation=confirmation_payload,
+            )
+            citation_status = build_citation_status(
+                message=message,
+                citations=citations,
+                retrieval_failed=citations_retrieval_failed,
+            )
             done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
                 "provider": result.get("provider"),
                 "model": result.get("model"),
                 "citations": citations,
+                "citation_status": citation_status,
             }
             if ui:
                 done_payload["ui"] = ui
-            result_understanding = result.get("understanding") if isinstance(result, dict) else None
-            if result_understanding or understanding:
-                done_payload["understanding"] = result_understanding or understanding
+            if normalized_understanding:
+                done_payload["understanding"] = normalized_understanding
+            if confirmation_payload:
+                done_payload["confirmation"] = confirmation_payload
+            agent_state = build_agent_state(
+                stream_phase="completed",
+                understanding=normalized_understanding,
+                confirmation=confirmation_payload,
+            )
+            if agent_state:
+                done_payload["agent_state"] = agent_state
+                if agent_state.get("state") == "waiting_confirmation":
+                    yield (
+                        "event: cognitive_status\ndata: "
+                        + json.dumps(
+                            {
+                                "state": "waiting_confirmation",
+                                "requires_confirmation": True,
+                                "reason": (confirmation_payload or {}).get("reason"),
+                                "timestamp": int(_time.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
             done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {done}\n\n"
 
@@ -512,7 +683,15 @@ class StreamingService:
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="error").observe(
                 max(0.0, _time.time() - start_t)
             )
-            err = json.dumps({"error": str(e), "code": "InvocationError"}, ensure_ascii=False)
+            err = json.dumps(
+                chat_sse_error_payload(
+                    code="CHAT_INVOCATION_ERROR",
+                    message=str(e),
+                    category="internal",
+                    retryable=True,
+                ),
+                ensure_ascii=False,
+            )
             try:
                 from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
 

@@ -45,6 +45,48 @@ class _SamplingProcessor:
         raise structlog.DropEvent
 
 
+_LEGACY_LOG_EVENTS = {"log_debug", "log_info", "log_warning", "log_error"}
+
+
+def _normalize_legacy_structlog_event(_, __, event_dict: dict[str, Any]):
+    """Normalize legacy structlog calls using event='log_*' and message='...'.
+
+    Legacy pattern found across the codebase:
+      logger.info("log_info", message="...")
+
+    This processor rewrites it into a standard event message while preserving
+    the original marker in `legacy_event` for migration observability.
+    """
+    event = event_dict.get("event")
+    message = event_dict.get("message")
+
+    # Some callsites pass a structured dict as the positional event:
+    #   logger.info({"event": "...", "foo": "bar"})
+    # structlog stores that dict under event_dict["event"].
+    # Normalize it by flattening into the top-level event payload.
+    if isinstance(event, dict):
+        nested = event
+        nested_event = nested.get("event")
+        for key, value in nested.items():
+            if key == "event":
+                continue
+            event_dict.setdefault(str(key), value)
+        if isinstance(nested_event, str) and nested_event.strip():
+            event_dict["event"] = nested_event
+        else:
+            event_dict["event"] = "structured_log_event"
+        event = event_dict.get("event")
+
+    if isinstance(event, str) and event in _LEGACY_LOG_EVENTS:
+        if message is not None:
+            event_dict["event"] = str(message)
+            event_dict["legacy_event"] = str(event)
+            event_dict.pop("message", None)
+        else:
+            event_dict["legacy_event"] = str(event)
+    return event_dict
+
+
 def _add_trace_correlation(_, __, event_dict: dict[str, Any]):
     event_dict["trace_id"] = TRACE_ID.get()
     event_dict["user_id"] = USER_ID.get()
@@ -159,6 +201,7 @@ def setup_logging(
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
+        _normalize_legacy_structlog_event,
         structlog.processors.TimeStamper(fmt="iso"),
         _add_trace_correlation,
         _redact_secrets,

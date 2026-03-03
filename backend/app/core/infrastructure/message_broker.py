@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import time
 import structlog
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -434,6 +435,24 @@ class MessageBroker:
                             break
                 if not isinstance(payload, dict):
                     raise TypeError("Task payload must be a JSON object")
+                # Retrocompatibilidade: mensagens antigas da fila de consolidação podem ter sido
+                # publicadas apenas com o payload de negócio (sem envelope TaskMessage).
+                if (
+                    queue_name == "janus.knowledge.consolidation"
+                    and isinstance(payload, dict)
+                    and ("task_id" not in payload or "task_type" not in payload or "timestamp" not in payload)
+                    and "mode" in payload
+                ):
+                    payload = {
+                        "task_id": f"legacy-{int(time.time() * 1000)}",
+                        "task_type": "knowledge_consolidation",
+                        "payload": payload,
+                        "timestamp": time.time(),
+                    }
+                    logger.warning(
+                        "broker_legacy_knowledge_consolidation_payload_wrapped",
+                        queue=queue_name,
+                    )
                 task = TaskMessage(**payload)  # type: ignore[name-defined]
                 
                 # Tracing manual

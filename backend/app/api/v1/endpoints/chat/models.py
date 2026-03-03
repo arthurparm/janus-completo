@@ -24,6 +24,59 @@ class ChatMessageRequest(BaseModel):
     project_id: str | None = Field(None)
 
 
+class ChatCitationStatus(BaseModel):
+    mode: str = "optional"
+    status: str = "not_applicable"
+    count: int = 0
+    reason: str | None = None
+
+
+class ChatRoutingState(BaseModel):
+    requested_role: str | None = None
+    selected_role: str | None = None
+    route_applied: bool | None = None
+    intent: str | None = None
+    risk_level: str | None = None
+    confidence: float | None = None
+
+
+class ChatRiskState(BaseModel):
+    level: str | None = None
+    source: str | None = None
+    summary: str | None = None
+    requires_confirmation: bool | None = None
+
+
+class ChatConfirmationState(BaseModel):
+    required: bool = True
+    reason: str | None = None
+    source: str | None = None
+    pending_action_id: int | None = None
+    approve_endpoint: str | None = None
+    reject_endpoint: str | None = None
+
+
+class ChatAgentState(BaseModel):
+    state: str
+    confidence_band: str | None = None
+    requires_confirmation: bool | None = None
+    reason: str | None = None
+
+
+class ChatUnderstandingPayload(BaseModel):
+    intent: str
+    summary: str
+    confidence: float | None = None
+    confidence_band: str | None = None
+    low_confidence: bool | None = None
+    requires_confirmation: bool | None = None
+    confirmation_reason: str | None = None
+    signals: list[str] | None = None
+    routing: ChatRoutingState | dict[str, Any] | None = None
+    risk: ChatRiskState | dict[str, Any] | None = None
+    confirmation: ChatConfirmationState | dict[str, Any] | None = None
+
+
 class ChatMessageResponse(BaseModel):
     response: str
     provider: str
@@ -31,8 +84,11 @@ class ChatMessageResponse(BaseModel):
     role: str
     conversation_id: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
+    citation_status: ChatCitationStatus = Field(default_factory=ChatCitationStatus)
     ui: dict[str, Any] | None = None
-    understanding: dict[str, Any] | None = None
+    understanding: ChatUnderstandingPayload | dict[str, Any] | None = None
+    confirmation: ChatConfirmationState | dict[str, Any] | None = None
+    agent_state: ChatAgentState | dict[str, Any] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -40,8 +96,11 @@ class ChatMessage(BaseModel):
     role: str
     text: str
     citations: list[dict[str, Any]] = Field(default_factory=list)
+    citation_status: ChatCitationStatus | dict[str, Any] | None = None
     ui: dict[str, Any] | None = None
-    understanding: dict[str, Any] | None = None
+    understanding: ChatUnderstandingPayload | dict[str, Any] | None = None
+    confirmation: ChatConfirmationState | dict[str, Any] | None = None
+    agent_state: ChatAgentState | dict[str, Any] | None = None
 
 
 class ChatHistoryResponse(BaseModel):

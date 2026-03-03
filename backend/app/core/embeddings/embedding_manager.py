@@ -61,6 +61,7 @@ _DEFAULT_LOCAL_MODEL = getattr(
 )
 _DEFAULT_OPENAI_MODEL = getattr(settings, "EMBEDDINGS_OPENAI_MODEL_NAME", "text-embedding-3-small")
 _DEFAULT_OPENROUTER_MODEL = getattr(settings, "EMBEDDINGS_OPENROUTER_MODEL_NAME", "qwen/qwen3-embedding-8b")
+_DEFAULT_OLLAMA_MODEL = getattr(settings, "EMBEDDINGS_OLLAMA_MODEL_NAME", "nomic-embed-text")
 _TARGET_VECTOR_SIZE = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
 _PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai" | "openrouter"
 _CACHE_TTL = int(getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600))

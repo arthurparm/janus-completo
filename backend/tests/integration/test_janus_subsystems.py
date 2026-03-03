@@ -271,16 +271,16 @@ class TestWorkers:
         except Exception as e:
             print(f"⚠ ConsolidationWorker: {e}")
 
-    def test_autonomy_worker_import(self):
-        """Test AutonomyWorker can be imported."""
+    def test_autonomy_service_import(self):
+        """Test AutonomyService can be imported."""
         try:
-            from app.core.workers.autonomy_worker import AutonomyWorker
+            from app.services.autonomy_service import AutonomyService
 
-            assert AutonomyWorker is not None
+            assert AutonomyService is not None
 
-            print("✓ AutonomyWorker available")
+            print("✓ AutonomyService available")
         except Exception as e:
-            print(f"⚠ AutonomyWorker: {e}")
+            print(f"⚠ AutonomyService: {e}")
 
 
 # ============================================================================

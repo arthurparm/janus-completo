@@ -36,7 +36,7 @@ def _parse_review_json(review_text: str) -> dict[str, Any]:
         return parse_json_strict(review_text)
     except Exception:
         # Fallback para parsing manual "sujo" ou rejeição por padrão em caso de erro grave
-        logger.warning("log_warning", message=f"Falha ao parsear JSON do Professor: {review_text[:100]}...")
+        logger.warning("professor_review_json_parse_failed", review_preview=review_text[:100])
         # Se falhar o parse, assumimos rejeição para segurança
         return {
             "status": "REJECTED",
@@ -58,6 +58,7 @@ async def process_professor_task(task: TaskMessage) -> None:
         code = state.data_payload.script_code
         if not code:
             # Sem código para revisar, encaminhar ao coder
+            state.status = "in_progress"
             state.next_agent_role = "coder"
             service = CollaborationService(CollaborationRepository())
             await service.pass_task(state)
@@ -98,8 +99,11 @@ async def process_professor_task(task: TaskMessage) -> None:
                 issues = "\n- ".join(review_data.get("critical_issues", []))
                 state.data_payload.review_notes = f"REJEITADO PELO PROFESSOR:\nIssues:\n- {issues}"
 
-                logger.info("log_info", message=f"Deep Reflexion: Retrying task ({state.retries}/10)",
-                    extra={"task_id": state.task_id, "attempt": state.retries}
+                logger.info(
+                    "professor_deep_reflexion_retry",
+                    task_id=state.task_id,
+                    attempt=state.retries,
+                    max_retries=10,
                 )
             else:
                 logger.warning("Deep Reflexion: Max retries (10) reached. Forcing Sandbox.")
@@ -107,6 +111,7 @@ async def process_professor_task(task: TaskMessage) -> None:
                 state.next_agent_role = "sandbox"
         else:
             state.next_agent_role = "sandbox"
+        state.status = "in_progress"
 
         service = CollaborationService(CollaborationRepository())
         await service.pass_task(state)
@@ -115,7 +120,7 @@ async def process_professor_task(task: TaskMessage) -> None:
             extra={"task_id": state.task_id, "next": state.next_agent_role},
         )
     except Exception as e:
-        logger.error("log_error", message=f"ProfessorAgent falhou: {e}", exc_info=True)
+        logger.error("professor_agent_failed", error=str(e), exc_info=True)
         raise
 
 

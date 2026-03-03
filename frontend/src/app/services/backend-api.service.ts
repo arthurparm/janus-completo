@@ -211,6 +211,45 @@ export interface ChatMessageRequest {
   user_id?: string;
   project_id?: string;
 }
+export interface CitationStatus {
+  mode: 'required' | 'optional' | string;
+  status: 'present' | 'missing_required' | 'not_applicable' | 'retrieval_failed' | string;
+  count: number;
+  reason?: string | null;
+}
+export interface ChatRoutingState {
+  requested_role?: string;
+  selected_role?: string;
+  route_applied?: boolean;
+  intent?: string;
+  risk_level?: string;
+  confidence?: number;
+  [key: string]: unknown;
+}
+export interface ChatRiskState {
+  level?: 'low' | 'medium' | 'high' | string;
+  source?: string;
+  summary?: string;
+  requires_confirmation?: boolean;
+  [key: string]: unknown;
+}
+export interface ChatConfirmationState {
+  required: boolean;
+  status?: string;
+  reason?: string | null;
+  source?: string;
+  pending_action_id?: number | null;
+  approve_endpoint?: string | null;
+  reject_endpoint?: string | null;
+  [key: string]: unknown;
+}
+export interface ChatAgentState {
+  state: 'thinking' | 'using_tool' | 'waiting_confirmation' | 'low_confidence' | 'streaming_response' | 'completed' | 'error' | string;
+  confidence_band?: 'high' | 'medium' | 'low' | string;
+  requires_confirmation?: boolean;
+  reason?: string;
+  [key: string]: unknown;
+}
 export interface ChatUnderstanding {
   intent: string;
   summary: string;
@@ -218,17 +257,24 @@ export interface ChatUnderstanding {
   confidence_band?: 'high' | 'medium' | 'low' | string;
   low_confidence?: boolean;
   requires_confirmation?: boolean;
-  confirmation_reason?: string;
+  confirmation_reason?: string | null;
   signals?: string[];
+  routing?: ChatRoutingState;
+  risk?: ChatRiskState;
+  confirmation?: ChatConfirmationState;
+  [key: string]: unknown;
 }
 export interface ChatMessage {
   role: string;
   text: string;
   timestamp: number;
   citations?: Citation[]
+  citation_status?: CitationStatus;
   reasoning?: string;
   ui?: { type: string; data: any };
   understanding?: ChatUnderstanding;
+  confirmation?: ChatConfirmationState;
+  agent_state?: ChatAgentState;
 }
 
 export interface Tool {
@@ -254,8 +300,11 @@ export interface ChatMessageResponse {
   role: string;
   conversation_id: string;
   citations: Citation[];
+  citation_status?: CitationStatus;
   ui?: { type: string; data: any };
   understanding?: ChatUnderstanding;
+  confirmation?: ChatConfirmationState;
+  agent_state?: ChatAgentState;
 }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ChatListItem {
@@ -354,9 +403,34 @@ export interface DocSearchResponse {
 export interface GenerativeMemoryItem {
   id?: string;
   content: string;
+  score?: number;
   type?: string;
   created_at?: string | number;
   updated_at?: string | number;
+  metadata?: {
+    importance?: number | string;
+    user_id?: string;
+    conversation_id?: string;
+    session_id?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface UserPreferenceMemoryItem {
+  id?: string;
+  content: string;
+  ts_ms?: number;
+  preference_kind?: 'do' | 'dont' | string;
+  instruction_text?: string;
+  scope?: string;
+  confidence?: number;
+  user_id?: string;
+  conversation_id?: string;
+  session_id?: string;
+  active?: boolean;
+  origin?: string;
+  dedupe_key?: string;
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -1061,9 +1135,12 @@ export class BackendApiService {
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
+          citation_status: m?.citation_status,
           reasoning: m?.reasoning,
           ui: m?.ui,
-          understanding: m?.understanding
+          understanding: m?.understanding,
+          confirmation: m?.confirmation,
+          agent_state: m?.agent_state,
         }))
         return { conversation_id: String(resp?.conversation_id || conversation_id), messages: mapped } as ChatHistoryResponse
       })
@@ -1100,9 +1177,12 @@ export class BackendApiService {
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
           citations: m?.citations,
+          citation_status: m?.citation_status,
           reasoning: m?.reasoning,
           ui: m?.ui,
-          understanding: m?.understanding
+          understanding: m?.understanding,
+          confirmation: m?.confirmation,
+          agent_state: m?.agent_state,
         }))
 
         return {
@@ -1140,9 +1220,12 @@ export class BackendApiService {
             text: this.normalizeChatText(lm?.text),
             timestamp: lm?.timestamp != null ? Number(lm.timestamp) : 0,
             citations: lm?.citations,
+            citation_status: lm?.citation_status,
             reasoning: lm?.reasoning,
             ui: lm?.ui,
-            understanding: lm?.understanding
+            understanding: lm?.understanding,
+            confirmation: lm?.confirmation,
+            agent_state: lm?.agent_state,
           } : undefined
           return {
             conversation_id: String(it?.conversation_id || ''),
@@ -1404,19 +1487,52 @@ export class BackendApiService {
     )
   }
 
-  getGenerativeMemories(query: string, limit: number = 10): Observable<GenerativeMemoryItem[]> {
+  getGenerativeMemories(
+    query: string,
+    limit: number = 10,
+    filters: { type?: string; userId?: string; conversationId?: string } = {}
+  ): Observable<GenerativeMemoryItem[]> {
     const qs = new URLSearchParams()
     qs.set('query', query)
     qs.set('limit', String(limit))
+    if (filters.type) qs.set('type', String(filters.type))
+    if (filters.userId) qs.set('user_id', String(filters.userId))
+    if (filters.conversationId) qs.set('conversation_id', String(filters.conversationId))
     return this.http.get<GenerativeMemoryItem[]>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`))
   }
 
-  addGenerativeMemory(content: string, opts: { importance?: number; type?: string } = {}): Observable<GenerativeMemoryItem> {
+  addGenerativeMemory(
+    content: string,
+    opts: { importance?: number; type?: string; userId?: string; conversationId?: string; sessionId?: string } = {}
+  ): Observable<GenerativeMemoryItem> {
     const qs = new URLSearchParams()
     qs.set('content', content)
     if (typeof opts.importance === 'number') qs.set('importance', String(opts.importance))
     if (opts.type) qs.set('type', String(opts.type))
+    if (opts.userId) qs.set('user_id', String(opts.userId))
+    if (opts.conversationId) qs.set('conversation_id', String(opts.conversationId))
+    if (opts.sessionId) qs.set('session_id', String(opts.sessionId))
     return this.http.post<GenerativeMemoryItem>(this.buildUrl(`/api/v1/memory/generative?${qs.toString()}`), {})
+  }
+
+  getUserPreferences(params: {
+    userId?: string
+    conversationId?: string
+    query?: string
+    limit?: number
+    activeOnly?: boolean
+  } = {}): Observable<UserPreferenceMemoryItem[]> {
+    const qs = new URLSearchParams()
+    if (params.userId) qs.set('user_id', String(params.userId))
+    if (params.conversationId) qs.set('conversation_id', String(params.conversationId))
+    if (params.query) qs.set('query', String(params.query))
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    if (typeof params.activeOnly === 'boolean') qs.set('active_only', String(params.activeOnly))
+    const headers = params.userId ? this.headersFor(params.userId) : undefined
+    return this.http.get<UserPreferenceMemoryItem[]>(
+      this.buildUrl(`/api/v1/memory/preferences${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
   }
 
   // Documents API

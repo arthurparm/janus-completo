@@ -9,7 +9,11 @@ from datetime import datetime
 
 import msgpack
 
-from app.core.autonomy.planner import build_plan_for_goal
+from app.core.autonomy.taskstate_status import (
+    is_success_terminal_status,
+    is_terminal_status,
+    normalize_task_status,
+)
 from app.core.infrastructure.message_broker import get_broker
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm.router import ModelPriority, ModelRole, get_llm
@@ -36,7 +40,7 @@ async def _decompose_complex_task(goal: str) -> str:
         res = await llm.ainvoke(prompt)
         return res.content
     except Exception as e:
-        logger.warning("log_warning", message=f"Falha na decomposição de tarefa: {e}")
+        logger.warning("router_task_decomposition_failed", error=str(e))
         return ""
 
 
@@ -89,14 +93,45 @@ async def process_router_task(task: TaskMessage) -> None:
         raw_state = payload.get("task_state") or {}
         state = TaskState(**raw_state)
 
-        # Se não há próximo agente definido, inferir o primeiro
-        if not state.next_agent_role:
-            state.next_agent_role = _infer_first_agent(state.original_goal)
         state.current_agent_role = "router"
+        state.status = normalize_task_status(state.status)
+
+        # Router como sink de terminalização: se a tarefa já chegou terminal ao Router,
+        # processa side-effects e encerra sem republish para evitar loop.
+        router_targeted = (state.next_agent_role or "").lower() == "router"
+        terminal = is_terminal_status(state.status)
+        if (not state.next_agent_role and terminal) or (router_targeted and terminal):
+            state.history.append(
+                {
+                    "agent_role": "router",
+                    "action": "router_terminalized",
+                    "notes": f"status={state.status}",
+                    "timestamp": datetime.utcnow().timestamp(),
+                }
+            )
+            logger.info(
+                "router_terminal_sink",
+                task_id=state.task_id,
+                status=state.status,
+            )
+        else:
+            # Se não há próximo agente definido, inferir o primeiro
+            if not state.next_agent_role:
+                state.next_agent_role = _infer_first_agent(state.original_goal)
+            # Anti-loop: router não deve se republicar com status não-terminal
+            elif router_targeted:
+                inferred = _infer_first_agent(state.original_goal)
+                logger.warning(
+                    "router_next_role_self_loop_corrected",
+                    task_id=state.task_id,
+                    status=state.status,
+                    previous_next_role="router",
+                    inferred_next_role=inferred,
+                )
+                state.next_agent_role = inferred
 
         # Nova lógica: se tarefa concluída com conhecimento, encaminhar ao consolidator
-        status = (state.status or "").lower()
-        success_like = status in ("success", "completed", "done")
+        success_like = is_success_terminal_status(state.status)
 
         # 1. Knowledge Consolidation (Memory)
         should_consolidate = success_like and _contains_knowledge_payload(state)
@@ -174,13 +209,23 @@ async def process_router_task(task: TaskMessage) -> None:
             }
         )
 
+        if terminal and ((state.next_agent_role or "").lower() == "router"):
+            service = CollaborationService(CollaborationRepository())
+            service.maybe_finalize_autonomy_goal(state)
+            logger.info(
+                "router_terminal_task_consumed",
+                task_id=state.task_id,
+                status=state.status,
+            )
+            return
+
         service = CollaborationService(CollaborationRepository())
         await service.pass_task(state)
         logger.info(
             "Router encaminhou TaskState", task_id=state.task_id, next_role=state.next_agent_role
         )
     except Exception as e:
-        logger.error("log_error", message=f"Router falhou ao processar TaskState: {e}", exc_info=True)
+        logger.error("router_process_task_failed", error=str(e), exc_info=True)
         raise
 
 

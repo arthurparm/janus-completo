@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,6 +25,7 @@ class AutonomyStartRequest(BaseModel):
     blocklist: list[str] = []
     max_actions_per_cycle: int = Field(20, ge=1, le=1000)
     max_seconds_per_cycle: int = Field(60, ge=1, le=3600)
+    execution_mode: Literal["enqueue_router"] = "enqueue_router"
     plan: list[dict[str, Any]] = Field(
         default_factory=list, description="Lista de passos: {'tool': str, 'args': dict}"
     )
@@ -35,6 +36,7 @@ class AutonomyStatusResponse(BaseModel):
     cycle_count: int
     last_cycle_at: float | None
     config: dict[str, Any]
+    runtime_lock: dict[str, Any] | None = None
 
 
 class PlanUpdateRequest(BaseModel):
@@ -154,10 +156,18 @@ async def start_autonomy(
         blocklist=request.blocklist,
         max_actions_per_cycle=request.max_actions_per_cycle,
         max_seconds_per_cycle=request.max_seconds_per_cycle,
+        execution_mode=request.execution_mode,
         plan=request.plan,
     )
     ok = await service.start(config)
     if not ok:
+        status_payload = service.get_status()
+        runtime_lock = status_payload.get("runtime_lock") or {}
+        if not status_payload.get("active") and runtime_lock.get("owner_id"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="AutonomyLoop lease indisponível (outra instância está ativa neste escopo).",
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="AutonomyLoop já está ativo."
         )

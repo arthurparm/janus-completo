@@ -1,7 +1,8 @@
 import asyncio
 import time
-import structlog
 from typing import Any, Optional
+
+import structlog
 
 from qdrant_client import models as qdrant_models
 
@@ -15,6 +16,7 @@ from app.repositories.chat_repository import ChatRepository
 from app.services.semantic_reranker_service import get_semantic_reranker
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
+from app.services.user_preference_memory_service import user_preference_memory_service
 
 logger = structlog.get_logger(__name__)
 
@@ -105,6 +107,7 @@ class RAGService:
     def _emit_step_telemetry(
         self,
         *,
+        endpoint: str,
         step: str,
         started_at: float,
         db: str,
@@ -113,7 +116,7 @@ class RAGService:
         extra: dict[str, Any] | None = None,
     ) -> None:
         emit_step_telemetry(
-            endpoint="/chat/rag",
+            endpoint=endpoint,
             step=step,
             source="rag_service",
             db=db,
@@ -129,29 +132,42 @@ class RAGService:
         limit: int = 5,
         user_id: str | None = None,
         conversation_id: str | None = None,
+        caller_endpoint: str = "/chat/rag",
+        transport: str = "unknown",
+        identity_source: str = "unknown",
     ) -> Optional[str]:
         """Retrieves relevant memories for the current message."""
         start = time.perf_counter()
+        telemetry_base = {
+            "transport": transport,
+            "identity_source": identity_source,
+            "user_id_present": bool(user_id),
+            "conversation_id_present": bool(conversation_id),
+        }
         if not self._memory:
             _RAG_SKIPPED.labels("retrieve_context", "no_memory_service").inc()
             _RAG_OPS.labels("retrieve_context", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="retrieve_context",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_NO_MEMORY_SERVICE",
+                extra=telemetry_base,
             )
             return None
         if not message:
             _RAG_SKIPPED.labels("retrieve_context", "empty_message").inc()
             _RAG_OPS.labels("retrieve_context", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="retrieve_context",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_EMPTY_MESSAGE",
+                extra=telemetry_base,
             )
             return None
         if not user_id:
@@ -159,15 +175,26 @@ class RAGService:
             _RAG_SKIPPED.labels("retrieve_context", "missing_user_id").inc()
             _RAG_OPS.labels("retrieve_context", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="retrieve_context",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_MISSING_USER_ID",
+                extra=telemetry_base,
             )
             return None
 
         try:
+            try:
+                await user_preference_memory_service.maybe_capture_from_message(
+                    message=message,
+                    user_id=str(user_id),
+                    conversation_id=conversation_id,
+                )
+            except Exception as pref_exc:
+                logger.warning("user_preference_capture_failed_in_rag", error=str(pref_exc))
+
             vec = await aembed_text(message)
             collection_name = await aget_or_create_collection(f"user_{user_id}")
             client = get_async_qdrant_client()
@@ -210,6 +237,17 @@ class RAGService:
                         "score": score,
                     }
                 )
+            preference_items: list[dict[str, Any]] = []
+            try:
+                preference_items = await user_preference_memory_service.list_preferences(
+                    user_id=str(user_id),
+                    query=message,
+                    limit=min(5, max(1, limit)),
+                    active_only=True,
+                )
+            except Exception as pref_exc:
+                logger.warning("user_preference_retrieve_failed_in_rag", error=str(pref_exc))
+
             rerank_applied = False
             rerank_method = "none"
             rerank_candidate_count = len(memories)
@@ -219,19 +257,28 @@ class RAGService:
                 rerank_applied = rerank_result.applied
                 rerank_method = rerank_result.method
                 rerank_candidate_count = int(rerank_result.candidate_count)
+            memories = [
+                item for item in memories
+                if str((item.get("metadata") or {}).get("type") or "").lower() != "user_preference"
+            ]
+            preference_context = user_preference_memory_service.format_preference_context(preference_items)
+            generic_context = self._format_memories(memories)
+            combined_context = self._combine_memory_context(preference_context, generic_context)
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
             scores = [m.get("score") for m in memories]
-            if memories:
+            if combined_context:
                 _RAG_RESULTS.labels("retrieve_context").inc(len(memories))
                 logger.info("RAG enrichment: retrieved %d relevant memories", len(memories))
                 _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
                 self._emit_step_telemetry(
+                    endpoint=caller_endpoint,
                     step="retrieve_context",
                     started_at=start,
                     db="qdrant",
                     confidence=confidence_from_scores(scores),
                     extra={
+                        **telemetry_base,
                         "result_count": len(memories),
                         "limit": int(limit),
                         "query_limit": int(query_limit),
@@ -239,17 +286,20 @@ class RAGService:
                         "rerank_method": rerank_method,
                         "rerank_candidate_count": int(rerank_candidate_count),
                         "rerank_top_k": int(limit),
+                        "user_preferences_count": len(preference_items),
                     },
                 )
-                return self._format_memories(memories)
+                return combined_context
 
             _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="retrieve_context",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 extra={
+                    **telemetry_base,
                     "result_count": 0,
                     "limit": int(limit),
                     "query_limit": int(query_limit),
@@ -257,6 +307,7 @@ class RAGService:
                     "rerank_method": "none",
                     "rerank_candidate_count": int(rerank_candidate_count),
                     "rerank_top_k": int(limit),
+                    "user_preferences_count": len(preference_items),
                 },
             )
             return None
@@ -265,52 +316,79 @@ class RAGService:
             _RAG_ERRORS.labels("retrieve_context", type(e).__name__).inc()
             _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="retrieve_context",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code=type(e).__name__,
-                extra={"limit": int(limit)},
+                extra={**telemetry_base, "limit": int(limit)},
             )
             logger.warning("Failed to retrieve memories for prompt enrichment", error=str(e))
             # We don't raise here to prevent blocking the chat response if memory fails
             return None
 
+    def _combine_memory_context(
+        self, preference_context: str | None, generic_context: str | None
+    ) -> str | None:
+        if preference_context and generic_context:
+            return f"{preference_context}\n\n{generic_context}"
+        return preference_context or generic_context
+
     async def maybe_index_message(
-        self, text: str, user_id: Optional[str], conversation_id: str, role: str
+        self,
+        text: str,
+        user_id: Optional[str],
+        conversation_id: str,
+        role: str,
+        caller_endpoint: str = "/chat/rag",
+        transport: str = "unknown",
+        identity_source: str = "unknown",
     ) -> None:
         start = time.perf_counter()
+        telemetry_base = {
+            "transport": transport,
+            "identity_source": identity_source,
+            "user_id_present": bool(user_id),
+            "conversation_id_present": bool(conversation_id),
+        }
         if not text:
             _RAG_SKIPPED.labels("index_message", "empty_text").inc()
             _RAG_OPS.labels("index_message", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="index_message",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_EMPTY_TEXT",
+                extra=telemetry_base,
             )
             return
         if not user_id:
             _RAG_SKIPPED.labels("index_message", "missing_user_id").inc()
             _RAG_OPS.labels("index_message", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="index_message",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_MISSING_USER_ID",
+                extra=telemetry_base,
             )
             return
         if not self._memory:
             _RAG_SKIPPED.labels("index_message", "no_memory_service").inc()
             _RAG_OPS.labels("index_message", "skipped").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="index_message",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_NO_MEMORY_SERVICE",
+                extra=telemetry_base,
             )
             return
 
@@ -321,20 +399,24 @@ class RAGService:
             )
             _RAG_OPS.labels("index_message", "success").inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="index_message",
                 started_at=start,
                 db="qdrant",
                 confidence=1.0,
+                extra=telemetry_base,
             )
         except Exception as e:
             _RAG_OPS.labels("index_message", "error").inc()
             _RAG_ERRORS.labels("index_message", type(e).__name__).inc()
             self._emit_step_telemetry(
+                endpoint=caller_endpoint,
                 step="index_message",
                 started_at=start,
                 db="qdrant",
                 confidence=0.0,
                 error_code=type(e).__name__,
+                extra=telemetry_base,
             )
             # Nao quebrar fluxo do chat se indexacao falhar, mas logar o erro
             logger.warning(
@@ -360,6 +442,7 @@ class RAGService:
                 _RAG_SKIPPED.labels("summarize", "below_threshold").inc()
                 _RAG_OPS.labels("summarize", "skipped").inc()
                 self._emit_step_telemetry(
+                    endpoint="/chat/rag",
                     step="summarize",
                     started_at=start,
                     db="llm+chat_repository",
@@ -372,6 +455,7 @@ class RAGService:
                 _RAG_SKIPPED.labels("summarize", "already_summarized").inc()
                 _RAG_OPS.labels("summarize", "skipped").inc()
                 self._emit_step_telemetry(
+                    endpoint="/chat/rag",
                     step="summarize",
                     started_at=start,
                     db="llm+chat_repository",
@@ -391,6 +475,7 @@ class RAGService:
                 _RAG_SKIPPED.labels("summarize", "empty_snippet").inc()
                 _RAG_OPS.labels("summarize", "skipped").inc()
                 self._emit_step_telemetry(
+                    endpoint="/chat/rag",
                     step="summarize",
                     started_at=start,
                     db="llm+chat_repository",
@@ -418,6 +503,7 @@ class RAGService:
             await asyncio.to_thread(self._repo.update_summary, conversation_id, summary_text)
             _RAG_OPS.labels("summarize", "success").inc()
             self._emit_step_telemetry(
+                endpoint="/chat/rag",
                 step="summarize",
                 started_at=start,
                 db="llm+chat_repository",
@@ -430,6 +516,7 @@ class RAGService:
             _RAG_OPS.labels("summarize", "error").inc()
             _RAG_ERRORS.labels("summarize", type(e).__name__).inc()
             self._emit_step_telemetry(
+                endpoint="/chat/rag",
                 step="summarize",
                 started_at=start,
                 db="llm+chat_repository",

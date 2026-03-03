@@ -10,7 +10,11 @@ from app.services.chat_service import (
     get_chat_service,
 )
 
-from .deps import actor_project_id, actor_user_id
+from .deps import (
+    actor_project_id,
+    is_chat_auth_enforced,
+    resolve_authenticated_user_context,
+)
 from .models import (
     ChatHistoryPaginatedResponse,
     ChatHistoryResponse,
@@ -37,10 +41,26 @@ async def chat_history(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    logger.info("log_info", message=f"API request for chat history: {conversation_id}, limit: {limit}, offset: {offset}")
+    logger.info(
+        "chat_history_request",
+        conversation_id=conversation_id,
+        limit=limit,
+        offset=offset,
+    )
 
     try:
-        user_id = actor_user_id(http)
+        identity_ctx = resolve_authenticated_user_context(
+            http,
+            None,
+            allow_anonymous_fallback=False,
+            endpoint_label="/api/v1/chat/history",
+        )
+        user_id = identity_ctx.user_id
+        if user_id is None and is_chat_auth_enforced():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+            )
         project_id = actor_project_id(http)
 
         if limit is not None:
@@ -65,9 +85,9 @@ async def chat_history(
                     ):
                         messages.append(ChatMessage(**apply_ui_to_message(message)))
                     else:
-                        logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
+                        logger.warning("chat_history_invalid_message_skipped", index=i)
                 except Exception as e:
-                    logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
+                    logger.warning("chat_history_message_conversion_failed", index=i, error=str(e))
 
             return ChatHistoryResponse(
                 conversation_id=hist["conversation_id"],
@@ -91,9 +111,9 @@ async def chat_history(
                 ):
                     messages.append(ChatMessage(**apply_ui_to_message(message)))
                 else:
-                    logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
+                    logger.warning("chat_history_invalid_message_skipped", index=i)
             except Exception as e:
-                logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
+                logger.warning("chat_history_message_conversion_failed", index=i, error=str(e))
 
         return ChatHistoryResponse(
             conversation_id=hist["conversation_id"],
@@ -104,7 +124,10 @@ async def chat_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     except ChatServiceError as e:
         if "Access denied" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
         )
@@ -128,7 +151,18 @@ async def chat_history_paginated(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    user_id = actor_user_id(http)
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        None,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat/history/paginated",
+    )
+    user_id = identity_ctx.user_id
+    if user_id is None and is_chat_auth_enforced():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+        )
     project_id = actor_project_id(http)
     try:
         hist = service.get_history_paginated(
@@ -152,9 +186,9 @@ async def chat_history_paginated(
                 ):
                     messages.append(ChatMessage(**apply_ui_to_message(message)))
                 else:
-                    logger.warning("log_warning", message=f"Skipping invalid message at index {i}: {message}")
+                    logger.warning("chat_history_invalid_message_skipped", index=i)
             except Exception as e:
-                logger.warning("log_warning", message=f"Error converting message at index {i}: {e}")
+                logger.warning("chat_history_message_conversion_failed", index=i, error=str(e))
 
         return ChatHistoryPaginatedResponse(
             conversation_id=hist["conversation_id"],
@@ -170,7 +204,10 @@ async def chat_history_paginated(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     except ChatServiceError as e:
         if "Access denied" in str(e):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "Access denied", "code": "CHAT_ACCESS_DENIED"},
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"
         )
@@ -192,7 +229,18 @@ async def list_conversations(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    final_user_id = user_id or actor_user_id(http)
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        user_id,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat/conversations",
+    )
+    final_user_id = identity_ctx.user_id
+    if final_user_id is None and is_chat_auth_enforced():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+        )
     items = await service.list_conversations(
         user_id=final_user_id,
         project_id=project_id,
