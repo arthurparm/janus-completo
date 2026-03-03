@@ -30,16 +30,26 @@ _MIN_VECTOR_SIZE = 1
 _MAX_VECTOR_SIZE = 10000
 _DEFAULT_VECTOR_SIZE = 1536
 
+def _resolve_qdrant_api_key() -> str | None:
+    api_key = getattr(settings, "QDRANT_API_KEY", None)
+    if hasattr(api_key, "get_secret_value"):
+        api_key = api_key.get_secret_value()
+    return str(api_key).strip() if api_key else None
+
 
 def get_async_qdrant_client() -> AsyncQdrantClient:
     """Retorna uma instância do cliente Qdrant assíncrono."""
     global _async_qdrant_client
     if _async_qdrant_client is None:
-        _async_qdrant_client = AsyncQdrantClient(
-            host=settings.QDRANT_HOST,
-            port=settings.QDRANT_PORT,
-            timeout=20,
-        )
+        client_kwargs: dict[str, object] = {
+            "host": settings.QDRANT_HOST,
+            "port": settings.QDRANT_PORT,
+            "timeout": 20,
+        }
+        api_key = _resolve_qdrant_api_key()
+        if api_key:
+            client_kwargs["api_key"] = api_key
+        _async_qdrant_client = AsyncQdrantClient(**client_kwargs)
         logger.info("Instância do AsyncQdrantClient criada.")
     return _async_qdrant_client
 
