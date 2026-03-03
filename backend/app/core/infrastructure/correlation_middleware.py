@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 
 import structlog
@@ -23,6 +24,10 @@ except Exception:
 class CorrelationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        traceparent = request.headers.get("traceparent")
+        tracestate = request.headers.get("tracestate")
+        if not traceparent:
+            traceparent = self._fallback_traceparent(request_id)
         try:
             actor = getattr(request.state, "actor_user_id", None)
         except Exception:
@@ -74,6 +79,9 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
                 span = trace.get_current_span()
                 if span is not None:
                     span.set_attribute("janus.trace_id", request_id)
+                    span.set_attribute("janus.traceparent", traceparent)
+                    if tracestate is not None:
+                        span.set_attribute("janus.tracestate", tracestate)
                     if user_id is not None:
                         span.set_attribute("janus.user_id", user_id)
                     if session_id is not None:
@@ -86,6 +94,8 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
             pass
         try:
             request.state.correlation_id = request_id
+            request.state.traceparent = traceparent
+            request.state.tracestate = tracestate
             request.state.session_id = session_id
             request.state.conversation_id = conversation_id
             request.state.project_id = project_id
@@ -94,4 +104,12 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
+        response.headers["traceparent"] = traceparent
+        if tracestate:
+            response.headers["tracestate"] = tracestate
         return response
+
+    def _fallback_traceparent(self, request_id: str) -> str:
+        trace_id = hashlib.sha256(str(request_id).encode("utf-8")).hexdigest()[:32]
+        span_id = trace_id[:16]
+        return f"00-{trace_id}-{span_id}-01"

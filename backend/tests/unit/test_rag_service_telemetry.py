@@ -1,6 +1,7 @@
 import pytest
 
 from app.services import rag_service as rag_module
+from app.core.routing import RouteDecision, RouteTarget
 from app.services.rag_service import RAGService
 from app.services.semantic_reranker_service import SemanticRerankResult
 
@@ -147,3 +148,33 @@ async def test_retrieve_context_applies_rerank_and_reports_query_limit(monkeypat
     assert event["extra"]["rerank_method"] == "fake_cross_encoder"
     assert event["extra"]["rerank_candidate_count"] == 1
     assert event["extra"]["rerank_top_k"] == 2
+
+
+@pytest.mark.asyncio
+async def test_retrieve_context_skips_when_route_is_not_qdrant(monkeypatch):
+    emitted: list[dict] = []
+
+    def _fake_emit(**kwargs):
+        emitted.append(kwargs)
+        return kwargs
+
+    monkeypatch.setattr(rag_module, "emit_step_telemetry", _fake_emit)
+
+    service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
+    context = await service.retrieve_context(
+        "find context",
+        user_id="u-1",
+        conversation_id="c-1",
+        route_decision=RouteDecision(
+            primary=RouteTarget.POSTGRES,
+            secondary=tuple(),
+            reason="test",
+            rule_id="test.route.postgres",
+        ),
+    )
+
+    assert context is None
+    assert emitted
+    event = emitted[-1]
+    assert event["error_code"] == "SKIPPED_ROUTE_UNSUPPORTED"
+    assert event["db"] == "postgres"

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import json
 import time
 import structlog
@@ -91,6 +92,85 @@ class MessageBroker:
         self._dlx_setup_lock = asyncio.Lock()
         self._dlx_topology_ready = False
 
+    def _extract_header(self, headers: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            if key in headers:
+                return headers.get(key)
+        lowered = {str(k).lower(): v for k, v in headers.items()}
+        for key in keys:
+            val = lowered.get(str(key).lower())
+            if val is not None:
+                return val
+        return None
+
+    def _traceparent_from_current_span(self) -> str | None:
+        if not _OTEL:
+            return None
+        try:
+            span = trace.get_current_span()
+            ctx = span.get_span_context() if span is not None else None
+            if ctx and ctx.is_valid:
+                trace_id = format(ctx.trace_id, "032x")
+                span_id = format(ctx.span_id, "016x")
+                return f"00-{trace_id}-{span_id}-01"
+        except Exception:
+            return None
+        return None
+
+    def _fallback_traceparent(self, request_id: str) -> str:
+        trace_id = hashlib.sha256(str(request_id).encode("utf-8")).hexdigest()[:32]
+        span_id = trace_id[:16]
+        return f"00-{trace_id}-{span_id}-01"
+
+    def _merge_trace_headers(self, headers: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(headers)
+        request_id = self._extract_header(
+            merged, "x-request-id", "X-Request-ID", "correlation_id"
+        )
+        if not request_id:
+            trace_ctx = TRACE_ID.get()
+            request_id = trace_ctx if trace_ctx and trace_ctx != "-" else None
+
+        traceparent = self._extract_header(merged, "traceparent")
+        tracestate = self._extract_header(merged, "tracestate")
+        if not traceparent:
+            traceparent = self._traceparent_from_current_span()
+        if not traceparent and request_id:
+            traceparent = self._fallback_traceparent(str(request_id))
+
+        if request_id:
+            merged.setdefault("x-request-id", str(request_id))
+            merged.setdefault("correlation_id", str(request_id))
+        if traceparent:
+            merged.setdefault("traceparent", str(traceparent))
+        if tracestate:
+            merged.setdefault("tracestate", str(tracestate))
+
+        user_id = self._extract_header(merged, "x-user-id", "X-User-Id")
+        if not user_id:
+            current_user = USER_ID.get()
+            if current_user and current_user != "-":
+                merged.setdefault("x-user-id", str(current_user))
+
+        return merged
+
+    def _bind_trace_context_from_headers(self, headers: dict[str, Any]) -> list[tuple[Any, Any]]:
+        tokens: list[tuple[Any, Any]] = []
+        request_id = self._extract_header(headers, "x-request-id", "X-Request-ID", "correlation_id")
+        user_id = self._extract_header(headers, "x-user-id", "X-User-Id")
+        if request_id:
+            tokens.append((TRACE_ID, TRACE_ID.set(str(request_id))))
+        if user_id:
+            tokens.append((USER_ID, USER_ID.set(str(user_id))))
+        return tokens
+
+    def _reset_trace_context(self, tokens: list[tuple[Any, Any]]) -> None:
+        for var, token in reversed(tokens):
+            try:
+                var.reset(token)
+            except Exception:
+                continue
+
     async def connect(self):
         """Estabelece a conexão com o RabbitMQ."""
         if self._connection and not self._connection.is_closed:
@@ -167,7 +247,7 @@ class MessageBroker:
             else getattr(self.settings, "BROKER_USE_MSGPACK", True)
         )
 
-        merged_headers: dict[str, Any] = {**(headers or {})}
+        merged_headers: dict[str, Any] = self._merge_trace_headers({**(headers or {})})
 
         if fmt_msgpack:
             if isinstance(message, (bytes, bytearray)):
@@ -415,103 +495,118 @@ class MessageBroker:
         """
 
         async def _on_message(message: aio_pika.IncomingMessage):
+            message_headers = dict(getattr(message, "headers", {}) or {})
+            trace_tokens = self._bind_trace_context_from_headers(message_headers)
             try:
-                ct = getattr(message, "content_type", None) or (message.headers or {}).get(
-                    "content_type"
-                )
-                use_msgpack_flag = getattr(settings, "BROKER_USE_MSGPACK", True)
-                use_msgpack = ct == "application/msgpack" or (ct is None and use_msgpack_flag)
-                if use_msgpack:
-                    payload = msgpack.unpackb(message.body, raw=False)
-                else:
-                    payload = json.loads(message.body.decode("utf-8"))
-                if isinstance(payload, str):
-                    for _ in range(2):
-                        try:
-                            payload = json.loads(payload)
-                        except json.JSONDecodeError:
-                            break
-                        if not isinstance(payload, str):
-                            break
-                if not isinstance(payload, dict):
-                    raise TypeError("Task payload must be a JSON object")
-                # Retrocompatibilidade: mensagens antigas da fila de consolidação podem ter sido
-                # publicadas apenas com o payload de negócio (sem envelope TaskMessage).
-                if (
-                    queue_name == "janus.knowledge.consolidation"
-                    and isinstance(payload, dict)
-                    and ("task_id" not in payload or "task_type" not in payload or "timestamp" not in payload)
-                    and "mode" in payload
-                ):
-                    payload = {
-                        "task_id": f"legacy-{int(time.time() * 1000)}",
-                        "task_type": "knowledge_consolidation",
-                        "payload": payload,
-                        "timestamp": time.time(),
-                    }
-                    logger.warning(
-                        "broker_legacy_knowledge_consolidation_payload_wrapped",
-                        queue=queue_name,
-                    )
-                task = TaskMessage(**payload)  # type: ignore[name-defined]
-                
-                # Tracing manual
-                if _OTEL and _tracer:
-                    with _tracer.start_as_current_span("broker.consume") as span:
-                        try:
-                            tid = TRACE_ID.get()
-                            sid = USER_ID.get()
-                            if tid and tid != "-":
-                                span.set_attribute("janus.trace_id", tid)
-                            if sid and sid != "-":
-                                span.set_attribute("janus.user_id", sid)
-                            span.set_attribute("broker.queue", queue_name)
-                            span.set_attribute("broker.content_type", str(ct))
-                        except Exception:
-                            pass
-                        await callback(task)
-                else:
-                    await callback(task)
-            except Exception as e:
-                logger.error(
-                    "Erro ao processar mensagem; reenfileirando",
-                    extra={"queue": queue_name},
-                    exc_info=e,
-                )
                 try:
-                    _CONSUME_ERRORS.labels(queue_name).inc()
-                except Exception:
-                    pass
+                    ct = getattr(message, "content_type", None) or message_headers.get("content_type")
+                    use_msgpack_flag = getattr(settings, "BROKER_USE_MSGPACK", True)
+                    use_msgpack = ct == "application/msgpack" or (ct is None and use_msgpack_flag)
+                    if use_msgpack:
+                        payload = msgpack.unpackb(message.body, raw=False)
+                    else:
+                        payload = json.loads(message.body.decode("utf-8"))
+                    if isinstance(payload, str):
+                        for _ in range(2):
+                            try:
+                                payload = json.loads(payload)
+                            except json.JSONDecodeError:
+                                break
+                            if not isinstance(payload, str):
+                                break
+                    if not isinstance(payload, dict):
+                        raise TypeError("Task payload must be a JSON object")
+                    # Retrocompatibilidade: mensagens antigas da fila de consolidação podem ter sido
+                    # publicadas apenas com o payload de negócio (sem envelope TaskMessage).
+                    if (
+                        queue_name == "janus.knowledge.consolidation"
+                        and isinstance(payload, dict)
+                        and (
+                            "task_id" not in payload
+                            or "task_type" not in payload
+                            or "timestamp" not in payload
+                        )
+                        and "mode" in payload
+                    ):
+                        payload = {
+                            "task_id": f"legacy-{int(time.time() * 1000)}",
+                            "task_type": "knowledge_consolidation",
+                            "payload": payload,
+                            "timestamp": time.time(),
+                        }
+                        logger.warning(
+                            "broker_legacy_knowledge_consolidation_payload_wrapped",
+                            queue=queue_name,
+                        )
+                    task = TaskMessage(**payload)  # type: ignore[name-defined]
+
+                    # Tracing manual
+                    if _OTEL and _tracer:
+                        with _tracer.start_as_current_span("broker.consume") as span:
+                            try:
+                                tid = TRACE_ID.get()
+                                sid = USER_ID.get()
+                                header_traceparent = self._extract_header(message_headers, "traceparent")
+                                header_tracestate = self._extract_header(message_headers, "tracestate")
+                                if tid and tid != "-":
+                                    span.set_attribute("janus.trace_id", tid)
+                                if sid and sid != "-":
+                                    span.set_attribute("janus.user_id", sid)
+                                if header_traceparent:
+                                    span.set_attribute("janus.traceparent", str(header_traceparent))
+                                if header_tracestate:
+                                    span.set_attribute("janus.tracestate", str(header_tracestate))
+                                span.set_attribute("broker.queue", queue_name)
+                                span.set_attribute("broker.content_type", str(ct))
+                            except Exception:
+                                pass
+                            await callback(task)
+                    else:
+                        await callback(task)
+                except Exception as e:
+                    logger.error(
+                        "Erro ao processar mensagem; reenfileirando",
+                        extra={"queue": queue_name},
+                        exc_info=e,
+                    )
+                    try:
+                        _CONSUME_ERRORS.labels(queue_name).inc()
+                    except Exception:
+                        pass
+                    try:
+                        ch = getattr(message, "channel", None)
+                        if ch is not None and not ch.is_closed:
+                            # CRITICAL FIX: Do NOT requeue on generic error to avoid infinite loops (poison pill).
+                            # Send to DLX (Dead Letter Exchange) by Nack(requeue=False).
+                            # Queue must be configured with x-dead-letter-exchange for this to work properly.
+                            await message.nack(requeue=False)
+                            logger.warning(
+                                "log_warning",
+                                message=f"Mensagem movida para DLX (requeue=False) devido a erro: {e}",
+                            )
+                        else:
+                            logger.warning(
+                                "Canal do RabbitMQ fechado; nack ignorado e mensagem será reentregue pelo broker."
+                            )
+                    except Exception as nack_err:
+                        logger.error(
+                            "Falha ao enviar NACK; possivelmente canal inválido", exc_info=nack_err
+                        )
+                    return
+
+                # Confirma a mensagem somente se o canal estiver válido
                 try:
                     ch = getattr(message, "channel", None)
                     if ch is not None and not ch.is_closed:
-                        # CRITICAL FIX: Do NOT requeue on generic error to avoid infinite loops (poison pill).
-                        # Send to DLX (Dead Letter Exchange) by Nack(requeue=False).
-                        # Queue must be configured with x-dead-letter-exchange for this to work properly.
-                        await message.nack(requeue=False)
-                        logger.warning("log_warning", message=f"Mensagem movida para DLX (requeue=False) devido a erro: {e}"
-                        )
+                        await message.ack()
                     else:
                         logger.warning(
-                            "Canal do RabbitMQ fechado; nack ignorado e mensagem será reentregue pelo broker."
+                            "Canal do RabbitMQ fechado antes do ACK; mensagem provavelmente será reentregue."
                         )
-                except Exception as nack_err:
-                    logger.error(
-                        "Falha ao enviar NACK; possivelmente canal inválido", exc_info=nack_err
-                    )
-                return
-
-            # Confirma a mensagem somente se o canal estiver válido
-            try:
-                ch = getattr(message, "channel", None)
-                if ch is not None and not ch.is_closed:
-                    await message.ack()
-                else:
-                    logger.warning(
-                        "Canal do RabbitMQ fechado antes do ACK; mensagem provavelmente será reentregue."
-                    )
-            except Exception as ack_err:
-                logger.error("Falha ao enviar ACK; mensagem será reentregue", exc_info=ack_err)
+                except Exception as ack_err:
+                    logger.error("Falha ao enviar ACK; mensagem será reentregue", exc_info=ack_err)
+            finally:
+                self._reset_trace_context(trace_tokens)
 
         async def _consume_loop() -> None:
             while True:
@@ -580,7 +675,10 @@ class MessageBroker:
                 content_type = "application/json"
 
             msg = aio_pika.Message(
-                body=body, delivery_mode=aio_pika.DeliveryMode.PERSISTENT, content_type=content_type
+                body=body,
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                content_type=content_type,
+                headers=self._merge_trace_headers({}),
             )
 
             await exchange.publish(msg, routing_key=routing_key)

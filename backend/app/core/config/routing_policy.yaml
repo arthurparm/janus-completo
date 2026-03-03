@@ -1,0 +1,44 @@
+version: 1
+mode: deterministic
+defaults:
+  primary: postgres
+  secondary: []
+  reason: "Fallback deterministic route."
+  rule_id: "default.postgres_only"
+rules:
+  chat_context_retrieval:
+    primary: qdrant
+    secondary:
+      - postgres
+    reason: "Semantic memory retrieval should prioritize vector search."
+    rule_id: "chat.context.qdrant_first"
+  rag_search:
+    primary: qdrant
+    secondary:
+      - postgres
+    reason: "RAG search should prioritize vector similarity."
+    rule_id: "rag.search.qdrant_first"
+  rag_user_chat_search:
+    primary: qdrant
+    secondary:
+      - postgres
+    reason: "User chat recall is optimized for vector embeddings."
+    rule_id: "rag.user_chat.qdrant_first"
+  rag_productivity_search:
+    primary: qdrant
+    secondary:
+      - postgres
+    reason: "Productivity retrieval requires semantic ranking."
+    rule_id: "rag.productivity.qdrant_first"
+  rag_hybrid_search:
+    primary: qdrant
+    secondary:
+      - neo4j
+    reason: "Hybrid search uses vector retrieval with graph enrichment."
+    rule_id: "rag.hybrid.qdrant_plus_neo4j"
+  knowledge_graph_query:
+    primary: neo4j
+    secondary:
+      - postgres
+    reason: "Graph traversal and relationships should prioritize Neo4j."
+    rule_id: "knowledge.graph.neo4j_first"

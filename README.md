@@ -25,6 +25,20 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 
 ## Getting Started
 
+### One-Command Local Bootstrap (Recommended)
+
+```bash
+python tooling/dev.py up
+```
+
+Optional lifecycle commands:
+
+```bash
+python tooling/dev.py setup
+python tooling/dev.py qa
+python tooling/dev.py down
+```
+
 ### Prerequisites
 
 - Node.js 20

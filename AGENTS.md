@@ -34,6 +34,18 @@ Monorepo with two main parts:
 
 ## Quick Start Workflows
 
+### One-Command Local Bootstrap (recommended)
+```bash
+python tooling/dev.py up
+```
+
+Auxiliary commands:
+```bash
+python tooling/dev.py setup
+python tooling/dev.py qa
+python tooling/dev.py down
+```
+
 ### Full Stack (recommended)
 ```bash
 docker compose up -d

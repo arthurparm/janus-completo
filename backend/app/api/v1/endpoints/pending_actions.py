@@ -1,7 +1,7 @@
 import structlog
 import asyncio
 import json
-from typing import List
+from typing import Any, List
 
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
@@ -27,6 +27,7 @@ class PendingActionDTO(BaseModel):
     created_at: str | None = None
     risk_level: str | None = None
     risk_summary: str | None = None
+    simulation: dict[str, Any] | None = None
 
 
 _HIGH_RISK_KEYWORDS = (
@@ -103,6 +104,34 @@ def _sanitize_pending_args_json(args_json: str | None) -> str | None:
         return json.dumps(redact_sensitive_payload(parsed), ensure_ascii=False)
     except Exception:
         return str(redact_sensitive_payload(raw_text))
+
+
+def _build_simulation_payload(item: Any) -> dict[str, Any] | None:
+    raw = getattr(item, "simulation_summary_json", None)
+    generated_at = getattr(item, "simulation_generated_at", None)
+    version = getattr(item, "simulation_version", None)
+    if raw is None and generated_at is None and version is None:
+        return None
+
+    parsed: dict[str, Any]
+    if isinstance(raw, str) and raw.strip():
+        try:
+            candidate = json.loads(raw)
+            parsed = candidate if isinstance(candidate, dict) else {"summary": str(candidate)}
+        except Exception:
+            parsed = {"summary": str(raw)}
+    else:
+        parsed = {}
+
+    safe = redact_sensitive_payload(parsed)
+    if generated_at is not None:
+        try:
+            safe["generated_at"] = generated_at.isoformat()
+        except Exception:
+            safe["generated_at"] = str(generated_at)
+    if version:
+        safe["simulation_version"] = str(version)
+    return safe or None
 
 
 def _is_backend_unavailable_error(error: Exception) -> bool:
@@ -274,6 +303,7 @@ async def list_pending(
                         ),
                         risk_level=risk_level,
                         risk_summary=risk_summary,
+                        simulation=_build_simulation_payload(item),
                     )
                 )
         except Exception as e:
@@ -414,6 +444,7 @@ async def approve_sql_action(action_id: int):
             ),
             risk_level=risk_level,
             risk_summary=risk_summary,
+            simulation=_build_simulation_payload(updated),
         )
     except HTTPException:
         raise
@@ -466,6 +497,7 @@ async def reject_sql_action(action_id: int):
             ),
             risk_level=risk_level,
             risk_summary=risk_summary,
+            simulation=_build_simulation_payload(updated),
         )
     except HTTPException:
         raise

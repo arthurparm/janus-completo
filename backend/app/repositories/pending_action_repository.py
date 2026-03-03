@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -15,7 +17,15 @@ class PendingActionRepository:
         return db.get_session_direct()
 
     def create(
-        self, user_id: str, tool_name: str, args_json: str, run_id: int | None, cycle: int | None
+        self,
+        user_id: str,
+        tool_name: str,
+        args_json: str,
+        run_id: int | None,
+        cycle: int | None,
+        simulation_summary_json: str | None = None,
+        simulation_generated_at: datetime | None = None,
+        simulation_version: str | None = None,
     ) -> PendingAction:
         s = self._get_session()
         try:
@@ -25,6 +35,9 @@ class PendingActionRepository:
                 args_json=args_json,
                 run_id=run_id,
                 cycle=cycle,
+                simulation_summary_json=simulation_summary_json,
+                simulation_generated_at=simulation_generated_at,
+                simulation_version=simulation_version,
             )
             s.add(p)
             s.commit()
