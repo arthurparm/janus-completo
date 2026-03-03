@@ -525,3 +525,80 @@ Copiar e preencher:
 - Dono:
 - Status:
 ```
+
+### [SG-014] Vazamento de PII em logs de Chat e Collaboration
+- Problema atual: Os serviços `ChatCommandHandler` (argumentos do usuário), `ChatEventPublisher` (conteúdo da mensagem) e `CollaborationService` (artefatos e mensagens) loggam conteúdo sensível que constitui risco de PII/LGPD.
+- Solucao proposta: Aplicar redação (PII redaction) antes de loggar, ou usar logs estruturados com restrição de acesso e ofuscação de dados textuais.
+- Impacto esperado: Conformidade com LGPD e prevenção de vazamento de dados sensíveis em logs plain text.
+- Riscos: Perda parcial de contexto para debugging se ofuscação for agressiva.
+- Dependencias: Módulo `app.core.memory.security` para usar regex de PII já existentes.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-013] Rate Limiting Fail-Closed
+- Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open.
+- Solucao proposta: Configurar a política do Rate Limit para modo `fail-open`, permitindo a requisição prosseguir com degradação graciosa caso o Redis caia.
+- Impacto esperado: Maior disponibilidade do sistema (Availability > 99.9%) caso o serviço de cache fique indisponível temporariamente.
+- Riscos: Possível sobrecarga da API durante interrupção do Redis.
+- Dependencias: Ajuste na injeção do rate limiter.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-015] Fuga de Autenticação em Workspaces API
+- Problema atual: Endpoints em `backend/app/api/v1/endpoints/workspace.py` usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ.
+- Solucao proposta: Adicionar dependência de autenticação (ex: `Depends(get_current_user)`) aos endpoints do workspace.
+- Impacto esperado: Prevenir que usuários anônimos manipulem workspaces e desliguem o sistema.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-016] Vulnerabilidade do Header X-User-Id
+- Problema atual: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` por padrão, possibilitando Bypass/Impersonation.
+- Solucao proposta: Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT/Token robusto.
+- Impacto esperado: Correção de vulnerabilidade crítica de spoofing de usuário.
+- Riscos: Quebra de compatibilidade em ambientes internos que confiam no header sem token.
+- Dependencias: Ajuste de configuração em `config.py`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [PX-013] Refatoração de God Objects e Componentes Complexos
+- Problema atual: `observability_service.py` (~1200 linhas) e `frontend/src/app/services/backend-api.service.ts` (~1638 linhas) e `conversations.ts` (~1700 linhas) concentram lógica excessiva.
+- Solucao proposta: Quebrar o serviço de observabilidade em (Health, Metrics, Audit, Anomaly) e particionar os componentes Frontend aplicando SRP e NgRx/Store.
+- Impacto esperado: Menor complexidade ciclomática, testes mais simples e manutenção sustentável.
+- Riscos: Regressões durante o processo de split de classes.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: ideia
+
+### [SG-017] Endpoint de Auth exposto a brute-force
+- Problema atual: `backend/app/api/v1/endpoints/auth.py` (login/refresh) não possuem rate limiter.
+- Solucao proposta: Decorar a rota de login com `@limiter.limit("5/minute")` para prevenir ataques de dicionário e brute-force.
+- Impacto esperado: Maior resiliência contra ataques de força bruta.
+- Riscos: Bloqueio acidental de IPs em caso de NAT/Proxy (necessário extrair IP real).
+- Dependencias: O Rate Limit com Redis.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-014] Hardcoded Paths e Criação Precoce de Diretórios
+- Problema atual: Trabalhadores assíncronos e testes quebram por `PermissionError` em caminhos como `/app/workspace` e `.mkdir()` fora de contexto em `NeuralTrainer`.
+- Solucao proposta: Usar sempre `app.core.infrastructure.filesystem_manager.WORKSPACE_DIR` e garantir que o `mkdir` ocorre apenas na hora da execução (e.g. `_save_model`).
+- Impacto esperado: Compatibilidade cross-environment (Docker/Local/CI) robusta.
+- Riscos: Quebra momentânea de caminhos estáticos assumidos.
+- Dependencias: filesystem_manager.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
