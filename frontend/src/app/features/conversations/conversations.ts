@@ -1960,7 +1960,7 @@ export class ConversationsComponent {
     if (value === null || value === undefined) return ''
     if (typeof value === 'string') {
       const cleaned = value
-        .replace(/\[object Object\]/g, '')
+        .replace(/\[\s*object\s+object\s*\]/gi, '')
         .split('')
         .map((ch) => {
           const code = ch.charCodeAt(0)
@@ -1986,7 +1986,7 @@ export class ConversationsComponent {
 
   private sanitizeStreamingText(value: string): string {
     return String(value || '')
-      .replace(/\[object Object\]/g, '')
+      .replace(/\[\s*object\s+object\s*\]/gi, '')
       .split('')
       .map((ch) => {
         const code = ch.charCodeAt(0)
