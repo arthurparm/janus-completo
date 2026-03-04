@@ -1726,8 +1726,9 @@ export class ConversationsComponent {
   }
 
   private appendThought(kind: ThoughtKind, title: string, text: string, timestamp?: number): void {
-    const safeTitle = this.sanitizeDiagnosticText(title, 'Evento').slice(0, 120)
-    const safeText = this.sanitizeDiagnosticText(text, 'Conteudo indisponivel')
+    const safeTitleRaw = this.sanitizeDiagnosticText(title, 'Evento').slice(0, 120)
+    const safeTitle = safeTitleRaw.toLowerCase() === 'unknown' ? 'Agente' : safeTitleRaw
+    const safeText = this.sanitizeDiagnosticText(text, 'Evento tecnico recebido')
     const item: ThoughtStreamItem = {
       id: this.createId(),
       kind,
@@ -1968,6 +1969,7 @@ export class ConversationsComponent {
             || code === 0x0c
             || (code >= 0x0e && code <= 0x1f)
             || (code >= 0x7f && code <= 0x9f)
+            || code === 0xfffd
           return isControl ? ' ' : ch
         })
         .join('')
@@ -1987,7 +1989,7 @@ export class ConversationsComponent {
     if (!raw) return fallback
     const compact = raw.replace(/\s{2,}/g, ' ').trim()
     if (!compact) return fallback
-    if (this.looksLikeBinaryPayload(compact)) {
+    if (this.looksLikeBinaryPayload(compact) || this.looksLikeStructuredTelemetryNoise(compact)) {
       return fallback || 'Conteudo nao textual omitido'
     }
     return compact
@@ -1998,5 +2000,20 @@ export class ConversationsComponent {
     const alphaNumericCount = (value.match(/[A-Za-z0-9\u00C0-\u024F]/g) || []).length
     const symbolRatio = 1 - (alphaNumericCount / value.length)
     return symbolRatio > 0.55
+  }
+
+  private looksLikeStructuredTelemetryNoise(value: string): boolean {
+    const lowered = value.toLowerCase()
+    const markers = [
+      'event_type',
+      'agent_role',
+      'task_id',
+      'metadata',
+      'entities_count',
+      'relationships_count',
+      'memory_consolidated',
+    ]
+    const hitCount = markers.reduce((acc, marker) => (lowered.includes(marker) ? acc + 1 : acc), 0)
+    return hitCount >= 3
   }
 }
