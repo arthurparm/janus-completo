@@ -17,10 +17,39 @@ export class MarkdownService {
         // Custom renderer for robust code block handling
         const renderer: any = new marked.Renderer();
 
-        renderer.code = (text: string, lang: string) => {
+        renderer.code = (code: unknown, languageHint?: string) => {
+            let text = '';
+            let lang = '';
+
+            if (typeof code === 'string') {
+                text = code;
+                lang = languageHint || '';
+            } else if (code && typeof code === 'object') {
+                const maybeToken = code as { text?: unknown; lang?: unknown; language?: unknown; raw?: unknown };
+                if (typeof maybeToken.text === 'string') {
+                    text = maybeToken.text;
+                } else if (typeof maybeToken.raw === 'string') {
+                    text = maybeToken.raw;
+                } else {
+                    try {
+                        text = JSON.stringify(maybeToken, null, 2);
+                    } catch {
+                        text = String(maybeToken);
+                    }
+                }
+
+                if (typeof maybeToken.lang === 'string') lang = maybeToken.lang;
+                else if (typeof maybeToken.language === 'string') lang = maybeToken.language;
+                else lang = languageHint || '';
+            } else {
+                text = String(code ?? '');
+                lang = languageHint || '';
+            }
+
+            const normalizedText = String(text || '').replace(/\[\s*object\s+object\s*\]/gi, '').trimEnd();
             const validLang = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
             try {
-                const highlighted = hljs.highlight(text, { language: validLang }).value;
+                const highlighted = hljs.highlight(normalizedText, { language: validLang }).value;
                 return `<div class="code-block-wrapper">
                    <div class="code-header">
                      <span class="lang-label">${validLang}</span>
@@ -28,7 +57,7 @@ export class MarkdownService {
                    <pre><code class="hljs language-${validLang}">${highlighted}</code></pre>
                  </div>`;
             } catch (e) {
-                return `<pre><code>${text}</code></pre>`;
+                return `<pre><code>${normalizedText}</code></pre>`;
             }
         };
 
