@@ -810,7 +810,7 @@
                         <app-skeleton variant="text" [count]="3"></app-skeleton>
                       } @else if (conversationMemory().length) {
                         <ul class="rail-list compact">
-                          @for (item of conversationMemory(); track item.ts_ms) {
+                          @for (item of conversationMemory(); track memoryTrackKey(item, $index)) {
                             <li class="rail-item compact-item memory-list-item">
                               <p class="memory-content">{{ item.content }}</p>
                               <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>
@@ -831,7 +831,7 @@
                         <app-skeleton variant="text" [count]="3"></app-skeleton>
                       } @else if (userMemory().length) {
                         <ul class="rail-list compact">
-                          @for (item of userMemory(); track item.ts_ms) {
+                          @for (item of userMemory(); track memoryTrackKey(item, $index)) {
                             <li class="rail-item compact-item memory-list-item">
                               <p class="memory-content">{{ item.content }}</p>
                               <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>

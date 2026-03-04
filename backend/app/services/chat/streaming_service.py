@@ -600,6 +600,7 @@ class StreamingService:
             pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
                 user_id=str(user_id) if user_id is not None else None,
                 message=message,
+                assistant_response=str(result.get("response") or ""),
                 conversation_id=conversation_id,
                 existing_pending_action_id=pending_action_id,
                 understanding=result_understanding if isinstance(result_understanding, dict) else None,

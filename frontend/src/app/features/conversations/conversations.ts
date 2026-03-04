@@ -748,6 +748,15 @@ export class ConversationsComponent {
     return parts.join(' · ')
   }
 
+  memoryTrackKey(item: MemoryItem, index: number): string {
+    const compositeId = String(item.composite_id || '').trim()
+    if (compositeId) return compositeId
+    const ts = Number(item.ts_ms)
+    const normalizedTs = Number.isFinite(ts) ? ts : (this.coerceDateInputToMs(item.metadata?.timestamp) || 0)
+    const content = this.sanitizeDiagnosticText(item.content, 'memory').slice(0, 48)
+    return `${normalizedTs}:${content}:${index}`
+  }
+
   setRagResultViewTab(tab: RagResultViewTab): void {
     this.ragResultViewTab.set(tab)
   }
@@ -1717,12 +1726,14 @@ export class ConversationsComponent {
   }
 
   private appendThought(kind: ThoughtKind, title: string, text: string, timestamp?: number): void {
+    const safeTitle = this.sanitizeDiagnosticText(title, 'Evento').slice(0, 120)
+    const safeText = this.sanitizeDiagnosticText(text, 'Conteudo indisponivel')
     const item: ThoughtStreamItem = {
       id: this.createId(),
       kind,
-      title,
-      text,
-      timestamp: Number(timestamp || Date.now())
+      title: safeTitle || 'Evento',
+      text: safeText,
+      timestamp: this.coerceDateInputToMs(timestamp) || Date.now()
     }
     this.thoughtStream.update((items) => [item, ...items].slice(0, 40))
   }
@@ -1947,7 +1958,20 @@ export class ConversationsComponent {
   private sanitizeChatText(value: unknown): string {
     if (value === null || value === undefined) return ''
     if (typeof value === 'string') {
-      const cleaned = value.replace(/\[object Object\]/g, '').replace(/\n{3,}/g, '\n\n')
+      const cleaned = value
+        .replace(/\[object Object\]/g, '')
+        .split('')
+        .map((ch) => {
+          const code = ch.charCodeAt(0)
+          const isControl = (code >= 0x00 && code <= 0x08)
+            || code === 0x0b
+            || code === 0x0c
+            || (code >= 0x0e && code <= 0x1f)
+            || (code >= 0x7f && code <= 0x9f)
+          return isControl ? ' ' : ch
+        })
+        .join('')
+        .replace(/\n{3,}/g, '\n\n')
       return cleaned.trim() ? cleaned : ''
     }
     if (typeof value === 'number' || typeof value === 'boolean') return String(value)
@@ -1956,5 +1980,23 @@ export class ConversationsComponent {
     } catch {
       return String(value)
     }
+  }
+
+  private sanitizeDiagnosticText(value: unknown, fallback = ''): string {
+    const raw = this.sanitizeChatText(value)
+    if (!raw) return fallback
+    const compact = raw.replace(/\s{2,}/g, ' ').trim()
+    if (!compact) return fallback
+    if (this.looksLikeBinaryPayload(compact)) {
+      return fallback || 'Conteudo nao textual omitido'
+    }
+    return compact
+  }
+
+  private looksLikeBinaryPayload(value: string): boolean {
+    if (value.length < 20) return false
+    const alphaNumericCount = (value.match(/[A-Za-z0-9\u00C0-\u024F]/g) || []).length
+    const symbolRatio = 1 - (alphaNumericCount / value.length)
+    return symbolRatio > 0.55
   }
 }

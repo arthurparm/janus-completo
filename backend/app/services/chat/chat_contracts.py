@@ -54,7 +54,14 @@ def chat_sse_error_payload(
     }
 
 
-_PENDING_ACTION_ID_RE = re.compile(r"Pending action id:\s*(\d+)", re.IGNORECASE)
+_PENDING_ACTION_ID_RE = re.compile(
+    r"(?:pending\s*action\s*id|pending[_\s-]*action[_\s-]*id)\s*[:=#-]?\s*(\d+)",
+    re.IGNORECASE,
+)
+_PENDING_ACTION_MARKER_RE = re.compile(
+    r"(?:pending\s*action\s*id|pending[_\s-]*action[_\s-]*id)\s*[:=#-]?\s*([A-Za-z0-9_-]+)",
+    re.IGNORECASE,
+)
 _HIGH_RISK_FALLBACK_KEYWORDS = (
     "deploy",
     "production",
@@ -67,6 +74,16 @@ _HIGH_RISK_FALLBACK_KEYWORDS = (
     "shutdown",
     "reset",
     "wipe",
+    "destrut",
+    "delete",
+    "deletar",
+    "apagar",
+    "excluir",
+    "remover",
+    "rm -rf",
+    "powershell",
+    "cmd.exe",
+    "shell",
 )
 
 
@@ -97,6 +114,7 @@ def maybe_create_fallback_pending_action(
     *,
     user_id: str | None,
     message: str,
+    assistant_response: str | None = None,
     conversation_id: str | None = None,
     existing_pending_action_id: int | None = None,
     understanding: dict[str, Any] | None = None,
@@ -107,16 +125,24 @@ def maybe_create_fallback_pending_action(
         )
     if not user_id:
         return None, None
-    if not isinstance(understanding, dict):
-        return None, None
-    if not bool(understanding.get("requires_confirmation")):
-        return None, None
+    context = understanding if isinstance(understanding, dict) else {}
+    requires_confirmation = bool(context.get("requires_confirmation"))
+    normalized_reason = _normalize_confirmation_reason(context.get("confirmation_reason"))
+    lowered_message = str(message or "").lower()
+    lowered_response = str(assistant_response or "").lower()
+    high_risk_signal = any(
+        keyword in lowered_message or keyword in lowered_response
+        for keyword in _HIGH_RISK_FALLBACK_KEYWORDS
+    )
+    pending_marker_signal = bool(_PENDING_ACTION_MARKER_RE.search(str(assistant_response or "")))
+    high_risk_reason = str(normalized_reason or "").lower() == "high_risk"
 
-    lowered = str(message or "").lower()
-    if not any(keyword in lowered for keyword in _HIGH_RISK_FALLBACK_KEYWORDS):
-        return None, _normalize_confirmation_reason(understanding.get("confirmation_reason"))
+    if not (requires_confirmation or high_risk_signal or pending_marker_signal):
+        return None, normalized_reason
+    if not (high_risk_signal or pending_marker_signal or high_risk_reason):
+        return None, normalized_reason
 
-    reason = _normalize_confirmation_reason(understanding.get("confirmation_reason")) or "high_risk"
+    reason = normalized_reason or "high_risk"
     try:
         from app.repositories.pending_action_repository import PendingActionRepository
 

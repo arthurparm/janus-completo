@@ -267,6 +267,7 @@ async def send_message(
     pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
         user_id=str(user_id) if user_id is not None else None,
         message=payload.message,
+        assistant_response=str(result.get("response") or ""),
         conversation_id=str(result.get("conversation_id") or payload.conversation_id),
         existing_pending_action_id=pending_action_id,
         understanding=understanding if isinstance(understanding, dict) else None,
