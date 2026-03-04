@@ -109,22 +109,51 @@ def test_resolve_files_for_study_incremental_uses_task_context_when_present(tmp_
     assert rows[0]["change_type"] == "task_context"
 
 
-def test_infer_self_memory_relationship_types_is_local_and_path_based():
+def test_infer_self_memory_relationship_types_is_local_and_code_aware(tmp_path: Path):
     service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    py_file = tmp_path / "backend" / "app" / "services" / "example_service.py"
+    py_file.parent.mkdir(parents=True, exist_ok=True)
+    py_file.write_text(
+        "\n".join(
+            [
+                "import os",
+                "from typing import Any",
+                "",
+                "class Base: ...",
+                "class Example(Base):",
+                "    def run(self):",
+                "        helper()",
+                "",
+                "def helper():",
+                "    return 1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
     rels = service._infer_self_memory_relationship_types(
-        "backend/app/services/autonomy_admin_service.py",
-        "backend/app/services/autonomy_admin_service.py: 100 linhas analisadas.",
+        "backend/app/services/example_service.py",
+        "backend/app/services/example_service.py: 10 linhas analisadas.",
     )
     assert "RELATES_TO" in rels
+    assert "IMPORTS" in rels
+    assert "DEFINES" in rels
+    assert "CALLS" in rels
+    assert "INHERITS_FROM" in rels
     assert "USES" in rels
-    assert "IMPLEMENTS" not in rels
 
+    style_file = tmp_path / "frontend" / "src" / "app" / "features" / "x.scss"
+    style_file.parent.mkdir(parents=True, exist_ok=True)
+    style_file.write_text(".panel { color: red; }", encoding="utf-8")
     rels_style = service._infer_self_memory_relationship_types(
-        "frontend/src/app/features/admin/autonomia/admin-autonomia.scss",
+        "frontend/src/app/features/x.scss",
         "Arquivo de interface/estilo.",
     )
     assert "RELATES_TO" in rels_style
     assert "HAS_PROPERTY" in rels_style
+    assert "CONTAINS" in rels_style
 
 
 @pytest.mark.asyncio
@@ -234,6 +263,8 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     assert "WHERE cf.path IN path_candidates" in query
     assert "OPTIONAL MATCH (fn:CodeFunction)" in query
     assert "OPTIONAL MATCH (cl:CodeClass)" in query
+    assert "MERGE (m)-[:IMPORTS]->(f)" in query
+    assert "MERGE (m)-[:CALLS]->(cf)" in query
     candidates = captured_params.get("path_candidates")
     assert isinstance(candidates, list)
     assert "backend/app/services/autonomy_admin_service.py" in candidates
@@ -243,6 +274,7 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     assert isinstance(rel_types, list)
     assert "RELATES_TO" in rel_types
     assert "USES" in rel_types
+    assert "IMPORTS" in rel_types
 
 
 def test_get_self_study_status_includes_running_progress():

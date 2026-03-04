@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
@@ -46,10 +47,14 @@ class AutonomyAdminService:
     )
     SELF_MEMORY_RELATION_ALLOWLIST = (
         GraphRelationship.RELATES_TO.value,
+        GraphRelationship.CALLS.value,
+        GraphRelationship.IMPORTS.value,
         GraphRelationship.DEFINES.value,
         GraphRelationship.USES.value,
         GraphRelationship.DEPENDS_ON.value,
+        GraphRelationship.INHERITS_FROM.value,
         GraphRelationship.IMPLEMENTS.value,
+        GraphRelationship.CONTAINS.value,
         GraphRelationship.HAS_PROPERTY.value,
         GraphRelationship.MENTIONS.value,
     )
@@ -543,11 +548,66 @@ class AutonomyAdminService:
 
         return [p for p in candidates if p]
 
+    def _read_study_file_content(self, rel_path: str) -> tuple[str, str] | None:
+        path = self._repo_root / rel_path
+        if not path.exists() or not path.is_file():
+            return None
+        if path.stat().st_size > self.MAX_FILE_SIZE_BYTES:
+            return None
+        suffix = path.suffix.lower()
+        if suffix not in {".py", ".ts", ".tsx", ".js", ".jsx", ".html", ".scss", ".css", ".md", ".json"}:
+            return None
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return None
+        return suffix, content
+
     def _infer_self_memory_relationship_types(self, rel_path: str, summary: str) -> list[str]:
         path = str(rel_path or "").lower()
         text = str(summary or "").lower()
         rel_types: set[str] = {GraphRelationship.RELATES_TO.value}
 
+        file_data = self._read_study_file_content(rel_path)
+        suffix = file_data[0] if file_data else ""
+        content = (file_data[1] if file_data else "")[:200_000]
+        content_lower = content.lower()
+
+        # Local structural/code analysis (no LLM): imports, declarations, calls, inheritance.
+        if content:
+            if suffix == ".py":
+                if re.search(r"(?m)^\s*(import|from)\s+\S+", content):
+                    rel_types.add(GraphRelationship.IMPORTS.value)
+                    rel_types.add(GraphRelationship.DEPENDS_ON.value)
+                if re.search(r"(?m)^\s*(def|class)\s+\w+", content):
+                    rel_types.add(GraphRelationship.DEFINES.value)
+                if re.search(r"(?m)^\s*class\s+\w+\s*\([^)]*\)\s*:", content):
+                    rel_types.add(GraphRelationship.INHERITS_FROM.value)
+                if re.search(r"\b\w+\s*\(", content):
+                    rel_types.add(GraphRelationship.CALLS.value)
+                    rel_types.add(GraphRelationship.USES.value)
+            elif suffix in {".ts", ".tsx", ".js", ".jsx"}:
+                if re.search(r"(?m)^\s*import\s+.+\s+from\s+['\"].+['\"]", content):
+                    rel_types.add(GraphRelationship.IMPORTS.value)
+                    rel_types.add(GraphRelationship.DEPENDS_ON.value)
+                if re.search(r"\b(class|function|interface|type|enum)\s+\w+", content):
+                    rel_types.add(GraphRelationship.DEFINES.value)
+                if re.search(r"\bextends\b", content_lower):
+                    rel_types.add(GraphRelationship.INHERITS_FROM.value)
+                if re.search(r"\bimplements\b", content_lower):
+                    rel_types.add(GraphRelationship.IMPLEMENTS.value)
+                if re.search(r"\b\w+\s*\(", content):
+                    rel_types.add(GraphRelationship.CALLS.value)
+                    rel_types.add(GraphRelationship.USES.value)
+            elif suffix in {".html", ".scss", ".css"}:
+                rel_types.add(GraphRelationship.HAS_PROPERTY.value)
+                rel_types.add(GraphRelationship.CONTAINS.value)
+            elif suffix in {".json"}:
+                rel_types.add(GraphRelationship.HAS_PROPERTY.value)
+            elif suffix == ".md":
+                rel_types.add(GraphRelationship.MENTIONS.value)
+
+        # Path/context hints complement code signals.
         if any(marker in path for marker in ("/api/", "/endpoints/", "/controllers/")):
             rel_types.add(GraphRelationship.IMPLEMENTS.value)
         if any(marker in path for marker in ("/models/", "/schemas/", "/types/")):
@@ -560,8 +620,19 @@ class AutonomyAdminService:
             rel_types.add(GraphRelationship.MENTIONS.value)
         if any(marker in path for marker in (".html", ".scss", ".css")) or "interface/estilo" in text:
             rel_types.add(GraphRelationship.HAS_PROPERTY.value)
+            rel_types.add(GraphRelationship.CONTAINS.value)
 
         return [rel for rel in self.SELF_MEMORY_RELATION_ALLOWLIST if rel in rel_types]
+
+    def _build_self_memory_rel_merge_block(self, target_var: str) -> str:
+        lines: list[str] = []
+        for rel_type in self.SELF_MEMORY_RELATION_ALLOWLIST:
+            lines.append(
+                f"              FOREACH (__ IN CASE WHEN '{rel_type}' IN $rel_types THEN [1] ELSE [] END |"
+            )
+            lines.append(f"                MERGE (m)-[:{rel_type}]->({target_var})")
+            lines.append("              )")
+        return "\n".join(lines)
 
     async def _persist_self_memory(self, *, rel_path: str, summary: str, sha_after: str | None) -> None:
         if not self._is_allowed_file_path(rel_path):
@@ -572,10 +643,12 @@ class AutonomyAdminService:
         rel_types = self._infer_self_memory_relationship_types(rel_path, summary)
         if not rel_types:
             rel_types = [GraphRelationship.RELATES_TO.value]
+        file_rel_merge_block = self._build_self_memory_rel_merge_block("f")
+        code_file_rel_merge_block = self._build_self_memory_rel_merge_block("cf")
         graph = await get_graph_db()
         await graph.execute(
-            """
-            MERGE (m:SelfMemory {file_path: $file_path})
+            f"""
+            MERGE (m:SelfMemory {{file_path: $file_path}})
             SET m.summary = $summary,
                 m.updated_at = timestamp(),
                 m.confidence = 0.75,
@@ -584,53 +657,13 @@ class AutonomyAdminService:
             OPTIONAL MATCH (f:File)
             WHERE f.path IN path_candidates
             FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |
-              FOREACH (__ IN CASE WHEN 'RELATES_TO' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:RELATES_TO]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'DEFINES' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:DEFINES]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'USES' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:USES]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'DEPENDS_ON' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:DEPENDS_ON]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'IMPLEMENTS' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:IMPLEMENTS]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'HAS_PROPERTY' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:HAS_PROPERTY]->(f)
-              )
-              FOREACH (__ IN CASE WHEN 'MENTIONS' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:MENTIONS]->(f)
-              )
+{file_rel_merge_block}
             )
             WITH m, path_candidates
             OPTIONAL MATCH (cf:CodeFile)
             WHERE cf.path IN path_candidates
             FOREACH (_ IN CASE WHEN cf IS NULL THEN [] ELSE [1] END |
-              FOREACH (__ IN CASE WHEN 'RELATES_TO' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:RELATES_TO]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'DEFINES' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:DEFINES]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'USES' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:USES]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'DEPENDS_ON' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:DEPENDS_ON]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'IMPLEMENTS' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:IMPLEMENTS]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'HAS_PROPERTY' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:HAS_PROPERTY]->(cf)
-              )
-              FOREACH (__ IN CASE WHEN 'MENTIONS' IN $rel_types THEN [1] ELSE [] END |
-                MERGE (m)-[:MENTIONS]->(cf)
-              )
+{code_file_rel_merge_block}
             )
             WITH m, path_candidates
             OPTIONAL MATCH (fn:CodeFunction)
