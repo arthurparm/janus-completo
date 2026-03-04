@@ -11,6 +11,7 @@ services:
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env.pc1}
+      - AUTH_ADMIN_CPF_ALLOWLIST=${AUTH_ADMIN_CPF_ALLOWLIST:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-["http://localhost:4300"]}
 
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
