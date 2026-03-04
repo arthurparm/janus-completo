@@ -30,7 +30,7 @@ class AutonomyAdminService:
     MAX_FILE_SIZE_BYTES = 512 * 1024
     MAX_FILES_PER_RUN = 1200
     MAX_RUN_SECONDS = 90
-    ALLOWED_ROOTS = ("backend/app", "frontend/src/app")
+    ALLOWED_ROOTS = ("backend/app", "frontend/src/app", "app")
     IGNORE_DIR_MARKERS = (
         "/node_modules/",
         "/.git/",
