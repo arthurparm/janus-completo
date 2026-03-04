@@ -82,6 +82,34 @@ services:
     networks:
       - janus-pc1-net
 
+  janus-frontend:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile
+    image: janus-completo-janus-frontend:latest
+    container_name: janus_frontend
+    ports:
+      - "${FRONTEND_PORT:-4300}:4300"
+    depends_on:
+      janus-api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4300/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: janus_postgres
