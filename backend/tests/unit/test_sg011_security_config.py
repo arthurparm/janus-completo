@@ -54,6 +54,15 @@ def test_validate_production_secrets_passes_with_secure_values(monkeypatch):
 
 
 def test_auth_admin_cpf_allowlist_parses_and_normalizes():
-    settings = AppSettings(_env_file=None, AUTH_ADMIN_CPF_ALLOWLIST="503.024.278-30, 12345678901")
+    settings = AppSettings(_env_file=None, AUTH_ADMIN_CPF_ALLOWLIST="503.024.278-30, 52998224725")
 
-    assert settings.AUTH_ADMIN_CPF_ALLOWLIST == ["50302427830", "12345678901"]
+    assert settings.AUTH_ADMIN_CPF_ALLOWLIST == ["50302427830", "52998224725"]
+
+
+def test_auth_admin_cpf_allowlist_ignores_invalid_values():
+    settings = AppSettings(
+        _env_file=None,
+        AUTH_ADMIN_CPF_ALLOWLIST="503.024.278-30, 11111111111, abc, 123",
+    )
+
+    assert settings.AUTH_ADMIN_CPF_ALLOWLIST == ["50302427830"]

@@ -180,3 +180,25 @@ def test_local_register_rejects_duplicate_cpf(monkeypatch):
     )
     assert second.status_code == 409
     assert second.json()["detail"] == "CPF already registered"
+
+
+def test_local_register_rejects_invalid_cpf(monkeypatch):
+    repo = _FakeRepo()
+    consent_store: dict[int, list[SimpleNamespace]] = {}
+    client = _build_client(monkeypatch, repo, consent_store)
+    monkeypatch.setattr(auth.settings, "AUTH_ADMIN_CPF_ALLOWLIST", ["50302427830"])
+
+    response = client.post(
+        "/api/v1/auth/local/register",
+        json={
+            "email": "invalidcpf@example.com",
+            "password": "Qw!12345678",
+            "username": "invalidcpf",
+            "full_name": "Invalid CPF",
+            "cpf": "111.111.111-11",
+            "terms": True,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid CPF"

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.core.infrastructure.auth import create_token
 from app.core.security.auth_rate_limiter import enforce_auth_rate_limit
+from app.core.security.cpf import is_valid_cpf, normalize_cpf
 from app.core.security.passwords import hash_password, verify_password
 from app.core.security.request_guard import require_authenticated_actor_id
 from app.repositories.user_repository import ConsentRepository, UserRepository
@@ -146,9 +147,17 @@ def _can_return_reset_token() -> bool:
 
 
 def _normalize_cpf(value: str | None) -> str:
-    if not value:
-        return ""
-    return "".join(ch for ch in str(value) if ch.isdigit())
+    return normalize_cpf(value)
+
+
+def _validate_cpf_or_raise(value: str | None) -> str:
+    normalized = _normalize_cpf(value)
+    if normalized and not is_valid_cpf(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid CPF",
+        )
+    return normalized
 
 
 def _cpf_hash_scope(value: str | None) -> str:
@@ -293,15 +302,15 @@ async def local_register(
     email = payload.email.strip().lower()
     username = payload.username.strip()
     full_name = payload.full_name.strip()
+    normalized_cpf = _validate_cpf_or_raise(payload.cpf)
 
     if repo.get_by_email(email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     if repo.get_by_username(username):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
-    if _is_cpf_already_registered(repo, payload.cpf):
+    if _is_cpf_already_registered(repo, normalized_cpf):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF already registered")
 
-    normalized_cpf = _normalize_cpf(payload.cpf)
     cpf_hash = (
         hashlib.sha256(normalized_cpf.encode("utf-8")).hexdigest() if normalized_cpf else None
     )
@@ -314,14 +323,14 @@ async def local_register(
         cpf_hash=cpf_hash,
     )
 
-    cpf_scope = _cpf_hash_scope(payload.cpf)
+    cpf_scope = _cpf_hash_scope(normalized_cpf)
     if cpf_scope:
         try:
             ConsentRepository().add_consent(int(user.id), scope=cpf_scope, granted=True)
         except Exception:
             pass
 
-    if _is_allowlisted_admin_cpf(payload.cpf):
+    if _is_allowlisted_admin_cpf(normalized_cpf):
         _ensure_admin_role_for_user(repo, int(user.id))
     elif not repo.has_any_admin():
         _ensure_admin_role_for_user(repo, int(user.id))

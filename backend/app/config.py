@@ -4,6 +4,8 @@ from typing import Any
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.security.cpf import is_valid_cpf, normalize_cpf
+
 _LOCALHOST_ORIGINS = [
     "http://localhost:4200",
     "http://127.0.0.1:4200",
@@ -617,9 +619,6 @@ class AppSettings(BaseSettings):
 
     @field_validator("AUTH_ADMIN_CPF_ALLOWLIST", mode="before")
     def _parse_auth_admin_cpf_allowlist(cls, v: Any):
-        def _normalize(value: Any) -> str:
-            return "".join(ch for ch in str(value) if ch.isdigit())
-
         items: list[str] = []
         if isinstance(v, str):
             s = v.strip()
@@ -638,8 +637,8 @@ class AppSettings(BaseSettings):
         else:
             return []
 
-        normalized = [_normalize(item) for item in items]
-        return [cpf for cpf in normalized if cpf]
+        normalized = [normalize_cpf(item) for item in items]
+        return [cpf for cpf in normalized if is_valid_cpf(cpf)]
 
     # ======= Validadores para variáveis de ambiente complexas =======
 
