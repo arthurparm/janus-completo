@@ -4,6 +4,7 @@ import { AuthService } from '../../auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { JarvisAvatarComponent } from '../../../shared/components/jarvis-avatar/jarvis-avatar.component';
 import { SystemHud } from '../../../shared/components/ui/system-hud/system-hud'; // Importar SystemHud
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-header',
@@ -14,6 +15,7 @@ import { SystemHud } from '../../../shared/components/ui/system-hud/system-hud';
 })
 export class Header {
   private auth = inject(AuthService);
+  private router = inject(Router);
 
   isMenuOpen = false;
   isAuthenticated$ = this.auth.isAuthenticated$;
@@ -28,7 +30,9 @@ export class Header {
     this.isMenuOpen = false;
   }
 
-  logout() {
-    this.auth.logout();
+  async logout(): Promise<void> {
+    await this.auth.logout();
+    this.closeMenu();
+    await this.router.navigate(['/login']);
   }
 }

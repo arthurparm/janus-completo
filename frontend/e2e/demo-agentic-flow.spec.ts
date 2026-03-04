@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { loginWithE2ECredentials, requireE2ECredentialsOrSkip } from './support/auth'
+
 type FixtureConversation = {
   conversation_id: string
   title: string
@@ -13,28 +15,66 @@ const markdownHistoryFixture = JSON.parse(
   readFileSync(resolve(process.cwd(), 'e2e/fixtures/conversation-history-markdown.json'), 'utf8'),
 ) as FixtureConversation
 
-const TEST_USER = {
-  email: process.env.E2E_USER_EMAIL || 'arthur.paraiso.mar@gmail.com',
-  password: process.env.TEST_PASSWORD || 'Kawai312967@',
-}
-
-async function login(page: import('@playwright/test').Page) {
-  await page.goto('/login')
-  await page.fill('input[type="email"]', TEST_USER.email)
-  await page.fill('input[type="password"]', TEST_USER.password)
-  const loginResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/auth/local/login') && response.request().method() === 'POST',
-  )
-  await page.click('button[type="submit"]')
-  await loginResponsePromise
-  await page.waitForTimeout(800)
-}
-
 test.describe('Demo Agentic Flow', () => {
   test('renderiza confirmação estruturada + citation_status (UX da demo)', async ({ page }) => {
     let convoId = 'demo-conv-1'
     let historyMessages: Array<{ role: string; text: string; timestamp: number; [key: string]: unknown }> = []
+    const demoPrompt = 'Fazer deploy em produção'
+    const assistantText = 'Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.'
+    const confirmationPayload = {
+      citation_status: {
+        mode: 'required',
+        status: 'missing_required',
+        count: 0,
+        reason: 'no_retrievable_sources',
+      },
+      understanding: {
+        intent: 'action_request',
+        summary: 'Executar deploy em produção',
+        confidence: 0.81,
+        confidence_band: 'high',
+        requires_confirmation: true,
+        confirmation_reason: 'high_risk',
+        risk: {
+          level: 'high',
+          source: 'heuristic',
+          summary: 'Ação classificada como alto risco; confirmação obrigatória.',
+          requires_confirmation: true,
+        },
+        confirmation: {
+          required: true,
+          reason: 'high_risk',
+          source: 'pending_actions_sql',
+          pending_action_id: 123,
+          approve_endpoint: '/api/v1/pending_actions/action/123/approve',
+          reject_endpoint: '/api/v1/pending_actions/action/123/reject',
+        },
+      },
+      confirmation: {
+        required: true,
+        reason: 'high_risk',
+        source: 'pending_actions_sql',
+        pending_action_id: 123,
+      },
+      agent_state: {
+        state: 'waiting_confirmation',
+        requires_confirmation: true,
+        reason: 'high_risk',
+      },
+    }
+
+    const persistConversationHistory = (promptText: string): void => {
+      const now = Date.now()
+      historyMessages = [
+        { role: 'user', text: promptText, timestamp: now - 1000 },
+        {
+          role: 'assistant',
+          text: assistantText,
+          timestamp: now,
+          ...confirmationPayload,
+        },
+      ]
+    }
 
     await page.addInitScript(() => {
       localStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
@@ -108,6 +148,10 @@ test.describe('Demo Agentic Flow', () => {
       })
     })
     await page.route('**/api/v1/chat/stream/**', async (route) => {
+      const url = new URL(route.request().url())
+      const promptText = url.searchParams.get('message') || demoPrompt
+      persistConversationHistory(promptText)
+
       const sse = [
         'event: start',
         '',
@@ -123,51 +167,16 @@ test.describe('Demo Agentic Flow', () => {
         'event: cognitive_status',
         'data: {"state":"waiting_confirmation","requires_confirmation":true,"reason":"high_risk","timestamp":2}',
         '',
+        'event: partial',
+        `data: ${JSON.stringify({ text: assistantText })}`,
+        '',
         'event: done',
         `data: ${JSON.stringify({
           conversation_id: convoId,
           provider: 'janus',
           model: 'agent',
           citations: [],
-          citation_status: {
-            mode: 'required',
-            status: 'missing_required',
-            count: 0,
-            reason: 'no_retrievable_sources',
-          },
-          understanding: {
-            intent: 'action_request',
-            summary: 'Executar deploy em produção',
-            confidence: 0.81,
-            confidence_band: 'high',
-            requires_confirmation: true,
-            confirmation_reason: 'high_risk',
-            risk: {
-              level: 'high',
-              source: 'heuristic',
-              summary: 'Ação classificada como alto risco; confirmação obrigatória.',
-              requires_confirmation: true,
-            },
-            confirmation: {
-              required: true,
-              reason: 'high_risk',
-              source: 'pending_actions_sql',
-              pending_action_id: 123,
-              approve_endpoint: '/api/v1/pending_actions/action/123/approve',
-              reject_endpoint: '/api/v1/pending_actions/action/123/reject',
-            },
-          },
-          confirmation: {
-            required: true,
-            reason: 'high_risk',
-            source: 'pending_actions_sql',
-            pending_action_id: 123,
-          },
-          agent_state: {
-            state: 'waiting_confirmation',
-            requires_confirmation: true,
-            reason: 'high_risk',
-          },
+          ...confirmationPayload,
         })}`,
         '',
       ].join('\n')
@@ -189,105 +198,18 @@ test.describe('Demo Agentic Flow', () => {
     })
 
     await page.route('**/api/v1/chat/message', async (route) => {
-      const now = Date.now()
-      historyMessages = [
-        ...historyMessages,
-        { role: 'user', text: 'Fazer deploy em produção', timestamp: now - 1000 },
-        {
-          role: 'assistant',
-          text: 'Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.',
-          timestamp: now,
-          citation_status: {
-            mode: 'required',
-            status: 'missing_required',
-            count: 0,
-            reason: 'no_retrievable_sources',
-          },
-          understanding: {
-            intent: 'action_request',
-            summary: 'Executar deploy em produção',
-            confidence: 0.81,
-            confidence_band: 'high',
-            requires_confirmation: true,
-            confirmation_reason: 'high_risk',
-            risk: {
-              level: 'high',
-              source: 'heuristic',
-              summary: 'Ação classificada como alto risco; confirmação obrigatória.',
-              requires_confirmation: true,
-            },
-            confirmation: {
-              required: true,
-              reason: 'high_risk',
-              source: 'pending_actions_sql',
-              pending_action_id: 123,
-              approve_endpoint: '/api/v1/pending_actions/action/123/approve',
-              reject_endpoint: '/api/v1/pending_actions/action/123/reject',
-            },
-          },
-          confirmation: {
-            required: true,
-            reason: 'high_risk',
-            source: 'pending_actions_sql',
-            pending_action_id: 123,
-          },
-          agent_state: {
-            state: 'waiting_confirmation',
-            requires_confirmation: true,
-            reason: 'high_risk',
-          },
-        },
-      ]
+      persistConversationHistory(demoPrompt)
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response:
-            'Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.',
+          response: assistantText,
           provider: 'janus',
           model: 'agent',
           role: 'assistant',
           conversation_id: convoId,
           citations: [],
-          citation_status: {
-            mode: 'required',
-            status: 'missing_required',
-            count: 0,
-            reason: 'no_retrievable_sources',
-          },
-          understanding: {
-            intent: 'action_request',
-            summary: 'Executar deploy em produção',
-            confidence: 0.81,
-            confidence_band: 'high',
-            requires_confirmation: true,
-            confirmation_reason: 'high_risk',
-            risk: {
-              level: 'high',
-              source: 'heuristic',
-              summary: 'Ação classificada como alto risco; confirmação obrigatória.',
-              requires_confirmation: true,
-            },
-            confirmation: {
-              required: true,
-              reason: 'high_risk',
-              source: 'pending_actions_sql',
-              pending_action_id: 123,
-              approve_endpoint: '/api/v1/pending_actions/action/123/approve',
-              reject_endpoint: '/api/v1/pending_actions/action/123/reject',
-            },
-          },
-          confirmation: {
-            required: true,
-            reason: 'high_risk',
-            source: 'pending_actions_sql',
-            pending_action_id: 123,
-          },
-          agent_state: {
-            state: 'waiting_confirmation',
-            requires_confirmation: true,
-            reason: 'high_risk',
-          },
+          ...confirmationPayload,
         }),
       })
     })
@@ -322,22 +244,29 @@ test.describe('Demo Agentic Flow', () => {
       await expect(streamingCheckbox).not.toBeChecked()
     }
 
-    await page.getByRole('textbox', { name: /Descreva a tarefa/i }).fill('Fazer deploy em produção')
+    await page.getByRole('textbox', { name: /Descreva a tarefa/i }).fill(demoPrompt)
     await page.getByRole('button', { name: /Enviar/i }).click()
 
-    await expect(page.getByText('Confirmação de ação')).toBeVisible()
-    await expect(page.getByText('Ação classificada como alto risco; confirmação obrigatória.')).toBeVisible()
+    const confirmationCard = page.locator('.confirmation-card').last()
+    await expect(confirmationCard).toBeVisible({ timeout: 15_000 })
+    await expect(confirmationCard).toContainText('Confirmação de ação', { timeout: 15_000 })
+    await expect(page.getByText('Ação classificada como alto risco; confirmação obrigatória.')).toBeVisible({
+      timeout: 15_000,
+    })
     await expect(page.getByText('Sem citação rastreável (obrigatória)')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Aprovar' })).toBeVisible()
+    await page.getByRole('button', { name: 'Atualizar' }).click()
+    await expect(confirmationCard).toBeVisible({ timeout: 15_000 })
+    await expect(confirmationCard.getByRole('button', { name: 'Aprovar' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Aprovar' }).click()
-    await expect(page.getByText(/Ação pendente #123 aprovada/i)).toBeVisible()
+    await confirmationCard.getByRole('button', { name: 'Aprovar' }).click()
+    await expect(page.getByText(/Ação pendente #123 aprovada/i)).toBeVisible({ timeout: 15_000 })
   })
 
   test('fluxo real da demo (opcional, backend real)', async ({ page }) => {
     test.skip(process.env.E2E_DEMO_REAL !== '1', 'Set E2E_DEMO_REAL=1 para rodar com backend real')
 
-    await login(page)
+    const credentials = requireE2ECredentialsOrSkip()
+    await loginWithE2ECredentials(page, credentials)
     await page.goto('/conversations')
     await page.waitForTimeout(1000)
 

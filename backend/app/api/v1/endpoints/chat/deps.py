@@ -3,12 +3,14 @@ import hashlib
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Literal
 
 from fastapi import HTTPException, Request, status
 
 _SSE_SLOT_LOCK = asyncio.Lock()
-_SSE_SLOTS_BY_USER: dict[str, int] = defaultdict(int)
+_SSE_SLOTS_BY_USER_CHANNEL: dict[tuple[str, str], int] = defaultdict(int)
 _SSE_SLOTS_TOTAL = 0
+SSEChannel = Literal["chat_stream", "agent_events"]
 
 
 def actor_user_id(http: Request | None) -> str | None:
@@ -300,8 +302,15 @@ def resolve_authenticated_user_id(http: Request | None, explicit_user_id: str | 
     )
 
 
-async def acquire_sse_slot(user_id: str | None) -> str:
-    max_per_user = max(1, int(os.getenv("CHAT_SSE_MAX_CONNECTIONS_PER_USER", "4")))
+def _channel_limit(channel: SSEChannel) -> int:
+    legacy_limit = os.getenv("CHAT_SSE_MAX_CONNECTIONS_PER_USER", "4")
+    if channel == "chat_stream":
+        return max(1, int(os.getenv("CHAT_SSE_MAX_CHAT_STREAMS_PER_USER", legacy_limit)))
+    return max(1, int(os.getenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", legacy_limit)))
+
+
+async def acquire_sse_slot(user_id: str | None, *, channel: SSEChannel) -> str:
+    max_per_user_channel = _channel_limit(channel)
     max_global = max(1, int(os.getenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "250")))
     slot_user = str(user_id or "anonymous")
 
@@ -312,25 +321,41 @@ async def acquire_sse_slot(user_id: str | None) -> str:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="SSE capacity exceeded (global).",
             )
-        current_user_slots = int(_SSE_SLOTS_BY_USER.get(slot_user, 0))
-        if current_user_slots >= max_per_user:
+        slot_key = (slot_user, channel)
+        current_channel_slots = int(_SSE_SLOTS_BY_USER_CHANNEL.get(slot_key, 0))
+        if current_channel_slots >= max_per_user_channel:
+            try:
+                import structlog
+
+                structlog.get_logger(__name__).warning(
+                    "chat_sse_capacity_exceeded_per_user_channel",
+                    user_id=slot_user,
+                    channel=channel,
+                    limit=max_per_user_channel,
+                    current_slots=current_channel_slots,
+                    total_slots=_SSE_SLOTS_TOTAL,
+                    global_limit=max_global,
+                )
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="SSE capacity exceeded for this user.",
             )
-        _SSE_SLOTS_BY_USER[slot_user] = current_user_slots + 1
+        _SSE_SLOTS_BY_USER_CHANNEL[slot_key] = current_channel_slots + 1
         _SSE_SLOTS_TOTAL += 1
     return slot_user
 
 
-async def release_sse_slot(slot_user: str) -> None:
+async def release_sse_slot(slot_user: str, *, channel: SSEChannel) -> None:
     global _SSE_SLOTS_TOTAL
     async with _SSE_SLOT_LOCK:
-        current = int(_SSE_SLOTS_BY_USER.get(slot_user, 0))
+        slot_key = (slot_user, channel)
+        current = int(_SSE_SLOTS_BY_USER_CHANNEL.get(slot_key, 0))
         if current <= 1:
-            _SSE_SLOTS_BY_USER.pop(slot_user, None)
+            _SSE_SLOTS_BY_USER_CHANNEL.pop(slot_key, None)
         else:
-            _SSE_SLOTS_BY_USER[slot_user] = current - 1
+            _SSE_SLOTS_BY_USER_CHANNEL[slot_key] = current - 1
         _SSE_SLOTS_TOTAL = max(0, _SSE_SLOTS_TOTAL - 1)
 
 

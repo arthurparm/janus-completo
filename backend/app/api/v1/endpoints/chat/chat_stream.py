@@ -139,7 +139,10 @@ async def stream_message(
                     )
                 raise
 
-        slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
+        slot_user = await acquire_sse_slot(
+            str(user_id) if user_id is not None else None,
+            channel="chat_stream",
+        )
         gen = service.stream_message(
             conversation_id=conversation_id,
             message=message,
@@ -178,7 +181,7 @@ async def stream_message(
                 yield chunk
         finally:
             if slot_user is not None:
-                await release_sse_slot(slot_user)
+                await release_sse_slot(slot_user, channel="chat_stream")
 
     return StreamingResponse(guarded_gen(), media_type="text/event-stream", headers=headers)
 
@@ -298,7 +301,10 @@ async def stream_agent_events(
                         ),
                     )
                 raise
-        slot_user = await acquire_sse_slot(str(user_id) if user_id is not None else None)
+        slot_user = await acquire_sse_slot(
+            str(user_id) if user_id is not None else None,
+            channel="agent_events",
+        )
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
     except HTTPException:
         raise
@@ -328,6 +334,6 @@ async def stream_agent_events(
                 yield chunk
         finally:
             if slot_user is not None:
-                await release_sse_slot(slot_user)
+                await release_sse_slot(slot_user, channel="agent_events")
 
     return StreamingResponse(guarded_gen(), media_type="text/event-stream", headers=headers)
