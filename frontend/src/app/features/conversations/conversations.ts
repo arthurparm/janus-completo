@@ -423,6 +423,11 @@ export class ConversationsComponent {
     this.queueScroll()
     this.responseStartedAt = Date.now()
 
+    if (this.shouldUseAdminCodeQa(message)) {
+      this.sendAdminCodeQa(conversationId, message)
+      return
+    }
+
     if (this.streamingEnabled()) {
       this.startStreaming(conversationId, message)
     } else {
@@ -1538,6 +1543,69 @@ export class ConversationsComponent {
             latency_ms: latencyMs,
             provider: resp.provider,
             model: resp.model
+          })
+          this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
+        }
+        this.sending.set(false)
+        this.flushPendingConversationNavigation(conversationId)
+        this.queueScroll()
+      })
+  }
+
+  private shouldUseAdminCodeQa(message: string): boolean {
+    if (!this.isAdmin()) return false
+    const normalized = message
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, ' ')
+    const hints = [
+      'arquivo',
+      'arquivos',
+      'codigo',
+      'code',
+      'endpoint',
+      'funcao',
+      'function',
+      'classe',
+      'class',
+      'repo',
+      'repositor',
+      'pasta',
+      'module',
+      'modulo'
+    ]
+    return hints.some((hint) => normalized.includes(hint))
+  }
+
+  private sendAdminCodeQa(conversationId: string, message: string): void {
+    this.api.askAutonomyAdminCodeQa({
+      question: message,
+      limit: 12,
+      citation_limit: 8
+    })
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        const latencyMs = this.consumeResponseLatency()
+        if (!resp) {
+          this.appendMessage({
+            id: this.createId(),
+            role: 'assistant',
+            text: 'Falha ao consultar codigo no modo admin.',
+            timestamp: Date.now(),
+            error: true
+          })
+        } else {
+          const now = Date.now()
+          const cleanText = this.sanitizeChatText(resp.answer)
+          this.appendMessage({
+            id: this.createId(),
+            role: 'assistant',
+            text: cleanText,
+            timestamp: now,
+            citations: resp.citations || [],
+            latency_ms: latencyMs,
+            provider: 'admin',
+            model: 'code-qa'
           })
           this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
         }

@@ -89,9 +89,10 @@ export class RoleGuard implements CanActivate {
       return true;
     }
 
-    return this.authService.user$.pipe(
+    return combineLatest([this.authService.authReady$, this.authService.user$]).pipe(
+      filter(([ready]) => ready),
       take(1),
-      map(user => {
+      map(([, user]) => {
         if (!user) {
           this.router.navigate(['/login']);
           return false;

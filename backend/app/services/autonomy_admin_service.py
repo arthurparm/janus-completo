@@ -682,6 +682,79 @@ class AutonomyAdminService:
             )
         return output
 
+    @staticmethod
+    def _is_legacy_code_answer(answer: str) -> bool:
+        normalized = (answer or "").strip().lower()
+        if not normalized:
+            return True
+        markers = (
+            "graph rag not initialized",
+            "nao tenho acesso",
+            "não tenho acesso",
+            "nao encontrei citacoes rastreaveis",
+            "não encontrei citações rastreáveis",
+        )
+        return any(marker in normalized for marker in markers)
+
+    @staticmethod
+    def _line_label(citation: dict[str, Any]) -> str:
+        start = citation.get("line_start", citation.get("line"))
+        end = citation.get("line_end")
+        try:
+            if start is None:
+                return ""
+            if end is None or int(end) == int(start):
+                return str(int(start))
+            return f"{int(start)}-{int(end)}"
+        except Exception:
+            return ""
+
+    def _build_code_evidence_answer(
+        self,
+        *,
+        question: str,
+        citations: list[dict[str, Any]],
+        self_memory: list[dict[str, Any]],
+    ) -> str:
+        by_file: dict[str, list[str]] = {}
+        for citation in citations:
+            path = str(citation.get("file_path") or "").strip()
+            if not path:
+                continue
+            line = self._line_label(citation)
+            by_file.setdefault(path, [])
+            if line and line not in by_file[path]:
+                by_file[path].append(line)
+
+        if not by_file:
+            return (
+                "Nao encontrei evidencia suficiente no codigo para responder com seguranca. "
+                "Reindexe/atualize o autoestudo e tente novamente."
+            )
+
+        top_files = list(by_file.items())[:5]
+        file_segments: list[str] = []
+        for path, lines in top_files:
+            if lines:
+                file_segments.append(f"{path}:{', '.join(lines[:4])}")
+            else:
+                file_segments.append(path)
+
+        answer_parts = [
+            (
+                "Com base nas citacoes do codigo para a pergunta "
+                f"\"{question}\", os pontos mais relevantes estao em: {'; '.join(file_segments)}."
+            )
+        ]
+        if self_memory:
+            first = self_memory[0]
+            mem_path = str(first.get("file_path") or "").strip()
+            mem_summary = str(first.get("summary") or "").strip()
+            if mem_path and mem_summary:
+                answer_parts.append(f"SelfMemory recente: {mem_path} -> {mem_summary}")
+        answer_parts.append("Posso detalhar qualquer arquivo citado, linha por linha, se voce quiser.")
+        return " ".join(answer_parts)
+
     async def ask_code_as_admin(self, *, question: str, limit: int = 10, citation_limit: int = 8) -> dict[str, Any]:
         question = (question or "").strip()
         if not question:
@@ -734,8 +807,15 @@ class AutonomyAdminService:
             )
         except Exception as exc:
             logger.warning("admin_code_qa_self_memory_failed", error=str(exc))
+        answer = str(result.get("answer") or "").strip()
+        if self._is_legacy_code_answer(answer):
+            answer = self._build_code_evidence_answer(
+                question=question,
+                citations=citations[:citation_limit],
+                self_memory=memory_rows,
+            )
         return {
-            "answer": result.get("answer") or "",
+            "answer": answer,
             "citations": citations[:citation_limit],
             "self_memory": memory_rows,
         }

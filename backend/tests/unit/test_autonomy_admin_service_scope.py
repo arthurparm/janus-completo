@@ -12,11 +12,12 @@ class _DummyLLM:
 
 
 class _DummyKnowledge:
-    def __init__(self, citations):
+    def __init__(self, citations, answer: str = "resposta"):
         self._citations = citations
+        self._answer = answer
 
     async def ask_code_with_citations(self, question: str, limit: int = 10, citation_limit: int = 8):
-        return {"answer": "resposta", "citations": self._citations}
+        return {"answer": self._answer, "citations": self._citations}
 
 
 class _DummyMeta:
@@ -34,10 +35,10 @@ def _patch_meta(monkeypatch):
     monkeypatch.setattr(autonomy_admin_module, "get_meta_agent_service", lambda: _DummyMeta())
 
 
-def _new_service(citations):
+def _new_service(citations, answer: str = "resposta"):
     return AutonomyAdminService(
         llm_service=_DummyLLM(),
-        knowledge_service=_DummyKnowledge(citations=citations),
+        knowledge_service=_DummyKnowledge(citations=citations, answer=answer),
     )
 
 
@@ -125,6 +126,25 @@ async def test_admin_code_qa_does_not_fail_when_self_memory_query_errors(monkeyp
     assert result["answer"] == "resposta"
     assert len(result["citations"]) == 1
     assert result["self_memory"] == []
+
+
+@pytest.mark.asyncio
+async def test_admin_code_qa_replaces_legacy_answer_with_evidence_summary(monkeypatch):
+    citations = [
+        {"file_path": "backend/app/services/autonomy_admin_service.py", "line": 690},
+        {"file_path": "backend/app/services/autonomy_admin_service.py", "line": 740},
+    ]
+    service = _new_service(citations=citations, answer="Graph RAG not initialized.")
+
+    async def _fake_get_graph_db():
+        return _DummyGraph()
+
+    monkeypatch.setattr(autonomy_admin_module, "get_graph_db", _fake_get_graph_db)
+
+    result = await service.ask_code_as_admin(question="me fale dos seus arquivos")
+    assert result["citations"]
+    assert "Graph RAG not initialized." not in result["answer"]
+    assert "backend/app/services/autonomy_admin_service.py" in result["answer"]
 
 
 @pytest.mark.asyncio

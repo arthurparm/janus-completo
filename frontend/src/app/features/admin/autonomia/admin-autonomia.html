@@ -151,7 +151,7 @@
         <div class="qa-citations">
           <h3>Citacoes</h3>
           <ul>
-            @for (citation of citations(); track (citation.file_path || citation.id || citation.title || $index)) {
+            @for (citation of citations(); track $index) {
               <li>
                 {{ citation.file_path || citation.title || citation.url || 'citacao' }}
                 @if (citation.line) { :{{ citation.line }} }
@@ -165,7 +165,7 @@
         <div class="qa-memory">
           <h3>SelfMemory recente</h3>
           <ul>
-            @for (memory of selfMemory(); track (memory.file_path || memory.updated_at || $index)) {
+            @for (memory of selfMemory(); track $index) {
               <li>
                 <strong>{{ memory.file_path || 'arquivo' }}</strong>
                 <p class="muted">{{ memory.summary || '' }}</p>
