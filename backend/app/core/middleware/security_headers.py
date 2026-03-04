@@ -8,22 +8,33 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Content Security Policy (CSP)
-        # Restricts the sources from which content can be loaded
-        # Note: 'unsafe-inline' and 'unsafe-eval' are permitted for Swagger UI compatibility
-        # In a production frontend-only scenario, these should be removed.
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " 
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "font-src 'self' data:; "
-            "connect-src 'self' https:; "
-            "frame-ancestors 'none'; " # Prevent embedding
-            "object-src 'none'; "      # Prevent Flash/Java
-            "base-uri 'self';"         # Prevent base tag hijacking
-        )
+        # Keep a strict default policy and relax only docs routes for Swagger CDN assets.
+        if request.url.path.startswith("/docs") or request.url.path.startswith("/redoc"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data: https://cdn.jsdelivr.net; "
+                "connect-src 'self' https:; "
+                "frame-ancestors 'none'; "
+                "object-src 'none'; "
+                "base-uri 'self';"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' https:; "
+                "frame-ancestors 'none'; "
+                "object-src 'none'; "
+                "base-uri 'self';"
+            )
         
         # Strict Transport Security (HSTS)
         # Enforces HTTPS connections
