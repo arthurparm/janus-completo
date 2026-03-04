@@ -509,6 +509,7 @@ class AutonomyAdminService:
             FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |
               MERGE (m)-[:RELATES_TO]->(f)
             )
+            WITH m
             OPTIONAL MATCH (cf:CodeFile {path: $file_path})
             FOREACH (_ IN CASE WHEN cf IS NULL THEN [] ELSE [1] END |
               MERGE (m)-[:RELATES_TO]->(cf)
@@ -712,23 +713,27 @@ class AutonomyAdminService:
             }
 
         # Enriquecer com memorias recentes de autoestudo
-        graph = await get_graph_db()
-        tokens = [tok.lower() for tok in question.replace("/", " ").replace(":", " ").split() if len(tok) > 2]
-        memory_rows = await graph.query(
-            """
-            MATCH (m:SelfMemory)
-            WHERE any(prefix IN $allowed_prefixes WHERE m.file_path STARTS WITH prefix)
-              AND (
-                size($tokens) = 0
-                OR any(t IN $tokens WHERE toLower(m.summary) CONTAINS t OR toLower(m.file_path) CONTAINS t)
-              )
-            RETURN m.file_path AS file_path, m.summary AS summary, m.updated_at AS updated_at
-            ORDER BY m.updated_at DESC
-            LIMIT 5
-            """,
-            {"tokens": tokens, "allowed_prefixes": [f"{p}/" for p in self.ALLOWED_ROOTS]},
-            operation="admin_code_qa_self_memory",
-        )
+        memory_rows: list[dict[str, Any]] = []
+        try:
+            graph = await get_graph_db()
+            tokens = [tok.lower() for tok in question.replace("/", " ").replace(":", " ").split() if len(tok) > 2]
+            memory_rows = await graph.query(
+                """
+                MATCH (m:SelfMemory)
+                WHERE any(prefix IN $allowed_prefixes WHERE m.file_path STARTS WITH prefix)
+                  AND (
+                    size($tokens) = 0
+                    OR any(t IN $tokens WHERE toLower(m.summary) CONTAINS t OR toLower(m.file_path) CONTAINS t)
+                  )
+                RETURN m.file_path AS file_path, m.summary AS summary, m.updated_at AS updated_at
+                ORDER BY m.updated_at DESC
+                LIMIT 5
+                """,
+                {"tokens": tokens, "allowed_prefixes": [f"{p}/" for p in self.ALLOWED_ROOTS]},
+                operation="admin_code_qa_self_memory",
+            )
+        except Exception as exc:
+            logger.warning("admin_code_qa_self_memory_failed", error=str(exc))
         return {
             "answer": result.get("answer") or "",
             "citations": citations[:citation_limit],
