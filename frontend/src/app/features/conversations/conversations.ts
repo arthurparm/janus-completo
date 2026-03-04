@@ -1552,7 +1552,7 @@ export class ConversationsComponent {
     if (!this.streamingBuffer) {
       this.appendThought('stream', 'Resposta', 'Janus iniciou a geracao da resposta.')
     }
-    this.streamingBuffer += this.sanitizeChatText(chunk)
+    this.streamingBuffer = this.sanitizeStreamingText(`${this.streamingBuffer}${chunk}`)
     this.updateMessage(this.streamingMessageId, {
       text: this.streamingBuffer,
       streaming: true
@@ -1982,6 +1982,24 @@ export class ConversationsComponent {
     } catch {
       return String(value)
     }
+  }
+
+  private sanitizeStreamingText(value: string): string {
+    return String(value || '')
+      .replace(/\[object Object\]/g, '')
+      .split('')
+      .map((ch) => {
+        const code = ch.charCodeAt(0)
+        const isControl = (code >= 0x00 && code <= 0x08)
+          || code === 0x0b
+          || code === 0x0c
+          || (code >= 0x0e && code <= 0x1f)
+          || (code >= 0x7f && code <= 0x9f)
+          || code === 0xfffd
+        return isControl ? ' ' : ch
+      })
+      .join('')
+      .replace(/\n{3,}/g, '\n\n')
   }
 
   private sanitizeDiagnosticText(value: unknown, fallback = ''): string {
