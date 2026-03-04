@@ -107,6 +107,24 @@ def test_resolve_files_for_study_incremental_uses_task_context_when_present(tmp_
     assert rows[0]["change_type"] == "task_context"
 
 
+def test_infer_self_memory_relationship_types_is_local_and_path_based():
+    service = _new_service(citations=[])
+    rels = service._infer_self_memory_relationship_types(
+        "backend/app/services/autonomy_admin_service.py",
+        "backend/app/services/autonomy_admin_service.py: 100 linhas analisadas.",
+    )
+    assert "RELATES_TO" in rels
+    assert "USES" in rels
+    assert "IMPLEMENTS" not in rels
+
+    rels_style = service._infer_self_memory_relationship_types(
+        "frontend/src/app/features/admin/autonomia/admin-autonomia.scss",
+        "Arquivo de interface/estilo.",
+    )
+    assert "RELATES_TO" in rels_style
+    assert "HAS_PROPERTY" in rels_style
+
+
 @pytest.mark.asyncio
 async def test_admin_code_qa_filters_citations_outside_app(monkeypatch):
     citations = [
@@ -212,11 +230,17 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     assert "FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |" in query
     assert "WHERE f.path IN path_candidates" in query
     assert "WHERE cf.path IN path_candidates" in query
+    assert "OPTIONAL MATCH (fn:CodeFunction)" in query
+    assert "OPTIONAL MATCH (cl:CodeClass)" in query
     candidates = captured_params.get("path_candidates")
     assert isinstance(candidates, list)
     assert "backend/app/services/autonomy_admin_service.py" in candidates
     assert "/backend/app/services/autonomy_admin_service.py" in candidates
     assert "app/services/autonomy_admin_service.py" in candidates
+    rel_types = captured_params.get("rel_types")
+    assert isinstance(rel_types, list)
+    assert "RELATES_TO" in rel_types
+    assert "USES" in rel_types
 
 
 def test_get_self_study_status_includes_running_progress():

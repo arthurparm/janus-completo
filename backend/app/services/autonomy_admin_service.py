@@ -13,6 +13,7 @@ from fastapi import Request
 
 from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
+from app.models.schemas import GraphRelationship
 from app.repositories.autonomy_admin_repository import AutonomyAdminRepository
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
@@ -41,6 +42,15 @@ class AutonomyAdminService:
         "/.playwright-cli/",
         "/outputs/",
         "/output/",
+    )
+    SELF_MEMORY_RELATION_ALLOWLIST = (
+        GraphRelationship.RELATES_TO.value,
+        GraphRelationship.DEFINES.value,
+        GraphRelationship.USES.value,
+        GraphRelationship.DEPENDS_ON.value,
+        GraphRelationship.IMPLEMENTS.value,
+        GraphRelationship.HAS_PROPERTY.value,
+        GraphRelationship.MENTIONS.value,
     )
 
     def __init__(self, llm_service: LLMService, knowledge_service: KnowledgeService):
@@ -527,12 +537,35 @@ class AutonomyAdminService:
 
         return [p for p in candidates if p]
 
+    def _infer_self_memory_relationship_types(self, rel_path: str, summary: str) -> list[str]:
+        path = str(rel_path or "").lower()
+        text = str(summary or "").lower()
+        rel_types: set[str] = {GraphRelationship.RELATES_TO.value}
+
+        if any(marker in path for marker in ("/api/", "/endpoints/", "/controllers/")):
+            rel_types.add(GraphRelationship.IMPLEMENTS.value)
+        if any(marker in path for marker in ("/models/", "/schemas/", "/types/")):
+            rel_types.add(GraphRelationship.DEFINES.value)
+        if any(marker in path for marker in ("/services/", "/workers/", "/agents/")):
+            rel_types.add(GraphRelationship.USES.value)
+        if any(marker in path for marker in ("/db/", "/repositories/", "/storage/")):
+            rel_types.add(GraphRelationship.DEPENDS_ON.value)
+        if any(marker in path for marker in ("/tests/", ".spec.", ".test.")):
+            rel_types.add(GraphRelationship.MENTIONS.value)
+        if any(marker in path for marker in (".html", ".scss", ".css")) or "interface/estilo" in text:
+            rel_types.add(GraphRelationship.HAS_PROPERTY.value)
+
+        return [rel for rel in self.SELF_MEMORY_RELATION_ALLOWLIST if rel in rel_types]
+
     async def _persist_self_memory(self, *, rel_path: str, summary: str, sha_after: str | None) -> None:
         if not self._is_allowed_file_path(rel_path):
             return
         path_candidates = self._build_graph_path_candidates(rel_path)
         if not path_candidates:
             return
+        rel_types = self._infer_self_memory_relationship_types(rel_path, summary)
+        if not rel_types:
+            rel_types = [GraphRelationship.RELATES_TO.value]
         graph = await get_graph_db()
         await graph.execute(
             """
@@ -545,18 +578,71 @@ class AutonomyAdminService:
             OPTIONAL MATCH (f:File)
             WHERE f.path IN path_candidates
             FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |
-              MERGE (m)-[:RELATES_TO]->(f)
+              FOREACH (__ IN CASE WHEN 'RELATES_TO' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:RELATES_TO]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'DEFINES' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:DEFINES]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'USES' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:USES]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'DEPENDS_ON' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:DEPENDS_ON]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'IMPLEMENTS' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:IMPLEMENTS]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'HAS_PROPERTY' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:HAS_PROPERTY]->(f)
+              )
+              FOREACH (__ IN CASE WHEN 'MENTIONS' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:MENTIONS]->(f)
+              )
             )
             WITH m, path_candidates
             OPTIONAL MATCH (cf:CodeFile)
             WHERE cf.path IN path_candidates
             FOREACH (_ IN CASE WHEN cf IS NULL THEN [] ELSE [1] END |
-              MERGE (m)-[:RELATES_TO]->(cf)
+              FOREACH (__ IN CASE WHEN 'RELATES_TO' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:RELATES_TO]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'DEFINES' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:DEFINES]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'USES' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:USES]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'DEPENDS_ON' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:DEPENDS_ON]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'IMPLEMENTS' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:IMPLEMENTS]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'HAS_PROPERTY' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:HAS_PROPERTY]->(cf)
+              )
+              FOREACH (__ IN CASE WHEN 'MENTIONS' IN $rel_types THEN [1] ELSE [] END |
+                MERGE (m)-[:MENTIONS]->(cf)
+              )
+            )
+            WITH m, path_candidates
+            OPTIONAL MATCH (fn:CodeFunction)
+            WHERE fn.file_path IN path_candidates
+            FOREACH (_ IN CASE WHEN fn IS NULL OR NOT ('DEFINES' IN $rel_types) THEN [] ELSE [1] END |
+              MERGE (m)-[:DEFINES]->(fn)
+            )
+            WITH m, path_candidates
+            OPTIONAL MATCH (cl:CodeClass)
+            WHERE cl.file_path IN path_candidates
+            FOREACH (_ IN CASE WHEN cl IS NULL OR NOT ('DEFINES' IN $rel_types) THEN [] ELSE [1] END |
+              MERGE (m)-[:DEFINES]->(cl)
             )
             """,
             {
                 "file_path": rel_path,
                 "path_candidates": path_candidates,
+                "rel_types": rel_types,
                 "summary": summary[:4000],
                 "sha_after": sha_after,
             },
