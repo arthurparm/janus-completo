@@ -70,7 +70,7 @@ def test_resolve_files_for_study_includes_only_app_paths(tmp_path: Path):
     assert "frontend/src/lib/x.ts" not in paths
 
 
-def test_resolve_files_for_study_incremental_without_diff_or_task_files_returns_empty(tmp_path: Path):
+def test_resolve_files_for_study_incremental_without_diff_or_task_files_falls_back_to_full(tmp_path: Path):
     service = _new_service(citations=[])
     service._repo_root = tmp_path
 
@@ -84,7 +84,9 @@ def test_resolve_files_for_study_incremental_without_diff_or_task_files_returns_
         target_commit=None,
         task_files=None,
     )
-    assert rows == []
+    assert len(rows) == 1
+    assert rows[0]["file_path"] == "backend/app/services/x.py"
+    assert rows[0]["change_type"] == "full"
 
 
 def test_resolve_files_for_study_incremental_uses_task_context_when_present(tmp_path: Path):

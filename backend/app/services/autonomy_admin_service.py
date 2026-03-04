@@ -31,6 +31,7 @@ class AutonomyAdminService:
     MAX_FILE_SIZE_BYTES = 512 * 1024
     MAX_FILES_PER_RUN = 1200
     MAX_RUN_SECONDS = 90
+    ALLOW_INCREMENTAL_FULL_FALLBACK = True
     ALLOWED_ROOTS = ("backend/app", "frontend/src/app", "app")
     IGNORE_DIR_MARKERS = (
         "/node_modules/",
@@ -458,8 +459,13 @@ class AutonomyAdminService:
                     }
                 )
 
-        # Incremental mode must not silently degrade to full scan when git diff is unavailable.
-        if mode == "incremental" and not results:
+        if mode == "incremental" and not results and self.ALLOW_INCREMENTAL_FULL_FALLBACK:
+            logger.info(
+                "incremental_self_study_fallback_full_scan",
+                reason="no_git_diff_or_task_context",
+                local_only=True,
+            )
+        elif mode == "incremental" and not results:
             return results
 
         if not results:
