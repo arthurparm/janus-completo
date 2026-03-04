@@ -84,7 +84,7 @@ PC2:
 
 ```bash
 curl -sf http://localhost:11434/api/tags
-curl -sf http://localhost:6333/collections
+curl -sf -H "api-key: ${QDRANT_API_KEY}" http://localhost:6333/collections
 ```
 
 PC1:

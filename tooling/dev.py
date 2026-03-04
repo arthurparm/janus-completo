@@ -14,6 +14,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = REPO_ROOT / "frontend"
 BACKEND_DIR = REPO_ROOT / "backend"
+ENV_FILES = (
+    (".env.pc1", ".env.pc1.example"),
+    (".env.pc2", ".env.pc2.example"),
+)
 
 BACKEND_CRITICAL_TESTS = [
     "qa/test_api_visibility_endpoints.py",
@@ -38,6 +42,28 @@ def run(cmd: list[str], *, cwd: Path | None = None) -> None:
     printable = " ".join(cmd)
     print(f"$ {printable}")
     subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
+
+
+def ensure_env_files() -> None:
+    for target_name, source_name in ENV_FILES:
+        target = REPO_ROOT / target_name
+        if target.exists():
+            continue
+        source = REPO_ROOT / source_name
+        if not source.exists():
+            raise RuntimeError(f"Missing required env template: {source_name}")
+        shutil.copyfile(source, target)
+        print(f"Created {target_name} from {source_name}")
+
+
+def resolve_env_file(name: str) -> str:
+    preferred = REPO_ROOT / name
+    if preferred.exists():
+        return name
+    fallback = REPO_ROOT / f"{name}.example"
+    if fallback.exists():
+        return f"{name}.example"
+    raise RuntimeError(f"Could not find {name} or {name}.example")
 
 
 def npm_install(frontend_dir: Path) -> None:
@@ -76,6 +102,21 @@ def cmd_setup() -> None:
 
 
 def cmd_up() -> None:
+    ensure_env_files()
+    env_pc2 = resolve_env_file(".env.pc2")
+    env_pc1 = resolve_env_file(".env.pc1")
+    run(
+        [
+            "docker",
+            "build",
+            "-f",
+            "backend/docker/Dockerfile",
+            "-t",
+            "janus-completo-janus-api:latest",
+            "backend",
+        ],
+        cwd=REPO_ROOT,
+    )
     run(
         [
             "docker",
@@ -83,7 +124,7 @@ def cmd_up() -> None:
             "-f",
             "docker-compose.pc2.yml",
             "--env-file",
-            ".env.pc2",
+            env_pc2,
             "up",
             "-d",
         ],
@@ -96,7 +137,7 @@ def cmd_up() -> None:
             "-f",
             "docker-compose.pc1.yml",
             "--env-file",
-            ".env.pc1",
+            env_pc1,
             "up",
             "-d",
         ],
@@ -116,6 +157,8 @@ def cmd_qa() -> None:
 
 
 def cmd_down() -> None:
+    env_pc1 = resolve_env_file(".env.pc1")
+    env_pc2 = resolve_env_file(".env.pc2")
     run(
         [
             "docker",
@@ -123,7 +166,7 @@ def cmd_down() -> None:
             "-f",
             "docker-compose.pc1.yml",
             "--env-file",
-            ".env.pc1",
+            env_pc1,
             "down",
         ],
         cwd=REPO_ROOT,
@@ -135,7 +178,7 @@ def cmd_down() -> None:
             "-f",
             "docker-compose.pc2.yml",
             "--env-file",
-            ".env.pc2",
+            env_pc2,
             "down",
         ],
         cwd=REPO_ROOT,

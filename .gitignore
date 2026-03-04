@@ -37,6 +37,8 @@ backend/app/backend.log
 # Environment / secrets (local only)
 # -----------------------------
 .env
+.env.pc1
+.env.pc2
 frontend/.env
 backend/app/.env
 backend/app/.env.windows

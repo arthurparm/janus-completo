@@ -6,7 +6,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env.pc2}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-2G}
       - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX:-8G}
@@ -35,6 +35,8 @@ services:
     container_name: janus_qdrant
     ports:
       - "6333:6333"
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc2}
     volumes:
       - janus_qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -94,6 +96,7 @@ services:
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
       - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
       - OLLAMA_CURATOR_MODEL=${OLLAMA_CURATOR_MODEL:-ministral-3:14b}
+      - OLLAMA_AUTO_PULL_MODELS=${OLLAMA_AUTO_PULL_MODELS:-true}
     depends_on:
       ollama:
         condition: service_healthy
@@ -101,18 +104,34 @@ services:
       - /bin/sh
       - -lc
       - |
-        set -e
+        set -eu
+        sanitize() {
+          printf "%s" "$$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+        }
         echo "Waiting Ollama..."
-        for i in $(seq 1 60); do
+        for i in $$(seq 1 60); do
           if ollama list >/dev/null 2>&1; then
             break
           fi
           sleep 2
         done
-        echo "Pulling models..."
-        ollama pull "$OLLAMA_ORCHESTRATOR_MODEL"
-        ollama pull "$OLLAMA_CODER_MODEL"
-        ollama pull "$OLLAMA_CURATOR_MODEL"
+        if [ "$$(sanitize "$$OLLAMA_AUTO_PULL_MODELS")" != "true" ]; then
+          echo "Skipping model pull (OLLAMA_AUTO_PULL_MODELS!=true)."
+          ollama list || true
+          exit 0
+        fi
+        ORCH_MODEL="$$(sanitize "$$OLLAMA_ORCHESTRATOR_MODEL")"
+        CODER_MODEL="$$(sanitize "$$OLLAMA_CODER_MODEL")"
+        CURATOR_MODEL="$$(sanitize "$$OLLAMA_CURATOR_MODEL")"
+        for model in "$$ORCH_MODEL" "$$CODER_MODEL" "$$CURATOR_MODEL"; do
+          if [ -z "$$model" ]; then
+            continue
+          fi
+          echo "Pulling model: $$model"
+          if ! ollama pull "$$model"; then
+            echo "Warning: failed to pull $$model"
+          fi
+        done
         ollama list
     restart: "no"
     networks:
