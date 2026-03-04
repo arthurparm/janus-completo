@@ -448,6 +448,10 @@ class AutonomyAdminService:
                     }
                 )
 
+        # Incremental mode must not silently degrade to full scan when git diff is unavailable.
+        if mode == "incremental" and not results:
+            return results
+
         if not results:
             for root in self.ALLOWED_ROOTS:
                 base = self._repo_root / root
@@ -493,8 +497,41 @@ class AutonomyAdminService:
             summary += " Arquivo de interface/estilo."
         return summary
 
+    def _build_graph_path_candidates(self, rel_path: str) -> list[str]:
+        rel = str(rel_path or "").strip().lstrip("./")
+        if not rel:
+            return []
+
+        candidates: set[str] = {rel}
+        candidates.add(f"/{rel}")
+
+        try:
+            abs_path = (self._repo_root / rel).resolve().as_posix()
+            candidates.add(abs_path)
+        except Exception:
+            pass
+
+        if rel.startswith("backend/"):
+            stripped = rel[len("backend/") :]
+            if stripped:
+                candidates.add(stripped)
+                candidates.add(f"/{stripped}")
+        if rel.startswith("app/"):
+            backend_variant = f"backend/{rel}"
+            candidates.add(backend_variant)
+            candidates.add(f"/{backend_variant}")
+            if rel.startswith("app/app/"):
+                backend_stripped = f"backend/{rel[len('app/') :]}"
+                candidates.add(backend_stripped)
+                candidates.add(f"/{backend_stripped}")
+
+        return [p for p in candidates if p]
+
     async def _persist_self_memory(self, *, rel_path: str, summary: str, sha_after: str | None) -> None:
         if not self._is_allowed_file_path(rel_path):
+            return
+        path_candidates = self._build_graph_path_candidates(rel_path)
+        if not path_candidates:
             return
         graph = await get_graph_db()
         await graph.execute(
@@ -504,19 +541,22 @@ class AutonomyAdminService:
                 m.updated_at = timestamp(),
                 m.confidence = 0.75,
                 m.sha_after = $sha_after
-            WITH m
-            OPTIONAL MATCH (f:File {path: $file_path})
+            WITH m, $path_candidates AS path_candidates
+            OPTIONAL MATCH (f:File)
+            WHERE f.path IN path_candidates
             FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |
               MERGE (m)-[:RELATES_TO]->(f)
             )
-            WITH m
-            OPTIONAL MATCH (cf:CodeFile {path: $file_path})
+            WITH m, path_candidates
+            OPTIONAL MATCH (cf:CodeFile)
+            WHERE cf.path IN path_candidates
             FOREACH (_ IN CASE WHEN cf IS NULL THEN [] ELSE [1] END |
               MERGE (m)-[:RELATES_TO]->(cf)
             )
             """,
             {
                 "file_path": rel_path,
+                "path_candidates": path_candidates,
                 "summary": summary[:4000],
                 "sha_after": sha_after,
             },

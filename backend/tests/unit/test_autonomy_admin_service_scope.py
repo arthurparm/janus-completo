@@ -70,6 +70,43 @@ def test_resolve_files_for_study_includes_only_app_paths(tmp_path: Path):
     assert "frontend/src/lib/x.ts" not in paths
 
 
+def test_resolve_files_for_study_incremental_without_diff_or_task_files_returns_empty(tmp_path: Path):
+    service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    inside_backend = tmp_path / "backend" / "app" / "services" / "x.py"
+    inside_backend.parent.mkdir(parents=True, exist_ok=True)
+    inside_backend.write_text("ok", encoding="utf-8")
+
+    rows = service._resolve_files_for_study(
+        mode="incremental",
+        base_commit=None,
+        target_commit=None,
+        task_files=None,
+    )
+    assert rows == []
+
+
+def test_resolve_files_for_study_incremental_uses_task_context_when_present(tmp_path: Path):
+    service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    inside_backend = tmp_path / "backend" / "app" / "services" / "x.py"
+    inside_backend.parent.mkdir(parents=True, exist_ok=True)
+    inside_backend.write_text("ok", encoding="utf-8")
+
+    rows = service._resolve_files_for_study(
+        mode="incremental",
+        base_commit=None,
+        target_commit=None,
+        task_files=["backend/app/services/x.py"],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["file_path"] == "backend/app/services/x.py"
+    assert rows[0]["change_type"] == "task_context"
+
+
 @pytest.mark.asyncio
 async def test_admin_code_qa_filters_citations_outside_app(monkeypatch):
     citations = [
@@ -153,10 +190,12 @@ async def test_admin_code_qa_replaces_legacy_answer_with_evidence_summary(monkey
 async def test_persist_self_memory_inserts_with_between_foreach_and_optional(monkeypatch):
     service = _new_service(citations=[])
     captured_query: dict[str, str] = {}
+    captured_params: dict[str, object] = {}
 
     class _CaptureGraph:
-        async def execute(self, query: str, *args, **kwargs):
+        async def execute(self, query: str, params: dict[str, object], *args, **kwargs):
             captured_query["value"] = query
+            captured_params.update(params)
 
     async def _fake_get_graph_db():
         return _CaptureGraph()
@@ -171,7 +210,13 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
 
     query = captured_query["value"]
     assert "FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |" in query
-    assert ")\n            WITH m\n            OPTIONAL MATCH (cf:CodeFile {path: $file_path})" in query
+    assert "WHERE f.path IN path_candidates" in query
+    assert "WHERE cf.path IN path_candidates" in query
+    candidates = captured_params.get("path_candidates")
+    assert isinstance(candidates, list)
+    assert "backend/app/services/autonomy_admin_service.py" in candidates
+    assert "/backend/app/services/autonomy_admin_service.py" in candidates
+    assert "app/services/autonomy_admin_service.py" in candidates
 
 
 def test_get_self_study_status_includes_running_progress():
