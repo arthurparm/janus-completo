@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { AuthGuard } from './core/guards/auth.guard';
+import { AuthGuard, RoleGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -26,6 +26,12 @@ export const routes: Routes = [
     path: 'observability',
     loadComponent: () => import('./features/observability/observability').then(m => m.ObservabilityComponent),
     canActivate: [AuthGuard]
+  },
+  {
+    path: 'admin/autonomia',
+    loadComponent: () => import('./features/admin/autonomia/admin-autonomia').then(m => m.AdminAutonomiaComponent),
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['admin'] }
   },
   {
     path: '',

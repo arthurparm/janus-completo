@@ -9,6 +9,7 @@ from .endpoints import (
     auth,
     auto_analysis,
     autonomy,
+    autonomy_admin,
     autonomy_history,
     chat,
     collaboration,
@@ -48,6 +49,7 @@ if getattr(settings, "PUBLIC_API_MINIMAL", False):
     api_router.include_router(users.router)
     api_router.include_router(profiles.router)
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
+    api_router.include_router(autonomy_admin.router, prefix="/autonomy/admin")
     api_router.include_router(assistant.router)
     api_router.include_router(autonomy_history.router, prefix="/autonomy/history")
     api_router.include_router(consents.router)
@@ -93,6 +95,7 @@ else:
     api_router.include_router(users.router)
     api_router.include_router(profiles.router)
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
+    api_router.include_router(autonomy_admin.router, prefix="/autonomy/admin")
     api_router.include_router(workers.router, prefix="/workers")  # Workers orchestration controls
     api_router.include_router(assistant.router)
     api_router.include_router(autonomy_history.router, prefix="/autonomy/history")

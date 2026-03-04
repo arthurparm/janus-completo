@@ -116,6 +116,15 @@ async def lifespan(app: FastAPI):
     app.state.assistant_service = kernel.assistant_service
     app.state.outbox_service = kernel.outbox_service
     app.state.goal_manager = kernel.goal_manager
+    try:
+        from app.services.autonomy_admin_service import AutonomyAdminService
+
+        app.state.autonomy_admin_service = AutonomyAdminService(
+            llm_service=kernel.llm_service,
+            knowledge_service=kernel.knowledge_service,
+        )
+    except Exception as e:
+        logger.warning("autonomy_admin_service_init_failed", error=str(e), exc_info=e)
 
     # Store workers in app state for status endpoints and diagnostics
     app.state.workers = kernel.workers
@@ -159,6 +168,21 @@ async def lifespan(app: FastAPI):
                 logger.info("Orchestrator workers started on startup.", count=len(payload))
         except Exception as e:
             logger.error("Failed to start orchestrator workers on startup.", exc_info=e)
+
+    # 4.6 Startup self-study health check (non-blocking)
+    try:
+        service = getattr(app.state, "autonomy_admin_service", None)
+        if service is not None:
+            async def _startup_self_study_wrapper():
+                try:
+                    outcome = await service.startup_self_study_check()
+                    logger.info("startup_self_study_check_completed", outcome=outcome)
+                except Exception as inner:
+                    logger.warning("startup_self_study_check_failed", error=str(inner), exc_info=inner)
+
+            asyncio.create_task(_startup_self_study_wrapper())
+    except Exception as e:
+        logger.warning("startup_self_study_check_schedule_failed", error=str(e), exc_info=e)
 
     yield
 

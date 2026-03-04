@@ -130,6 +130,12 @@ class AutonomyGoalRepository:
 
             row.status = next_status
             row.updated_at = datetime.utcnow()
+            if next_status in TERMINAL_GOAL_STATUSES:
+                row.closed_at = datetime.utcnow()
+                row.closed_reason = reason
+            else:
+                row.closed_at = None
+                row.closed_reason = None
             s.add(
                 AutonomyGoalTransition(
                     goal_id=goal_id,

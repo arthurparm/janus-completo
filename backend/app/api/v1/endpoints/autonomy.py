@@ -1,11 +1,12 @@
 from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.autonomy.goal_manager import GoalManager, GoalStatus, get_goal_manager
 from app.core.tools.action_module import action_registry
+from app.services.autonomy_admin_service import maybe_trigger_self_study_on_goal_completion
 from app.services.autonomy_service import AutonomyConfig, AutonomyService, get_autonomy_service
 
 router = APIRouter(tags=["Autonomy"])
@@ -277,7 +278,11 @@ async def get_goal(goal_id: str, manager: GoalManager = Depends(get_goal_manager
     "/goals/{goal_id}/status", response_model=GoalResponse, summary="Atualiza status da meta"
 )
 async def update_goal_status(
-    goal_id: str, req: GoalStatusUpdateRequest, manager: GoalManager = Depends(get_goal_manager)
+    goal_id: str,
+    req: GoalStatusUpdateRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    manager: GoalManager = Depends(get_goal_manager),
 ):
     if req.status not in {
         GoalStatus.PENDING,
@@ -291,6 +296,13 @@ async def update_goal_status(
     goal = manager.update_goal_status(goal_id, req.status)
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meta não encontrada")
+    if req.status == GoalStatus.COMPLETED:
+        background_tasks.add_task(
+            maybe_trigger_self_study_on_goal_completion,
+            app=request.app,
+            reason=f"goal_completed:{goal_id}",
+            trigger_type="goal_completed",
+        )
     return GoalResponse(**goal.__dict__)
 
 

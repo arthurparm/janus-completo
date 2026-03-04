@@ -49,6 +49,18 @@
     </nav>
   </div>
 
+  @if (isAdmin()) {
+    <div class="sidebar-section">
+      <h3 class="section-title">ADMIN</h3>
+      <nav class="side-nav">
+        <a class="side-link" routerLink="/admin/autonomia" routerLinkActive="active">
+          <ui-icon class="icon">admin_panel_settings</ui-icon>
+          <span class="label">Autonomia Admin</span>
+        </a>
+      </nav>
+    </div>
+  }
+
   <div class="sidebar-section">
     <h3 class="section-title">OBSERVABILIDADE</h3>
     <nav class="side-nav">

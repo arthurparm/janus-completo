@@ -5,7 +5,13 @@ from app.models.autonomy_models import (
     AutonomyGoalTransition,
     AutonomyLoopLease,
     AutonomyRun,
+    AutonomySelfStudyFile,
+    AutonomySelfStudyRun,
+    AutonomySelfStudyState,
+    AutonomySprint,
+    AutonomySprintType,
     AutonomyStep,
+    AutonomyTaskEvidence,
 )
 from app.models.quarantine_models import QuarantineItem
 from app.models.pending_action_models import PendingAction
@@ -22,6 +28,12 @@ __all__ = [
     "AutonomyEnqueueLedger",
     "AutonomyGoal",
     "AutonomyGoalTransition",
+    "AutonomySprintType",
+    "AutonomySprint",
+    "AutonomyTaskEvidence",
+    "AutonomySelfStudyRun",
+    "AutonomySelfStudyFile",
+    "AutonomySelfStudyState",
     "AutonomyLoopLease",
     "QuarantineItem",
     "PendingAction",

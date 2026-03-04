@@ -544,6 +544,87 @@ export interface AutonomyPolicyUpdateRequest {
   max_seconds_per_cycle?: number
 }
 
+export interface AdminBacklogSyncResponse {
+  created: number
+  deduped: number
+  capped: number
+  closed: number
+  fallback_used_count: number
+  findings_total: number
+}
+
+export interface AdminBacklogTask {
+  id: string
+  title: string
+  description: string
+  status: string
+  priority: number
+  source_kind?: string | null
+  source_fingerprint?: string | null
+  area?: string | null
+  severity?: string | null
+  auto_created?: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface AdminBacklogSprint {
+  id: string
+  name: string
+  status: string
+  start_ts?: number | null
+  end_ts?: number | null
+  tasks: AdminBacklogTask[]
+}
+
+export interface AdminBacklogSprintType {
+  sprint_type: { id: string; name: string; slug: string }
+  sprints: AdminBacklogSprint[]
+}
+
+export interface SelfStudyRunFile {
+  id: number
+  file_path: string
+  change_type?: string | null
+  sha_before?: string | null
+  sha_after?: string | null
+  summary_status: string
+  error?: string | null
+}
+
+export interface SelfStudyRun {
+  id: number
+  trigger_type: string
+  mode: 'incremental' | 'full' | string
+  status: string
+  files_total: number
+  files_processed: number
+  error?: string | null
+  base_commit?: string | null
+  target_commit?: string | null
+  created_at?: string | null
+  finished_at?: string | null
+  files?: SelfStudyRunFile[]
+}
+
+export interface SelfStudyStatusResponse {
+  last_studied_commit?: string | null
+  last_success_at?: string | null
+  running?: {
+    id: number
+    status: string
+    mode: string
+    created_at?: string | null
+  } | null
+  recent_runs: SelfStudyRun[]
+}
+
+export interface AdminCodeQaResponse {
+  answer: string
+  citations: Citation[]
+  self_memory: Array<{ file_path?: string; summary?: string; updated_at?: string | number }>
+}
+
 // Auto Analysis
 export interface HealthInsight {
   issue: string
@@ -1450,6 +1531,35 @@ export class BackendApiService {
 
   deleteGoal(goal_id: string): Observable<{ status: string; goal_id: string }> {
     return this.http.delete<{ status: string; goal_id: string }>(this.buildUrl(`/api/v1/autonomy/goals/${encodeURIComponent(goal_id)}`))
+  }
+
+  syncAutonomyAdminBacklog(): Observable<AdminBacklogSyncResponse> {
+    return this.http.post<AdminBacklogSyncResponse>(this.buildUrl(`/api/v1/autonomy/admin/backlog/sync`), {})
+  }
+
+  getAutonomyAdminBoard(params: { status?: string; limit?: number } = {}): Observable<{ items: AdminBacklogSprintType[] }> {
+    const qs = new URLSearchParams()
+    if (params.status) qs.set('status', String(params.status))
+    qs.set('limit', String(params.limit ?? 200))
+    return this.http.get<{ items: AdminBacklogSprintType[] }>(this.buildUrl(`/api/v1/autonomy/admin/board?${qs.toString()}`))
+  }
+
+  runAutonomyAdminSelfStudy(req: { mode: 'incremental' | 'full'; reason?: string }): Observable<{ status: string; run_id: number }> {
+    return this.http.post<{ status: string; run_id: number }>(this.buildUrl(`/api/v1/autonomy/admin/self-study/run`), req)
+  }
+
+  getAutonomyAdminSelfStudyStatus(): Observable<SelfStudyStatusResponse> {
+    return this.http.get<SelfStudyStatusResponse>(this.buildUrl(`/api/v1/autonomy/admin/self-study/status`))
+  }
+
+  listAutonomyAdminSelfStudyRuns(limit: number = 20): Observable<{ items: SelfStudyRun[] }> {
+    const qs = new URLSearchParams()
+    qs.set('limit', String(limit))
+    return this.http.get<{ items: SelfStudyRun[] }>(this.buildUrl(`/api/v1/autonomy/admin/self-study/runs?${qs.toString()}`))
+  }
+
+  askAutonomyAdminCodeQa(req: { question: string; limit?: number; citation_limit?: number }): Observable<AdminCodeQaResponse> {
+    return this.http.post<AdminCodeQaResponse>(this.buildUrl(`/api/v1/autonomy/admin/code-qa`), req)
   }
 
 

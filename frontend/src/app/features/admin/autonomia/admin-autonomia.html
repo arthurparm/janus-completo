@@ -1,0 +1,179 @@
+<section class="admin-autonomia-page">
+  <app-header></app-header>
+
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ADMIN</p>
+        <h1>Autonomia Interna</h1>
+        <p class="sub">
+          Backlog interno, autoestudo incremental e perguntas naturais sobre o codigo com citacoes.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <ui-badge variant="info">RBAC: admin</ui-badge>
+        <button ui-button variant="ghost" size="lg" (click)="refreshAll()" [disabled]="loading() || syncing() || runningStudy()">
+          Atualizar
+        </button>
+      </div>
+    </header>
+
+    @if (error()) {
+      <div class="inline-alert" role="alert">{{ error() }}</div>
+    }
+    @if (notice()) {
+      <div class="inline-success" role="status">{{ notice() }}</div>
+    }
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Backlog</h2>
+        <div class="row-actions">
+          <ui-badge variant="neutral">{{ totalTasks() }} tasks</ui-badge>
+          <button ui-button variant="default" size="sm" (click)="syncBacklog()" [disabled]="syncing()">
+            {{ syncing() ? 'Sincronizando...' : 'Sincronizar backlog' }}
+          </button>
+        </div>
+      </div>
+
+      @if (!board().length) {
+        <p class="muted">Nenhum item de backlog encontrado.</p>
+      } @else {
+        <div class="board-list">
+          @for (type of board(); track type.sprint_type.id) {
+            <article class="bucket">
+              <div class="bucket-head">
+                <h3>{{ type.sprint_type.name }}</h3>
+                <ui-badge variant="neutral">{{ type.sprints.length }} sprints</ui-badge>
+              </div>
+              @for (sprint of type.sprints; track sprint.id) {
+                <div class="sprint-block">
+                  <div class="sprint-head">
+                    <strong>{{ sprint.name }}</strong>
+                    <ui-badge variant="neutral">{{ sprint.tasks.length }} tasks</ui-badge>
+                  </div>
+                  @if (!sprint.tasks.length) {
+                    <p class="muted">Sem tasks.</p>
+                  } @else {
+                    <div class="tasks">
+                      @for (task of sprint.tasks; track task.id) {
+                        <article class="task-row">
+                          <div>
+                            <p class="task-title">{{ task.title }}</p>
+                            <p class="muted">{{ task.description }}</p>
+                          </div>
+                          <div class="task-metrics">
+                            <span class="chip">status: {{ task.status }}</span>
+                            <span class="chip">prio: {{ task.priority }}</span>
+                            @if (task.area) {
+                              <span class="chip">area: {{ task.area }}</span>
+                            }
+                            @if (task.severity) {
+                              <span class="chip">sev: {{ task.severity }}</span>
+                            }
+                          </div>
+                        </article>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Autoestudo</h2>
+        <div class="row-actions">
+          <button ui-button variant="ghost" size="sm" (click)="runStudy('incremental')" [disabled]="runningStudy()">
+            Reestudar incremental
+          </button>
+          <button ui-button variant="ghost" size="sm" (click)="runStudy('full')" [disabled]="runningStudy()">
+            Reestudar full
+          </button>
+        </div>
+      </div>
+
+      <div class="study-status">
+        <p><strong>Ultimo commit estudado:</strong> {{ selfStudyStatus()?.last_studied_commit || 'n/a' }}</p>
+        <p><strong>Ultimo sucesso:</strong> {{ selfStudyStatus()?.last_success_at || 'n/a' }}</p>
+        <p><strong>Run em andamento:</strong> {{ selfStudyStatus()?.running ? ('#' + selfStudyStatus()?.running?.id + ' - ' + selfStudyStatus()?.running?.status) : 'nao' }}</p>
+      </div>
+
+      @if (!selfStudyRuns().length) {
+        <p class="muted">Sem historico de runs.</p>
+      } @else {
+        <div class="runs">
+          @for (run of selfStudyRuns(); track run.id) {
+            <article class="run-row">
+              <div class="run-head">
+                <strong>#{{ run.id }} - {{ run.mode }} - {{ run.status }}</strong>
+                <span class="muted">{{ run.files_processed }}/{{ run.files_total }} arquivos</span>
+              </div>
+              <p class="muted">trigger: {{ run.trigger_type }} · commit: {{ run.base_commit || 'n/a' }} -> {{ run.target_commit || 'n/a' }}</p>
+              @if (run.error) {
+                <p class="error-text">{{ run.error }}</p>
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Pergunte ao Codigo</h2>
+      </div>
+      <textarea
+        class="question-input"
+        rows="4"
+        placeholder="Ex: Onde o Janus dispara autoestudo quando uma task e concluida?"
+        [value]="question()"
+        (input)="onQuestionChange($any($event.target).value)"
+      ></textarea>
+      <div class="row-actions">
+        <button ui-button variant="default" size="sm" (click)="askCode()" [disabled]="asking() || !question().trim()">
+          {{ asking() ? 'Consultando...' : 'Perguntar' }}
+        </button>
+      </div>
+
+      @if (answer()) {
+        <div class="qa-answer">
+          <h3>Resposta</h3>
+          <p>{{ answer() }}</p>
+        </div>
+      }
+
+      @if (citations().length) {
+        <div class="qa-citations">
+          <h3>Citacoes</h3>
+          <ul>
+            @for (citation of citations(); track (citation.file_path || citation.id || citation.title || $index)) {
+              <li>
+                {{ citation.file_path || citation.title || citation.url || 'citacao' }}
+                @if (citation.line) { :{{ citation.line }} }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      @if (selfMemory().length) {
+        <div class="qa-memory">
+          <h3>SelfMemory recente</h3>
+          <ul>
+            @for (memory of selfMemory(); track (memory.file_path || memory.updated_at || $index)) {
+              <li>
+                <strong>{{ memory.file_path || 'arquivo' }}</strong>
+                <p class="muted">{{ memory.summary || '' }}</p>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </section>
+  </div>
+</section>

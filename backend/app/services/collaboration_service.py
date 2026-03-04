@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any
@@ -387,6 +388,10 @@ class CollaborationService:
 
         target_status = GoalStatus.COMPLETED if status == "completed" else GoalStatus.FAILED
         goal_repo = AutonomyGoalRepository()
+        existing_goal = goal_repo.get_goal(goal_id)
+        was_completed = bool(
+            existing_goal and str(getattr(existing_goal, "status", "")).strip().lower() == GoalStatus.COMPLETED
+        )
         updated = goal_repo.transition_status(
             goal_id,
             target_status,
@@ -405,6 +410,33 @@ class CollaborationService:
             goal_status=target_status,
             updated=bool(updated),
         )
+        if status == "completed" and updated is not None and not was_completed:
+            try:
+                from app.core.kernel import Kernel
+                from app.services.autonomy_admin_service import AutonomyAdminService
+
+                kernel = Kernel.get_instance()
+                llm_service = getattr(kernel, "llm_service", None)
+                knowledge_service = getattr(kernel, "knowledge_service", None)
+                if llm_service is not None and knowledge_service is not None:
+                    service = AutonomyAdminService(
+                        llm_service=llm_service,
+                        knowledge_service=knowledge_service,
+                    )
+                    asyncio.create_task(
+                        service.run_self_study(
+                            mode="incremental",
+                            reason=f"goal_completed_from_taskstate:{goal_id}",
+                            trigger_type="goal_completed",
+                        )
+                    )
+            except Exception as e:
+                logger.warning(
+                    "self_study_trigger_from_collaboration_failed",
+                    goal_id=goal_id,
+                    task_id=task_state.task_id,
+                    error=str(e),
+                )
 
 
 # Padrão de Injeção de Dependência: Getter para o serviço
