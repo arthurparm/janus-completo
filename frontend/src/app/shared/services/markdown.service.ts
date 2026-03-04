@@ -16,6 +16,7 @@ export class MarkdownService {
     private configureMarked(): void {
         // Custom renderer for robust code block handling
         const renderer: any = new marked.Renderer();
+        const defaultRenderer: any = new marked.Renderer();
 
         renderer.code = (code: unknown, languageHint?: string) => {
             let text = '';
@@ -61,7 +62,19 @@ export class MarkdownService {
             }
         };
 
-        renderer.table = (header: string, body: string) => {
+        renderer.table = (...args: unknown[]) => {
+            try {
+                // Delegate to Marked's native renderer to stay compatible with v4/v5/v6 signatures.
+                const rendered = String(defaultRenderer.table(...args) || '').trim();
+                if (rendered) {
+                    return `<div class="table-container">${rendered}</div>`;
+                }
+            } catch {
+                // Fallback to legacy signature handling below.
+            }
+
+            const header = typeof args[0] === 'string' ? args[0] : '';
+            const body = typeof args[1] === 'string' ? args[1] : '';
             return `<div class="table-container"><table class="table table-striped">
                     <thead>${header}</thead>
                     <tbody>${body}</tbody>
