@@ -162,6 +162,7 @@ def setup_logging(
     module_levels: dict[str, int] | None = None,
     sampling: float = 1.0,
     log_file: str | None = "janus.log",
+    error_log_file: str | None = None,
 ):
     """Configure structlog to emit JSON with correlation and safety.
 
@@ -170,6 +171,8 @@ def setup_logging(
         module_levels: Optional per-module level overrides.
         sampling: Probability [0..1] to keep info/debug logs (warnings+ are always kept).
         log_file: Path to the log file (default: "janus.log").
+        error_log_file: Path to the error-only log file. If omitted and log_file is
+            set, defaults to a sibling `janus-errors.log`.
     """
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -177,6 +180,10 @@ def setup_logging(
 
     root = logging.getLogger()
     root.handlers = [handler]
+
+    if error_log_file is None and log_file:
+        log_dir = os.path.dirname(log_file)
+        error_log_file = os.path.join(log_dir, "janus-errors.log") if log_dir else "janus-errors.log"
 
     if log_file:
         try:
@@ -192,6 +199,20 @@ def setup_logging(
         except Exception:
             # Fallback to stderr if file logging fails, but don't crash
             print(f"Failed to setup file logging to {log_file}", file=sys.stderr)
+
+    if error_log_file:
+        try:
+            error_log_dir = os.path.dirname(error_log_file)
+            if error_log_dir and not os.path.exists(error_log_dir):
+                os.makedirs(error_log_dir, exist_ok=True)
+
+            error_file_handler = logging.FileHandler(error_log_file, encoding="utf-8")
+            error_file_handler.setFormatter(logging.Formatter("%(message)s"))
+            error_file_handler.addFilter(_LevelFilter(module_levels))
+            error_file_handler.setLevel(logging.ERROR)
+            root.addHandler(error_file_handler)
+        except Exception:
+            print(f"Failed to setup error file logging to {error_log_file}", file=sys.stderr)
 
     root.setLevel(level)
 
