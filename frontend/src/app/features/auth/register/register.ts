@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core'
+import { ChangeDetectorRef, Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms'
 import { RouterLink } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
@@ -13,6 +13,27 @@ import { AuthService } from '../../../core/auth/auth.service'
 export class RegisterComponent {
   private fb = inject(FormBuilder)
   private auth = inject(AuthService)
+  private cdr = inject(ChangeDetectorRef)
+  private readonly cpfValidator: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
+    const cpf = String(control.value ?? '').replace(/\D/g, '')
+    if (!cpf) return null
+    if (cpf.length !== 11) return { cpfInvalid: true }
+    if (/^(\d)\1{10}$/.test(cpf)) return { cpfInvalid: true }
+
+    const calcDigit = (base: number): number => {
+      let sum = 0
+      for (let i = 0; i < base; i += 1) {
+        sum += Number(cpf[i]) * ((base + 1) - i)
+      }
+      const digit = (sum * 10) % 11
+      return digit === 10 ? 0 : digit
+    }
+
+    const d10 = calcDigit(9)
+    const d11 = calcDigit(10)
+    const valid = d10 === Number(cpf[9]) && d11 === Number(cpf[10])
+    return valid ? null : { cpfInvalid: true }
+  }
   private readonly passwordStrengthValidator: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
     const value = String(control.value ?? '')
     const hasMinLength = value.length >= 8
@@ -34,7 +55,7 @@ export class RegisterComponent {
   form = this.fb.group({
     username: ['', [Validators.required, Validators.minLength(3), Validators.pattern(/^[a-zA-Z0-9._-]+$/)]],
     fullName: ['', [Validators.required, Validators.minLength(3)]],
-    cpf: ['', [Validators.required, Validators.pattern(/^(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/)]],
+    cpf: ['', [Validators.required, Validators.pattern(/^(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/), this.cpfValidator]],
     phone: ['', [Validators.required, Validators.pattern(/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/)]],
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, this.passwordStrengthValidator]],
@@ -105,7 +126,7 @@ export class RegisterComponent {
     }
     this.loading = true
     try {
-      const ok = await this.auth.registerLocal({
+      const result = await this.auth.registerLocal({
         username: String(this.form.value.username || ''),
         fullName: String(this.form.value.fullName || ''),
         cpf: String(this.form.value.cpf || ''),
@@ -114,16 +135,17 @@ export class RegisterComponent {
         password: String(this.form.value.password || ''),
         terms: Boolean(this.form.value.terms)
       })
-      if (ok) {
+      if (result.ok) {
         this.success = 'Cadastro realizado. Voce ja pode acessar.'
         this.form.reset({ terms: false })
       } else {
-        this.error = 'Falha ao registrar. Verifique seus dados.'
+        this.error = result.error || 'Falha ao registrar. Verifique seus dados.'
       }
-    } catch (err) {
+    } catch {
       this.error = 'Falha ao registrar. Tente novamente.'
     } finally {
       this.loading = false
+      this.cdr.markForCheck()
     }
   }
 

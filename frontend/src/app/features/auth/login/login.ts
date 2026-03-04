@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core'
+import { ChangeDetectorRef, Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
 import { Router } from '@angular/router'
 import { RouterLink } from '@angular/router'
@@ -17,6 +17,7 @@ export class LoginComponent {
   private auth = inject(AuthService)
   private router = inject(Router)
   private logger = inject(AppLoggerService)
+  private cdr = inject(ChangeDetectorRef)
   form = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required]],
@@ -59,6 +60,7 @@ export class LoginComponent {
       this.handleFailure()
     } finally {
       this.loading = false
+      this.cdr.markForCheck()
     }
   }
 
@@ -78,6 +80,7 @@ export class LoginComponent {
       this.handleFailure()
     } finally {
       this.loading = false
+      this.cdr.markForCheck()
     }
   }
 
@@ -97,6 +100,7 @@ export class LoginComponent {
       this.handleFailure()
     } finally {
       this.loading = false
+      this.cdr.markForCheck()
     }
   }
 
@@ -106,6 +110,7 @@ export class LoginComponent {
       this.lockedUntil = Date.now() + 60_000
     }
     this.error = 'Falha no login. Verifique seus dados.'
+    this.cdr.markForCheck()
   }
 
   async recoverAccess() {
@@ -129,6 +134,7 @@ export class LoginComponent {
       this.error = 'Falha ao solicitar recuperacao.'
     } finally {
       this.loading = false
+      this.cdr.markForCheck()
     }
   }
 }

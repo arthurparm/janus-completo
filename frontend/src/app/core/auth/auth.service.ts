@@ -1,5 +1,5 @@
 import { Injectable, inject, signal, computed } from '@angular/core'
-import { HttpClient } from '@angular/common/http'
+import { HttpClient, HttpErrorResponse } from '@angular/common/http'
 import { API_BASE_URL, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
 import { firstValueFrom } from 'rxjs'
 import { toObservable } from '@angular/core/rxjs-interop'
@@ -18,6 +18,11 @@ export interface User {
 export interface LocalAuthResponse {
   token: string
   user: User
+}
+
+export interface AuthActionResult {
+  ok: boolean
+  error?: string
 }
 
 @Injectable({ providedIn: 'root' })
@@ -109,7 +114,7 @@ export class AuthService {
     email: string
     password: string
     terms: boolean
-  }): Promise<boolean> {
+  }): Promise<AuthActionResult> {
     try {
       const out = await firstValueFrom(
         this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/register`, {
@@ -128,11 +133,11 @@ export class AuthService {
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
-        return true
+        return { ok: true }
       }
-      return false
-    } catch {
-      return false
+      return { ok: false, error: 'Falha ao registrar. Verifique seus dados.' }
+    } catch (err) {
+      return { ok: false, error: this.extractErrorDetail(err) }
     }
   }
 
@@ -173,5 +178,19 @@ export class AuthService {
 
   async logout(): Promise<void> {
     this.clearSession()
+  }
+
+  private extractErrorDetail(err: unknown): string {
+    if (err instanceof HttpErrorResponse) {
+      const body = err.error
+      if (body && typeof body === 'object') {
+        const detail = (body as { detail?: unknown }).detail
+        if (typeof detail === 'string' && detail.trim()) return detail.trim()
+        const message = (body as { message?: unknown }).message
+        if (typeof message === 'string' && message.trim()) return message.trim()
+      }
+      if (typeof body === 'string' && body.trim()) return body.trim()
+    }
+    return 'Falha ao registrar. Verifique seus dados.'
   }
 }
