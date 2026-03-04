@@ -195,6 +195,23 @@ def _should_promote_user_to_admin_by_cpf(user_id: int) -> bool:
     return False
 
 
+def _is_cpf_already_registered(repo: UserRepository, cpf_value: str | None) -> bool:
+    normalized = _normalize_cpf(cpf_value)
+    if not normalized:
+        return False
+
+    cpf_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    if repo.get_by_cpf_hash(cpf_hash):
+        return True
+
+    try:
+        scope = f"cpf_hash:{cpf_hash}"
+        user_ids = ConsentRepository().list_user_ids_by_scope(scope)
+        return len(user_ids) > 0
+    except Exception:
+        return False
+
+
 def _ensure_firebase_initialized() -> None:
     import firebase_admin
     from app.core.infrastructure.firebase import get_firebase_service
@@ -281,13 +298,20 @@ async def local_register(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     if repo.get_by_username(username):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
+    if _is_cpf_already_registered(repo, payload.cpf):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF already registered")
 
+    normalized_cpf = _normalize_cpf(payload.cpf)
+    cpf_hash = (
+        hashlib.sha256(normalized_cpf.encode("utf-8")).hexdigest() if normalized_cpf else None
+    )
     pw_hash = hash_password(payload.password)
     user = repo.create_user(
         email=email,
         display_name=full_name,
         username=username,
         password_hash=pw_hash,
+        cpf_hash=cpf_hash,
     )
 
     cpf_scope = _cpf_hash_scope(payload.cpf)

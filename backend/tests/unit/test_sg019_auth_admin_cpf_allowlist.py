@@ -12,6 +12,7 @@ class _FakeRepo:
         self._users_by_id: dict[int, SimpleNamespace] = {}
         self._users_by_email: dict[str, int] = {}
         self._users_by_username: dict[str, int] = {}
+        self._users_by_cpf_hash: dict[str, int] = {}
         self._roles: dict[int, set[str]] = {}
 
     def create_user(
@@ -21,6 +22,7 @@ class _FakeRepo:
         external_id: str | None = None,
         username: str | None = None,
         password_hash: str | None = None,
+        cpf_hash: str | None = None,
     ):
         user_id = self._next_id
         self._next_id += 1
@@ -31,6 +33,7 @@ class _FakeRepo:
             external_id=external_id,
             username=username,
             password_hash=password_hash,
+            cpf_hash=cpf_hash,
             password_reset_token_hash=None,
             password_reset_expires_at=None,
         )
@@ -39,6 +42,8 @@ class _FakeRepo:
             self._users_by_email[email] = user_id
         if username:
             self._users_by_username[username] = user_id
+        if cpf_hash:
+            self._users_by_cpf_hash[cpf_hash] = user_id
         self._roles.setdefault(user_id, set())
         return user
 
@@ -48,6 +53,10 @@ class _FakeRepo:
 
     def get_by_username(self, username: str):
         uid = self._users_by_username.get(username)
+        return self._users_by_id.get(uid) if uid else None
+
+    def get_by_cpf_hash(self, cpf_hash: str):
+        uid = self._users_by_cpf_hash.get(cpf_hash)
         return self._users_by_id.get(uid) if uid else None
 
     def list_roles(self, user_id: int) -> list[str]:
@@ -137,3 +146,37 @@ def test_local_login_promotes_existing_user_by_cpf_consent(monkeypatch):
     payload = response.json()
     assert "admin" in payload["user"]["roles"]
     assert repo.is_admin(int(user.id))
+
+
+def test_local_register_rejects_duplicate_cpf(monkeypatch):
+    repo = _FakeRepo()
+    consent_store: dict[int, list[SimpleNamespace]] = {}
+    client = _build_client(monkeypatch, repo, consent_store)
+    monkeypatch.setattr(auth.settings, "AUTH_ADMIN_CPF_ALLOWLIST", ["50302427830"])
+
+    first = client.post(
+        "/api/v1/auth/local/register",
+        json={
+            "email": "first@example.com",
+            "password": "Qw!12345678",
+            "username": "firstuser",
+            "full_name": "First User",
+            "cpf": "50302427830",
+            "terms": True,
+        },
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/api/v1/auth/local/register",
+        json={
+            "email": "second@example.com",
+            "password": "Qw!12345678",
+            "username": "seconduser",
+            "full_name": "Second User",
+            "cpf": "503.024.278-30",
+            "terms": True,
+        },
+    )
+    assert second.status_code == 409
+    assert second.json()["detail"] == "CPF already registered"

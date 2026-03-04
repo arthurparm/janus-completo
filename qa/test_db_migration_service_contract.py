@@ -38,6 +38,7 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
 
     assert result["status"] == "applied"
     assert any("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE (email)" in q for q in fake.executed_sql)
+    assert any("ALTER TABLE users ADD CONSTRAINT unique_user_cpf_hash UNIQUE (cpf_hash)" in q for q in fake.executed_sql)
     assert all("UNIQUE KEY" not in q for q in fake.executed_sql)
     assert any("ALTER TABLE user_privacy_consents ADD CONSTRAINT unique_user_privacy_scope_consent UNIQUE (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE INDEX idx_privacy_consent_user_scope ON user_privacy_consents (user_id, scope)" in q for q in fake.executed_sql)

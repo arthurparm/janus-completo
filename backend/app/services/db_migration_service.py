@@ -110,6 +110,12 @@ class DBMigrationService:
             )
             add(
                 "users",
+                "cpf_hash",
+                "column",
+                self._column_exists(s, "users", "cpf_hash"),
+            )
+            add(
+                "users",
                 "password_reset_token_hash",
                 "column",
                 self._column_exists(s, "users", "password_reset_token_hash"),
@@ -137,6 +143,12 @@ class DBMigrationService:
                 "unique_user_external_id",
                 "constraint",
                 self._constraint_exists(s, "users", "unique_user_external_id"),
+            )
+            add(
+                "users",
+                "unique_user_cpf_hash",
+                "constraint",
+                self._constraint_exists(s, "users", "unique_user_cpf_hash"),
             )
             add(
                 "pending_actions",
@@ -188,6 +200,9 @@ class DBMigrationService:
             if not self._column_exists(s, "users", "password_hash"):
                 s.execute(text("ALTER TABLE users ADD COLUMN password_hash TEXT NULL"))
                 applied.append("users.password_hash")
+            if not self._column_exists(s, "users", "cpf_hash"):
+                s.execute(text("ALTER TABLE users ADD COLUMN cpf_hash VARCHAR(128) NULL"))
+                applied.append("users.cpf_hash")
             if not self._column_exists(s, "users", "password_reset_token_hash"):
                 s.execute(text("ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(128) NULL"))
                 applied.append("users.password_reset_token_hash")
@@ -230,6 +245,18 @@ class DBMigrationService:
                     )
                 )
                 applied.append("users.unique_user_external_id")
+            if not self._constraint_exists(s, "users", "unique_user_cpf_hash"):
+                s.execute(
+                    text(
+                        self._unique_constraint_sql(
+                            dialect=dialect,
+                            table="users",
+                            constraint="unique_user_cpf_hash",
+                            columns_csv="cpf_hash",
+                        )
+                    )
+                )
+                applied.append("users.unique_user_cpf_hash")
             if not self._column_exists(s, "pending_actions", "simulation_summary_json"):
                 s.execute(text("ALTER TABLE pending_actions ADD COLUMN simulation_summary_json TEXT NULL"))
                 applied.append("pending_actions.simulation_summary_json")

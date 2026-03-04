@@ -25,6 +25,7 @@ class User(Base):
     email = Column(String(255), nullable=True)
     display_name = Column(String(100), nullable=True)
     password_hash = Column(Text, nullable=True)
+    cpf_hash = Column(String(128), nullable=True)
     password_reset_token_hash = Column(String(128), nullable=True)
     password_reset_expires_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")
@@ -39,6 +40,7 @@ class User(Base):
         UniqueConstraint("email", name="unique_user_email"),
         UniqueConstraint("username", name="unique_user_username"),
         UniqueConstraint("external_id", name="unique_user_external_id"),
+        UniqueConstraint("cpf_hash", name="unique_user_cpf_hash"),
     )
 
 

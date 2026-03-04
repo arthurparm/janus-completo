@@ -47,6 +47,7 @@ class UserRepository:
         external_id: str | None = None,
         username: str | None = None,
         password_hash: str | None = None,
+        cpf_hash: str | None = None,
     ) -> User:
         s = self._get_session()
         try:
@@ -56,6 +57,7 @@ class UserRepository:
                 external_id=external_id,
                 username=username,
                 password_hash=password_hash,
+                cpf_hash=cpf_hash,
             )
             s.add(u)
             s.commit()
@@ -69,6 +71,14 @@ class UserRepository:
         s = self._get_session()
         try:
             return s.query(User).filter(User.username == username).first()
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_by_cpf_hash(self, cpf_hash: str) -> User | None:
+        s = self._get_session()
+        try:
+            return s.query(User).filter(User.cpf_hash == cpf_hash).first()
         finally:
             if not self._session:
                 s.close()
@@ -93,6 +103,19 @@ class UserRepository:
             if not u:
                 return False
             u.password_hash = password_hash
+            s.commit()
+            return True
+        finally:
+            if not self._session:
+                s.close()
+
+    def set_cpf_hash(self, user_id: int, cpf_hash: str | None) -> bool:
+        s = self._get_session()
+        try:
+            u = s.query(User).filter(User.id == user_id).first()
+            if not u:
+                return False
+            u.cpf_hash = cpf_hash
             s.commit()
             return True
         finally:
@@ -271,6 +294,19 @@ class ConsentRepository:
         s = self._get_session()
         try:
             return s.query(Consent).filter(Consent.user_id == user_id).all()
+        finally:
+            if not self._session:
+                s.close()
+
+    def list_user_ids_by_scope(self, scope: str) -> list[int]:
+        s = self._get_session()
+        try:
+            rows = (
+                s.query(Consent.user_id)
+                .filter(Consent.scope == scope, Consent.granted.is_(True))
+                .all()
+            )
+            return [int(row[0]) for row in rows if row and row[0] is not None]
         finally:
             if not self._session:
                 s.close()
