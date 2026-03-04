@@ -46,3 +46,15 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Baixa
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
+
+### 8. Endpoints do Windows Agent sem Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O serviço autônomo FastAPI expõe capacidades sensíveis a nível de sistema operacional do Windows (captura de tela, notificações, conversão de texto em voz) em uma porta sem requerer autenticação.
+- **Ação Recomendada:** Implementar um mecanismo de autenticação (como token/API key) ou vincular explicitamente a escuta somente à interface de rede interna do docker e rejeitar chamadas de outras fontes.
+
+### 9. Rate Limiter Fail-Closed configuration
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`
+- **Gravidade:** Média
+- **Descrição:** A configuração do middleware de rate limit falha fechada (fail-closed) na ausência de Redis em produção, retornando erro 503 e bloqueando tráfego legítimo em caso de falha de infraestrutura.
+- **Ação Recomendada:** Adotar uma estratégia fail-open que continue processando chamadas mesmo com a falha do rate limit (preferível) ou ajustar as políticas para que a indisponibilidade do limitador não tire o sistema do ar.

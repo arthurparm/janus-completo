@@ -100,6 +100,13 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Corrigir Bypass de AuthZ nos endpoints do Shared Workspace (`/collaboration`) | P0 | S | ideia |
+| SG-021 | Aplicar Rate Limit (`@limiter.limit`) nos endpoints de Autenticação | P1 | M | ideia |
+| SG-022 | Desabilitar `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar injeção | P0 | S | ideia |
+| SG-023 | Corrigir OS Command Injection (Bandit B602) no `launcher_tools.py` | P0 | S | ideia |
+| SG-024 | Implementar Autenticação no serviço independente `windows_agent.py` | P0 | M | ideia |
+| SG-025 | Corrigir Fail-Closed para Fail-Open no RateLimitMiddleware (DDoS / Indisponibilidade) | P1 | S | ideia |
+| SG-026 | Sanitização de PII em logs de voz e chat no Daemon e `ChatService` | P1 | M | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
