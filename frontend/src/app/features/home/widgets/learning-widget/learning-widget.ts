@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { BackendApiService, PostSprintSummaryResponse } from '../../../../services/backend-api.service';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
@@ -13,6 +14,7 @@ import { catchError, shareReplay } from 'rxjs/operators';
 })
 export class LearningWidget {
   private api = inject(BackendApiService);
+  private router = inject(Router);
 
   summary$: Observable<PostSprintSummaryResponse | null>;
 
@@ -21,5 +23,15 @@ export class LearningWidget {
       catchError(() => of(null)),
       shareReplay({ bufferSize: 1, refCount: true })
     );
+  }
+
+  openLearningInsights(): void {
+    try {
+      localStorage.setItem('janus.conversations.show_advanced_mode', '1');
+      localStorage.setItem('janus.conversations.advanced_rail_tab', 'insights');
+    } catch {
+      // no-op
+    }
+    void this.router.navigate(['/conversations']);
   }
 }

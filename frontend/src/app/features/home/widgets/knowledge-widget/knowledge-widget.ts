@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { BackendApiService, KnowledgeStats } from '../../../../services/backend-api.service';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
@@ -13,6 +14,7 @@ import { catchError, shareReplay } from 'rxjs/operators';
 })
 export class KnowledgeWidget {
   private api = inject(BackendApiService);
+  private router = inject(Router);
 
   stats$: Observable<KnowledgeStats | null>;
 
@@ -29,5 +31,9 @@ export class KnowledgeWidget {
       .sort(([, a], [, b]) => b - a)
       .slice(0, 4)
       .map(([label, count]) => ({ label, count }));
+  }
+
+  openKnowledgeView(): void {
+    void this.router.navigate(['/observability']);
   }
 }

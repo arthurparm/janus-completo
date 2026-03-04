@@ -1,4 +1,4 @@
-import { Component, OnInit, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, ElementRef, ViewChild, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SystemStatusService, ServiceHealthResponse, SystemStatusResponse } from '../../../../core/services/system-status.service';
 import { Observable } from 'rxjs';
@@ -12,8 +12,9 @@ import { gsap } from 'gsap';
   styleUrls: ['./system-hud.scss'],
 })
 export class SystemHud implements OnInit {
-  @ViewChild('hudPanel') hudPanel!: ElementRef;
-  @ViewChild('pulseIndicator') pulseIndicator!: ElementRef;
+  @ViewChild('hudRoot') hudRoot?: ElementRef<HTMLElement>;
+  @ViewChild('hudPanel') hudPanel?: ElementRef<HTMLElement>;
+  @ViewChild('pulseIndicator') pulseIndicator?: ElementRef<HTMLElement>;
 
   isOpen = false;
   systemStatus$: Observable<SystemStatusResponse>;
@@ -32,7 +33,8 @@ export class SystemHud implements OnInit {
     // mas usaremos GSAP para a abertura do painel.
   }
 
-  toggleHud() {
+  toggleHud(event?: Event) {
+    event?.stopPropagation();
     this.isOpen = !this.isOpen;
     
     if (this.isOpen) {
@@ -45,18 +47,21 @@ export class SystemHud implements OnInit {
   private animateOpen() {
     // GSAP animation para entrada futurista
     setTimeout(() => {
-      if (this.hudPanel) {
-        gsap.fromTo(this.hudPanel.nativeElement, 
+      const panel = this.hudPanel?.nativeElement;
+      if (panel) {
+        gsap.fromTo(panel,
           { opacity: 0, y: -20, scale: 0.95 },
           { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'back.out(1.7)' }
         );
         
         // Animar itens individualmente (stagger)
-        const items = this.hudPanel.nativeElement.querySelectorAll('.hud-item');
-        gsap.fromTo(items,
-          { opacity: 0, x: -20 },
-          { opacity: 1, x: 0, duration: 0.3, stagger: 0.1, delay: 0.1 }
-        );
+        const items = panel.querySelectorAll('.hud-item');
+        if (items.length > 0) {
+          gsap.fromTo(items,
+            { opacity: 0, x: -20 },
+            { opacity: 1, x: 0, duration: 0.3, stagger: 0.1, delay: 0.1 }
+          );
+        }
       }
     }, 0); // Tick para garantir renderização do *ngIf
   }
@@ -82,6 +87,16 @@ export class SystemHud implements OnInit {
       case 'degraded': return 'bg-yellow-500';
       case 'error': return 'bg-red-500';
       default: return 'bg-gray-500';
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event): void {
+    if (!this.isOpen) return;
+    const root = this.hudRoot?.nativeElement;
+    const target = event.target as Node | null;
+    if (root && target && !root.contains(target)) {
+      this.isOpen = false;
     }
   }
 }

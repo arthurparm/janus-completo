@@ -12,8 +12,6 @@ import {
   ConversationMeta,
   BackendApiService
 } from '../../services/backend-api.service'
-import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
-import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { Header } from '../../core/layout/header/header'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 
@@ -29,8 +27,6 @@ import { LearningWidget } from './widgets/learning-widget/learning-widget'
     CommonModule,
     RouterLink,
     ReactiveFormsModule,
-    UiBadgeComponent,
-    UiButtonComponent,
     Header,
     SkeletonComponent,
     KnowledgeWidget,
@@ -120,12 +116,35 @@ export class HomeComponent {
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
     this.api.listConversations(userId ? { user_id: userId, limit: 4 } : { limit: 4 })
       .pipe(
-        map((resp) => resp.conversations || []),
+        map((resp) => (resp.conversations || []).map((conv) => this.normalizeConversationTimestamps(conv))),
         catchError(() => of([]))
       )
       .subscribe(convs => {
         this.conversations.set(convs)
         this.loading.set(false)
       })
+  }
+
+  private normalizeConversationTimestamps(conv: ConversationMeta): ConversationMeta {
+    const createdAt = this.normalizeTimestamp(conv.created_at)
+    const updatedAt = this.normalizeTimestamp(conv.updated_at) ?? createdAt
+    return {
+      ...conv,
+      created_at: createdAt ?? undefined,
+      updated_at: updatedAt ?? undefined,
+    }
+  }
+
+  private normalizeTimestamp(value: unknown): number | null {
+    if (value === null || value === undefined) return null
+    const n = typeof value === 'string' ? Number(value) : Number(value)
+    if (Number.isFinite(n)) {
+      return n < 1_000_000_000_000 ? n * 1000 : n
+    }
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return null
   }
 }

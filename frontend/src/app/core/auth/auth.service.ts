@@ -1,9 +1,10 @@
 import { Injectable, inject, signal, computed } from '@angular/core'
 import { HttpClient, HttpErrorResponse } from '@angular/common/http'
-import { API_BASE_URL, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
+import { API_BASE_URL, VISITOR_MODE_KEY } from '../../services/api.config'
 import { firstValueFrom } from 'rxjs'
 import { toObservable } from '@angular/core/rxjs-interop'
 import { AppLoggerService } from '../services/app-logger.service'
+import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from '../../services/auth.utils'
 
 export interface User {
   id: string
@@ -60,7 +61,7 @@ export class AuthService {
     this._authReady.set(false)
     this._firebaseAuthReady.set(true)
 
-    const token = localStorage.getItem(AUTH_TOKEN_KEY)
+    const token = getStoredAuthToken()
     if (token) {
       try {
         const user = await firstValueFrom(
@@ -79,7 +80,7 @@ export class AuthService {
     this._authReady.set(true)
   }
 
-  async loginWithPassword(email: string, password: string, _remember: boolean): Promise<boolean> {
+  async loginWithPassword(email: string, password: string, remember: boolean): Promise<boolean> {
     try {
       const out = await firstValueFrom(
         this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/login`, {
@@ -89,7 +90,7 @@ export class AuthService {
       )
       const token = String(out?.token || '')
       if (token) {
-        localStorage.setItem(AUTH_TOKEN_KEY, token)
+        storeAuthToken(token, remember)
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
@@ -129,7 +130,7 @@ export class AuthService {
       )
       const token = String(out?.token || '')
       if (token) {
-        localStorage.setItem(AUTH_TOKEN_KEY, token)
+        storeAuthToken(token, true)
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
@@ -170,7 +171,7 @@ export class AuthService {
   }
 
   private clearSession() {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
+    clearStoredAuthToken()
     localStorage.removeItem(VISITOR_MODE_KEY)
     this._isAuthenticated.set(false)
     this._user.set(null)

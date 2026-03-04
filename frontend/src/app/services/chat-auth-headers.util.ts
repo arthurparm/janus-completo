@@ -1,5 +1,4 @@
-import { AUTH_TOKEN_KEY } from './api.config'
-import { decodeTokenUserId } from './auth.utils'
+import { decodeTokenUserId, getStoredAuthToken } from './auth.utils'
 
 export interface ChatStreamAuthHeadersOptions {
   projectId?: string | null
@@ -42,7 +41,7 @@ export function buildChatStreamAuthHeaders(
     headers.set('tracestate', options.tracestate)
   }
   try {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY)
+    const token = getStoredAuthToken()
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
       const uid = decodeTokenUserId(token)

@@ -1,19 +1,18 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { AUTH_TOKEN_KEY } from '../../services/api.config';
-import { decodeTokenUserId } from '../../services/auth.utils';
+import { decodeTokenUserId, getStoredAuthToken } from '../../services/auth.utils';
 import { AppLoggerService } from '../services/app-logger.service';
 
 /**
  * Opcionalmente anexa Authorization: Bearer <token> quando disponível.
- * - Lê token de localStorage pela chave configurável (AUTH_TOKEN_KEY)
+ * - Lê token de localStorage/sessionStorage
  * - Não sobrescreve cabeçalhos Authorization existentes
  * - Não impõe credenciais; requests anônimas continuam funcionando
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const logger = inject(AppLoggerService);
   try {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const token = getStoredAuthToken();
     const setHeaders: Record<string, string> = {};
 
     if (!req.headers.has('Authorization') && token) {

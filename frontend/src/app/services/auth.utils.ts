@@ -1,3 +1,5 @@
+import { AUTH_TOKEN_KEY } from './api.config'
+
 export function decodeTokenUserId(token: string | null): number | null {
   if (!token) return null
   try {
@@ -11,6 +13,37 @@ export function decodeTokenUserId(token: string | null): number | null {
     return Number.isFinite(uid) ? uid : null
   } catch {
     return null
+  }
+}
+
+export function getStoredAuthToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function storeAuthToken(token: string, rememberSession: boolean): void {
+  try {
+    if (rememberSession) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token)
+      sessionStorage.removeItem(AUTH_TOKEN_KEY)
+      return
+    }
+    sessionStorage.setItem(AUTH_TOKEN_KEY, token)
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    // no-op
+  }
+}
+
+export function clearStoredAuthToken(): void {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    // no-op
   }
 }
 
