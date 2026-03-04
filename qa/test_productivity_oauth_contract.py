@@ -48,4 +48,4 @@ def test_canonical_callback_route_still_exists():
 def test_canonical_refresh_route_still_exists():
     client = _client()
     resp = client.post("/api/v1/productivity/oauth/google/refresh", params={"user_id": 1})
-    assert resp.status_code == 403
+    assert resp.status_code == 401

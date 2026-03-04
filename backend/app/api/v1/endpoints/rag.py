@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteIntent, RouteTarget, get_knowledge_routing_policy
+from app.core.security.request_guard import resolve_user_scope_id
 from app.services.memory_service import MemoryService, get_memory_service
 
 try:
@@ -462,11 +463,7 @@ async def rag_user_chat_search_v2(
     http: Request = None,
 ):
     started_at = time.perf_counter()
-    if not user_id:
-        try:
-            user_id = http.headers.get("X-User-Id") if http else None
-        except Exception:
-            user_id = None
+    user_id = resolve_user_scope_id(http, user_id)
     if not user_id:
         _emit_rag_step(
             endpoint="/rag/user_chat",
@@ -595,11 +592,7 @@ async def rag_hybrid_search(
     service: MemoryService = Depends(get_memory_service),
 ):
     started_at = time.perf_counter()
-    try:
-        hdr_uid = http.headers.get("X-User-Id") if http else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(http, user_id)
     if not uid:
         _emit_rag_step(
             endpoint="/rag/hybrid_search",

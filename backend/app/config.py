@@ -363,7 +363,14 @@ class AppSettings(BaseSettings):
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
     AUTH_RESET_RETURN_TOKEN: bool = False
-    AUTH_TRUST_X_USER_ID_HEADER: bool = True
+    AUTH_TRUST_X_USER_ID_HEADER: bool = False
+    AUTH_RATE_LIMIT_ENABLED: bool = True
+    AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {
+        "auth.token": {"max_attempts": 20, "window_seconds": 60},
+        "auth.local_login": {"max_attempts": 10, "window_seconds": 60},
+        "auth.local_request_reset": {"max_attempts": 5, "window_seconds": 60},
+        "auth.local_reset": {"max_attempts": 10, "window_seconds": 60},
+    }
     AI_INTENT_ROUTING_ENABLED: bool = True
     AI_INTENT_RISK_ESCALATION_ENABLED: bool = True
     AI_INTENT_ROUTING_MIN_CONFIDENCE: float = 0.72
@@ -396,9 +403,12 @@ class AppSettings(BaseSettings):
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
-    RABBITMQ_PASSWORD: str = "change_me_rabbitmq_password"
+    RABBITMQ_PASSWORD: SecretStr = SecretStr("change_me_rabbitmq_password")
     RABBITMQ_MANAGEMENT_PORT: int = 15672
     BROKER_USE_MSGPACK: bool = True
+
+    # Tooling safety
+    LAUNCH_APP_ALLOWED_APPS: list[str] = []
 
     # Redis
     REDIS_ENABLED: bool = False

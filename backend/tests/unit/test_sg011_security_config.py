@@ -34,7 +34,7 @@ def test_validate_production_secrets_rejects_insecure_defaults(monkeypatch):
     monkeypatch.setattr(secret_validator.settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(secret_validator.settings, "NEO4J_PASSWORD", SecretStr("password"))
     monkeypatch.setattr(secret_validator.settings, "POSTGRES_PASSWORD", SecretStr("janus_pass"))
-    monkeypatch.setattr(secret_validator.settings, "RABBITMQ_PASSWORD", "janus_pass")
+    monkeypatch.setattr(secret_validator.settings, "RABBITMQ_PASSWORD", SecretStr("janus_pass"))
     monkeypatch.setattr(secret_validator.settings, "AUTH_JWT_SECRET", "dev_secret_change_me")
 
     with pytest.raises(secret_validator.InsecureConfigurationError):
@@ -47,7 +47,7 @@ def test_validate_production_secrets_passes_with_secure_values(monkeypatch):
     monkeypatch.setattr(
         secret_validator.settings, "POSTGRES_PASSWORD", SecretStr("PostgresSecure-123")
     )
-    monkeypatch.setattr(secret_validator.settings, "RABBITMQ_PASSWORD", "RabbitSecure-456")
+    monkeypatch.setattr(secret_validator.settings, "RABBITMQ_PASSWORD", SecretStr("RabbitSecure-456"))
     monkeypatch.setattr(secret_validator.settings, "AUTH_JWT_SECRET", "JwtSecure-789")
 
     secret_validator.validate_production_secrets()

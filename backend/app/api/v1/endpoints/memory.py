@@ -8,6 +8,7 @@ from qdrant_client import models
 
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.generative_memory import generative_memory_service
+from app.core.security.request_guard import resolve_user_scope_id
 from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
 from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
@@ -124,7 +125,7 @@ async def get_memories_timeline(
             detail=f"Invalid date format. Use ISO 8601 (e.g., 2023-01-01T12:00:00Z). Error: {e}",
         )
 
-    resolved_user_id = user_id or request.headers.get("X-User-Id")
+    resolved_user_id = resolve_user_scope_id(request, user_id)
 
     if resolved_user_id:
         try:
@@ -193,7 +194,7 @@ async def get_generative_memories(
     Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
     """
     try:
-        resolved_user_id = user_id or request.headers.get("X-User-Id")
+        resolved_user_id = resolve_user_scope_id(request, user_id)
         resolved_conversation_id = (
             conversation_id
             or request.headers.get("X-Conversation-Id")
@@ -231,7 +232,7 @@ async def add_generative_memory(
         meta = {}
         if importance is not None:
             meta["importance"] = importance
-        resolved_user_id = user_id or request.headers.get("X-User-Id")
+        resolved_user_id = resolve_user_scope_id(request, user_id)
         resolved_conversation_id = (
             conversation_id or request.headers.get("X-Conversation-Id") or request.headers.get("X-Session-Id")
         )
@@ -257,17 +258,17 @@ async def add_generative_memory(
 @router.get("/preferences", response_model=list[UserPreferenceMemoryItem])
 async def get_user_preferences(
     request: Request,
-    user_id: str | None = Query(None, description="User ID (or send X-User-Id header)"),
+    user_id: str | None = Query(None, description="User ID"),
     conversation_id: str | None = Query(None, description="Optional conversation filter"),
     query: str | None = Query(None, description="Optional semantic query"),
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
 ):
-    resolved_user_id = user_id or request.headers.get("X-User-Id")
+    resolved_user_id = resolve_user_scope_id(request, user_id)
     if not resolved_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required (query param or X-User-Id header)",
+            detail="user_id is required (query param or authenticated actor)",
         )
     try:
         items = await user_preference_memory_service.list_preferences(

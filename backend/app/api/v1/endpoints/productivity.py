@@ -57,6 +57,7 @@ import time as _t
 from urllib.parse import urlencode
 
 from app.config import settings
+from app.core.security.request_guard import require_authenticated_actor_id
 
 router = APIRouter(tags=["Productivity"], prefix="/productivity")
 
@@ -122,9 +123,9 @@ async def calendar_add_event(
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, payload.user_id, "calendar.write")
     _t0 = _t.time()
@@ -216,9 +217,9 @@ async def calendar_add_event(
 
 @router.post("/oauth/google/start")
 async def oauth_google_start(payload: OAuthStartRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     try:
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
@@ -248,9 +249,9 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
 async def calendar_list_events(
     user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, user_id, "calendar.read")
     path = f"workspace/productivity/calendar_{user_id}.json"
@@ -281,9 +282,9 @@ class MailSendRequest(BaseModel):
 async def mail_send(
     payload: MailSendRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, payload.user_id, "mail.send")
     _t0 = _t.time()
@@ -347,9 +348,9 @@ async def mail_send(
 async def mail_list(
     user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, user_id, "mail.read")
     path = f"workspace/productivity/mail_{user_id}.json"
@@ -379,9 +380,9 @@ class NoteAddRequest(BaseModel):
 async def notes_add(
     payload: NoteAddRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, payload.user_id, "notes.write")
     _t0 = _t.time()
@@ -486,9 +487,9 @@ async def notes_add(
 async def notes_list(
     user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     _ensure_consent(repo, user_id, "notes.read")
     path = f"workspace/productivity/notes_{user_id}.json"
@@ -505,9 +506,7 @@ async def notes_list(
 
 @router.get("/limits/status")
 async def limits_status(request: Request, user_id: int | None = None):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    if not actor:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    actor = require_authenticated_actor_id(request)
     try:
         actor_id = int(actor)
     except Exception:
@@ -564,11 +563,11 @@ async def limits_status(request: Request, user_id: int | None = None):
 
 @router.get("/oauth/google/start")
 async def google_oauth_start(user_id: int, request: Request, scope: str = "calendar"):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     from app.repositories.user_repository import UserRepository
 
     ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
     redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
@@ -615,9 +614,7 @@ class GoogleOAuthCallbackRequest(BaseModel):
 
 @router.post("/oauth/google/callback")
 async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    if not actor:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    actor = require_authenticated_actor_id(request)
     # troca de código por token
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
     client_secret = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None) or None
@@ -697,11 +694,11 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 
 @router.post("/oauth/google/refresh")
 async def google_oauth_refresh(user_id: int, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     from app.repositories.user_repository import UserRepository
 
     ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
+    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     repo_tok = OAuthTokenRepository()
     tok = repo_tok.get(user_id=int(user_id), provider="google")

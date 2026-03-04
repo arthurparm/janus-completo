@@ -10,6 +10,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import aio_pika
+from pydantic import SecretStr
 from aio_pika.abc import AbstractRobustConnection
 from aiormq.exceptions import (
     ChannelClosed,
@@ -66,6 +67,12 @@ _CONNECTION_ERRORS = Counter(
 _CONSUME_ERRORS = Counter(
     "broker_consume_errors_total", "Total de erros ao consumir mensagens", ["queue"]
 )
+
+
+def _secret_to_plain(value: str | SecretStr | None) -> str:
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return str(value or "")
 
 
 class MessageBroker:
@@ -180,7 +187,8 @@ class MessageBroker:
                 return
             logger.info("Conectando ao RabbitMQ...")
             try:
-                rabbitmq_url = f"amqp://{self.settings.RABBITMQ_USER}:{self.settings.RABBITMQ_PASSWORD}@{self.settings.RABBITMQ_HOST}:{self.settings.RABBITMQ_PORT}/"
+                password = _secret_to_plain(self.settings.RABBITMQ_PASSWORD)
+                rabbitmq_url = f"amqp://{self.settings.RABBITMQ_USER}:{password}@{self.settings.RABBITMQ_HOST}:{self.settings.RABBITMQ_PORT}/"
                 self._connection = await self.connection_factory(
                     rabbitmq_url, client_properties={"connection_name": "janus_system"}
                 )
@@ -192,7 +200,7 @@ class MessageBroker:
                 )
                 # Fallback: tentar localhost para execução fora do Docker
                 try:
-                    fallback_url = f"amqp://{self.settings.RABBITMQ_USER}:{self.settings.RABBITMQ_PASSWORD}@localhost:{self.settings.RABBITMQ_PORT}/"
+                    fallback_url = f"amqp://{self.settings.RABBITMQ_USER}:{password}@localhost:{self.settings.RABBITMQ_PORT}/"
                     logger.info("Tentando fallback de conexão com RabbitMQ em localhost...")
                     self._connection = await self.connection_factory(
                         fallback_url, client_properties={"connection_name": "janus_system_local"}
@@ -755,7 +763,7 @@ class MessageBroker:
         host = self.settings.RABBITMQ_HOST
         port = self.settings.RABBITMQ_MANAGEMENT_PORT
         user = self.settings.RABBITMQ_USER
-        password = self.settings.RABBITMQ_PASSWORD
+        password = _secret_to_plain(self.settings.RABBITMQ_PASSWORD)
         url = f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
 
         def _fetch() -> dict[str, Any] | None:
@@ -851,7 +859,7 @@ class MessageBroker:
         host = self.settings.RABBITMQ_HOST
         port = self.settings.RABBITMQ_MANAGEMENT_PORT
         user = self.settings.RABBITMQ_USER
-        password = self.settings.RABBITMQ_PASSWORD
+        password = _secret_to_plain(self.settings.RABBITMQ_PASSWORD)
         url = (
             f"http://{host}:{port}/api/queues/%2F/{quote(queue_name)}"
             f"?if-unused={str(if_unused).lower()}&if-empty={str(if_empty).lower()}"

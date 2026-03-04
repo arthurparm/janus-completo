@@ -3,6 +3,7 @@ Auto-análise do Janus - Um jeito simples do sistema se entender melhor
 """
 
 from datetime import datetime
+import secrets
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -184,9 +185,7 @@ async def _generate_fun_fact() -> str:
         "Processo informações mais rápido que um cafeína no cérebro! ⚡",
     ]
 
-    import random
-
-    return random.choice(facts)
+    return secrets.choice(facts)
 
 
 def _calculate_overall_health(insights: list) -> str:

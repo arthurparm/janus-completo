@@ -54,6 +54,11 @@ logger.debug("log_file_selected", log_file=log_file, cwd=os.getcwd())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0.5 Validate critical secrets in production before bootstrapping services.
+    from app.core.security.secret_validator import validate_production_secrets
+
+    validate_production_secrets()
+
     # 0. Validate LangSmith Configuration
     if settings.LANGCHAIN_TRACING_V2 == "true":
         if not settings.LANGCHAIN_API_KEY:

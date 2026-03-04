@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.core.infrastructure.auth import create_token
+from app.core.security.auth_rate_limiter import enforce_auth_rate_limit
 from app.core.security.passwords import hash_password, verify_password
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.repositories.user_repository import ConsentRepository, UserRepository
 
 router = APIRouter(tags=["Auth"], prefix="/auth")
@@ -30,10 +32,8 @@ def get_user_repo(request: Request) -> UserRepository:
 async def issue_token(
     payload: TokenRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    if not actor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    actor_id = int(actor)
+    enforce_auth_rate_limit(request, endpoint_key="auth.token", identifier=payload.user_id)
+    actor_id = require_authenticated_actor_id(request)
     target_id = int(payload.user_id)
     if actor_id != target_id and not repo.is_admin(actor_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -137,7 +137,10 @@ class LocalResetResponse(BaseModel):
 
 
 def _can_return_reset_token() -> bool:
-    if str(getattr(settings, "ENVIRONMENT", "")).lower() == "production":
+    env = str(getattr(settings, "ENVIRONMENT", "")).lower().strip()
+    if env in {"production", "development", "staging"}:
+        return False
+    if env not in {"test", "testing", "ci"}:
         return False
     return bool(getattr(settings, "AUTH_RESET_RETURN_TOKEN", False))
 
@@ -254,9 +257,13 @@ async def local_register(
 
 
 @router.post("/local/login", response_model=LocalAuthResponse)
-async def local_login(payload: LocalLoginRequest, repo: UserRepository = Depends(get_user_repo)):
+async def local_login(
+    payload: LocalLoginRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
+):
     identifier = (payload.email or "").strip().lower()
     username = (payload.username or "").strip()
+    limiter_id = identifier or username or "-"
+    enforce_auth_rate_limit(request, endpoint_key="auth.local_login", identifier=limiter_id)
 
     user = None
     if identifier:
@@ -287,8 +294,11 @@ async def local_me(request: Request, repo: UserRepository = Depends(get_user_rep
 
 @router.post("/local/request-reset", response_model=LocalResetResponse)
 async def local_request_reset(
-    payload: LocalResetRequest, repo: UserRepository = Depends(get_user_repo)
+    payload: LocalResetRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
 ):
+    enforce_auth_rate_limit(
+        request, endpoint_key="auth.local_request_reset", identifier=payload.email
+    )
     email = payload.email.strip().lower()
     user = repo.get_by_email(email)
     if not user:
@@ -307,8 +317,9 @@ async def local_request_reset(
 
 @router.post("/local/reset", response_model=LocalResetResponse)
 async def local_reset_password(
-    payload: LocalResetConfirmRequest, repo: UserRepository = Depends(get_user_repo)
+    payload: LocalResetConfirmRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
 ):
+    enforce_auth_rate_limit(request, endpoint_key="auth.local_reset", identifier=payload.token)
     token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
     user = repo.get_by_reset_token(token_hash)
     if not user:

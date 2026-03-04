@@ -13,6 +13,7 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
+from app.core.security.request_guard import resolve_user_scope_id
 from app.services.document_service import DocumentIngestionService
 
 try:
@@ -94,11 +95,7 @@ async def upload_document(
     import time as _t
 
     _t0 = _t.perf_counter()
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
@@ -169,11 +166,7 @@ async def search_documents(
     import time as _t
 
     _t0 = _t.perf_counter()
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         _DOC_SEARCH_REQ.labels("error").inc()
         _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
@@ -245,11 +238,7 @@ async def list_documents(
     request: Request = None,
     limit: int = 100,
 ):
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         return DocListResponse(items=[])
     client = get_async_qdrant_client()
@@ -325,11 +314,7 @@ async def list_documents(
 
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user_id: str | None = None, request: Request = None):
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
@@ -374,11 +359,7 @@ async def link_url(
     request: Request = None,
     service: DocumentIngestionService = Depends(get_doc_service),
 ):
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
@@ -420,11 +401,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
     import time as _t
 
     _t0 = _t.perf_counter()
-    try:
-        hdr_uid = request.headers.get("X-User-Id") if request else None
-    except Exception:
-        hdr_uid = None
-    uid = user_id or hdr_uid
+    uid = resolve_user_scope_id(request, user_id)
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"

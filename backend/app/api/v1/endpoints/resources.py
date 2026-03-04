@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.config import settings
-from app.repositories.user_repository import UserRepository
+from app.core.security.request_guard import require_admin_actor
 from app.services.resource_manager import get_user_gpu_usage
 
 router = APIRouter(tags=["Resources"], prefix="/resources")
@@ -20,10 +20,7 @@ class BudgetSetRequest(BaseModel):
 
 @router.post("/gpu/budget")
 async def set_gpu_budget(req: BudgetSetRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     b = dict(getattr(settings, "TRAINING_GPU_BUDGET_PER_USER", {}) or {})
     b[str(req.user_id)] = float(req.budget)
     settings.TRAINING_GPU_BUDGET_PER_USER = b

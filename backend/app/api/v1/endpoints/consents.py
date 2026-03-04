@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.db import db
 from app.models.consent_models import Consent
 from app.repositories.user_repository import UserRepository
@@ -32,9 +33,9 @@ class ConsentResponse(BaseModel):
 
 @router.post("/", response_model=ConsentResponse)
 async def grant_consent(payload: ConsentRequest, request: Request):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+    actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if not actor or (str(actor) != str(payload.user_id) and not ur.is_admin(int(actor))):
+    if str(actor) != str(payload.user_id) and not ur.is_admin(int(actor)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     s = _get_session()
     try:
@@ -68,12 +69,8 @@ async def list_consents(
     s = _get_session()
     try:
         if request is not None:
-            actor = getattr(request.state, "actor_user_id", None) or request.headers.get(
-                "X-User-Id"
-            )
+            actor = require_authenticated_actor_id(request)
             ur = UserRepository()
-            if not actor:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
             if user_id is None and not ur.is_admin(int(actor)):
                 user_id = str(actor)
             if user_id is not None and (str(actor) != str(user_id)) and not ur.is_admin(int(actor)):
@@ -109,9 +106,9 @@ async def revoke_consent(consent_id: int, request: Request):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Consentimento não encontrado"
             )
-        actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
+        actor = require_authenticated_actor_id(request)
         ur = UserRepository()
-        if not actor or (str(actor) != str(c.user_id) and not ur.is_admin(int(actor))):
+        if str(actor) != str(c.user_id) and not ur.is_admin(int(actor)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         from datetime import datetime
 

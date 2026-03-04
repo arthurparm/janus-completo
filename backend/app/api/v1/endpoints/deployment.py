@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.config import settings
+from app.core.security.request_guard import require_admin_actor
 from app.repositories.deployment_repository import DeploymentRepository
-from app.repositories.user_repository import UserRepository
 from app.services.bias_check_service import BiasCheckService
 
 router = APIRouter(tags=["Deployment"], prefix="/deployment")
@@ -25,19 +25,13 @@ class StageRequest(BaseModel):
 async def stage(
     req: StageRequest, request: Request, repo: DeploymentRepository = Depends(get_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     return repo.stage(req.model_id, req.rollout_percent)
 
 
 @router.post("/publish")
 async def publish(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     try:
         meta_path = os.path.join("/app", "workspace", "models", model_id, "metadata.json")
         if os.path.isfile(meta_path):
@@ -70,10 +64,7 @@ async def publish(model_id: str, request: Request, repo: DeploymentRepository = 
 
 @router.post("/precheck")
 async def precheck(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     svc = BiasCheckService()
     res = svc.run_precheck(model_id)
     try:
@@ -87,8 +78,5 @@ async def precheck(model_id: str, request: Request, repo: DeploymentRepository =
 
 @router.post("/rollback")
 async def rollback(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     return repo.rollback(model_id)

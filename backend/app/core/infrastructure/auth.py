@@ -81,7 +81,7 @@ def get_actor_user_id(request: Request) -> int | None:
             return uid
 
     env = str(getattr(settings, "ENVIRONMENT", "development")).strip().lower()
-    trust_header = bool(getattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True))
+    trust_header = bool(getattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", False))
     if env == "production" or not trust_header:
         return None
 

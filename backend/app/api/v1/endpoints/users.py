@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import (
+    require_admin_actor,
+    require_same_user_or_admin,
+)
 from app.models.consent_scopes import is_valid_scope
 from app.repositories.user_repository import ConsentRepository, UserRepository
 
@@ -48,9 +52,7 @@ async def assign_role(
     request: Request,
     repo: UserRepository = Depends(get_user_repo),
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    if not actor or not repo.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    require_admin_actor(request)
     ok = repo.assign_role(user_id, payload.role_name)
     if not ok:
         raise HTTPException(
@@ -83,10 +85,7 @@ async def add_consent(
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    require_same_user_or_admin(request, int(user_id))
     if not is_valid_scope(payload.scope):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid scope")
     from datetime import datetime
@@ -111,10 +110,7 @@ async def add_consent(
 async def list_consents(
     user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    require_same_user_or_admin(request, int(user_id))
     items = repo.list_consents(user_id=user_id)
     return [
         {
@@ -131,10 +127,7 @@ async def list_consents(
 async def revoke_consent(
     user_id: int, scope: str, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = getattr(request.state, "actor_user_id", None) or request.headers.get("X-User-Id")
-    ur = UserRepository()
-    if not actor or (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    require_same_user_or_admin(request, int(user_id))
     if not is_valid_scope(scope):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid scope")
     ok = repo.revoke_consent(user_id=user_id, scope=scope)

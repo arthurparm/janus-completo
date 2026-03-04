@@ -1,10 +1,35 @@
+import os
 import structlog
 import platform
+import re
 import subprocess
 
 from langchain.tools import tool
 
+from app.config import settings
+
 logger = structlog.get_logger(__name__)
+_DISALLOWED_CHARS = set("&;|`$><\n\r")
+_APP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._/\- :]{1,256}$")
+
+
+def _is_allowed_app_name(app_name: str) -> bool:
+    if not app_name:
+        return False
+    if any(char in _DISALLOWED_CHARS for char in app_name):
+        return False
+    if not _APP_NAME_PATTERN.fullmatch(app_name):
+        return False
+    return True
+
+
+def _is_allowlisted_app(app_name: str) -> bool:
+    allowed = getattr(settings, "LAUNCH_APP_ALLOWED_APPS", []) or []
+    normalized = {str(item).strip().lower() for item in allowed if str(item).strip()}
+    if not normalized:
+        return True
+    base_name = os.path.basename(app_name).lower()
+    return app_name.lower() in normalized or base_name in normalized
 
 
 @tool
@@ -25,12 +50,14 @@ def launch_app(app_name: str) -> str:
     app_name = app_name.strip()
 
     logger.info("log_info", message=f"Tentando iniciar aplicativo: {app_name} no sistema {system}")
+    if not _is_allowed_app_name(app_name):
+        return "Erro: app_name contém caracteres inválidos ou potencialmente perigosos."
+    if not _is_allowlisted_app(app_name):
+        return "Erro: app_name não está na allowlist configurada para lançamento."
 
     try:
         if system == "Windows":
-            # 'start' é um comando interno do shell cmd.exe
-            # start "" "app_name" é a sintaxe segura
-            subprocess.Popen(f'start "" "{app_name}"', shell=True)
+            os.startfile(app_name)  # type: ignore[attr-defined]
         elif system == "Darwin":  # macOS
             subprocess.Popen(["open", "-a", app_name])
         elif system == "Linux":
