@@ -615,6 +615,10 @@ export interface SelfStudyStatusResponse {
     status: string
     mode: string
     created_at?: string | null
+    files_total?: number
+    files_processed?: number
+    current_file_path?: string | null
+    current_file_index?: number | null
   } | null
   recent_runs: SelfStudyRun[]
 }

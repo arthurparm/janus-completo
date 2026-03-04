@@ -1,4 +1,6 @@
+from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -170,3 +172,43 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     query = captured_query["value"]
     assert "FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |" in query
     assert ")\n            WITH m\n            OPTIONAL MATCH (cf:CodeFile {path: $file_path})" in query
+
+
+def test_get_self_study_status_includes_running_progress():
+    service = _new_service(citations=[])
+    now = datetime(2026, 3, 4, 19, 10, tzinfo=timezone.utc)
+
+    class _Repo:
+        def get_self_study_state(self):
+            return SimpleNamespace(last_studied_commit="abc123", last_success_at=now)
+
+        def get_latest_running_self_study(self):
+            return SimpleNamespace(
+                id=99,
+                status="running",
+                mode="incremental",
+                created_at=now,
+            )
+
+        def get_self_study_run_progress(self, run_id: int):
+            assert run_id == 99
+            return {
+                "files_total": 429,
+                "files_processed": 7,
+                "current_file_path": "backend/app/services/autonomy_admin_service.py",
+                "current_file_index": 8,
+            }
+
+        def list_self_study_runs(self, limit: int = 5):
+            assert limit == 5
+            return []
+
+    service._repo = _Repo()  # type: ignore[assignment]
+
+    status = service.get_self_study_status()
+    assert status["last_studied_commit"] == "abc123"
+    assert status["running"]["id"] == 99
+    assert status["running"]["files_total"] == 429
+    assert status["running"]["files_processed"] == 7
+    assert status["running"]["current_file_index"] == 8
+    assert status["running"]["current_file_path"] == "backend/app/services/autonomy_admin_service.py"

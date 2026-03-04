@@ -555,6 +555,11 @@ class AutonomyAdminService:
         )
         total_candidates = len(files)
         files = files[: self.MAX_FILES_PER_RUN]
+        self._repo.update_self_study_run_progress(
+            run.id,
+            files_total=len(files),
+            files_processed=0,
+        )
         processed = 0
         errors = 0
         started = time.perf_counter()
@@ -577,10 +582,15 @@ class AutonomyAdminService:
                 summary = self._summarize_file(rel)
                 await self._persist_self_memory(rel_path=rel, summary=summary, sha_after=item.get("sha_after"))
                 self._repo.update_self_study_file_status(file_row.id, "completed")
-                processed += 1
             except Exception as e:
                 errors += 1
                 self._repo.update_self_study_file_status(file_row.id, "failed", error=str(e))
+            finally:
+                processed += 1
+                self._repo.update_self_study_run_progress(
+                    run.id,
+                    files_processed=processed,
+                )
 
         truncated = total_candidates > self.MAX_FILES_PER_RUN
         final_status = (
@@ -629,6 +639,7 @@ class AutonomyAdminService:
                 "status": running.status,
                 "mode": running.mode,
                 "created_at": running.created_at.isoformat() if running.created_at else None,
+                **(self._repo.get_self_study_run_progress(running.id) or {}),
             }
             if running
             else None,

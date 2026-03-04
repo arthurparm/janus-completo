@@ -26,6 +26,8 @@ import { UiButtonComponent } from '../../../shared/components/ui/button/button.c
 export class AdminAutonomiaComponent {
   private readonly api = inject(BackendApiService)
   private readonly destroyRef = inject(DestroyRef)
+  private selfStudyPollTimer: ReturnType<typeof setInterval> | null = null
+  private readonly selfStudyPollIntervalMs = 1500
 
   readonly loading = signal(true)
   readonly syncing = signal(false)
@@ -51,6 +53,7 @@ export class AdminAutonomiaComponent {
   )
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.stopSelfStudyPolling())
     this.refreshAll()
   }
 
@@ -76,16 +79,7 @@ export class AdminAutonomiaComponent {
   }
 
   refreshSelfStudy() {
-    this.api.getAutonomyAdminSelfStudyStatus()
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        catchError((err) => {
-          this.error.set(this.extractErrorMessage(err, 'Falha ao carregar status de autoestudo.'))
-          return of({ recent_runs: [] } as SelfStudyStatusResponse)
-        })
-      )
-      .subscribe((status) => this.selfStudyStatus.set(status))
-
+    this.refreshSelfStudyStatus()
     this.api.listAutonomyAdminSelfStudyRuns(20)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -95,6 +89,53 @@ export class AdminAutonomiaComponent {
         })
       )
       .subscribe((resp) => this.selfStudyRuns.set(resp.items || []))
+  }
+
+  private refreshSelfStudyStatus() {
+    this.api.getAutonomyAdminSelfStudyStatus()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          this.error.set(this.extractErrorMessage(err, 'Falha ao carregar status de autoestudo.'))
+          return of({ recent_runs: [] } as SelfStudyStatusResponse)
+        })
+      )
+      .subscribe((status) => {
+        const wasRunning = Boolean(this.selfStudyStatus()?.running)
+        const isRunning = Boolean(status.running)
+        this.selfStudyStatus.set(status)
+        if (isRunning) {
+          this.startSelfStudyPolling()
+        } else {
+          this.stopSelfStudyPolling()
+          if (wasRunning) {
+            this.refreshSelfStudyRuns()
+          }
+        }
+      })
+  }
+
+  private refreshSelfStudyRuns() {
+    this.api.listAutonomyAdminSelfStudyRuns(20)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          this.error.set(this.extractErrorMessage(err, 'Falha ao carregar historico de autoestudo.'))
+          return of({ items: [] as SelfStudyRun[] })
+        })
+      )
+      .subscribe((resp) => this.selfStudyRuns.set(resp.items || []))
+  }
+
+  private startSelfStudyPolling() {
+    if (this.selfStudyPollTimer) return
+    this.selfStudyPollTimer = setInterval(() => this.refreshSelfStudyStatus(), this.selfStudyPollIntervalMs)
+  }
+
+  private stopSelfStudyPolling() {
+    if (!this.selfStudyPollTimer) return
+    clearInterval(this.selfStudyPollTimer)
+    this.selfStudyPollTimer = null
   }
 
   syncBacklog() {

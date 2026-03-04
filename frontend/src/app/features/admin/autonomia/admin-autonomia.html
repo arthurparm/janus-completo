@@ -101,6 +101,16 @@
         <p><strong>Ultimo commit estudado:</strong> {{ selfStudyStatus()?.last_studied_commit || 'n/a' }}</p>
         <p><strong>Ultimo sucesso:</strong> {{ selfStudyStatus()?.last_success_at || 'n/a' }}</p>
         <p><strong>Run em andamento:</strong> {{ selfStudyStatus()?.running ? ('#' + selfStudyStatus()?.running?.id + ' - ' + selfStudyStatus()?.running?.status) : 'nao' }}</p>
+        @if (selfStudyStatus()?.running) {
+          <p class="study-progress">
+            <strong>Progresso:</strong>
+            arquivo {{ selfStudyStatus()?.running?.current_file_index || ((selfStudyStatus()?.running?.files_processed || 0) + 1) }}/{{ selfStudyStatus()?.running?.files_total || '?' }}
+          </p>
+          <p class="study-current-file">
+            <strong>Arquivo atual:</strong>
+            <span class="mono">{{ selfStudyStatus()?.running?.current_file_path || 'aguardando...' }}</span>
+          </p>
+        }
       </div>
 
       @if (!selfStudyRuns().length) {

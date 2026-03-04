@@ -399,6 +399,27 @@ class AutonomyAdminRepository:
             if not self._session:
                 s.close()
 
+    def update_self_study_run_progress(
+        self,
+        run_id: int,
+        *,
+        files_total: int | None = None,
+        files_processed: int | None = None,
+    ) -> None:
+        s = self._get_session()
+        try:
+            run = s.query(AutonomySelfStudyRun).filter(AutonomySelfStudyRun.id == run_id).first()
+            if not run:
+                return
+            if files_total is not None:
+                run.files_total = int(files_total)
+            if files_processed is not None:
+                run.files_processed = int(files_processed)
+            s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
     def finish_self_study_run(
         self,
         run_id: int,
@@ -479,6 +500,38 @@ class AutonomyAdminRepository:
                 .order_by(AutonomySelfStudyRun.created_at.desc())
                 .first()
             )
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_self_study_run_progress(self, run_id: int) -> dict[str, Any] | None:
+        s = self._get_session()
+        try:
+            run = s.query(AutonomySelfStudyRun).filter(AutonomySelfStudyRun.id == run_id).first()
+            if not run:
+                return None
+            current_file = (
+                s.query(AutonomySelfStudyFile)
+                .filter(
+                    and_(
+                        AutonomySelfStudyFile.run_id == run_id,
+                        AutonomySelfStudyFile.summary_status == "running",
+                    )
+                )
+                .order_by(AutonomySelfStudyFile.id.desc())
+                .first()
+            )
+            files_total = int(run.files_total or 0)
+            files_processed = int(run.files_processed or 0)
+            current_index = None
+            if current_file and files_total > 0:
+                current_index = min(files_processed + 1, files_total)
+            return {
+                "files_total": files_total,
+                "files_processed": files_processed,
+                "current_file_path": current_file.file_path if current_file else None,
+                "current_file_index": current_index,
+            }
         finally:
             if not self._session:
                 s.close()
