@@ -46,6 +46,7 @@ class AppSettings(BaseSettings):
     # Qdrant
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
+    QDRANT_HTTPS: bool = False
     QDRANT_API_KEY: SecretStr | None = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
 

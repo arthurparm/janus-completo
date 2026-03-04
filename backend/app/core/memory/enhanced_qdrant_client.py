@@ -75,6 +75,7 @@ class EnhancedQdrantClient:
             "grpc_port": grpc_port,
             "prefer_grpc": prefer_grpc,
             "timeout": timeout_config.connection_timeout,
+            "https": bool(kwargs.pop("https", getattr(settings, "QDRANT_HTTPS", False))),
         }
         if api_key:
             client_kwargs["api_key"] = api_key

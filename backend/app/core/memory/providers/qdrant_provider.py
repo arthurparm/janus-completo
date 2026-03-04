@@ -44,6 +44,7 @@ class QdrantProvider:
             client_kwargs: dict[str, Any] = {
                 "host": self.settings.QDRANT_HOST,
                 "port": self.settings.QDRANT_PORT,
+                "https": bool(getattr(self.settings, "QDRANT_HTTPS", False)),
             }
             if qdrant_api_key:
                 client_kwargs["api_key"] = qdrant_api_key
