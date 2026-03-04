@@ -46,3 +46,18 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Baixa
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
+
+### 8. Acesso Não Autenticado a Endpoints de Sistema Operacional
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Alta
+- **Descrição:** O script do agente Windows inicia um servidor FastAPI expondo rotas sensíveis como `/screenshot`, `/notify` e TTS (`/speak`) totalmente sem verificação de autenticação ou chaves da API, permitindo que qualquer elemento da LAN execute ações arbitrárias na interface do host.
+- **Ação Recomendada:** Proteger os endpoints com verificação via Header `X-API-Key` ou Bearer token simétrico acordado com o Container cliente, e fazer o binding preferencial via localhost seguro.
+
+## Checklist e Gaps de Segurança
+
+* [ ] **AuthZ em Workspaces**: Bloquear acessos anônimos para endpoints críticos em `workspace.py` (adicionar `Depends(get_current_user)`).
+* [ ] **Proteção contra Brute Force**: Habilitar `@limiter.limit` em `backend/app/api/v1/endpoints/auth.py` (login/refresh).
+* [ ] **Hardcoded Secrets Defaults**: Garantir bloqueio estrito de valores fallback em `config.py` (ex: `NEO4J_PASSWORD`, `POSTGRES_PASSWORD`).
+* [ ] **Remoção de PII**: Evitar logar payloads integrais de requests e prever sanitização em todos os logs críticos de domínio.
+* [ ] **Lock de Dependências**: Implementar geração de arquivo de lock file na etapa de CI.
+* [ ] **Proteção Agent Windows**: Aplicar checagem básica de AuthN nas rotas em `windows_agent.py`.

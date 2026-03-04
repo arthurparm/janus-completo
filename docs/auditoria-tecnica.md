@@ -73,3 +73,29 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+## Achados do dia (Atual)
+
+### 7. Fragilidade de Métricas (Testes)
+**Descrição:** Observou-se que as métricas do Prometheus instanciadas a nível de módulo falham em re-execuções de testes unitários devido ao `ValueError: Duplicated timeseries in CollectorRegistry`.
+**Evidências:**
+- `backend/app/core/workers/neural_training_system.py`: Instanciação estática de `Counter` e `Histogram` como `_TRAINING_JOBS` e `_TRAINING_LATENCY` que não usam controle de duplicidade no `REGISTRY`.
+
+**Próximos passos:**
+- Criar a issue OQ-017 para isolar o registro de métricas em singletons no startup ou injetar blocos try-except para recuperar instâncias do `REGISTRY`.
+
+### 8. Gerador Pseudo-Aleatório Inseguro
+**Descrição:** Geração de valores no sistema utiliza pacotes de entropia predizível (inseguros em contextos onde é necessário RNG criptográfico forte).
+**Evidências:**
+- `backend/app/api/v1/endpoints/auto_analysis.py`: O método `_generate_fun_fact()` utiliza a biblioteca padrão `random` levantando avisos estáticos do Bandit (B311).
+
+**Próximos passos:**
+- Criar a issue SG-020 para padronizar o uso de `secrets` em vez de `random` em toda a aplicação base.
+
+### 9. Acesso Não Autenticado a Capacidades do OS
+**Descrição:** A aplicação auxiliar do agente de OS roda expondo as capacidades profundas (como screenshot de janelas e notificação de toast) em interfaces de rede sem qualquer autenticação, constituindo um risco se for vinculada na LAN com outras máquinas.
+**Evidências:**
+- `backend/windows_agent.py`: As rotas `/screenshot`, `/notify` e TTS (`/speak`) respondem ativamente via FastAPI para qualquer client requirinte na rede em que ele se encontre rodando (normalmente host Windows).
+
+**Próximos passos:**
+- Adicionar issue SG-021 para planejar uma limitação de host (bind estrito local) ou chave pré-compartilhada para interagir com o agente Windows.

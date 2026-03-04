@@ -97,9 +97,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
-
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Substituir pseudo-random generator (Bandit B311) no auto_analysis.py por secrets | P2 | S | ideia |
+| SG-021 | Protecao de acesso nao autenticado ao windows_agent.py | P0 | S | ideia |
+
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -120,6 +122,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
+| OQ-017 | Refatorar inicializacao de metricas Prometheus para evitar Duplicate Registration em testes | P1 | S | ideia |
 
 ---
 
@@ -238,6 +241,39 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dependencias: telemetria historica confiavel, schema de feedback por acao e fallback deterministico.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [OQ-017] Registro Duplicado de Métricas no Prometheus
+- Problema atual: A instanciação de métricas no escopo do módulo (`Counter`, `Histogram` em `neural_training_system.py`) falha com `ValueError: Duplicated timeseries` durante execução de testes unitários repetidos.
+- Solucao proposta: Envolver a inicialização das métricas com blocos `try...except ValueError` e acessar os coletores existentes de `prometheus_client.REGISTRY` caso já instanciadas, ou empacotar em singletons.
+- Impacto esperado: Estabilidade da suíte de testes e inicialização segura de componentes monitorados.
+- Riscos: Redução de visibilidade ou zeragem acidental de contadores caso instanciados incorretamente no runtime.
+- Dependencias: `prometheus_client`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Uso de Pseudo-Random Generator Inseguro (Bandit B311)
+- Problema atual: `backend/app/api/v1/endpoints/auto_analysis.py` utiliza o módulo padrão `random` (`random.choice`) para geração de insights/fatos, alertado pelo linter de segurança.
+- Solucao proposta: Substituir `import random` por `import secrets` para geração de escolhas criptograficamente seguras, mesmo que em contexto não crítico, visando compliance total de análise estática.
+- Impacto esperado: Zero alertas de segurança estática no pipeline de CI.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Acesso Não Autenticado a Capacidades do OS (Windows Agent)
+- Problema atual: `backend/windows_agent.py` opera como serviço FastAPI independente expondo rotas sensíveis (como `/screenshot`, `/notify` e TTS) sem nenhuma restrição ou validação de autenticação na rede.
+- Solucao proposta: Implementar uma camada básica de autenticação, como verificação de um token estático/API Key ou restrição severa de interface de rede local (bind only `localhost` se container puder falar via Docker Gateway + Auth Header).
+- Impacto esperado: Proteção contra injeção ou espionagem por qualquer ator presente na mesma sub-rede da máquina host.
+- Riscos: Interrupção temporária de serviços de fallback local caso cliente (Container) não seja atualizado para injetar a chave requerida.
+- Dependencias: Modificação simultânea no Core Containerizado para passar tokens ao usar Agent.
+- Prioridade: P0
+- Esforco: S
 - Dono: a definir
 - Status: ideia
 
