@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.agents import AgentRole
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.collaboration_service import CollaborationService, get_collaboration_service
 
 try:
@@ -24,7 +25,10 @@ except Exception:
         CRITICAL = 4
 
 
-router = APIRouter(tags=["Collaboration"])
+router = APIRouter(
+    tags=["Collaboration"],
+    dependencies=[Depends(require_authenticated_actor_id)],
+)
 logger = structlog.get_logger(__name__)
 
 # --- Pydantic Models (DTOs) ---
