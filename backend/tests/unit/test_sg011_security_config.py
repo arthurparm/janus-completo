@@ -51,3 +51,9 @@ def test_validate_production_secrets_passes_with_secure_values(monkeypatch):
     monkeypatch.setattr(secret_validator.settings, "AUTH_JWT_SECRET", "JwtSecure-789")
 
     secret_validator.validate_production_secrets()
+
+
+def test_auth_admin_cpf_allowlist_parses_and_normalizes():
+    settings = AppSettings(_env_file=None, AUTH_ADMIN_CPF_ALLOWLIST="503.024.278-30, 12345678901")
+
+    assert settings.AUTH_ADMIN_CPF_ALLOWLIST == ["50302427830", "12345678901"]

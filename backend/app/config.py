@@ -364,6 +364,7 @@ class AppSettings(BaseSettings):
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
     AUTH_RESET_RETURN_TOKEN: bool = False
     AUTH_TRUST_X_USER_ID_HEADER: bool = False
+    AUTH_ADMIN_CPF_ALLOWLIST: list[str] = []
     AUTH_RATE_LIMIT_ENABLED: bool = True
     AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {
         "auth.token": {"max_attempts": 20, "window_seconds": 60},
@@ -613,6 +614,32 @@ class AppSettings(BaseSettings):
         if isinstance(v, list):
             return [str(x).strip().lower() for x in v if str(x).strip()]
         return []
+
+    @field_validator("AUTH_ADMIN_CPF_ALLOWLIST", mode="before")
+    def _parse_auth_admin_cpf_allowlist(cls, v: Any):
+        def _normalize(value: Any) -> str:
+            return "".join(ch for ch in str(value) if ch.isdigit())
+
+        items: list[str] = []
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return []
+            if s.startswith("["):
+                try:
+                    arr = json.loads(s)
+                    items = [str(x).strip() for x in arr if str(x).strip()]
+                except Exception:
+                    items = [x.strip() for x in s.split(",") if x.strip()]
+            else:
+                items = [x.strip() for x in s.split(",") if x.strip()]
+        elif isinstance(v, list):
+            items = [str(x).strip() for x in v if str(x).strip()]
+        else:
+            return []
+
+        normalized = [_normalize(item) for item in items]
+        return [cpf for cpf in normalized if cpf]
 
     # ======= Validadores para variáveis de ambiente complexas =======
 

@@ -145,6 +145,56 @@ def _can_return_reset_token() -> bool:
     return bool(getattr(settings, "AUTH_RESET_RETURN_TOKEN", False))
 
 
+def _normalize_cpf(value: str | None) -> str:
+    if not value:
+        return ""
+    return "".join(ch for ch in str(value) if ch.isdigit())
+
+
+def _cpf_hash_scope(value: str | None) -> str:
+    normalized = _normalize_cpf(value)
+    if not normalized:
+        return ""
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"cpf_hash:{digest}"
+
+
+def _is_allowlisted_admin_cpf(value: str | None) -> bool:
+    normalized = _normalize_cpf(value)
+    if not normalized:
+        return False
+    allowlist = getattr(settings, "AUTH_ADMIN_CPF_ALLOWLIST", []) or []
+    return normalized in allowlist
+
+
+def _ensure_admin_role_for_user(repo: UserRepository, user_id: int) -> None:
+    if not repo.has_role(int(user_id), "ADMIN"):
+        repo.assign_role(int(user_id), "ADMIN")
+
+
+def _should_promote_user_to_admin_by_cpf(user_id: int) -> bool:
+    allowlist = getattr(settings, "AUTH_ADMIN_CPF_ALLOWLIST", []) or []
+    if not allowlist:
+        return False
+
+    allow_scopes = {_cpf_hash_scope(cpf) for cpf in allowlist}
+    allow_scopes.discard("")
+    if not allow_scopes:
+        return False
+
+    try:
+        consents = ConsentRepository().list_consents(int(user_id))
+    except Exception:
+        return False
+
+    for consent in consents:
+        if not getattr(consent, "granted", False):
+            continue
+        if getattr(consent, "scope", "") in allow_scopes:
+            return True
+    return False
+
+
 def _ensure_firebase_initialized() -> None:
     import firebase_admin
     from app.core.infrastructure.firebase import get_firebase_service
@@ -240,9 +290,17 @@ async def local_register(
         password_hash=pw_hash,
     )
 
-    if not repo.has_any_admin():
-        if not repo.has_role(int(user.id), "ADMIN"):
-            repo.assign_role(int(user.id), "ADMIN")
+    cpf_scope = _cpf_hash_scope(payload.cpf)
+    if cpf_scope:
+        try:
+            ConsentRepository().add_consent(int(user.id), scope=cpf_scope, granted=True)
+        except Exception:
+            pass
+
+    if _is_allowlisted_admin_cpf(payload.cpf):
+        _ensure_admin_role_for_user(repo, int(user.id))
+    elif not repo.has_any_admin():
+        _ensure_admin_role_for_user(repo, int(user.id))
     else:
         if not repo.has_role(int(user.id), "USER"):
             repo.assign_role(int(user.id), "USER")
@@ -276,6 +334,9 @@ async def local_login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if _should_promote_user_to_admin_by_cpf(int(user.id)):
+        _ensure_admin_role_for_user(repo, int(user.id))
 
     tok = create_token(int(user.id), 3600)
     return LocalAuthResponse(token=tok, user=_build_local_user(repo, user))
