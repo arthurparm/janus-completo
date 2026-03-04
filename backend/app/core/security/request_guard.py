@@ -17,7 +17,7 @@ def get_request_actor_id(request: Request | None) -> int | None:
         return None
 
 
-def require_authenticated_actor_id(request: Request | None) -> int:
+def require_authenticated_actor_id(request: Request) -> int:
     actor_id = get_request_actor_id(request)
     if actor_id is None:
         raise HTTPException(
@@ -26,14 +26,14 @@ def require_authenticated_actor_id(request: Request | None) -> int:
     return actor_id
 
 
-def require_admin_actor(request: Request | None) -> int:
+def require_admin_actor(request: Request) -> int:
     actor_id = require_authenticated_actor_id(request)
     if not UserRepository().is_admin(actor_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
     return actor_id
 
 
-def require_same_user_or_admin(request: Request | None, target_user_id: int) -> int:
+def require_same_user_or_admin(request: Request, target_user_id: int) -> int:
     actor_id = require_authenticated_actor_id(request)
     if actor_id != int(target_user_id) and not UserRepository().is_admin(actor_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
