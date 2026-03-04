@@ -98,6 +98,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
 
+| SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
+| SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -116,6 +118,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-010 | Postmortem template e playbook de incidentes | P1 | S | ideia |
 | OQ-011 | Cobertura automatizada das 231 APIs com relatorio JSON e evidencias Docker | P0 | M | feito (2026-02-21, automacao entregue; inventario atual 230/231) |
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
+| OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
+| OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 
 ---
 
@@ -153,6 +157,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | PL-008 | Conectores nativos (GitHub, Notion, Jira, Slack, GDrive) | P2 | L | ideia |
 | PL-009 | Pipeline de ingestao em lote com dedupe e retry robusto | P1 | M | ideia |
 | PL-010 | Data catalog interno para fontes de conhecimento | P2 | M | ideia |
+| PL-011 | Fixar dependências do Backend (lockfile) e versionamento de pacotes críticos (asyncpg) | P1 | M | ideia |
 
 ---
 
