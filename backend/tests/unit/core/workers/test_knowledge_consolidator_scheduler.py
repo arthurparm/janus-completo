@@ -1,5 +1,6 @@
 import asyncio
 import types
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -86,3 +87,30 @@ async def test_consolidate_batch_uses_lock_to_prevent_parallel_runs():
     )
 
     assert max_active == 1
+
+
+def test_normalize_point_id_preserves_valid_uuid():
+    kc = KnowledgeConsolidator()
+    point_id = str(uuid.uuid4())
+
+    normalized = kc._normalize_point_id(point_id)
+
+    assert normalized == point_id
+
+
+def test_normalize_point_id_maps_non_uuid_strings_to_uuid5():
+    kc = KnowledgeConsolidator()
+    point_id = "conversation:abc123"
+
+    normalized = kc._normalize_point_id(point_id)
+
+    assert isinstance(normalized, str)
+    assert normalized == str(uuid.uuid5(uuid.NAMESPACE_DNS, point_id))
+
+
+def test_normalize_point_id_preserves_numeric_ids_as_int():
+    kc = KnowledgeConsolidator()
+
+    normalized = kc._normalize_point_id("123")
+
+    assert normalized == 123

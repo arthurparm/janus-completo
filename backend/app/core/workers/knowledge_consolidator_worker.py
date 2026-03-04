@@ -85,16 +85,22 @@ class KnowledgeConsolidator:
 
         return chunks
 
-    def _normalize_point_id(self, experience_id: str) -> str | int:
+    def _normalize_point_id(self, experience_id: str | int) -> str | int:
         """
         Aplica o mesmo mapeamento usado na ingestão do MemoryCore:
-        - tenta converter para int;
+        - mantém int quando possível;
+        - mantém UUID válido sem alterar;
         - caso contrário, UUID5 determinístico baseado na string do ID.
         """
         try:
             return int(experience_id)
         except Exception:
-            return str(uuid.uuid5(uuid.NAMESPACE_DNS, str(experience_id)))
+            exp_id_str = str(experience_id)
+            try:
+                uuid.UUID(exp_id_str)
+                return exp_id_str
+            except Exception:
+                return str(uuid.uuid5(uuid.NAMESPACE_DNS, exp_id_str))
 
     async def _initialize(self):
         """Inicializa componentes (lazy)."""

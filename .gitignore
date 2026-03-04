@@ -123,7 +123,8 @@ _bmad/
 # Temporary artifacts
 # -----------------------------
 coverage/
-outputs/tmp/
-outputs/backups/
+outputs/*
 backend/evals/technical-qa/runs/
 evidencia.txt
+.playwright-cli/*
+output/*
