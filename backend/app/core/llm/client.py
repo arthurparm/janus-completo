@@ -1,8 +1,8 @@
-import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
 
+import structlog
 from langchain_core.language_models.chat_models import BaseChatModel
 from prometheus_client import Counter, Histogram
 
@@ -77,6 +77,8 @@ class LLMClient:
         self.project_id = project_id
         self.settings = config if config is not None else settings
         self.circuit_breaker = circuit_breaker
+        self._last_provider = provider
+        self._last_model = model
 
         # Delegates
         self.adapter = get_adapter(base, provider)
@@ -199,6 +201,8 @@ class LLMClient:
         cached_entry = response_cache.get(prompt, self.role.value, priority_val)
         if cached_entry:
             logger.info("log_info", message=f"LLM Cache HIT for {self.provider}/{self.model}")
+            self._last_provider = str(cached_entry.get("provider", self.provider))
+            self._last_model = str(cached_entry.get("model", self.model))
             return cached_entry["response"]
 
         self._validate_prompt(prompt)
@@ -232,6 +236,8 @@ class LLMClient:
 
         start = time.perf_counter()
         pricing = _get_model_pricing(self.provider, self.model)
+        self._last_provider = self.provider
+        self._last_model = self.model
 
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
@@ -441,6 +447,8 @@ class LLMClient:
                         LLM_REQUESTS.labels(
                             "ollama", fallback_model, self.role.value, "fallback_success", ""
                         ).inc()
+                        self._last_provider = "ollama"
+                        self._last_model = fallback_model
                         return sanitized_text
                     else:
                         logger.warning("Fallback Ollama falhou no health check.")
@@ -480,8 +488,8 @@ class LLMClient:
 
         return {
             "response": text,
-            "provider": self.provider,
-            "model": self.model,
+            "provider": self._last_provider,
+            "model": self._last_model,
             "role": self.role.value,
             "reasoning": reasoning,
             # Placeholder para usage

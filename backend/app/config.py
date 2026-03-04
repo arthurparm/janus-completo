@@ -252,11 +252,11 @@ class AppSettings(BaseSettings):
     RAG_RERANK_MAX_CONTENT_CHARS: int = 1200
 
     # Preço por 1k tokens (USD) por provedor
-    # Valores padrão podem ser ajustados via .env conforme necessidade
-    OPENAI_COST_PER_1K_INPUT_USD: float = 5.0
-    OPENAI_COST_PER_1K_OUTPUT_USD: float = 15.0
-    GEMINI_COST_PER_1K_INPUT_USD: float = 0.5
-    GEMINI_COST_PER_1K_OUTPUT_USD: float = 1.5
+    # Valores padrão conservadores para evitar fallback indevido por teto de custo.
+    OPENAI_COST_PER_1K_INPUT_USD: float = 0.005
+    OPENAI_COST_PER_1K_OUTPUT_USD: float = 0.015
+    GEMINI_COST_PER_1K_INPUT_USD: float = 0.0005
+    GEMINI_COST_PER_1K_OUTPUT_USD: float = 0.0015
     OLLAMA_COST_PER_1K_INPUT_USD: float = 0.0
     OLLAMA_COST_PER_1K_OUTPUT_USD: float = 0.0
     DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00028
@@ -274,39 +274,32 @@ class AppSettings(BaseSettings):
     OLLAMA_GPU_LAYERS: int | None = None  # camadas na GPU (auto se None)
 
     # Modularidade: candidatos por papel
-    # ESTRATÉGIA: OPENROUTER FIRST -> LOCAL FALLBACK
+    # Estratégia padrão: prioriza provedores cloud compatíveis com o roteador atual.
     LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {
         "orchestrator": [
-            "openrouter:deepseek/deepseek-r1-0528:free",
-            "openrouter:google/gemini-2.0-flash-exp:free",
-            "openrouter:tngtech/deepseek-r1t-chimera:free",
-            # Fallback Local se OpenRouter falhar/limitar
-            "ollama:deepseek-r1:14b",
+            "deepseek:deepseek-chat",
+            "xai:grok-4-1-fast-reasoning",
+            "openai:gpt-5-mini",
         ],
         "code_generator": [
-            "openrouter:qwen/qwen3-coder:free",
-            "openrouter:deepseek/deepseek-r1-0528:free",
-            "openrouter:mistralai/devstral-2512:free",
-            # Fallback Local
-            "ollama:qwen2.5-coder:32b",
+            "deepseek:deepseek-reasoner",
+            "openai:gpt-5-mini",
+            "xai:grok-4-1-fast-reasoning",
         ],
         "knowledge_curator": [
-            "openrouter:meta-llama/llama-3.3-70b-instruct:free",
-            "openrouter:meta-llama/llama-3.1-405b-instruct:free",
-            "openrouter:nvidia/nemotron-3-nano-30b-a3b:free",
-            # Fallback Local
-            "ollama:qwen2.5:14b",
+            "deepseek:deepseek-chat",
+            "openai:gpt-5-mini",
+            "xai:grok-4-1-fast-reasoning",
         ]
     }
 
     # Tabelas de preço por modelo (se ausente, usa preço default do provedor)
     OPENAI_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "gpt-4o": {"input_per_1k_usd": 5.0, "output_per_1k_usd": 15.0},
-        # Adicione aqui outros modelos (ex.: "gpt-4", "gpt-5")
+        "gpt-4o": {"input_per_1k_usd": 0.005, "output_per_1k_usd": 0.015},
+        "gpt-5-mini": {"input_per_1k_usd": 0.00025, "output_per_1k_usd": 0.002},
     }
     GEMINI_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "gemini-2.5-flash": {"input_per_1k_usd": 0.5, "output_per_1k_usd": 1.5},
-        # Adicione aqui outros modelos (ex.: "gemini-2.5-pro")
+        "gemini-2.5-flash": {"input_per_1k_usd": 0.0005, "output_per_1k_usd": 0.0015},
     }
     DEEPSEEK_MODEL_PRICING: dict[str, dict[str, float]] = {
         "deepseek-chat": {
