@@ -1,0 +1,22 @@
+{
+  "conversation_id": "fixture-markdown-conv",
+  "title": "Fixture Markdown Regression",
+  "updated_at": 1772640000000,
+  "messages": [
+    {
+      "role": "user",
+      "text": "Me mostre uma tabela e um trecho de codigo.",
+      "timestamp": 1772640001000
+    },
+    {
+      "role": "assistant",
+      "text": "### Status dos Componentes\n\n| Componente | Status |\n| --- | --- |\n| frontend | healthy |\n| backend | healthy |",
+      "timestamp": 1772640002000
+    },
+    {
+      "role": "assistant",
+      "text": "### Exemplo de script\n\n```bash\necho \"janus-ok\"\n```",
+      "timestamp": 1772640003000
+    }
+  ]
+}

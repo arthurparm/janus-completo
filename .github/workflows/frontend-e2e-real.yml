@@ -1,0 +1,206 @@
+name: Frontend E2E Real
+
+on:
+  workflow_dispatch:
+
+jobs:
+  frontend-e2e-real:
+    name: Frontend E2E Real Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      E2E_ADMIN_CPF: "52998224725"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate required secrets
+        env:
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          if [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
+            echo "Missing required secrets: E2E_USER_EMAIL / E2E_USER_PASSWORD"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Build CI env file for pc1 stack
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          cat > .env.e2e.ci <<EOF
+          ENVIRONMENT=development
+          AUTH_JWT_SECRET=jwt_ci_e2e_frontend_real_20260304
+          AUTH_ADMIN_CPF_ALLOWLIST=${E2E_ADMIN_CPF}
+          CORS_ALLOW_ORIGINS=["http://localhost:4300"]
+          FRONTEND_PORT=4300
+
+          POSTGRES_HOST=postgres
+          POSTGRES_PORT=5432
+          POSTGRES_USER=janus
+          POSTGRES_PASSWORD=janus_ci_e2e_pwd
+          POSTGRES_DB=janus_db
+
+          REDIS_ENABLED=true
+          REDIS_URL=redis://redis:6379
+
+          RABBITMQ_HOST=rabbitmq
+          RABBITMQ_PORT=5672
+          RABBITMQ_MANAGEMENT_PORT=15672
+          RABBITMQ_USER=janus
+          RABBITMQ_PASSWORD=janus_ci_e2e_pwd
+
+          NEO4J_URI=bolt://host.docker.internal:7687
+          NEO4J_USER=neo4j
+          NEO4J_PASSWORD=rFUZMfi9X8n5GCZSlKpIVergKJ_yYdYW
+
+          QDRANT_HOST=host.docker.internal
+          QDRANT_PORT=6333
+          QDRANT_HTTPS=false
+          QDRANT_API_KEY=qdrant_ci_key
+
+          OLLAMA_HOST=http://host.docker.internal:11434
+          OLLAMA_ORCHESTRATOR_MODEL=gpt-oss:20b
+          OLLAMA_CODER_MODEL=deepseek-coder:6.7b
+          OLLAMA_CURATOR_MODEL=ministral-3:14b
+          OLLAMA_KEEP_ALIVE=30m
+          OLLAMA_NUM_CTX=4096
+
+          OPENAI_API_KEY=${OPENAI_API_KEY}
+          OPENAI_MODEL_NAME=gpt-5-mini
+          START_ORCHESTRATOR_WORKERS_ON_STARTUP=true
+          AUTO_INDEX_ON_STARTUP=false
+          INIT_MAS_AGENTS_ON_STARTUP=false
+          EOF
+
+      - name: Start pc2 dependencies (neo4j + qdrant)
+        run: |
+          docker compose -f docker-compose.pc2.yml --env-file .env.pc2.example up -d neo4j qdrant
+
+      - name: Start pc1 app stack
+        run: |
+          docker compose -f docker-compose.pc1.yml --env-file .env.e2e.ci up -d --build \
+            postgres redis rabbitmq janus-api janus-frontend
+
+      - name: Wait for API and frontend health
+        run: |
+          for i in {1..120}; do
+            if curl -sf http://localhost:8000/health >/dev/null; then
+              echo "API is healthy"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8000/health >/dev/null
+
+          for i in {1..120}; do
+            if curl -sf http://localhost:4300/ >/dev/null; then
+              echo "Frontend is healthy"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:4300/ >/dev/null
+
+      - name: Seed dedicated admin E2E account (idempotent)
+        env:
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          import urllib.error
+
+          email = os.environ["E2E_USER_EMAIL"].strip().lower()
+          password = os.environ["E2E_USER_PASSWORD"]
+          cpf = os.environ.get("E2E_ADMIN_CPF", "52998224725")
+          username = ("admin_e2e_" + email.split("@")[0].replace(".", "_"))[:48]
+
+          payload = {
+              "email": email,
+              "password": password,
+              "username": username,
+              "full_name": "Admin E2E",
+              "cpf": cpf,
+              "terms": True,
+          }
+          req = urllib.request.Request(
+              "http://localhost:8000/api/v1/auth/local/register",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  body = resp.read().decode("utf-8", "ignore")
+                  print("register status:", resp.status)
+                  print("register body:", body[:400])
+          except urllib.error.HTTPError as err:
+              body = err.read().decode("utf-8", "ignore")
+              if err.code == 409:
+                  print("account already exists; continuing")
+              else:
+                  raise RuntimeError(f"register failed: {err.code} body={body[:400]}")
+          PY
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Run real admin smoke
+        env:
+          E2E_BASE_URL: http://localhost:4300
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          npx playwright test e2e/admin-chat-real.smoke.spec.ts --project=chromium
+        working-directory: frontend
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-real-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+
+      - name: Docker evidence (status + logs tail)
+        if: always()
+        run: |
+          mkdir -p outputs/qa
+          docker compose -f docker-compose.pc1.yml --env-file .env.e2e.ci ps > outputs/qa/frontend_e2e_pc1_ps.txt || true
+          docker compose -f docker-compose.pc2.yml --env-file .env.pc2.example ps > outputs/qa/frontend_e2e_pc2_ps.txt || true
+          docker compose -f docker-compose.pc1.yml --env-file .env.e2e.ci logs --tail=200 janus-api > outputs/qa/frontend_e2e_api_log_tail.txt || true
+          docker compose -f docker-compose.pc1.yml --env-file .env.e2e.ci logs --tail=200 janus-frontend > outputs/qa/frontend_e2e_front_log_tail.txt || true
+
+      - name: Upload docker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-real-docker-evidence
+          path: |
+            outputs/qa/frontend_e2e_pc1_ps.txt
+            outputs/qa/frontend_e2e_pc2_ps.txt
+            outputs/qa/frontend_e2e_api_log_tail.txt
+            outputs/qa/frontend_e2e_front_log_tail.txt
+
+      - name: Teardown docker stacks
+        if: always()
+        run: |
+          docker compose -f docker-compose.pc1.yml --env-file .env.e2e.ci down -v || true
+          docker compose -f docker-compose.pc2.yml --env-file .env.pc2.example down -v || true

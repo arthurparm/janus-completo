@@ -67,7 +67,10 @@ export class MarkdownService {
                 // Delegate to Marked's native renderer to stay compatible with v4/v5/v6 signatures.
                 const rendered = String(defaultRenderer.table(...args) || '').trim();
                 if (rendered) {
-                    return `<div class="table-container">${rendered}</div>`;
+                    const withClasses = /<table[^>]*class=/i.test(rendered)
+                        ? rendered
+                        : rendered.replace(/<table>/i, '<table class="table table-striped">');
+                    return `<div class="table-container">${withClasses}</div>`;
                 }
             } catch {
                 // Fallback to legacy signature handling below.

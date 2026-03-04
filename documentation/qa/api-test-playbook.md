@@ -147,6 +147,25 @@ CI workflow: `.github/workflows/quality-gates.yml`
 - `backend-tests` (critical suite + MR-013 offline eval gate)
 - `ops-validation` (manual trigger only, includes OQ-011/OQ-002 artifacts)
 
+## Frontend Admin Chat E2E (Manual Release Checklist)
+
+Workflow manual dedicado:
+- `.github/workflows/frontend-e2e-real.yml`
+- Trigger: `workflow_dispatch`
+- Secrets obrigatorios: `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`
+- Variaveis operacionais: `E2E_BASE_URL` (default `http://localhost:4300`)
+
+Checklist de validacao por release:
+1. Login com conta admin tecnica no frontend.
+2. Criar nova conversa em `/conversations`.
+3. Validar stream de resposta ativo (endpoint SSE de chat e resposta incremental).
+4. Gerar confirmacao pendente e validar fluxo `Aprovar`.
+5. Gerar nova confirmacao pendente e validar fluxo `Rejeitar`.
+6. Validar render de tabela markdown sem artefatos (`[object Object]`, `undefined`).
+7. Validar render de bloco de codigo markdown sem artefatos.
+8. Validar console limpo (sem `console.error` nao-whitelisted).
+9. Coletar evidencias: Playwright report/trace/video + hash de commit validado.
+
 ## Definition of Done (DX-011)
 
 - Matrix can be regenerated from current API state with one command.

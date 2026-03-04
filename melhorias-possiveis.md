@@ -526,6 +526,39 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 ---
 
+## 13) Achados E2E (frontend + backend de teste)
+
+Contexto de validacao: fluxos end-to-end executados com Playwright no ambiente de teste (`frontend :4300`, `api :8000`), cobrindo login, chat admin, pendencias, memoria, RAG e autonomia.
+
+| ID | Achado E2E | Impacto | Status |
+|---|---|---|---|
+| E2E-001 | Parsing fragil de `pending_action_id` em respostas/eventos de chat quebrava o fluxo de aprovacao/rejeicao em alguns formatos de retorno | Alto (acoes de risco podiam ficar sem confirmacao operacional confiavel) | concluido (2026-03-04) |
+| E2E-002 | Thought stream exibia payload tecnico corrompido em vez de texto amigavel quando chegavam eventos malformados/incompletos | Medio (ruido visual e perda de confianca na UX admin) | concluido (2026-03-04) |
+| E2E-003 | Lista de memorias com chave duplicada no `@for` gerava warning e risco de render inconsistente em atualizacao dinamica | Medio | concluido (2026-03-04) |
+| E2E-004 | Renderer Markdown de bloco de codigo convertia token para `[object Object]` em certas mensagens, quebrando leitura tecnica no chat | Alto (respostas tecnicas ilegiveis) | concluido (2026-03-04) |
+| E2E-005 | Necessidade de consolidar smoke E2E automatizado em CI para evitar regressao dos fluxos admin validados manualmente | Medio | parcial (2026-03-04, workflow manual criado) |
+
+Desdobramento em tasks executaveis:
+
+| Task ID | Task | Prioridade | Status |
+|---|---|---|---|
+| E2E-T01 | Corrigir extracao de `pending_action_id` em respostas com formatos heterogeneos | P0 | concluido (2026-03-04) |
+| E2E-T02 | Corrigir fallback de confirmacao para sinais textuais de acao de risco | P0 | concluido (2026-03-04) |
+| E2E-T03 | Corrigir renderizacao de tabela Markdown sem artefato `[object Object]undefined` | P0 | concluido (2026-03-04) |
+| E2E-T04 | Corrigir renderizacao de bloco de codigo para token shape moderno do `marked` | P0 | concluido (2026-03-04) |
+| E2E-T05 | Sanitizar thought stream para eventos tecnicos malformados/corrompidos | P1 | concluido (2026-03-04) |
+| E2E-T06 | Corrigir chave de tracking da lista de memoria para evitar duplicidade em `@for` | P1 | concluido (2026-03-04) |
+| E2E-T07 | Criar teste unitario para renderer de tabela Markdown com assinatura nova/legada | P1 | concluido (2026-03-04) |
+| E2E-T08 | Criar teste unitario para renderer de codigo com token object e string | P1 | concluido (2026-03-04) |
+| E2E-T09 | Criar fixture de conversa com tabela + bloco de codigo para regressao de historico | P1 | concluido (2026-03-04) |
+| E2E-T10 | Automatizar smoke Playwright de conversa admin (login, stream, aprovar/rejeitar) | P0 | concluido (2026-03-04) |
+| E2E-T11 | Adicionar gate CI para falhar em console errors no smoke E2E admin | P1 | concluido (2026-03-04, manual) |
+| E2E-T12 | Publicar checklist padrao de validacao manual E2E (frontend + api) por release | P2 | concluido (2026-03-04) |
+
+Observacao: nao ficaram bloqueadores funcionais abertos no fluxo admin apos os hotfixes desta rodada; o ponto pendente e transformar a cobertura manual em gate recorrente de E2E.
+
+---
+
 ## Template para novas ideias
 
 Copiar e preencher:

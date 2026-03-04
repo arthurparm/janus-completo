@@ -1,4 +1,17 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+type FixtureConversation = {
+  conversation_id: string
+  title: string
+  updated_at: number
+  messages: Array<{ role: string; text: string; timestamp: number; [key: string]: unknown }>
+}
+
+const markdownHistoryFixture = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'e2e/fixtures/conversation-history-markdown.json'), 'utf8'),
+) as FixtureConversation
 
 const TEST_USER = {
   email: process.env.E2E_USER_EMAIL || 'arthur.paraiso.mar@gmail.com',
@@ -331,5 +344,90 @@ test.describe('Demo Agentic Flow', () => {
     // Este teste depende de um prompt de ambiente que realmente gere pending action de risco.
     // Mantemos como smoke da fatia vertical real; a versão determinística acima valida a UX.
     await expect(page.getByRole('heading', { name: /Converse com o Janus/i })).toBeVisible()
+  })
+
+  test('renderiza fixture de historico markdown sem artefatos', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
+    })
+
+    await page.route('**/api/v1/auth/local/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'fixture-user',
+          email: 'fixture@janus.local',
+          roles: ['admin'],
+          display_name: 'Fixture User',
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/chat/conversations**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            conversation_id: markdownHistoryFixture.conversation_id,
+            title: markdownHistoryFixture.title,
+            updated_at: markdownHistoryFixture.updated_at,
+            last_message: markdownHistoryFixture.messages[markdownHistoryFixture.messages.length - 1],
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/v1/chat/*/history**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversation_id: markdownHistoryFixture.conversation_id,
+          messages: markdownHistoryFixture.messages,
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/knowledge/stats**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await page.route('**/api/v1/autonomy/status**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await page.route('**/api/v1/reflexion/summary**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await page.route('**/api/v1/memory/timeline**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+    })
+    await page.route('**/api/v1/documents/list**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+    })
+    await page.route('**/api/v1/autonomy/goals**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+    })
+    await page.route('**/api/v1/tools/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) })
+    })
+    await page.route('**/api/v1/chat/*/events**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: 'event: connected\\ndata: {}\\n\\n',
+      })
+    })
+
+    await page.goto(`/conversations/${markdownHistoryFixture.conversation_id}`)
+    await page.waitForTimeout(700)
+
+    await expect(page.getByText('Status dos Componentes')).toBeVisible()
+    await expect(page.locator('.message-text table')).toHaveCount(1)
+    await expect(page.locator('.code-block-wrapper')).toHaveCount(1)
+
+    const pageText = await page.locator('body').innerText()
+    expect(pageText).not.toContain('[object Object]')
+    expect(pageText).not.toContain(']undefined')
   })
 })
