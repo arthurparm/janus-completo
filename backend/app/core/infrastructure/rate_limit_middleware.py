@@ -23,7 +23,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.enabled = getattr(settings, "RATE_LIMIT_ENABLED", True)
         env = str(getattr(settings, "ENVIRONMENT", "development")).strip().lower()
-        self.fail_closed = bool(getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)) or env == "production"
+        self.fail_closed = bool(getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False))
         # Convert requests/min to requests/sec for token bucket
         self.rate_ip = max(0.1, getattr(settings, "RATE_LIMIT_PER_IP_PER_MIN", 60) / 60.0)
         self.burst_ip = max(1, int(getattr(settings, "RATE_LIMIT_PER_IP_PER_MIN", 60)))

@@ -97,9 +97,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
-
+| SG-014 | Implementar redação PII (regex) antes de registrar conteúdos de Chat/Events em logs | P0 | S | ideia |
+| SG-015 | Configurar dependência de Auth/Sessão explícita nos endpoints compartilhados de Workspaces | P0 | S | feito (2026-03-05) |
+| SG-016 | Desativar bypass inseguro de X-User-Id por padrão na produção (config.py) | P0 | S | feito (2026-03-05) |
+| SG-017 | Adicionar `slowapi` e decorar rotas expostas da Auth API com `@limiter.limit` (Rate Limit) | P1 | S | ideia |
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
-| SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | feito (2026-03-05) |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade

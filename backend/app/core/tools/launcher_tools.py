@@ -30,7 +30,7 @@ def launch_app(app_name: str) -> str:
         if system == "Windows":
             # 'start' é um comando interno do shell cmd.exe
             # start "" "app_name" é a sintaxe segura
-            subprocess.Popen(f'start "" "{app_name}"', shell=True)
+            subprocess.Popen(["cmd.exe", "/c", "start", '""', app_name])
         elif system == "Darwin":  # macOS
             subprocess.Popen(["open", "-a", app_name])
         elif system == "Linux":

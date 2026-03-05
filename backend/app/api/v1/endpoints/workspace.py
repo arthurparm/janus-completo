@@ -1,8 +1,9 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.core.infrastructure.auth import get_actor_user_id
 from app.services.collaboration_service import (
     AgentNotFoundError,
     CollaborationService,
@@ -20,8 +21,13 @@ class AddArtifactRequest(BaseModel):
 
 @router.post("/workspace/artifacts/add")
 def add_artifact(
-    payload: AddArtifactRequest, service: CollaborationService = Depends(get_collaboration_service)
+    request: Request,
+    payload: AddArtifactRequest,
+    service: CollaborationService = Depends(get_collaboration_service)
 ):
+    current_user = get_actor_user_id(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         result = service.add_artifact(
             key=payload.key, value=payload.value, author=payload.author or ""
@@ -68,6 +74,9 @@ def get_messages_for(
 
 
 @router.post("/system/shutdown", tags=["Collaboration - System"])
-def shutdown_system(service: CollaborationService = Depends(get_collaboration_service)):
+def shutdown_system(request: Request, service: CollaborationService = Depends(get_collaboration_service)):
+    current_user = get_actor_user_id(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     service.shutdown_system()
     return {"message": "System shutdown initiated"}
