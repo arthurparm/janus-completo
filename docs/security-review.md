@@ -46,3 +46,47 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Baixa
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
+
+## Achados do dia (2026-03-05)
+
+### Checklist executado
+- [x] Verificação de PII/tokens em logs de serviços (Chat, Tools, Daemon).
+- [x] Análise estática com Bandit no backend (`app/`).
+- [x] Verificação de dependências com `npm audit` e `pip-audit`.
+- [x] Revisão dos endpoints expostos sem autenticação (Workspace e Windows Agent).
+
+### 8. Possível Injeção de SQL (Hardcoded SQL)
+- **Caminho:** `backend/app/services/dedupe_service.py` (linhas 101, 137)
+- **Gravidade:** Alta
+- **Descrição:** O Bandit (B608) detectou a construção de queries SQL manipulando strings diretamente através de f-strings, o que pode abrir vetor para SQL Injection caso os parâmetros `{table}` ou outros inputs não sejam estritamente controlados ou sanitizados pela ORM.
+- **Ação Recomendada:** Utilizar parâmetros nomeados padrão do SQLAlchemy (`:param`) ou construtores de `Table` e objetos `update()` para evitar formatação manual de texto.
+
+### 9. Vulnerabilidade a Ataques XML (Billion Laughs / XXE)
+- **Caminho:** `backend/app/services/document_parser_service.py` (linha 111)
+- **Gravidade:** Média
+- **Descrição:** O parser de documentos utiliza `xml.etree.ElementTree.fromstring` para analisar dados XML não confiáveis, sendo vulnerável a ataques de expansão de entidades. Detectado pelo Bandit (B314 e B405).
+- **Ação Recomendada:** Substituir o uso do pacote padrão `xml.etree` pelo pacote `defusedxml` ou desativar a resolução de entidades externas.
+
+### 10. Risco de Execução de Subprocessos com Untrusted Input
+- **Caminho:** `backend/app/services/semantic_commit_service.py` (linhas 58, 94)
+- **Gravidade:** Baixa/Média
+- **Descrição:** Uso de `subprocess.run` (Bandit B603) sem validação explícita ou sanitização da variável de entrada `cmd`, que executa comandos do Git no shell do sistema. Se os caminhos ou parâmetros do repositório forem controláveis externamente, pode resultar em injeção de comandos.
+- **Ação Recomendada:** Assegurar que os argumentos do comando Git estejam restritos a listas seguras de strings e não possam ser manipulados através da API.
+
+### 11. Dependências do Frontend Vulneráveis (npm audit)
+- **Escopo:** `frontend/`
+- **Gravidade:** Alta
+- **Descrição:** O `npm audit` revelou 5 vulnerabilidades (4 High, 1 Moderate). Os pacotes impactados incluem `@hono/node-server` (Bypass de autorização), `dompurify` (Cross-site Scripting XSS), `hono` (Cookie/SSE Injection), `immutable` (Prototype Pollution) e `tar` (Path Traversal).
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar as versões secundárias dos pacotes vulneráveis para as versões mitigadas.
+
+### 12. Dependência do Backend Vulnerável (pip-audit)
+- **Escopo:** `backend/`
+- **Gravidade:** Alta
+- **Descrição:** O `pip-audit` identificou que a versão instalada do pacote `pip` (25.3) está vulnerável à CVE-2026-1703.
+- **Ação Recomendada:** Atualizar a versão do `pip` para a versão recomendada (26.0) dentro do ambiente do container e CI/CD.
+
+### 13. Exposição do Windows Agent OS Endpoints
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O script expõe endpoints de interação com o SO Windows (captura de tela, notificações, e TTS) pela porta 5001 usando FastAPI sem nenhum mecanismo de autenticação ou autorização.
+- **Ação Recomendada:** Implementar um token ou mecanismo de autenticação baseado em cabeçalhos neste serviço auxiliar para garantir que apenas o Janus container autorizado possa invocá-lo.

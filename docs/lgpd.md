@@ -26,3 +26,15 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ## 4. Recomendações Recentes
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
+
+## Achados do dia (2026-03-05)
+
+### 5. Lacunas Recentes e Impacto Observado
+1. **Dados de Áudio no Janus Daemon:** A interface recém implementada (`backend/app/interfaces/daemon/daemon.py`) recebe e logga transcrições/conteúdo direto de comandos de voz via texto, enquadrando-se num escopo crítico de LGPD caso o usuário diga informações pessoais.
+   - **Impacto:** Alta exposição caso o arquivo `janus.log` seja comprometido.
+2. **Dados de Telemetria sem Redação (Productivity Tools):** Continua sendo exposto de maneira indesejada o destinatário, remetente e assunto nas ferramentas de e-mail ao loggar "send_email".
+   - **Impacto:** Fere princípio de Minimização dos Dados.
+
+### Próximos passos
+- Implementar máscara imediata para os argumentos do `Daemon` e e-mail.
+- Forçar uma política de Rotação (`logrotate`) diária para diminuir a Janela de Retenção de logs não criptografados e com potencial PII.
