@@ -3,6 +3,29 @@
 Data de criação: 2026-03-01
 Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que podem ser exploradas, de acordo com o Threat Model.
 
+## Achados do dia (2026-03-05)
+
+- **Checklist executado:**
+  - [x] Definição de janela de análise (últimas 24h fallback).
+  - [x] Varredura de Segurança em arquivos alterados (0 arquivos modificados no período).
+  - [x] Varredura de Dependências (Frontend e Backend).
+  - [x] Mapeamento LGPD incremental.
+- **Resultado da Janela:** Nenhum arquivo fonte foi alterado nas últimas 24 horas, portanto não há novos achados de código estático (vulnerabilidades, PII, auth) a relatar hoje.
+- **Auditoria de Dependências (Frontend):**
+  - Identificadas vulnerabilidades via `npm audit`:
+    - `@hono/node-server` (High) - Bypass de autorização em caminhos estáticos.
+    - `dompurify` (Moderate) - Cross-site Scripting (XSS).
+    - `hono` (High) - Injeção de Cookie, Injeção SSE, acesso arbitrário a arquivos.
+    - `immutable` (High) - Prototype Pollution.
+    - `tar` (High).
+  - **Ações Recomendadas:** Executar `npm audit fix` ou atualizar manualmente as bibliotecas vulneráveis listadas no relatório.
+- **Auditoria de Dependências (Backend):**
+  - **Limitação:** A execução do `pip-audit` falhou devido a incompatibilidades de versão do Python com dependências fixadas (ex: `tflite-runtime==2.14.0` não possui distribuição para o Python 3.12 no ambiente atual).
+  - **Evidência:** `ERROR: Could not find a version that satisfies the requirement tflite-runtime==2.14.0` e `ERROR:pip_audit._virtual_env:internal pip failure`.
+  - **Ações Recomendadas:** Atualizar a versão do `tflite-runtime` no `requirements.txt` para uma versão compatível com Python 3.12, ou configurar o ambiente de build/CI para rodar a auditoria em uma imagem Python 3.10/3.11 nativa do projeto.
+
+---
+
 ## Vulnerabilidades Abertas
 
 ### 1. Header `X-User-Id` Exploit (Impersonation)

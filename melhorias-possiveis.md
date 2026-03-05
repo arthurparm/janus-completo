@@ -641,3 +641,25 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-020] Atualização de Dependências Críticas Frontend (Audit)
+- ID: SG-020
+- Tipo: bug / vulnerabilidade
+- Esforço: S
+- Prioridade: P1
+- Status: ideia
+- Autor/Data: Jules / 2026-03-05
+- Descrição da Proposta: Atualizar as dependências do Frontend listadas no `npm audit` (hono, dompurify, immutable, tar) que possuem vulnerabilidades identificadas que variam de Cross-site Scripting a Prototype Pollution e bypass de Autorização.
+- Valor: Mitigar vetores de ataque em nível de aplicação e frontend, fechando vulnerabilidades documentadas por CVEs.
+- Dependencias: CI/CD com execuções do `npm audit fix`.
+
+### [PL-012] Fixar e auditar compatibilidade do Backend Python
+- ID: PL-012
+- Tipo: tech_debt / seguranca
+- Esforço: M
+- Prioridade: P2
+- Status: ideia
+- Autor/Data: Jules / 2026-03-05
+- Descrição da Proposta: A auditoria de segurança (via `pip-audit`) no backend atualmente falha devido a inconsistências no `requirements.txt` com as versões de Python (ex. `tflite-runtime==2.14.0` inacessível no ambiente 3.12). Refatorar os requisitos para adequação com a versão alvo, viabilizando varreduras contínuas no pipeline de DevSecOps.
+- Valor: Possibilitar a execução orgânica de análise de composição de software (SCA) no projeto.
+- Dependencias: Nenhuma.
