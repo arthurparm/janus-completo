@@ -363,6 +363,79 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     assert captured_params["symbols"] == ["AutonomyAdminService"]
 
 
+@pytest.mark.asyncio
+async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch):
+    service = _new_service(citations=[])
+    query_calls: list[str] = []
+
+    class _RetryGraph:
+        async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
+            query_calls.append(str(kwargs.get("operation") or ""))
+            operation = str(kwargs.get("operation") or "")
+            if operation == "self_study_selfmemory_upsert":
+                if query_calls.count("self_study_selfmemory_upsert") == 1:
+                    return [{"owner_links": 0, "symbol_links": 0}]
+                return [{"owner_links": 1, "symbol_links": 0}]
+            if operation == "self_study_code_graph_file_count":
+                return [{"file_count": 341}]
+            return []
+
+    async def _fake_get_graph_db():
+        return _RetryGraph()
+
+    reindex_calls = {"count": 0}
+
+    async def _fake_index_codebase():
+        reindex_calls["count"] += 1
+        return {"message": "ok"}
+
+    monkeypatch.setattr(autonomy_admin_module, "get_graph_db", _fake_get_graph_db)
+    service._knowledge_service.index_codebase = _fake_index_codebase  # type: ignore[method-assign]
+
+    await service._persist_self_memory(
+        rel_path="app/app/core/memory/graph_embeddings.py",
+        summary_payload={
+            "summary": "ok",
+            "summary_version": service.SELF_MEMORY_SUMMARY_VERSION,
+            "language": "python",
+            "symbols": ["GraphEmbeddingsManager"],
+            "imports": ["json"],
+            "touchpoints": ["neo4j"],
+            "domain_tags": ["memory"],
+            "confidence": 0.9,
+        },
+        sha_after="abc123",
+        source_experience_id="exp-1",
+    )
+
+    assert query_calls.count("self_study_selfmemory_upsert") == 2
+    assert reindex_calls["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_ensure_code_graph_ready_reindexes_when_graph_is_empty():
+    service = _new_service(citations=[])
+    counts = iter([0, 12])
+
+    async def _fake_get_code_graph_file_count():
+        return next(counts)
+
+    reindex_calls = {"count": 0}
+
+    async def _fake_index_codebase():
+        reindex_calls["count"] += 1
+        return {"message": "ok"}
+
+    service._get_code_graph_file_count = _fake_get_code_graph_file_count  # type: ignore[method-assign]
+    service._knowledge_service.index_codebase = _fake_index_codebase  # type: ignore[method-assign]
+
+    count = await service._ensure_code_graph_ready(force=True)
+
+    assert count == 12
+    assert reindex_calls["count"] == 1
+    assert service._code_graph_file_count_cache == 12
+
+
 def test_get_self_study_status_includes_running_progress():
     service = _new_service(citations=[])
     now = datetime(2026, 3, 4, 19, 10, tzinfo=timezone.utc)

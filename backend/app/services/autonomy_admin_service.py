@@ -80,6 +80,7 @@ class AutonomyAdminService:
         self._self_study_local_only = bool(
             getattr(settings, "AUTONOMY_SELF_STUDY_LOCAL_ONLY", True)
         )
+        self._code_graph_file_count_cache: int | None = None
         # backend/app/services -> backend/app -> backend -> repo
         self._repo_root = Path(__file__).resolve().parents[3]
 
@@ -990,6 +991,101 @@ class AutonomyAdminService:
             lines.append("              )")
         return "\n".join(lines)
 
+    async def _get_code_graph_file_count(self) -> int:
+        graph = await get_graph_db()
+        rows = await graph.query(
+            """
+            MATCH (owner)
+            WHERE owner:File OR owner:CodeFile
+            RETURN count(DISTINCT owner) AS file_count
+            """,
+            operation="self_study_code_graph_file_count",
+        )
+        return int((rows or [{}])[0].get("file_count", 0) or 0)
+
+    async def _ensure_code_graph_ready(self, *, force: bool = False) -> int:
+        if self._code_graph_file_count_cache is not None and not force:
+            return self._code_graph_file_count_cache
+
+        file_count = await self._get_code_graph_file_count()
+        if file_count <= 0:
+            logger.warning("self_study_code_graph_empty_reindexing")
+            await self._knowledge_service.index_codebase()
+            file_count = await self._get_code_graph_file_count()
+        self._code_graph_file_count_cache = file_count
+        return file_count
+
+    async def _upsert_self_memory_graph_links(
+        self,
+        *,
+        rel_path: str,
+        path_candidates: list[str],
+        summary_payload: dict[str, Any],
+        sha_after: str | None,
+        source_experience_id: str | None,
+        symbol_names: list[str],
+        rel_types: list[str],
+    ) -> list[dict[str, Any]]:
+        graph = await get_graph_db()
+        return await graph.query(
+            """
+            MERGE (m:SelfMemory {file_path: $file_path})
+            SET m.summary = $summary,
+                m.summary_version = $summary_version,
+                m.language = $language,
+                m.symbols = $symbols,
+                m.imports = $imports,
+                m.touchpoints = $touchpoints,
+                m.domain_tags = $domain_tags,
+                m.confidence = $confidence,
+                m.file_path = $file_path,
+                m.sha_after = $sha_after,
+                m.source_experience_id = $source_experience_id,
+                m.updated_at = timestamp()
+            WITH m, $path_candidates AS path_candidates
+            OPTIONAL MATCH (owner)
+            WHERE (owner:File OR owner:CodeFile) AND owner.path IN path_candidates
+            WITH m, path_candidates, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
+            FOREACH (owner IN owners |
+              MERGE (m)-[:RELATES_TO]->(owner)
+            )
+            WITH m, path_candidates, owners
+            OPTIONAL MATCH (fn:CodeFunction)
+            WHERE fn.file_path IN path_candidates
+              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
+            WITH m, owners, path_candidates, [node IN collect(DISTINCT fn) WHERE node IS NOT NULL] AS functions
+            FOREACH (fn IN functions |
+              MERGE (m)-[:DEFINES]->(fn)
+            )
+            WITH m, owners, [node IN functions WHERE node IS NOT NULL] AS functions, path_candidates
+            OPTIONAL MATCH (cl:CodeClass)
+            WHERE cl.file_path IN path_candidates
+              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
+            WITH m, owners, functions, [node IN collect(DISTINCT cl) WHERE node IS NOT NULL] AS classes
+            FOREACH (cl IN classes |
+              MERGE (m)-[:DEFINES]->(cl)
+            )
+            RETURN size(owners) AS owner_links, size(functions) + size(classes) AS symbol_links
+            """,
+            {
+                "file_path": rel_path,
+                "path_candidates": path_candidates,
+                "summary": str(summary_payload.get("summary") or "").strip()[:4000],
+                "summary_version": str(summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION),
+                "language": str(summary_payload.get("language") or ""),
+                "symbols": summary_payload.get("symbols") or [],
+                "imports": summary_payload.get("imports") or [],
+                "touchpoints": summary_payload.get("touchpoints") or [],
+                "domain_tags": summary_payload.get("domain_tags") or [],
+                "confidence": float(summary_payload.get("confidence") or 0.75),
+                "sha_after": sha_after,
+                "symbol_names": symbol_names,
+                "source_experience_id": source_experience_id,
+                "rel_types": rel_types,
+            },
+            operation="self_study_selfmemory_upsert",
+        )
+
     async def _memorize_self_study_summary(
         self,
         *,
@@ -1040,66 +1136,31 @@ class AutonomyAdminService:
             for symbol in (summary_payload.get("symbols") or [])
             if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", str(symbol or ""))
         ]
-        graph = await get_graph_db()
-        rows = await graph.query(
-            """
-            MERGE (m:SelfMemory {file_path: $file_path})
-            SET m.summary = $summary,
-                m.summary_version = $summary_version,
-                m.language = $language,
-                m.symbols = $symbols,
-                m.imports = $imports,
-                m.touchpoints = $touchpoints,
-                m.domain_tags = $domain_tags,
-                m.confidence = $confidence,
-                m.file_path = $file_path,
-                m.sha_after = $sha_after,
-                m.source_experience_id = $source_experience_id,
-                m.updated_at = timestamp()
-            WITH m, $path_candidates AS path_candidates
-            OPTIONAL MATCH (owner)
-            WHERE (owner:File OR owner:CodeFile) AND owner.path IN path_candidates
-            WITH m, path_candidates, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
-            FOREACH (owner IN owners |
-              MERGE (m)-[:RELATES_TO]->(owner)
-            )
-            WITH m, path_candidates, owners
-            OPTIONAL MATCH (fn:CodeFunction)
-            WHERE fn.file_path IN path_candidates
-              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
-            WITH m, owners, path_candidates, [node IN collect(DISTINCT fn) WHERE node IS NOT NULL] AS functions
-            FOREACH (fn IN functions |
-              MERGE (m)-[:DEFINES]->(fn)
-            )
-            WITH m, owners, [node IN functions WHERE node IS NOT NULL] AS functions, path_candidates
-            OPTIONAL MATCH (cl:CodeClass)
-            WHERE cl.file_path IN path_candidates
-              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
-            WITH m, owners, functions, [node IN collect(DISTINCT cl) WHERE node IS NOT NULL] AS classes
-            FOREACH (cl IN classes |
-              MERGE (m)-[:DEFINES]->(cl)
-            )
-            RETURN size(owners) AS owner_links, size(functions) + size(classes) AS symbol_links
-            """,
-            {
-                "file_path": rel_path,
-                "path_candidates": path_candidates,
-                "summary": summary[:4000],
-                "summary_version": str(summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION),
-                "language": str(summary_payload.get("language") or ""),
-                "symbols": summary_payload.get("symbols") or [],
-                "imports": summary_payload.get("imports") or [],
-                "touchpoints": summary_payload.get("touchpoints") or [],
-                "domain_tags": summary_payload.get("domain_tags") or [],
-                "confidence": float(summary_payload.get("confidence") or 0.75),
-                "sha_after": sha_after,
-                "symbol_names": symbol_names,
-                "source_experience_id": source_experience_id,
-            },
-            operation="self_study_selfmemory_upsert",
+        rows = await self._upsert_self_memory_graph_links(
+            rel_path=rel_path,
+            path_candidates=path_candidates,
+            summary_payload=summary_payload,
+            sha_after=sha_after,
+            source_experience_id=source_experience_id,
+            symbol_names=symbol_names,
+            rel_types=rel_types,
         )
         owner_links = int((rows or [{}])[0].get("owner_links", 0) or 0)
         if owner_links <= 0:
+            file_count = await self._ensure_code_graph_ready(force=True)
+            if file_count > 0:
+                rows = await self._upsert_self_memory_graph_links(
+                    rel_path=rel_path,
+                    path_candidates=path_candidates,
+                    summary_payload=summary_payload,
+                    sha_after=sha_after,
+                    source_experience_id=source_experience_id,
+                    symbol_names=symbol_names,
+                    rel_types=rel_types,
+                )
+                owner_links = int((rows or [{}])[0].get("owner_links", 0) or 0)
+            if owner_links > 0:
+                return
             raise AutonomyAdminServiceError(
                 f"SelfMemory criada sem vinculo a File/CodeFile: {rel_path}"
             )
@@ -1134,6 +1195,7 @@ class AutonomyAdminService:
             target_commit=target_commit,
             task_files=task_files,
         )
+        await self._ensure_code_graph_ready()
         total_candidates = len(files)
         files = files[: self.MAX_FILES_PER_RUN]
         self._repo.update_self_study_run_progress(
