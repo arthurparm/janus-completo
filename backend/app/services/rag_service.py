@@ -12,7 +12,13 @@ from app.core.llm import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteDecision, RouteIntent, RouteTarget, get_knowledge_routing_policy
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_chat_collection_name,
+    build_user_docs_collection_name,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 from app.repositories.chat_repository import ChatRepository
 from app.services.semantic_reranker_service import get_semantic_reranker
 from app.services.llm_service import LLMService
@@ -223,7 +229,6 @@ class RAGService:
                 logger.warning("user_preference_capture_failed_in_rag", error=str(pref_exc))
 
             vec = await aembed_text(message)
-            collection_name = await aget_or_create_collection(f"user_{user_id}")
             client = get_async_qdrant_client()
             candidate_multiplier = max(1, int(getattr(settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)))
             query_limit = (
@@ -242,14 +247,21 @@ class RAGService:
             # (documentos ingeridos não têm session_id).
 
             qfilter = qdrant_models.Filter(must=must)
-            res = await client.query_points(
-                collection_name=collection_name,
-                query=vec,
-                limit=query_limit,
-                with_payload=True,
-                query_filter=qfilter,
-            )
-            hits = getattr(res, "points", res) or []
+            hits: list[Any] = []
+            for collection_name in (
+                build_user_memory_collection_name(str(user_id)),
+                build_user_docs_collection_name(str(user_id)),
+                build_user_chat_collection_name(str(user_id)),
+            ):
+                coll = await aget_or_create_collection(collection_name)
+                res = await client.query_points(
+                    collection_name=coll,
+                    query=vec,
+                    limit=query_limit,
+                    with_payload=True,
+                    query_filter=qfilter,
+                )
+                hits.extend(getattr(res, "points", res) or [])
 
             memories: list[dict[str, Any]] = []
             for h in hits:

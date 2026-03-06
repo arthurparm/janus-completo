@@ -63,6 +63,7 @@ from app.db.vector_store import (
     aget_collection_info,
     aget_or_create_collection,
     async_count_points,
+    build_user_docs_collection_name,
     get_async_qdrant_client,
 )
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
@@ -110,7 +111,7 @@ async def upload_document(
         pass
     # Verifica quota de pontos por usuário antes de indexar
     try:
-        info = await aget_collection_info(f"user_{uid}")
+        info = await aget_collection_info(build_user_docs_collection_name(uid))
         points_count = int(info.get("points_count") or 0)
         # estima chunks a partir do tamanho do texto, aproximado após parsing; fallback para 1000 bytes/chunk
         est_chunks = max(1, int(len(data or b"") / 1000))
@@ -173,7 +174,7 @@ async def search_documents(
         return DocSearchResponse(results=[])
     vec = await aembed_text(query)
     client = get_async_qdrant_client()
-    collection_name = await aget_or_create_collection(f"user_{uid}")
+    collection_name = await aget_or_create_collection(build_user_docs_collection_name(uid))
     must: list[models.FieldCondition] = [
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
         models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
@@ -242,7 +243,7 @@ async def list_documents(
     if not uid:
         return DocListResponse(items=[])
     client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(f"user_{uid}")
+    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     must: list[models.FieldCondition] = [
         models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
         models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
@@ -320,7 +321,7 @@ async def delete_document(doc_id: str, user_id: str | None = None, request: Requ
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(f"user_{uid}")
+    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     try:
         qfilter = models.Filter(
             must=[
@@ -407,7 +408,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(f"user_{uid}")
+    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     try:
         qfilter = models.Filter(
             must=[

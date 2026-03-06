@@ -263,10 +263,9 @@ async def user_summary(user_id: str, request: Request):
             ts if last_updated is None or float(ts) > float(last_updated) else last_updated
         )
     try:
-        from app.db.vector_store import aget_collection_info
+        from app.db.vector_store import aget_total_points, get_user_collection_names
 
-        info = await aget_collection_info(f"user_{user_id}")
-        points = int(info.get("points_count") or 0)
+        points = await aget_total_points(list(get_user_collection_names(user_id).values()))
     except Exception:
         points = None
     return UserSummaryResponse(

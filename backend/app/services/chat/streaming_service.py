@@ -475,11 +475,15 @@ class StreamingService:
                 from qdrant_client import models as qdrant_models
 
                 from app.core.embeddings.embedding_manager import aembed_text
-                from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+                from app.db.vector_store import (
+                    aget_or_create_collection,
+                    build_user_chat_collection_name,
+                    get_async_qdrant_client,
+                )
 
                 vec = await aembed_text(message)
                 coll = (
-                    await aget_or_create_collection(f"user_{user_id}")
+                    await aget_or_create_collection(build_user_chat_collection_name(str(user_id)))
                     if user_id
                     else await aget_or_create_collection("janus_episodic_memory")
                 )

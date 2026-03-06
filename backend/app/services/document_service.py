@@ -7,7 +7,12 @@ import structlog
 from qdrant_client import models
 
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_deterministic_point_id,
+    build_user_docs_collection_name,
+    get_async_qdrant_client,
+)
 from app.repositories.observability_repository import record_audit_event_direct
 from app.core.exceptions.document_exceptions import QuotaExceededError
 from app.core.monitoring.document_metrics import get_metrics_recorder
@@ -143,7 +148,7 @@ class DocumentIngestionService:
         vectors = await aembed_texts(chunks)
         self._metrics.record_ingest_latency(time.perf_counter() - _t0)
 
-        collection_name = await aget_or_create_collection(f"user_{user_id}")
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         client = get_async_qdrant_client()
 
         # Check quota
@@ -186,11 +191,16 @@ class DocumentIngestionService:
         ts_ms = int(time.time() * 1000)
 
         for i, vec in enumerate(vectors):
-            pid = str(uuid4())
-
             # Hash de conteúdo normalizado para dedupe
             norm = re.sub(r"\s+", " ", chunks[i]).strip().lower()
             content_hash = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+            pid = build_deterministic_point_id(
+                "doc-chunk",
+                user_id,
+                doc_id,
+                i,
+                content_hash,
+            )
 
             # Verificar duplicidade existente
             dup_status = "unique"
@@ -217,12 +227,16 @@ class DocumentIngestionService:
                 logger.debug("duplicate_check_failed", chunk_index=i, error=str(e))
 
             payload = {
+                "type": "doc_chunk",
+                "ts_ms": ts_ms,
+                "composite_id": f"doc:{user_id}:{doc_id}:{i}:{content_hash}",
                 "metadata": {
                     "type": "doc_chunk",
-                    "user_id": user_id,
+                    "user_id": str(user_id),
                     "doc_id": doc_id,
                     "file_name": filename,
                     "timestamp": ts_ms,
+                    "ts_ms": ts_ms,
                     "index": i,
                     "content_hash": content_hash,
                     "status": dup_status,
@@ -231,6 +245,7 @@ class DocumentIngestionService:
                     "semantic_entities": semantic.entities,
                     "semantic_summary": semantic.summary,
                     "semantic_confidence": semantic.confidence,
+                    "origin": "documents.ingest_file",
                 },
                 "content": chunks[i][:2000],
             }

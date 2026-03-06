@@ -153,3 +153,41 @@ async def test_recall_filtered_and_failures_and_lessons():
     lessons = await service.recall_recent_lessons(limit=5)
     assert len(lessons) == 1
     assert lessons[0]["metadata"]["type"] == "lesson"
+
+
+@pytest.mark.asyncio
+async def test_index_interaction_uses_chat_collection_and_deterministic_point_id(monkeypatch):
+    service = MemoryService(FakeMemoryRepository())
+    captured: dict[str, Any] = {}
+
+    class DummyClient:
+        async def upsert(self, *, collection_name, points):
+            captured["collection_name"] = collection_name
+            captured["points"] = points
+
+    async def _fake_collection(name: str, *args, **kwargs):
+        return name
+
+    async def _fake_count(*args, **kwargs):
+        return 0
+
+    async def _fake_embed(text: str):
+        return [0.1, 0.2, 0.3]
+
+    monkeypatch.setattr("app.services.memory_service.aget_or_create_collection", _fake_collection)
+    monkeypatch.setattr("app.services.memory_service.async_count_points", _fake_count)
+    monkeypatch.setattr("app.services.memory_service.aembed_text", _fake_embed)
+    monkeypatch.setattr("app.services.memory_service.get_async_qdrant_client", lambda: DummyClient())
+    monkeypatch.setattr("app.services.memory_service.time.time", lambda: 1234.567)
+
+    await service.index_interaction("hello", "u1", "sess-1", "user")
+    first_point = captured["points"][0]
+
+    await service.index_interaction("hello", "u1", "sess-1", "user")
+    second_point = captured["points"][0]
+
+    assert captured["collection_name"] == "user_chat_u1"
+    assert first_point.id == second_point.id
+    assert first_point.payload["metadata"]["origin"] == "chat.index_interaction"
+    assert first_point.payload["metadata"]["conversation_id"] == "sess-1"
+    assert first_point.payload["type"] == "chat_msg"

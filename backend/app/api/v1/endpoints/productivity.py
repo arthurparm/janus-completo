@@ -6,7 +6,12 @@ from qdrant_client import models
 
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.filesystem_manager import read_file, write_file
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_deterministic_point_id,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
 from app.services.observability_service import ObservabilityService
 
@@ -174,17 +179,24 @@ async def calendar_add_event(
     try:
         if bool(payload.index):
             client = get_async_qdrant_client()
-            coll = await aget_or_create_collection(f"user_{payload.user_id}")
+            coll = await aget_or_create_collection(
+                build_user_memory_collection_name(str(payload.user_id))
+            )
             evt = payload.event.model_dump()
             content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
             vec = await aembed_text(content)
             pid = f"calendar:{payload.user_id}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
             payload_q = {
                 "content": content,
+                "type": "calendar_event",
+                "ts_ms": int(evt.get("start_ts") or 0),
+                "composite_id": pid,
                 "metadata": {
                     "type": "calendar_event",
                     "user_id": str(payload.user_id),
                     "timestamp": int(evt.get("start_ts") or 0),
+                    "ts_ms": int(evt.get("start_ts") or 0),
+                    "origin": "productivity.calendar.endpoint",
                 },
             }
             point = models.PointStruct(id=pid, vector=vec, payload=payload_q)
@@ -438,16 +450,29 @@ async def notes_add(
     try:
         if bool(payload.index):
             client = get_async_qdrant_client()
-            coll = await aget_or_create_collection(f"user_{payload.user_id}")
+            coll = await aget_or_create_collection(
+                build_user_memory_collection_name(str(payload.user_id))
+            )
             content = f"{note.get('title', '')}\n{note.get('content', '')}"
             vec = await aembed_text(content)
-            pid = f"note:{payload.user_id}:{hash(content)}"
+            now_ts_ms = int(__import__("time").time() * 1000)
+            pid = build_deterministic_point_id(
+                "productivity-note",
+                payload.user_id,
+                note.get("title", ""),
+                content,
+            )
             payload_q = {
                 "content": content,
+                "type": "note_item",
+                "ts_ms": now_ts_ms,
+                "composite_id": pid,
                 "metadata": {
                     "type": "note_item",
                     "user_id": str(payload.user_id),
-                    "timestamp": int(__import__("time").time()),
+                    "timestamp": now_ts_ms,
+                    "ts_ms": now_ts_ms,
+                    "origin": "productivity.notes.endpoint",
                 },
             }
             point = models.PointStruct(id=pid, vector=vec, payload=payload_q)

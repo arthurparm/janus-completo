@@ -4,14 +4,16 @@ import re
 import time
 from datetime import datetime, UTC, timedelta
 from typing import Any, List
-from uuid import uuid4
-
 import structlog
 from qdrant_client import models as qdrant_models
 
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.memory_core import get_memory_db
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 from app.services.llm_service import LLMService
 from app.repositories.llm_repository import get_llm_repository
@@ -53,6 +55,10 @@ class GenerativeMemoryService:
             metadata["session_id"] = metadata.get("conversation_id")
         if metadata.get("session_id") and not metadata.get("conversation_id"):
             metadata["conversation_id"] = metadata.get("session_id")
+        now_ms = int(time.time() * 1000)
+        metadata.setdefault("access_count", 0)
+        metadata.setdefault("last_accessed_at", now_ms)
+        metadata.setdefault("origin", "memory.generative")
         
         # 1. Calculate Importance
         if metadata.get("importance") is None:
@@ -173,7 +179,9 @@ class GenerativeMemoryService:
         if not user_id:
             return
         try:
-            collection_name = await aget_or_create_collection(f"user_{user_id}")
+            collection_name = await aget_or_create_collection(
+                build_user_memory_collection_name(user_id)
+            )
             client = get_async_qdrant_client()
             try:
                 vec = await aembed_text(experience.content)
@@ -196,7 +204,7 @@ class GenerativeMemoryService:
                 payload_meta["conversation_id"] = payload_meta.get("session_id")
 
             point = qdrant_models.PointStruct(
-                id=str(uuid4()),
+                id=str(experience.id),
                 vector=vec,
                 payload={
                     "content": experience.content,

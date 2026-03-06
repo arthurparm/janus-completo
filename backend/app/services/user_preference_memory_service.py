@@ -11,7 +11,11 @@ from qdrant_client import models as qdrant_models
 
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.generative_memory import generative_memory_service
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -156,7 +160,9 @@ class UserPreferenceMemoryService:
         active_only: bool = True,
         query: str | None = None,
     ) -> list[dict[str, Any]]:
-        collection_name = await aget_or_create_collection(f"user_{user_id}")
+        collection_name = await aget_or_create_collection(
+            build_user_memory_collection_name(user_id)
+        )
         client = get_async_qdrant_client()
 
         must: list[qdrant_models.FieldCondition] = [

@@ -17,9 +17,7 @@ except Exception:
             pass
 
     Histogram = Counter = _Noop
-import asyncio
 from typing import Any
-from uuid import uuid4
 
 from fastapi import Request
 from qdrant_client import models
@@ -31,6 +29,8 @@ from app.core.protocols import MemoryRepositoryProtocol
 from app.db.vector_store import (
     aget_or_create_collection,
     async_count_points,
+    build_deterministic_point_id,
+    build_user_chat_collection_name,
     get_async_qdrant_client,
 )
 from app.models.schemas import Experience
@@ -250,7 +250,9 @@ class MemoryService:
 
         logger.info("Indexando interaÃ§Ã£o no vetor (MemÃ³ria)", user_id=user_id, role=role)
         try:
-            collection_name = await aget_or_create_collection(f"user_{user_id}")
+            collection_name = await aget_or_create_collection(
+                build_user_chat_collection_name(user_id)
+            )
             client = get_async_qdrant_client()
 
             max_points = int(getattr(settings, "CHAT_INDEX_MAX_POINTS_PER_USER", 200000) or 200000)
@@ -276,19 +278,36 @@ class MemoryService:
 
             payload = {
                 "content": content,
+                "type": "chat_msg",
                 "ts_ms": now_ms,
+                "composite_id": build_deterministic_point_id(
+                    "chat-msg-composite",
+                    user_id,
+                    session_id,
+                    role,
+                    now_ms,
+                    content,
+                ),
                 "metadata": {
                     "type": "chat_msg",
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "role": role,
+                    "user_id": str(user_id),
+                    "session_id": str(session_id),
+                    "conversation_id": str(session_id),
+                    "role": str(role),
                     "timestamp": now_ms,
+                    "ts_ms": now_ms,
+                    "origin": "chat.index_interaction",
                 },
             }
 
-            composite_id = f"chat:{user_id}:{session_id}:{uuid4().hex}"
-            payload["composite_id"] = composite_id
-            point_id = str(uuid4())
+            point_id = build_deterministic_point_id(
+                "chat-msg",
+                user_id,
+                session_id,
+                role,
+                now_ms,
+                content,
+            )
             point = models.PointStruct(id=point_id, vector=vec, payload=payload)
 
             await client.upsert(collection_name=collection_name, points=[point])
@@ -300,5 +319,3 @@ class MemoryService:
 # PadrÃ£o de InjeÃ§Ã£o de DependÃªncia: Getter para o serviÃ§o
 def get_memory_service(request: Request) -> MemoryService:
     return request.app.state.memory_service
-
-

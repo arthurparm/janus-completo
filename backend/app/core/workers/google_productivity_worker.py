@@ -9,7 +9,11 @@ import structlog
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import get_broker
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 from app.models.schemas import TaskMessage
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.user_repository import OAuthTokenRepository
@@ -284,7 +288,9 @@ async def start_google_productivity_consumer():
                     try:
                         _t0 = __import__("time").perf_counter()
                         client = get_async_qdrant_client()
-                        coll = await aget_or_create_collection(f"user_{user_id}")
+                        coll = await aget_or_create_collection(
+                            build_user_memory_collection_name(str(user_id))
+                        )
                         title = str(ev.get("title", ""))
                         loc = str(ev.get("location", ""))
                         content = f"{title} @ {loc}"
@@ -292,12 +298,16 @@ async def start_google_productivity_consumer():
                         pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
                         payload_q = {
                             "content": content,
+                            "type": "calendar_event",
+                            "ts_ms": int(ev.get("start_ts") or 0),
+                            "composite_id": pid,
                             "metadata": {
                                 "type": "calendar_event",
                                 "origin": "google",
                                 "scope": "calendar.write",
                                 "user_id": str(user_id),
                                 "timestamp": int(ev.get("start_ts") or 0),
+                                "ts_ms": int(ev.get("start_ts") or 0),
                             },
                         }
                         from qdrant_client import models as _m
@@ -429,20 +439,27 @@ async def start_google_productivity_consumer():
                         try:
                             _t0 = __import__("time").perf_counter()
                             client = get_async_qdrant_client()
-                            coll = await aget_or_create_collection(f"user_{user_id}")
+                            coll = await aget_or_create_collection(
+                                build_user_memory_collection_name(str(user_id))
+                            )
                             content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
                             vec = await aembed_text(content)
-                            composite_id = f"mail:{user_id}:{hash(content)}"
+                            composite_id = (
+                                f"mail:{user_id}:{msg.get('to', '')!s}:{msg.get('subject', '')!s}:{content}"
+                            )
                             pid = str(uuid5(NAMESPACE_URL, composite_id))
                             payload_q = {
                                 "content": content,
+                                "type": "email_message",
+                                "ts_ms": int(__import__("time").time() * 1000),
                                 "composite_id": composite_id,
                                 "metadata": {
                                     "type": "email_message",
                                     "origin": "google",
                                     "scope": "mail.send",
                                     "user_id": str(user_id),
-                                    "timestamp": int(__import__("time").time()),
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                    "ts_ms": int(__import__("time").time() * 1000),
                                 },
                             }
                             from qdrant_client import models as _m

@@ -13,7 +13,6 @@ from app.core.monitoring.poison_pill_handler import (
 )
 from app.db.graph import get_graph_db
 from app.db import db
-from app.db.vector_store import aget_collection_info
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import AuditEvent, Message
 from app.models.user_models import Session as ChatSession
@@ -169,8 +168,11 @@ class ObservabilityRepository:
 
         metrics = await asyncio.to_thread(_compute_sql_metrics)
         try:
-            info = await aget_collection_info(f"user_{user_id}")
-            metrics["vector_points"] = int(info.get("points_count") or 0)
+            from app.db.vector_store import aget_total_points, get_user_collection_names
+
+            metrics["vector_points"] = await aget_total_points(
+                list(get_user_collection_names(str(user_id)).values())
+            )
         except Exception:
             metrics["vector_points"] = 0
         return metrics

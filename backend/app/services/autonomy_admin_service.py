@@ -17,6 +17,7 @@ from fastapi import Request
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
+from app.db.vector_store import build_deterministic_point_id
 from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience, GraphRelationship
 from app.repositories.memory_repository import MemoryRepository
@@ -1167,7 +1168,18 @@ class AutonomyAdminService:
             "domain_tags": summary_payload.get("domain_tags") or [],
             "local_only": self._self_study_local_only,
         }
-        experience = Experience(type="episodic", content=compact_text, metadata=metadata)
+        summary_version = summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION
+        experience = Experience(
+            id=build_deterministic_point_id(
+                "self-study",
+                rel_path,
+                sha_after or "",
+                summary_version,
+            ),
+            type="episodic",
+            content=compact_text,
+            metadata=metadata,
+        )
         memory_repo = MemoryRepository(await get_memory_db())
         await memory_repo.save_experience(experience)
         return experience

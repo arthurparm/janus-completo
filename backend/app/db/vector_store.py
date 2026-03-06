@@ -1,5 +1,9 @@
-import structlog
+import re
+import uuid
+from dataclasses import dataclass
+
 import requests
+import structlog
 import urllib3
 from qdrant_client import AsyncQdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
@@ -29,6 +33,132 @@ _async_qdrant_client: AsyncQdrantClient | None = None
 _MIN_VECTOR_SIZE = 1
 _MAX_VECTOR_SIZE = 10000
 _DEFAULT_VECTOR_SIZE = 1536
+_DEFAULT_INDEXING_THRESHOLD = 200
+_DEFAULT_FULL_SCAN_THRESHOLD = 200
+
+
+@dataclass(frozen=True)
+class CollectionSpec:
+    name: str
+    hnsw_m: int = 32
+    ef_construct: int = 200
+    full_scan_threshold: int = _DEFAULT_FULL_SCAN_THRESHOLD
+    indexing_threshold: int = _DEFAULT_INDEXING_THRESHOLD
+    use_quantization: bool = True
+    payload_indexes: dict[str, PayloadSchemaType] | None = None
+
+
+_LEGACY_USER_COLLECTION_PATTERN = re.compile(r"^user_[A-Za-z0-9_-]+$")
+
+
+def _sanitize_user_fragment(user_id: str) -> str:
+    value = str(user_id or "").strip()
+    if not value:
+        raise ValueError("user_id inválido.")
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", value)
+    if not sanitized:
+        raise ValueError("user_id inválido.")
+    return sanitized
+
+
+def build_user_chat_collection_name(user_id: str) -> str:
+    return f"user_chat_{_sanitize_user_fragment(user_id)}"
+
+
+def build_user_docs_collection_name(user_id: str) -> str:
+    return f"user_docs_{_sanitize_user_fragment(user_id)}"
+
+
+def build_user_memory_collection_name(user_id: str) -> str:
+    return f"user_memory_{_sanitize_user_fragment(user_id)}"
+
+
+def get_user_collection_names(user_id: str) -> dict[str, str]:
+    return {
+        "chat": build_user_chat_collection_name(user_id),
+        "docs": build_user_docs_collection_name(user_id),
+        "memory": build_user_memory_collection_name(user_id),
+    }
+
+
+def build_deterministic_point_id(namespace: str, *parts: object) -> str:
+    joined = ":".join(str(part or "").strip() for part in parts)
+    seed = f"{namespace}:{joined}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+
+
+def _infer_collection_spec(collection_name: str) -> CollectionSpec:
+    episodic_indexes = {
+        "metadata.type": PayloadSchemaType.KEYWORD,
+        "metadata.origin": PayloadSchemaType.KEYWORD,
+        "metadata.source_kind": PayloadSchemaType.KEYWORD,
+        "metadata.content_kind": PayloadSchemaType.KEYWORD,
+        "metadata.consolidation_status": PayloadSchemaType.KEYWORD,
+        "metadata.file_path": PayloadSchemaType.KEYWORD,
+        "metadata.sha_after": PayloadSchemaType.KEYWORD,
+        "metadata.user_id": PayloadSchemaType.KEYWORD,
+        "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+        "metadata.strong_memory": PayloadSchemaType.BOOL,
+        "metadata.captured_at": PayloadSchemaType.INTEGER,
+        "metadata.timestamp": PayloadSchemaType.INTEGER,
+    }
+    if collection_name == getattr(settings, "QDRANT_COLLECTION_EPISODIC", "janus_episodic_memory"):
+        return CollectionSpec(name=collection_name, payload_indexes=episodic_indexes)
+    if collection_name.startswith("user_chat_"):
+        return CollectionSpec(
+            name=collection_name,
+            payload_indexes={
+                "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
+                "metadata.session_id": PayloadSchemaType.KEYWORD,
+                "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+                "metadata.role": PayloadSchemaType.KEYWORD,
+                "metadata.origin": PayloadSchemaType.KEYWORD,
+                "metadata.timestamp": PayloadSchemaType.INTEGER,
+            },
+        )
+    if collection_name.startswith("user_docs_"):
+        return CollectionSpec(
+            name=collection_name,
+            payload_indexes={
+                "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
+                "metadata.doc_id": PayloadSchemaType.KEYWORD,
+                "metadata.file_name": PayloadSchemaType.KEYWORD,
+                "metadata.content_hash": PayloadSchemaType.KEYWORD,
+                "metadata.status": PayloadSchemaType.KEYWORD,
+                "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+                "metadata.origin": PayloadSchemaType.KEYWORD,
+                "metadata.timestamp": PayloadSchemaType.INTEGER,
+            },
+        )
+    if collection_name.startswith("user_memory_"):
+        return CollectionSpec(
+            name=collection_name,
+            payload_indexes={
+                "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
+                "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+                "metadata.session_id": PayloadSchemaType.KEYWORD,
+                "metadata.origin": PayloadSchemaType.KEYWORD,
+                "metadata.status": PayloadSchemaType.KEYWORD,
+                "metadata.active": PayloadSchemaType.BOOL,
+                "metadata.preference_kind": PayloadSchemaType.KEYWORD,
+                "metadata.timestamp": PayloadSchemaType.INTEGER,
+            },
+        )
+    if _LEGACY_USER_COLLECTION_PATTERN.match(collection_name):
+        return CollectionSpec(
+            name=collection_name,
+            payload_indexes={
+                "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
+                "metadata.origin": PayloadSchemaType.KEYWORD,
+                "metadata.status": PayloadSchemaType.KEYWORD,
+                "metadata.timestamp": PayloadSchemaType.INTEGER,
+            },
+        )
+    return CollectionSpec(name=collection_name, payload_indexes={"metadata.timestamp": PayloadSchemaType.INTEGER})
 
 def _resolve_qdrant_api_key() -> str | None:
     api_key = getattr(settings, "QDRANT_API_KEY", None)
@@ -63,6 +193,141 @@ async def async_count_points(
     return int(getattr(resp, "count", 0) or 0)
 
 
+async def _ensure_collection_tuning(
+    client: AsyncQdrantClient, collection_name: str, spec: CollectionSpec
+) -> None:
+    try:
+        await client.update_collection(
+            collection_name=collection_name,
+            hnsw_config=models.HnswConfigDiff(
+                m=spec.hnsw_m,
+                ef_construct=spec.ef_construct,
+                full_scan_threshold=spec.full_scan_threshold,
+            ),
+            optimizer_config=models.OptimizersConfigDiff(
+                indexing_threshold=spec.indexing_threshold
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "log_warning",
+            message=f"Falha ao ajustar tuning da coleção '{collection_name}': {exc}",
+        )
+
+
+async def _ensure_payload_indexes(
+    client: AsyncQdrantClient, collection_name: str, spec: CollectionSpec
+) -> None:
+    for field_name, schema in (spec.payload_indexes or {}).items():
+        try:
+            await client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=schema,
+            )
+        except Exception as exc:
+            logger.debug(
+                "qdrant_payload_index_ensure_failed",
+                field_name=field_name,
+                collection=collection_name,
+                error=str(exc),
+            )
+
+
+async def aensure_collection(
+    client: AsyncQdrantClient,
+    collection_name: str,
+    vector_size: int = _DEFAULT_VECTOR_SIZE,
+) -> str:
+    collection_name = _validate_collection_name(collection_name)
+    vector_size = _validate_vector_size(vector_size)
+    spec = _infer_collection_spec(collection_name)
+    try:
+        collection_info = await client.get_collection(collection_name=collection_name)
+        if collection_info.config.params.vectors.size != vector_size:
+            logger.warning(
+                "log_warning",
+                message=f"Tamanho do vetor da coleção '{collection_name}' difere do solicitado.",
+            )
+        await _ensure_collection_tuning(client, collection_name, spec)
+        await _ensure_payload_indexes(client, collection_name, spec)
+        return collection_name
+    except UnexpectedResponse as get_error:
+        if get_error.status_code != 404:
+            logger.error(
+                "log_error",
+                message=f"Falha ao consultar coleção async '{collection_name}': {get_error}",
+                exc_info=True,
+            )
+            raise ConnectionError(
+                f"Não foi possível consultar a coleção async: {get_error}"
+            ) from get_error
+    except Exception as get_error:
+        logger.error(
+            "log_error",
+            message=f"Falha inesperada ao consultar coleção async '{collection_name}': {get_error}",
+            exc_info=True,
+        )
+        raise ConnectionError(
+            f"Não foi possível consultar a coleção async: {get_error}"
+        ) from get_error
+
+    logger.warning("log_warning", message=f"Coleção '{collection_name}' não encontrada. Criando via async...")
+    try:
+        create_kwargs: dict[str, object] = {
+            "collection_name": collection_name,
+            "vectors_config": models.VectorParams(
+                size=vector_size, distance=models.Distance.COSINE
+            ),
+            "hnsw_config": models.HnswConfigDiff(
+                m=spec.hnsw_m,
+                ef_construct=spec.ef_construct,
+                full_scan_threshold=spec.full_scan_threshold,
+            ),
+            "optimizers_config": models.OptimizersConfigDiff(
+                indexing_threshold=spec.indexing_threshold
+            ),
+        }
+        if spec.use_quantization:
+            create_kwargs["quantization_config"] = models.ScalarQuantization(
+                scalar=models.ScalarQuantizationConfig(
+                    type=models.ScalarType.INT8,
+                    quantile=0.99,
+                    always_ram=True,
+                )
+            )
+        await client.create_collection(**create_kwargs)
+        logger.info("log_info", message=f"Coleção '{collection_name}' criada via async.")
+    except UnexpectedResponse as create_error:
+        if create_error.status_code == 409:
+            logger.info(
+                "log_info",
+                message=f"Coleção '{collection_name}' já foi criada por outra requisição (409). Continuando.",
+            )
+        else:
+            logger.error(
+                "log_error",
+                message=f"Falha ao criar coleção async '{collection_name}': {create_error}",
+                exc_info=True,
+            )
+            raise ConnectionError(
+                f"Não foi possível criar a coleção async: {create_error}"
+            ) from create_error
+    except Exception as create_error:
+        logger.error(
+            "log_error",
+            message=f"Falha ao criar coleção async '{collection_name}': {create_error}",
+            exc_info=True,
+        )
+        raise ConnectionError(
+            f"Não foi possível criar a coleção async: {create_error}"
+        ) from create_error
+
+    await _ensure_collection_tuning(client, collection_name, spec)
+    await _ensure_payload_indexes(client, collection_name, spec)
+    return collection_name
+
+
 def _validate_vector_size(vector_size: int) -> int:
     if not isinstance(vector_size, int) or not (
         _MIN_VECTOR_SIZE <= vector_size <= _MAX_VECTOR_SIZE
@@ -87,111 +352,8 @@ async def aget_or_create_collection(
     collection_name: str, vector_size: int = _DEFAULT_VECTOR_SIZE
 ) -> str:
     """Versão assíncrona para obter ou criar uma coleção no Qdrant."""
-    collection_name = _validate_collection_name(collection_name)
-    vector_size = _validate_vector_size(vector_size)
     async_client = get_async_qdrant_client()
-    try:
-        collection_info = await async_client.get_collection(collection_name=collection_name)
-        if collection_info.config.params.vectors.size != vector_size:
-            logger.warning("log_warning", message=f"Tamanho do vetor da coleção '{collection_name}' difere do solicitado.")
-    except UnexpectedResponse as get_error:
-        if get_error.status_code != 404:
-            logger.error(
-                "log_error",
-                message=f"Falha ao consultar coleção async '{collection_name}': {get_error}",
-                exc_info=True,
-            )
-            raise ConnectionError(
-                f"Não foi possível consultar a coleção async: {get_error}"
-            ) from get_error
-        logger.warning("log_warning", message=f"Coleção '{collection_name}' não encontrada. Criando via async...")
-        try:
-            await async_client.create_collection(
-                collection_name=collection_name,
-                vectors_config=models.VectorParams(
-                    size=vector_size, distance=models.Distance.COSINE
-                ),
-                # EVOLUTION: Scalar Quantization (Int8) for 4x memory compression
-                quantization_config=models.ScalarQuantization(
-                    scalar=models.ScalarQuantizationConfig(
-                        type=models.ScalarType.INT8,
-                        quantile=0.99,
-                        always_ram=True,
-                    )
-                ),
-                # EVOLUTION: Optimized HNSW for scale
-                hnsw_config=models.HnswConfigDiff(
-                    m=32,
-                    ef_construct=200,
-                    full_scan_threshold=10000,
-                ),
-            )
-            logger.info("log_info", message=f"Coleção '{collection_name}' criada via async.")
-        except UnexpectedResponse as create_error:
-            # Corrida concorrente: duas requests fazem get(404) e uma perde no create(409).
-            if create_error.status_code == 409:
-                logger.info(
-                    "log_info",
-                    message=f"Coleção '{collection_name}' já foi criada por outra requisição (409). Continuando.",
-                )
-            else:
-                logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
-                )
-                raise ConnectionError(
-                    f"Não foi possível criar a coleção async: {create_error}"
-                ) from create_error
-        except Exception as create_error:
-            logger.error("log_error", message=f"Falha ao criar coleção async '{collection_name}': {create_error}", exc_info=True
-            )
-            raise ConnectionError(
-                f"Não foi possível criar a coleção async: {create_error}"
-            ) from create_error
-        try:
-            # Criar índices de payload para metadados importantes
-            await async_client.create_payload_index(
-                collection_name=collection_name,
-                field_name="metadata.type",
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            await async_client.create_payload_index(
-                collection_name=collection_name,
-                field_name="metadata.timestamp",
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-            try:
-                await async_client.create_payload_index(
-                    collection_name=collection_name,
-                    field_name="metadata.origin",
-                    field_schema=PayloadSchemaType.KEYWORD,
-                )
-            except Exception as e:
-                logger.warning("log_warning", message=f"Failed to create async 'origin' index for {collection_name}: {e}")
-            try:
-                await async_client.create_payload_index(
-                    collection_name=collection_name,
-                    field_name="metadata.status",
-                    field_schema=PayloadSchemaType.KEYWORD,
-                )
-            except Exception as e:
-                logger.warning("log_warning", message=f"Failed to create async 'status' index for {collection_name}: {e}")
-            logger.info("log_info", message=f"Índices de payload para '{collection_name}' criados em metadata.type e metadata.timestamp via async."
-            )
-        except Exception as index_error:
-            logger.warning(
-                "log_warning",
-                message=f"Falha ao garantir índices de payload para '{collection_name}' via async: {index_error}",
-                exc_info=True,
-            )
-    except Exception as get_error:
-        logger.error(
-            "log_error",
-            message=f"Falha inesperada ao consultar coleção async '{collection_name}': {get_error}",
-            exc_info=True,
-        )
-        raise ConnectionError(
-            f"Não foi possível consultar a coleção async: {get_error}"
-        ) from get_error
-    return collection_name
+    return await aensure_collection(async_client, collection_name=collection_name, vector_size=vector_size)
 
 
 async def check_qdrant_readiness() -> bool:
@@ -254,3 +416,14 @@ async def aget_collection_info(collection_name: str) -> dict:
     except Exception as e:
         logger.error("log_error", message=f"Erro ao obter informações da coleção '{collection_name}' (async): {e}")
         raise
+
+
+async def aget_total_points(collection_names: list[str]) -> int:
+    total = 0
+    for collection_name in collection_names:
+        try:
+            info = await aget_collection_info(collection_name)
+            total += int(info.get("points_count") or 0)
+        except Exception:
+            continue
+    return total

@@ -10,6 +10,7 @@ from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.db.vector_store import aensure_collection
 from app.models.schemas import VectorCollection
 
 try:
@@ -74,21 +75,12 @@ class QdrantProvider:
 
         for attempt in range(max_retries):
             try:
-                try:
-                    await self.client.get_collection(self.collection_name)
-                    logger.info("log_info", message=f"Coleção '{self.collection_name}' já existe.")
-                except Exception:
-                    logger.info("log_info", message=f"Coleção '{self.collection_name}' não encontrada. Criando...")
-                    await self.client.create_collection(
-                        collection_name=self.collection_name,
-                        vectors_config=models.VectorParams(
-                            size=self._vector_size, distance=models.Distance.COSINE
-                        ),
-                    )
-                    logger.info("Coleção criada com sucesso.")
-
+                await aensure_collection(
+                    self.client,
+                    collection_name=self.collection_name,
+                    vector_size=self._vector_size,
+                )
                 self._offline = False
-                await self._ensure_payload_indexes()
                 return
             except Exception as e:
                 is_last = attempt == max_retries - 1

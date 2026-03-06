@@ -9,7 +9,13 @@ from qdrant_client import models
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.generative_memory import generative_memory_service
 from app.core.security.request_guard import resolve_user_scope_id
-from app.db.vector_store import aget_or_create_collection, get_async_qdrant_client
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_chat_collection_name,
+    build_user_docs_collection_name,
+    build_user_memory_collection_name,
+    get_async_qdrant_client,
+)
 from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.user_preference_memory_service import user_preference_memory_service
@@ -94,6 +100,68 @@ def _point_to_item(point: Any) -> MemoryTimelineItem:
     )
 
 
+def _timeline_user_collections(user_id: str) -> list[str]:
+    return [
+        build_user_memory_collection_name(user_id),
+        build_user_chat_collection_name(user_id),
+        build_user_docs_collection_name(user_id),
+    ]
+
+
+async def _load_user_timeline_points(
+    *,
+    user_id: str,
+    query: str | None,
+    start_ts: int | None,
+    end_ts: int | None,
+    limit: int,
+) -> list[Any]:
+    client = get_async_qdrant_client()
+    vector = await aembed_text(query) if query else None
+    points: list[Any] = []
+    for collection_name in _timeline_user_collections(user_id):
+        coll = await aget_or_create_collection(collection_name)
+        must: list[models.FieldCondition] = []
+        if start_ts is not None or end_ts is not None:
+            rng = models.Range(gte=start_ts, lte=end_ts)
+            must.append(models.FieldCondition(key="metadata.timestamp", range=rng))
+        qfilter = models.Filter(must=must) if must else None
+        if vector is not None:
+            res = await client.query_points(
+                collection_name=coll,
+                query=vector,
+                limit=limit,
+                with_payload=True,
+                query_filter=qfilter,
+            )
+            coll_points = list(getattr(res, "points", res) or [])
+        else:
+            coll_points, _ = await client.scroll(
+                collection_name=coll,
+                scroll_filter=qfilter,
+                limit=limit,
+                with_payload=True,
+            )
+        points.extend(coll_points)
+    return points
+
+
+def _sort_and_dedupe_timeline(items: list[MemoryTimelineItem], limit: int) -> list[MemoryTimelineItem]:
+    deduped: dict[str, MemoryTimelineItem] = {}
+    for item in items:
+        key = str(
+            item.composite_id
+            or (item.metadata or {}).get("dedupe_key")
+            or (item.metadata or {}).get("doc_id")
+            or f"{item.content}:{item.ts_ms}"
+        )
+        current = deduped.get(key)
+        if current is None or int(item.ts_ms or 0) > int(current.ts_ms or 0):
+            deduped[key] = item
+    ordered = sorted(deduped.values(), key=lambda item: item.ts_ms or 0, reverse=True)
+    return ordered[:limit]
+
+
 @router.get("/timeline", response_model=list[MemoryTimelineItem])
 async def get_memories_timeline(
     request: Request,
@@ -129,39 +197,15 @@ async def get_memories_timeline(
 
     if resolved_user_id:
         try:
-            collection_name = await aget_or_create_collection(f"user_{resolved_user_id}")
-            client = get_async_qdrant_client()
-
-            must: list[models.FieldCondition] = []
-            if start_ts is not None or end_ts is not None:
-                rng = models.Range(gte=start_ts, lte=end_ts)
-                must.append(models.FieldCondition(key="metadata.timestamp", range=rng))
-
-            qfilter = models.Filter(must=must) if must else None
-
-            points: list[Any] = []
-            if query:
-                vec = await aembed_text(query)
-                res = await client.query_points(
-                    collection_name=collection_name,
-                    query=vec,
-                    limit=limit,
-                    with_payload=True,
-                    query_filter=qfilter,
-                )
-                points = getattr(res, "points", res) or []
-            else:
-                scroll_limit = min(500, max(limit * 5, limit))
-                points, _ = await client.scroll(
-                    collection_name=collection_name,
-                    scroll_filter=qfilter,
-                    limit=scroll_limit,
-                    with_payload=True,
-                )
-
-            items = [_point_to_item(p) for p in points]
-            items.sort(key=lambda item: item.ts_ms or 0, reverse=True)
-            return items[:limit]
+            fetch_limit = min(500, max(limit * 5, limit))
+            points = await _load_user_timeline_points(
+                user_id=str(resolved_user_id),
+                query=query,
+                start_ts=start_ts,
+                end_ts=end_ts,
+                limit=fetch_limit,
+            )
+            return _sort_and_dedupe_timeline([_point_to_item(p) for p in points], limit)
         except Exception as e:
             logger.error("log_error", message=f"Error retrieving user timeline: {e}", exc_info=True)
             raise HTTPException(
