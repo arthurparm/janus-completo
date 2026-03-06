@@ -319,16 +319,22 @@ async def test_admin_code_qa_replaces_legacy_answer_with_evidence_summary(monkey
 @pytest.mark.asyncio
 async def test_persist_self_memory_inserts_with_between_foreach_and_optional(monkeypatch):
     service = _new_service(citations=[])
-    captured_query: dict[str, str] = {}
+    captured_queries: dict[str, str] = {}
     captured_params: dict[str, object] = {}
+    owner_params: dict[str, object] = {}
 
     class _CaptureGraph:
         async def query(self, query: str, params: dict[str, object], *args, **kwargs):
             operation = str(kwargs.get("operation") or "")
-            if operation == "self_study_selfmemory_upsert":
-                captured_query["value"] = query
+            captured_queries[operation] = query
+            if operation == "self_study_selfmemory_node_upsert":
                 captured_params.update(params)
                 return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_owner_link":
+                owner_params.update(params)
+                return [{"owner_links": 1}]
+            if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
+                return [{"symbol_links": 1}]
             if operation == "self_study_selfmemory_verify":
                 return [{"owner_links": 1, "symbol_links": 1}]
             return []
@@ -354,16 +360,17 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
         source_experience_id="exp-1",
     )
 
-    query = captured_query["value"]
-    assert "MERGE (m)-[:RELATES_TO]->(owner)" in query
-    assert "OPTIONAL MATCH (fn:CodeFunction)" in query
-    assert "OPTIONAL MATCH (cl:CodeClass)" in query
-    assert "MERGE (m)-[:DEFINES]->(fn)" in query
-    candidates = captured_params.get("path_candidates")
+    assert "MERGE (m:SelfMemory {file_path: $file_path})" in captured_queries["self_study_selfmemory_node_upsert"]
+    assert "MERGE (m)-[:RELATES_TO]->(owner)" in captured_queries["self_study_selfmemory_owner_link"]
+    assert "MATCH (fn:CodeFunction)" in captured_queries["self_study_selfmemory_function_link"]
+    assert "MATCH (cl:CodeClass)" in captured_queries["self_study_selfmemory_class_link"]
+    candidates = owner_params.get("path_candidates")
     assert isinstance(candidates, list)
     assert "backend/app/services/autonomy_admin_service.py" in candidates
     assert "/backend/app/services/autonomy_admin_service.py" in candidates
     assert "app/services/autonomy_admin_service.py" in candidates
+    owner_query = captured_queries["self_study_selfmemory_owner_link"]
+    assert "owner.path IN $path_candidates" in owner_query
     assert captured_params["source_experience_id"] == "exp-1"
     assert captured_params["symbols"] == ["AutonomyAdminService"]
 
@@ -377,8 +384,14 @@ async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch)
         async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
             query_calls.append(str(kwargs.get("operation") or ""))
             operation = str(kwargs.get("operation") or "")
-            if operation == "self_study_selfmemory_upsert":
+            if operation == "self_study_selfmemory_node_upsert":
                 return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_owner_link":
+                if query_calls.count("self_study_selfmemory_owner_link") == 1:
+                    return [{"owner_links": 0}]
+                return [{"owner_links": 1}]
+            if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
+                return [{"symbol_links": 0}]
             if operation == "self_study_selfmemory_verify":
                 if query_calls.count("self_study_selfmemory_verify") == 1:
                     return [{"owner_links": 0, "symbol_links": 0}]
@@ -415,7 +428,8 @@ async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch)
         source_experience_id="exp-1",
     )
 
-    assert query_calls.count("self_study_selfmemory_upsert") == 2
+    assert query_calls.count("self_study_selfmemory_node_upsert") == 2
+    assert query_calls.count("self_study_selfmemory_owner_link") == 2
     assert query_calls.count("self_study_selfmemory_verify") == 2
     assert reindex_calls["count"] == 0
 
@@ -429,8 +443,12 @@ async def test_persist_self_memory_uses_verify_query_to_avoid_false_negative(mon
         async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
             operation = str(kwargs.get("operation") or "")
             query_calls.append(operation)
-            if operation == "self_study_selfmemory_upsert":
+            if operation == "self_study_selfmemory_node_upsert":
                 return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_owner_link":
+                return [{"owner_links": 1}]
+            if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
+                return [{"symbol_links": 0}]
             if operation == "self_study_selfmemory_verify":
                 return [{"owner_links": 1, "symbol_links": 1}]
             if operation == "self_study_code_graph_file_count":
@@ -465,7 +483,8 @@ async def test_persist_self_memory_uses_verify_query_to_avoid_false_negative(mon
         source_experience_id="exp-1",
     )
 
-    assert query_calls.count("self_study_selfmemory_upsert") == 1
+    assert query_calls.count("self_study_selfmemory_node_upsert") == 1
+    assert query_calls.count("self_study_selfmemory_owner_link") == 1
     assert query_calls.count("self_study_selfmemory_verify") == 1
     assert reindex_calls["count"] == 0
 

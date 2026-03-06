@@ -1027,7 +1027,7 @@ class AutonomyAdminService:
         rel_types: list[str],
     ) -> list[dict[str, Any]]:
         graph = await get_graph_db()
-        return await graph.query(
+        await graph.query(
             """
             MERGE (m:SelfMemory {file_path: $file_path})
             SET m.summary = $summary,
@@ -1042,34 +1042,10 @@ class AutonomyAdminService:
                 m.sha_after = $sha_after,
                 m.source_experience_id = $source_experience_id,
                 m.updated_at = timestamp()
-            WITH m, $path_candidates AS path_candidates
-            OPTIONAL MATCH (owner)
-            WHERE (owner:File OR owner:CodeFile) AND owner.path IN path_candidates
-            WITH m, path_candidates, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
-            FOREACH (owner IN owners |
-              MERGE (m)-[:RELATES_TO]->(owner)
-            )
-            WITH m, path_candidates, owners
-            OPTIONAL MATCH (fn:CodeFunction)
-            WHERE fn.file_path IN path_candidates
-              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
-            WITH m, owners, path_candidates, [node IN collect(DISTINCT fn) WHERE node IS NOT NULL] AS functions
-            FOREACH (fn IN functions |
-              MERGE (m)-[:DEFINES]->(fn)
-            )
-            WITH m, owners, [node IN functions WHERE node IS NOT NULL] AS functions, path_candidates
-            OPTIONAL MATCH (cl:CodeClass)
-            WHERE cl.file_path IN path_candidates
-              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
-            WITH m, owners, functions, [node IN collect(DISTINCT cl) WHERE node IS NOT NULL] AS classes
-            FOREACH (cl IN classes |
-              MERGE (m)-[:DEFINES]->(cl)
-            )
-            RETURN size(owners) AS owner_links, size(functions) + size(classes) AS symbol_links
+            RETURN m.file_path AS file_path
             """,
             {
                 "file_path": rel_path,
-                "path_candidates": path_candidates,
                 "summary": str(summary_payload.get("summary") or "").strip()[:4000],
                 "summary_version": str(summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION),
                 "language": str(summary_payload.get("language") or ""),
@@ -1079,12 +1055,60 @@ class AutonomyAdminService:
                 "domain_tags": summary_payload.get("domain_tags") or [],
                 "confidence": float(summary_payload.get("confidence") or 0.75),
                 "sha_after": sha_after,
-                "symbol_names": symbol_names,
                 "source_experience_id": source_experience_id,
-                "rel_types": rel_types,
             },
-            operation="self_study_selfmemory_upsert",
+            operation="self_study_selfmemory_node_upsert",
         )
+        owner_rows = await graph.query(
+            """
+            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (owner)
+            WHERE (owner:File OR owner:CodeFile) AND owner.path IN $path_candidates
+            MERGE (m)-[:RELATES_TO]->(owner)
+            RETURN count(DISTINCT owner) AS owner_links
+            """,
+            {
+                "file_path": rel_path,
+                "path_candidates": path_candidates,
+            },
+            operation="self_study_selfmemory_owner_link",
+        )
+        function_rows = await graph.query(
+            """
+            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (fn:CodeFunction)
+            WHERE fn.file_path IN $path_candidates
+              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
+            MERGE (m)-[:DEFINES]->(fn)
+            RETURN count(DISTINCT fn) AS symbol_links
+            """,
+            {
+                "file_path": rel_path,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="self_study_selfmemory_function_link",
+        )
+        class_rows = await graph.query(
+            """
+            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (cl:CodeClass)
+            WHERE cl.file_path IN $path_candidates
+              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
+            MERGE (m)-[:DEFINES]->(cl)
+            RETURN count(DISTINCT cl) AS symbol_links
+            """,
+            {
+                "file_path": rel_path,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="self_study_selfmemory_class_link",
+        )
+        owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
+        function_links = int((function_rows or [{}])[0].get("symbol_links", 0) or 0)
+        class_links = int((class_rows or [{}])[0].get("symbol_links", 0) or 0)
+        return [{"owner_links": owner_links, "symbol_links": function_links + class_links}]
 
     async def _get_self_memory_graph_link_counts(
         self,
