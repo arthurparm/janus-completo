@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import sys
+from logging.handlers import RotatingFileHandler
 from typing import Any
 
 import structlog
@@ -192,7 +193,14 @@ def setup_logging(
             if log_dir and not os.path.exists(log_dir):
                 os.makedirs(log_dir, exist_ok=True)
 
-            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            max_bytes = int(getattr(settings, "LOG_FILE_MAX_BYTES", 10 * 1024 * 1024))
+            backup_count = int(getattr(settings, "LOG_FILE_BACKUP_COUNT", 5))
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=max(1, max_bytes),
+                backupCount=max(1, backup_count),
+                encoding="utf-8",
+            )
             file_handler.setFormatter(logging.Formatter("%(message)s"))
             file_handler.addFilter(_LevelFilter(module_levels))
             root.addHandler(file_handler)
@@ -206,7 +214,14 @@ def setup_logging(
             if error_log_dir and not os.path.exists(error_log_dir):
                 os.makedirs(error_log_dir, exist_ok=True)
 
-            error_file_handler = logging.FileHandler(error_log_file, encoding="utf-8")
+            max_bytes = int(getattr(settings, "LOG_FILE_MAX_BYTES", 10 * 1024 * 1024))
+            backup_count = int(getattr(settings, "LOG_FILE_BACKUP_COUNT", 5))
+            error_file_handler = RotatingFileHandler(
+                error_log_file,
+                maxBytes=max(1, max_bytes),
+                backupCount=max(1, backup_count),
+                encoding="utf-8",
+            )
             error_file_handler.setFormatter(logging.Formatter("%(message)s"))
             error_file_handler.addFilter(_LevelFilter(module_levels))
             error_file_handler.setLevel(logging.ERROR)

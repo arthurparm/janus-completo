@@ -286,6 +286,29 @@ class ObservabilityService:
             )
             raise ObservabilityServiceError("Falha ao limpar a quarentena expirada.") from e
 
+    def purge_old_audit_events(self, retention_days: int) -> dict[str, Any]:
+        op = "audit_purge"
+        op_start = self._observe_operation_start(op)
+        logger.info(
+            "observability_audit_purge_requested",
+            operation=op,
+            retention_days=retention_days,
+        )
+        try:
+            removed = self._repo.purge_old_audit_events(retention_days)
+            self._observe_operation_success(op, op_start)
+            self._observe_result_size(op, "events_removed", removed)
+            return {"removed": removed, "retention_days": retention_days}
+        except ObservabilityRepositoryError as e:
+            self._observe_operation_failure(op, op_start, e)
+            logger.exception(
+                "observability_audit_purge_failed",
+                operation=op,
+                retention_days=retention_days,
+                error=str(e),
+            )
+            raise ObservabilityServiceError("Falha ao expurgar eventos de auditoria antigos.") from e
+
     def get_poison_pill_stats(self, queue: str | None = None) -> dict[str, Any]:
         logger.info(
             "observability_poison_pill_stats_requested",

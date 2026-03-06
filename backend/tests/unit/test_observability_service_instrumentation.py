@@ -248,3 +248,58 @@ def test_request_pipeline_dashboard_starts_otel_span_when_tracer_present(fake_me
     assert any(
         span.name == "observability.service.request_pipeline_dashboard" for span in tracer.started
     )
+
+
+def test_purge_old_audit_events_records_metrics_success(fake_metrics):
+    _obs_module, ops_total, duration, result_items, *_ = fake_metrics
+
+    class _Repo:
+        def purge_old_audit_events(self, retention_days: int) -> int:
+            assert retention_days == 30
+            return 12
+
+    service = ObservabilityService(repo=_Repo())
+    result = service.purge_old_audit_events(30)
+
+    assert result["removed"] == 12
+    assert result["retention_days"] == 30
+    assert any(
+        call[0] == "inc"
+        and call[1].get("operation") == "audit_purge"
+        and call[1].get("outcome") == "success"
+        for call in ops_total.calls
+    )
+    assert any(
+        call[0] == "observe" and call[1].get("operation") == "audit_purge"
+        for call in duration.calls
+    )
+    assert any(
+        call[0] == "observe"
+        and call[1].get("operation") == "audit_purge"
+        and call[1].get("kind") == "events_removed"
+        and call[2] == 12
+        for call in result_items.calls
+    )
+
+
+def test_purge_old_audit_events_records_metrics_error(fake_metrics):
+    _obs_module, ops_total, duration, _result_items, *_ = fake_metrics
+
+    class _Repo:
+        def purge_old_audit_events(self, retention_days: int) -> int:
+            raise ObservabilityRepositoryError("boom")
+
+    service = ObservabilityService(repo=_Repo())
+    with pytest.raises(ObservabilityServiceError):
+        service.purge_old_audit_events(30)
+
+    assert any(
+        call[0] == "inc"
+        and call[1].get("operation") == "audit_purge"
+        and call[1].get("outcome") == "error"
+        for call in ops_total.calls
+    )
+    assert any(
+        call[0] == "observe" and call[1].get("operation") == "audit_purge"
+        for call in duration.calls
+    )

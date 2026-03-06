@@ -313,6 +313,10 @@ async def initialize_default_jobs(scheduler: SchedulerService):
     """
     from app.core.agents.meta_agent import get_meta_agent
     from app.core.memory.memory_core import get_memory_db
+    from app.core.monitoring import get_health_monitor
+    from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
+    from app.repositories.observability_repository import ObservabilityRepository
+    from app.services.observability_service import ObservabilityService
 
     # Job: MetaAgent Analysis (a cada 5 minutos)
     async def meta_agent_analysis():
@@ -373,6 +377,32 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         hour=3,
         minute=0,
         metadata={"description": "Limpeza diária de logs e cache"},
+    )
+
+    # Job: SG-013 Audit Retention Cleanup (intervalo configurável)
+    async def audit_retention_cleanup():
+        try:
+            retention_days = max(1, int(getattr(settings, "AUDIT_RETENTION_DAYS", 30)))
+            repo = ObservabilityRepository(get_health_monitor(), get_poison_pill_handler())
+            service = ObservabilityService(repo)
+            result = service.purge_old_audit_events(retention_days)
+            logger.info(
+                "log_info",
+                message="Expurgo automático de auditoria executado",
+                removed=result.get("removed", 0),
+                retention_days=retention_days,
+            )
+        except Exception as e:
+            logger.error("log_error", message=f"Audit retention cleanup failed: {e}")
+
+    scheduler.register_job(
+        name="audit_retention_cleanup",
+        callback=audit_retention_cleanup,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(60, int(getattr(settings, "AUDIT_PURGE_INTERVAL_SECONDS", 3600))),
+        metadata={
+            "description": "Expurgo automático de eventos de auditoria baseado em AUDIT_RETENTION_DAYS",
+        },
     )
 
     # Job: Update Gemini Quotas (a cada 1 hora)

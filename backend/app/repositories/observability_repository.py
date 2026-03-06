@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -527,6 +528,31 @@ class ObservabilityRepository:
                 error=str(e),
             )
             raise ObservabilityRepositoryError("Falha ao contar eventos de auditoria.") from e
+        finally:
+            s.close()
+
+    def purge_old_audit_events(self, retention_days: int) -> int:
+        if retention_days <= 0:
+            raise ObservabilityRepositoryError("retention_days deve ser maior que zero.")
+
+        s = db.get_session_direct()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+            removed = (
+                s.query(AuditEvent)
+                .filter(AuditEvent.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
+            s.commit()
+            return int(removed or 0)
+        except Exception as e:
+            s.rollback()
+            logger.exception(
+                "observability_repo_audit_purge_failed",
+                retention_days=retention_days,
+                error=str(e),
+            )
+            raise ObservabilityRepositoryError("Falha ao expurgar eventos de auditoria.") from e
         finally:
             s.close()
 
