@@ -100,6 +100,24 @@ async def test_memory_core_applies_strong_metadata_contract(monkeypatch):
     assert metadata["file_path"] == "backend/app/services/x.py"
     assert metadata["consolidation_hash"]
 
+
+def test_memory_core_uses_relaxed_quota_for_self_study():
+    class MockSettings:
+        QDRANT_HOST = "localhost"
+        QDRANT_PORT = 6333
+        MEMORY_VECTOR_SIZE = 1536
+        MEMORY_SHORT_TTL_SECONDS = 600
+        MEMORY_SHORT_MAX_ITEMS = 512
+        MEMORY_QUOTA_MAX_ITEMS_PER_ORIGIN = 200
+        MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN = 5_000_000
+        MEMORY_QUOTA_MAX_ITEMS_SELF_STUDY = 5000
+        MEMORY_QUOTA_MAX_BYTES_SELF_STUDY = 25_000_000
+
+    memory = MemoryCore(client=MagicMock(), circuit_breaker=MagicMock(), config=MockSettings())
+
+    assert memory._get_quota_limits("chat") == (200, 5_000_000)
+    assert memory._get_quota_limits("self_study") == (5000, 25_000_000)
+
 if __name__ == "__main__":
     import asyncio
     asyncio.run(test_memory_core_dependency_injection())

@@ -67,6 +67,12 @@ class MemoryCore:
         self._quota_max_bytes = int(
             getattr(self.settings, "MEMORY_QUOTA_MAX_BYTES_PER_ORIGIN", 5_000_000)
         )
+        self._self_study_quota_max_items = int(
+            getattr(self.settings, "MEMORY_QUOTA_MAX_ITEMS_SELF_STUDY", 5000)
+        )
+        self._self_study_quota_max_bytes = int(
+            getattr(self.settings, "MEMORY_QUOTA_MAX_BYTES_SELF_STUDY", 25_000_000)
+        )
 
         # Metrics
         self._quota_rejections = memory_quota_rejections_total
@@ -315,6 +321,7 @@ class MemoryCore:
 
         metadata = experience.metadata or {}
         origin = str(metadata.get("origin") or "unknown")
+        quota_max_items, quota_max_bytes = self._get_quota_limits(origin)
         now = time.time()
         entry = self._quota.get(origin)
         if entry is None or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s:
@@ -325,18 +332,18 @@ class MemoryCore:
         projected_items = int(entry.get("items", 0)) + 1
         projected_bytes = int(entry.get("bytes", 0)) + content_bytes
 
-        if self._quota_max_items > 0 and projected_items > self._quota_max_items:
+        if quota_max_items > 0 and projected_items > quota_max_items:
             self._quota_rejections.inc()
             raise ValueError(
                 f"Memory item quota exceeded for origin '{origin}' "
-                f"({projected_items}/{self._quota_max_items})"
+                f"({projected_items}/{quota_max_items})"
             )
 
-        if self._quota_max_bytes > 0 and projected_bytes > self._quota_max_bytes:
+        if quota_max_bytes > 0 and projected_bytes > quota_max_bytes:
             self._quota_rejections.inc()
             raise ValueError(
                 f"Memory byte quota exceeded for origin '{origin}' "
-                f"({projected_bytes}/{self._quota_max_bytes})"
+                f"({projected_bytes}/{quota_max_bytes})"
             )
 
     def _update_quota(self, experience):
@@ -361,6 +368,11 @@ class MemoryCore:
             for bucket_origin, bucket in list(self._quota.items()):
                 if float(bucket.get("window_start", 0.0)) < cutoff:
                     self._quota.pop(bucket_origin, None)
+
+    def _get_quota_limits(self, origin: str) -> tuple[int, int]:
+        if str(origin or "").strip().lower() == "self_study":
+            return self._self_study_quota_max_items, self._self_study_quota_max_bytes
+        return self._quota_max_items, self._quota_max_bytes
 
     def _get_timestamp_ms(self, ts_str):
         try:
