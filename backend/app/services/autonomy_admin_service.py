@@ -982,7 +982,7 @@ class AutonomyAdminService:
         graph = await get_graph_db()
         rows = await graph.query(
             """
-            MERGE (m:SelfMemory {{file_path: $file_path}})
+            MERGE (m:SelfMemory {file_path: $file_path})
             SET m.summary = $summary,
                 m.summary_version = $summary_version,
                 m.language = $language,
