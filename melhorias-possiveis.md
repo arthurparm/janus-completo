@@ -641,3 +641,14 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-020] Possível SQL Injection em Dedupe Service
+- Problema atual: A classe `DedupeService` utiliza f-strings para construir dinamicamente as tabelas a serem alteradas (ex: `f"UPDATE {table} SET..."`) em chamadas ao `SQLAlchemy`. Se uma entrada não sanitizada vazar no identificador da tabela, isso gerará SQL Injection (Bandit B608).
+- Solucao proposta: Aplicar validador de allowlist estrita aos nomes de tabelas permitidos antes da execução ou evitar a formatação dinâmica utilizando modelos de queries seguros no SQLAlchemy.
+- Impacto esperado: Proteção reforçada nas limpezas de banco contra execuções maliciosas via string manipulation.
+- Riscos: Quebra de funcionalidade de deduplicação se a lista não cobrir todas as tabelas necessárias.
+- Dependencias: Testes da camada de deduplicação.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia

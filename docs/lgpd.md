@@ -26,3 +26,8 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ## 4. Recomendações Recentes
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
+
+## Achados do dia (2026-03-06)
+
+- **Novas Lacunas Identificadas:** Nenhuma nova vulnerabilidade de LGPD/PII foi introduzida nas alterações das últimas 24 horas. Os riscos mapeados anteriormente permanecem os mesmos.
+- **Próximos Passos:** Continuar acompanhando as mitigações sugeridas nas revisões anteriores.

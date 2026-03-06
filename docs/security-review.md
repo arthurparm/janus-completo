@@ -46,3 +46,36 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Baixa
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
+
+## Achados do dia (2026-03-06)
+
+**Checklist executado:**
+- [x] Varredura de logs com PII/tokens
+- [x] Ausência de validação de entrada
+- [x] Checagem de AuthN/AuthZ e endpoint sensível
+- [x] Permissões e segredos hardcoded
+- [x] Limite de rotas críticas
+- [x] Auditoria de dependências (NPM e PIP)
+
+### 8. Possível SQL Injection via F-strings
+- **ID:** SG-020
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta
+- **Descrição:** Uso de f-strings dinâmicas para definir nomes de tabelas em consultas de atualização/exclusão (ex: `f"UPDATE {table} SET..."`). Pode permitir injeção de SQL se o nome da tabela vier de uma fonte não sanitizada.
+- **Ação Recomendada:** Utilizar binding seguro de parâmetros também para identificadores de tabelas ou aplicar validação estrita (allowlist) nos nomes de tabelas aceitáveis.
+
+### Auditoria de Dependências
+**NPM (Frontend)**
+Encontradas vulnerabilidades de segurança.
+- **`@hono/node-server` (High):** Authorization bypass for protected static paths.
+- **`dompurify` (Moderate):** Cross-site Scripting (XSS) vulnerability.
+- **`express-rate-limit` (High):** IPv4-mapped IPv6 bypasses per-client rate limiting.
+- **`hono` (High/Moderate):** Arbitrary file access, SSE Control Field Injection, and Cookie Attribute Injection.
+- **`immutable` (High):** Prototype Pollution.
+- **`tar` (High):** Hardlink Path Traversal via Drive-Relative Linkpath.
+- **Ação Recomendada:** Atualizar dependências via `npm audit fix` ou fazer bump manual das bibliotecas.
+
+**PIP (Backend)**
+Auditoria bloqueada devido a limitação de ambiente.
+- **Descrição:** `tflite-runtime` requer versões Python diferentes da versão do ambiente de auditoria.
+- **Ação Recomendada:** Realizar auditoria num ambiente configurado ou ignorar a restrição para prosseguir com verificação de outras bibliotecas.
