@@ -313,6 +313,22 @@ class KnowledgeService:
         )
         provenance_links = 0
         if source_experience_id:
+            await graph.query(
+                """
+                MERGE (exp:Experience {id: $experience_id})
+                ON CREATE SET exp.created_at = timestamp()
+                SET exp.type = coalesce(exp.type, 'episodic'),
+                    exp.origin = coalesce(exp.origin, 'self_study'),
+                    exp.file_path = coalesce(exp.file_path, $file_path),
+                    exp.updated_at = timestamp()
+                RETURN exp.id AS id
+                """,
+                {
+                    "experience_id": source_experience_id,
+                    "file_path": rel_path,
+                },
+                operation="knowledge_self_memory_experience_upsert",
+            )
             provenance_rows = await graph.query(
                 """
                 MATCH (m) WHERE elementId(m) = $node_id

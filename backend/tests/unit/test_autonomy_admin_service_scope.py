@@ -388,6 +388,53 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
 
 
 @pytest.mark.asyncio
+async def test_memorize_self_study_summary_upserts_experience_node(monkeypatch):
+    service = _new_service(citations=[])
+    saved: list[object] = []
+    captured_ops: list[str] = []
+
+    class _MemoryDb:
+        async def amemorize(self, experience):
+            saved.append(experience)
+
+        async def arecall_filtered(self, *args, **kwargs):
+            return []
+
+    class _CaptureGraph:
+        async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
+            captured_ops.append(str(kwargs.get("operation") or ""))
+            return [{"id": "exp-1"}]
+
+    async def _fake_get_memory_db():
+        return _MemoryDb()
+
+    async def _fake_get_graph_db():
+        return _CaptureGraph()
+
+    monkeypatch.setattr(autonomy_admin_module, "get_memory_db", _fake_get_memory_db)
+    monkeypatch.setattr(autonomy_admin_module, "get_graph_db", _fake_get_graph_db)
+
+    experience = await service._memorize_self_study_summary(
+        rel_path="backend/app/services/autonomy_admin_service.py",
+        summary_payload={
+            "summary": "ok",
+            "compact_text": "compact",
+            "summary_version": service.SELF_MEMORY_SUMMARY_VERSION,
+            "language": "python",
+            "symbols": ["AutonomyAdminService"],
+            "imports": ["json"],
+            "touchpoints": ["neo4j"],
+            "domain_tags": ["service"],
+        },
+        sha_after="abc123",
+    )
+
+    assert saved
+    assert experience.id == saved[0].id
+    assert "self_study_experience_upsert" in captured_ops
+
+
+@pytest.mark.asyncio
 async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch):
     service = _new_service(citations=[])
     query_calls: list[str] = []

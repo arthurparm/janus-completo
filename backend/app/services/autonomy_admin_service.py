@@ -1269,7 +1269,68 @@ class AutonomyAdminService:
         )
         memory_repo = MemoryRepository(await get_memory_db())
         await memory_repo.save_experience(experience)
+        await self._ensure_self_study_experience_node(
+            experience=experience,
+            rel_path=rel_path,
+            summary_payload=summary_payload,
+        )
         return experience
+
+    async def _ensure_self_study_experience_node(
+        self,
+        *,
+        experience: Experience,
+        rel_path: str,
+        summary_payload: dict[str, Any],
+    ) -> None:
+        graph = await get_graph_db()
+        metadata = {}
+        try:
+            metadata = (
+                experience.metadata.model_dump()
+                if hasattr(experience.metadata, "model_dump")
+                else dict(experience.metadata or {})
+            )
+        except Exception:
+            metadata = {}
+        timestamp = str(getattr(experience, "timestamp", "") or "").strip() or datetime.now(
+            timezone.utc
+        ).isoformat()
+        compact_text = str(summary_payload.get("compact_text") or experience.content or "").strip()
+        await graph.query(
+            """
+            MERGE (exp:Experience {id: $id})
+            ON CREATE SET exp.created_at = timestamp()
+            SET exp.type = $type,
+                exp.content = $content,
+                exp.timestamp = $timestamp,
+                exp.origin = $origin,
+                exp.source_kind = $source_kind,
+                exp.content_kind = $content_kind,
+                exp.strong_memory = $strong_memory,
+                exp.file_path = $file_path,
+                exp.summary_version = $summary_version,
+                exp.local_only = $local_only,
+                exp.updated_at = timestamp()
+            RETURN exp.id AS id
+            """,
+            {
+                "id": str(experience.id),
+                "type": str(experience.type or "episodic"),
+                "content": compact_text[:4000],
+                "timestamp": timestamp,
+                "origin": str(metadata.get("origin") or "self_study"),
+                "source_kind": str(metadata.get("source_kind") or "code_file"),
+                "content_kind": str(metadata.get("content_kind") or "code_summary"),
+                "strong_memory": bool(metadata.get("strong_memory", True)),
+                "file_path": rel_path,
+                "summary_version": str(
+                    summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION
+                ),
+                "local_only": bool(metadata.get("local_only", self._self_study_local_only)),
+            },
+            operation="self_study_experience_upsert",
+        )
 
     async def _persist_self_memory(
         self,

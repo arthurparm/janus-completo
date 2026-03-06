@@ -98,4 +98,5 @@ async def test_repair_self_memory_graph_relinks_owner_and_provenance(monkeypatch
     assert result["provenance_links"] == 1
     assert result["symbol_links"] == 1
     assert "knowledge_self_memory_owner_link_fallback" in captured_ops
+    assert "knowledge_self_memory_experience_upsert" in captured_ops
     assert "knowledge_self_memory_provenance_link" in captured_ops
