@@ -205,6 +205,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-011] Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails
+
 - Problema atual: o roteamento de mensagens do chat depende principalmente de regras e contexto bruto, gerando escolhas subotimas de agente em parte das conversas.
 - Solucao proposta: treinar e integrar um classificador leve (intencao + risco + urgencia) no fluxo de entrada do chat para decidir agente, politicas e nivel de verificacao antes da resposta.
 - Impacto esperado: melhora de qualidade de resposta, menos retries, menor custo de tokens e maior previsibilidade operacional.
@@ -218,6 +219,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-012] Reranker semantico no RAG com cross-encoder para priorizar evidencias relevantes
+
 - Problema atual: o retrieval vetorial puro ainda traz chunks parcialmente relevantes, elevando ruido no contexto final do LLM.
 - Solucao proposta: inserir etapa de reranking com cross-encoder apos recuperacao inicial para reordenar candidatos por relevancia contextual.
 - Impacto esperado: maior precisao factual, menos alucinacao e reducao de tokens por prompt com contexto mais enxuto.
@@ -231,6 +233,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-013] Politica de decisao para orquestracao autonoma baseada em historico de sucesso
+
 - Problema atual: escolha de proximas acoes autonomas ainda depende muito de heuristicas estaticas e pode repetir caminhos ineficientes.
 - Solucao proposta: treinar modelo de ranking/politica com historico de execucoes (sucesso, custo, tempo, falha) para priorizar a melhor proxima acao.
 - Impacto esperado: menos loops, maior taxa de conclusao e melhor uso de budget por objetivo.
@@ -244,6 +247,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-014] Deteccao preditiva de anomalias operacionais em latencia, erro e filas
+
 - Problema atual: muitos desvios operacionais sao percebidos apenas apos impacto no usuario.
 - Solucao proposta: adicionar deteccao de anomalias em series temporais de metricas criticas (latencia, taxa de erro, backlog de fila) com alertas automaticos.
 - Impacto esperado: deteccao precoce de incidentes, menor MTTR e aumento de confiabilidade do sistema.
@@ -257,6 +261,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-015] Predicao de satisfacao e risco de abandono de conversa com acao automatica
+
 - Problema atual: sinais de conversa mal resolvida nem sempre sao capturados em tempo de evitar churn na sessao.
 - Solucao proposta: treinar modelo de classificacao/regressao com sinais de UX (tempo, retries, interrupcoes, feedback) para estimar satisfacao e risco de abandono.
 - Impacto esperado: acionamento proativo de fallback, escalonamento para agente especialista e melhoria de experiencia.
@@ -270,6 +275,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-016] Classificacao e extracao semantica na ingestao de documentos (tipo, entidades, resumo)
+
 - Problema atual: ingestao trata documentos de forma quase uniforme, com perda de estrutura e sem priorizacao inteligente.
 - Solucao proposta: aplicar classificacao de tipo de documento, extracao de entidades (NER) e resumo estruturado antes da indexacao.
 - Impacto esperado: base de conhecimento mais consistente, melhor recuperacao no RAG e menor trabalho manual de curadoria.
@@ -283,6 +289,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ---
 
 ### [AI-017] Camada multimodal de visao e audio para enriquecer contexto dos agentes
+
 - Problema atual: agentes ainda exploram pouco sinais de tela e audio para compreender contexto real do usuario.
 - Solucao proposta: integrar modelos de visao/audio para classificacao de contexto, deteccao de eventos e enriquecimento de memoria de sessao.
 - Impacto esperado: respostas mais contextuais em fluxos multimodais e nova classe de automacoes orientadas por percepcao.
@@ -531,7 +538,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 Copiar e preencher:
 
 ```md
+
 ### [ID] Titulo da melhoria
+
 - Problema atual:
 - Solucao proposta:
 - Impacto esperado:
@@ -544,6 +553,7 @@ Copiar e preencher:
 ```
 
 ### [SG-014] Vazamento de PII em logs de Chat e Collaboration
+
 - Problema atual: Os serviços `ChatCommandHandler` (argumentos do usuário), `ChatEventPublisher` (conteúdo da mensagem) e `CollaborationService` (artefatos e mensagens) loggam conteúdo sensível que constitui risco de PII/LGPD.
 - Solucao proposta: Aplicar redação (PII redaction) antes de loggar, ou usar logs estruturados com restrição de acesso e ofuscação de dados textuais.
 - Impacto esperado: Conformidade com LGPD e prevenção de vazamento de dados sensíveis em logs plain text.
@@ -555,6 +565,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [OQ-013] Rate Limiting Fail-Closed
+
 - Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open.
 - Solucao proposta: Configurar a política do Rate Limit para modo `fail-open`, permitindo a requisição prosseguir com degradação graciosa caso o Redis caia.
 - Impacto esperado: Maior disponibilidade do sistema (Availability > 99.9%) caso o serviço de cache fique indisponível temporariamente.
@@ -566,6 +577,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-015] Fuga de Autenticação em Workspaces API
+
 - Problema atual: Endpoints em `backend/app/api/v1/endpoints/workspace.py` usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ.
 - Solucao proposta: Adicionar dependência de autenticação (ex: `Depends(get_current_user)`) aos endpoints do workspace.
 - Impacto esperado: Prevenir que usuários anônimos manipulem workspaces e desliguem o sistema.
@@ -577,6 +589,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-016] Vulnerabilidade do Header X-User-Id
+
 - Problema atual: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` por padrão, possibilitando Bypass/Impersonation.
 - Solucao proposta: Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT/Token robusto.
 - Impacto esperado: Correção de vulnerabilidade crítica de spoofing de usuário.
@@ -588,6 +601,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [PX-013] Refatoração de God Objects e Componentes Complexos
+
 - Problema atual: `observability_service.py` (~1200 linhas) e `frontend/src/app/services/backend-api.service.ts` (~1638 linhas) e `conversations.ts` (~1700 linhas) concentram lógica excessiva.
 - Solucao proposta: Quebrar o serviço de observabilidade em (Health, Metrics, Audit, Anomaly) e particionar os componentes Frontend aplicando SRP e NgRx/Store.
 - Impacto esperado: Menor complexidade ciclomática, testes mais simples e manutenção sustentável.
@@ -599,6 +613,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-017] Endpoint de Auth exposto a brute-force
+
 - Problema atual: `backend/app/api/v1/endpoints/auth.py` (login/refresh) não possuem rate limiter.
 - Solucao proposta: Decorar a rota de login com `@limiter.limit("5/minute")` para prevenir ataques de dicionário e brute-force.
 - Impacto esperado: Maior resiliência contra ataques de força bruta.
@@ -610,6 +625,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [OQ-014] Hardcoded Paths e Criação Precoce de Diretórios
+
 - Problema atual: Trabalhadores assíncronos e testes quebram por `PermissionError` em caminhos como `/app/workspace` e `.mkdir()` fora de contexto em `NeuralTrainer`.
 - Solucao proposta: Usar sempre `app.core.infrastructure.filesystem_manager.WORKSPACE_DIR` e garantir que o `mkdir` ocorre apenas na hora da execução (e.g. `_save_model`).
 - Impacto esperado: Compatibilidade cross-environment (Docker/Local/CI) robusta.
@@ -621,6 +637,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-018] Vulnerabilidade OS Command Injection
+
 - Problema atual: `backend/app/core/tools/launcher_tools.py` permite RCE e injeção de comandos devido ao uso inseguro de `subprocess.Popen` com o argumento `shell=True`.
 - Solucao proposta: Substituir por um array de argumentos em formato de lista (ex: `subprocess.Popen(["start", '""', app_name])`) ou outra alternativa da stdlib sem shell string execution.
 - Impacto esperado: Remoção imediata de risco crítico mapeado por linter (Bandit B602).
@@ -632,6 +649,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-019] Vazamento contínuo de PII e estado global inseguro (Produtividade)
+
 - Problema atual: `backend/app/core/tools/productivity_tools.py` possui listas de notas/calendário armazenadas globalmente em memória (`_notes`, `_calendar_events`) vazando contexto através de requests. Além disso, o logger grava emails e ids abertos.
 - Solucao proposta: Remover as globais para um repositório restrito por sessão/DB e ofuscar IDs, e-mails, e assuntos no logger do `send_email`.
 - Impacto esperado: Conformidade com LGPD e eliminação de falhas de isolamento no state application.
@@ -639,5 +657,53 @@ Copiar e preencher:
 - Dependencias: Camada de mascaramento em `logging_config.py`.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Potencial SQL Injection no dedupe_service.py
+
+- Problema atual: Uso de f-strings para nome de tabelas/queries de banco que permitem bypass e injeções de SQL cru (Bandit B608).
+- Solucao proposta: Utilizar placeholders para identificadores parametrizados caso suportado pela DBAL ou validação/cast seguro antes do insert dinâmico da string.
+- Impacto esperado: Proteção contra manipulação de base e injeção de DDL/DML.
+- Riscos: Refatoração quebrar execução dinâmica.
+- Dependencias: SQLAlchemy / asyncpg adapters.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Endpoints do windows_agent.py sem Autenticação
+
+- Problema atual: A API de utilitários locais do Host provê comandos interativos de OS (screenshot, TTS, notificação) acessíveis globalmente pela interface de rede host sem um secret validado.
+- Solucao proposta: Injetar middleware de Token/Secret e restringir chamadas a `127.0.0.1` ou à interface do Docker bridge com mTLS.
+- Impacto esperado: Prevenção de execução local por intrusos na rede.
+- Riscos: Interrupção da comunicação Janus-Agent local.
+- Dependencias: Configuração unificada do daemon agent.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-017] Tratamento de Registro Duplicado de Métricas Prometheus
+
+- Problema atual: A instanciação estática de módulos de Counter/Histogram em `neural_training_system.py` quebra testes assíncronos que reimportam a classe, gerando falhas globais por tentativa de overwrite do coletor de métricas do Prometheus.
+- Solucao proposta: Envolver a inicialização das métricas com `try...except ValueError` ou alocá-las apenas a nível de classe garantindo o lookup prévio usando a registry padrão (`prometheus_client.REGISTRY`).
+- Impacto esperado: Estabilização dos testes automatizados e suíte E2E sem afetar runtime de prod.
+- Riscos: Redirecionamento indevido de labels da métrica.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [PX-014] Refatoração de God Objects no Frontend
+
+- Problema atual: `conversations.ts` e `backend-api.service.ts` acumulam mais de 1600 linhas cada, contendo de UI states complexos a requisições de backend não normalizadas, agindo como anti-patterns.
+- Solucao proposta: Decomposição guiada para modularização via injeções de Redux/NgRx e extração de subcomponentes puros de exibição.
+- Impacto esperado: Código testável e coeso para o AppSec e QA avançar métricas de E2E.
+- Riscos: Perda momentânea de tracking do estado das chamadas WebSocket na conversa.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
 - Dono: a definir
 - Status: ideia

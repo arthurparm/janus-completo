@@ -73,3 +73,29 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+## Achados do dia (Atualização Atual)
+
+### 7. Fragilidades de Segurança Adicionais (SQLi e APIs Expostas)
+**Descrição:** O sistema possui endpoints expostos sem autenticação para interações críticas e riscos de injeção direta de SQL que violam as premissas de segurança e o Threat Model.
+**Evidências:**
+- `backend/app/services/dedupe_service.py`: Uso de f-strings para criação/formatação dinâmica de nomes de tabelas em consultas SQL, resultando em potencial SQL Injection (Bandit B608).
+- `backend/windows_agent.py`: Endpoints de interação com o sistema operacional host (como `/screenshot`, TTS, STT) são servidos via FastAPI sem mecanismos de AuthN/AuthZ.
+
+**Próximos passos:**
+- Adicionar validação de parâmetros e trocar f-strings por prepared statements onde aplicável no serviço de deduplicação.
+- Implementar checagem simples de token (AuthN) ou mTLS no `windows_agent.py`.
+- Registrar as melhorias SG-020 (SQLi) e SG-021 (Auth no Agent) no backlog.
+
+### 8. Fragilidades de Testes e Observabilidade
+**Descrição:** O registro de métricas para a observabilidade falha silenciosamente ou quebra testes automatizados por colisões de registro e a interface visual tem God Objects massivos.
+**Evidências:**
+- `backend/app/core/workers/neural_training_system.py`: A definição das métricas Prometheus (`Counter`, `Histogram`) no nível do módulo gera conflito quando múltiplos testes importam a classe e tentam registrar a mesma métrica na registry global.
+- `frontend/src/app/services/backend-api.service.ts` (~1638 linhas) e `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas): Componentes frontends agindo como God Objects, dificultando testes e quebrando o SRP.
+- `backend/app/services/tool_service_improved.py`: Cópia morta/duplicada do serviço oficial de ferramentas.
+
+**Próximos passos:**
+- Ajustar instanciação de métricas Prometheus com bloco `try...except ValueError` ou encapsulando em escopo de classe/instância.
+- Incluir a refatoração do Frontend na fila do roadmap, alinhado com o épico de V1 da UI.
+- Excluir o arquivo duplicado de tooling.
+- Registrar os itens OQ-017 e PX-014 no backlog.
