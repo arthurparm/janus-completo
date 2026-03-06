@@ -396,9 +396,29 @@ def test_get_self_study_status_includes_running_progress():
 
     status = service.get_self_study_status()
     assert status["local_only"] is True
+    assert status["run_budget_seconds"] == service._max_run_seconds
+    assert status["run_deadline_local"] is None
     assert status["last_studied_commit"] == "abc123"
     assert status["running"]["id"] == 99
     assert status["running"]["files_total"] == 429
     assert status["running"]["files_processed"] == 7
     assert status["running"]["current_file_index"] == 8
     assert status["running"]["current_file_path"] == "backend/app/services/autonomy_admin_service.py"
+
+
+def test_get_self_study_run_budget_uses_local_deadline(monkeypatch):
+    service = _new_service(citations=[])
+    service._max_run_seconds = 600
+    service._self_study_deadline_local = "2026-03-07T09:00:00-03:00"
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            frozen = cls(2026, 3, 6, 18, 0, tzinfo=timezone.utc)
+            if tz is None:
+                return frozen
+            return frozen.astimezone(tz)
+
+    monkeypatch.setattr(autonomy_admin_module, "datetime", _FrozenDateTime)
+
+    assert service._get_self_study_run_budget_seconds() == 64800

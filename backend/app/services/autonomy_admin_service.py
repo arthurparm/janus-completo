@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import structlog
 from fastapi import Request
@@ -36,6 +37,7 @@ class AutonomyAdminService:
     MAX_FILE_SIZE_BYTES = 512 * 1024
     MAX_FILES_PER_RUN = 1200
     MAX_RUN_SECONDS = 90
+    DEFAULT_SELF_STUDY_TIMEZONE = "America/Sao_Paulo"
     SELF_MEMORY_SUMMARY_VERSION = "v2"
     ALLOW_INCREMENTAL_FULL_FALLBACK = True
     ALLOWED_ROOTS = ("backend/app", "frontend/src/app", "app")
@@ -71,6 +73,9 @@ class AutonomyAdminService:
         self._meta = get_meta_agent_service()
         self._max_run_seconds = int(
             getattr(settings, "AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS", self.MAX_RUN_SECONDS)
+        )
+        self._self_study_deadline_local = getattr(
+            settings, "AUTONOMY_SELF_STUDY_RUN_DEADLINE_LOCAL", None
         )
         self._self_study_local_only = bool(
             getattr(settings, "AUTONOMY_SELF_STUDY_LOCAL_ONLY", True)
@@ -142,6 +147,32 @@ class AutonomyAdminService:
     def _fingerprint(parts: list[str]) -> str:
         normalized = "|".join(p.strip().lower() for p in parts if p is not None)
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    def _get_self_study_run_budget_seconds(self) -> int:
+        deadline_raw = str(self._self_study_deadline_local or "").strip()
+        if not deadline_raw:
+            return self._max_run_seconds
+        try:
+            deadline = datetime.fromisoformat(deadline_raw)
+        except ValueError:
+            logger.warning(
+                "self_study_deadline_invalid",
+                deadline=deadline_raw,
+                fallback_seconds=self._max_run_seconds,
+            )
+            return self._max_run_seconds
+
+        local_tz = ZoneInfo(self.DEFAULT_SELF_STUDY_TIMEZONE)
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=local_tz)
+        else:
+            deadline = deadline.astimezone(local_tz)
+
+        remaining_seconds = max(
+            0,
+            int((deadline - datetime.now(local_tz)).total_seconds()),
+        )
+        return max(self._max_run_seconds, remaining_seconds)
 
     async def _classify_sprint_type(self, finding: dict[str, Any]) -> tuple[str, str | None, bool, str | None, str | None]:
         category = str(finding.get("category") or "geral").strip().lower()
@@ -1114,9 +1145,10 @@ class AutonomyAdminService:
         errors = 0
         started = time.perf_counter()
         timed_out = False
+        run_budget_seconds = self._get_self_study_run_budget_seconds()
 
         for item in files:
-            if (time.perf_counter() - started) >= self._max_run_seconds:
+            if (time.perf_counter() - started) >= run_budget_seconds:
                 timed_out = True
                 break
             rel = item["file_path"]
@@ -1188,6 +1220,8 @@ class AutonomyAdminService:
             "file_cap": self.MAX_FILES_PER_RUN,
             "base_commit": base_commit,
             "target_commit": target_commit,
+            "run_budget_seconds": run_budget_seconds,
+            "run_deadline_local": str(self._self_study_deadline_local or "").strip() or None,
             "local_only": self._self_study_local_only,
         }
 
@@ -1197,6 +1231,8 @@ class AutonomyAdminService:
         runs = self._repo.list_self_study_runs(limit=5)
         return {
             "local_only": self._self_study_local_only,
+            "run_budget_seconds": self._get_self_study_run_budget_seconds(),
+            "run_deadline_local": str(self._self_study_deadline_local or "").strip() or None,
             "last_studied_commit": state.last_studied_commit,
             "last_success_at": state.last_success_at.isoformat() if state.last_success_at else None,
             "running": {
