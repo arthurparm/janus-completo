@@ -1008,8 +1008,12 @@ class AutonomyAdminService:
             return self._code_graph_file_count_cache
 
         file_count = await self._get_code_graph_file_count()
-        if file_count <= 0:
-            logger.warning("self_study_code_graph_empty_reindexing")
+        if force or file_count <= 0:
+            logger.warning(
+                "self_study_code_graph_reindexing",
+                force=force,
+                file_count=file_count,
+            )
             await self._knowledge_service.index_codebase()
             file_count = await self._get_code_graph_file_count()
         self._code_graph_file_count_cache = file_count
