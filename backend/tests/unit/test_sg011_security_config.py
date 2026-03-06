@@ -41,6 +41,17 @@ def test_validate_production_secrets_rejects_insecure_defaults(monkeypatch):
         secret_validator.validate_production_secrets()
 
 
+def test_validate_production_secrets_rejects_required_placeholder(monkeypatch):
+    monkeypatch.setattr(secret_validator.settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(secret_validator.settings, "NEO4J_PASSWORD", SecretStr("__REQUIRED__"))
+    monkeypatch.setattr(secret_validator.settings, "POSTGRES_PASSWORD", SecretStr("__REQUIRED__"))
+    monkeypatch.setattr(secret_validator.settings, "RABBITMQ_PASSWORD", SecretStr("__REQUIRED__"))
+    monkeypatch.setattr(secret_validator.settings, "AUTH_JWT_SECRET", "JwtSecure-789")
+
+    with pytest.raises(secret_validator.InsecureConfigurationError):
+        secret_validator.validate_production_secrets()
+
+
 def test_validate_production_secrets_passes_with_secure_values(monkeypatch):
     monkeypatch.setattr(secret_validator.settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(secret_validator.settings, "NEO4J_PASSWORD", SecretStr("n3o4j-Secure-987"))

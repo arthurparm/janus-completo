@@ -14,9 +14,9 @@ logger = structlog.get_logger(__name__)
 # Known insecure defaults that MUST be changed in production.
 # Values are normalized to lowercase/trim during checks.
 INSECURE_DEFAULTS: dict[str, set[str]] = {
-    "NEO4J_PASSWORD": {"password", "change_me_neo4j_password"},
-    "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password"},
-    "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password"},
+    "NEO4J_PASSWORD": {"password", "change_me_neo4j_password", "__required__"},
+    "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password", "__required__"},
+    "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password", "__required__"},
     "AUTH_JWT_SECRET": {
         "",
         "none",

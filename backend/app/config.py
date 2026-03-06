@@ -43,7 +43,7 @@ class AppSettings(BaseSettings):
     # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: SecretStr = SecretStr("change_me_neo4j_password")
+    NEO4J_PASSWORD: SecretStr = SecretStr("__REQUIRED__")
 
     # Qdrant
     QDRANT_HOST: str = "qdrant"
@@ -60,7 +60,7 @@ class AppSettings(BaseSettings):
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "janus"
-    POSTGRES_PASSWORD: SecretStr = SecretStr("change_me_postgres_password")
+    POSTGRES_PASSWORD: SecretStr = SecretStr("__REQUIRED__")
     POSTGRES_DB: str = "janus_db"
 
 
@@ -415,7 +415,7 @@ class AppSettings(BaseSettings):
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_USER: str = "janus"
-    RABBITMQ_PASSWORD: SecretStr = SecretStr("change_me_rabbitmq_password")
+    RABBITMQ_PASSWORD: SecretStr = SecretStr("__REQUIRED__")
     RABBITMQ_MANAGEMENT_PORT: int = 15672
     BROKER_USE_MSGPACK: bool = True
 
