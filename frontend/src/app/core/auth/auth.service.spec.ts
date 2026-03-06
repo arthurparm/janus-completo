@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing'
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { provideHttpClient } from '@angular/common/http'
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing'
 import { AuthService } from './auth.service'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
+import { firstValueFrom, filter, take } from 'rxjs'
 
 describe('AuthService', () => {
   let http: HttpTestingController
@@ -9,7 +11,10 @@ describe('AuthService', () => {
   beforeEach(() => {
     localStorage.clear()
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     })
     http = TestBed.inject(HttpTestingController)
   })
@@ -21,6 +26,8 @@ describe('AuthService', () => {
 
   it('deve fazer login com email/senha e salvar token local', async () => {
     const svc = TestBed.inject(AuthService)
+    http.expectNone(`${API_BASE_URL}/v1/auth/local/me`)
+
     const promise = svc.loginWithPassword('a@b.com', '123456', true)
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
     expect(req.request.method).toBe('POST')
@@ -40,7 +47,7 @@ describe('AuthService', () => {
     expect(req.request.method).toBe('GET')
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
-    await Promise.resolve()
+    await firstValueFrom(svc.authReady$.pipe(filter(Boolean), take(1)))
     expect(svc.isAuthenticated()).toBe(true)
     expect(svc.currentUserValue?.email).toBe('a@b.com')
   })
