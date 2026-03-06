@@ -37,6 +37,7 @@ Optional lifecycle commands:
 python tooling/dev.py setup
 python tooling/dev.py qa
 python tooling/dev.py down
+python tooling/dev.py doctor --host 100.89.17.105 --backend-port 8000 --frontend-port 4300 --json-out outputs/qa/quick_diagnostics_report.json
 ```
 
 ### Prerequisites

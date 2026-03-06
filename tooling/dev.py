@@ -185,6 +185,27 @@ def cmd_down() -> None:
     )
 
 
+def cmd_doctor(args: argparse.Namespace) -> None:
+    quick_diag_script = REPO_ROOT / "tooling" / "quick_diagnostics.py"
+    cmd = [
+        sys.executable,
+        str(quick_diag_script),
+        "--host",
+        str(args.host),
+        "--backend-port",
+        str(args.backend_port),
+        "--frontend-port",
+        str(args.frontend_port),
+        "--timeout",
+        str(args.timeout),
+    ]
+    if args.json_out:
+        cmd.extend(["--json-out", str(args.json_out)])
+    if args.verify_tls:
+        cmd.append("--verify-tls")
+    run(cmd, cwd=REPO_ROOT)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Unified local developer workflow for janus-completo.",
@@ -194,6 +215,20 @@ def parse_args() -> argparse.Namespace:
     subparsers.add_parser("up", help="Start docker stack and wait for health checks.")
     subparsers.add_parser("qa", help="Run backend critical tests and frontend quality gates.")
     subparsers.add_parser("down", help="Stop local docker stack.")
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Run DX-007 quick diagnostics against a target host (health + deps + config).",
+    )
+    doctor_parser.add_argument("--host", default="100.89.17.105")
+    doctor_parser.add_argument("--backend-port", type=int, default=8000)
+    doctor_parser.add_argument("--frontend-port", type=int, default=4300)
+    doctor_parser.add_argument("--timeout", type=float, default=5.0)
+    doctor_parser.add_argument("--json-out", default="")
+    doctor_parser.add_argument(
+        "--verify-tls",
+        action="store_true",
+        help="Enable TLS certificate verification (disabled by default for self-signed envs).",
+    )
     return parser.parse_args()
 
 
@@ -208,6 +243,8 @@ def main() -> int:
         cmd_qa()
     elif command == "down":
         cmd_down()
+    elif command == "doctor":
+        cmd_doctor(args)
     else:
         raise RuntimeError(f"Unknown command: {command}")
     return 0
