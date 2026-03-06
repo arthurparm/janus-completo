@@ -370,6 +370,7 @@ class KnowledgeConsolidator:
             payload_metadata = dict(metadata or {})
             payload_metadata["consolidated"] = True
             payload_metadata["consolidation_status"] = "done"
+            payload_metadata["neo4j_sync_status"] = "consolidated"
             payload_metadata["consolidated_at"] = int(time.time() * 1000)
             payload_metadata["neo4j_relationships_count"] = int(relationships_created)
             payload_metadata["neo4j_entities_count"] = int(entities_created)

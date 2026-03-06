@@ -51,6 +51,10 @@ class AppSettings(BaseSettings):
     QDRANT_HTTPS: bool = False
     QDRANT_API_KEY: SecretStr | None = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
+    QDRANT_EPISODIC_HNSW_M: int = 32
+    QDRANT_EPISODIC_EF_CONSTRUCT: int = 200
+    QDRANT_EPISODIC_FULL_SCAN_THRESHOLD: int = 200
+    QDRANT_EPISODIC_INDEXING_THRESHOLD: int = 200
 
     # PostgreSQL - Configuration-as-Data
     POSTGRES_HOST: str = "postgres"
@@ -538,6 +542,8 @@ class AppSettings(BaseSettings):
     OTEL_OTLP_ENDPOINT: str | None = None
     OTEL_SERVICE_NAME: str | None = None
     LOG_SAMPLING_RATE: float = 1.0
+    LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024
+    LOG_FILE_BACKUP_COUNT: int = 5
     AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
     AUDIT_RETENTION_DAYS: int = 30
     OQ_SLO_WINDOW_MINUTES: int = 15

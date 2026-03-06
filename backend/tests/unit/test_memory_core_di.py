@@ -97,8 +97,46 @@ async def test_memory_core_applies_strong_metadata_contract(monkeypatch):
     assert metadata["content_kind"] == "episodic"
     assert metadata["strong_memory"] is True
     assert metadata["consolidation_status"] == "pending"
+    assert metadata["neo4j_sync_status"] == "pending"
     assert metadata["file_path"] == "backend/app/services/x.py"
+    assert metadata["memory_key"] is None
+    assert metadata["local_only"] is False
     assert metadata["consolidation_hash"]
+
+
+@pytest.mark.asyncio
+async def test_memory_core_can_patch_metadata_after_write(monkeypatch):
+    mock_client = AsyncMock()
+    mock_cb = MagicMock()
+
+    class MockSettings:
+        QDRANT_HOST = "localhost"
+        QDRANT_PORT = 6333
+        MEMORY_VECTOR_SIZE = 1536
+        MEMORY_SHORT_TTL_SECONDS = 600
+        MEMORY_SHORT_MAX_ITEMS = 512
+
+    monkeypatch.setattr(memory_core_module, "aembed_text", AsyncMock(return_value=[0.1] * 1536))
+    memory = MemoryCore(client=mock_client, circuit_breaker=mock_cb, config=MockSettings())
+
+    exp = Experience(
+        id="self-study-id",
+        type="episodic",
+        content="Arquivo backend/app/services/x.py",
+        metadata={"origin": "self_study"},
+    )
+
+    await memory.amemorize(exp)
+    await memory.aupdate_metadata(
+        "self-study-id",
+        {"memory_key": "mk-1", "neo4j_sync_status": "linked"},
+    )
+
+    assert mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["memory_key"] == "mk-1"
+    assert (
+        mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["neo4j_sync_status"]
+        == "linked"
+    )
 
 
 def test_memory_core_uses_relaxed_quota_for_self_study():

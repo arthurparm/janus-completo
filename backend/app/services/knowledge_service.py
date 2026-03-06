@@ -1,10 +1,13 @@
+import hashlib
 import re
 import time
+import asyncio
 from typing import Any
 
 import structlog
 from fastapi import Request
 
+from app.db.graph import get_graph_db
 from app.core.memory.rag_telemetry import emit_step_telemetry
 from app.core.memory.graph_rag_core import query_knowledge_graph
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
@@ -34,6 +37,8 @@ class KnowledgeService:
 
     def __init__(self, repo: KnowledgeRepository):
         self._repo = repo
+        self._index_lock = asyncio.Lock()
+        self._index_task: asyncio.Task[dict[str, Any]] | None = None
 
     async def get_stats(self) -> dict[str, Any]:
         try:
@@ -95,7 +100,328 @@ class KnowledgeService:
         stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
         return stats
 
-    async def index_codebase(self) -> dict[str, Any]:
+    @staticmethod
+    def _build_graph_path_candidates(rel_path: str) -> list[str]:
+        rel = str(rel_path or "").strip().lstrip("./")
+        if not rel:
+            return []
+
+        candidates: set[str] = {rel, f"/{rel}", f"/app/{rel}"}
+        if rel.startswith("backend/"):
+            stripped = rel[len("backend/") :]
+            if stripped:
+                candidates.update({stripped, f"/{stripped}", f"/app/{stripped}"})
+        if rel.startswith("app/"):
+            backend_variant = f"backend/{rel}"
+            candidates.update({backend_variant, f"/{backend_variant}", f"/app/{rel}"})
+            if rel.startswith("app/app/"):
+                backend_stripped = f"backend/{rel[len('app/') :]}"
+                candidates.update({backend_stripped, f"/{backend_stripped}"})
+        if rel.startswith("frontend/"):
+            candidates.add(f"/app/{rel}")
+        return [candidate for candidate in candidates if candidate]
+
+    @staticmethod
+    def _preferred_graph_owner_path(rel_path: str, path_candidates: list[str]) -> str:
+        for candidate in path_candidates:
+            if candidate.startswith("/app/"):
+                return candidate
+        rel = str(rel_path or "").strip().lstrip("./")
+        if rel.startswith("backend/"):
+            return f"/app/{rel[len('backend/') :]}"
+        if rel:
+            return f"/app/{rel}" if not rel.startswith("/app/") else rel
+        return "/app"
+
+    @staticmethod
+    def _build_self_memory_key(
+        rel_path: str,
+        *,
+        summary_version: str | None,
+        sha_after: str | None,
+    ) -> str:
+        normalized_path = str(rel_path or "").strip().lstrip("./")
+        normalized_version = str(summary_version or "legacy").strip() or "legacy"
+        normalized_sha = str(sha_after or "").strip()
+        prefix = "selfmemory" if normalized_sha else "selfmemory-legacy"
+        raw = f"{normalized_path}|{normalized_version}|{normalized_sha or 'legacy'}"
+        return f"{prefix}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
+
+    @staticmethod
+    def _normalize_symbol_names(raw_symbols: Any) -> list[str]:
+        symbol_names: list[str] = []
+        seen: set[str] = set()
+        for symbol in raw_symbols or []:
+            value = str(symbol or "").strip()
+            if not value or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", value):
+                continue
+            if value in seen:
+                continue
+            seen.add(value)
+            symbol_names.append(value)
+        return symbol_names
+
+    async def _repair_single_self_memory(
+        self,
+        *,
+        row: dict[str, Any],
+        is_current: bool,
+    ) -> dict[str, int]:
+        graph = await get_graph_db()
+        node_id = str(row.get("node_id") or "").strip()
+        rel_path = str(row.get("file_path") or "").strip().lstrip("./")
+        if not node_id or not rel_path:
+            return {"owner_links": 0, "symbol_links": 0, "provenance_links": 0}
+
+        summary_version = str(row.get("summary_version") or "").strip() or "legacy"
+        sha_after = str(row.get("sha_after") or "").strip() or None
+        source_experience_id = str(row.get("source_experience_id") or "").strip() or None
+        symbol_names = self._normalize_symbol_names(row.get("symbols") or [])
+        memory_key = self._build_self_memory_key(
+            rel_path,
+            summary_version=summary_version,
+            sha_after=sha_after,
+        )
+        path_candidates = self._build_graph_path_candidates(rel_path)
+        primary_owner_path = self._preferred_graph_owner_path(rel_path, path_candidates)
+
+        await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            SET m.memory_key = $memory_key,
+                m.file_path = $file_path,
+                m.summary_version = $summary_version,
+                m.sha_after = CASE WHEN $sha_after IS NULL OR $sha_after = '' THEN m.sha_after ELSE $sha_after END,
+                m.is_current = $is_current,
+                m.is_legacy = $is_legacy,
+                m.updated_at = coalesce(m.updated_at, timestamp())
+            RETURN m.memory_key AS memory_key
+            """,
+            {
+                "node_id": node_id,
+                "memory_key": memory_key,
+                "file_path": rel_path,
+                "summary_version": summary_version,
+                "sha_after": sha_after,
+                "is_current": is_current,
+                "is_legacy": not bool(sha_after),
+            },
+            operation="knowledge_self_memory_meta_upsert",
+        )
+
+        await graph.query(
+            """
+            MATCH (other:SelfMemory {file_path: $file_path})
+            WHERE elementId(other) <> $node_id
+            SET other.is_current = false
+            RETURN count(other) AS demoted
+            """,
+            {"file_path": rel_path, "node_id": node_id},
+            operation="knowledge_self_memory_current_demote",
+        )
+
+        await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            MATCH (m)-[r:RELATES_TO]->(owner)
+            WHERE (owner:File OR owner:CodeFile) AND NOT owner.path IN $path_candidates
+            DELETE r
+            RETURN count(r) AS removed_links
+            """,
+            {"node_id": node_id, "path_candidates": path_candidates},
+            operation="knowledge_self_memory_owner_cleanup",
+        )
+        await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            MATCH (m)-[r:DEFINES]->(symbol)
+            WHERE (symbol:CodeFunction OR symbol:CodeClass)
+              AND NOT (
+                symbol.file_path IN $path_candidates
+                AND (size($symbol_names) = 0 OR symbol.name IN $symbol_names)
+              )
+            DELETE r
+            RETURN count(r) AS removed_links
+            """,
+            {
+                "node_id": node_id,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="knowledge_self_memory_symbol_cleanup",
+        )
+
+        owner_rows = await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            MATCH (owner)
+            WHERE (owner:File OR owner:CodeFile) AND owner.path IN $path_candidates
+            MERGE (m)-[:RELATES_TO]->(owner)
+            RETURN count(DISTINCT owner) AS owner_links
+            """,
+            {"node_id": node_id, "path_candidates": path_candidates},
+            operation="knowledge_self_memory_owner_link_existing",
+        )
+        owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
+        if owner_links <= 0:
+            owner_rows = await graph.query(
+                """
+                MATCH (m) WHERE elementId(m) = $node_id
+                MERGE (owner:File {path: $primary_owner_path})
+                SET owner.name = coalesce(owner.name, $primary_owner_path),
+                    owner.file_path = coalesce(owner.file_path, $primary_owner_path),
+                    owner.source = coalesce(owner.source, 'self_study')
+                MERGE (m)-[:RELATES_TO]->(owner)
+                RETURN count(owner) AS owner_links
+                """,
+                {"node_id": node_id, "primary_owner_path": primary_owner_path},
+                operation="knowledge_self_memory_owner_link_fallback",
+            )
+            owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
+
+        function_rows = await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            MATCH (fn:CodeFunction)
+            WHERE fn.file_path IN $path_candidates
+              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
+            MERGE (m)-[:DEFINES]->(fn)
+            RETURN count(DISTINCT fn) AS symbol_links
+            """,
+            {
+                "node_id": node_id,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="knowledge_self_memory_function_link",
+        )
+        class_rows = await graph.query(
+            """
+            MATCH (m) WHERE elementId(m) = $node_id
+            MATCH (cl:CodeClass)
+            WHERE cl.file_path IN $path_candidates
+              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
+            MERGE (m)-[:DEFINES]->(cl)
+            RETURN count(DISTINCT cl) AS symbol_links
+            """,
+            {
+                "node_id": node_id,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="knowledge_self_memory_class_link",
+        )
+        provenance_links = 0
+        if source_experience_id:
+            provenance_rows = await graph.query(
+                """
+                MATCH (m) WHERE elementId(m) = $node_id
+                MATCH (exp:Experience {id: $experience_id})
+                MERGE (m)-[:EXTRACTED_FROM]->(exp)
+                RETURN count(exp) AS provenance_links
+                """,
+                {
+                    "node_id": node_id,
+                    "experience_id": source_experience_id,
+                },
+                operation="knowledge_self_memory_provenance_link",
+            )
+            provenance_links = int(
+                (provenance_rows or [{}])[0].get("provenance_links", 0) or 0
+            )
+
+        return {
+            "owner_links": owner_links,
+            "symbol_links": int((function_rows or [{}])[0].get("symbol_links", 0) or 0)
+            + int((class_rows or [{}])[0].get("symbol_links", 0) or 0),
+            "provenance_links": provenance_links,
+        }
+
+    async def repair_self_memory_graph(self, *, limit: int | None = None) -> dict[str, Any]:
+        graph = await get_graph_db()
+        query = """
+        MATCH (m:SelfMemory)
+        RETURN elementId(m) AS node_id,
+               m.file_path AS file_path,
+               m.summary_version AS summary_version,
+               m.sha_after AS sha_after,
+               m.source_experience_id AS source_experience_id,
+               m.symbols AS symbols,
+               coalesce(m.updated_at, 0) AS updated_at
+        ORDER BY updated_at DESC, file_path ASC
+        """
+        params: dict[str, Any] = {}
+        if limit is not None:
+            query += "\nLIMIT $limit"
+            params["limit"] = int(limit)
+        rows = await graph.query(query, params, operation="knowledge_self_memory_fetch")
+
+        repaired = 0
+        connected = 0
+        provenance = 0
+        symbol_links = 0
+        seen_paths: set[str] = set()
+        for row in rows or []:
+            rel_path = str(row.get("file_path") or "").strip().lstrip("./")
+            is_current = rel_path not in seen_paths
+            if rel_path:
+                seen_paths.add(rel_path)
+            result = await self._repair_single_self_memory(row=row, is_current=is_current)
+            repaired += 1
+            connected += 1 if result["owner_links"] > 0 else 0
+            provenance += result["provenance_links"]
+            symbol_links += result["symbol_links"]
+
+        return {
+            "repaired": repaired,
+            "connected": connected,
+            "provenance_links": provenance,
+            "symbol_links": symbol_links,
+        }
+
+    async def get_self_memory_neo4j_audit(self, *, orphan_limit: int = 25) -> dict[str, Any]:
+        graph = await get_graph_db()
+        totals = await graph.query(
+            """
+            MATCH (m:SelfMemory)
+            OPTIONAL MATCH (m)-[:RELATES_TO]->(owner)
+            WHERE owner:File OR owner:CodeFile
+            OPTIONAL MATCH (m)-[:EXTRACTED_FROM]->(exp:Experience)
+            RETURN count(DISTINCT m) AS total_self_memory,
+                   count(DISTINCT CASE WHEN owner IS NOT NULL THEN m END) AS connected_self_memory,
+                   count(DISTINCT CASE WHEN exp IS NULL THEN m END) AS self_memory_without_extracted_from,
+                   count(DISTINCT CASE WHEN m.sha_after IS NULL OR trim(toString(m.sha_after)) = '' THEN m END) AS self_memory_without_sha_after
+            """,
+            operation="knowledge_self_memory_audit_totals",
+        )
+        orphan_rows = await graph.query(
+            """
+            MATCH (m:SelfMemory)
+            WHERE NOT EXISTS {
+              MATCH (m)-[:RELATES_TO]->(owner)
+              WHERE owner:File OR owner:CodeFile
+            }
+            RETURN m.file_path AS file_path, count(*) AS count
+            ORDER BY count DESC, file_path ASC
+            LIMIT $limit
+            """,
+            {"limit": int(orphan_limit)},
+            operation="knowledge_self_memory_audit_orphans",
+        )
+        row = (totals or [{}])[0]
+        return {
+            "total_self_memory": int(row.get("total_self_memory", 0) or 0),
+            "connected_self_memory": int(row.get("connected_self_memory", 0) or 0),
+            "self_memory_without_extracted_from": int(
+                row.get("self_memory_without_extracted_from", 0) or 0
+            ),
+            "self_memory_without_sha_after": int(
+                row.get("self_memory_without_sha_after", 0) or 0
+            ),
+            "orphan_self_memory_by_path": orphan_rows or [],
+        }
+
+    async def _index_codebase_impl(self) -> dict[str, Any]:
         logger.info("log_info", message=f"Iniciando orquestração de indexação da base de código em '{CODEBASE_DIR}'...")
         await self._repo.clear_code_entities()
 
@@ -121,9 +447,33 @@ class KnowledgeService:
                 total_classes += len(parser.classes)
 
         await self._repo.bulk_merge_calls(all_calls)
+        repair_stats = await self.repair_self_memory_graph()
 
-        summary = f"Indexação concluída. {total_files} arquivos | {total_funcs} funções | {total_classes} classes | {len(all_calls)} chamadas internas criadas."
-        return {"message": "Indexação da base de código concluída.", "summary": summary}
+        summary = (
+            "Indexação concluída. "
+            f"{total_files} arquivos | {total_funcs} funções | {total_classes} classes | "
+            f"{len(all_calls)} chamadas internas criadas | "
+            f"{repair_stats['connected']}/{repair_stats['repaired']} SelfMemory religadas."
+        )
+        return {
+            "message": "Indexação da base de código concluída.",
+            "summary": summary,
+            "repair": repair_stats,
+        }
+
+    async def index_codebase(self) -> dict[str, Any]:
+        async with self._index_lock:
+            if self._index_task and not self._index_task.done():
+                task = self._index_task
+            else:
+                task = asyncio.create_task(self._index_codebase_impl())
+                self._index_task = task
+        try:
+            return await task
+        finally:
+            async with self._index_lock:
+                if self._index_task is task and task.done():
+                    self._index_task = None
 
     async def clear_graph(self) -> int:
         return await self._repo.clear_all_data()

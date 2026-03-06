@@ -137,16 +137,7 @@ class MemoryCore:
             meta["pii_redacted"] = True
 
         # Preserve a stable metadata contract for downstream consolidation/ranking.
-        meta.setdefault("origin", "unknown")
-        meta.setdefault("source_kind", "generic")
-        meta.setdefault("content_kind", payload.get("type") or "episodic")
-        meta.setdefault("strong_memory", False)
-        meta.setdefault("consolidation_status", "pending")
-        meta.setdefault("file_path", None)
-        meta.setdefault("sha_after", None)
-        meta.setdefault("user_id", None)
-        meta.setdefault("conversation_id", None)
-        meta.setdefault("captured_at", ts_ms)
+        self._normalize_metadata_contract(meta, payload_type=str(payload.get("type") or ""), ts_ms=ts_ms)
         if not meta.get("consolidation_hash"):
             meta["consolidation_hash"] = self._build_consolidation_hash(
                 experience_type=str(payload.get("type") or ""),
@@ -403,17 +394,53 @@ class MemoryCore:
                     "strong_memory",
                     "consolidation_status",
                     "consolidation_hash",
+                    "neo4j_sync_status",
                     "file_path",
                     "sha_after",
                     "user_id",
                     "conversation_id",
                     "captured_at",
+                    "local_only",
+                    "memory_key",
+                    "summary_version",
                     "type",
                 }
                 else k
             )
             must.append(models.FieldCondition(key=key, match=models.MatchValue(value=v)))
         return models.Filter(must=must) if must else None
+
+    def _normalize_metadata_contract(
+        self,
+        metadata: dict[str, Any],
+        *,
+        payload_type: str,
+        ts_ms: int,
+    ) -> None:
+        metadata.setdefault("origin", "unknown")
+        metadata.setdefault("source_kind", "generic")
+        metadata.setdefault("content_kind", payload_type or "episodic")
+        metadata.setdefault("strong_memory", False)
+        metadata.setdefault("consolidation_status", "pending")
+        metadata.setdefault("neo4j_sync_status", "pending")
+        metadata.setdefault("file_path", None)
+        metadata.setdefault("sha_after", None)
+        metadata.setdefault("user_id", None)
+        metadata.setdefault("conversation_id", None)
+        metadata.setdefault("captured_at", ts_ms)
+        metadata.setdefault("local_only", False)
+        metadata.setdefault("summary_version", None)
+        metadata.setdefault("memory_key", None)
+
+    async def aupdate_metadata(self, experience_id: str, metadata_patch: dict[str, Any]) -> None:
+        if not metadata_patch:
+            return
+        point_id = self._ensure_valid_point_id(experience_id)
+        await self.provider.client.set_payload(
+            collection_name=self.collection_name,
+            payload={"metadata": metadata_patch},
+            points=[point_id],
+        )
 
     def _build_consolidation_hash(
         self,

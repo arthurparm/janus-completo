@@ -1,7 +1,9 @@
+import asyncio
 from typing import Any
 
 import structlog
 from fastapi import Depends
+from neo4j.exceptions import TransientError
 
 from app.db.graph import GraphDatabase, get_graph_db
 from app.models.schemas import GraphLabel, GraphRelationship  # Importa os Enums
@@ -19,6 +21,13 @@ class KnowledgeRepository:
 
     def __init__(self, db: GraphDatabase):
         self._db = db
+
+    @staticmethod
+    def _is_retryable_transient(exc: Exception) -> bool:
+        if not isinstance(exc, TransientError):
+            return False
+        code = str(getattr(exc, "code", "") or "")
+        return "DeadlockDetected" in code or "TransientError" in code
 
     async def get_node_and_relationship_stats(self) -> dict[str, list]:
         node_stats_query = (
@@ -58,72 +67,92 @@ class KnowledgeRepository:
 
     async def save_code_structure(self, parser: CodeParser):
         logger.debug("Salvando estrutura de codigo no repositorio", file_path=parser.file_path)
-        async with await self._db.get_session() as session:
-            tx = await session.begin_transaction()
-            try:
-                file_label = f"{GraphLabel.FILE.value}:{GraphLabel.CODE_FILE.value}"
-                func_label = f"{GraphLabel.FUNCTION.value}:{GraphLabel.CODE_FUNCTION.value}"
-                cls_label = f"{GraphLabel.CLASS.value}:{GraphLabel.CODE_CLASS.value}"
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            async with await self._db.get_session() as session:
+                tx = await session.begin_transaction()
+                committed = False
+                try:
+                    file_label = f"{GraphLabel.FILE.value}:{GraphLabel.CODE_FILE.value}"
+                    func_label = f"{GraphLabel.FUNCTION.value}:{GraphLabel.CODE_FUNCTION.value}"
+                    cls_label = f"{GraphLabel.CLASS.value}:{GraphLabel.CODE_CLASS.value}"
 
-                file_props = {
-                    "name": parser.file_path,
-                    "path": parser.file_path,
-                    "file_path": parser.file_path,
-                }
-                file_id = await self._db.merge_node(
-                    tx,
-                    label=file_label,
-                    name=parser.file_path,
-                    properties=file_props,
-                    merge_keys=["path"],
-                )
-                for func in parser.functions:
-                    func_name = func["name"]
-                    func_qualified = func.get("qualified_name") or func_name
-                    func_props = {
-                        "name": func_name,
+                    file_props = {
+                        "name": parser.file_path,
+                        "path": parser.file_path,
                         "file_path": parser.file_path,
-                        "full_name": f"{parser.file_path}::{func_qualified}",
-                        "line": func.get("line"),
                     }
-                    func_id = await self._db.merge_node(
+                    file_id = await self._db.merge_node(
                         tx,
-                        label=func_label,
-                        name=func_name,
-                        properties=func_props,
-                        merge_keys=["name", "file_path"],
+                        label=file_label,
+                        name=parser.file_path,
+                        properties=file_props,
+                        merge_keys=["path"],
                     )
-                    await self._db.merge_relationship(
-                        tx,
-                        source_id=file_id,
-                        target_id=func_id,
-                        rel_type=GraphRelationship.CONTAINS.value,
+                    for func in parser.functions:
+                        func_name = func["name"]
+                        func_qualified = func.get("qualified_name") or func_name
+                        func_props = {
+                            "name": func_name,
+                            "file_path": parser.file_path,
+                            "full_name": f"{parser.file_path}::{func_qualified}",
+                            "line": func.get("line"),
+                        }
+                        func_id = await self._db.merge_node(
+                            tx,
+                            label=func_label,
+                            name=func_name,
+                            properties=func_props,
+                            merge_keys=["name", "file_path"],
+                        )
+                        await self._db.merge_relationship(
+                            tx,
+                            source_id=file_id,
+                            target_id=func_id,
+                            rel_type=GraphRelationship.CONTAINS.value,
+                        )
+                    for cls in parser.classes:
+                        cls_name = cls["name"]
+                        cls_qualified = cls.get("qualified_name") or cls_name
+                        cls_props = {
+                            "name": cls_name,
+                            "file_path": parser.file_path,
+                            "full_name": f"{parser.file_path}::{cls_qualified}",
+                            "line": cls.get("line"),
+                        }
+                        cls_id = await self._db.merge_node(
+                            tx,
+                            label=cls_label,
+                            name=cls_name,
+                            properties=cls_props,
+                            merge_keys=["name", "file_path"],
+                        )
+                        await self._db.merge_relationship(
+                            tx,
+                            source_id=file_id,
+                            target_id=cls_id,
+                            rel_type=GraphRelationship.CONTAINS.value,
+                        )
+                    await tx.commit()
+                    committed = True
+                    return
+                except Exception as exc:
+                    if not self._is_retryable_transient(exc) or attempt >= max_attempts:
+                        raise
+                    logger.warning(
+                        "repo_save_code_structure_retry_transient",
+                        file_path=parser.file_path,
+                        attempt=attempt,
+                        error=str(exc),
                     )
-                for cls in parser.classes:
-                    cls_name = cls["name"]
-                    cls_qualified = cls.get("qualified_name") or cls_name
-                    cls_props = {
-                        "name": cls_name,
-                        "file_path": parser.file_path,
-                        "full_name": f"{parser.file_path}::{cls_qualified}",
-                        "line": cls.get("line"),
-                    }
-                    cls_id = await self._db.merge_node(
-                        tx,
-                        label=cls_label,
-                        name=cls_name,
-                        properties=cls_props,
-                        merge_keys=["name", "file_path"],
-                    )
-                    await self._db.merge_relationship(
-                        tx,
-                        source_id=file_id,
-                        target_id=cls_id,
-                        rel_type=GraphRelationship.CONTAINS.value,
-                    )
-                await tx.commit()
-            finally:
-                await tx.close()
+                    await asyncio.sleep(0.2 * attempt)
+                finally:
+                    if not committed:
+                        try:
+                            await tx.rollback()
+                        except Exception:
+                            pass
+                    await tx.close()
 
     async def clear_all_data(self) -> int:
         await self._db.execute("MATCH (n) DETACH DELETE n", operation="repo_clear_graph")
@@ -188,6 +217,17 @@ class KnowledgeRepository:
                         total=len(deduped_calls),
                     )
                     batch_size = reduced
+                except Exception as exc:
+                    if not self._is_retryable_transient(exc):
+                        raise
+                    logger.warning(
+                        "bulk_merge_calls_retry_transient",
+                        attempted_batch_size=batch_size,
+                        processed=index,
+                        total=len(deduped_calls),
+                        error=str(exc),
+                    )
+                    await asyncio.sleep(0.2)
         try:
             record_audit_event_direct(
                 {"action": "bulk_merge_calls", "count": len(calls), "deduped_count": len(deduped_calls)}

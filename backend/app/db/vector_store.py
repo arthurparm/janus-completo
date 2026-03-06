@@ -94,16 +94,41 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
         "metadata.source_kind": PayloadSchemaType.KEYWORD,
         "metadata.content_kind": PayloadSchemaType.KEYWORD,
         "metadata.consolidation_status": PayloadSchemaType.KEYWORD,
+        "metadata.neo4j_sync_status": PayloadSchemaType.KEYWORD,
         "metadata.file_path": PayloadSchemaType.KEYWORD,
         "metadata.sha_after": PayloadSchemaType.KEYWORD,
         "metadata.user_id": PayloadSchemaType.KEYWORD,
         "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+        "metadata.memory_key": PayloadSchemaType.KEYWORD,
+        "metadata.summary_version": PayloadSchemaType.KEYWORD,
+        "metadata.local_only": PayloadSchemaType.BOOL,
         "metadata.strong_memory": PayloadSchemaType.BOOL,
         "metadata.captured_at": PayloadSchemaType.INTEGER,
         "metadata.timestamp": PayloadSchemaType.INTEGER,
     }
     if collection_name == getattr(settings, "QDRANT_COLLECTION_EPISODIC", "janus_episodic_memory"):
-        return CollectionSpec(name=collection_name, payload_indexes=episodic_indexes)
+        return CollectionSpec(
+            name=collection_name,
+            hnsw_m=int(getattr(settings, "QDRANT_EPISODIC_HNSW_M", 32)),
+            ef_construct=int(
+                getattr(settings, "QDRANT_EPISODIC_EF_CONSTRUCT", 200)
+            ),
+            full_scan_threshold=int(
+                getattr(
+                    settings,
+                    "QDRANT_EPISODIC_FULL_SCAN_THRESHOLD",
+                    _DEFAULT_FULL_SCAN_THRESHOLD,
+                )
+            ),
+            indexing_threshold=int(
+                getattr(
+                    settings,
+                    "QDRANT_EPISODIC_INDEXING_THRESHOLD",
+                    _DEFAULT_INDEXING_THRESHOLD,
+                )
+            ),
+            payload_indexes=episodic_indexes,
+        )
     if collection_name.startswith("user_chat_"):
         return CollectionSpec(
             name=collection_name,

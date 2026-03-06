@@ -32,6 +32,10 @@ class SelfStudyRunRequest(BaseModel):
     reason: str | None = None
 
 
+class SelfStudyNeo4jRepairRequest(BaseModel):
+    limit: int | None = Field(default=None, ge=1, le=5000)
+
+
 class CodeQARequest(BaseModel):
     question: str = Field(..., min_length=1)
     limit: int = Field(10, ge=1, le=50)
@@ -83,6 +87,22 @@ async def self_study_runs(
     return {"items": service.list_self_study_runs(limit=limit)}
 
 
+@router.get("/self-study/neo4j-audit")
+async def self_study_neo4j_audit(
+    orphan_limit: int = Query(default=25, ge=1, le=200),
+    service: AutonomyAdminService = Depends(get_autonomy_admin_service),
+):
+    return await service.get_self_study_neo4j_audit(orphan_limit=orphan_limit)
+
+
+@router.post("/self-study/neo4j-repair")
+async def self_study_neo4j_repair(
+    payload: SelfStudyNeo4jRepairRequest,
+    service: AutonomyAdminService = Depends(get_autonomy_admin_service),
+):
+    return await service.repair_self_study_neo4j(limit=payload.limit)
+
+
 @router.post("/code-qa", response_model=CodeQAResponse)
 async def code_qa(
     payload: CodeQARequest,
@@ -112,4 +132,3 @@ async def admin_manual_goal_completion_trigger(
         trigger_type="goal_completed",
     )
     return {"status": "queued"}
-

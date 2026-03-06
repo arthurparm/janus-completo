@@ -134,6 +134,22 @@ class MemoryRepository:
             logger.error("Erro no repositório ao buscar lições recentes", exc_info=e)
             raise
 
+    async def update_experience_metadata(
+        self,
+        experience_id: str,
+        metadata_patch: dict[str, Any],
+    ) -> None:
+        logger.debug(
+            "Atualizando metadata da experiência no repositório de memória",
+            experience_id=experience_id,
+            metadata_keys=sorted((metadata_patch or {}).keys()),
+        )
+        try:
+            await self._db.aupdate_metadata(experience_id=experience_id, metadata_patch=metadata_patch)
+        except Exception as e:
+            logger.error("Erro no repositório ao atualizar metadata da experiência", exc_info=e)
+            raise
+
 
 # Padrão de Injeção de Dependência: Getter para o repositório
 def get_memory_repository(db: MemoryDBProtocol = Depends(get_memory_db)) -> MemoryRepository:

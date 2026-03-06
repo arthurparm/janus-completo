@@ -29,6 +29,12 @@ class _AdminServiceStub:
     def list_self_study_runs(self, limit=20):
         return []
 
+    async def get_self_study_neo4j_audit(self, *, orphan_limit: int = 25):
+        return {"total_self_memory": 0, "connected_self_memory": 0}
+
+    async def repair_self_study_neo4j(self, *, limit: int | None = None):
+        return {"repaired": 0, "connected": 0}
+
     async def ask_code_as_admin(self, *, question: str, limit: int = 10, citation_limit: int = 8):
         return {"answer": "ok", "citations": [], "self_memory": []}
 

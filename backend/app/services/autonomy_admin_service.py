@@ -150,6 +150,20 @@ class AutonomyAdminService:
         normalized = "|".join(p.strip().lower() for p in parts if p is not None)
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
+    def _build_self_memory_key(
+        self,
+        *,
+        rel_path: str,
+        summary_version: str | None,
+        sha_after: str | None,
+    ) -> str:
+        normalized_path = str(rel_path or "").strip().lstrip("./")
+        normalized_version = str(summary_version or "legacy").strip() or "legacy"
+        normalized_sha = str(sha_after or "").strip()
+        prefix = "selfmemory" if normalized_sha else "selfmemory-legacy"
+        raw = f"{normalized_path}|{normalized_version}|{normalized_sha or 'legacy'}"
+        return f"{prefix}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
+
     def _get_self_study_run_budget_seconds(self) -> int:
         deadline_raw = str(self._self_study_deadline_local or "").strip()
         if not deadline_raw:
@@ -881,8 +895,7 @@ class AutonomyAdminService:
         if not rel:
             return []
 
-        candidates: set[str] = {rel}
-        candidates.add(f"/{rel}")
+        candidates: set[str] = {rel, f"/{rel}", f"/app/{rel}"}
 
         try:
             abs_path = (self._repo_root / rel).resolve().as_posix()
@@ -895,16 +908,31 @@ class AutonomyAdminService:
             if stripped:
                 candidates.add(stripped)
                 candidates.add(f"/{stripped}")
+                candidates.add(f"/app/{stripped}")
         if rel.startswith("app/"):
             backend_variant = f"backend/{rel}"
             candidates.add(backend_variant)
             candidates.add(f"/{backend_variant}")
+            candidates.add(f"/app/{rel}")
             if rel.startswith("app/app/"):
                 backend_stripped = f"backend/{rel[len('app/') :]}"
                 candidates.add(backend_stripped)
                 candidates.add(f"/{backend_stripped}")
+        if rel.startswith("frontend/"):
+            candidates.add(f"/app/{rel}")
 
         return [p for p in candidates if p]
+
+    def _preferred_graph_owner_path(self, rel_path: str, path_candidates: list[str]) -> str:
+        for candidate in path_candidates:
+            if candidate.startswith("/app/"):
+                return candidate
+        rel = str(rel_path or "").strip().lstrip("./")
+        if rel.startswith("backend/"):
+            return f"/app/{rel[len('backend/') :]}"
+        if rel:
+            return f"/app/{rel}" if not rel.startswith("/app/") else rel
+        return "/app"
 
     def _read_study_file_content(self, rel_path: str) -> tuple[str, str] | None:
         path = self._repo_root / rel_path
@@ -1023,6 +1051,7 @@ class AutonomyAdminService:
     async def _upsert_self_memory_graph_links(
         self,
         *,
+        memory_key: str,
         rel_path: str,
         path_candidates: list[str],
         summary_payload: dict[str, Any],
@@ -1034,7 +1063,8 @@ class AutonomyAdminService:
         graph = await get_graph_db()
         await graph.query(
             """
-            MERGE (m:SelfMemory {file_path: $file_path})
+            MERGE (m:SelfMemory {memory_key: $memory_key})
+            ON CREATE SET m.created_at = timestamp()
             SET m.summary = $summary,
                 m.summary_version = $summary_version,
                 m.language = $language,
@@ -1046,10 +1076,14 @@ class AutonomyAdminService:
                 m.file_path = $file_path,
                 m.sha_after = $sha_after,
                 m.source_experience_id = $source_experience_id,
+                m.memory_key = $memory_key,
+                m.is_current = true,
+                m.is_legacy = $is_legacy,
                 m.updated_at = timestamp()
-            RETURN m.file_path AS file_path
+            RETURN m.memory_key AS memory_key
             """,
             {
+                "memory_key": memory_key,
                 "file_path": rel_path,
                 "summary": str(summary_payload.get("summary") or "").strip()[:4000],
                 "summary_version": str(summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION),
@@ -1061,26 +1095,56 @@ class AutonomyAdminService:
                 "confidence": float(summary_payload.get("confidence") or 0.75),
                 "sha_after": sha_after,
                 "source_experience_id": source_experience_id,
+                "is_legacy": not bool(str(sha_after or "").strip()),
             },
             operation="self_study_selfmemory_node_upsert",
         )
+        await graph.query(
+            """
+            MATCH (other:SelfMemory {file_path: $file_path})
+            WHERE other.memory_key <> $memory_key
+            SET other.is_current = false
+            RETURN count(other) AS demoted
+            """,
+            {"file_path": rel_path, "memory_key": memory_key},
+            operation="self_study_selfmemory_current_demote",
+        )
         owner_rows = await graph.query(
             """
-            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (m:SelfMemory {memory_key: $memory_key})
             MATCH (owner)
             WHERE (owner:File OR owner:CodeFile) AND owner.path IN $path_candidates
             MERGE (m)-[:RELATES_TO]->(owner)
             RETURN count(DISTINCT owner) AS owner_links
             """,
             {
-                "file_path": rel_path,
+                "memory_key": memory_key,
                 "path_candidates": path_candidates,
             },
             operation="self_study_selfmemory_owner_link",
         )
+        owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
+        if owner_links <= 0:
+            owner_rows = await graph.query(
+                """
+                MATCH (m:SelfMemory {memory_key: $memory_key})
+                MERGE (owner:File {path: $primary_owner_path})
+                SET owner.name = coalesce(owner.name, $primary_owner_path),
+                    owner.file_path = coalesce(owner.file_path, $primary_owner_path),
+                    owner.source = coalesce(owner.source, 'self_study')
+                MERGE (m)-[:RELATES_TO]->(owner)
+                RETURN count(owner) AS owner_links
+                """,
+                {
+                    "memory_key": memory_key,
+                    "primary_owner_path": self._preferred_graph_owner_path(rel_path, path_candidates),
+                },
+                operation="self_study_selfmemory_owner_fallback",
+            )
+            owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
         function_rows = await graph.query(
             """
-            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (m:SelfMemory {memory_key: $memory_key})
             MATCH (fn:CodeFunction)
             WHERE fn.file_path IN $path_candidates
               AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
@@ -1088,7 +1152,7 @@ class AutonomyAdminService:
             RETURN count(DISTINCT fn) AS symbol_links
             """,
             {
-                "file_path": rel_path,
+                "memory_key": memory_key,
                 "path_candidates": path_candidates,
                 "symbol_names": symbol_names,
             },
@@ -1096,7 +1160,7 @@ class AutonomyAdminService:
         )
         class_rows = await graph.query(
             """
-            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (m:SelfMemory {memory_key: $memory_key})
             MATCH (cl:CodeClass)
             WHERE cl.file_path IN $path_candidates
               AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
@@ -1104,13 +1168,26 @@ class AutonomyAdminService:
             RETURN count(DISTINCT cl) AS symbol_links
             """,
             {
-                "file_path": rel_path,
+                "memory_key": memory_key,
                 "path_candidates": path_candidates,
                 "symbol_names": symbol_names,
             },
             operation="self_study_selfmemory_class_link",
         )
-        owner_links = int((owner_rows or [{}])[0].get("owner_links", 0) or 0)
+        if source_experience_id:
+            await graph.query(
+                """
+                MATCH (m:SelfMemory {memory_key: $memory_key})
+                MATCH (exp:Experience {id: $experience_id})
+                MERGE (m)-[:EXTRACTED_FROM]->(exp)
+                RETURN count(exp) AS provenance_links
+                """,
+                {
+                    "memory_key": memory_key,
+                    "experience_id": source_experience_id,
+                },
+                operation="self_study_selfmemory_provenance_link",
+            )
         function_links = int((function_rows or [{}])[0].get("symbol_links", 0) or 0)
         class_links = int((class_rows or [{}])[0].get("symbol_links", 0) or 0)
         return [{"owner_links": owner_links, "symbol_links": function_links + class_links}]
@@ -1118,6 +1195,7 @@ class AutonomyAdminService:
     async def _get_self_memory_graph_link_counts(
         self,
         *,
+        memory_key: str,
         rel_path: str,
         path_candidates: list[str],
         symbol_names: list[str],
@@ -1125,7 +1203,7 @@ class AutonomyAdminService:
         graph = await get_graph_db()
         return await graph.query(
             """
-            MATCH (m:SelfMemory {file_path: $file_path})
+            MATCH (m:SelfMemory {memory_key: $memory_key})
             OPTIONAL MATCH (m)-[:RELATES_TO]->(owner)
             WHERE (owner:File OR owner:CodeFile) AND owner.path IN $path_candidates
             WITH m, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
@@ -1136,7 +1214,7 @@ class AutonomyAdminService:
                    size([node IN collect(DISTINCT symbol) WHERE node IS NOT NULL]) AS symbol_links
             """,
             {
-                "file_path": rel_path,
+                "memory_key": memory_key,
                 "path_candidates": path_candidates,
                 "symbol_names": symbol_names,
             },
@@ -1151,24 +1229,33 @@ class AutonomyAdminService:
         sha_after: str | None,
     ) -> Experience:
         compact_text = str(summary_payload.get("compact_text") or summary_payload.get("summary") or "").strip()
+        summary_version = str(
+            summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION
+        ).strip() or self.SELF_MEMORY_SUMMARY_VERSION
+        memory_key = self._build_self_memory_key(
+            rel_path=rel_path,
+            summary_version=summary_version,
+            sha_after=sha_after,
+        )
         metadata = {
             "origin": "self_study",
             "source_kind": "code_file",
             "content_kind": "code_summary",
             "strong_memory": True,
             "consolidation_status": "pending",
+            "neo4j_sync_status": "pending",
             "file_path": rel_path,
             "sha_after": sha_after,
             "captured_at": int(time.time() * 1000),
-            "summary_version": summary_payload.get("summary_version"),
+            "summary_version": summary_version,
             "language": summary_payload.get("language"),
             "symbols": summary_payload.get("symbols") or [],
             "imports": summary_payload.get("imports") or [],
             "touchpoints": summary_payload.get("touchpoints") or [],
             "domain_tags": summary_payload.get("domain_tags") or [],
             "local_only": self._self_study_local_only,
+            "memory_key": memory_key,
         }
-        summary_version = summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION
         experience = Experience(
             id=build_deterministic_point_id(
                 "self-study",
@@ -1198,6 +1285,14 @@ class AutonomyAdminService:
         if not path_candidates:
             return
         summary = str(summary_payload.get("summary") or "").strip()
+        summary_version = str(
+            summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION
+        ).strip() or self.SELF_MEMORY_SUMMARY_VERSION
+        memory_key = self._build_self_memory_key(
+            rel_path=rel_path,
+            summary_version=summary_version,
+            sha_after=sha_after,
+        )
         rel_types = self._infer_self_memory_relationship_types(rel_path, summary)
         symbol_names = [
             symbol
@@ -1205,6 +1300,7 @@ class AutonomyAdminService:
             if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", str(symbol or ""))
         ]
         await self._upsert_self_memory_graph_links(
+            memory_key=memory_key,
             rel_path=rel_path,
             path_candidates=path_candidates,
             summary_payload=summary_payload,
@@ -1214,6 +1310,7 @@ class AutonomyAdminService:
             rel_types=rel_types,
         )
         rows = await self._get_self_memory_graph_link_counts(
+            memory_key=memory_key,
             rel_path=rel_path,
             path_candidates=path_candidates,
             symbol_names=symbol_names,
@@ -1223,6 +1320,7 @@ class AutonomyAdminService:
             file_count = await self._ensure_code_graph_ready(force=True)
             if file_count > 0:
                 await self._upsert_self_memory_graph_links(
+                    memory_key=memory_key,
                     rel_path=rel_path,
                     path_candidates=path_candidates,
                     summary_payload=summary_payload,
@@ -1232,6 +1330,7 @@ class AutonomyAdminService:
                     rel_types=rel_types,
                 )
                 rows = await self._get_self_memory_graph_link_counts(
+                    memory_key=memory_key,
                     rel_path=rel_path,
                     path_candidates=path_candidates,
                     symbol_names=symbol_names,
@@ -1316,6 +1415,22 @@ class AutonomyAdminService:
                     sha_after=item.get("sha_after"),
                     source_experience_id=experience.id,
                 )
+                memory_repo = MemoryRepository(await get_memory_db())
+                await memory_repo.update_experience_metadata(
+                    experience.id,
+                    {
+                        "memory_key": self._build_self_memory_key(
+                            rel_path=rel,
+                            summary_version=str(
+                                summary_payload.get("summary_version")
+                                or self.SELF_MEMORY_SUMMARY_VERSION
+                            ),
+                            sha_after=item.get("sha_after"),
+                        ),
+                        "neo4j_sync_status": "linked",
+                        "source_experience_id": experience.id,
+                    },
+                )
                 self._repo.update_self_study_file_status(file_row.id, "completed")
             except Exception as e:
                 errors += 1
@@ -1399,6 +1514,14 @@ class AutonomyAdminService:
                 for r in runs
             ],
         }
+
+    async def get_self_study_neo4j_audit(self, *, orphan_limit: int = 25) -> dict[str, Any]:
+        return await self._knowledge_service.get_self_memory_neo4j_audit(
+            orphan_limit=orphan_limit
+        )
+
+    async def repair_self_study_neo4j(self, *, limit: int | None = None) -> dict[str, Any]:
+        return await self._knowledge_service.repair_self_memory_graph(limit=limit)
 
     def list_self_study_runs(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self._repo.list_self_study_runs(limit=limit)
@@ -1510,14 +1633,33 @@ class AutonomyAdminService:
     async def _recall_self_study_memories(
         self, *, question: str, limit: int = 5
     ) -> list[dict[str, Any]]:
+        filters = {
+            "origin": "self_study",
+            "strong_memory": True,
+            "source_kind": "code_file",
+            "content_kind": "code_summary",
+            "neo4j_sync_status": "linked",
+        }
         try:
             memory_db = await get_memory_db()
             recalled = await memory_db.arecall_filtered(
                 query=question,
-                filters={"origin": "self_study", "strong_memory": True},
+                filters=filters,
                 limit=limit,
                 min_score=0.1,
             )
+            if not recalled:
+                recalled = await memory_db.arecall_filtered(
+                    query=question,
+                    filters={
+                        "origin": "self_study",
+                        "strong_memory": True,
+                        "source_kind": "code_file",
+                        "content_kind": "code_summary",
+                    },
+                    limit=limit,
+                    min_score=0.1,
+                )
         except Exception as exc:
             logger.warning("admin_code_qa_self_study_qdrant_failed", error=str(exc))
             return []
@@ -1579,7 +1721,8 @@ class AutonomyAdminService:
                 MATCH (m:SelfMemory)-[:RELATES_TO]->(owner)
                 WHERE owner:File OR owner:CodeFile
                 WITH DISTINCT m
-                WHERE any(prefix IN $allowed_prefixes WHERE m.file_path STARTS WITH prefix)
+                WHERE coalesce(m.is_current, true)
+                  AND any(prefix IN $allowed_prefixes WHERE m.file_path STARTS WITH prefix)
                   AND (
                     size($tokens) = 0
                     OR any(t IN $tokens WHERE toLower(m.summary) CONTAINS t OR toLower(m.file_path) CONTAINS t)

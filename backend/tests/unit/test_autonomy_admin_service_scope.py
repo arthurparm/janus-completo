@@ -333,8 +333,12 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
             if operation == "self_study_selfmemory_owner_link":
                 owner_params.update(params)
                 return [{"owner_links": 1}]
+            if operation == "self_study_selfmemory_owner_fallback":
+                return [{"owner_links": 1}]
             if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
                 return [{"symbol_links": 1}]
+            if operation == "self_study_selfmemory_provenance_link":
+                return [{"provenance_links": 1}]
             if operation == "self_study_selfmemory_verify":
                 return [{"owner_links": 1, "symbol_links": 1}]
             return []
@@ -360,19 +364,27 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
         source_experience_id="exp-1",
     )
 
-    assert "MERGE (m:SelfMemory {file_path: $file_path})" in captured_queries["self_study_selfmemory_node_upsert"]
+    assert "MERGE (m:SelfMemory {memory_key: $memory_key})" in captured_queries["self_study_selfmemory_node_upsert"]
     assert "MERGE (m)-[:RELATES_TO]->(owner)" in captured_queries["self_study_selfmemory_owner_link"]
     assert "MATCH (fn:CodeFunction)" in captured_queries["self_study_selfmemory_function_link"]
     assert "MATCH (cl:CodeClass)" in captured_queries["self_study_selfmemory_class_link"]
+    assert "MERGE (m)-[:EXTRACTED_FROM]->(exp)" in captured_queries["self_study_selfmemory_provenance_link"]
     candidates = owner_params.get("path_candidates")
     assert isinstance(candidates, list)
     assert "backend/app/services/autonomy_admin_service.py" in candidates
     assert "/backend/app/services/autonomy_admin_service.py" in candidates
     assert "app/services/autonomy_admin_service.py" in candidates
+    assert "/app/app/services/autonomy_admin_service.py" in candidates
     owner_query = captured_queries["self_study_selfmemory_owner_link"]
     assert "owner.path IN $path_candidates" in owner_query
     assert captured_params["source_experience_id"] == "exp-1"
     assert captured_params["symbols"] == ["AutonomyAdminService"]
+    assert captured_params["memory_key"] == service._build_self_memory_key(
+        rel_path="backend/app/services/autonomy_admin_service.py",
+        summary_version=service.SELF_MEMORY_SUMMARY_VERSION,
+        sha_after="abc123",
+    )
+    assert captured_params["is_legacy"] is False
 
 
 @pytest.mark.asyncio
@@ -390,8 +402,12 @@ async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch)
                 if query_calls.count("self_study_selfmemory_owner_link") == 1:
                     return [{"owner_links": 0}]
                 return [{"owner_links": 1}]
+            if operation == "self_study_selfmemory_owner_fallback":
+                return [{"owner_links": 0}]
             if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
                 return [{"symbol_links": 0}]
+            if operation == "self_study_selfmemory_provenance_link":
+                return [{"provenance_links": 1}]
             if operation == "self_study_selfmemory_verify":
                 if query_calls.count("self_study_selfmemory_verify") == 1:
                     return [{"owner_links": 0, "symbol_links": 0}]
@@ -447,8 +463,12 @@ async def test_persist_self_memory_uses_verify_query_to_avoid_false_negative(mon
                 return [{"owner_links": 0, "symbol_links": 0}]
             if operation == "self_study_selfmemory_owner_link":
                 return [{"owner_links": 1}]
+            if operation == "self_study_selfmemory_owner_fallback":
+                return [{"owner_links": 0}]
             if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
                 return [{"symbol_links": 0}]
+            if operation == "self_study_selfmemory_provenance_link":
+                return [{"provenance_links": 1}]
             if operation == "self_study_selfmemory_verify":
                 return [{"owner_links": 1, "symbol_links": 1}]
             if operation == "self_study_code_graph_file_count":
@@ -487,6 +507,55 @@ async def test_persist_self_memory_uses_verify_query_to_avoid_false_negative(mon
     assert query_calls.count("self_study_selfmemory_owner_link") == 1
     assert query_calls.count("self_study_selfmemory_verify") == 1
     assert reindex_calls["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_persist_self_memory_creates_fallback_owner_when_code_owner_is_missing(monkeypatch):
+    service = _new_service(citations=[])
+    captured_queries: dict[str, str] = {}
+
+    class _FallbackGraph:
+        async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
+            operation = str(kwargs.get("operation") or "")
+            captured_queries[operation] = query
+            if operation == "self_study_selfmemory_node_upsert":
+                return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_owner_link":
+                return [{"owner_links": 0}]
+            if operation == "self_study_selfmemory_owner_fallback":
+                return [{"owner_links": 1}]
+            if operation in {"self_study_selfmemory_function_link", "self_study_selfmemory_class_link"}:
+                return [{"symbol_links": 0}]
+            if operation == "self_study_selfmemory_provenance_link":
+                return [{"provenance_links": 0}]
+            if operation == "self_study_selfmemory_verify":
+                return [{"owner_links": 1, "symbol_links": 0}]
+            return []
+
+    async def _fake_get_graph_db():
+        return _FallbackGraph()
+
+    monkeypatch.setattr(autonomy_admin_module, "get_graph_db", _fake_get_graph_db)
+
+    await service._persist_self_memory(
+        rel_path="frontend/src/app/features/auth/login.ts",
+        summary_payload={
+            "summary": "ok",
+            "summary_version": service.SELF_MEMORY_SUMMARY_VERSION,
+            "language": "typescript",
+            "symbols": ["LoginComponent"],
+            "imports": ["@angular/core"],
+            "touchpoints": ["ui"],
+            "domain_tags": ["frontend"],
+            "confidence": 0.9,
+        },
+        sha_after="def456",
+        source_experience_id=None,
+    )
+
+    assert "MERGE (owner:File {path: $primary_owner_path})" in captured_queries[
+        "self_study_selfmemory_owner_fallback"
+    ]
 
 
 @pytest.mark.asyncio
@@ -596,3 +665,49 @@ def test_get_self_study_run_budget_uses_local_deadline(monkeypatch):
     monkeypatch.setattr(autonomy_admin_module, "datetime", _FrozenDateTime)
 
     assert service._get_self_study_run_budget_seconds() == 64800
+
+
+@pytest.mark.asyncio
+async def test_recall_self_study_memories_prefers_linked_code_summary(monkeypatch):
+    service = _new_service(citations=[])
+    filters_seen: list[dict[str, object]] = []
+
+    class _MemoryDb:
+        async def arecall_filtered(self, *, query, filters, limit, min_score):
+            del query, limit, min_score
+            filters_seen.append(filters)
+            if filters.get("neo4j_sync_status") == "linked":
+                return []
+            return [
+                SimpleNamespace(
+                    content="Resumo forte",
+                    metadata={
+                        "file_path": "backend/app/services/example.py",
+                        "captured_at": 123,
+                    },
+                    score=0.8,
+                )
+            ]
+
+    async def _fake_get_memory_db():
+        return _MemoryDb()
+
+    monkeypatch.setattr(autonomy_admin_module, "get_memory_db", _fake_get_memory_db)
+
+    rows = await service._recall_self_study_memories(question="example")
+
+    assert len(rows) == 1
+    assert rows[0]["file_path"] == "backend/app/services/example.py"
+    assert filters_seen[0] == {
+        "origin": "self_study",
+        "strong_memory": True,
+        "source_kind": "code_file",
+        "content_kind": "code_summary",
+        "neo4j_sync_status": "linked",
+    }
+    assert filters_seen[1] == {
+        "origin": "self_study",
+        "strong_memory": True,
+        "source_kind": "code_file",
+        "content_kind": "code_summary",
+    }
