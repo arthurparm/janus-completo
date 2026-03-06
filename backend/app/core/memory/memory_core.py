@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import time
 import uuid
 from typing import Any
@@ -109,7 +110,11 @@ class MemoryCore:
 
         # 5. Prepare Payload
         ts_ms = self._get_timestamp_ms(experience.timestamp)
-        payload = experience.dict()
+        payload = (
+            experience.model_dump()
+            if hasattr(experience, "model_dump")
+            else experience.dict()
+        )
         payload.update(
             {
                 "ts_ms": ts_ms,
@@ -124,6 +129,24 @@ class MemoryCore:
         if pii_types:
             meta["pii"] = pii_types
             meta["pii_redacted"] = True
+
+        # Preserve a stable metadata contract for downstream consolidation/ranking.
+        meta.setdefault("origin", "unknown")
+        meta.setdefault("source_kind", "generic")
+        meta.setdefault("content_kind", payload.get("type") or "episodic")
+        meta.setdefault("strong_memory", False)
+        meta.setdefault("consolidation_status", "pending")
+        meta.setdefault("file_path", None)
+        meta.setdefault("sha_after", None)
+        meta.setdefault("user_id", None)
+        meta.setdefault("conversation_id", None)
+        meta.setdefault("captured_at", ts_ms)
+        if not meta.get("consolidation_hash"):
+            meta["consolidation_hash"] = self._build_consolidation_hash(
+                experience_type=str(payload.get("type") or ""),
+                content=str(final_content or ""),
+                metadata=meta,
+            )
 
         # Preserve type for filtering
         if payload.get("type"):
@@ -357,9 +380,46 @@ class MemoryCore:
             return None
         must = []
         for k, v in filters.items():
-            key = f"metadata.{k}" if k in ("origin", "status") else k
+            key = (
+                f"metadata.{k}"
+                if k
+                in {
+                    "origin",
+                    "status",
+                    "source_kind",
+                    "content_kind",
+                    "strong_memory",
+                    "consolidation_status",
+                    "consolidation_hash",
+                    "file_path",
+                    "sha_after",
+                    "user_id",
+                    "conversation_id",
+                    "captured_at",
+                    "type",
+                }
+                else k
+            )
             must.append(models.FieldCondition(key=key, match=models.MatchValue(value=v)))
         return models.Filter(must=must) if must else None
+
+    def _build_consolidation_hash(
+        self,
+        *,
+        experience_type: str,
+        content: str,
+        metadata: dict[str, Any],
+    ) -> str:
+        parts = [
+            str(experience_type or "").strip().lower(),
+            str(metadata.get("origin") or "").strip().lower(),
+            str(metadata.get("source_kind") or "").strip().lower(),
+            str(metadata.get("file_path") or "").strip().lower(),
+            str(metadata.get("sha_after") or "").strip().lower(),
+            str(content or "").strip(),
+        ]
+        normalized = "|".join(parts)
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     def _point_to_experience(self, point) -> ScoredExperience:
         payload = point.payload or {}

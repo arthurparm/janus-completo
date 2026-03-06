@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import structlog
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.http.models import PayloadSchemaType
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
@@ -87,6 +88,7 @@ class QdrantProvider:
                     logger.info("Coleção criada com sucesso.")
 
                 self._offline = False
+                await self._ensure_payload_indexes()
                 return
             except Exception as e:
                 is_last = attempt == max_retries - 1
@@ -102,6 +104,36 @@ class QdrantProvider:
                     logger.warning("log_warning", message=f"Falha Qdrant (tentativa {attempt+1}). Retentando em {delay:.1f}s..."
                     )
                     await asyncio.sleep(delay)
+
+    async def _ensure_payload_indexes(self) -> None:
+        index_specs = {
+            "metadata.type": PayloadSchemaType.KEYWORD,
+            "metadata.origin": PayloadSchemaType.KEYWORD,
+            "metadata.source_kind": PayloadSchemaType.KEYWORD,
+            "metadata.content_kind": PayloadSchemaType.KEYWORD,
+            "metadata.consolidation_status": PayloadSchemaType.KEYWORD,
+            "metadata.file_path": PayloadSchemaType.KEYWORD,
+            "metadata.sha_after": PayloadSchemaType.KEYWORD,
+            "metadata.user_id": PayloadSchemaType.KEYWORD,
+            "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+            "metadata.strong_memory": PayloadSchemaType.BOOL,
+            "metadata.captured_at": PayloadSchemaType.INTEGER,
+            "metadata.timestamp": PayloadSchemaType.INTEGER,
+        }
+        for field_name, schema in index_specs.items():
+            try:
+                await self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field_name,
+                    field_schema=schema,
+                )
+            except Exception:
+                logger.debug(
+                    "qdrant_payload_index_ensure_failed",
+                    field_name=field_name,
+                    collection=self.collection_name,
+                    exc_info=True,
+                )
 
     async def try_revive(self) -> bool:
         """Tenta reconectar se estiver offline."""

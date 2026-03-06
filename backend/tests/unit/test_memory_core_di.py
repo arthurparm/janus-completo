@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import app.core.memory.memory_core as memory_core_module
 from app.core.memory.memory_core import MemoryCore
 from app.models.schemas import Experience
 
@@ -57,6 +58,47 @@ async def test_memory_core_dependency_injection():
     # Check if client.upsert called
     assert mock_client.upsert.called or mock_client.upsert.await_args is not None
     print("✅ Dependency Injection Test Passed: MemoryCore used mock client!")
+
+
+@pytest.mark.asyncio
+async def test_memory_core_applies_strong_metadata_contract(monkeypatch):
+    mock_client = AsyncMock()
+    mock_cb = MagicMock()
+
+    class MockSettings:
+        QDRANT_HOST = "localhost"
+        QDRANT_PORT = 6333
+        MEMORY_VECTOR_SIZE = 1536
+        MEMORY_SHORT_TTL_SECONDS = 600
+        MEMORY_SHORT_MAX_ITEMS = 512
+
+    monkeypatch.setattr(memory_core_module, "aembed_text", AsyncMock(return_value=[0.1] * 1536))
+    memory = MemoryCore(client=mock_client, circuit_breaker=mock_cb, config=MockSettings())
+
+    exp = Experience(
+        id="self-study-id",
+        type="episodic",
+        content="Arquivo backend/app/services/x.py",
+        metadata={
+            "origin": "self_study",
+            "source_kind": "code_file",
+            "strong_memory": True,
+            "file_path": "backend/app/services/x.py",
+        },
+    )
+
+    await memory.amemorize(exp)
+
+    upsert_points = mock_client.upsert.await_args.kwargs["points"]
+    payload = upsert_points[0].payload
+    metadata = payload["metadata"]
+    assert metadata["origin"] == "self_study"
+    assert metadata["source_kind"] == "code_file"
+    assert metadata["content_kind"] == "episodic"
+    assert metadata["strong_memory"] is True
+    assert metadata["consolidation_status"] == "pending"
+    assert metadata["file_path"] == "backend/app/services/x.py"
+    assert metadata["consolidation_hash"]
 
 if __name__ == "__main__":
     import asyncio

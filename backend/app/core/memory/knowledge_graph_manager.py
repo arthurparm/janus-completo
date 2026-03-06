@@ -352,10 +352,12 @@ class KnowledgeGraphManager:
         Realiza uma busca 'semântica' (por enquanto baseada em texto) no grafo.
         """
         cypher_query = """
-        MATCH (n)
-        WHERE (n:Concept OR n:Tool OR n:Error OR n:Solution OR n:Technology)
-          AND (toLower(n.name) CONTAINS toLower($query) OR toLower(n.description) CONTAINS toLower($query))
-        RETURN n.name as name, labels(n)[0] as type, n.description as summary
+        CALL db.index.fulltext.queryNodes("entity_keyword_search", $query, {limit: $limit})
+        YIELD node, score
+        RETURN coalesce(node.name, node.canonical_name, '') as name,
+               coalesce(node.type, labels(node)[0], 'Entity') as type,
+               coalesce(node.description, node.summary, '') as summary,
+               score
         LIMIT $limit
         """
         try:

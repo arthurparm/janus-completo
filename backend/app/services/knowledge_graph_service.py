@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections import OrderedDict
 from datetime import datetime
 from typing import Any
@@ -48,6 +49,60 @@ class KnowledgeGraphService:
         if not self._graph_db:
             self._graph_db = await get_graph_db()
         return self._graph_db
+
+    async def _run_rows(self, target: Any, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        if hasattr(target, "run"):
+            result = await target.run(query, **(params or {}))
+            return [record.data() async for record in result]
+        return await target.query(query, params or {})
+
+    async def _ensure_experience_node(
+        self,
+        target: Any,
+        *,
+        experience_id: str,
+        source_metadata: dict[str, Any],
+    ) -> None:
+        now = datetime.now().isoformat()
+        await self._run_rows(
+            target,
+            """
+            MERGE (exp:Experience {id: $experience_id})
+            SET exp.created_at = coalesce(exp.created_at, $now),
+                exp.updated_at = $now,
+                exp.origin = coalesce($origin, exp.origin),
+                exp.source_kind = coalesce($source_kind, exp.source_kind),
+                exp.content_kind = coalesce($content_kind, exp.content_kind),
+                exp.file_path = coalesce($file_path, exp.file_path),
+                exp.sha_after = coalesce($sha_after, exp.sha_after),
+                exp.consolidation_hash = coalesce($consolidation_hash, exp.consolidation_hash),
+                exp.captured_at = coalesce($captured_at, exp.captured_at)
+            RETURN exp.id AS id
+            """,
+            {
+                "experience_id": experience_id,
+                "now": now,
+                "origin": source_metadata.get("origin"),
+                "source_kind": source_metadata.get("source_kind"),
+                "content_kind": source_metadata.get("content_kind") or source_metadata.get("type"),
+                "file_path": source_metadata.get("file_path"),
+                "sha_after": source_metadata.get("sha_after"),
+                "consolidation_hash": source_metadata.get("consolidation_hash"),
+                "captured_at": source_metadata.get("captured_at"),
+            },
+        )
+
+    async def _link_self_memory_provenance(self, target: Any, experience_id: str) -> None:
+        await self._run_rows(
+            target,
+            """
+            MATCH (m:SelfMemory {source_experience_id: $experience_id})
+            MATCH (exp:Experience {id: $experience_id})
+            MERGE (m)-[:EXTRACTED_FROM]->(exp)
+            RETURN count(m) AS linked
+            """,
+            {"experience_id": experience_id},
+        )
 
     async def persist_experience_node(
         self, experience: Experience, user_id: str | None = None
@@ -136,168 +191,231 @@ class KnowledgeGraphService:
 
         created_entities_count = 0
         created_relationships_count = 0
-
-        # 1. Persistir Entidades
-        for idx, ent in enumerate(prepared_entities):
+        source_metadata = dict(source_metadata or {})
+        consolidation_hash = str(source_metadata.get("consolidation_hash") or "").strip()
+        session = None
+        tx = None
+        target: Any = db
+        if hasattr(db, "get_session"):
             try:
-                now = datetime.now().isoformat()
-                query = """
-                MERGE (e:Entity {canonical_name: $canonical_name})
-                ON CREATE SET
-                    e.type = $type,
-                    e.name = $display_name,
-                    e.description = $description,
-                    e.source_experience = $exp_id,
-                    e.source_experiences = CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END,
-                    e.confidence = $confidence,
-                    e.created_at = $now,
-                    e.canonical_name = $canonical_name
-                ON MATCH SET
-                    e.last_seen = $now,
-                    e.canonical_name = coalesce(e.canonical_name, $canonical_name),
-                    e.type = coalesce(e.type, $type),
-                    e.source_experience = coalesce(e.source_experience, $exp_id),
-                    e.confidence = coalesce(e.confidence, $confidence),
-                    e.description = CASE
-                        WHEN coalesce(e.description, '') = '' AND coalesce($description, '') <> '' THEN $description
-                        ELSE e.description
-                    END
-                WITH e,
-                     CASE
-                        WHEN e.aliases IS NULL THEN CASE WHEN coalesce(e.name, '') = '' THEN [] ELSE [e.name] END
-                        ELSE e.aliases
-                     END AS current_aliases,
-                     [a IN $aliases WHERE a IS NOT NULL AND trim(a) <> ''] AS alias_candidates,
-                     CASE
-                        WHEN e.source_experiences IS NULL THEN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END
-                        ELSE e.source_experiences
-                     END AS current_source_experiences
-                WITH e, current_aliases, alias_candidates, current_source_experiences,
-                     size([a IN alias_candidates WHERE NOT a IN current_aliases]) AS alias_added_count
-                SET e.aliases = reduce(acc = current_aliases, a IN alias_candidates |
-                    CASE WHEN a IN acc THEN acc ELSE acc + a END
-                )
-                SET e.source_experiences = reduce(acc = current_source_experiences, x IN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END |
-                    CASE WHEN x IN acc THEN acc ELSE acc + x END
-                )
-                RETURN elementId(e) as id, alias_added_count
-                """
+                session = await db.get_session()
+                tx = await session.begin_transaction()
+                target = tx
+            except Exception:
+                target = db
+                tx = None
+                session = None
 
-                result = await db.query(
-                    query,
-                    {
-                        "canonical_name": ent["canonical_name"],
-                        "display_name": ent["display_name"],
-                        "aliases": ent["aliases"],
-                        "type": ent["type"],
-                        "description": ent.get("description", ""),
-                        "confidence": ent.get("confidence", 0.5),
-                        "exp_id": experience_id,
-                        "now": now,
-                    },
+        try:
+            try:
+                await self._ensure_experience_node(
+                    target,
+                    experience_id=experience_id,
+                    source_metadata=source_metadata,
                 )
-
-                if result:
-                    try:
-                        alias_added = int(result[0].get("alias_added_count", 0) or 0)
-                        if alias_added > 0:
-                            _GRAPH_ENTITY_ALIAS_ADDED_TOTAL.inc(alias_added)
-                    except Exception:
-                        pass
-                created_entities_count += 1
-
             except CircuitOpenError as e:
-                remaining = max(0, len(prepared_entities) - idx)
                 logger.warning(
-                    "Circuit breaker aberto durante persistencia de entidades; "
-                    f"abortando lote (restantes={remaining}): {e}"
+                    "Circuit breaker aberto durante persistencia de proveniencia; "
+                    f"abortando lote completo: {e}"
                 )
-                break
-            except Exception as e:
-                logger.error(
-                    "log_error",
-                    message=f"Erro ao persistir entidade '{ent.get('display_name')}': {e}",
-                    exc_info=True,
-                )
+                return 0, 0
 
-        # 2. Persistir Relacionamentos
-        for idx, rel in enumerate(prepared_relationships):
-            try:
-                # Validação via Graph Guardian (Quarentena)
-                if self._should_quarantine(rel):
-                    _GRAPH_RELATIONSHIPS_QUARANTINED_TOTAL.inc()
-                    await self._send_to_quarantine(rel, experience_id, "Policy Violation")
-                    continue
+            for idx, ent in enumerate(prepared_entities):
+                try:
+                    now = datetime.now().isoformat()
+                    result = await self._run_rows(
+                        target,
+                        """
+                        MERGE (e:Entity {canonical_name: $canonical_name})
+                        ON CREATE SET
+                            e.type = $type,
+                            e.name = $display_name,
+                            e.description = $description,
+                            e.source_experience = $exp_id,
+                            e.source_experiences = CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END,
+                            e.confidence = $confidence,
+                            e.created_at = $now,
+                            e.canonical_name = $canonical_name,
+                            e.summary = coalesce($description, '')
+                        ON MATCH SET
+                            e.last_seen = $now,
+                            e.canonical_name = coalesce(e.canonical_name, $canonical_name),
+                            e.type = coalesce(e.type, $type),
+                            e.source_experience = coalesce(e.source_experience, $exp_id),
+                            e.confidence = CASE
+                                WHEN coalesce(e.confidence, 0.0) >= $confidence THEN e.confidence
+                                ELSE $confidence
+                            END,
+                            e.description = CASE
+                                WHEN coalesce(e.description, '') = '' AND coalesce($description, '') <> '' THEN $description
+                                ELSE e.description
+                            END,
+                            e.summary = CASE
+                                WHEN coalesce(e.summary, '') = '' AND coalesce($description, '') <> '' THEN $description
+                                ELSE e.summary
+                            END
+                        WITH e,
+                             CASE
+                                WHEN e.aliases IS NULL THEN CASE WHEN coalesce(e.name, '') = '' THEN [] ELSE [e.name] END
+                                ELSE e.aliases
+                             END AS current_aliases,
+                             [a IN $aliases WHERE a IS NOT NULL AND trim(a) <> ''] AS alias_candidates,
+                             CASE
+                                WHEN e.source_experiences IS NULL THEN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END
+                                ELSE e.source_experiences
+                             END AS current_source_experiences
+                        WITH e, current_aliases, alias_candidates, current_source_experiences,
+                             size([a IN alias_candidates WHERE NOT a IN current_aliases]) AS alias_added_count
+                        SET e.aliases = reduce(acc = current_aliases, a IN alias_candidates |
+                            CASE WHEN a IN acc THEN acc ELSE acc + a END
+                        )
+                        SET e.source_experiences = reduce(acc = current_source_experiences, x IN CASE WHEN $exp_id IS NULL THEN [] ELSE [$exp_id] END |
+                            CASE WHEN x IN acc THEN acc ELSE acc + x END
+                        )
+                        WITH e, alias_added_count
+                        MATCH (exp:Experience {id: $exp_id})
+                        MERGE (e)-[:EXTRACTED_FROM]->(exp)
+                        RETURN elementId(e) as id, alias_added_count
+                        """,
+                        {
+                            "canonical_name": ent["canonical_name"],
+                            "display_name": ent["display_name"],
+                            "aliases": ent["aliases"],
+                            "type": ent["type"],
+                            "description": ent.get("description", ""),
+                            "confidence": ent.get("confidence", 0.5),
+                            "exp_id": experience_id,
+                            "now": now,
+                        },
+                    )
+                    if result:
+                        try:
+                            alias_added = int(result[0].get("alias_added_count", 0) or 0)
+                            if alias_added > 0:
+                                _GRAPH_ENTITY_ALIAS_ADDED_TOTAL.inc(alias_added)
+                        except Exception:
+                            pass
+                    created_entities_count += 1
 
-                relation_type, used_generic_fallback = self._coerce_relation_type(rel.get("normalized_type"))
-                if used_generic_fallback:
-                    _GRAPH_RELATIONSHIPS_FALLBACK_GENERIC_TOTAL.inc()
-
-                query = f"""
-                MATCH (source:Entity)
-                WHERE source.canonical_name = $source_canonical
-                   OR source.name = $source_canonical
-                   OR source.name = $source_name
-                WITH source,
-                     CASE
-                        WHEN source.canonical_name = $source_canonical THEN 0
-                        WHEN source.name = $source_canonical THEN 1
-                        ELSE 2
-                     END AS source_rank
-                ORDER BY source_rank ASC
-                LIMIT 1
-                MATCH (target:Entity)
-                WHERE target.canonical_name = $target_canonical
-                   OR target.name = $target_canonical
-                   OR target.name = $target_name
-                WITH source, target,
-                     CASE
-                        WHEN target.canonical_name = $target_canonical THEN 0
-                        WHEN target.name = $target_canonical THEN 1
-                        ELSE 2
-                     END AS target_rank
-                ORDER BY target_rank ASC
-                LIMIT 1
-                MERGE (source)-[r:{relation_type.value}]->(target)
-                ON CREATE SET r.weight = $weight, r.source_exp = $exp_id, r.created_at = $now
-                ON MATCH SET r.weight = r.weight + 0.1, r.last_seen = $now
-                RETURN type(r)
-                """
-
-                result = await db.query(
-                    query,
-                    {
-                        "source_name": rel["source"],
-                        "target_name": rel["target"],
-                        "source_canonical": rel["source_canonical"],
-                        "target_canonical": rel["target_canonical"],
-                        "weight": rel.get("weight", 0.5),
-                        "exp_id": experience_id,
-                        "now": datetime.now().isoformat(),
-                    },
-                )
-
-                if result:
-                    created_relationships_count += 1
-                else:
-                    # Se falhou, pode ser que um dos nós não exista (ex: erro de digitação do LLM)
+                except CircuitOpenError as e:
+                    remaining = max(0, len(prepared_entities) - idx)
                     logger.warning(
-                        "log_warning",
-                        message=(
-                            "Relacionamento ignorado (nós não encontrados): "
-                            f"{rel.get('source')} -> {rel.get('target')}"
-                        ),
+                        "Circuit breaker aberto durante persistencia de entidades; "
+                        f"abortando lote (restantes={remaining}): {e}"
+                    )
+                    break
+                except Exception as e:
+                    logger.error(
+                        "log_error",
+                        message=f"Erro ao persistir entidade '{ent.get('display_name')}': {e}",
+                        exc_info=True,
                     )
 
-            except CircuitOpenError as e:
-                remaining = max(0, len(prepared_relationships) - idx)
-                logger.warning(
-                    "Circuit breaker aberto durante persistencia de relacionamentos; "
-                    f"abortando lote (restantes={remaining}): {e}"
-                )
-                break
-            except Exception as e:
-                logger.error("log_error", message=f"Erro ao persistir relacionamento: {e}", exc_info=True)
+            for idx, rel in enumerate(prepared_relationships):
+                try:
+                    if self._should_quarantine(rel):
+                        _GRAPH_RELATIONSHIPS_QUARANTINED_TOTAL.inc()
+                        await self._send_to_quarantine(rel, experience_id, "Policy Violation")
+                        continue
+
+                    relation_type, used_generic_fallback = self._coerce_relation_type(rel.get("normalized_type"))
+                    if used_generic_fallback:
+                        _GRAPH_RELATIONSHIPS_FALLBACK_GENERIC_TOTAL.inc()
+                    if hasattr(db, "register_relationship_type") and tx is not None:
+                        await db.register_relationship_type(tx, relation_type.value)
+
+                    result = await self._run_rows(
+                        target,
+                        f"""
+                        MATCH (source:Entity)
+                        WHERE source.canonical_name = $source_canonical
+                           OR source.name = $source_canonical
+                           OR source.name = $source_name
+                        WITH source,
+                             CASE
+                                WHEN source.canonical_name = $source_canonical THEN 0
+                                WHEN source.name = $source_canonical THEN 1
+                                ELSE 2
+                             END AS source_rank
+                        ORDER BY source_rank ASC
+                        LIMIT 1
+                        MATCH (target:Entity)
+                        WHERE target.canonical_name = $target_canonical
+                           OR target.name = $target_canonical
+                           OR target.name = $target_name
+                        WITH source, target,
+                             CASE
+                                WHEN target.canonical_name = $target_canonical THEN 0
+                                WHEN target.name = $target_canonical THEN 1
+                                ELSE 2
+                             END AS target_rank
+                        ORDER BY target_rank ASC
+                        LIMIT 1
+                        MERGE (source)-[r:{relation_type.value}]->(target)
+                        ON CREATE SET
+                            r.weight = $weight,
+                            r.source_exp = $exp_id,
+                            r.created_at = $now,
+                            r.first_seen = $now,
+                            r.last_seen = $now,
+                            r.support_count = CASE WHEN $consolidation_hash = '' THEN 0 ELSE 1 END,
+                            r.source_hashes = CASE WHEN $consolidation_hash = '' THEN [] ELSE [$consolidation_hash] END
+                        ON MATCH SET
+                            r.last_seen = $now,
+                            r.support_count = CASE
+                                WHEN $consolidation_hash = '' OR $consolidation_hash IN coalesce(r.source_hashes, []) THEN coalesce(r.support_count, 0)
+                                ELSE coalesce(r.support_count, 0) + 1
+                            END,
+                            r.source_hashes = CASE
+                                WHEN $consolidation_hash = '' OR $consolidation_hash IN coalesce(r.source_hashes, []) THEN coalesce(r.source_hashes, [])
+                                ELSE coalesce(r.source_hashes, []) + $consolidation_hash
+                            END,
+                            r.weight = CASE
+                                WHEN coalesce(r.weight, 0.0) >= $weight THEN coalesce(r.weight, 0.0)
+                                ELSE $weight
+                            END
+                        RETURN type(r) AS rel_type
+                        """,
+                        {
+                            "source_name": rel["source"],
+                            "target_name": rel["target"],
+                            "source_canonical": rel["source_canonical"],
+                            "target_canonical": rel["target_canonical"],
+                            "weight": rel.get("weight", 0.5),
+                            "exp_id": experience_id,
+                            "now": datetime.now().isoformat(),
+                            "consolidation_hash": consolidation_hash,
+                        },
+                    )
+                    if result:
+                        created_relationships_count += 1
+                    else:
+                        logger.warning(
+                            "log_warning",
+                            message=(
+                                "Relacionamento ignorado (nós não encontrados): "
+                                f"{rel.get('source')} -> {rel.get('target')}"
+                            ),
+                        )
+
+                except CircuitOpenError as e:
+                    remaining = max(0, len(prepared_relationships) - idx)
+                    logger.warning(
+                        "Circuit breaker aberto durante persistencia de relacionamentos; "
+                        f"abortando lote (restantes={remaining}): {e}"
+                    )
+                    break
+                except Exception as e:
+                    logger.error("log_error", message=f"Erro ao persistir relacionamento: {e}", exc_info=True)
+
+            await self._link_self_memory_provenance(target, experience_id)
+            if tx is not None:
+                await tx.commit()
+        finally:
+            if tx is not None:
+                await tx.close()
+            if session is not None:
+                await session.close()
 
         return created_entities_count, created_relationships_count
 
@@ -306,6 +424,9 @@ class KnowledgeGraphService:
         for ent in entities or []:
             raw_name = str(ent.get("name") or "").strip()
             if len(raw_name) < 2:
+                continue
+            if self._is_noise_entity_name(raw_name):
+                logger.info("graph_entity_rejected_noise", name=raw_name)
                 continue
             raw_type = str(ent.get("type") or "unknown")
             try:
@@ -319,6 +440,9 @@ class KnowledgeGraphService:
 
             canonical_name = str(normalized.get("name") or "").strip()
             if not canonical_name:
+                continue
+            if self._is_noise_entity_name(canonical_name):
+                logger.info("graph_entity_rejected_noise", name=canonical_name)
                 continue
 
             if raw_name != canonical_name:
@@ -348,6 +472,25 @@ class KnowledgeGraphService:
             except Exception:
                 item["confidence"] = item.get("confidence", 0.5)
         return list(grouped.values())
+
+    def _is_noise_entity_name(self, value: str) -> bool:
+        candidate = str(value or "").strip()
+        if not candidate:
+            return True
+        lower = candidate.lower()
+        if lower.startswith("dedupe key"):
+            return True
+        if re.search(r"^\*\.[a-z0-9]+$", lower):
+            return True
+        if "/" in candidate or "\\" in candidate:
+            return True
+        if re.search(r"\.(py|ts|tsx|js|jsx|scss|css|md|json|log|html?)$", lower):
+            return True
+        if lower.endswith(" directory") or lower in {"tmp", "var/tmp"}:
+            return True
+        if re.fullmatch(r"[@#/._-]+", candidate):
+            return True
+        return False
 
     def _prepare_relationships_batch(self, relationships: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped: OrderedDict[tuple[str, str, str], dict[str, Any]] = OrderedDict()

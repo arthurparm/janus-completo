@@ -7,6 +7,7 @@ e KnowledgeGraphService.
 """
 
 import asyncio
+import hashlib
 import structlog
 import time
 import uuid
@@ -14,6 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from prometheus_client import Counter, Histogram
+from qdrant_client import models
 
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
@@ -188,15 +190,24 @@ class KnowledgeConsolidator:
                 return stats
 
             try:
-                # 1. Buscar experiências não consolidadas
-                # Nota: Em um sistema real, teríamos um flag 'consolidated' no payload ou uma coleção separada
-                # Para este exemplo, vamos assumir que buscamos as mais recentes e verificamos se já existem no grafo
-
-                # Filtro simplificado: buscar ultimas memories
-                # Idealmente: filter={"must_not": [{"key": "metadata.consolidated", "match": {"value": True}}]}
                 try:
+                    pending_filter = models.Filter(
+                        should=[
+                            models.FieldCondition(
+                                key="metadata.consolidation_status",
+                                match=models.MatchValue(value="pending"),
+                            ),
+                            models.IsNullCondition(
+                                is_null=models.PayloadField(key="metadata.consolidation_status")
+                            ),
+                            models.IsEmptyCondition(
+                                is_empty=models.PayloadField(key="metadata.consolidation_status")
+                            ),
+                        ]
+                    )
                     results = await self.qdrant_client.scroll(
-                        collection_name=VectorCollection.EPISODIC_MEMORY.value,  # Nome hipotético da coleção de memória
+                        collection_name=VectorCollection.EPISODIC_MEMORY.value,
+                        scroll_filter=pending_filter,
                         limit=limit,
                         with_payload=True,
                         with_vectors=False,
@@ -219,8 +230,7 @@ class KnowledgeConsolidator:
                     )
                     metadata = point.payload.get("metadata", {})
 
-                    # Skip se já consolidado (verificação otimizada seria no filtro do qdrant)
-                    if metadata.get("consolidated"):
+                    if (metadata.get("consolidation_status") or "pending") != "pending":
                         continue
 
                     try:
@@ -255,11 +265,26 @@ class KnowledgeConsolidator:
         logger.info("knowledge_consolidator_experience_started", experience_id=experience_id)
 
         try:
-            # 1. Extração
             extractor = get_knowledge_extraction_service()
-            extracted_data = await extractor.extract_from_text(experience_content, metadata)
+            consolidation_hash = str(metadata.get("consolidation_hash") or "").strip()
+            if not consolidation_hash:
+                consolidation_hash = self._build_consolidation_hash(experience_content, metadata)
+                metadata = dict(metadata or {})
+                metadata["consolidation_hash"] = consolidation_hash
 
-            if not extracted_data:
+            chunks = [experience_content]
+            if str(metadata.get("content_kind") or "") != "code_summary":
+                chunks = self._chunk_text(experience_content, chunk_size=3500, overlap=300) or [experience_content]
+
+            extracted_data = {"entities": [], "relationships": []}
+            for chunk in chunks:
+                chunk_result = await extractor.extract_from_text(chunk, metadata)
+                if not chunk_result:
+                    continue
+                extracted_data["entities"].extend(chunk_result.get("entities", []))
+                extracted_data["relationships"].extend(chunk_result.get("relationships", []))
+
+            if not extracted_data["entities"] and not extracted_data["relationships"]:
                 if extractor.is_llm_temporarily_unavailable():
                     logger.debug(
                         "knowledge_consolidator_experience_skipped_llm_unavailable",
@@ -277,7 +302,6 @@ class KnowledgeConsolidator:
 
             ENTITIES_EXTRACTED.inc(num_entities)
 
-            # 2. Persistência
             graph_svc = get_knowledge_graph_service()
             created_ents, created_rels = await graph_svc.persist_extraction(
                 experience_id, extracted_data, metadata
@@ -285,8 +309,12 @@ class KnowledgeConsolidator:
 
             RELATIONSHIPS_CREATED.inc(created_rels)
 
-            # 3. Marcar como consolidado (Atualizar Qdrant)
-            await self._mark_as_consolidated(experience_id, metadata)
+            await self._mark_as_consolidated(
+                experience_id,
+                metadata,
+                entities_created=created_ents,
+                relationships_created=created_rels,
+            )
 
             duration = time.time() - start_time
             CONSOLIDATION_LATENCY.labels(outcome="success").observe(duration)
@@ -314,14 +342,40 @@ class KnowledgeConsolidator:
             )
             raise  # Re-raise for circuit breaker
 
-    async def _mark_as_consolidated(self, experience_id: str, metadata: dict[str, Any] | None = None):
+    def _build_consolidation_hash(self, content: str, metadata: dict[str, Any] | None = None) -> str:
+        metadata = dict(metadata or {})
+        normalized = "|".join(
+            [
+                str(metadata.get("origin") or "").strip().lower(),
+                str(metadata.get("source_kind") or "").strip().lower(),
+                str(metadata.get("file_path") or "").strip().lower(),
+                str(metadata.get("sha_after") or "").strip().lower(),
+                str(content or "").strip(),
+            ]
+        )
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    async def _mark_as_consolidated(
+        self,
+        experience_id: str,
+        metadata: dict[str, Any] | None = None,
+        *,
+        entities_created: int = 0,
+        relationships_created: int = 0,
+    ):
         """Atualiza flag no Qdrant para evitar reprocessamento."""
         point_id = self._normalize_point_id(experience_id)
         collection = VectorCollection.EPISODIC_MEMORY.value
         try:
+            payload_metadata = dict(metadata or {})
+            payload_metadata["consolidated"] = True
+            payload_metadata["consolidation_status"] = "done"
+            payload_metadata["consolidated_at"] = int(time.time() * 1000)
+            payload_metadata["neo4j_relationships_count"] = int(relationships_created)
+            payload_metadata["neo4j_entities_count"] = int(entities_created)
             await self.qdrant_client.set_payload(
                 collection_name=collection,
-                payload={"metadata": {"consolidated": True}},
+                payload={"metadata": payload_metadata},
                 points=[point_id],
             )
         except Exception as e:

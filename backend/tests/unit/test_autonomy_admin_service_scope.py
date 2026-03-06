@@ -36,6 +36,15 @@ class _DummyGraph:
 def _patch_meta(monkeypatch):
     monkeypatch.setattr(autonomy_admin_module, "get_meta_agent_service", lambda: _DummyMeta())
 
+    class _DummyMemoryDb:
+        async def arecall_filtered(self, *args, **kwargs):
+            return []
+
+    async def _fake_get_memory_db():
+        return _DummyMemoryDb()
+
+    monkeypatch.setattr(autonomy_admin_module, "get_memory_db", _fake_get_memory_db)
+
 
 def _new_service(citations, answer: str = "resposta"):
     return AutonomyAdminService(
@@ -156,6 +165,52 @@ def test_infer_self_memory_relationship_types_is_local_and_code_aware(tmp_path: 
     assert "CONTAINS" in rels_style
 
 
+def test_summarize_file_returns_structured_python_memory(tmp_path: Path):
+    service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    py_file = tmp_path / "backend" / "app" / "services" / "example_service.py"
+    py_file.parent.mkdir(parents=True, exist_ok=True)
+    py_file.write_text(
+        '\n'.join(
+            [
+                '"""Handle chat orchestration."""',
+                "import httpx",
+                "from app.db.graph import get_graph_db",
+                "",
+                "class ExampleService:",
+                "    async def run(self):",
+                "        return await helper()",
+                "",
+                "async def helper():",
+                "    return 1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    summary = service._summarize_file("backend/app/services/example_service.py")
+
+    assert summary is not None
+    assert summary["language"] == "python"
+    assert "ExampleService" in summary["symbols"]
+    assert "helper" in summary["symbols"]
+    assert "httpx" in summary["imports"]
+    assert summary["summary_version"] == service.SELF_MEMORY_SUMMARY_VERSION
+    assert "compact_text" in summary
+
+
+def test_summarize_file_returns_none_for_unhelpful_file(tmp_path: Path):
+    service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    data_file = tmp_path / "app" / "workspace" / "training_data.jsonl"
+    data_file.parent.mkdir(parents=True, exist_ok=True)
+    data_file.write_text("{}", encoding="utf-8")
+
+    assert service._summarize_file("app/workspace/training_data.jsonl") is None
+
+
 @pytest.mark.asyncio
 async def test_admin_code_qa_filters_citations_outside_app(monkeypatch):
     citations = [
@@ -242,9 +297,10 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
     captured_params: dict[str, object] = {}
 
     class _CaptureGraph:
-        async def execute(self, query: str, params: dict[str, object], *args, **kwargs):
+        async def query(self, query: str, params: dict[str, object], *args, **kwargs):
             captured_query["value"] = query
             captured_params.update(params)
+            return [{"owner_links": 1, "symbol_links": 1}]
 
     async def _fake_get_graph_db():
         return _CaptureGraph()
@@ -253,28 +309,32 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
 
     await service._persist_self_memory(
         rel_path="backend/app/services/autonomy_admin_service.py",
-        summary="ok",
+        summary_payload={
+            "summary": "ok",
+            "summary_version": service.SELF_MEMORY_SUMMARY_VERSION,
+            "language": "python",
+            "symbols": ["AutonomyAdminService"],
+            "imports": ["json"],
+            "touchpoints": ["neo4j"],
+            "domain_tags": ["service"],
+            "confidence": 0.9,
+        },
         sha_after="abc123",
+        source_experience_id="exp-1",
     )
 
     query = captured_query["value"]
-    assert "FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |" in query
-    assert "WHERE f.path IN path_candidates" in query
-    assert "WHERE cf.path IN path_candidates" in query
+    assert "MERGE (m)-[:RELATES_TO]->(owner)" in query
     assert "OPTIONAL MATCH (fn:CodeFunction)" in query
     assert "OPTIONAL MATCH (cl:CodeClass)" in query
-    assert "MERGE (m)-[:IMPORTS]->(f)" in query
-    assert "MERGE (m)-[:CALLS]->(cf)" in query
+    assert "MERGE (m)-[:DEFINES]->(fn)" in query
     candidates = captured_params.get("path_candidates")
     assert isinstance(candidates, list)
     assert "backend/app/services/autonomy_admin_service.py" in candidates
     assert "/backend/app/services/autonomy_admin_service.py" in candidates
     assert "app/services/autonomy_admin_service.py" in candidates
-    rel_types = captured_params.get("rel_types")
-    assert isinstance(rel_types, list)
-    assert "RELATES_TO" in rel_types
-    assert "USES" in rel_types
-    assert "IMPORTS" in rel_types
+    assert captured_params["source_experience_id"] == "exp-1"
+    assert captured_params["symbols"] == ["AutonomyAdminService"]
 
 
 def test_get_self_study_status_includes_running_progress():

@@ -211,6 +211,17 @@ class GraphDatabase:
                                     }}
                                     """
                                 )
+                            if "entity_embeddings" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE VECTOR INDEX entity_embeddings IF NOT EXISTS
+                                    FOR (n:Entity) ON (n.embedding)
+                                    OPTIONS {indexConfig: {
+                                        `vector.dimensions`: 1536,
+                                        `vector.similarity_function`: 'cosine'
+                                    }}
+                                    """
+                                )
 
                             # 2. Universal Full-Text Index (Lexical Search)
                             if "keyword_search" not in existing_schema:
@@ -219,6 +230,14 @@ class GraphDatabase:
                                     CREATE FULLTEXT INDEX keyword_search IF NOT EXISTS
                                     FOR (n:Concept|Technology|Tool|Pattern|Solution|Error|Person)
                                     ON EACH [n.name, n.description, n.summary]
+                                    """
+                                )
+                            if "entity_keyword_search" not in existing_schema:
+                                await session.run(
+                                    """
+                                    CREATE FULLTEXT INDEX entity_keyword_search IF NOT EXISTS
+                                    FOR (n:Entity)
+                                    ON EACH [n.name, n.description, n.canonical_name, n.summary]
                                     """
                                 )
 
@@ -342,6 +361,14 @@ class GraphDatabase:
                         if "experience_consolidated_at_idx" not in existing_schema:
                             await session.run(
                                 "CREATE INDEX experience_consolidated_at_idx IF NOT EXISTS FOR (e:Experience) ON (e.consolidated_at)"
+                            )
+                        if "entity_canonical_name_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX entity_canonical_name_idx IF NOT EXISTS FOR (e:Entity) ON (e.canonical_name)"
+                            )
+                        if "entity_type_idx" not in existing_schema:
+                            await session.run(
+                                "CREATE INDEX entity_type_idx IF NOT EXISTS FOR (e:Entity) ON (e.type)"
                             )
                     except Exception:
                         try:

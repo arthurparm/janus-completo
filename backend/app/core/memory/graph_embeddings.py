@@ -57,7 +57,9 @@ class GraphEmbeddingsManager:
             logger.error("log_error", message=f"Erro ao gerar batch embeddings: {e}")
             return []
 
-    async def vector_search(self, query: str, k: int = 10, min_score: float = 0.7, label: str = "Concept") -> list[dict[str, Any]]:
+    async def vector_search(
+        self, query: str, k: int = 10, min_score: float = 0.7, label: str = "Entity"
+    ) -> list[dict[str, Any]]:
         """
         Realiza busca vetorial direta no Neo4j.
         Suporta múltiplos índices por label.
@@ -71,8 +73,7 @@ class GraphEmbeddingsManager:
             if not db:
                 return []
 
-            # Determine index name based on label
-            index_name = f"{label.lower()}_embeddings"
+            index_name = "entity_embeddings" if label == "Entity" else f"{label.lower()}_embeddings"
             
             # Neo4j 5.11+ syntax
             results = await db.query(
@@ -104,7 +105,7 @@ class GraphEmbeddingsManager:
 
             results = await db.query(
                 """
-                CALL db.index.fulltext.queryNodes("keyword_search", $query, {limit: $k})
+                CALL db.index.fulltext.queryNodes("entity_keyword_search", $query, {limit: $k})
                 YIELD node, score
                 RETURN node, score, id(node) as id, labels(node) as labels
                 """,
@@ -121,10 +122,7 @@ class GraphEmbeddingsManager:
         Estratégia: RRF (Reciprocal Rank Fusion) simplificada ou Weighted Merge.
         Aqui usamos Weighted Merge simples.
         """
-        # 1. Vector Search (Primary Context - Concept)
-        # TODO: Expandir para buscar em múltiplos índices vetoriais se necessário (Tech, Tool...)
-        # Por enquanto, foca em Concept como entrada semântica principal.
-        vec_results = await self.vector_search(query, k=k, label="Concept")
+        vec_results = await self.vector_search(query, k=k, label="Entity")
         
         # 2. Key entities from query (Technology/Tool) might be better found via separate vector search?
         # Let's try to search ALL vector indexes? Too slow.
@@ -173,9 +171,9 @@ class GraphEmbeddingsManager:
     async def reindex_graph(self, batch_size: int = 50, labels: list[str] = None):
         """
         Job de migração/correção: Varre nós sem embedding e gera (Universal).
-        Labels suportadas: Concept, Technology, Tool, Pattern, Solution, Error.
+        Labels suportadas por default: Entity.
         """
-        target_labels = labels or ["Concept", "Technology", "Tool", "Pattern", "Solution", "Error"]
+        target_labels = labels or ["Entity"]
         logger.info("log_info", message=f"Iniciando reindexação universal para labels: {target_labels}")
         
         db = await self._db_getter()
@@ -191,8 +189,14 @@ class GraphEmbeddingsManager:
                 nodes = await db.query(
                     f"""
                     MATCH (n:{label})
-                    WHERE n.embedding IS NULL AND n.name IS NOT NULL
-                    RETURN id(n) as id, n.name as text
+                    WHERE n.embedding IS NULL AND coalesce(n.name, n.canonical_name) IS NOT NULL
+                    RETURN id(n) as id,
+                           trim(
+                               coalesce(n.name, '') + ' ' +
+                               coalesce(n.canonical_name, '') + ' ' +
+                               coalesce(n.description, '') + ' ' +
+                               coalesce(n.summary, '')
+                           ) as text
                     LIMIT $limit
                     """,
                     {"limit": batch_size},

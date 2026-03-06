@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -14,7 +15,9 @@ from fastapi import Request
 
 from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
-from app.models.schemas import GraphRelationship
+from app.core.memory.memory_core import get_memory_db
+from app.models.schemas import Experience, GraphRelationship
+from app.repositories.memory_repository import MemoryRepository
 from app.repositories.autonomy_admin_repository import AutonomyAdminRepository
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
@@ -32,6 +35,7 @@ class AutonomyAdminService:
     MAX_FILE_SIZE_BYTES = 512 * 1024
     MAX_FILES_PER_RUN = 1200
     MAX_RUN_SECONDS = 90
+    SELF_MEMORY_SUMMARY_VERSION = "v2"
     ALLOW_INCREMENTAL_FULL_FALLBACK = True
     ALLOWED_ROOTS = ("backend/app", "frontend/src/app", "app")
     IGNORE_DIR_MARKERS = (
@@ -495,28 +499,320 @@ class AutonomyAdminService:
                     )
         return results
 
-    def _summarize_file(self, rel_path: str) -> str:
+    @staticmethod
+    def _compact_list(values: list[str], limit: int = 6) -> list[str]:
+        out: list[str] = []
+        for value in values:
+            item = str(value or "").strip()
+            if not item or item in out:
+                continue
+            out.append(item)
+            if len(out) >= limit:
+                break
+        return out
+
+    @staticmethod
+    def _extract_touchpoints(content_lower: str) -> list[str]:
+        patterns = {
+            "http_api": r"\b(router|apirouter|fastapi|fetch|axios|httpx|requests|get\(|post\()",
+            "database": r"\b(sqlalchemy|session|postgres|mysql|sqlite|db\.|select |insert |update |delete )",
+            "neo4j": r"\bneo4j\b",
+            "qdrant": r"\bqdrant\b",
+            "queue": r"\b(rabbitmq|queue|broker|publish|consume|worker)\b",
+            "filesystem": r"\b(pathlib|open\(|write_text|read_text|os\.path|shutil|unlink|rmtree)\b",
+            "subprocess": r"\bsubprocess\b|\brun\(",
+            "cache": r"\b(redis|cache|memo)\b",
+            "auth": r"\b(auth|token|permission|secret|credential)\b",
+            "frontend_ui": r"\b(component|template|selector|ngif|ngfor|signal|effect)\b",
+        }
+        hits = [name for name, pattern in patterns.items() if re.search(pattern, content_lower)]
+        return AutonomyAdminService._compact_list(hits, limit=8)
+
+    def _infer_domain_tags(self, rel_path: str, content_lower: str) -> list[str]:
+        tags: list[str] = []
+        path = rel_path.lower()
+        if "/api/" in path or "/endpoints/" in path:
+            tags.append("api")
+        if "/services/" in path:
+            tags.append("service")
+        if "/workers/" in path or "/agents/" in path:
+            tags.append("worker")
+        if "/db/" in path or "/repositories/" in path:
+            tags.append("persistence")
+        if "/tests/" in path or ".spec." in path or ".test." in path:
+            tags.append("test")
+        if "/memory/" in path or "selfmemory" in content_lower or "qdrant" in content_lower:
+            tags.append("memory")
+        if "neo4j" in content_lower:
+            tags.append("graph")
+        if any(marker in path for marker in (".html", ".scss", ".css", "/components/", "/features/")):
+            tags.append("ui")
+        return self._compact_list(tags, limit=6)
+
+    def _build_summary_payload(
+        self,
+        *,
+        rel_path: str,
+        language: str,
+        summary: str,
+        symbols: list[str],
+        imports: list[str],
+        touchpoints: list[str],
+        domain_tags: list[str],
+        confidence: float,
+        purpose: str,
+        risks: list[str],
+        test_impact: str,
+    ) -> dict[str, Any] | None:
+        summary = str(summary or "").strip()
+        if not summary:
+            return None
+        compact_text_parts = [
+            f"Arquivo {rel_path}.",
+            purpose,
+            summary,
+        ]
+        if symbols:
+            compact_text_parts.append(f"Simbolos: {', '.join(symbols[:8])}.")
+        if imports:
+            compact_text_parts.append(f"Dependencias: {', '.join(imports[:8])}.")
+        if touchpoints:
+            compact_text_parts.append(f"Touchpoints: {', '.join(touchpoints[:8])}.")
+        if risks:
+            compact_text_parts.append(f"Riscos: {', '.join(risks[:5])}.")
+        compact_text_parts.append(f"Impacto de teste: {test_impact}.")
+        return {
+            "summary": summary,
+            "summary_version": self.SELF_MEMORY_SUMMARY_VERSION,
+            "language": language,
+            "symbols": self._compact_list(symbols, limit=16),
+            "imports": self._compact_list(imports, limit=16),
+            "touchpoints": self._compact_list(touchpoints, limit=12),
+            "domain_tags": self._compact_list(domain_tags, limit=8),
+            "confidence": float(confidence),
+            "purpose": purpose,
+            "risks": self._compact_list(risks, limit=8),
+            "test_impact": test_impact,
+            "compact_text": " ".join(part for part in compact_text_parts if part).strip(),
+            "file_path": rel_path,
+        }
+
+    def _summarize_python_file(self, rel_path: str, content: str) -> dict[str, Any] | None:
+        try:
+            tree = ast.parse(content)
+        except Exception:
+            return None
+        imports: list[str] = []
+        symbols: list[str] = []
+        endpoints: list[str] = []
+        subclass_count = 0
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                imports.append(module)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if not node.name.startswith("_"):
+                    symbols.append(node.name)
+                if isinstance(node, ast.ClassDef) and node.bases:
+                    subclass_count += 1
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for dec in node.decorator_list:
+                        dec_text = ast.unparse(dec) if hasattr(ast, "unparse") else ""
+                        if any(token in dec_text for token in (".get", ".post", ".put", ".delete", ".patch")):
+                            endpoints.append(node.name)
+        docstring = ast.get_docstring(tree) or ""
+        content_lower = content.lower()
+        touchpoints = self._extract_touchpoints(content_lower)
+        domain_tags = self._infer_domain_tags(rel_path, content_lower)
+        risks: list[str] = []
+        if re.search(r"\b(subprocess|os\.remove|shutil\.rmtree|unlink\()", content_lower):
+            risks.append("filesystem_mutation")
+        if "eval(" in content_lower or "exec(" in content_lower:
+            risks.append("dynamic_execution")
+        if "secret" in content_lower or "token" in content_lower:
+            risks.append("secret_handling")
+        if any(tp in touchpoints for tp in ("database", "neo4j", "qdrant", "queue")):
+            risks.append("integration_surface")
+        purpose = docstring.splitlines()[0].strip() if docstring else "Modulo Python de aplicacao."
+        summary = (
+            f"{rel_path} implementa {len(symbols)} simbolos publicos, "
+            f"{len(imports)} imports relevantes e {len(touchpoints)} touchpoints operacionais."
+        )
+        if endpoints:
+            summary += f" Expõe endpoints/handlers via {', '.join(self._compact_list(endpoints, 4))}."
+        if subclass_count:
+            summary += f" Contem {subclass_count} hierarquias de classe."
+        test_impact = (
+            "cobrir fluxo de integracao e efeitos colaterais"
+            if any(tp in touchpoints for tp in ("database", "neo4j", "qdrant", "queue", "http_api"))
+            else "cobrir simbolos publicos e regressao funcional"
+        )
+        return self._build_summary_payload(
+            rel_path=rel_path,
+            language="python",
+            summary=summary,
+            symbols=symbols,
+            imports=imports,
+            touchpoints=touchpoints,
+            domain_tags=domain_tags,
+            confidence=0.92,
+            purpose=purpose,
+            risks=risks,
+            test_impact=test_impact,
+        )
+
+    def _summarize_js_like_file(self, rel_path: str, content: str, suffix: str) -> dict[str, Any] | None:
+        content_lower = content.lower()
+        imports = re.findall(r"(?m)^\s*import\s+.+?\s+from\s+['\"]([^'\"]+)['\"]", content)
+        imports += re.findall(r"require\(['\"]([^'\"]+)['\"]\)", content)
+        symbols = re.findall(
+            r"(?m)^\s*(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            content,
+        )
+        selectors = re.findall(r"selector:\s*['\"]([^'\"]+)['\"]", content)
+        routes = re.findall(r"path:\s*['\"]([^'\"]+)['\"]", content)
+        touchpoints = self._extract_touchpoints(content_lower)
+        domain_tags = self._infer_domain_tags(rel_path, content_lower)
+        risks: list[str] = []
+        if "innerhtml" in content_lower or "dangerouslysetinnerhtml" in content_lower:
+            risks.append("unsafe_html")
+        if any(tp in touchpoints for tp in ("http_api", "database", "queue")):
+            risks.append("integration_surface")
+        role = "modulo TS/JS"
+        if suffix in {".tsx", ".jsx"} or selectors:
+            role = "componente de interface"
+        elif routes:
+            role = "configuracao de rotas"
+        summary = (
+            f"{rel_path} atua como {role}, com {len(symbols)} simbolos exportaveis e "
+            f"{len(imports)} dependencias explicitas."
+        )
+        if selectors:
+            summary += f" Seletores principais: {', '.join(self._compact_list(selectors, 3))}."
+        if routes:
+            summary += f" Rotas relevantes: {', '.join(self._compact_list(routes, 3))}."
+        test_impact = (
+            "validar componentes, bindings e integracao com servicos"
+            if role == "componente de interface"
+            else "validar contratos publicos e rotas expostas"
+        )
+        return self._build_summary_payload(
+            rel_path=rel_path,
+            language="typescript" if suffix in {".ts", ".tsx"} else "javascript",
+            summary=summary,
+            symbols=symbols,
+            imports=imports,
+            touchpoints=touchpoints,
+            domain_tags=domain_tags,
+            confidence=0.88,
+            purpose=f"{role.capitalize()} no workspace.",
+            risks=risks,
+            test_impact=test_impact,
+        )
+
+    def _summarize_style_file(self, rel_path: str, content: str) -> dict[str, Any] | None:
+        selectors = re.findall(r"(?m)^\s*([.#]?[A-Za-z_][A-Za-z0-9_\-\s>:+]*)\s*\{", content)
+        selectors = [selector.strip() for selector in selectors if selector.strip()]
+        if not selectors:
+            return None
+        content_lower = content.lower()
+        summary = (
+            f"{rel_path} define apresentacao visual com {len(selectors)} seletores principais "
+            f"e foco em interface/estilo."
+        )
+        return self._build_summary_payload(
+            rel_path=rel_path,
+            language="stylesheet",
+            summary=summary,
+            symbols=selectors,
+            imports=[],
+            touchpoints=["frontend_ui"],
+            domain_tags=self._infer_domain_tags(rel_path, content_lower),
+            confidence=0.8,
+            purpose="Folha de estilo ou template visual.",
+            risks=[],
+            test_impact="validar regressao visual e estados responsivos",
+        )
+
+    def _summarize_markdown_file(self, rel_path: str, content: str) -> dict[str, Any] | None:
+        headings = re.findall(r"(?m)^#+\s+(.+)$", content)
+        if not headings:
+            return None
+        summary = (
+            f"{rel_path} documenta {len(headings)} topicos principais, incluindo "
+            f"{', '.join(self._compact_list(headings, 4))}."
+        )
+        return self._build_summary_payload(
+            rel_path=rel_path,
+            language="markdown",
+            summary=summary,
+            symbols=headings,
+            imports=[],
+            touchpoints=["documentation"],
+            domain_tags=self._infer_domain_tags(rel_path, content.lower()),
+            confidence=0.72,
+            purpose="Documento de referencia operacional.",
+            risks=[],
+            test_impact="confirmar alinhamento com contratos e runbooks atuais",
+        )
+
+    def _summarize_json_file(self, rel_path: str, content: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            return None
+        keys: list[str] = []
+        if isinstance(parsed, dict):
+            keys = [str(k) for k in parsed.keys()]
+        elif isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+            keys = [str(k) for k in parsed[0].keys()]
+        if not keys:
+            return None
+        summary = (
+            f"{rel_path} armazena configuracao/dados estruturados com chaves principais "
+            f"{', '.join(self._compact_list(keys, 6))}."
+        )
+        return self._build_summary_payload(
+            rel_path=rel_path,
+            language="json",
+            summary=summary,
+            symbols=keys,
+            imports=[],
+            touchpoints=["configuration"],
+            domain_tags=self._infer_domain_tags(rel_path, content.lower()),
+            confidence=0.78,
+            purpose="Arquivo JSON com configuracao ou dados persistidos.",
+            risks=["configuration_drift"] if "url" in {k.lower() for k in keys} else [],
+            test_impact="validar shape, defaults e consumidores do schema",
+        )
+
+    def _summarize_file(self, rel_path: str) -> dict[str, Any] | None:
         p = self._repo_root / rel_path
         if not p.exists() or not p.is_file():
-            return "Arquivo indisponivel para estudo."
+            return None
         if p.stat().st_size > self.MAX_FILE_SIZE_BYTES:
-            return "Arquivo ignorado por tamanho."
+            return None
         suffix = p.suffix.lower()
         if suffix not in {".py", ".ts", ".tsx", ".js", ".jsx", ".html", ".scss", ".css", ".md", ".json"}:
-            return "Arquivo fora dos tipos de estudo permitidos."
+            return None
         try:
             content = p.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            return "Falha de leitura do arquivo."
-        lines = content.count("\n") + 1
-        summary = f"{rel_path}: {lines} linhas analisadas."
+            return None
         if suffix == ".py":
-            summary += " Possivel modulo Python com classes/funcoes para indexacao de chamadas."
-        elif suffix in {".ts", ".tsx", ".js", ".jsx"}:
-            summary += " Possivel modulo de logica frontend/backend JS/TS."
-        elif suffix in {".html", ".scss", ".css"}:
-            summary += " Arquivo de interface/estilo."
-        return summary
+            return self._summarize_python_file(rel_path, content)
+        if suffix in {".ts", ".tsx", ".js", ".jsx"}:
+            return self._summarize_js_like_file(rel_path, content, suffix)
+        if suffix in {".html", ".scss", ".css"}:
+            return self._summarize_style_file(rel_path, content)
+        if suffix == ".md":
+            return self._summarize_markdown_file(rel_path, content)
+        if suffix == ".json":
+            return self._summarize_json_file(rel_path, content)
+        return None
 
     def _build_graph_path_candidates(self, rel_path: str) -> list[str]:
         rel = str(rel_path or "").strip().lstrip("./")
@@ -634,59 +930,118 @@ class AutonomyAdminService:
             lines.append("              )")
         return "\n".join(lines)
 
-    async def _persist_self_memory(self, *, rel_path: str, summary: str, sha_after: str | None) -> None:
+    async def _memorize_self_study_summary(
+        self,
+        *,
+        rel_path: str,
+        summary_payload: dict[str, Any],
+        sha_after: str | None,
+    ) -> Experience:
+        compact_text = str(summary_payload.get("compact_text") or summary_payload.get("summary") or "").strip()
+        metadata = {
+            "origin": "self_study",
+            "source_kind": "code_file",
+            "content_kind": "code_summary",
+            "strong_memory": True,
+            "consolidation_status": "pending",
+            "file_path": rel_path,
+            "sha_after": sha_after,
+            "captured_at": int(time.time() * 1000),
+            "summary_version": summary_payload.get("summary_version"),
+            "language": summary_payload.get("language"),
+            "symbols": summary_payload.get("symbols") or [],
+            "imports": summary_payload.get("imports") or [],
+            "touchpoints": summary_payload.get("touchpoints") or [],
+            "domain_tags": summary_payload.get("domain_tags") or [],
+        }
+        experience = Experience(type="episodic", content=compact_text, metadata=metadata)
+        memory_repo = MemoryRepository(await get_memory_db())
+        await memory_repo.save_experience(experience)
+        return experience
+
+    async def _persist_self_memory(
+        self,
+        *,
+        rel_path: str,
+        summary_payload: dict[str, Any],
+        sha_after: str | None,
+        source_experience_id: str | None = None,
+    ) -> None:
         if not self._is_allowed_file_path(rel_path):
             return
         path_candidates = self._build_graph_path_candidates(rel_path)
         if not path_candidates:
             return
+        summary = str(summary_payload.get("summary") or "").strip()
         rel_types = self._infer_self_memory_relationship_types(rel_path, summary)
-        if not rel_types:
-            rel_types = [GraphRelationship.RELATES_TO.value]
-        file_rel_merge_block = self._build_self_memory_rel_merge_block("f")
-        code_file_rel_merge_block = self._build_self_memory_rel_merge_block("cf")
+        symbol_names = [
+            symbol
+            for symbol in (summary_payload.get("symbols") or [])
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", str(symbol or ""))
+        ]
         graph = await get_graph_db()
-        await graph.execute(
-            f"""
+        rows = await graph.query(
+            """
             MERGE (m:SelfMemory {{file_path: $file_path}})
             SET m.summary = $summary,
-                m.updated_at = timestamp(),
-                m.confidence = 0.75,
-                m.sha_after = $sha_after
+                m.summary_version = $summary_version,
+                m.language = $language,
+                m.symbols = $symbols,
+                m.imports = $imports,
+                m.touchpoints = $touchpoints,
+                m.domain_tags = $domain_tags,
+                m.confidence = $confidence,
+                m.file_path = $file_path,
+                m.sha_after = $sha_after,
+                m.source_experience_id = $source_experience_id,
+                m.updated_at = timestamp()
             WITH m, $path_candidates AS path_candidates
-            OPTIONAL MATCH (f:File)
-            WHERE f.path IN path_candidates
-            FOREACH (_ IN CASE WHEN f IS NULL THEN [] ELSE [1] END |
-{file_rel_merge_block}
+            OPTIONAL MATCH (owner)
+            WHERE (owner:File OR owner:CodeFile) AND owner.path IN path_candidates
+            WITH m, path_candidates, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
+            FOREACH (owner IN owners |
+              MERGE (m)-[:RELATES_TO]->(owner)
             )
-            WITH m, path_candidates
-            OPTIONAL MATCH (cf:CodeFile)
-            WHERE cf.path IN path_candidates
-            FOREACH (_ IN CASE WHEN cf IS NULL THEN [] ELSE [1] END |
-{code_file_rel_merge_block}
-            )
-            WITH m, path_candidates
+            WITH m, path_candidates, owners
             OPTIONAL MATCH (fn:CodeFunction)
             WHERE fn.file_path IN path_candidates
-            FOREACH (_ IN CASE WHEN fn IS NULL OR NOT ('DEFINES' IN $rel_types) THEN [] ELSE [1] END |
+              AND (size($symbol_names) = 0 OR fn.name IN $symbol_names)
+            WITH m, owners, path_candidates, [node IN collect(DISTINCT fn) WHERE node IS NOT NULL] AS functions
+            FOREACH (fn IN functions |
               MERGE (m)-[:DEFINES]->(fn)
             )
-            WITH m, path_candidates
+            WITH m, owners, [node IN functions WHERE node IS NOT NULL] AS functions, path_candidates
             OPTIONAL MATCH (cl:CodeClass)
             WHERE cl.file_path IN path_candidates
-            FOREACH (_ IN CASE WHEN cl IS NULL OR NOT ('DEFINES' IN $rel_types) THEN [] ELSE [1] END |
+              AND (size($symbol_names) = 0 OR cl.name IN $symbol_names)
+            WITH m, owners, functions, [node IN collect(DISTINCT cl) WHERE node IS NOT NULL] AS classes
+            FOREACH (cl IN classes |
               MERGE (m)-[:DEFINES]->(cl)
             )
+            RETURN size(owners) AS owner_links, size(functions) + size(classes) AS symbol_links
             """,
             {
                 "file_path": rel_path,
                 "path_candidates": path_candidates,
-                "rel_types": rel_types,
                 "summary": summary[:4000],
+                "summary_version": str(summary_payload.get("summary_version") or self.SELF_MEMORY_SUMMARY_VERSION),
+                "language": str(summary_payload.get("language") or ""),
+                "symbols": summary_payload.get("symbols") or [],
+                "imports": summary_payload.get("imports") or [],
+                "touchpoints": summary_payload.get("touchpoints") or [],
+                "domain_tags": summary_payload.get("domain_tags") or [],
+                "confidence": float(summary_payload.get("confidence") or 0.75),
                 "sha_after": sha_after,
+                "symbol_names": symbol_names,
+                "source_experience_id": source_experience_id,
             },
             operation="self_study_selfmemory_upsert",
         )
+        owner_links = int((rows or [{}])[0].get("owner_links", 0) or 0)
+        if owner_links <= 0:
+            raise AutonomyAdminServiceError(
+                f"SelfMemory criada sem vinculo a File/CodeFile: {rel_path}"
+            )
 
     async def run_self_study(
         self,
@@ -744,8 +1099,21 @@ class AutonomyAdminService:
                 summary_status="running",
             )
             try:
-                summary = self._summarize_file(rel)
-                await self._persist_self_memory(rel_path=rel, summary=summary, sha_after=item.get("sha_after"))
+                summary_payload = self._summarize_file(rel)
+                if not summary_payload:
+                    self._repo.update_self_study_file_status(file_row.id, "skipped")
+                    continue
+                experience = await self._memorize_self_study_summary(
+                    rel_path=rel,
+                    summary_payload=summary_payload,
+                    sha_after=item.get("sha_after"),
+                )
+                await self._persist_self_memory(
+                    rel_path=rel,
+                    summary_payload=summary_payload,
+                    sha_after=item.get("sha_after"),
+                    source_experience_id=experience.id,
+                )
                 self._repo.update_self_study_file_status(file_row.id, "completed")
             except Exception as e:
                 errors += 1
@@ -931,6 +1299,38 @@ class AutonomyAdminService:
         answer_parts.append("Posso detalhar qualquer arquivo citado, linha por linha, se voce quiser.")
         return " ".join(answer_parts)
 
+    async def _recall_self_study_memories(
+        self, *, question: str, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        try:
+            memory_db = await get_memory_db()
+            recalled = await memory_db.arecall_filtered(
+                query=question,
+                filters={"origin": "self_study", "strong_memory": True},
+                limit=limit,
+                min_score=0.1,
+            )
+        except Exception as exc:
+            logger.warning("admin_code_qa_self_study_qdrant_failed", error=str(exc))
+            return []
+
+        rows: list[dict[str, Any]] = []
+        for item in recalled or []:
+            metadata = item.metadata or {}
+            rel = self._normalize_repo_path(metadata.get("file_path"))
+            if not self._is_allowed_file_path(rel):
+                continue
+            rows.append(
+                {
+                    "file_path": rel,
+                    "summary": str(item.content or "").strip(),
+                    "updated_at": metadata.get("captured_at"),
+                    "score": getattr(item, "score", 0.0),
+                    "source": "qdrant",
+                }
+            )
+        return rows
+
     async def ask_code_as_admin(self, *, question: str, limit: int = 10, citation_limit: int = 8) -> dict[str, Any]:
         question = (question or "").strip()
         if not question:
@@ -968,7 +1368,9 @@ class AutonomyAdminService:
             tokens = [tok.lower() for tok in question.replace("/", " ").replace(":", " ").split() if len(tok) > 2]
             memory_rows = await graph.query(
                 """
-                MATCH (m:SelfMemory)
+                MATCH (m:SelfMemory)-[:RELATES_TO]->(owner)
+                WHERE owner:File OR owner:CodeFile
+                WITH DISTINCT m
                 WHERE any(prefix IN $allowed_prefixes WHERE m.file_path STARTS WITH prefix)
                   AND (
                     size($tokens) = 0
@@ -983,17 +1385,26 @@ class AutonomyAdminService:
             )
         except Exception as exc:
             logger.warning("admin_code_qa_self_memory_failed", error=str(exc))
+        qdrant_rows = await self._recall_self_study_memories(question=question, limit=5)
+        merged_memory: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
+        for row in [*(memory_rows or []), *qdrant_rows]:
+            path = str(row.get("file_path") or "").strip()
+            if not path or path in seen_paths:
+                continue
+            seen_paths.add(path)
+            merged_memory.append(row)
         answer = str(result.get("answer") or "").strip()
         if self._is_legacy_code_answer(answer):
             answer = self._build_code_evidence_answer(
                 question=question,
                 citations=citations[:citation_limit],
-                self_memory=memory_rows,
+                self_memory=merged_memory,
             )
         return {
             "answer": answer,
             "citations": citations[:citation_limit],
-            "self_memory": memory_rows,
+            "self_memory": merged_memory,
         }
 
     async def startup_self_study_check(self) -> dict[str, Any]:
