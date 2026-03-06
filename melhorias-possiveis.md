@@ -100,6 +100,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Corrigir vulnerabilidade de injeção de SQL no dedupe_service.py | P1 | S | ideia |
+| SG-021 | Proteger endpoints locais do windows_agent.py com autenticação | P0 | S | ideia |
+| SG-022 | Atualizar frontend @hono/node-server para mitigar auth bypass | P1 | S | ideia |
+| SG-023 | Aplicar redação/ofuscação de PII nos logs do ChatService e Daemon | P1 | S | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -238,6 +242,50 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dependencias: telemetria historica confiavel, schema de feedback por acao e fallback deterministico.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Corrigir vulnerabilidade de injeção de SQL no dedupe_service.py
+- Problema atual: O `dedupe_service.py` constrói queries utilizando f-strings e concatena nomes de tabelas, o que foi reportado como possível SQL Injection (Bandit B608).
+- Solucao proposta: Refatorar a criação de queries de forma parametrizada, escapando nomes de tabelas dinâmicas ou usando métodos providos pelo ORM de forma segura.
+- Impacto esperado: Mitigação de possível vulnerabilidade de acesso ou injeção indevida na base.
+- Riscos: Nomes de tabelas precisam ser validados contra uma lista de allowlist confiável.
+- Dependencias: SQLAlchemy ou driver subjacente de injeção segura.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Proteger endpoints locais do windows_agent.py com autenticação
+- Problema atual: O FastAPI que expõe OS interactions locais (como `/screenshot` e outros em `windows_agent.py`) não possui AuthZ/AuthN.
+- Solucao proposta: Adicionar checagem de Token (API Key) nas rotas.
+- Impacto esperado: Interrupção do acesso irrestrito dentro da rede às ações perigosas no SO host (captura de tela livre).
+- Riscos: Configurações do container ou serviço que dependem do serviço podem precisar de ajuste de injecção da key.
+- Dependencias: FastAPI Auth.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] Atualizar frontend @hono/node-server para mitigar auth bypass
+- Problema atual: NPM audit acusa vulnerabilidade de auth bypass em caminhos estáticos por encoding de slash na dependência `@hono/node-server`.
+- Solucao proposta: Rodar upgrade e dedupe das deps afetadas.
+- Impacto esperado: Eliminação de vetor crítico/alto reportado.
+- Riscos: Breaking changes no framework caso o bump seja grande.
+- Dependencias: Frontend deps.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-023] Aplicar redação/ofuscação de PII nos logs do ChatService e Daemon
+- Problema atual: Chamadas de log (`logger.info`) nessas classes não ofuscam adequadamente inputs diretos dos usuários (voz ou texto contendo informações PII).
+- Solucao proposta: Garantir que a camada de ofuscação (`app.core.memory.security`) seja aplicada sistematicamente aos fluxos de logging.
+- Impacto esperado: Conformidade com regras de LGPD e segurança de log inativo (janus.log).
+- Riscos: Nenhum substancial, possivelmente overhead levíssimo de parsing.
+- Dependencias: `logging_config.py` e mascaramento.
+- Prioridade: P1
+- Esforco: S
 - Dono: a definir
 - Status: ideia
 

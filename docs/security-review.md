@@ -46,3 +46,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Baixa
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
+
+### 8. Frontend Dependency `@hono/node-server` Authorization Bypass
+- **Caminho:** `frontend/package.json` (dependência)
+- **Gravidade:** Alta
+- **Descrição:** `@hono/node-server` possui uma vulnerabilidade de bypass de autorização em caminhos estáticos protegidos via slashes encodadas no middleware Serve Static.
+- **Ação Recomendada:** Atualizar a dependência para uma versão corrigida mapeada pelo `npm audit`.
+
+### 9. Potential SQL Injection em `dedupe_service.py`
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O serviço de deduplicação (`dedupe_service.py`) possui uma potencial vulnerabilidade de injeção de SQL (Bandit B608) devido ao uso de f-strings para construir dinamicamente nomes de tabelas em consultas SQL.
+- **Ação Recomendada:** Refatorar as consultas SQL para não usar f-strings com inputs externos ou sanitizar rigorosamente os nomes das tabelas usando features do ORM/banco de dados que escapam identificadores.
+
+### 10. `windows_agent.py` Endpoints Sem Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O script standalone FastAPI expõe endpoints de interação profunda com o SO Windows (como capturas de tela via `/screenshot`, notificações, etc) para a rede local sem nenhum mecanismo de autenticação ou restrição de sessão (AuthZ/AuthN).
+- **Ação Recomendada:** Implementar tokens de API ou verificação de rede restrita no FastAPI do windows_agent para limitar o acesso estritamente a clients confiáveis do container do backend.

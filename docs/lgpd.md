@@ -12,7 +12,7 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 - Interações diretas no Chat (Conversas, histórico e "thought streams" guardados em banco de dados).
 
 ## 2. Pontos de Risco Atuais (Achados da Auditoria)
-- **Vazamento por Logging:** O `ChatEventPublisher`, `CollaborationService` e `ChatCommandHandler` estão gravando partes do conteúdo dos usuários, como prévias (100 caracteres) e meta-dados de e-mail e payloads, de forma não ofuscada nos arquivos de log estáticos da aplicação (`janus.log`).
+- **Vazamento por Logging:** O `ChatEventPublisher`, `CollaborationService` e `ChatCommandHandler` estão gravando partes do conteúdo dos usuários, como prévias (100 caracteres) e meta-dados de e-mail e payloads, de forma não ofuscada nos arquivos de log estáticos da aplicação (`janus.log`). Adicionalmente, o `ChatService` utiliza `logger.info` e a interface Janus Daemon (`backend/app/interfaces/daemon/daemon.py`) também captura comandos de voz em logs informativos que podem advertidamente vazar PII textualmente.
 - **Retenção Descontrolada:** Embora exista o `DataRetentionService`, ele depende de execuções assíncronas falhas acopladas a transações síncronas (`sync_events.py`) e falta um cron job para varrer e aplicar expurgo estruturado. Ademais, os logs gravados em disco (`janus.log`) não contam com política de rotação.
 - **Vazamento em In-Memory:** As `ProductivityTools` mantêm globais (_notes, _calendar_events) na memória volátil que constituem risco não-persistente.
 
