@@ -5,7 +5,7 @@
 1. Criar branch de feature/fix.
 2. Implementar alteracoes com foco em baixo acoplamento.
 3. Rodar lint/test/build localmente.
-4. Abrir PR com descricao objetiva e impactos.
+4. Abrir PR usando o template de risco e evidencia em `.github/pull_request_template.md`.
 
 ## Convencao de Commits
 
@@ -36,6 +36,7 @@ Usar Conventional Commits:
 
 - `frontend/CONTRIBUTING.md`
 - `frontend/README.md`
+- `.github/pull_request_template.md`
 - `documentation/index.md`
 
 ---
