@@ -1086,6 +1086,34 @@ class AutonomyAdminService:
             operation="self_study_selfmemory_upsert",
         )
 
+    async def _get_self_memory_graph_link_counts(
+        self,
+        *,
+        rel_path: str,
+        path_candidates: list[str],
+        symbol_names: list[str],
+    ) -> list[dict[str, Any]]:
+        graph = await get_graph_db()
+        return await graph.query(
+            """
+            MATCH (m:SelfMemory {file_path: $file_path})
+            OPTIONAL MATCH (m)-[:RELATES_TO]->(owner)
+            WHERE (owner:File OR owner:CodeFile) AND owner.path IN $path_candidates
+            WITH m, [node IN collect(DISTINCT owner) WHERE node IS NOT NULL] AS owners
+            OPTIONAL MATCH (m)-[:DEFINES]->(symbol)
+            WHERE (symbol:CodeFunction OR symbol:CodeClass)
+              AND (size($symbol_names) = 0 OR symbol.name IN $symbol_names)
+            RETURN size(owners) AS owner_links,
+                   size([node IN collect(DISTINCT symbol) WHERE node IS NOT NULL]) AS symbol_links
+            """,
+            {
+                "file_path": rel_path,
+                "path_candidates": path_candidates,
+                "symbol_names": symbol_names,
+            },
+            operation="self_study_selfmemory_verify",
+        )
+
     async def _memorize_self_study_summary(
         self,
         *,
@@ -1136,7 +1164,7 @@ class AutonomyAdminService:
             for symbol in (summary_payload.get("symbols") or [])
             if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", str(symbol or ""))
         ]
-        rows = await self._upsert_self_memory_graph_links(
+        await self._upsert_self_memory_graph_links(
             rel_path=rel_path,
             path_candidates=path_candidates,
             summary_payload=summary_payload,
@@ -1145,11 +1173,16 @@ class AutonomyAdminService:
             symbol_names=symbol_names,
             rel_types=rel_types,
         )
+        rows = await self._get_self_memory_graph_link_counts(
+            rel_path=rel_path,
+            path_candidates=path_candidates,
+            symbol_names=symbol_names,
+        )
         owner_links = int((rows or [{}])[0].get("owner_links", 0) or 0)
         if owner_links <= 0:
             file_count = await self._ensure_code_graph_ready(force=True)
             if file_count > 0:
-                rows = await self._upsert_self_memory_graph_links(
+                await self._upsert_self_memory_graph_links(
                     rel_path=rel_path,
                     path_candidates=path_candidates,
                     summary_payload=summary_payload,
@@ -1157,6 +1190,11 @@ class AutonomyAdminService:
                     source_experience_id=source_experience_id,
                     symbol_names=symbol_names,
                     rel_types=rel_types,
+                )
+                rows = await self._get_self_memory_graph_link_counts(
+                    rel_path=rel_path,
+                    path_candidates=path_candidates,
+                    symbol_names=symbol_names,
                 )
                 owner_links = int((rows or [{}])[0].get("owner_links", 0) or 0)
             if owner_links > 0:

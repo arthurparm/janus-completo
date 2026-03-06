@@ -324,9 +324,14 @@ async def test_persist_self_memory_inserts_with_between_foreach_and_optional(mon
 
     class _CaptureGraph:
         async def query(self, query: str, params: dict[str, object], *args, **kwargs):
-            captured_query["value"] = query
-            captured_params.update(params)
-            return [{"owner_links": 1, "symbol_links": 1}]
+            operation = str(kwargs.get("operation") or "")
+            if operation == "self_study_selfmemory_upsert":
+                captured_query["value"] = query
+                captured_params.update(params)
+                return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_verify":
+                return [{"owner_links": 1, "symbol_links": 1}]
+            return []
 
     async def _fake_get_graph_db():
         return _CaptureGraph()
@@ -373,7 +378,9 @@ async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch)
             query_calls.append(str(kwargs.get("operation") or ""))
             operation = str(kwargs.get("operation") or "")
             if operation == "self_study_selfmemory_upsert":
-                if query_calls.count("self_study_selfmemory_upsert") == 1:
+                return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_verify":
+                if query_calls.count("self_study_selfmemory_verify") == 1:
                     return [{"owner_links": 0, "symbol_links": 0}]
                 return [{"owner_links": 1, "symbol_links": 0}]
             if operation == "self_study_code_graph_file_count":
@@ -409,6 +416,57 @@ async def test_persist_self_memory_retries_after_code_graph_reindex(monkeypatch)
     )
 
     assert query_calls.count("self_study_selfmemory_upsert") == 2
+    assert query_calls.count("self_study_selfmemory_verify") == 2
+    assert reindex_calls["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_persist_self_memory_uses_verify_query_to_avoid_false_negative(monkeypatch):
+    service = _new_service(citations=[])
+    query_calls: list[str] = []
+
+    class _VerifyGraph:
+        async def query(self, query: str, params: dict[str, object] | None = None, *args, **kwargs):
+            operation = str(kwargs.get("operation") or "")
+            query_calls.append(operation)
+            if operation == "self_study_selfmemory_upsert":
+                return [{"owner_links": 0, "symbol_links": 0}]
+            if operation == "self_study_selfmemory_verify":
+                return [{"owner_links": 1, "symbol_links": 1}]
+            if operation == "self_study_code_graph_file_count":
+                return [{"file_count": 341}]
+            return []
+
+    async def _fake_get_graph_db():
+        return _VerifyGraph()
+
+    reindex_calls = {"count": 0}
+
+    async def _fake_index_codebase():
+        reindex_calls["count"] += 1
+        return {"message": "ok"}
+
+    monkeypatch.setattr(autonomy_admin_module, "get_graph_db", _fake_get_graph_db)
+    service._knowledge_service.index_codebase = _fake_index_codebase  # type: ignore[method-assign]
+
+    await service._persist_self_memory(
+        rel_path="app/app/core/memory/graph_embeddings.py",
+        summary_payload={
+            "summary": "ok",
+            "summary_version": service.SELF_MEMORY_SUMMARY_VERSION,
+            "language": "python",
+            "symbols": ["GraphEmbeddingsManager"],
+            "imports": ["json"],
+            "touchpoints": ["neo4j"],
+            "domain_tags": ["memory"],
+            "confidence": 0.9,
+        },
+        sha_after="abc123",
+        source_experience_id="exp-1",
+    )
+
+    assert query_calls.count("self_study_selfmemory_upsert") == 1
+    assert query_calls.count("self_study_selfmemory_verify") == 1
     assert reindex_calls["count"] == 0
 
 
