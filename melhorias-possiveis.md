@@ -641,3 +641,5 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+- [ ] **OQ-017**: Reduzir API Drift aumentando a cobertura de testes E2E/Dual-mode. (P1, M) - Baseado no relatório diário de APIs não cobertas.

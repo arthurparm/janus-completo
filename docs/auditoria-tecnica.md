@@ -73,3 +73,12 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+
+## Achados do dia (2026-03-06)
+
+### Auditoria API Drift
+**Descrição:** Verificação automática de cobertura e conformidade de API.
+**Evidências:** 205 endpoints sem testes E2E/Dual-mode de um total de 232.
+**Próximos passos:**
+- Analisar os endpoints descobertos listados em `outputs/qa/api_coverage_report.json` e aumentar a cobertura de testes.
