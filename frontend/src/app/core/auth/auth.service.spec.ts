@@ -71,6 +71,42 @@ describe('AuthService', () => {
     expect(result.reason).toBe('invalid_request')
   })
 
+  it('deve mapear 401 com orientacao para recuperar acesso', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.loginWithPassword('a@b.com', '12345678', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush({ detail: 'Invalid credentials' }, { status: 401, statusText: 'Unauthorized' })
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Recuperar acesso')
+  })
+
+  it('deve mapear 422 com erro de senha minima', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.loginWithPassword('a@b.com', '123', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush(
+      { detail: [{ msg: 'String should have at least 8 characters', loc: ['body', 'password'] }] },
+      { status: 422, statusText: 'Unprocessable Content' }
+    )
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('minimo 8')
+  })
+
+  it('deve mapear reset com token invalido', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.resetPassword('invalid', 'NovaSenha@123')
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/reset`)
+    req.flush({ detail: 'Invalid token' }, { status: 400, statusText: 'Bad Request' })
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Token invalido ou expirado')
+  })
+
   it('deve restaurar sessao quando existir token local', async () => {
     localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
 

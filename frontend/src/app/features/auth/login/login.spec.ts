@@ -7,13 +7,20 @@ import { vi } from 'vitest'
 
 describe('LoginComponent', () => {
   let comp: LoginComponent
-  let authSpy: { loginWithPassword: ReturnType<typeof vi.fn>; loginWithProvider: ReturnType<typeof vi.fn> }
+  let authSpy: {
+    loginWithPassword: ReturnType<typeof vi.fn>
+    loginWithProvider: ReturnType<typeof vi.fn>
+    requestPasswordReset: ReturnType<typeof vi.fn>
+    resetPassword: ReturnType<typeof vi.fn>
+  }
   let router: Router
 
   beforeEach(() => {
     authSpy = {
       loginWithPassword: vi.fn(),
-      loginWithProvider: vi.fn()
+      loginWithProvider: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      resetPassword: vi.fn()
     }
 
     TestBed.configureTestingModule({

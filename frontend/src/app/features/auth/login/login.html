@@ -97,6 +97,53 @@
           > {{ notice }}
         </div>
       }
+
+      @if (showResetGuide) {
+        <div class="notice-box">
+          <p><strong>Fluxo guiado de redefinicao</strong></p>
+          <p>1) Solicite a recuperacao acima. 2) Cole o token. 3) Defina sua nova senha.</p>
+
+          <div class="field">
+            <label for="resetToken">Token de recuperacao</label>
+            <input
+              id="resetToken"
+              type="text"
+              class="glass-input"
+              placeholder="Cole o token recebido"
+              [(ngModel)]="resetToken"
+              name="resetToken"
+            />
+          </div>
+
+          <div class="field">
+            <label for="newPassword">Nova senha</label>
+            <input
+              id="newPassword"
+              type="password"
+              class="glass-input"
+              placeholder="Minimo 8 caracteres"
+              [(ngModel)]="newPassword"
+              name="newPassword"
+            />
+          </div>
+
+          <div class="field">
+            <label for="confirmPassword">Confirmar nova senha</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              class="glass-input"
+              placeholder="Repita a nova senha"
+              [(ngModel)]="confirmPassword"
+              name="confirmPassword"
+            />
+          </div>
+
+          <button type="button" class="glass-button secondary" (click)="submitResetPassword()" [disabled]="loading">
+            Confirmar redefinicao
+          </button>
+        </div>
+      }
     </form>
   </div>
 </section>

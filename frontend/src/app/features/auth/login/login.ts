@@ -1,5 +1,6 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
+import { FormsModule } from '@angular/forms'
 import { Router } from '@angular/router'
 import { RouterLink } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
@@ -8,7 +9,7 @@ import { AppLoggerService } from '../../../core/services/app-logger.service'
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink],
   templateUrl: './login.html',
   styleUrls: ['./login.scss']
 })
@@ -28,6 +29,10 @@ export class LoginComponent {
   error = ''
   notice = ''
   showRecoveryHint = false
+  showResetGuide = false
+  resetToken = ''
+  newPassword = ''
+  confirmPassword = ''
   attempts = 0
   lockedUntil = 0
 
@@ -122,6 +127,10 @@ export class LoginComponent {
     if (this.loading) return
     this.error = ''
     this.notice = ''
+    this.showResetGuide = false
+    this.resetToken = ''
+    this.newPassword = ''
+    this.confirmPassword = ''
     const email = String(this.form.value.email || '').trim()
     if (!email) {
       this.error = 'Informe seu email para recuperar o acesso.'
@@ -131,13 +140,55 @@ export class LoginComponent {
     try {
       const token = await this.auth.requestPasswordReset(email)
       if (token) {
-        this.notice = `Token de reset: ${token}`
+        this.notice = `Token de reset: ${token}. Cole abaixo para definir uma nova senha.`
+        this.resetToken = token
       } else {
-        this.notice = 'Se o email existir, enviaremos instrucoes de recuperacao.'
+        this.notice = 'Se o email existir, enviaremos instrucoes de recuperacao. Se tiver um token, use o fluxo guiado abaixo.'
       }
+      this.showResetGuide = true
       this.showRecoveryHint = false
     } catch {
       this.error = 'Falha ao solicitar recuperacao.'
+    } finally {
+      this.loading = false
+      this.cdr.markForCheck()
+    }
+  }
+
+  async submitResetPassword() {
+    if (this.loading) return
+    this.error = ''
+    this.notice = ''
+
+    const token = this.resetToken.trim()
+    const password = this.newPassword.trim()
+    const confirm = this.confirmPassword.trim()
+
+    if (!token) {
+      this.error = 'Informe o token de recuperacao.'
+      return
+    }
+    if (password.length < 8) {
+      this.error = 'A nova senha deve ter no minimo 8 caracteres.'
+      return
+    }
+    if (password !== confirm) {
+      this.error = 'A confirmacao da senha nao confere.'
+      return
+    }
+
+    this.loading = true
+    try {
+      const result = await this.auth.resetPassword(token, password)
+      if (!result.ok) {
+        this.error = result.error || 'Falha ao redefinir senha.'
+        return
+      }
+      this.notice = 'Senha redefinida com sucesso. Faca login com a nova senha.'
+      this.showResetGuide = false
+      this.resetToken = ''
+      this.newPassword = ''
+      this.confirmPassword = ''
     } finally {
       this.loading = false
       this.cdr.markForCheck()

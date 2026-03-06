@@ -161,7 +161,7 @@ export class AuthService {
     }
   }
 
-  async resetPassword(token: string, password: string): Promise<boolean> {
+  async resetPassword(token: string, password: string): Promise<AuthActionResult> {
     try {
       const out = await firstValueFrom(
         this.http.post<{ status: string }>(`${API_BASE_URL}/v1/auth/local/reset`, {
@@ -170,8 +170,18 @@ export class AuthService {
         })
       )
       return out?.status === 'ok'
-    } catch {
-      return false
+        ? { ok: true }
+        : { ok: false, error: 'Nao foi possivel redefinir a senha. Tente novamente.' }
+    } catch (err) {
+      if (err instanceof HttpErrorResponse) {
+        if (err.status === 400) {
+          return { ok: false, error: 'Token invalido ou expirado. Solicite um novo link de recuperacao.' }
+        }
+        if (err.status === 422) {
+          return { ok: false, error: 'A nova senha precisa ter no minimo 8 caracteres.' }
+        }
+      }
+      return { ok: false, error: 'Falha ao redefinir senha. Tente novamente.' }
     }
   }
 
@@ -203,19 +213,30 @@ export class AuthService {
   private extractLoginError(err: unknown): LoginResult {
     if (err instanceof HttpErrorResponse) {
       if (err.status === 401) {
+        const detail = this.readErrorDetail(err)
+        const invalidCredentials = detail.includes('invalid credentials')
         return {
           ok: false,
           statusCode: 401,
           reason: 'invalid_credentials',
-          error: 'Email/usuario ou senha invalidos.'
+          error: invalidCredentials
+            ? 'Email/usuario ou senha invalidos. Verifique os dados ou use "Recuperar acesso".'
+            : 'Sessao nao autorizada. Faca login novamente.'
         }
       }
       if (err.status === 422) {
+        const detail = this.readErrorDetail(err)
+        const passwordMinLen = detail.includes('least 8') || detail.includes('min_length')
+        const emailInvalid = detail.includes('email')
         return {
           ok: false,
           statusCode: 422,
           reason: 'invalid_request',
-          error: 'Dados de login invalidos. Revise email e senha.'
+          error: passwordMinLen
+            ? 'Senha invalida: use no minimo 8 caracteres.'
+            : emailInvalid
+              ? 'Email invalido. Revise o formato e tente novamente.'
+              : 'Dados de login invalidos. Revise email e senha e tente novamente.'
         }
       }
       if (err.status === 429) {
@@ -234,5 +255,28 @@ export class AuthService {
       }
     }
     return { ok: false, reason: 'unknown', error: 'Falha no login. Tente novamente.' }
+  }
+
+  private readErrorDetail(err: HttpErrorResponse): string {
+    const body = err.error
+    if (body && typeof body === 'object') {
+      const detail = (body as { detail?: unknown }).detail
+      if (typeof detail === 'string') return detail.toLowerCase()
+      if (Array.isArray(detail)) {
+        return detail
+          .map(item => {
+            if (item && typeof item === 'object') {
+              return String((item as { msg?: unknown }).msg ?? '')
+            }
+            return String(item ?? '')
+          })
+          .join(' ')
+          .toLowerCase()
+      }
+      const message = (body as { message?: unknown }).message
+      if (typeof message === 'string') return message.toLowerCase()
+    }
+    if (typeof body === 'string') return body.toLowerCase()
+    return ''
   }
 }
