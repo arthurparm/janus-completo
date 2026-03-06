@@ -13,6 +13,7 @@ from typing import Any
 import structlog
 from fastapi import Request
 
+from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
 from app.core.memory.memory_core import get_memory_db
@@ -68,6 +69,9 @@ class AutonomyAdminService:
         self._llm_service = llm_service
         self._knowledge_service = knowledge_service
         self._meta = get_meta_agent_service()
+        self._max_run_seconds = int(
+            getattr(settings, "AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS", self.MAX_RUN_SECONDS)
+        )
         # backend/app/services -> backend/app -> backend -> repo
         self._repo_root = Path(__file__).resolve().parents[3]
 
@@ -1086,7 +1090,7 @@ class AutonomyAdminService:
         timed_out = False
 
         for item in files:
-            if (time.perf_counter() - started) >= self.MAX_RUN_SECONDS:
+            if (time.perf_counter() - started) >= self._max_run_seconds:
                 timed_out = True
                 break
             rel = item["file_path"]

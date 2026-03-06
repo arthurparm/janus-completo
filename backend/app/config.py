@@ -81,6 +81,7 @@ class AppSettings(BaseSettings):
     MEMORY_QUOTA_MAX_BYTES_SELF_STUDY: int = 25_000_000
     MEMORY_ENCRYPTION_KEY: str | None = None
     MEMORY_PII_REDACT: bool = True
+    AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS: int = 600
 
     # Raciocínio
     REASONING_MAX_ITERATIONS: int = 3
