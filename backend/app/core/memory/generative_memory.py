@@ -102,18 +102,26 @@ class GenerativeMemoryService:
         """
         Retrieves memories based on Park et al. scoring formula.
         """
-        memory_core = await get_memory_db()
-
-        # 1. Get Candidates (Relevance) - Vector Search
-        # We fetch more than limit to allow re-ranking
         candidate_limit = max(limit * 5, limit)
-        filters = self._build_retrieval_filters(
-            type_filter=type_filter, user_id=user_id, conversation_id=conversation_id
-        )
-        if filters:
-            candidates = await memory_core.arecall_filtered(query, filters=filters, limit=candidate_limit)
+        if user_id:
+            candidates = await self._retrieve_user_scoped_candidates(
+                query=query,
+                limit=candidate_limit,
+                type_filter=type_filter,
+                user_id=user_id,
+                conversation_id=conversation_id,
+            )
         else:
-            candidates = await memory_core.arecall(query, limit=candidate_limit)
+            memory_core = await get_memory_db()
+            filters = self._build_retrieval_filters(
+                type_filter=type_filter, user_id=user_id, conversation_id=conversation_id
+            )
+            if filters:
+                candidates = await memory_core.arecall_filtered(
+                    query, filters=filters, limit=candidate_limit
+                )
+            else:
+                candidates = await memory_core.arecall(query, limit=candidate_limit)
         
         # 2. Score and Rank
         scored_memories = []
@@ -155,6 +163,71 @@ class GenerativeMemoryService:
         scored_memories.sort(key=lambda x: x.score, reverse=True)
         
         return scored_memories[:limit]
+
+    async def _retrieve_user_scoped_candidates(
+        self,
+        *,
+        query: str,
+        limit: int,
+        type_filter: str | None,
+        user_id: str,
+        conversation_id: str | None,
+    ) -> list[ScoredExperience]:
+        collection_name = await aget_or_create_collection(build_user_memory_collection_name(user_id))
+        client = get_async_qdrant_client()
+        vector = await aembed_text(query)
+
+        must: list[qdrant_models.Condition] = [
+            qdrant_models.FieldCondition(
+                key="metadata.user_id",
+                match=qdrant_models.MatchValue(value=str(user_id)),
+            )
+        ]
+        if type_filter:
+            must.append(
+                qdrant_models.FieldCondition(
+                    key="type",
+                    match=qdrant_models.MatchValue(value=str(type_filter)),
+                )
+            )
+        if conversation_id:
+            must.append(
+                qdrant_models.FieldCondition(
+                    key="metadata.conversation_id",
+                    match=qdrant_models.MatchValue(value=str(conversation_id)),
+                )
+            )
+
+        result = await client.query_points(
+            collection_name=collection_name,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+            query_filter=qdrant_models.Filter(must=must),
+        )
+        points = list(getattr(result, "points", result) or [])
+        return [self._point_to_scored_experience(point) for point in points]
+
+    def _point_to_scored_experience(self, point: Any) -> ScoredExperience:
+        payload = getattr(point, "payload", None) or {}
+        metadata = payload.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = dict(metadata)
+        timestamp = payload.get("timestamp")
+        if not timestamp:
+            ts_ms = payload.get("ts_ms") or metadata.get("ts_ms") or metadata.get("timestamp")
+            try:
+                timestamp = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC).isoformat()
+            except Exception:
+                timestamp = datetime.now(UTC).isoformat()
+        return ScoredExperience(
+            id=str(getattr(point, "id", "")),
+            timestamp=str(timestamp),
+            type=str(payload.get("type") or metadata.get("type") or "episodic"),
+            content=str(payload.get("content") or ""),
+            metadata=metadata,
+            score=float(getattr(point, "score", 0.0) or 0.0),
+        )
 
     def _build_retrieval_filters(
         self,
