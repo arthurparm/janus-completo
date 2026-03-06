@@ -9,6 +9,16 @@ class FakeTx:
     def __init__(self):
         self.committed = False
         self.closed = False
+        self.run_calls = []
+
+    async def run(self, query: str, **params):
+        self.run_calls.append({"query": query, "params": params})
+
+        class _Result:
+            async def single(self_inner):
+                return {"file_id": params.get("file_id")}
+
+        return _Result()
 
     async def commit(self):
         self.committed = True
@@ -96,8 +106,12 @@ async def test_save_code_structure_uses_consistent_graph_keys():
 
     file_call = db.merge_node_calls[0]
     assert file_call["merge_keys"] == ["path"]
+    assert file_call["label"] == "File"
     assert file_call["properties"]["path"] == "/repo/app/example.py"
     assert file_call["properties"]["file_path"] == "/repo/app/example.py"
+    assert db.tx.run_calls
+    assert "SET f:CodeFile" in db.tx.run_calls[0]["query"]
+    assert db.tx.run_calls[0]["params"]["file_id"] == "node-1"
 
     function_call = db.merge_node_calls[1]
     assert function_call["merge_keys"] == ["name", "file_path"]

@@ -73,7 +73,6 @@ class KnowledgeRepository:
                 tx = await session.begin_transaction()
                 committed = False
                 try:
-                    file_label = f"{GraphLabel.FILE.value}:{GraphLabel.CODE_FILE.value}"
                     func_label = f"{GraphLabel.FUNCTION.value}:{GraphLabel.CODE_FUNCTION.value}"
                     cls_label = f"{GraphLabel.CLASS.value}:{GraphLabel.CODE_CLASS.value}"
 
@@ -84,10 +83,21 @@ class KnowledgeRepository:
                     }
                     file_id = await self._db.merge_node(
                         tx,
-                        label=file_label,
+                        label=GraphLabel.FILE.value,
                         name=parser.file_path,
                         properties=file_props,
                         merge_keys=["path"],
+                    )
+                    await tx.run(
+                        f"""
+                        MATCH (f:{GraphLabel.FILE.value})
+                        WHERE elementId(f) = $file_id
+                        SET f:{GraphLabel.CODE_FILE.value}
+                        SET f += $props
+                        RETURN elementId(f) AS file_id
+                        """,
+                        file_id=file_id,
+                        props=file_props,
                     )
                     for func in parser.functions:
                         func_name = func["name"]
