@@ -356,6 +356,23 @@ label {
     letter-spacing: 0.08em;
 }
 
+.error-action {
+    margin-top: 0.6rem;
+}
+
+.recover-inline {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    color: #fecaca;
+    border-radius: 8px;
+    padding: 0.35rem 0.65rem;
+    font-family: $font-display;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
 .notice-box {
     margin-top: 0.5rem;
     padding: 0.75rem 0.9rem;

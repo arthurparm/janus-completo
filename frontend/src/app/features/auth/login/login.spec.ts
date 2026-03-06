@@ -40,11 +40,27 @@ describe('LoginComponent', () => {
   it('deve logar com email/senha validos', async () => {
     comp.form.setValue({ email: 'a@b.com', password: '123456', remember: true })
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true)
-    authSpy.loginWithPassword.mockResolvedValue(true)
+    authSpy.loginWithPassword.mockResolvedValue({ ok: true })
 
     await comp.loginEmailPassword()
 
     expect(authSpy.loginWithPassword).toHaveBeenCalledWith('a@b.com', '123456', true)
     expect(navigateSpy).toHaveBeenCalledWith(['/'])
+  })
+
+  it('deve exibir hint de recuperacao em erro 401', async () => {
+    comp.form.setValue({ email: 'a@b.com', password: 'bad-pass', remember: true })
+    authSpy.loginWithPassword.mockResolvedValue({
+      ok: false,
+      statusCode: 401,
+      reason: 'invalid_credentials',
+      error: 'Email/usuario ou senha invalidos.'
+    })
+
+    await comp.loginEmailPassword()
+
+    expect(comp.error).toContain('invalidos')
+    expect(comp.showRecoveryHint).toBe(true)
+    expect(comp.notice).toContain('Recuperar acesso')
   })
 })

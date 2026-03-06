@@ -85,6 +85,11 @@
       @if (error) {
         <div class="error-box">
           > {{ error }}
+          @if (showRecoveryHint) {
+            <div class="error-action">
+              <button type="button" class="recover-inline" (click)="recoverAccess()">Guiar recuperacao</button>
+            </div>
+          }
         </div>
       }
       @if (notice) {

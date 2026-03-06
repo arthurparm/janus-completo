@@ -27,6 +27,7 @@ export class LoginComponent {
   loading = false
   error = ''
   notice = ''
+  showRecoveryHint = false
   attempts = 0
   lockedUntil = 0
 
@@ -45,15 +46,15 @@ export class LoginComponent {
     const v = this.form.value
     try {
       this.logger.debug('[LoginComponent] Attempting login', { email: v.email })
-      const ok = await this.auth.loginWithPassword(String(v.email), String(v.password), !!v.remember)
-      if (ok) {
+      const result = await this.auth.loginWithPassword(String(v.email), String(v.password), !!v.remember)
+      if (result.ok) {
         this.logger.info('[LoginComponent] Login successful, navigating to home')
         // Add a small delay to ensure token is properly stored
         await new Promise(resolve => setTimeout(resolve, 100))
         await this.router.navigate(['/'])
       } else {
-        this.logger.warn('[LoginComponent] Login failed - invalid credentials')
-        this.handleFailure()
+        this.logger.warn('[LoginComponent] Login failed', { reason: result.reason, statusCode: result.statusCode })
+        this.handleFailure(result.error, result.statusCode === 401)
       }
     } catch (error) {
       this.logger.error('[LoginComponent] Login error', error)
@@ -104,12 +105,16 @@ export class LoginComponent {
     }
   }
 
-  handleFailure() {
+  handleFailure(errorMessage?: string, withRecoveryHint = false) {
     this.attempts += 1
+    this.showRecoveryHint = withRecoveryHint
     if (this.attempts >= 5) {
       this.lockedUntil = Date.now() + 60_000
     }
-    this.error = 'Falha no login. Verifique seus dados.'
+    this.error = errorMessage || 'Falha no login. Verifique seus dados.'
+    if (withRecoveryHint) {
+      this.notice = 'Se voce esqueceu a senha, use Recuperar acesso para receber instrucoes.'
+    }
     this.cdr.markForCheck()
   }
 
@@ -128,8 +133,9 @@ export class LoginComponent {
       if (token) {
         this.notice = `Token de reset: ${token}`
       } else {
-        this.notice = 'Se o email existir, enviaremos instrucoes.'
+        this.notice = 'Se o email existir, enviaremos instrucoes de recuperacao.'
       }
+      this.showRecoveryHint = false
     } catch {
       this.error = 'Falha ao solicitar recuperacao.'
     } finally {

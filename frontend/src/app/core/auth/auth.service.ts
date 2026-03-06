@@ -26,6 +26,11 @@ export interface AuthActionResult {
   error?: string
 }
 
+export interface LoginResult extends AuthActionResult {
+  statusCode?: number
+  reason?: 'invalid_credentials' | 'invalid_request' | 'rate_limited' | 'unknown'
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly _isAuthenticated = signal<boolean>(false)
@@ -80,7 +85,7 @@ export class AuthService {
     this._authReady.set(true)
   }
 
-  async loginWithPassword(email: string, password: string, remember: boolean): Promise<boolean> {
+  async loginWithPassword(email: string, password: string, remember: boolean): Promise<LoginResult> {
     try {
       const out = await firstValueFrom(
         this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/login`, {
@@ -94,11 +99,11 @@ export class AuthService {
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
-        return true
+        return { ok: true }
       }
-      return false
-    } catch {
-      return false
+      return { ok: false, error: 'Falha no login. Tente novamente.' }
+    } catch (err) {
+      return this.extractLoginError(err)
     }
   }
 
@@ -193,5 +198,41 @@ export class AuthService {
       if (typeof body === 'string' && body.trim()) return body.trim()
     }
     return 'Falha ao registrar. Verifique seus dados.'
+  }
+
+  private extractLoginError(err: unknown): LoginResult {
+    if (err instanceof HttpErrorResponse) {
+      if (err.status === 401) {
+        return {
+          ok: false,
+          statusCode: 401,
+          reason: 'invalid_credentials',
+          error: 'Email/usuario ou senha invalidos.'
+        }
+      }
+      if (err.status === 422) {
+        return {
+          ok: false,
+          statusCode: 422,
+          reason: 'invalid_request',
+          error: 'Dados de login invalidos. Revise email e senha.'
+        }
+      }
+      if (err.status === 429) {
+        return {
+          ok: false,
+          statusCode: 429,
+          reason: 'rate_limited',
+          error: 'Muitas tentativas. Aguarde 1 minuto e tente novamente.'
+        }
+      }
+      return {
+        ok: false,
+        statusCode: err.status,
+        reason: 'unknown',
+        error: 'Falha no login. Tente novamente.'
+      }
+    }
+    return { ok: false, reason: 'unknown', error: 'Falha no login. Tente novamente.' }
   }
 }

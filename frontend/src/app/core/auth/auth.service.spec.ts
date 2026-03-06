@@ -29,8 +29,8 @@ describe('AuthService', () => {
     expect(req.request.body).toEqual({ email: 'a@b.com', password: '123456' })
     req.flush({ token: 'janus.jwt', user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] } })
 
-    const ok = await promise
-    expect(ok).toBe(true)
+    const result = await promise
+    expect(result.ok).toBe(true)
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
   })
@@ -41,10 +41,34 @@ describe('AuthService', () => {
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
     req.flush({ token: 'janus.jwt', user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] } })
 
-    const ok = await promise
-    expect(ok).toBe(true)
+    const result = await promise
+    expect(result.ok).toBe(true)
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+  })
+
+  it('deve retornar erro mapeado para 401', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.loginWithPassword('a@b.com', '123456', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush({ detail: 'Invalid credentials' }, { status: 401, statusText: 'Unauthorized' })
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.statusCode).toBe(401)
+    expect(result.reason).toBe('invalid_credentials')
+  })
+
+  it('deve retornar erro mapeado para 422', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.loginWithPassword('bad-email', '123456', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush({ detail: 'validation error' }, { status: 422, statusText: 'Unprocessable Content' })
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.statusCode).toBe(422)
+    expect(result.reason).toBe('invalid_request')
   })
 
   it('deve restaurar sessao quando existir token local', async () => {
