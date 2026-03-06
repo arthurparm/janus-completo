@@ -127,11 +127,20 @@ async def test_memory_core_can_patch_metadata_after_write(monkeypatch):
     )
 
     await memory.amemorize(exp)
+    mock_client.retrieve.return_value = [
+        MagicMock(payload={"metadata": {"origin": "self_study", "file_path": "backend/app/services/x.py"}})
+    ]
     await memory.aupdate_metadata(
         "self-study-id",
         {"memory_key": "mk-1", "neo4j_sync_status": "linked"},
     )
 
+    assert len(mock_client.retrieve.await_args.kwargs["ids"]) == 1
+    assert mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["origin"] == "self_study"
+    assert (
+        mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["file_path"]
+        == "backend/app/services/x.py"
+    )
     assert mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["memory_key"] == "mk-1"
     assert (
         mock_client.set_payload.await_args.kwargs["payload"]["metadata"]["neo4j_sync_status"]

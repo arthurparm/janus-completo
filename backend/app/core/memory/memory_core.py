@@ -436,9 +436,23 @@ class MemoryCore:
         if not metadata_patch:
             return
         point_id = self._ensure_valid_point_id(experience_id)
+        existing_metadata: dict[str, Any] = {}
+        try:
+            points = await self.provider.client.retrieve(
+                collection_name=self.collection_name,
+                ids=[point_id],
+                with_payload=True,
+                with_vectors=False,
+            )
+            if points:
+                payload = getattr(points[0], "payload", None) or {}
+                existing_metadata = dict(payload.get("metadata") or {})
+        except Exception:
+            existing_metadata = {}
+        merged_metadata = {**existing_metadata, **dict(metadata_patch or {})}
         await self.provider.client.set_payload(
             collection_name=self.collection_name,
-            payload={"metadata": metadata_patch},
+            payload={"metadata": merged_metadata},
             points=[point_id],
         )
 
