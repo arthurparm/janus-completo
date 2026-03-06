@@ -157,6 +157,22 @@ async def test_bulk_merge_calls_prefers_same_file_and_fallback():
 
 
 @pytest.mark.asyncio
+async def test_clear_code_entities_preserves_file_nodes():
+    db = FakeGraphDB()
+    repo = KnowledgeRepository(db)
+
+    await repo.clear_code_entities()
+
+    assert [call["operation"] for call in db.execute_calls] == [
+        "repo_cleanup_code_symbols",
+        "repo_cleanup_code_files",
+    ]
+    assert "CodeFunction OR n:CodeClass" in db.execute_calls[0]["query"]
+    assert "DETACH DELETE n" in db.execute_calls[0]["query"]
+    assert "MATCH (f:CodeFile) REMOVE f:CodeFile" == db.execute_calls[1]["query"]
+
+
+@pytest.mark.asyncio
 async def test_bulk_merge_calls_dedupes_before_persisting():
     db = FakeGraphDB()
     repo = KnowledgeRepository(db)

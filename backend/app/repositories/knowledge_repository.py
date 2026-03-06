@@ -178,8 +178,16 @@ class KnowledgeRepository:
         return 0
 
     async def clear_code_entities(self):
-        query = f"MATCH (n) WHERE n:{GraphLabel.CODE_FUNCTION.value} OR n:{GraphLabel.CODE_CLASS.value} OR n:{GraphLabel.CODE_FILE.value} DETACH DELETE n"
-        await self._db.execute(query, operation="repo_cleanup_code")
+        delete_symbols_query = (
+            f"MATCH (n) WHERE n:{GraphLabel.CODE_FUNCTION.value} OR n:{GraphLabel.CODE_CLASS.value} "
+            "DETACH DELETE n"
+        )
+        demote_files_query = (
+            f"MATCH (f:{GraphLabel.CODE_FILE.value}) "
+            f"REMOVE f:{GraphLabel.CODE_FILE.value}"
+        )
+        await self._db.execute(delete_symbols_query, operation="repo_cleanup_code_symbols")
+        await self._db.execute(demote_files_query, operation="repo_cleanup_code_files")
 
     async def bulk_merge_calls(self, calls: list[dict[str, Any]]):
         if not calls:

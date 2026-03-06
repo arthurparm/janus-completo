@@ -274,8 +274,12 @@ def index_codebase() -> dict:
 
     logger.info("Limpando entidades de código antigas do grafo...")
     repo.query(
-        "cleanup_code_entities",
-        "MATCH (n) WHERE n:CodeFunction OR n:CodeClass OR n:CodeFile DETACH DELETE n",
+        "cleanup_code_entities_symbols",
+        "MATCH (n) WHERE n:CodeFunction OR n:CodeClass DETACH DELETE n",
+    )
+    repo.query(
+        "cleanup_code_entities_files",
+        "MATCH (f:CodeFile) REMOVE f:CodeFile",
     )
 
     total_files, total_funcs, total_classes = 0, 0, 0
