@@ -17,7 +17,11 @@ from app.core.monitoring.chat_metrics import (
     CHAT_TOKENS_TOTAL,
 )
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
-from app.services.chat.chat_citation_service import build_citation_status, map_citation_hits
+from app.services.chat.chat_citation_service import (
+    MANDATORY_CITATION_GUARD_TEXT,
+    build_citation_status,
+    map_citation_hits,
+)
 from app.services.chat.chat_contracts import (
     build_agent_state,
     build_confirmation_payload,
@@ -32,6 +36,7 @@ from app.services.chat.message_helpers import (
     split_ui,
 )
 from app.services.chat.message_orchestration_service import MessageOrchestrationService
+from app.services.chat_study_service import ChatStudyService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 
@@ -443,8 +448,6 @@ class StreamingService:
             result = await task
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            assistant_text = result.get("response", "")
-            _, ui = split_ui(assistant_text)
             current_provider = result.get("provider")
 
             if self._cb_should_block(current_provider):
@@ -465,42 +468,6 @@ class StreamingService:
                     pass
                 yield f"event: error\ndata: {err}\n\n"
                 return
-
-            for i in range(0, len(assistant_text), 256):
-                chunk = assistant_text[i : i + 256]
-                tok = json.dumps({"text": chunk, "timestamp": int(_time.time() * 1000)}, ensure_ascii=False)
-                yield f"event: token\ndata: {tok}\n\n"
-                yield f"event: partial\ndata: {tok}\n\n"
-
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            try:
-                provider = result.get("provider", "unknown")
-                pricing = _provider_pricing.get(provider)
-                if pricing:
-                    cost = (in_tokens / 1000.0) * float(pricing.input_per_1k_usd) + (
-                        out_tokens / 1000.0
-                    ) * float(pricing.output_per_1k_usd)
-                    if user_id:
-                        CHAT_SPEND_USD_TOTAL.labels(kind="user").inc(cost)
-                    if project_id:
-                        CHAT_SPEND_USD_TOTAL.labels(kind="project").inc(cost)
-            except Exception:
-                pass
-
-            try:
-                self._message_orchestration_service.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
-            except Exception:
-                pass
 
             citations: list[dict[str, Any]] = []
             citations_retrieval_failed = False
@@ -628,8 +595,113 @@ class StreamingService:
                 citations=citations,
                 retrieval_failed=citations_retrieval_failed,
             )
+            assistant_text = str(result.get("response") or "")
+            if citation_status.get("status") == "missing_required":
+                yield (
+                    "event: cognitive_status\ndata: "
+                    + json.dumps(
+                        {
+                            "state": "studying_codebase",
+                            "reason": "Estudando a base para responder com seguranca; isso pode demorar.",
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+                study_service = ChatStudyService(
+                    llm_service=self._llm,
+                    knowledge_service=None,
+                    autonomy_admin_service=None,
+                )
+                pending_progress_events: list[str] = []
+
+                async def _progress(value: int, stage: str, reason: str) -> None:
+                    state = "study_progress" if stage != "synthesis" else "resuming_answer_generation"
+                    payload = {
+                        "state": state,
+                        "reason": reason,
+                        "progress": value,
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    yield_data = json.dumps(payload, ensure_ascii=False)
+                    pending_progress_events.append(
+                        f"event: cognitive_status\ndata: {yield_data}\n\n"
+                    )
+
+                study_result = await study_service.answer_with_study(
+                    question=message,
+                    role=role,
+                    priority=priority,
+                    progress_cb=_progress,
+                )
+                for progress_event in pending_progress_events:
+                    yield progress_event
+                assistant_text = str(study_result.get("response") or MANDATORY_CITATION_GUARD_TEXT)
+                result["response"] = assistant_text
+                result["provider"] = study_result.get("provider") or result.get("provider")
+                result["model"] = study_result.get("model") or result.get("model")
+                citations = study_result.get("citations") or []
+                citation_status = study_result.get("citation_status") or citation_status
+            _, ui = split_ui(assistant_text)
+
+            for i in range(0, len(assistant_text), 256):
+                chunk = assistant_text[i : i + 256]
+                tok = json.dumps({"text": chunk, "timestamp": int(_time.time() * 1000)}, ensure_ascii=False)
+                yield f"event: token\ndata: {tok}\n\n"
+                yield f"event: partial\ndata: {tok}\n\n"
+
+            saved_message = self._repo.add_message(
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+                metadata={
+                    "citations": citations,
+                    "citation_status": citation_status,
+                    "understanding": normalized_understanding,
+                    "confirmation": confirmation_payload,
+                    "agent_state": build_agent_state(
+                        stream_phase="completed",
+                        understanding=normalized_understanding,
+                        confirmation=confirmation_payload,
+                    ),
+                    "delivery_status": "completed",
+                    "provider": result.get("provider"),
+                    "model": result.get("model"),
+                },
+            )
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
+
+            try:
+                provider = result.get("provider", "unknown")
+                pricing = _provider_pricing.get(provider)
+                if pricing:
+                    cost = (in_tokens / 1000.0) * float(pricing.input_per_1k_usd) + (
+                        out_tokens / 1000.0
+                    ) * float(pricing.output_per_1k_usd)
+                    if user_id:
+                        CHAT_SPEND_USD_TOTAL.labels(kind="user").inc(cost)
+                    if project_id:
+                        CHAT_SPEND_USD_TOTAL.labels(kind="project").inc(cost)
+            except Exception:
+                pass
+
+            try:
+                self._message_orchestration_service.trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+
             done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
+                "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
                 "provider": result.get("provider"),
                 "model": result.get("model"),
                 "citations": citations,
@@ -641,7 +713,11 @@ class StreamingService:
                 done_payload["understanding"] = normalized_understanding
             if confirmation_payload:
                 done_payload["confirmation"] = confirmation_payload
-            agent_state = build_agent_state(
+            agent_state = (
+                saved_message.get("agent_state")
+                if isinstance(saved_message, dict)
+                else None
+            ) or build_agent_state(
                 stream_phase="completed",
                 understanding=normalized_understanding,
                 confirmation=confirmation_payload,

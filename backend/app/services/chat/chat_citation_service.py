@@ -1,8 +1,37 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from app.api.v1.endpoints.chat.policies import requires_mandatory_citations
+MANDATORY_CITATION_GUARD_TEXT = (
+    "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
+    "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
+)
+
+_CITATION_REQUIRED_PATTERNS = (
+    r"\bcodigo\b",
+    r"\bcode\b",
+    r"\bfuncao\b",
+    r"\bfunction\b",
+    r"\bclasse\b",
+    r"\bclass\b",
+    r"\barquivo\b",
+    r"\bfile\b",
+    r"\bdocumentacao\b",
+    r"\bdocumentation\b",
+    r"\bdocs?\b",
+    r"\breadme\b",
+    r"\bapi\b",
+    r"\bendpoint\b",
+    r"\.py\b",
+    r"\.ts\b",
+    r"\.js\b",
+)
+
+
+def requires_mandatory_citations(message: str) -> bool:
+    text = (message or "").lower()
+    return any(re.search(pattern, text) for pattern in _CITATION_REQUIRED_PATTERNS)
 
 
 def map_citation_hits(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -75,4 +104,3 @@ def build_citation_status(
         "count": 0,
         "reason": None,
     }
-

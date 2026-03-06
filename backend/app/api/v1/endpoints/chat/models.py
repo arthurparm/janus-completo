@@ -83,15 +83,21 @@ class ChatMessageResponse(BaseModel):
     model: str
     role: str
     conversation_id: str
+    message_id: str | None = None
     citations: list[dict[str, Any]] = Field(default_factory=list)
     citation_status: ChatCitationStatus = Field(default_factory=ChatCitationStatus)
     ui: dict[str, Any] | None = None
     understanding: ChatUnderstandingPayload | dict[str, Any] | None = None
     confirmation: ChatConfirmationState | dict[str, Any] | None = None
     agent_state: ChatAgentState | dict[str, Any] | None = None
+    delivery_status: str | None = None
+    study_job: dict[str, Any] | None = None
+    study_notice: str | None = None
+    failure_classification: str | None = None
 
 
 class ChatMessage(BaseModel):
+    message_id: str | None = None
     timestamp: float
     role: str
     text: str
@@ -101,6 +107,10 @@ class ChatMessage(BaseModel):
     understanding: ChatUnderstandingPayload | dict[str, Any] | None = None
     confirmation: ChatConfirmationState | dict[str, Any] | None = None
     agent_state: ChatAgentState | dict[str, Any] | None = None
+    delivery_status: str | None = None
+    failure_classification: str | None = None
+    provider: str | None = None
+    model: str | None = None
 
 
 class ChatHistoryResponse(BaseModel):

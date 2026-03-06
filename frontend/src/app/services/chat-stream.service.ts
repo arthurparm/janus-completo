@@ -9,6 +9,7 @@ type StreamStatus = 'idle' | 'connecting' | 'open' | 'streaming' | 'retrying' | 
 
 export interface StreamDone {
   conversation_id?: string
+  message_id?: string
   provider?: string
   model?: string
   citations?: Citation[]
@@ -377,6 +378,7 @@ export class ChatStreamService {
         const parsed = JSON.parse(data || '{}') as StreamDone
         this.done$.next({
           conversation_id: parsed?.conversation_id,
+          message_id: parsed?.message_id,
           provider: parsed?.provider,
           model: parsed?.model,
           citations: parsed?.citations,

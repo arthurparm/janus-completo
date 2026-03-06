@@ -110,6 +110,12 @@
             {{ error() }}
           </div>
         }
+        @if (!showAdvanced() && autonomyNotice(); as notice) {
+          <div class="section-notice" [class.is-success]="notice.kind === 'success'" [class.is-info]="notice.kind === 'info'" [class.is-warning]="notice.kind === 'warning'" [class.is-error]="notice.kind === 'error'" role="status" aria-live="polite">
+            <span class="material-icons">{{ notice.kind === 'success' ? 'check_circle' : notice.kind === 'error' ? 'error_outline' : 'info' }}</span>
+            <span>{{ notice.message }}</span>
+          </div>
+        }
 
         <div class="chat-body" #messageList>
           @if (historyLoading()) {

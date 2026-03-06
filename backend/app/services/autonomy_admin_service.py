@@ -72,6 +72,9 @@ class AutonomyAdminService:
         self._max_run_seconds = int(
             getattr(settings, "AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS", self.MAX_RUN_SECONDS)
         )
+        self._self_study_local_only = bool(
+            getattr(settings, "AUTONOMY_SELF_STUDY_LOCAL_ONLY", True)
+        )
         # backend/app/services -> backend/app -> backend -> repo
         self._repo_root = Path(__file__).resolve().parents[3]
 
@@ -110,6 +113,30 @@ class AutonomyAdminService:
         if not self._is_allowed_file_path(rel):
             return None
         return rel
+
+    @staticmethod
+    def _looks_like_remote_reference(raw_path: str | Path | None) -> bool:
+        raw = str(raw_path or "").strip().lower()
+        if not raw:
+            return False
+        return (
+            "://" in raw
+            or raw.startswith("git@")
+            or raw.startswith("www.")
+            or raw.startswith("ssh:")
+        )
+
+    def _resolve_local_study_path(self, raw_path: str | Path | None) -> tuple[Path | None, str | None]:
+        if self._looks_like_remote_reference(raw_path):
+            return None, None
+        normalized = self._normalize_repo_path(raw_path)
+        if not normalized:
+            return None, None
+        candidate = (self._repo_root / normalized).resolve()
+        allowed = self._repo_relative_if_allowed(candidate)
+        if not candidate.exists() or not allowed:
+            return None, None
+        return candidate, allowed
 
     @staticmethod
     def _fingerprint(parts: list[str]) -> str:
@@ -442,9 +469,8 @@ class AutonomyAdminService:
             out = self._git(["diff", "--name-only", f"{base_commit}..{target_commit}"])
             if out:
                 for rel in [line.strip() for line in out.splitlines() if line.strip()]:
-                    p = self._repo_root / rel
-                    allowed = self._repo_relative_if_allowed(p)
-                    if not allowed or not p.exists() or allowed in seen:
+                    p, allowed = self._resolve_local_study_path(rel)
+                    if not p or not allowed or allowed in seen:
                         continue
                     seen.add(allowed)
                     results.append(
@@ -458,9 +484,8 @@ class AutonomyAdminService:
 
         if not results and task_files:
             for rel in task_files:
-                p = self._repo_root / rel
-                allowed = self._repo_relative_if_allowed(p)
-                if not allowed or not p.exists() or allowed in seen:
+                p, allowed = self._resolve_local_study_path(rel)
+                if not p or not allowed or allowed in seen:
                     continue
                 seen.add(allowed)
                 results.append(
@@ -476,7 +501,7 @@ class AutonomyAdminService:
             logger.info(
                 "incremental_self_study_fallback_full_scan",
                 reason="no_git_diff_or_task_context",
-                local_only=True,
+                local_only=self._self_study_local_only,
             )
         elif mode == "incremental" and not results:
             return results
@@ -957,6 +982,7 @@ class AutonomyAdminService:
             "imports": summary_payload.get("imports") or [],
             "touchpoints": summary_payload.get("touchpoints") or [],
             "domain_tags": summary_payload.get("domain_tags") or [],
+            "local_only": self._self_study_local_only,
         }
         experience = Experience(type="episodic", content=compact_text, metadata=metadata)
         memory_repo = MemoryRepository(await get_memory_db())
@@ -1162,6 +1188,7 @@ class AutonomyAdminService:
             "file_cap": self.MAX_FILES_PER_RUN,
             "base_commit": base_commit,
             "target_commit": target_commit,
+            "local_only": self._self_study_local_only,
         }
 
     def get_self_study_status(self) -> dict[str, Any]:
@@ -1169,6 +1196,7 @@ class AutonomyAdminService:
         running = self._repo.get_latest_running_self_study()
         runs = self._repo.list_self_study_runs(limit=5)
         return {
+            "local_only": self._self_study_local_only,
             "last_studied_commit": state.last_studied_commit,
             "last_success_at": state.last_success_at.isoformat() if state.last_success_at else None,
             "running": {

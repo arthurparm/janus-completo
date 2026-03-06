@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import structlog
@@ -13,7 +14,12 @@ from app.services.chat_service import (
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
-from app.services.chat.chat_citation_service import build_citation_status, map_citation_hits
+from app.services.chat.chat_citation_service import (
+    MANDATORY_CITATION_GUARD_TEXT,
+    build_citation_status,
+    map_citation_hits,
+)
+from app.services.chat_study_service import ChatStudyJobService, ChatStudyService
 from app.services.chat.chat_contracts import (
     build_agent_state,
     build_confirmation_payload,
@@ -37,6 +43,20 @@ from .policies import confidence_band, confidence_confirmation_threshold
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+
+
+def _get_chat_study_job_service(http: Request, service: ChatService) -> ChatStudyJobService:
+    existing = getattr(http.app.state, "chat_study_job_service", None)
+    if existing is not None:
+        return existing
+    study_service = ChatStudyService(
+        llm_service=getattr(http.app.state, "llm_service", None),
+        knowledge_service=getattr(http.app.state, "knowledge_service", None),
+        autonomy_admin_service=getattr(http.app.state, "autonomy_admin_service", None),
+    )
+    jobs = ChatStudyJobService(study_service=study_service, chat_service=service)
+    http.app.state.chat_study_job_service = jobs
+    return jobs
 
 
 @router.post("/start", response_model=ChatStartResponse, summary="Inicia uma nova conversa")
@@ -237,11 +257,73 @@ async def send_message(
                 "Antes de executar essa acao, confirme se devo prosseguir."
             )
 
+    last_assistant_message: dict[str, Any] | None = None
     if result.get("citation_status", {}).get("status") == "missing_required":
-        result["response"] = (
-            "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
-            "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
+        placeholder_text = (
+            "Estou estudando a base para responder com segurança. "
+            "Isso pode demorar um pouco porque preciso localizar evidências rastreáveis."
         )
+        result["response"] = placeholder_text
+        result["delivery_status"] = "pending_study"
+        result["study_notice"] = placeholder_text
+        result["failure_classification"] = (
+            "infra_transient"
+            if result.get("citation_status", {}).get("reason") == "retrieval_error"
+            else None
+        )
+        if hasattr(service, "get_last_assistant_message"):
+            try:
+                last_assistant_message = await service.get_last_assistant_message(
+                    conversation_id=payload.conversation_id,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "chat_message_get_last_assistant_failed",
+                    conversation_id=payload.conversation_id,
+                    error=str(e),
+                )
+        if last_assistant_message and hasattr(service, "update_message_payload"):
+            try:
+                await service.update_message_payload(
+                    conversation_id=payload.conversation_id,
+                    message_id=int(last_assistant_message.get("id")),
+                    patch={
+                        "text": placeholder_text,
+                        "citations": [],
+                        "citation_status": result.get("citation_status"),
+                        "delivery_status": "pending_study",
+                        "failure_classification": result.get("failure_classification"),
+                        "provider": result.get("provider"),
+                        "model": result.get("model"),
+                    },
+                    user_id=user_id,
+                )
+                result["message_id"] = str(last_assistant_message.get("id"))
+                jobs = _get_chat_study_job_service(http, service)
+                job = jobs.create_job(
+                    conversation_id=payload.conversation_id,
+                    message_id=str(last_assistant_message.get("id")),
+                    question=payload.message,
+                    user_id=user_id,
+                    placeholder_message=placeholder_text,
+                )
+                result["study_job"] = {
+                    "job_id": job.job_id,
+                    "status": job.status,
+                    "poll_url": f"/api/v1/chat/study-jobs/{job.job_id}",
+                    "conversation_id": payload.conversation_id,
+                    "message_id": str(last_assistant_message.get("id")),
+                    "placeholder_message": placeholder_text,
+                }
+                asyncio.create_task(jobs.run_job(job_id=job.job_id, role=role, priority=priority))
+            except Exception as e:
+                logger.warning(
+                    "chat_message_start_study_failed",
+                    conversation_id=payload.conversation_id,
+                    error=str(e),
+                )
+                result["response"] = MANDATORY_CITATION_GUARD_TEXT
 
     if routing_decision:
         understanding = result.get("understanding")
@@ -297,5 +379,41 @@ async def send_message(
     )
     if agent_state:
         result["agent_state"] = agent_state
+
+    if last_assistant_message is None and hasattr(service, "get_last_assistant_message"):
+        try:
+            last_assistant_message = await service.get_last_assistant_message(
+                conversation_id=payload.conversation_id,
+                user_id=user_id,
+            )
+        except Exception:
+            last_assistant_message = None
+    if last_assistant_message and hasattr(service, "update_message_payload"):
+        try:
+            await service.update_message_payload(
+                conversation_id=payload.conversation_id,
+                message_id=int(last_assistant_message.get("id")),
+                patch={
+                    "text": result.get("response"),
+                    "citations": result.get("citations") or [],
+                    "citation_status": result.get("citation_status"),
+                    "ui": result.get("ui"),
+                    "understanding": result.get("understanding"),
+                    "confirmation": result.get("confirmation"),
+                    "agent_state": result.get("agent_state"),
+                    "delivery_status": result.get("delivery_status") or "completed",
+                    "failure_classification": result.get("failure_classification"),
+                    "provider": result.get("provider"),
+                    "model": result.get("model"),
+                },
+                user_id=user_id,
+            )
+            result["message_id"] = str(last_assistant_message.get("id"))
+        except Exception as e:
+            logger.warning(
+                "chat_message_persist_metadata_failed",
+                conversation_id=payload.conversation_id,
+                error=str(e),
+            )
 
     return ChatMessageResponse(**result)

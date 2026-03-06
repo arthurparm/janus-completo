@@ -266,6 +266,7 @@ export interface ChatUnderstanding {
   [key: string]: unknown;
 }
 export interface ChatMessage {
+  message_id?: string;
   role: string;
   text: string;
   timestamp: number;
@@ -276,6 +277,10 @@ export interface ChatMessage {
   understanding?: ChatUnderstanding;
   confirmation?: ChatConfirmationState;
   agent_state?: ChatAgentState;
+  delivery_status?: string;
+  failure_classification?: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface Tool {
@@ -294,18 +299,45 @@ export interface ToolListResponse {
   tools: Tool[];
 }
 
+export interface ChatStudyJobRef {
+  job_id: string;
+  status: string;
+  poll_url: string;
+  conversation_id: string;
+  message_id?: string;
+  placeholder_message?: string;
+}
+
+export interface ChatStudyJobResponse {
+  job_id: string;
+  status: string;
+  progress: number;
+  conversation_id: string;
+  message_id?: string;
+  placeholder_message?: string;
+  failure_classification?: string;
+  final_response?: ChatMessageResponse;
+  error?: string;
+  updated_at?: number;
+}
+
 export interface ChatMessageResponse {
   response: string;
   provider: string;
   model: string;
   role: string;
   conversation_id: string;
+  message_id?: string;
   citations: Citation[];
   citation_status?: CitationStatus;
   ui?: { type: string; data: any };
   understanding?: ChatUnderstanding;
   confirmation?: ChatConfirmationState;
   agent_state?: ChatAgentState;
+  delivery_status?: string;
+  study_job?: ChatStudyJobRef;
+  study_notice?: string;
+  failure_classification?: string;
 }
 export interface ChatHistoryResponse { conversation_id: string; messages: ChatMessage[] }
 export interface ChatListItem {
@@ -1226,11 +1258,16 @@ export class BackendApiService {
     )
   }
 
+  getChatStudyJob(jobId: string): Observable<ChatStudyJobResponse> {
+    return this.http.get<ChatStudyJobResponse>(this.buildUrl(`/api/v1/chat/study-jobs/${encodeURIComponent(jobId)}`))
+  }
+
   getChatHistory(conversation_id: string): Observable<ChatHistoryResponse> {
     return this.http.get<ChatHistoryResponse>(this.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history`)).pipe(
       map((resp) => {
         const msgs = Array.isArray(resp?.messages) ? resp.messages : []
         const mapped = msgs.map((m) => ({
+          message_id: typeof m?.message_id === 'string' ? String(m.message_id) : undefined,
           role: String(m?.role || ''),
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
@@ -1241,6 +1278,10 @@ export class BackendApiService {
           understanding: m?.understanding,
           confirmation: m?.confirmation,
           agent_state: m?.agent_state,
+          delivery_status: typeof m?.delivery_status === 'string' ? String(m.delivery_status) : undefined,
+          failure_classification: typeof m?.failure_classification === 'string' ? String(m.failure_classification) : undefined,
+          provider: typeof m?.provider === 'string' ? String(m.provider) : undefined,
+          model: typeof m?.model === 'string' ? String(m.model) : undefined,
         }))
         return { conversation_id: String(resp?.conversation_id || conversation_id), messages: mapped } as ChatHistoryResponse
       })
@@ -1273,6 +1314,7 @@ export class BackendApiService {
       map((resp) => {
         const msgs = Array.isArray(resp?.messages) ? resp.messages : []
         const mapped = msgs.map((m) => ({
+          message_id: typeof m?.message_id === 'string' ? String(m.message_id) : undefined,
           role: String(m?.role || ''),
           text: this.normalizeChatText(m?.text),
           timestamp: m?.timestamp != null ? Number(m.timestamp) : 0,
@@ -1283,6 +1325,10 @@ export class BackendApiService {
           understanding: m?.understanding,
           confirmation: m?.confirmation,
           agent_state: m?.agent_state,
+          delivery_status: typeof m?.delivery_status === 'string' ? String(m.delivery_status) : undefined,
+          failure_classification: typeof m?.failure_classification === 'string' ? String(m.failure_classification) : undefined,
+          provider: typeof m?.provider === 'string' ? String(m.provider) : undefined,
+          model: typeof m?.model === 'string' ? String(m.model) : undefined,
         }))
 
         return {

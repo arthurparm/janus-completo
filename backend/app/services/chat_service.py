@@ -256,6 +256,37 @@ class ChatService:
             conversation_id=conversation_id, message_id=message_id, user_id=user_id
         )
 
+    async def replace_last_assistant_message(
+        self, conversation_id: str, new_text: str, user_id: str | None = None
+    ) -> None:
+        await self._conversation_service.replace_last_assistant_message(
+            conversation_id=conversation_id,
+            new_text=new_text,
+            user_id=user_id,
+        )
+
+    async def get_last_assistant_message(
+        self, conversation_id: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        return await self._conversation_service.get_last_assistant_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+
+    async def update_message_payload(
+        self,
+        conversation_id: str,
+        message_id: int,
+        patch: dict[str, Any],
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        return await self._conversation_service.update_message_payload(
+            conversation_id=conversation_id,
+            message_id=message_id,
+            patch=patch,
+            user_id=user_id,
+        )
+
     async def stream_message(
         self,
         conversation_id: str,

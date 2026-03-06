@@ -82,6 +82,7 @@ class AppSettings(BaseSettings):
     MEMORY_ENCRYPTION_KEY: str | None = None
     MEMORY_PII_REDACT: bool = True
     AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS: int = 600
+    AUTONOMY_SELF_STUDY_LOCAL_ONLY: bool = True
 
     # Raciocínio
     REASONING_MAX_ITERATIONS: int = 3

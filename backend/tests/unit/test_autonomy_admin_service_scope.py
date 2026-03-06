@@ -118,6 +118,32 @@ def test_resolve_files_for_study_incremental_uses_task_context_when_present(tmp_
     assert rows[0]["change_type"] == "task_context"
 
 
+def test_resolve_files_for_study_rejects_remote_or_outside_task_context(tmp_path: Path):
+    service = _new_service(citations=[])
+    service._repo_root = tmp_path
+
+    inside_backend = tmp_path / "backend" / "app" / "services" / "x.py"
+    inside_backend.parent.mkdir(parents=True, exist_ok=True)
+    inside_backend.write_text("ok", encoding="utf-8")
+
+    outside_repo = tmp_path.parent / "outside.py"
+    outside_repo.write_text("bad", encoding="utf-8")
+
+    rows = service._resolve_files_for_study(
+        mode="incremental",
+        base_commit=None,
+        target_commit=None,
+        task_files=[
+            "https://example.com/backend/app/services/x.py",
+            str(outside_repo),
+            "backend/app/services/x.py",
+        ],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["file_path"] == "backend/app/services/x.py"
+
+
 def test_infer_self_memory_relationship_types_is_local_and_code_aware(tmp_path: Path):
     service = _new_service(citations=[])
     service._repo_root = tmp_path
@@ -369,6 +395,7 @@ def test_get_self_study_status_includes_running_progress():
     service._repo = _Repo()  # type: ignore[assignment]
 
     status = service.get_self_study_status()
+    assert status["local_only"] is True
     assert status["last_studied_commit"] == "abc123"
     assert status["running"]["id"] == 99
     assert status["running"]["files_total"] == 429

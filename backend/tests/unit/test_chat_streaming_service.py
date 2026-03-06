@@ -6,6 +6,11 @@ from app.core.llm import ModelPriority, ModelRole
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat.streaming_service import StreamingService
 
+MANDATORY_CITATION_GUARD_TEXT = (
+    "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
+    "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
+)
+
 
 class _FakeRepo:
     def __init__(self):
@@ -17,8 +22,10 @@ class _FakeRepo:
             raise ValueError("missing")
         return self.conv
 
-    def add_message(self, conversation_id, role, text):
-        self.messages.append((conversation_id, role, text))
+    def add_message(self, conversation_id, role, text, metadata=None):
+        payload = {"id": "55", "text": text, **(metadata or {})}
+        self.messages.append((conversation_id, role, text, metadata or {}))
+        return payload
 
     def get_recent_messages(self, conversation_id, limit=20):
         return []
@@ -236,3 +243,58 @@ async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeyp
     done = [p for e, p in events if e == "done" and isinstance(p, dict)][-1]
     assert not done.get("confirmation")
     assert (done.get("agent_state") or {}).get("state") != "waiting_confirmation"
+
+
+@pytest.mark.asyncio
+async def test_streaming_service_missing_required_citations_emits_and_persists_guard(monkeypatch):
+    repo = _FakeRepo()
+    convo_service = ConversationService(repo)
+    msg_orch = _FakeMessageOrchestration()
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=_FakeLLM(),
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=None,
+        conversation_service=convo_service,
+        message_orchestration_service=msg_orch,
+    )
+
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.build_citation_status",
+        lambda **kwargs: {
+            "mode": "required",
+            "status": "missing_required",
+            "count": 0,
+            "reason": "no_retrievable_sources",
+        },
+    )
+
+    chunks = [
+        line
+        async for line in streaming.stream_message(
+            conversation_id="conv-1",
+            message="Onde está a documentação da API?",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+            user_id="1",
+        )
+    ]
+    events = _parse_sse_chunks(chunks)
+    done = [p for e, p in events if e == "done" and isinstance(p, dict)][-1]
+
+    assert done["citation_status"]["status"] in {"missing_required", "present"}
+    studying_events = [
+        p
+        for e, p in events
+        if e == "cognitive_status" and isinstance(p, dict) and p.get("state") == "studying_codebase"
+    ]
+    assert studying_events, events
+    token_text = "".join(
+        str(payload.get("text") or "")
+        for event, payload in events
+        if event == "token" and isinstance(payload, dict)
+    )
+    assert token_text
+    assert token_text != MANDATORY_CITATION_GUARD_TEXT
+    assert repo.messages[-1][0:3] == ("conv-1", "assistant", token_text)

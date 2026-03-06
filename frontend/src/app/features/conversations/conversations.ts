@@ -15,6 +15,8 @@ import {
   ChatAgentState,
   ChatConfirmationState,
   ChatMessage,
+  ChatStudyJobRef,
+  ChatStudyJobResponse,
   ChatUnderstanding,
   ConversationMeta,
   CitationStatus,
@@ -39,6 +41,7 @@ import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.c
 import { JarvisAvatarComponent } from '../../shared/components/jarvis-avatar/jarvis-avatar.component'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 import { MarkdownPipe } from '../../shared/pipes/markdown.pipe'
+import { parseAdminCodeQaCommand } from './admin-code-qa.util'
 
 type ChatRole = 'user' | 'assistant' | 'system' | 'event'
 
@@ -56,6 +59,8 @@ interface ChatMessageView {
   latency_ms?: number
   provider?: string
   model?: string
+  delivery_status?: string
+  failure_classification?: string
   streaming?: boolean
   error?: boolean
 }
@@ -324,6 +329,7 @@ export class ConversationsComponent {
   private scrollQueued = false
   private responseStartedAt: number | null = null
   private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
+  private readonly studyPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   readonly quickPrompts = [
     'Resuma esta conversa em 5 pontos.',
     'Quais sao os proximos passos recomendados para este tema?',
@@ -368,7 +374,7 @@ export class ConversationsComponent {
         const state = String(evt?.state || '')
         this.latestCognitiveState.set(state)
         if (state) {
-          this.appendThought('agent', 'Estado cognitivo', `Estado: ${state}${evt.reason ? ` (${evt.reason})` : ''}`)
+          this.appendThought('agent', 'Estado cognitivo', this.cognitiveStatusText(state, evt.reason))
         }
       })
 
@@ -392,6 +398,8 @@ export class ConversationsComponent {
     this.destroyRef.onDestroy(() => {
       this.noticeTimers.forEach((timer) => clearTimeout(timer))
       this.noticeTimers.clear()
+      this.studyPollTimers.forEach((timer) => clearTimeout(timer))
+      this.studyPollTimers.clear()
       this.eventsService.disconnect()
       this.stream.stop()
     })
@@ -423,8 +431,25 @@ export class ConversationsComponent {
     this.queueScroll()
     this.responseStartedAt = Date.now()
 
-    if (this.shouldUseAdminCodeQa(message)) {
-      this.sendAdminCodeQa(conversationId, message)
+    const adminCodeQa = parseAdminCodeQaCommand(message, this.isAdmin())
+    if (adminCodeQa.enabled) {
+      if (!adminCodeQa.question) {
+        const nowHelp = Date.now()
+        const helpText = 'Para consultar codigo no modo admin, use: /code sua pergunta.'
+        this.appendMessage({
+          id: this.createId(),
+          role: 'assistant',
+          text: helpText,
+          timestamp: nowHelp
+        })
+        this.updateConversationPreview(conversationId, 'assistant', helpText, nowHelp)
+        this.sending.set(false)
+        this.flushPendingConversationNavigation(conversationId)
+        this.queueScroll()
+        return
+      }
+
+      this.sendAdminCodeQa(conversationId, adminCodeQa.question)
       return
     }
 
@@ -1529,8 +1554,9 @@ export class ConversationsComponent {
           const backendMessageId = typeof raw['message_id'] === 'string'
             ? String(raw['message_id'])
             : (typeof raw['id'] === 'string' ? String(raw['id']) : undefined)
+          const localMessageId = this.createId()
           this.appendMessage({
-            id: this.createId(),
+            id: localMessageId,
             backendMessageId,
             role: 'assistant',
             text: cleanText,
@@ -1542,39 +1568,20 @@ export class ConversationsComponent {
             agent_state: resp.agent_state,
             latency_ms: latencyMs,
             provider: resp.provider,
-            model: resp.model
+            model: resp.model,
+            delivery_status: resp.delivery_status,
+            failure_classification: resp.failure_classification
           })
           this.updateConversationPreview(conversationId, 'assistant', cleanText, now)
+          if (resp.delivery_status === 'pending_study' && resp.study_job) {
+            this.startStudyPolling(resp.study_job, localMessageId)
+            this.showStudyNotice(resp.study_notice || resp.study_job.placeholder_message || 'Estudando a base para responder com seguranca; isso pode demorar.')
+          }
         }
         this.sending.set(false)
         this.flushPendingConversationNavigation(conversationId)
         this.queueScroll()
       })
-  }
-
-  private shouldUseAdminCodeQa(message: string): boolean {
-    if (!this.isAdmin()) return false
-    const normalized = message
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, ' ')
-    const hints = [
-      'arquivo',
-      'arquivos',
-      'codigo',
-      'code',
-      'endpoint',
-      'funcao',
-      'function',
-      'classe',
-      'class',
-      'repo',
-      'repositor',
-      'pasta',
-      'module',
-      'modulo'
-    ]
-    return hints.some((hint) => normalized.includes(hint))
   }
 
   private sendAdminCodeQa(conversationId: string, message: string): void {
@@ -1630,8 +1637,11 @@ export class ConversationsComponent {
 
   private handleStreamDone(done: StreamDone): void {
     const latencyMs = this.consumeResponseLatency()
+    const finalText = this.streamingBuffer
     if (this.streamingMessageId) {
       this.updateMessage(this.streamingMessageId, {
+        backendMessageId: done.message_id,
+        text: finalText,
         streaming: false,
         citations: done.citations || [],
         citation_status: done.citation_status,
@@ -1642,7 +1652,7 @@ export class ConversationsComponent {
         provider: done.provider,
         model: done.model
       })
-      this.updateConversationPreview(done.conversation_id || this.selectedId() || '', 'assistant', this.streamingBuffer, Date.now())
+      this.updateConversationPreview(done.conversation_id || this.selectedId() || '', 'assistant', finalText, Date.now())
     }
     this.streamingBuffer = ''
     this.streamingMessageId = null
@@ -1751,8 +1761,99 @@ export class ConversationsComponent {
       agent_state: (raw['agent_state'] as ChatAgentState | undefined),
       latency_ms: Number.isFinite(latencyMsRaw) && latencyMsRaw > 0 ? latencyMsRaw : undefined,
       provider: typeof raw['provider'] === 'string' ? String(raw['provider']) : undefined,
-      model: typeof raw['model'] === 'string' ? String(raw['model']) : undefined
+      model: typeof raw['model'] === 'string' ? String(raw['model']) : undefined,
+      delivery_status: typeof raw['delivery_status'] === 'string' ? String(raw['delivery_status']) : undefined,
+      failure_classification: typeof raw['failure_classification'] === 'string' ? String(raw['failure_classification']) : undefined
     }
+  }
+
+  private cognitiveStatusText(state: string, reason?: string): string {
+    if (state === 'studying_codebase') {
+      return reason || 'Estudando a base para responder com seguranca; isso pode demorar.'
+    }
+    if (state === 'study_progress') {
+      return reason || 'Estudo em andamento na base local.'
+    }
+    if (state === 'resuming_answer_generation') {
+      return reason || 'Gerando a resposta final a partir do estudo.'
+    }
+    return `Estado: ${state}${reason ? ` (${reason})` : ''}`
+  }
+
+  private showStudyNotice(message: string): void {
+    this.autonomyNotice.set({ kind: 'info', message, visible: true })
+  }
+
+  private startStudyPolling(job: ChatStudyJobRef, localMessageId: string): void {
+    const jobId = String(job.job_id || '')
+    if (!jobId) return
+    const existing = this.studyPollTimers.get(jobId)
+    if (existing) clearTimeout(existing)
+
+    this.api.getChatStudyJob(jobId)
+      .pipe(catchError(() => of(null)))
+      .subscribe((resp) => {
+        if (!resp) {
+          this.scheduleStudyPoll(jobId, localMessageId, 2500)
+          return
+        }
+        this.applyStudyJobUpdate(localMessageId, resp)
+      })
+  }
+
+  private scheduleStudyPoll(jobId: string, localMessageId: string, delayMs: number): void {
+    const timer = setTimeout(() => this.startStudyPolling({
+      job_id: jobId,
+      status: 'running',
+      poll_url: '',
+      conversation_id: this.selectedId() || ''
+    }, localMessageId), delayMs)
+    this.studyPollTimers.set(jobId, timer)
+  }
+
+  private applyStudyJobUpdate(localMessageId: string, job: ChatStudyJobResponse): void {
+    const jobId = String(job.job_id || '')
+    if (!jobId) return
+    if (job.status === 'completed' && job.final_response) {
+      const finalResponse = job.final_response
+      const finalText = this.sanitizeChatText(finalResponse.response)
+      this.updateMessage(localMessageId, {
+        backendMessageId: finalResponse.message_id,
+        text: finalText,
+        citations: finalResponse.citations || [],
+        citation_status: finalResponse.citation_status,
+        understanding: finalResponse.understanding,
+        confirmation: finalResponse.confirmation ?? finalResponse.understanding?.confirmation,
+        agent_state: finalResponse.agent_state,
+        provider: finalResponse.provider,
+        model: finalResponse.model,
+        delivery_status: finalResponse.delivery_status,
+        failure_classification: finalResponse.failure_classification
+      })
+      this.updateConversationPreview(job.conversation_id, 'assistant', finalText, Date.now())
+      this.studyPollTimers.delete(jobId)
+      this.autonomyNotice.set(null)
+      this.queueScroll()
+      return
+    }
+    if (job.status === 'failed') {
+      this.updateMessage(localMessageId, {
+        text: job.error || 'Falha ao concluir o estudo automatico dessa resposta.',
+        error: true,
+        delivery_status: 'failed',
+        failure_classification: job.failure_classification
+      })
+      this.studyPollTimers.delete(jobId)
+      return
+    }
+    if (job.placeholder_message) {
+      this.updateMessage(localMessageId, {
+        text: this.sanitizeChatText(job.placeholder_message),
+        delivery_status: 'pending_study',
+        failure_classification: job.failure_classification
+      })
+    }
+    this.scheduleStudyPoll(jobId, localMessageId, 2500)
   }
 
   private createId(): string {

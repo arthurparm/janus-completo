@@ -1,3 +1,4 @@
+from copy import deepcopy
 from time import time
 from typing import Any
 from uuid import uuid4
@@ -65,6 +66,29 @@ class ChatRepository:
         with open(self._store_path, "w", encoding="utf-8") as f:
             json.dump(self._conversations, f, ensure_ascii=False, indent=2)
 
+    def _normalize_message(self, msg: dict[str, Any]) -> dict[str, Any]:
+        normalized = {
+            "id": msg.get("id"),
+            "timestamp": msg.get("timestamp", time()),
+            "role": msg.get("role"),
+            "text": msg.get("text", ""),
+        }
+        for key in (
+            "citations",
+            "citation_status",
+            "ui",
+            "understanding",
+            "confirmation",
+            "agent_state",
+            "delivery_status",
+            "failure_classification",
+            "provider",
+            "model",
+        ):
+            if key in msg and msg.get(key) is not None:
+                normalized[key] = deepcopy(msg.get(key))
+        return normalized
+
     def start_conversation(
         self,
         persona: str | None,
@@ -93,13 +117,24 @@ class ChatRepository:
         self._save()
         return conversation_id
 
-    def add_message(self, conversation_id: str, role: str, text: str) -> None:
+    def add_message(
+        self,
+        conversation_id: str,
+        role: str,
+        text: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        conv["messages"].append({"timestamp": time(), "role": role, "text": text})
+        next_id = max((int(msg.get("id") or 0) for msg in conv.get("messages", [])), default=0) + 1
+        payload = self._normalize_message(
+            {"id": next_id, "timestamp": time(), "role": role, "text": text, **(metadata or {})}
+        )
+        conv["messages"].append(payload)
         conv["updated_at"] = time()
         self._save()
+        return deepcopy(payload)
 
     def get_conversation(self, conversation_id: str) -> dict[str, Any]:
         conv = self._conversations.get(conversation_id)
@@ -122,7 +157,7 @@ class ChatRepository:
             valid_messages = []
             for i, msg in enumerate(messages):
                 if isinstance(msg, dict) and "timestamp" in msg and "role" in msg and "text" in msg:
-                    valid_messages.append(msg)
+                    valid_messages.append(self._normalize_message(msg))
                 else:
                     logger.warning("log_warning", message=f"Invalid message structure at index {i} in conversation {conversation_id}: {msg}"
                     )
@@ -201,6 +236,62 @@ class ChatRepository:
         conv["summary"] = summary
         conv["updated_at"] = time()
         self._save()
+
+    def replace_last_assistant_message(
+        self, conversation_id: str, new_text: str, user_id: str | None = None
+    ) -> None:
+        conv = self._conversations.get(conversation_id)
+        if conv is None:
+            raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
+        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
+            raise ChatRepositoryError("Access denied: user_id mismatch")
+
+        messages = conv.get("messages") or []
+        for msg in reversed(messages):
+            if str(msg.get("role")) == "assistant":
+                msg["text"] = new_text
+                conv["updated_at"] = time()
+                self._save()
+                return
+        raise ChatRepositoryError("Assistant message not found")
+
+    def get_last_assistant_message(
+        self, conversation_id: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        conv = self._conversations.get(conversation_id)
+        if conv is None:
+            raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
+        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
+            raise ChatRepositoryError("Access denied: user_id mismatch")
+        for msg in reversed(conv.get("messages") or []):
+            if str(msg.get("role")) == "assistant":
+                return self._normalize_message(msg)
+        raise ChatRepositoryError("Assistant message not found")
+
+    def update_message_payload(
+        self,
+        conversation_id: str,
+        message_id: int,
+        patch: dict[str, Any],
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        conv = self._conversations.get(conversation_id)
+        if conv is None:
+            raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
+        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
+            raise ChatRepositoryError("Access denied: user_id mismatch")
+        for msg in conv.get("messages") or []:
+            if int(msg.get("id") or 0) != int(message_id):
+                continue
+            for key, value in patch.items():
+                if value is None:
+                    msg.pop(key, None)
+                else:
+                    msg[key] = deepcopy(value)
+            conv["updated_at"] = time()
+            self._save()
+            return self._normalize_message(msg)
+        raise ChatRepositoryError("Message not found")
 
     def count_conversations(self) -> int:
         return len(self._conversations)

@@ -30,7 +30,12 @@ class _DummyChatService:
         self.last_stream_conversation_id = None
         self.last_events_user_id = None
         self.last_events_conversation_id = None
+        self.last_replaced_conversation_id = None
+        self.last_replaced_text = None
+        self.last_replaced_user_id = None
+        self.last_message_patch = None
         self.list_calls = 0
+        self._assistant_message = {"id": "77", "role": "assistant", "text": "ok"}
 
     async def start_conversation_async(self, persona, user_id, project_id):
         self.last_start_user_id = user_id
@@ -55,6 +60,24 @@ class _DummyChatService:
     async def list_conversations(self, **kwargs):
         self.list_calls += 1
         return []
+
+    async def replace_last_assistant_message(self, conversation_id, new_text, user_id=None):
+        self.last_replaced_conversation_id = conversation_id
+        self.last_replaced_text = new_text
+        self.last_replaced_user_id = user_id
+
+    async def get_last_assistant_message(self, conversation_id, user_id=None):
+        return dict(self._assistant_message)
+
+    async def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
+        self.last_message_patch = {
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "patch": patch,
+            "user_id": user_id,
+        }
+        self._assistant_message.update({"text": patch.get("text", self._assistant_message["text"])})
+        return dict(self._assistant_message)
 
     def stream_message(self, **kwargs):
         self.last_stream_user_id = kwargs.get("user_id")
@@ -149,7 +172,11 @@ def test_chat_message_requires_citations_for_code_or_docs_queries():
     data = resp.json()
     assert data["citations"] == []
     assert data["citation_status"]["status"] == "missing_required"
-    assert "Nao encontrei citacoes rastreaveis" in data["response"]
+    assert data["delivery_status"] == "pending_study"
+    assert "estudando a base" in data["response"].lower()
+    assert data["study_job"]["job_id"]
+    assert data["message_id"] == "77"
+    assert svc.last_message_patch["patch"]["delivery_status"] == "pending_study"
 
 
 def test_chat_message_low_confidence_requires_confirmation(monkeypatch):

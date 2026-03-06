@@ -220,3 +220,46 @@ class ConversationService:
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
+
+    async def replace_last_assistant_message(
+        self, conversation_id: str, new_text: str, user_id: str | None = None
+    ) -> None:
+        try:
+            await asyncio.to_thread(
+                self._repo.replace_last_assistant_message,
+                conversation_id,
+                new_text,
+                user_id,
+            )
+        except ChatRepositoryError as e:
+            raise ChatServiceError(str(e)) from e
+
+    async def get_last_assistant_message(
+        self, conversation_id: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                self._repo.get_last_assistant_message,
+                conversation_id,
+                user_id,
+            )
+        except ChatRepositoryError as e:
+            raise ChatServiceError(str(e)) from e
+
+    async def update_message_payload(
+        self,
+        conversation_id: str,
+        message_id: int,
+        patch: dict[str, Any],
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                self._repo.update_message_payload,
+                conversation_id,
+                message_id,
+                patch,
+                user_id,
+            )
+        except ChatRepositoryError as e:
+            raise ChatServiceError(str(e)) from e

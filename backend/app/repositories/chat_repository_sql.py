@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from datetime import datetime
 from typing import Any
 
@@ -32,6 +33,53 @@ class ChatRepositorySQL:
 
     def _fallback_ts(self, dt: datetime) -> float:
         return dt.timestamp() if isinstance(dt, datetime) else float(dt)
+
+    def _message_to_dict(self, message: Message | dict[str, Any]) -> dict[str, Any]:
+        if isinstance(message, dict):
+            payload = {
+                "id": message.get("id"),
+                "timestamp": self._fallback_ts(message.get("timestamp")),
+                "role": message.get("role"),
+                "text": message.get("text"),
+            }
+            for key in (
+                "citations",
+                "citation_status",
+                "ui",
+                "understanding",
+                "confirmation",
+                "agent_state",
+                "delivery_status",
+                "failure_classification",
+                "provider",
+                "model",
+            ):
+                if key in message and message.get(key) is not None:
+                    payload[key] = deepcopy(message.get(key))
+            return payload
+
+        payload = {
+            "id": str(message.id),
+            "timestamp": self._fallback_ts(message.timestamp),
+            "role": message.role,
+            "text": message.text,
+        }
+        mapping = {
+            "citations": message.citations_json,
+            "citation_status": message.citation_status_json,
+            "ui": message.ui_json,
+            "understanding": message.understanding_json,
+            "confirmation": message.confirmation_json,
+            "agent_state": message.agent_state_json,
+            "delivery_status": message.delivery_status,
+            "failure_classification": message.failure_classification,
+            "provider": message.provider,
+            "model": message.model,
+        }
+        for key, value in mapping.items():
+            if value is not None:
+                payload[key] = deepcopy(value)
+        return payload
 
     def _get_session(self) -> Session:
         if self._session:
@@ -101,7 +149,13 @@ class ChatRepositorySQL:
             if not self._session:
                 s.close()
 
-    def add_message(self, conversation_id: str, role: str, text: str) -> None:
+    def add_message(
+        self,
+        conversation_id: str,
+        role: str,
+        text: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         if self._use_fallback:
             sid = int(conversation_id)
             if sid not in self._fallback_sessions:
@@ -111,20 +165,37 @@ class ChatRepositorySQL:
                 "timestamp": datetime.utcnow(),
                 "role": role,
                 "text": text,
+                **(metadata or {}),
             }
             self._fallback_next_msg_id += 1
             self._fallback_messages.setdefault(sid, []).append(msg)
             self._fallback_sessions[sid]["updated_at"] = datetime.utcnow()
-            return
+            return self._message_to_dict(msg)
         s = self._get_session()
         try:
             sid = int(conversation_id)
-            m = Message(session_id=sid, role=role, text=text)
+            m = Message(
+                session_id=sid,
+                role=role,
+                text=text,
+                citations_json=(metadata or {}).get("citations"),
+                citation_status_json=(metadata or {}).get("citation_status"),
+                ui_json=(metadata or {}).get("ui"),
+                understanding_json=(metadata or {}).get("understanding"),
+                confirmation_json=(metadata or {}).get("confirmation"),
+                agent_state_json=(metadata or {}).get("agent_state"),
+                delivery_status=(metadata or {}).get("delivery_status"),
+                failure_classification=(metadata or {}).get("failure_classification"),
+                provider=(metadata or {}).get("provider"),
+                model=(metadata or {}).get("model"),
+            )
             s.add(m)
             cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
             if cs:
                 cs.updated_at = datetime.utcnow()
             s.commit()
+            s.refresh(m)
+            return self._message_to_dict(m)
         finally:
             if not self._session:
                 s.close()
@@ -144,14 +215,7 @@ class ChatRepositorySQL:
                 "created_at": self._fallback_ts(cs.get("created_at")),
                 "updated_at": self._fallback_ts(cs.get("updated_at")),
                 "summary": cs.get("summary"),
-                "messages": [
-                    {
-                        "timestamp": self._fallback_ts(m.get("timestamp")),
-                        "role": m.get("role"),
-                        "text": m.get("text"),
-                    }
-                    for m in msgs
-                ],
+                "messages": [self._message_to_dict(m) for m in msgs],
             }
         s = self._get_session()
         try:
@@ -177,9 +241,7 @@ class ChatRepositorySQL:
                 "created_at": _ts(cs.created_at),
                 "updated_at": _ts(cs.updated_at),
                 "summary": cs.summary,
-                "messages": [
-                    {"timestamp": _ts(m.timestamp), "role": m.role, "text": m.text} for m in msgs
-                ],
+                "messages": [self._message_to_dict(m) for m in msgs],
             }
         finally:
             if not self._session:
@@ -218,14 +280,7 @@ class ChatRepositorySQL:
                 msgs = [m for m in msgs if self._fallback_ts(m["timestamp"]) > after_ts]
             total_count = len(msgs)
             msgs = msgs[offset : offset + limit]
-            result_messages = [
-                {
-                    "timestamp": self._fallback_ts(m.get("timestamp")),
-                    "role": m.get("role"),
-                    "text": m.get("text"),
-                }
-                for m in msgs
-            ]
+            result_messages = [self._message_to_dict(m) for m in msgs]
             has_more = (offset + len(result_messages)) < total_count
             next_offset = offset + len(result_messages) if has_more else None
             return {
@@ -258,9 +313,7 @@ class ChatRepositorySQL:
             def _ts(d: datetime) -> float:
                 return d.timestamp() if isinstance(d, datetime) else float(d)
 
-            result_messages = [
-                {"timestamp": _ts(m.timestamp), "role": m.role, "text": m.text} for m in messages
-            ]
+            result_messages = [self._message_to_dict(m) for m in messages]
 
             has_more = (offset + len(result_messages)) < total_count
             next_offset = offset + len(result_messages) if has_more else None
@@ -294,11 +347,7 @@ class ChatRepositorySQL:
                 last = msgs[-1] if msgs else None
                 last_dict = None
                 if last:
-                    last_dict = {
-                        "timestamp": self._fallback_ts(last.get("timestamp")),
-                        "role": last.get("role"),
-                        "text": last.get("text"),
-                    }
+                    last_dict = self._message_to_dict(last)
                 result.append(
                     {
                         "conversation_id": str(sid),
@@ -335,11 +384,7 @@ class ChatRepositorySQL:
                 )
                 last_dict = None
                 if last:
-                    last_dict = {
-                        "timestamp": _ts(last.timestamp),
-                        "role": last.role,
-                        "text": last.text,
-                    }
+                    last_dict = self._message_to_dict(last)
                 result.append(
                     {
                         "conversation_id": str(cs.id),
@@ -451,6 +496,145 @@ class ChatRepositorySQL:
             msg.text = new_text
             cs.updated_at = datetime.utcnow()
             s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
+    def replace_last_assistant_message(
+        self, conversation_id: str, new_text: str, user_id: str | None = None
+    ) -> None:
+        if self._use_fallback:
+            sid = int(conversation_id)
+            if sid not in self._fallback_sessions:
+                raise ChatRepositoryError("Conversation not found")
+            msgs = self._fallback_messages.get(sid, [])
+            for msg in reversed(msgs):
+                if str(msg.get("role")) == "assistant":
+                    msg["text"] = new_text
+                    self._fallback_sessions[sid]["updated_at"] = datetime.utcnow()
+                    return
+            raise ChatRepositoryError("Assistant message not found")
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
+                    if not self._user_repo.is_admin(uid):
+                        raise ChatRepositoryError("Access denied: user_id mismatch")
+
+            msg = (
+                s.query(Message)
+                .filter(Message.session_id == sid, Message.role == "assistant")
+                .order_by(desc(Message.timestamp), desc(Message.id))
+                .first()
+            )
+            if msg is None:
+                raise ChatRepositoryError("Assistant message not found")
+            msg.text = new_text
+            cs.updated_at = datetime.utcnow()
+            s.commit()
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_last_assistant_message(
+        self, conversation_id: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        if self._use_fallback:
+            sid = int(conversation_id)
+            if sid not in self._fallback_sessions:
+                raise ChatRepositoryError("Conversation not found")
+            for msg in reversed(self._fallback_messages.get(sid, [])):
+                if str(msg.get("role")) == "assistant":
+                    return self._message_to_dict(msg)
+            raise ChatRepositoryError("Assistant message not found")
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
+                    if not self._user_repo.is_admin(uid):
+                        raise ChatRepositoryError("Access denied: user_id mismatch")
+            msg = (
+                s.query(Message)
+                .filter(Message.session_id == sid, Message.role == "assistant")
+                .order_by(desc(Message.timestamp), desc(Message.id))
+                .first()
+            )
+            if msg is None:
+                raise ChatRepositoryError("Assistant message not found")
+            return self._message_to_dict(msg)
+        finally:
+            if not self._session:
+                s.close()
+
+    def update_message_payload(
+        self,
+        conversation_id: str,
+        message_id: int,
+        patch: dict[str, Any],
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        if self._use_fallback:
+            sid = int(conversation_id)
+            msgs = self._fallback_messages.get(sid, [])
+            msg = next((m for m in msgs if int(m.get("id") or 0) == int(message_id)), None)
+            if msg is None:
+                raise ChatRepositoryError("Message not found")
+            for key, value in patch.items():
+                if value is None:
+                    msg.pop(key, None)
+                else:
+                    msg[key] = deepcopy(value)
+            self._fallback_sessions[sid]["updated_at"] = datetime.utcnow()
+            return self._message_to_dict(msg)
+        s = self._get_session()
+        try:
+            sid = int(conversation_id)
+            msg = (
+                s.query(Message)
+                .filter(Message.id == int(message_id), Message.session_id == sid)
+                .first()
+            )
+            if msg is None:
+                raise ChatRepositoryError("Message not found")
+            cs = s.query(ChatSession).filter(ChatSession.id == sid).first()
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id:
+                uid = self._resolve_user_id(user_id)
+                if uid is not None and cs.user_id is not None and cs.user_id != uid:
+                    if not self._user_repo.is_admin(uid):
+                        raise ChatRepositoryError("Access denied: user_id mismatch")
+            mapping = {
+                "text": "text",
+                "citations": "citations_json",
+                "citation_status": "citation_status_json",
+                "ui": "ui_json",
+                "understanding": "understanding_json",
+                "confirmation": "confirmation_json",
+                "agent_state": "agent_state_json",
+                "delivery_status": "delivery_status",
+                "failure_classification": "failure_classification",
+                "provider": "provider",
+                "model": "model",
+            }
+            for key, column_name in mapping.items():
+                if key not in patch:
+                    continue
+                setattr(msg, column_name, deepcopy(patch.get(key)))
+            cs.updated_at = datetime.utcnow()
+            s.commit()
+            s.refresh(msg)
+            return self._message_to_dict(msg)
         finally:
             if not self._session:
                 s.close()

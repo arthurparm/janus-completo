@@ -104,6 +104,26 @@ def test_parse_tool_calls_does_not_parse_legacy_xml_by_default():
     assert calls == []
 
 
+def test_parse_tool_calls_accepts_envelope_embedded_in_text():
+    service = ToolExecutorService()
+    text = """
+    Vou abrir o arquivo solicitado e depois retorno com um resumo.
+    ```json
+    {
+      "type": "tool_call_envelope",
+      "version": "1.0",
+      "calls": [
+        {"name": "read_file", "args": {"file_path": "README.md"}}
+      ]
+    }
+    ```
+    """
+
+    calls = service.parse_tool_calls(text)
+
+    assert calls == [{"name": "read_file", "args": {"file_path": "README.md"}}]
+
+
 class _ArgsSchema(BaseModel):
     value: int
 

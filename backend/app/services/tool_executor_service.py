@@ -104,12 +104,36 @@ class ToolExecutorService:
         if not stripped:
             return None
 
+        # Fast path: payload is already a single fenced JSON block or raw JSON object.
         fenced = re.fullmatch(r"```(?:json)?\s*(\{.*\})\s*```", stripped, re.DOTALL)
         if fenced:
             return fenced.group(1).strip()
 
         if stripped.startswith("{") and stripped.endswith("}"):
             return stripped
+
+        # Look for JSON fenced blocks anywhere in the text.
+        for match in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text, re.IGNORECASE):
+            candidate = match.group(1).strip()
+            if candidate.startswith("{") and candidate.endswith("}"):
+                try:
+                    decoded = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(decoded, dict) and decoded.get("type") == "tool_call_envelope":
+                    return candidate
+
+        # Fallback: scan for a JSON object embedded in plain text.
+        decoder = json.JSONDecoder()
+        for idx, char in enumerate(text):
+            if char != "{":
+                continue
+            try:
+                decoded, consumed = decoder.raw_decode(text[idx:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(decoded, dict) and decoded.get("type") == "tool_call_envelope":
+                return text[idx : idx + consumed]
         return None
 
     def parse_tool_calls(self, text: str) -> list[dict[str, Any]]:

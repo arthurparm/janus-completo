@@ -200,6 +200,13 @@ class Kernel:
                 await db.create_tables()
             except Exception as e:
                 logger.warning("log_warning", message=f"DB table creation skipped or failed: {e}")
+            try:
+                from app.services.db_migration_service import db_migration_service
+
+                migration_result = await asyncio.to_thread(db_migration_service.migrate_schema)
+                logger.info("db_schema_migration_checked", result=migration_result)
+            except Exception as e:
+                logger.warning("log_warning", message=f"DB migration skipped or failed: {e}")
 
             # Initialize Core Infra
             from app.core.infrastructure.redis_manager import RedisManager
