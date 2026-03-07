@@ -1,9 +1,35 @@
 # Relatório de Revisão de Segurança - Janus
 
-Data de criação: 2026-03-01
+Data de criação: 2026-03-07
 Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que podem ser exploradas, de acordo com o Threat Model.
 
+## Checklist de Segurança Semanal
+- [ ] Executar `npm audit` no frontend para identificar vulnerabilidades de dependências.
+- [ ] Executar `pip-audit` no backend para identificar vulnerabilidades em pacotes Python.
+- [ ] Revisar logs de sistema para segredos ou tokens expostos inadvertidamente.
+- [ ] Validar a presença de rate limiting em todos os endpoints sensíveis (ex: Autenticação).
+- [ ] Verificar permissões e controles de AuthZ em rotas novas ou críticas.
+- [ ] Executar análise estática (ex: Bandit) para identificar injeção de SQL ou comandos OS.
+
 ## Vulnerabilidades Abertas
+
+### 8. Vulnerabilidade de Bypass de Autorização no `@hono/node-server` e outras dependências npm
+- **Caminho:** `frontend/package.json`
+- **Gravidade:** Alta
+- **Descrição:** O `npm audit` detectou diversas vulnerabilidades nas dependências, incluindo o pacote `@hono/node-server` e `hono` com brechas de bypass de autorização e XSS (DOMPurify).
+- **Ação Recomendada:** Atualizar dependências afetadas usando `npm audit fix` ou fixar versões seguras no `package.json`.
+
+### 9. Risco de Injeção de SQL em Tabelas Dinâmicas
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta
+- **Descrição:** Uso de f-strings para construção de nomes de tabelas dinâmicas em consultas SQL cria um potencial de injeção de SQL (alertado pelo Bandit B608).
+- **Ação Recomendada:** Refatorar a construção das queries para usar parâmetros ou sanitização robusta nos nomes das tabelas (identificadores).
+
+### 10. Ausência de Autenticação em Endpoints do Agente Windows
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O script expõe endpoints de interação nativa do sistema operacional (ex: `/screenshot`) via FastAPI sem qualquer mecanismo de autenticação ou autorização.
+- **Ação Recomendada:** Implementar um mecanismo de autenticação de tokens ou restringir o acesso apenas a origens confiáveis (localhost/containers específicos).
 
 ### 1. Header `X-User-Id` Exploit (Impersonation)
 - **Caminho:** `backend/app/core/infrastructure/auth.py`

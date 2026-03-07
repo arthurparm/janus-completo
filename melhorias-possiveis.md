@@ -100,6 +100,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Corrigir potencial Injeção de SQL em tabelas dinâmicas no dedupe_service.py | P1 | S | ideia |
+| SG-021 | Implementar autenticação em endpoints nativos expostos no windows_agent.py | P0 | S | ideia |
+| SG-022 | Sanitizar logs não estruturados em chat_service.py para remover PII | P1 | S | ideia |
+| SG-023 | Ocultar dados biométricos (transcrições) dos logs abertos no daemon.py | P1 | S | ideia |
+| SG-024 | Atualizar e corrigir dependências vulneráveis do frontend (npm audit) | P0 | S | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -238,6 +243,61 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dependencias: telemetria historica confiavel, schema de feedback por acao e fallback deterministico.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Corrigir potencial Injeção de SQL em tabelas dinâmicas no dedupe_service.py
+- Problema atual: Uso de f-strings para definir tabelas no `dedupe_service.py` gera vulnerabilidade (B608).
+- Solucao proposta: Utilizar SQL parametrizado ou abstração segura de nomes de tabelas para queries que geram deduping.
+- Impacto esperado: Menor risco de injeção de SQL e melhora no score em análise do Bandit.
+- Riscos: Falhas de sintaxe em queries dinâmicas após as modificações.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Implementar autenticação em endpoints nativos expostos no windows_agent.py
+- Problema atual: O `windows_agent.py` roda uma FastAPI sem AuthZ, que permite rodar funcionalidades de OS por acesso não autenticado na rede do container.
+- Solucao proposta: Exigir token via dependência local ou aceitar conexões apenas de IPs em uma AllowList estrita do Docker Bridge.
+- Impacto esperado: Prevenir escalonamento de privilégios de containers via acessos arbitrários as funcionalidades Desktop.
+- Riscos: Impedir comunicação legítima caso o container principal perca auth configs na reinicialização.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] Sanitizar logs não estruturados em chat_service.py para remover PII
+- Problema atual: O serviço central de chat usa logs como `logger.info(message.content)` de forma não estruturada.
+- Solucao proposta: Utilizar o módulo interno `memory.security` para rodar regex masks de PII em inputs antes da submissão ao `structlog`.
+- Impacto esperado: Menos informações do usuário no file de logs central (`janus.log`), mantendo contexto sem ferir LGPD.
+- Riscos: Performance e CPU spike com regexes em fluxos pesados e simultâneos de stream chat.
+- Dependencias: Módulo `app.core.memory.security`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-023] Ocultar dados biométricos (transcrições) dos logs abertos no daemon.py
+- Problema atual: Comandos de voz em áudio estão virando texto em `daemon.py` e indo pro log sem censura, gerando PII e dados sensíveis via voz.
+- Solucao proposta: Ofuscar o comando capturado (Ex: `Voice Command received: [REDACTED]`) antes da persistência não segura.
+- Impacto esperado: Diminuição do footprint biométrico no sistema de persistência para LGPD compliance.
+- Riscos: Nenhuma.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-024] Atualizar e corrigir dependências vulneráveis do frontend (npm audit)
+- Problema atual: Bibliotecas como `hono`, `@hono/node-server`, `dompurify` estão desatualizadas com falhas de CSRF/XSS.
+- Solucao proposta: Elevar a versão do framework no `package.json` rodando `npm audit fix --force`.
+- Impacto esperado: Limpar a lista de vulnerabilidades High/Moderate do npm.
+- Riscos: Breakage de pacotes e de middlewares que mudem de assinatura com minor updates.
+- Dependencias: Testes E2E (Playwright) para validarem que o update não feriu navegação do sistema.
+- Prioridade: P0
+- Esforco: S
 - Dono: a definir
 - Status: ideia
 
