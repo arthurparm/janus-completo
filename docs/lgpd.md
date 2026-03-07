@@ -3,6 +3,13 @@
 Data de criação: 2026-03-01
 Objetivo: Mapear fluxos de dados sensíveis e riscos de privacidade dentro do sistema.
 
+## Achados do dia (2026-03-07)
+
+### Vazamento Contínuo de PII em Logs e Armazenamento Temporário
+- **Lacuna / Risco:** Os serviços `ChatEventPublisher`, `CollaborationService` e `ChatCommandHandler` estão gravando dados e preview de mensagens dos usuários nos logs sem aplicar ofuscação (`_publish_to_log` expõe payload original). Adicionalmente, as variáveis de produtividade (`_calendar_events` e `_notes` em `productivity_tools.py`) estão alocadas de forma global e o envio de email (`send_email`) exibe metadados confidenciais (destinatário e assunto) no `.info()`.
+- **Impacto:** Alto risco de privacidade; a gravação continuada de PII mascarada imperfeitamente corrompe o `janus.log` com e-mails e inputs dos colaboradores ou usuários diretos.
+- **Recomendação acionável:** Refatorar a classe `_publish_to_log` aplicando filtros da biblioteca `security.py` já mapeada, isolar variáveis temporais para o disco e mascarar logs do `send_email`.
+
 ## 1. Inventário de Dados e PII (Informações Pessoais Identificáveis)
 Atualmente o sistema processa e interage com as seguintes informações pessoais (PII):
 - E-mails (Remetente e Destinatários via Productivity Tools)

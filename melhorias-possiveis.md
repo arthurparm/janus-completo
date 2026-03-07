@@ -100,6 +100,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | SQL Injection risk in dedupe_service table names (f-strings) | P0 | M | ideia |
+| SG-021 | Proteção de AuthN nos endpoints críticos do windows_agent.py | P0 | S | ideia |
+| SG-022 | Sanitização/PII Redaction para logs do ChatEventPublisher e Collaboration | P1 | S | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -635,9 +638,42 @@ Copiar e preencher:
 - Problema atual: `backend/app/core/tools/productivity_tools.py` possui listas de notas/calendário armazenadas globalmente em memória (`_notes`, `_calendar_events`) vazando contexto através de requests. Além disso, o logger grava emails e ids abertos.
 - Solucao proposta: Remover as globais para um repositório restrito por sessão/DB e ofuscar IDs, e-mails, e assuntos no logger do `send_email`.
 - Impacto esperado: Conformidade com LGPD e eliminação de falhas de isolamento no state application.
+- Riscos: Nenhum direto além do refatoramento da arquitetura in-memory atual.
+- Dependencias: Banco de dados ou cache isolado (ex: File System manager `WORKSPACE_DIR` temporário).
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] SQL Injection risk in dedupe_service
+- Problema atual: Uso inseguro de f-strings com nomes de tabelas dinâmicas pode permitir SQL Injection (Bandit B608).
+- Solucao proposta: Passar os table names ou input columns atráves de identificadores mapeados (`text()` seguros) e remover construção direta.
+- Impacto esperado: Risco zero de invasão via string query manipulation.
+- Riscos: Refatoração pode afetar queries dinâmicas complexas, exigindo validação via Pytest.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Proteção AuthN no windows_agent.py
+- Problema atual: FastAPI do agente windows (`windows_agent.py`) não checa identidades antes de dar acesso ao SO (Porta 5001 exposta com `["*"]` no Docker).
+- Solucao proposta: Validar `X-Agent-Token` no nível de interceptor/middleware e injetar credencial restrita.
+- Impacto esperado: Prevenção de execuções de SO por intrusos ou bad payloads através do host bypass.
+- Riscos: Quebra de comunicação com containers atuais se não houver provisionamento automático do Token no ambiente.
+- Dependencias: Variável de ambiente do contêiner cliente.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] PII Redaction e Sanitização para Handlers e Services
+- Problema atual: Extensa carga de PII do usuário ou artefatos gravados sem restrição em `.info` do `ChatEventPublisher` e handlers de serviço.
+- Solucao proposta: Acoplar `app.core.memory.security` e aplicar a ofuscação de PII diretamente no `_publish_to_log` e payloads.
+- Impacto esperado: Redução substancial da área de ataque para vazamento de Informação Pessoal no Log Aggregator e arquivos de storage offline (`janus.log`).
 - Riscos: Redução de velocidade na execução destas ferramentas caso banco/cache esteja lento.
 - Dependencias: Camada de mascaramento em `logging_config.py`.
 - Prioridade: P1
-- Esforco: M
+- Esforco: S
 - Dono: a definir
 - Status: ideia

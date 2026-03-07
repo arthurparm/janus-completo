@@ -3,6 +3,33 @@
 Data de criação: 2026-03-01
 Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que podem ser exploradas, de acordo com o Threat Model.
 
+## Achados do dia (2026-03-07)
+
+**Checklist Executado:**
+- [x] Varredura incremental de commits (24h/última execução).
+- [x] Checagem de ausência de validação de entrada/Auth.
+- [x] Auditoria de AppSec (`npm audit` e `pip-audit`).
+- [x] Análise de logs em busca de metadados sensíveis e vazamentos PII.
+- [x] Triagem de dependências físicas em ambientes restritos.
+
+### 1. Vulnerabilidade no Windows Agent (OS Capabilities Expostas)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O script standalone FastAPI `windows_agent.py` expõe endpoints críticos do sistema operacional (como `/screenshot`, TTS e notificações) na porta 5001 (`0.0.0.0`) sem nenhum mecanismo de Autenticação (AuthN) ou Autorização (AuthZ).
+- **Ação Recomendada:** Adicionar mecanismo de autenticação via token (ex: validação de um `X-Agent-Token`) antes de liberar acesso aos recursos do host e fechar o CORS para origens específicas, se possível.
+
+### 2. SQL Injection Risk (Bandit B608)
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta
+- **Descrição:** Potencial vulnerabilidade de SQL Injection devido ao uso de f-strings dinâmicas para a construção de nomes de tabelas nas queries SQLAlchemy.
+- **Ação Recomendada:** Refatorar o SQLAlchemy para sanitizar estritamente a entrada e mapeamento da tabela ou usar identificadores parametrizados seguros da própria ORM.
+
+### 3. Falha/Limitação na Auditoria de Dependências (AppSec)
+- **Caminho:** `backend/requirements.txt`
+- **Gravidade:** Baixa
+- **Descrição:** O `pip-audit` falhou (Exception) devido à dependência `tflite-runtime` possuir constraints restritas de versões do Python incompatíveis com o ambiente padrão de CI/Auditoria, ofuscando a análise contínua das demais dependências.
+- **Ação Recomendada:** Documentar a limitação e executar auditorias em ambientes com o python estritamente compatível para garantir cobertura completa.
+
 ## Vulnerabilidades Abertas
 
 ### 1. Header `X-User-Id` Exploit (Impersonation)
