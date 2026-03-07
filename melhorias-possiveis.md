@@ -100,6 +100,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Corrigir potencial SQL Injection em queries f-string no DedupeService | P1 | S | ideia |
+| SG-021 | Windows Agent: implementar API Keys / AuthN para evitar RCE e exposição de OS APIs | P0 | S | ideia |
+| SG-022 | Windows Agent: LGPD - adicionar registro de auditoria e/ou ofuscação de PII na captura de tela | P2 | M | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -120,6 +123,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
+| OQ-017 | Substituir uso de standard random por secrets (Bandit B311) no auto_analysis.py | P2 | S | ideia |
 
 ---
 
@@ -238,6 +242,50 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dependencias: telemetria historica confiavel, schema de feedback por acao e fallback deterministico.
 - Prioridade: P1
 - Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-020] Corrigir potencial SQL Injection em queries f-string no DedupeService
+- Problema atual: `backend/app/services/dedupe_service.py` utiliza f-strings para construir consultas SQL iterando nomes de tabelas, sendo reportado pelo Bandit (B608) como risco de injeção.
+- Solucao proposta: Validar rigorosamente os inputs em um whitelist explícito estrito antes de passá-los para a interpolação ou migrar para construtores seguros do SQLAlchemy/Psycopg.
+- Impacto esperado: Remover a vulnerabilidade de Injeção de SQL identificada por SAST.
+- Riscos: Quebra de consultas se as definições do whitelist esquecerem uma tabela do banco de dados.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Windows Agent exposto na rede sem API Keys ou Autenticação (AuthN)
+- Problema atual: O serviço `backend/windows_agent.py` serve as OS capabilities (notificações, TTS e captura de tela) em porta aberta sem middleware de autenticação, podendo expor dados vitais ou levar a execução de código remota.
+- Solucao proposta: Implementar uma camada de Header Validation (API-Key) para todas as rotas e injetá-la como segredo através da comunicação do Container (Janus Backend) -> Host.
+- Impacto esperado: Impedir uso indevido e acesso à OS do host via requisições de outras máquinas da rede.
+- Riscos: Desalinhamento da chave causaria falha na execução do agente (Circuit Breaker deve acionar).
+- Dependencias: O `config.py` do backend precisará de uma nova ENV de token local.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] LGPD/Segurança: Windows Agent com ausência de Auditoria e Risco em Captura de Tela
+- Problema atual: As capturas de tela obtidas pelo `windows_agent.py` ocorrem sob demanda sem registros estruturados das chamadas, e o conteúdo de tela pode vazar informações críticas sobre a máquina hospedeira do usuário.
+- Solucao proposta: Exigir a criação de um Log de Auditoria estrito cada vez que o Agente é acionado, e considerar OCR simples on-the-fly para ofuscar (PII) senhas/emails expostos na tela antes do envio final à Engine (Agent).
+- Impacto esperado: Maior segurança e documentação de ações tomadas pelo framework, em compasso com LGPD.
+- Riscos: Ofuscação por OCR pode atrasar severamente a resposta (alta latência).
+- Dependencias: Avaliação de OCR local (ex: Tesseract).
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [OQ-017] Geração Insegura de Seleção Randômica para uso não-criptográfico (Bandit B311)
+- Problema atual: O endpoint de "Auto Analysis" em `backend/app/api/v1/endpoints/auto_analysis.py` utiliza `random.choice(facts)` que é vulnerável a previsibilidade na seed, apesar do contexto ser inofensivo no momento.
+- Solucao proposta: Substituir o módulo padrão `random` por `secrets.choice`, que é cryptographic-safe conforme as boas práticas do framework.
+- Impacto esperado: Fechar mais uma finding do Bandit no projeto.
+- Riscos: Nenhum impacto funcional esperado.
+- Dependencias: Módulo padrão `secrets`.
+- Prioridade: P2
+- Esforco: S
 - Dono: a definir
 - Status: ideia
 

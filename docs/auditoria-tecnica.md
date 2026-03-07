@@ -73,3 +73,26 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+## Achados do dia (2026-03-07)
+
+### 7. Injeção de SQL e Geração Insegura de Random (Segurança/Qualidade)
+**Descrição:** Identificou-se o uso de f-strings dinâmicas para nomes de tabelas em consultas SQL em rotinas de deduplicação, representando potencial vulnerabilidade de Injeção de SQL. Além disso, rotinas de auto-análise geram seleções randômicas utilizando módulos inseguros para propósitos criptográficos (Bandit B311, B608).
+**Evidências:**
+- `backend/app/services/dedupe_service.py`: Consultas formatadas de forma insegura (ex: `f"UPDATE {table} SET user_id = :canon..."`).
+- `backend/app/api/v1/endpoints/auto_analysis.py`: Uso de `import random` e `random.choice(facts)` em vez do módulo mais seguro `secrets.choice`.
+
+**Próximos passos:**
+- Sanitizar/validar rigorosamente a variável `{table}` contra um allowlist explícito antes da interpolação.
+- Substituir `random.choice` por `secrets.choice`.
+- Adicionar issue SG-020 (SQLi) e SG-021 (Random inseguro) ao backlog.
+
+### 8. Windows Agent Exposto e Captura de Tela sem Auditoria (Segurança/LGPD)
+**Descrição:** O agente de integração Windows em FastAPI (utilizado para interagir com o host) expõe funcionalidades críticas do SO, como captura de tela, leitura de títulos de janelas, síntese de voz (TTS) e notificações sem nenhum mecanismo de autenticação (AuthN) ou autorização (AuthZ). Ademais, as capturas de tela e ações não possuem registros de auditoria ou ofuscação de PII por padrão.
+**Evidências:**
+- `backend/windows_agent.py`: Endpoints como `/screenshot` e `/window/title` respondem livremente na porta 5001 sob a permissão do usuário de SO que roda o agente, sem tokens JWT ou API Keys.
+
+**Próximos passos:**
+- Implementar autenticação baseada em token JWT (ou uma API Key forte via env var configurável localmente) no `windows_agent.py`.
+- Implementar ofuscação de tela on-the-fly para PII ou registro obrigatório de auditoria (audit trail) a cada requisição aceita.
+- Adicionar issue SG-022 (AuthN Windows Agent) e SG-023 (LGPD/Captura não auditada) ao backlog.
