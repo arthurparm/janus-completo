@@ -241,6 +241,72 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dono: a definir
 - Status: ideia
 
+### [SG-020] Risco de SQL Injection via Construção de Strings Dinâmicas
+- Problema atual: O serviço `backend/app/services/dedupe_service.py` utiliza interpolação de string literal (f-strings) com identificadores não sanitizados (`UPDATE {table} SET...`) para executar queries no DB (Bandit B608).
+- Solucao proposta: Migrar as implementações em `dedupe_service.py` para declarações seguras usando sintaxe de objetos ORM do SQLAlchemy ou sanitizando rigidamente a lista de tabelas autorizadas.
+- Impacto esperado: Remoção imediata do risco de execução de código arbitrário e injeção (SQL Injection).
+- Riscos: Interrupções eventuais no serviço de Deduplicação e lentidão em jobs.
+- Dependencias: Nenhuma
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Interface do Windows Agent sem Autenticação
+- Problema atual: A aplicação FastAPI nativa do Windows (`backend/windows_agent.py`) não possui mecanismos de AuthN ou AuthZ na porta 5001. Qualquer tráfego recebido pode enviar ou obter interações com o SO (ex: Screenshot, Notificações).
+- Solucao proposta: Proteger todos os endpoints injetando autenticação por chave/Bearer token ou isolar na interface de loopback bloqueando explicitamente solicitações não autenticadas de containers remotos.
+- Impacto esperado: Eliminação do vetor de ataque OS interaction/impersonation local.
+- Riscos: Containers no backend poderão não conseguir acessar a ferramenta caso chaves/secretas não sejam perfeitamente sincronizadas via environment.
+- Dependencias: Camada de orquestração local de rede.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] Risco LGPD em Captura de Tela sem Ofuscação/Minimização
+- Problema atual: As APIs do Windows Agent de Screenshot não aplicam restrições, ofuscações e operam no modo indiscriminado capturando telas potencialmente contendo informações sensíveis/PII do usuário sem notificação adequada de log/audit.
+- Solucao proposta: Aplicar redação (Blur/OCR PII Masking) pós-captura nos buffers da imagem (via modelo local) antes do envio HTTP ao container consumindo o log e minimizando os espaços das capturas.
+- Impacto esperado: Conformidade estrita com LGPD no processamento Visual e Minimization Policies.
+- Riscos: Perda de utilidade dos LLMs Multimodais durante interações ou lentidão (overhead) para enviar imagens.
+- Dependencias: Serviços ou bibliotecas de visão computacional leves/OCR ofuscadores.
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: ideia
+
+### [SG-023] Vazamento de Comandos de Voz PII
+- Problema atual: Interface `backend/app/interfaces/daemon/daemon.py` grava e faz logging extenso dos dados biometrizados/STT (Comandos de Voz processados) indiscriminadamente.
+- Solucao proposta: Adicionar um `PIIRedactor` ao injetor de streams do Daemon ou reduzir drasticamente a quantidade de caracteres permitidos para dump em arquivos locais.
+- Impacto esperado: Menor retenção desnecessária de conversações cruas na rede local e em disco.
+- Riscos: Redução de contexto nos debugs de interações audíveis.
+- Dependencias: `memory/security.py` redactor.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-024] Dependências Críticas Frontend Vulneráveis (npm audit)
+- Problema atual: Diversas bibliotecas frontend (ex: `@hono/node-server`, `dompurify`, `express-rate-limit`) contém vulnerabilidades severas, abrindo brechas para bypass de Auth e XSS no painel.
+- Solucao proposta: Aplicar o comando de remediação `npm audit fix` ou fazer upgrades/bumps manuais das dependências comprometidas no `frontend/package.json`.
+- Impacto esperado: Resolução estrutural das cadeias de dependências e bloqueio a exploits documentados.
+- Riscos: Breaking changes no código/views após a alteração forçada das dependências.
+- Dependencias: Pipeline de testes end-to-end do frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-025] Uso de Pseudo-Random Generators Inseguros (Bandit)
+- Problema atual: O endpoint `backend/app/api/v1/endpoints/auto_analysis.py` utiliza do pacote python padrão `random` (`random.choice`) ao invés do `secrets` exigido pelas normativas de AppSec criptográfico (Bandit B311).
+- Solucao proposta: Substituir por `secrets.choice()` ou gerar uma exceção `# nosec` confirmando ausência de risco criptográfico se for apenas log de curiosidades (fatos).
+- Impacto esperado: Eliminar flags críticas no Linter de Segurança (pip-audit/bandit) e adequar a arquitetura ao standard Python Security guidelines.
+- Riscos: Nulo.
+- Dependencias: stdlib python.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
 ---
 
 ### [AI-014] Deteccao preditiva de anomalias operacionais em latencia, erro e filas
