@@ -26,3 +26,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ## 4. Recomendações Recentes
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
+
+## Achados do dia (2026-03-08)
+
+### Lacunas e Impacto
+- **Captura de Tela Indiscriminada:** O serviço `backend/windows_agent.py` capta a tela do usuário através do endpoint `/screenshot` e disponibiliza sem registros de auditoria ou ofuscação (PII), ferindo princípios de minimização (Coleta Excessiva).
+- **Voz Logada sem Minimização:** O `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz (dados biométricos indiretos e possivelmente sensíveis) nos logs da aplicação em claro.
+
+### Próximos Passos
+1. **Adicionar Auditoria e Redação Visual:** No `windows_agent.py`, logar toda requisição com escopo, finalidade e ofuscar ativamente áreas sensíveis do display antes de retorná-lo.
+2. **Filtrar Logs do Daemon:** Integrar uma camada de _PII scrubbing_ aos canais do logger em `daemon.py` para os conteúdos textuais transcritos dos comandos vocais.
