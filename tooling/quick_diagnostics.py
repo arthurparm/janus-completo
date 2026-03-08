@@ -12,6 +12,21 @@ from typing import Any, Callable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+REQUIRED_ENV_KEYS: dict[str, list[str]] = {
+    ".env.pc1": [
+        "POSTGRES_PASSWORD",
+        "RABBITMQ_PASSWORD",
+        "NEO4J_PASSWORD",
+        "QDRANT_API_KEY",
+        "OLLAMA_HOST",
+    ],
+    ".env.pc2": [
+        "NEO4J_PASSWORD",
+        "QDRANT_API_KEY",
+        "OLLAMA_ORCHESTRATOR_MODEL",
+    ],
+}
+PLACEHOLDER_MARKERS = ("SEU_DOMINIO_OU_IP", "__REQUIRED__", "changeme", "your_value_here")
 
 
 def _http_probe(url: str, timeout: float, insecure_tls: bool) -> dict[str, Any]:
@@ -60,8 +75,34 @@ def _config_checks(config_paths: list[str] | None = None) -> list[dict[str, Any]
     for rel in paths:
         absolute = REPO_ROOT / rel
         exists = absolute.exists()
-        results.append({"file": rel, "ok": exists, "absolute_path": str(absolute)})
+        check: dict[str, Any] = {"file": rel, "ok": exists, "absolute_path": str(absolute)}
+        env_profile = Path(rel).name
+        if exists and env_profile in REQUIRED_ENV_KEYS:
+            env_values = _parse_env_file(absolute)
+            required_keys = REQUIRED_ENV_KEYS[env_profile]
+            missing_keys = [key for key in required_keys if not env_values.get(key, "").strip()]
+            placeholder_keys = [
+                key
+                for key in required_keys
+                if any(marker in env_values.get(key, "") for marker in PLACEHOLDER_MARKERS)
+            ]
+            check["required_keys"] = required_keys
+            check["missing_keys"] = missing_keys
+            check["placeholder_keys"] = placeholder_keys
+            check["ok"] = not missing_keys and not placeholder_keys
+        results.append(check)
     return results
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
 
 
 def build_report(
@@ -148,6 +189,23 @@ def _print_summary(report: dict[str, Any]) -> None:
     print(f"- deps_tcp_ok: {summary['deps_tcp_ok']}")
     print(f"- config_ok: {summary['config_ok']}")
     print(f"- overall_ok: {summary['overall_ok']}")
+    failed_configs = [
+        item
+        for item in report.get("config_checks", [])
+        if not item.get("ok", False)
+    ]
+    if failed_configs:
+        print("- config_failures:")
+        for item in failed_configs:
+            detail_parts = []
+            missing = item.get("missing_keys", [])
+            placeholders = item.get("placeholder_keys", [])
+            if missing:
+                detail_parts.append(f"missing={','.join(missing)}")
+            if placeholders:
+                detail_parts.append(f"placeholder={','.join(placeholders)}")
+            details = f" ({'; '.join(detail_parts)})" if detail_parts else ""
+            print(f"  - {item['file']}{details}")
 
 
 def main() -> int:
