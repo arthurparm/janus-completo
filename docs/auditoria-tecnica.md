@@ -73,3 +73,43 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+## Achados do dia (2026-03-08)
+
+### 7. Segurança de Host e Endpoints Expostos
+**Descrição:** O agente de Windows (`backend/windows_agent.py`) levanta um servidor FastAPI na porta 5001 expondo capacidades destrutivas e invasivas do OS (Screen Capture, Notificações Toast e Text-to-Speech) sem aplicar nenhum controle de acesso ou autenticação.
+**Evidências:**
+- `backend/windows_agent.py`: A inicialização ocorre com `uvicorn.run(app, host="0.0.0.0", port=5001)` e endpoints (ex: `@app.post("/screenshot")`) não exigem credenciais.
+
+**Próximos passos:**
+- Implementar verificação de token ou header (`Depends(verify_token)`) para garantir que apenas o daemon do Docker Janus possa acessar esses endpoints.
+- Registrar SG-021 no backlog.
+
+### 8. Risco de LGPD e Privacidade em Captura de Tela
+**Descrição:** Ainda em `backend/windows_agent.py`, a ferramenta de captura de tela é capaz de gravar a área de trabalho inteira (fallback default de `ImageGrab.grab()` ou quando modo explícito for "full"). Isso implica que PII do usuário hospedado (mensagens pessoais, emails no fundo) podem ser gravados pelo agente sem ofuscação/minimização e sem log de auditoria explícito de consentimento.
+**Evidências:**
+- `backend/windows_agent.py`: Em `capture_active_window()`, se a janela não for detectada ou pywin32 falhar, ele faz o fallback global `return ImageGrab.grab()`.
+
+**Próximos passos:**
+- Adicionar logs de auditoria atrelando capturas ao request_id original. Restringir a captura "full" via flag de consentimento explícito, favorecendo sempre recortes mínimos (active window).
+- Adicionar issue SG-022 no backlog de melhorias.
+
+### 9. Vulnerabilidades Mapeadas de Dependências
+**Descrição:** O Frontend acumula dependências defasadas ou com exploits conhecidos atestados via `npm audit` (ex: dompurify e node-server).
+**Evidências:**
+- Packages como `@hono/node-server`, `dompurify` e `express-rate-limit` no ecossistema do frontend apresentam issues de segurança de rede e XSS em suas versões atuais.
+
+**Próximos passos:**
+- Atualizar a árvore de dependências no pacote do frontend, validando eventuais breaking changes.
+- Adicionar a issue SG-024 no `melhorias-possiveis.md`.
+
+### 10. Vulnerabilidades de Código Fonte (Bandit)
+**Descrição:** O analisador estático (Bandit) identificou dois riscos médios/críticos relacionados ao uso de bibliotecas na base de código, nomeadamente injeção de SQL e geração insegura de números.
+**Evidências:**
+- `backend/app/services/dedupe_service.py`: Construção de comandos SQL (ex: `f"UPDATE {table} SET user_id = :canon WHERE user_id IN :dups"`) usando f-strings pode abrir brechas caso o parâmetro `table` seja corrompido ou manipulado futuramente. Risco de SQL Injection (Bandit B608).
+- `backend/app/api/v1/endpoints/auto_analysis.py`: Uso do `random` padrão para lidar com dados possivelmente aplicados a fluxos sensíveis, o que é inseguro criptograficamente (Bandit B311).
+
+**Próximos passos:**
+- Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
+- Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
+- Documentar SG-020 e SG-025 no backlog.

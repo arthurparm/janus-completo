@@ -241,6 +241,61 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Dono: a definir
 - Status: ideia
 
+### [SG-020] Potencial SQL Injection em queries dinâmicas (Bandit B608)
+- Problema atual: `backend/app/services/dedupe_service.py` constrói nomes de tabelas dinamicamente com f-strings nas queries SQL, apresentando um risco de injeção mapeado (Bandit B608).
+- Solucao proposta: Substituir a construção dinâmica de queries por parametrização adequada e validação estrita dos nomes de tabelas permitidos.
+- Impacto esperado: Mitigação de risco crítico de SQL Injection.
+- Riscos: Quebra do fluxo de deduplicação se a validação dos nomes das tabelas não for precisa.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-021] Endpoint Windows Agent sem Autenticação
+- Problema atual: `backend/windows_agent.py` expõe endpoints críticos do sistema operacional hospedeiro (screenshot, notify, speak) na porta 5001 sem mecanismo de autenticação (AuthN/AuthZ).
+- Solucao proposta: Implementar uma camada de autenticação leve no FastAPI (como um token em um cabeçalho ou query param), garantindo que apenas requisições originárias do container do Janus sejam autorizadas.
+- Impacto esperado: Bloqueio de acessos não autorizados e execução remota não autenticada no host Windows.
+- Riscos: Nenhuma falha esperada desde que o docker-compose passe a credencial correta.
+- Dependencias: Passagem de um secret compartilhado entre Janus container e Windows Agent.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-022] Risco LGPD em Screenshots Full Screen no Windows Agent
+- Problema atual: O endpoint de captura de tela no `backend/windows_agent.py` pode capturar todo o ambiente de trabalho (quando o fallback para a captura full screen ocorre ou modo "full" é invocado), sem log de auditoria, caracterizando um risco em termos de minimização de dados e LGPD.
+- Solucao proposta: Adicionar um mecanismo de consentimento, auditar cada captura via log central e restringir por padrão a captura para apenas a janela ativa ou mascarar áreas sensíveis.
+- Impacto esperado: Cumprimento dos princípios da LGPD de necessidade, minimização de dados e responsabilidade (trilha de auditoria).
+- Riscos: Desafios técnicos no processamento ou mascaramento em tempo real se a performance for afetada.
+- Dependencias: Mecanismo de logging centralizado ou local seguro.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-024] Vulnerabilidades em dependências do frontend (npm audit)
+- Problema atual: Múltiplas dependências do frontend (`@hono/node-server`, `dompurify`, e `express-rate-limit`) possuem vulnerabilidades ativas mapeadas através do `npm audit`.
+- Solucao proposta: Atualizar as versões destas dependências para suas correções seguras e realizar regressão nos testes do frontend.
+- Impacto esperado: Resolução imediata de vulnerabilidades introduzidas pelas bibliotecas no ecossistema do frontend.
+- Riscos: Breaking changes causadas por atualizações major/minor das libs listadas.
+- Dependencias: Ajuste de dependências no `package.json`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-025] Geração pseudo-aleatória insegura (Bandit B311)
+- Problema atual: A rotina no arquivo `backend/app/api/v1/endpoints/auto_analysis.py` usa funções de geração pseudo-aleatórias (do módulo padrão `random`), as quais são inseguras para propósitos criptográficos ou tokens.
+- Solucao proposta: Substituir o uso do módulo `random` pelo módulo `secrets` integrado no Python para gerações críticas ou aleatoriedades seguras.
+- Impacto esperado: Remoção de um alerta do analisador de segurança (Bandit B311) e blindagem contra ataques à aleatoriedade do sistema.
+- Riscos: Pequena chance de problema caso as rotinas exijam um seed determinístico estrito, embora indesejável para segurança.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
 ---
 
 ### [AI-014] Deteccao preditiva de anomalias operacionais em latencia, erro e filas
