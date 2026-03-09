@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing'
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { provideHttpClient } from '@angular/common/http'
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing'
 import { AuthService } from './auth.service'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
+import { firstValueFrom, filter, take } from 'rxjs'
 
 describe('AuthService', () => {
   let http: HttpTestingController
@@ -10,7 +12,7 @@ describe('AuthService', () => {
     localStorage.clear()
     sessionStorage.clear()
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     })
     http = TestBed.inject(HttpTestingController)
   })
@@ -115,7 +117,7 @@ describe('AuthService', () => {
     expect(req.request.method).toBe('GET')
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
-    await Promise.resolve()
+    await firstValueFrom(svc.authReady$.pipe(filter(Boolean), take(1)))
     expect(svc.isAuthenticated()).toBe(true)
     expect(svc.currentUserValue?.email).toBe('a@b.com')
   })
@@ -128,8 +130,23 @@ describe('AuthService', () => {
     expect(req.request.method).toBe('GET')
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
-    await Promise.resolve()
+    await firstValueFrom(svc.authReady$.pipe(filter(Boolean), take(1)))
     expect(svc.isAuthenticated()).toBe(true)
     expect(svc.currentUserValue?.email).toBe('a@b.com')
+  })
+
+  it('deve limpar sessao quando token persistido estiver invalido', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'expired.jwt')
+
+    const svc = TestBed.inject(AuthService)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/me`)
+    expect(req.request.method).toBe('GET')
+    req.flush({ detail: 'Invalid token' }, { status: 401, statusText: 'Unauthorized' })
+
+    await firstValueFrom(svc.authReady$.pipe(filter(Boolean), take(1)))
+    expect(svc.isAuthenticated()).toBe(false)
+    expect(svc.currentUserValue).toBeNull()
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
   })
 })
