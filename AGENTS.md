@@ -464,6 +464,11 @@ python backend/scripts/benchmark_complex_process.py --base-url http://localhost:
 python backend/scripts/benchmark_complex_process.py --base-url http://localhost:8000 --mode llm --runs 3
 ```
 
+Quick diagnostics CLI (health + deps + config):
+```bash
+python tooling/quick_diagnose.py --base-url http://100.89.17.105:8000 --output-json outputs/qa/quick_diagnose.json
+```
+
 Benchmark script options often used for tuning:
 ```bash
 python backend/scripts/benchmark_complex_process.py \
