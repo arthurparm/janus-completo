@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing'
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { provideHttpClient } from '@angular/common/http'
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing'
 import { AuthService } from './auth.service'
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
 
@@ -10,7 +11,10 @@ describe('AuthService', () => {
     localStorage.clear()
     sessionStorage.clear()
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     })
     http = TestBed.inject(HttpTestingController)
   })
@@ -33,6 +37,7 @@ describe('AuthService', () => {
     expect(result.ok).toBe(true)
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    http.expectNone(`${API_BASE_URL}/v1/auth/local/me`)
   })
 
   it('deve fazer login com remember=false e salvar token no sessionStorage', async () => {
@@ -45,6 +50,7 @@ describe('AuthService', () => {
     expect(result.ok).toBe(true)
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    http.expectNone(`${API_BASE_URL}/v1/auth/local/me`)
   })
 
   it('deve retornar erro mapeado para 401', async () => {
@@ -105,6 +111,7 @@ describe('AuthService', () => {
     const result = await promise
     expect(result.ok).toBe(false)
     expect(result.error).toContain('Token invalido ou expirado')
+    http.expectNone(`${API_BASE_URL}/v1/auth/local/me`)
   })
 
   it('deve restaurar sessao quando existir token local', async () => {
