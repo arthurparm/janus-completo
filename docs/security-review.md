@@ -83,3 +83,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Evidência:** Execução de `pip-audit` falhou.
 - **Descrição:** Ambiente restrito ou dependências conflitantes/faltantes impediram a varredura completa do `requirements.txt`.
 - **Ação Recomendada:** Garantir pré-instalação de ambiente reprodutível (lockfile) para as varreduras do `pip-audit`.
+
+### Achados do dia (2026-03-09)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 12. Senhas e Secrets Impressos em Logs e Ferramentas
+- **Caminhos:** `backend/scripts/benchmark_complex_process.py`, `backend/tests/chaos_harness.py`, `backend/tests/e2e/test_realtime_observability.py`, `tooling/run_api_e2e_all.py`, `backend/tests/verify_secret_management.py`
+- **Gravidade:** Alta
+- **Descrição:** Scripts e ferramentas de teste/desenvolvimento que utilizam prints brutos (`print("password")` ou similares) e contém credenciais hardcoded, podendo vazar segredos de infraestrutura ou chaves para logs de CI/CD ou saídas de terminal.
+- **Ação Recomendada:** Utilizar variáveis de ambiente configuradas, mascarar saídas (scrubbing) e remover senhas estáticas de ferramentas de linha de comando.
+
+### 13. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** 6 vulnerabilidades encontradas (1 moderada, 5 altas) nos pacotes `dompurify` (Cross-site Scripting), `express-rate-limit` (IPv4-mapped IPv6 bypass), `hono` (Cookie Attribute Injection, SSE Control Field Injection, file access via serveStatic), `immutable` (Prototype Pollution), `tar` (Path Traversal). O `@hono/node-server` também persiste com a falha relatada anteriormente (authorization bypass).
+- **Ação Recomendada:** Atualizar os pacotes utilizando `npm audit fix` ou instalar versões mais recentes manualmente.
+
+### 14. Vulnerabilidade no pip (Backend)
+- **Caminho:** `backend/requirements.txt` (ou pacote root) / `pip-audit`
+- **Gravidade:** Média/Baixa
+- **Descrição:** A ferramenta `pip-audit` identificou a vulnerabilidade CVE-2026-1703 no pacote `pip` (versão 25.3).
+- **Ação Recomendada:** Atualizar a versão do `pip` para a versão recomendada (26.0).

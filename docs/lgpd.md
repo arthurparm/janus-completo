@@ -36,3 +36,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Adicionar Auditoria e Redação Visual:** No `windows_agent.py`, logar toda requisição com escopo, finalidade e ofuscar ativamente áreas sensíveis do display antes de retorná-lo.
 2. **Filtrar Logs do Daemon:** Integrar uma camada de _PII scrubbing_ aos canais do logger em `daemon.py` para os conteúdos textuais transcritos dos comandos vocais.
+
+## Achados do dia (2026-03-09)
+
+### Lacunas e Impacto
+- **Vazamento Secundário em Ferramentas e Logs de Infraestrutura:** Ferramentas de CI, QA e testes (e.g. `tooling/run_api_e2e_all.py`, `backend/scripts/benchmark_complex_process.py`) imprimem informações abertas, como senhas de simulação, inputs raw e tokens no terminal de saída. Em ambientes corporativos, essas saídas viram logs centralizados (DataDog/CloudWatch), resultando em armazenamento indevido (Secondary Leakage).
+
+### Próximos Passos
+1. **Padronizar Saídas de Scripts (Masking):** Integrar o utilitário de redação de PII (`backend/app/core/memory/security.py`) mesmo nas ferramentas e scripts de testes antes da impressão em tela de dados mockados sensíveis que possam ir para logs da CI.

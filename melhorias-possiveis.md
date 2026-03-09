@@ -647,3 +647,47 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-029] Senhas e Secrets Impressos em Logs e Ferramentas CI/CD
+- Problema atual: Ferramentas de desenvolvimento, QA e scripts (e.g. `tooling/run_api_e2e_all.py`, `benchmark_complex_process.py`) exibem dados sensíveis e secrets explicitamente em saídas que podem ser logadas pela CI.
+- Solucao proposta: Substituir prints hardcoded por loggers configurados com ofuscação de segredos ou usar variáveis de ambiente sem fazer eco de seu valor real.
+- Impacto esperado: Evitar vazamento de credenciais na visualização e armazenamento de logs do pipeline CI/CD.
+- Riscos: Dificuldade ocasional no debug para desenvolvedores locais sem as chaves mascaradas.
+- Dependencias: Ajustes de testes.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Atualização de Dependências Críticas no Frontend (NPM Audit)
+- Problema atual: O Frontend apresenta vulnerabilidades em componentes chave: `dompurify` (XSS), `express-rate-limit` (Bypass), `hono` (Injection/Bypass), `immutable` (Prototype Pollution) e `tar` (Path Traversal).
+- Solucao proposta: Executar `npm audit fix` ou atualizar os pacotes afetados manualmente testando compatibilidade.
+- Impacto esperado: Prevenir vetores de ataque XSS e Path Traversal reportados em dependências subjacentes.
+- Riscos: Quebra de build no frontend se a nova versão da lib for imcompatível com outras dependências.
+- Dependencias: Testes E2E (Playwright) para validação.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade no Pacote PIP
+- Problema atual: `pip-audit` apontou a CVE-2026-1703 no gerenciador local `pip`.
+- Solucao proposta: Fazer upgrade do `pip` base em todas as imagens Docker e fluxos de CI (`pip install --upgrade pip>=26.0`).
+- Impacto esperado: Maior segurança na gestão de pacotes do ambiente Python.
+- Riscos: Impacto potencial na instalação de dependências legado.
+- Dependencias: Atualização nas instruções Dockerfile ou scripts de CI.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] LGPD: Vazamento de PII em Artefatos de Infraestrutura (Tooling/QA)
+- Problema atual: Ferramentas periféricas podem gerar Secondary Leakage por não aderirem aos padrões estritos de logging e ofuscação da aplicação principal.
+- Solucao proposta: Aplicar um wrapper unificado de scrubbing de PII que possa ser invocado pelos scripts em `tooling/` antes de imprimir saídas longas ou requisições.
+- Impacto esperado: Menor pegada de dados não tratados sendo arquivados por serviços externos.
+- Riscos: Ocultar dados mockados durante simulações, dificultando testes de unidade/QA se ofuscação for demasiada abrangente.
+- Dependencias: `backend/app/core/memory/security.py`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
