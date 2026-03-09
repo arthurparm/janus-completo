@@ -1,8 +1,8 @@
-import structlog
 import asyncio
 import json
 from typing import Any, List
 
+import structlog
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
 from langgraph.types import Command
@@ -162,6 +162,145 @@ def _is_waiting_for_human_approval(next_value: object) -> bool:
         return "human_approval" in next_value
     # Legacy stubs may expose only a truthy flag.
     return bool(next_value)
+
+
+def _load_pending_action_context(args_json: str | None) -> dict[str, Any]:
+    if not args_json:
+        return {}
+    try:
+        parsed = json.loads(args_json)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _build_resolved_confirmation_payload(
+    confirmation: dict[str, Any] | None,
+    *,
+    status_value: str,
+) -> dict[str, Any]:
+    payload = dict(confirmation or {})
+    payload["required"] = False
+    payload["status"] = status_value
+    payload.pop("approve_endpoint", None)
+    payload.pop("reject_endpoint", None)
+    return payload
+
+
+def _build_resolved_understanding_payload(
+    understanding: dict[str, Any] | None,
+    *,
+    status_value: str,
+) -> dict[str, Any] | None:
+    if not isinstance(understanding, dict):
+        return understanding
+    payload = dict(understanding)
+    payload["requires_confirmation"] = False
+    nested_confirmation = payload.get("confirmation")
+    if isinstance(nested_confirmation, dict):
+        payload["confirmation"] = _build_resolved_confirmation_payload(
+            nested_confirmation,
+            status_value=status_value,
+        )
+    return payload
+
+
+def _build_resolved_agent_state_payload(
+    agent_state: dict[str, Any] | None,
+    *,
+    status_value: str,
+) -> dict[str, Any]:
+    payload = dict(agent_state or {})
+    payload["state"] = "completed"
+    payload["requires_confirmation"] = False
+    payload["reason"] = status_value
+    return payload
+
+
+def _build_resolved_chat_message_patch(
+    message: dict[str, Any],
+    *,
+    status_value: str,
+) -> dict[str, Any]:
+    confirmation = (
+        message.get("confirmation") if isinstance(message.get("confirmation"), dict) else None
+    )
+    understanding = (
+        message.get("understanding") if isinstance(message.get("understanding"), dict) else None
+    )
+    agent_state = (
+        message.get("agent_state") if isinstance(message.get("agent_state"), dict) else None
+    )
+    return {
+        "confirmation": _build_resolved_confirmation_payload(
+            confirmation,
+            status_value=status_value,
+        ),
+        "understanding": _build_resolved_understanding_payload(
+            understanding,
+            status_value=status_value,
+        ),
+        "agent_state": _build_resolved_agent_state_payload(
+            agent_state,
+            status_value=status_value,
+        ),
+    }
+
+
+def _sync_chat_confirmation_for_action(action: Any, *, status_value: str) -> None:
+    context = _load_pending_action_context(getattr(action, "args_json", None))
+    conversation_id = context.get("conversation_id")
+    if conversation_id is None:
+        return
+
+    from app.repositories.chat_repository_sql import ChatRepositorySQL
+
+    repo = ChatRepositorySQL()
+    try:
+        messages = repo.get_history(str(conversation_id))
+    except Exception as e:
+        logger.warning(
+            "pending_action_chat_sync_history_failed",
+            action_id=getattr(action, "id", None),
+            conversation_id=conversation_id,
+            error=str(e),
+        )
+        return
+
+    action_id = getattr(action, "id", None)
+    matched = 0
+    for message in messages:
+        confirmation = message.get("confirmation")
+        if str(message.get("role")) != "assistant" or not isinstance(confirmation, dict):
+            continue
+        if confirmation.get("pending_action_id") != action_id:
+            continue
+        message_id = message.get("id")
+        if message_id is None:
+            continue
+        patch = _build_resolved_chat_message_patch(message, status_value=status_value)
+        try:
+            repo.update_message_payload(
+                str(conversation_id),
+                int(message_id),
+                patch,
+            )
+            matched += 1
+        except Exception as e:
+            logger.warning(
+                "pending_action_chat_sync_update_failed",
+                action_id=action_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                error=str(e),
+            )
+
+    if matched == 0:
+        logger.info(
+            "pending_action_chat_sync_no_matching_message",
+            action_id=action_id,
+            conversation_id=conversation_id,
+        )
 
 
 def _get_session_context_manager(postgres_db):
@@ -424,6 +563,7 @@ async def approve_sql_action(action_id: int):
         updated = repo.set_status(action_id, "approved")
         if not updated:
             raise HTTPException(status_code=404, detail="Pending action not found")
+        _sync_chat_confirmation_for_action(updated, status_value="approved")
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
         risk_level, risk_summary = _summarize_action_risk(
@@ -477,6 +617,7 @@ async def reject_sql_action(action_id: int):
         updated = repo.set_status(action_id, "rejected")
         if not updated:
             raise HTTPException(status_code=404, detail="Pending action not found")
+        _sync_chat_confirmation_for_action(updated, status_value="rejected")
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
         risk_level, risk_summary = _summarize_action_risk(

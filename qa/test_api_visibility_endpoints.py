@@ -364,6 +364,7 @@ def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):
 
 
 def test_pending_actions_approve_sql_action(client, monkeypatch):
+    import app.repositories.chat_repository_sql as chat_repo_module
     import app.repositories.pending_action_repository as pending_repo_module
 
     class DummyPendingRow:
@@ -371,11 +372,12 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
             self.id = 202
             self.user_id = "u-2"
             self.tool_name = "codex_review"
-            self.args_json = '{"commit":"abc123"}'
+            self.args_json = '{"conversation_id":"77","commit":"abc123"}'
             self.status = "pending"
             self.created_at = datetime(2026, 2, 12, 11, 0, 0)
 
     row = DummyPendingRow()
+    updated_payloads = []
 
     class DummyPendingRepo:
         def get(self, action_id):
@@ -393,15 +395,75 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
         pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
     )
 
+    class DummyChatRepo:
+        def get_history(self, conversation_id):
+            assert conversation_id == "77"
+            return [
+                {
+                    "id": "501",
+                    "role": "assistant",
+                    "text": "Pedido classificado como alto risco.",
+                    "confirmation": {
+                        "required": True,
+                        "reason": "high_risk",
+                        "pending_action_id": 202,
+                        "approve_endpoint": "/api/v1/pending_actions/action/202/approve",
+                        "reject_endpoint": "/api/v1/pending_actions/action/202/reject",
+                    },
+                    "understanding": {
+                        "requires_confirmation": True,
+                        "confirmation_reason": "high_risk",
+                        "confirmation": {
+                            "required": True,
+                            "pending_action_id": 202,
+                            "approve_endpoint": "/api/v1/pending_actions/action/202/approve",
+                            "reject_endpoint": "/api/v1/pending_actions/action/202/reject",
+                        },
+                    },
+                    "agent_state": {
+                        "state": "waiting_confirmation",
+                        "requires_confirmation": True,
+                        "reason": "high_risk",
+                    },
+                }
+            ]
+
+        def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
+            updated_payloads.append(
+                {
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "patch": patch,
+                    "user_id": user_id,
+                }
+            )
+            return {}
+
+    monkeypatch.setattr(
+        chat_repo_module, "ChatRepositorySQL", lambda *args, **kwargs: DummyChatRepo()
+    )
+
     resp = client.post("/api/v1/pending_actions/action/202/approve")
     assert resp.status_code == 202
     data = resp.json()
     assert data["source"] == "sql"
     assert data["action_id"] == 202
     assert data["status"] == "approved"
+    assert len(updated_payloads) == 1
+    patch = updated_payloads[0]["patch"]
+    assert updated_payloads[0]["conversation_id"] == "77"
+    assert updated_payloads[0]["message_id"] == 501
+    assert patch["confirmation"]["required"] is False
+    assert patch["confirmation"]["status"] == "approved"
+    assert "approve_endpoint" not in patch["confirmation"]
+    assert patch["understanding"]["requires_confirmation"] is False
+    assert patch["understanding"]["confirmation"]["status"] == "approved"
+    assert patch["agent_state"]["state"] == "completed"
+    assert patch["agent_state"]["reason"] == "approved"
 
 
 def test_pending_actions_reject_sql_action(client, monkeypatch):
+    import app.repositories.chat_repository_sql as chat_repo_module
     import app.repositories.pending_action_repository as pending_repo_module
 
     class DummyPendingRow:
@@ -409,11 +471,12 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
             self.id = 303
             self.user_id = "u-3"
             self.tool_name = "codex_exec"
-            self.args_json = '{"prompt":"bye"}'
+            self.args_json = '{"conversation_id":"88","prompt":"bye"}'
             self.status = "pending"
             self.created_at = datetime(2026, 2, 12, 12, 0, 0)
 
     row = DummyPendingRow()
+    updated_payloads = []
 
     class DummyPendingRepo:
         def get(self, action_id):
@@ -431,12 +494,71 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
         pending_repo_module, "PendingActionRepository", lambda *args, **kwargs: DummyPendingRepo()
     )
 
+    class DummyChatRepo:
+        def get_history(self, conversation_id):
+            assert conversation_id == "88"
+            return [
+                {
+                    "id": "601",
+                    "role": "assistant",
+                    "text": "Pedido classificado como alto risco.",
+                    "confirmation": {
+                        "required": True,
+                        "reason": "high_risk",
+                        "pending_action_id": 303,
+                        "approve_endpoint": "/api/v1/pending_actions/action/303/approve",
+                        "reject_endpoint": "/api/v1/pending_actions/action/303/reject",
+                    },
+                    "understanding": {
+                        "requires_confirmation": True,
+                        "confirmation_reason": "high_risk",
+                        "confirmation": {
+                            "required": True,
+                            "pending_action_id": 303,
+                            "approve_endpoint": "/api/v1/pending_actions/action/303/approve",
+                            "reject_endpoint": "/api/v1/pending_actions/action/303/reject",
+                        },
+                    },
+                    "agent_state": {
+                        "state": "waiting_confirmation",
+                        "requires_confirmation": True,
+                        "reason": "high_risk",
+                    },
+                }
+            ]
+
+        def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
+            updated_payloads.append(
+                {
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "patch": patch,
+                    "user_id": user_id,
+                }
+            )
+            return {}
+
+    monkeypatch.setattr(
+        chat_repo_module, "ChatRepositorySQL", lambda *args, **kwargs: DummyChatRepo()
+    )
+
     resp = client.post("/api/v1/pending_actions/action/303/reject")
     assert resp.status_code == 202
     data = resp.json()
     assert data["source"] == "sql"
     assert data["action_id"] == 303
     assert data["status"] == "rejected"
+    assert len(updated_payloads) == 1
+    patch = updated_payloads[0]["patch"]
+    assert updated_payloads[0]["conversation_id"] == "88"
+    assert updated_payloads[0]["message_id"] == 601
+    assert patch["confirmation"]["required"] is False
+    assert patch["confirmation"]["status"] == "rejected"
+    assert "reject_endpoint" not in patch["confirmation"]
+    assert patch["understanding"]["requires_confirmation"] is False
+    assert patch["understanding"]["confirmation"]["status"] == "rejected"
+    assert patch["agent_state"]["state"] == "completed"
+    assert patch["agent_state"]["reason"] == "rejected"
 
 
 def test_pending_actions_approve_returns_503_when_state_backend_unavailable(client, monkeypatch):

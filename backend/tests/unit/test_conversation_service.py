@@ -84,6 +84,64 @@ def test_get_history_paginated_caps_limit():
     assert len(result["messages"]) == 1
 
 
+def test_get_history_reconciles_resolved_pending_actions(monkeypatch):
+    repo = _FakeRepo()
+    repo.conv["messages"] = [
+        {
+            "timestamp": 1.0,
+            "role": "assistant",
+            "text": "Pedido classificado como alto risco.",
+            "confirmation": {
+                "required": True,
+                "reason": "high_risk",
+                "pending_action_id": 42,
+                "approve_endpoint": "/api/v1/pending_actions/action/42/approve",
+                "reject_endpoint": "/api/v1/pending_actions/action/42/reject",
+            },
+            "understanding": {
+                "requires_confirmation": True,
+                "confirmation_reason": "high_risk",
+                "confirmation": {
+                    "required": True,
+                    "pending_action_id": 42,
+                    "approve_endpoint": "/api/v1/pending_actions/action/42/approve",
+                    "reject_endpoint": "/api/v1/pending_actions/action/42/reject",
+                },
+            },
+            "agent_state": {
+                "state": "waiting_confirmation",
+                "requires_confirmation": True,
+                "reason": "high_risk",
+            },
+        }
+    ]
+    service = ConversationService(repo)
+
+    class _ResolvedPendingAction:
+        status = "approved"
+
+    class _FakePendingActionRepo:
+        def get(self, action_id):
+            assert action_id == 42
+            return _ResolvedPendingAction()
+
+    monkeypatch.setattr(
+        "app.repositories.pending_action_repository.PendingActionRepository",
+        lambda *args, **kwargs: _FakePendingActionRepo(),
+    )
+
+    result = service.get_history("conv-1", user_id="user-1", project_id="proj-1")
+    message = result["messages"][0]
+
+    assert message["confirmation"]["required"] is False
+    assert message["confirmation"]["status"] == "approved"
+    assert "approve_endpoint" not in message["confirmation"]
+    assert message["understanding"]["requires_confirmation"] is False
+    assert message["understanding"]["confirmation"]["status"] == "approved"
+    assert message["agent_state"]["state"] == "completed"
+    assert message["agent_state"]["reason"] == "approved"
+
+
 @pytest.mark.asyncio
 async def test_crud_operations_delegate_to_repo():
     repo = _FakeRepo()
