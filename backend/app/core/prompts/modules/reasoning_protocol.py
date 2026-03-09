@@ -22,7 +22,6 @@ class ReasoningProtocolModule(PromptModule):
         IntentType.CODE_REVIEW: "capability_code_review",
         IntentType.DEBUGGING: "capability_hypothesis_debugging",
         IntentType.RESEARCH: "capability_chain_of_thought",
-        IntentType.QUESTION: "capability_chain_of_thought",
     }
 
     @property
