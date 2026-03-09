@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 def estimate_tokens(prompt_service: Any, text: str) -> int:
@@ -15,6 +16,34 @@ def estimate_tokens(prompt_service: Any, text: str) -> int:
 
 def split_ui(text: str) -> tuple[str, dict[str, Any] | None]:
     return (text or "", None)
+
+
+def _build_question_summary(normalized: str) -> str:
+    clean = normalized.rstrip("?.! ").strip()
+
+    history_match = re.search(
+        r"(?:historia|história)\s+(?:para|sobre)\s+(.+)$",
+        clean,
+        re.IGNORECASE,
+    )
+    if history_match:
+        topic = history_match.group(1).strip(" ?.!").strip()
+        if topic:
+            return f"Usuario pediu uma historia sobre {topic}."
+
+    explain_match = re.search(
+        r"^(?:como|qual|quais|quando|porque|por que|what|how|why)\s+(.+)$",
+        clean,
+        re.IGNORECASE,
+    )
+    if explain_match:
+        topic = explain_match.group(1).strip(" ?.!").strip()
+        if topic:
+            return f"Usuario fez uma pergunta sobre {topic}."
+
+    if clean:
+        return "Usuario fez uma pergunta para obter informacao ou orientacao."
+    return normalized
 
 
 def build_understanding_payload(message: str) -> dict[str, Any] | None:
@@ -123,6 +152,8 @@ def build_understanding_payload(message: str) -> dict[str, Any] | None:
     summary = normalized
     if intent == "file_reference":
         summary = "Usuario informou que enviou um arquivo para consulta."
+    elif intent == "question":
+        summary = _build_question_summary(normalized)
     if len(summary) > 180:
         summary = f"{summary[:177].rstrip()}..."
 
