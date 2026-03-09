@@ -4,10 +4,10 @@ Executes ReAct (Reasoning + Acting) loop with tool execution fallbacks.
 """
 
 import asyncio
-import os
 import re
 import structlog
 from typing import Any
+from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
 from app.core.llm import ModelRole, ModelPriority
 from app.core.infrastructure.fallback_chain import FallbackChain
@@ -64,25 +64,12 @@ class ChatAgentLoop:
         return max(1, len(text) // 4)
 
     def _build_policy(self) -> PolicyEngine:
-        risk_profile = os.getenv("CHAT_TOOL_RISK_PROFILE", RiskProfile.BALANCED)
-        auto_confirm = os.getenv("CHAT_TOOL_AUTO_CONFIRM", "false").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        allowlist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_ALLOWLIST", "").split(",")
-            if name.strip()
-        }
-        blocklist = {
-            name.strip()
-            for name in os.getenv("CHAT_TOOL_BLOCKLIST", "").split(",")
-            if name.strip()
-        }
-        max_actions = int(os.getenv("CHAT_TOOL_MAX_ACTIONS", "20"))
-        max_seconds = int(os.getenv("CHAT_TOOL_MAX_SECONDS", "60"))
+        risk_profile = str(settings.CHAT_TOOL_RISK_PROFILE or RiskProfile.BALANCED).strip().lower()
+        auto_confirm = bool(settings.CHAT_TOOL_AUTO_CONFIRM)
+        allowlist = {name.strip() for name in settings.CHAT_TOOL_ALLOWLIST if name.strip()}
+        blocklist = {name.strip() for name in settings.CHAT_TOOL_BLOCKLIST if name.strip()}
+        max_actions = int(settings.CHAT_TOOL_MAX_ACTIONS)
+        max_seconds = int(settings.CHAT_TOOL_MAX_SECONDS)
 
         return PolicyEngine(
             PolicyConfig(
