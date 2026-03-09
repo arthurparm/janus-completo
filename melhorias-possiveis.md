@@ -106,6 +106,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-023 | LGPD: Ofuscar comandos de voz capturados e logados em daemon.py | P1 | S | aberto |
 | SG-024 | Atualizar @hono/node-server no frontend para mitigar vulnerabilidade de alta severidade | P1 | S | aberto |
 | SG-025 | Substituir geradores pseudo-aleatorios padrao por secrets no auto_analysis.py | P2 | S | aberto |
+| SG-026 | Mitigar riscos de injeção de código (subprocess shell=True, exec, eval) nas ferramentas do core e sandbox Python | P0 | M | aberto |
+| SG-027 | Remediar criação insegura de arquivos temporários (/tmp hardcodes) no backend | P1 | M | aberto |
+| SG-028 | Adicionar validação de URL schemes (urllib.urlopen) nos serviços de Agent Tools e Message Broker | P1 | S | aberto |
+| SG-029 | Atualizar dependências vulneráveis do frontend (dompurify, express-rate-limit, hono, immutable, tar) | P0 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade

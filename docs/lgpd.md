@@ -36,3 +36,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Adicionar Auditoria e Redação Visual:** No `windows_agent.py`, logar toda requisição com escopo, finalidade e ofuscar ativamente áreas sensíveis do display antes de retorná-lo.
 2. **Filtrar Logs do Daemon:** Integrar uma camada de _PII scrubbing_ aos canais do logger em `daemon.py` para os conteúdos textuais transcritos dos comandos vocais.
+
+## Achados do dia (2026-03-09)
+
+### Lacunas e Impacto
+- **Risco de Exfiltração de PII por Vulnerabilidades Frontend:** A identificação de falha de Path Traversal (Hardlink) na dependência `tar` no ecossistema do frontend eleva o risco de vazamento de dados locais (como arquivos de log contendo informações pessoais, e.g., `janus.log`), caso a aplicação manipule extração de arquivos do lado do cliente ou servidor SSR incorretamente, burlando controles de contenção.
+
+### Próximos Passos
+1. **Sanitização de Dependências:** Mitigar a vulnerabilidade Path Traversal atualizando a dependência `tar` no frontend, prevenindo acessos a arquivos sensíveis fora do diretório escopo.

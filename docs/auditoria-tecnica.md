@@ -73,3 +73,25 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+
+## Achados do dia (2026-03-09)
+
+### 7. Risco de Execução de Código e Manipulação de Arquivos via Componentes Core e Sandbox
+**Descrição:** Observou-se que o Sandbox Python e ferramentas auxiliares estão operando com execuções inseguras (`exec`, `eval`, `shell=True`) e manipulando arquivos temporários e URLs de forma estática e não higienizada, propiciando potenciais RCE e SSRF na infraestrutura.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: `subprocess` operando em modo shell (`shell=True`).
+- `backend/app/core/infrastructure/python_sandbox.py`: Execução nativa e direta da string de código com `exec()`.
+- `backend/app/core/tools/faulty_tools.py`: Uso de `eval()`.
+- `backend/app/core/memory/log_aware_reflector.py`: Utilização de caminhos no diretório global compartilhado `/tmp/janus.log` sem escopo efêmero isolado.
+- `backend/app/core/infrastructure/message_broker.py` & `backend/app/core/tools/agent_tools.py`: Uso de `urllib.request.urlopen` suscetível a schemes arbitrários.
+
+**Próximos passos:**
+- Remover `shell=True`, migrar de `eval` para `ast.literal_eval`, refatorar manipulação de logs para usar APIs temporárias seguras, e validar esquemas de URLs (HTTP/HTTPS).
+
+### 8. Identificação de Múltiplos Riscos de Cadeia de Suprimento no Frontend
+**Descrição:** Verificou-se que a camada de frontend baseia-se em bibliotecas atualmente exploráveis. Foram identificados múltiplos vetores incluindo Path Traversal, XSS, Bypass de Rate Limit (IPv6) e envenenamento de protótipos.
+**Evidências:**
+- `npm audit` aponta falhas severas nos pacotes `dompurify` (Moderate, XSS), `express-rate-limit` (High, IPv6 bypass), `hono` (High, Cookie Attribute Injection), `immutable` (High, Prototype pollution) e `tar` (High, Path Traversal).
+
+**Próximos passos:**
+- Engatilhar processo de bump de dependências frontend, atualizando pacotes para as respectivas minor/patch fix. Registrar e acompanhar vulnerabilidades não mitigadas.

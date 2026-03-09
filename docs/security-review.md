@@ -83,3 +83,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Evidência:** Execução de `pip-audit` falhou.
 - **Descrição:** Ambiente restrito ou dependências conflitantes/faltantes impediram a varredura completa do `requirements.txt`.
 - **Ação Recomendada:** Garantir pré-instalação de ambiente reprodutível (lockfile) para as varreduras do `pip-audit`.
+
+## Achados do dia (2026-03-09)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] bandit (backend)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 12. Vulnerabilidades de Execução de Código e Sanitização (Backend)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`, `backend/app/core/infrastructure/python_sandbox.py`, `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Alta/Média (Bandit B602, B102, B307)
+- **Descrição:** Identificado o uso de `subprocess.Popen` com `shell=True` no `launcher_tools.py`, abrindo margem para execução arbitrária de comandos se não validado. O uso de `exec()` no `python_sandbox.py` e `eval()` no `faulty_tools.py` também representa grave risco de injeção de código se o ambiente/sandbox não for hermeticamente seguro.
+- **Ação Recomendada:** Remover `shell=True` e sanitizar entradas rigorosamente; utilizar `ast.literal_eval` no lugar de `eval()`; restringir e auditar usos de `exec`.
+
+### 13. Vulnerabilidades de File System e URL Fetching Inseguros (Backend)
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py`, `backend/app/core/infrastructure/message_broker.py`, `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B108, B310)
+- **Descrição:** O `log_aware_reflector.py` utiliza caminhos hardcoded para arquivos temporários no diretório `/tmp`, o que pode acarretar em colisões ou vazamentos em sistemas compartilhados. Adicionalmente, múltiplos usos de `urllib.request.urlopen` ocorrem sem validação de schemas permitidos (risco de carregar arquivos via `file://`).
+- **Ação Recomendada:** Utilizar o módulo `tempfile` nativo para manipulação segura de temporários e validar protocolos HTTP/HTTPS antes de carregar URLs externas.
+
+### 14. Vulnerabilidades Críticas nas Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta/Média
+- **Descrição:** Varredura detectou `dompurify` (Moderate, XSS), `express-rate-limit` (High, IPv6 Bypass), `hono` (High, Cookie Attribute Injection), `immutable` (High, Prototype pollution) e `tar` (High, Path Traversal).
+- **Ação Recomendada:** Atualizar os pacotes de frontend mapeados executando atualizações major/minor de acordo com as fix advisories listadas pelo audit do npm.
