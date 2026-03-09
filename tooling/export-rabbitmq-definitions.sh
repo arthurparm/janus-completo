@@ -5,10 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/backend/app/.env"
 OUTPUT_FILE=""
 BEST_EFFORT="false"
+RABBITMQ_API_URL="http://localhost:15672"
 
 usage() {
   cat <<'EOF'
-Usage: tooling/export-rabbitmq-definitions.sh --output <file> [--best-effort]
+Usage: tooling/export-rabbitmq-definitions.sh --output <file> [--api-url <url>] [--best-effort]
 
 Exports RabbitMQ definitions using the local management API.
 Requires RABBITMQ_USER and RABBITMQ_PASSWORD in backend/app/.env.
@@ -19,6 +20,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --output)
       OUTPUT_FILE="${2:-}"
+      shift 2
+      ;;
+    --api-url)
+      RABBITMQ_API_URL="${2:-}"
       shift 2
       ;;
     --best-effort)
@@ -63,7 +68,7 @@ mkdir -p "$(dirname "${OUTPUT_FILE}")"
 
 if ! curl -sfS \
   --user "${RABBITMQ_USER}:${RABBITMQ_PASSWORD}" \
-  "http://localhost:15672/api/definitions" \
+  "${RABBITMQ_API_URL%/}/api/definitions" \
   -o "${OUTPUT_FILE}"; then
   echo "RabbitMQ definitions export failed" >&2
   [[ "${BEST_EFFORT}" == "true" ]] && exit 0

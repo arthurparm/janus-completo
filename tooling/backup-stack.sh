@@ -6,10 +6,11 @@ DEFAULT_OUTPUT_ROOT="${ROOT_DIR}/outputs/backups"
 OUTPUT_ROOT="${DEFAULT_OUTPUT_ROOT}"
 SKIP_OLLAMA="true"
 NO_RESTART="false"
+RABBITMQ_API_URL="http://localhost:15672"
 
 usage() {
   cat <<'EOF'
-Usage: tooling/backup-stack.sh [--output-dir <dir>] [--skip-ollama] [--include-ollama] [--no-restart]
+Usage: tooling/backup-stack.sh [--output-dir <dir>] [--skip-ollama] [--include-ollama] [--no-restart] [--rabbitmq-api-url <url>]
 
 Cold backup v1 for local Docker Compose stateful services.
 Stops running compose services, snapshots backend/data directories, optionally exports RabbitMQ definitions,
@@ -34,6 +35,10 @@ while [[ $# -gt 0 ]]; do
     --no-restart)
       NO_RESTART="true"
       shift
+      ;;
+    --rabbitmq-api-url)
+      RABBITMQ_API_URL="${2:-}"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -69,6 +74,7 @@ trap 'rc=$?; if [[ $rc -ne 0 ]]; then echo "Backup failed (exit ${rc})."; restar
 echo "Exporting RabbitMQ definitions (best effort)..."
 "${ROOT_DIR}/tooling/export-rabbitmq-definitions.sh" \
   --output "${backup_dir}/rabbitmq-definitions.json" \
+  --api-url "${RABBITMQ_API_URL}" \
   --best-effort || true
 
 echo "Saving compose status..."
@@ -123,7 +129,7 @@ fi
 git_commit="$(git rev-parse HEAD 2>/dev/null || true)"
 hostname_value="$(hostname 2>/dev/null || echo unknown)"
 
-python3 - "$backup_dir" "$timestamp" "$hostname_value" "$git_commit" "$services" "$SKIP_OLLAMA" <<'PY'
+python3 - "$backup_dir" "$timestamp" "$hostname_value" "$git_commit" "$services" "$SKIP_OLLAMA" "$RABBITMQ_API_URL" <<'PY'
 import json, sys
 from pathlib import Path
 
@@ -133,6 +139,7 @@ hostname = sys.argv[3]
 git_commit = sys.argv[4]
 services = [s for s in sys.argv[5].split(" ") if s]
 skip_ollama = sys.argv[6].lower() == "true"
+rabbitmq_api_url = sys.argv[7]
 
 data_archives = sorted(
     [p.name for p in (backup_dir / "data").glob("*.tar.gz")]
@@ -144,6 +151,7 @@ manifest = {
     "git_commit": git_commit or None,
     "services_stopped": services,
     "skip_ollama": skip_ollama,
+    "rabbitmq_api_url": rabbitmq_api_url,
     "artifacts": {
         "compose_ps": "compose-ps.txt",
         "rabbitmq_definitions": "rabbitmq-definitions.json" if (backup_dir / "rabbitmq-definitions.json").exists() else None,
