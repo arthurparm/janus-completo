@@ -113,4 +113,49 @@ describe('ConversationsComponent', () => {
     expect(apiStub.listDocuments).toHaveBeenCalledWith('fresh', '2')
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/conversations', 'fresh'], { replaceUrl: true })
   })
+
+  it('reconciles resolved pending actions when history already contains the system approval message', () => {
+    apiStub.getChatHistoryPaginated.mockReturnValue(
+      of({
+        conversation_id: 'legacy',
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            text: 'Resposta aguardando aprovação',
+            timestamp: Date.now(),
+            confirmation: {
+              required: true,
+              reason: 'high_risk',
+              pending_action_id: 42,
+              approve_endpoint: '/api/v1/pending_actions/action/42/approve',
+              reject_endpoint: '/api/v1/pending_actions/action/42/reject'
+            },
+            agent_state: {
+              state: 'waiting_confirmation',
+              requires_confirmation: true,
+              reason: 'high_risk'
+            }
+          },
+          {
+            id: 'system-1',
+            role: 'system',
+            text: 'Ação pendente #42 aprovada. Action approved.',
+            timestamp: Date.now() + 1
+          }
+        ]
+      })
+    )
+
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    const assistant = component.messages().find((msg) => msg.role === 'assistant')
+    expect(assistant?.confirmation?.required).toBe(false)
+    expect(assistant?.confirmation?.status).toBe('approved')
+    expect(assistant?.confirmation?.approve_endpoint).toBeUndefined()
+    expect(assistant?.agent_state?.state).toBe('completed')
+    expect(assistant?.agent_state?.reason).toBe('approved')
+  })
 })

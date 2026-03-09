@@ -116,6 +116,7 @@ interface PriorityOption {
 }
 
 type GoalStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+type PendingActionResolution = 'approved' | 'rejected'
 
 @Component({
   selector: 'app-conversations',
@@ -135,6 +136,9 @@ type GoalStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConversationsComponent {
+  private static readonly PENDING_ACTION_RESOLUTION_RE =
+    /a[cç][aã]o pendente\s+#(\d+)\s+(aprovada|rejeitada)\b/i
+
   private api = inject(BackendApiService)
   private auth = inject(AuthService)
   private route = inject(ActivatedRoute)
@@ -1332,7 +1336,8 @@ export class ConversationsComponent {
         catchError(() => of([]))
       )
       .subscribe((items) => {
-        this.messages.set(items.map((msg) => this.mapMessage(msg)))
+        const mapped = items.map((msg) => this.mapMessage(msg))
+        this.messages.set(this.reconcileResolvedPendingActions(mapped))
         this.historyLoading.set(false)
         this.queueScroll()
       })
@@ -1765,6 +1770,70 @@ export class ConversationsComponent {
       delivery_status: typeof raw['delivery_status'] === 'string' ? String(raw['delivery_status']) : undefined,
       failure_classification: typeof raw['failure_classification'] === 'string' ? String(raw['failure_classification']) : undefined
     }
+  }
+
+  private reconcileResolvedPendingActions(messages: ChatMessageView[]): ChatMessageView[] {
+    const resolved = new Map<number, PendingActionResolution>()
+
+    for (const msg of messages) {
+      if (msg.role !== 'system') continue
+      const match = ConversationsComponent.PENDING_ACTION_RESOLUTION_RE.exec(msg.text || '')
+      if (!match) continue
+      const actionId = Number(match[1])
+      const status = match[2]?.toLowerCase() === 'aprovada' ? 'approved' : 'rejected'
+      if (Number.isFinite(actionId)) {
+        resolved.set(actionId, status)
+      }
+    }
+
+    if (!resolved.size) return messages
+
+    return messages.map((msg) => {
+      if (msg.role !== 'assistant') return msg
+      const confirmation = msg.confirmation || msg.understanding?.confirmation
+      const actionId = confirmation?.pending_action_id
+      if (typeof actionId !== 'number') return msg
+
+      const resolution = resolved.get(actionId)
+      if (!resolution) return msg
+
+      const nextConfirmation: ChatConfirmationState = {
+        ...(confirmation || { required: true }),
+        required: false,
+        status: resolution,
+      }
+      delete nextConfirmation.approve_endpoint
+      delete nextConfirmation.reject_endpoint
+
+      const nextUnderstanding = msg.understanding
+        ? {
+            ...msg.understanding,
+            requires_confirmation: false,
+            confirmation: {
+              ...(msg.understanding.confirmation || nextConfirmation),
+              required: false,
+              status: resolution,
+            },
+          }
+        : msg.understanding
+
+      if (nextUnderstanding?.confirmation) {
+        delete nextUnderstanding.confirmation.approve_endpoint
+        delete nextUnderstanding.confirmation.reject_endpoint
+      }
+
+      return {
+        ...msg,
+        confirmation: nextConfirmation,
+        understanding: nextUnderstanding,
+        agent_state: {
+          ...(msg.agent_state || { state: 'completed' }),
+          state: 'completed',
+          requires_confirmation: false,
+          reason: resolution,
+        },
+      }
+    })
   }
 
   private cognitiveStatusText(state: string, reason?: string): string {
