@@ -3,6 +3,7 @@ Document Parser Service with hierarchical fallbacks.
 Extracts text from various document formats.
 """
 
+import json
 import re
 import time
 import structlog
@@ -43,6 +44,8 @@ class DocumentParserService:
         # Determine parser type
         if ct.startswith("text/plain"):
             return self._parse_plain(data)
+        elif ct.startswith("application/json") or ct.endswith("+json") or filename.lower().endswith(".json"):
+            return self._parse_json(data)
         elif ct.startswith("text/html") or ct.startswith("application/xhtml"):
             return self._parse_html(data)
         elif ct.startswith("application/pdf") or filename.lower().endswith(".pdf"):
@@ -71,6 +74,44 @@ class DocumentParserService:
         except Exception as e:
             self._metrics.record_parse("plain", "error", time.perf_counter() - t0)
             logger.warning("plain_text_parse_failed", error=str(e))
+            return ""
+
+    def _parse_json(self, data: bytes) -> str:
+        """Parse JSON files into searchable text lines."""
+        t0 = time.perf_counter()
+
+        try:
+            raw = data.decode("utf-8", errors="ignore")
+            parsed = json.loads(raw)
+
+            lines: list[str] = []
+
+            def _walk(value, path: str = "") -> None:
+                if isinstance(value, dict):
+                    for key, child in value.items():
+                        child_path = f"{path}.{key}" if path else str(key)
+                        _walk(child, child_path)
+                    return
+                if isinstance(value, list):
+                    for index, child in enumerate(value):
+                        child_path = f"{path}[{index}]" if path else f"[{index}]"
+                        _walk(child, child_path)
+                    return
+                normalized = re.sub(r"\s+", " ", str(value)).strip()
+                if not normalized:
+                    return
+                lines.append(f"{path}: {normalized}" if path else normalized)
+
+            _walk(parsed)
+
+            text = "\n".join(lines).strip()
+            if not text:
+                text = raw
+            self._metrics.record_parse("json", "success", time.perf_counter() - t0)
+            return text
+        except Exception as e:
+            self._metrics.record_parse("json", "error", time.perf_counter() - t0)
+            logger.warning("json_parse_failed", error=str(e))
             return ""
 
     def _parse_html(self, data: bytes) -> str:
