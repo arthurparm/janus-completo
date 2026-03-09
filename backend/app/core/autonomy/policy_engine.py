@@ -25,6 +25,7 @@ class PolicyConfig:
     allowlist: set[str] = field(default_factory=set)
     blocklist: set[str] = field(default_factory=set)
     capability_allowlist: set[str] = field(default_factory=set)
+    scope_allowlist: set[str] = field(default_factory=set)
     command_allowlist: set[str] = field(default_factory=set)
     restricted_command_tools: set[str] = field(default_factory=set)
     command_blocklist_tokens: set[str] = field(default_factory=set)
@@ -40,6 +41,8 @@ class PolicyConfig:
             self.capability_allowlist = _parse_csv_set(
                 os.getenv("CHAT_TOOL_CAPABILITY_ALLOWLIST", "")
             )
+        if not self.scope_allowlist:
+            self.scope_allowlist = _parse_csv_set(os.getenv("CHAT_TOOL_SCOPE_ALLOWLIST", ""))
 
         if not self.command_allowlist:
             self.command_allowlist = _parse_csv_set(os.getenv("CHAT_TOOL_COMMAND_ALLOWLIST", ""))
@@ -64,6 +67,9 @@ class PolicyConfig:
         self.blocklist = {str(item).strip().lower() for item in self.blocklist if str(item).strip()}
         self.capability_allowlist = {
             str(item).strip().lower() for item in self.capability_allowlist if str(item).strip()
+        }
+        self.scope_allowlist = {
+            str(item).strip().lower() for item in self.scope_allowlist if str(item).strip()
         }
         self.command_allowlist = {
             str(item).strip().lower() for item in self.command_allowlist if str(item).strip()
@@ -230,6 +236,36 @@ class PolicyEngine:
 
         return None
 
+    def _extract_scope_tags(self, meta: ToolMetadata) -> set[str]:
+        tags = getattr(meta, "tags", None)
+        if not isinstance(tags, list):
+            return set()
+        scope_tags: set[str] = set()
+        for raw_tag in tags:
+            tag = str(raw_tag or "").strip().lower()
+            if not tag.startswith("scope:"):
+                continue
+            scope = tag.removeprefix("scope:").strip()
+            if scope:
+                scope_tags.add(scope)
+        return scope_tags
+
+    def _check_scope_allowlist(self, meta: ToolMetadata) -> PolicyDecision:
+        if not self.config.scope_allowlist:
+            return PolicyDecision(allowed=True)
+
+        tool_scopes = self._extract_scope_tags(meta)
+        if tool_scopes.intersection(self.config.scope_allowlist):
+            return PolicyDecision(allowed=True)
+
+        if not tool_scopes:
+            return PolicyDecision(allowed=False, reason="Tool has no declared scope tags")
+
+        return PolicyDecision(
+            allowed=False,
+            reason=f"Tool scopes {sorted(tool_scopes)} outside allowlist",
+        )
+
     def _check_command_allowlist(
         self, *, meta: ToolMetadata, input_args: dict[str, Any] | None
     ) -> PolicyDecision:
@@ -321,6 +357,10 @@ class PolicyEngine:
         capability_decision = self._check_capability_allowlist(meta)
         if not capability_decision.allowed:
             return capability_decision
+
+        scope_decision = self._check_scope_allowlist(meta)
+        if not scope_decision.allowed:
+            return scope_decision
 
         command_decision = self._check_command_allowlist(meta=meta, input_args=input_args)
         if not command_decision.allowed:

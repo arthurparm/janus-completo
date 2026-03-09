@@ -106,3 +106,67 @@ def test_policy_engine_fail_closed_for_sensitive_command_without_allowlist(monke
 
     assert decision.allowed is False
     assert "allowlist" in str(decision.reason).lower()
+
+
+def test_policy_engine_blocks_tool_without_scope_tag_when_scope_allowlist_enabled(monkeypatch):
+    meta = ToolMetadata(
+        name="browse_url",
+        category=ToolCategory.WEB,
+        description="browse",
+        permission_level=PermissionLevel.SAFE,
+    )
+    _patch_registry(monkeypatch, meta)
+
+    engine = PolicyEngine(
+        PolicyConfig(
+            risk_profile=RiskProfile.BALANCED,
+            scope_allowlist={"calendar.read"},
+        )
+    )
+    decision = engine.validate_tool_call("browse_url", {"url": "https://example.com"})
+
+    assert decision.allowed is False
+    assert "scope" in str(decision.reason).lower()
+
+
+def test_policy_engine_blocks_tool_outside_scope_allowlist(monkeypatch):
+    meta = ToolMetadata(
+        name="calendar_write",
+        category=ToolCategory.API,
+        description="calendar write",
+        permission_level=PermissionLevel.WRITE,
+        tags=["scope:calendar.write", "personal"],
+    )
+    _patch_registry(monkeypatch, meta)
+
+    engine = PolicyEngine(
+        PolicyConfig(
+            risk_profile=RiskProfile.BALANCED,
+            scope_allowlist={"calendar.read"},
+        )
+    )
+    decision = engine.validate_tool_call("calendar_write", {"event": "demo"})
+
+    assert decision.allowed is False
+    assert "outside allowlist" in str(decision.reason).lower()
+
+
+def test_policy_engine_allows_tool_inside_scope_allowlist(monkeypatch):
+    meta = ToolMetadata(
+        name="calendar_read",
+        category=ToolCategory.API,
+        description="calendar read",
+        permission_level=PermissionLevel.READ_ONLY,
+        tags=["scope:calendar.read", "personal"],
+    )
+    _patch_registry(monkeypatch, meta)
+
+    engine = PolicyEngine(
+        PolicyConfig(
+            risk_profile=RiskProfile.BALANCED,
+            scope_allowlist={"calendar.read"},
+        )
+    )
+    decision = engine.validate_tool_call("calendar_read", {"window": "today"})
+
+    assert decision.allowed is True
