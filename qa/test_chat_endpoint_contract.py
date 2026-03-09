@@ -265,6 +265,48 @@ def test_chat_message_citations_include_clickable_source_metadata():
     assert citation["url"] == "https://example.invalid/main.py#L42"
 
 
+def test_chat_message_document_citations_prevent_pending_study(monkeypatch):
+    async def _fake_collect_chat_citations(**kwargs):
+        return {
+            "citations": [
+                {
+                    "id": "doc-1",
+                    "title": "genesis-backup-2026-02-05.json",
+                    "file_path": "genesis-backup-2026-02-05.json",
+                    "source_type": "document",
+                    "type": "document",
+                    "snippet": '{"version":1}',
+                }
+            ],
+            "retrieval_failed": False,
+        }
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.chat.chat_message.collect_chat_citations",
+        _fake_collect_chat_citations,
+    )
+    svc = _DummyChatService()
+    client = _build_client(svc)
+
+    resp = client.post(
+        "/api/v1/chat/message",
+        json={
+            "conversation_id": "conv-1",
+            "message": "te mandei um arquivo",
+            "role": "orchestrator",
+            "priority": "fast_and_cheap",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["citation_status"]["status"] == "present"
+    assert len(data["citations"]) == 1
+    assert data["citations"][0]["source_type"] == "document"
+    assert data.get("study_job") is None
+    assert data.get("delivery_status") != "pending_study"
+
+
 def test_chat_health_is_non_destructive_probe():
     svc = _DummyChatService()
     client = _build_client(svc)

@@ -17,11 +17,11 @@ class _DummyMemory:
 
 
 class _FakeHit:
-    def __init__(self, score: float, content: str):
+    def __init__(self, score: float, content: str, metadata: dict | None = None):
         self.score = score
         self.payload = {
             "content": content,
-            "metadata": {"type": "doc_chunk", "user_id": "u-1"},
+            "metadata": metadata or {"type": "doc_chunk", "user_id": "u-1"},
         }
 
 
@@ -37,6 +37,9 @@ class _FakeClient:
     async def query_points(self, **kwargs):
         self.last_limit = kwargs.get("limit")
         return _FakeQueryResponse(points=[_FakeHit(0.83, "Important context")])
+
+    async def scroll(self, **kwargs):
+        return ([], None)
 
 
 @pytest.mark.asyncio
@@ -146,8 +149,70 @@ async def test_retrieve_context_applies_rerank_and_reports_query_limit(monkeypat
     assert event["extra"]["query_limit"] == 6
     assert event["extra"]["rerank_applied"] is True
     assert event["extra"]["rerank_method"] == "fake_cross_encoder"
-    assert event["extra"]["rerank_candidate_count"] == 1
+    assert event["extra"]["rerank_candidate_count"] == 3
     assert event["extra"]["rerank_top_k"] == 2
+
+
+@pytest.mark.asyncio
+async def test_retrieve_context_includes_conversation_document_context_for_uploaded_file_reference(
+    monkeypatch,
+):
+    async def _fake_embed(text: str):
+        return [0.1, 0.2, 0.3]
+
+    async def _fake_collection(name: str):
+        return name
+
+    class _DocAwareClient(_FakeClient):
+        async def query_points(self, **kwargs):
+            self.last_limit = kwargs.get("limit")
+            return _FakeQueryResponse(
+                points=[
+                    _FakeHit(
+                        0.91,
+                        '{"version":1}',
+                        metadata={
+                            "type": "doc_chunk",
+                            "user_id": "u-1",
+                            "file_name": "genesis-backup-2026-02-05.json",
+                        },
+                    )
+                ]
+            )
+
+        async def scroll(self, **kwargs):
+            return (
+                [
+                    _FakeHit(
+                        0.0,
+                        '{"version":1,"createdAt":"2026-02-05"}',
+                        metadata={
+                            "type": "doc_chunk",
+                            "user_id": "u-1",
+                            "conversation_id": "c-1",
+                            "doc_id": "doc:u-1:1",
+                            "file_name": "genesis-backup-2026-02-05.json",
+                            "semantic_summary": "Backup do cenário Genesis.",
+                        },
+                    )
+                ],
+                None,
+            )
+
+    monkeypatch.setattr(rag_module, "aembed_text", _fake_embed)
+    monkeypatch.setattr(rag_module, "aget_or_create_collection", _fake_collection)
+    monkeypatch.setattr(rag_module, "get_async_qdrant_client", lambda: _DocAwareClient())
+
+    service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
+    context = await service.retrieve_context(
+        "te mandei um arquivo",
+        user_id="u-1",
+        conversation_id="c-1",
+    )
+
+    assert context is not None
+    assert "Documentos anexados nesta conversa:" in context
+    assert "genesis-backup-2026-02-05.json" in context
 
 
 @pytest.mark.asyncio

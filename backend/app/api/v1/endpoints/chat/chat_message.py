@@ -17,7 +17,7 @@ from app.services.memory_service import MemoryService, get_memory_service
 from app.services.chat.chat_citation_service import (
     MANDATORY_CITATION_GUARD_TEXT,
     build_citation_status,
-    map_citation_hits,
+    collect_chat_citations,
 )
 from app.services.chat_study_service import ChatStudyJobService, ChatStudyService
 from app.services.chat.chat_contracts import (
@@ -204,18 +204,16 @@ async def send_message(
             ),
         )
 
-    citations: list[dict[str, Any]] = []
-    citations_retrieval_failed = False
     try:
-        filters: dict[str, Any] = {"status_not": "duplicate"}
-        if result.get("conversation_id"):
-            filters["metadata.session_id"] = result.get("conversation_id")
-        if user_id:
-            filters["metadata.user_id"] = str(user_id)
-        vec_results = await memory.recall_filtered(
-            query=payload.message, filters=filters, limit=5, min_score=0.1
+        citation_result = await collect_chat_citations(
+            message=payload.message,
+            user_id=str(user_id) if user_id is not None else None,
+            conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+            memory_service=memory,
+            limit=5,
         )
-        citations = map_citation_hits(vec_results)
+        citations = citation_result.get("citations") or []
+        citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
     except Exception as e:
         logger.warning("chat_message_citations_failed", error=str(e))
         citations = []

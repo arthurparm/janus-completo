@@ -12,7 +12,7 @@ from uuid import uuid4
 import structlog
 
 from app.core.llm import ModelPriority, ModelRole
-from app.services.chat.chat_citation_service import build_citation_status
+from app.services.chat.chat_citation_service import build_citation_status, collect_chat_citations
 
 logger = structlog.get_logger(__name__)
 
@@ -149,6 +149,8 @@ class ChatStudyService:
         question: str,
         role: ModelRole = ModelRole.ORCHESTRATOR,
         priority: ModelPriority = ModelPriority.FAST_AND_CHEAP,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
         progress_cb: Any | None = None,
     ) -> dict[str, Any]:
         async def _progress(value: int, stage: str, reason: str) -> None:
@@ -164,6 +166,38 @@ class ChatStudyService:
             priority=priority,
             progress=_progress,
         )
+
+        await _progress(30, "document_scan", "Verificando documentos anexados a esta conversa.")
+        doc_retrieval = await collect_chat_citations(
+            message=question,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            memory_service=None,
+            limit=_MAX_CANDIDATES,
+        )
+        citations = list(doc_retrieval.get("citations") or [])
+        if citations:
+            await _progress(90, "synthesis", "Sintetizando a resposta final com base nos documentos anexados.")
+            answer = await self._synthesize_answer(
+                question=question,
+                citations=citations,
+                role=role,
+                priority=priority,
+            )
+            return {
+                "response": answer,
+                "citations": citations,
+                "citation_status": build_citation_status(
+                    message=question,
+                    citations=citations,
+                    retrieval_failed=bool(doc_retrieval.get("retrieval_failed")),
+                ),
+                "delivery_status": "completed",
+                "failure_classification": infra_failure,
+                "study_notice": "Estudando os documentos anexados para responder com segurança.",
+                "provider": "janus",
+                "model": "conversation-doc-study",
+            }
 
         await _progress(45, "self_study", "Revisando a base local para localizar arquivos relevantes.")
         await self._run_self_study(question)
@@ -446,6 +480,8 @@ class ChatStudyJobService:
                 question=job.question,
                 role=role,
                 priority=priority,
+                user_id=job.user_id,
+                conversation_id=job.conversation_id,
                 progress_cb=_progress,
             )
             patch = {

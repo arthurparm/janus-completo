@@ -30,6 +30,21 @@ def build_understanding_payload(message: str) -> dict[str, Any] | None:
 
     intent_specs: list[tuple[str, tuple[str, ...], float, bool]] = [
         (
+            "file_reference",
+            (
+                "te mandei um arquivo",
+                "te enviei um arquivo",
+                "enviei um arquivo",
+                "mandei um arquivo",
+                "anexo",
+                "arquivo",
+                "documento",
+                "upload",
+            ),
+            0.88,
+            False,
+        ),
+        (
             "reminder",
             (
                 "lembrete",
@@ -106,6 +121,8 @@ def build_understanding_payload(message: str) -> dict[str, Any] | None:
             base_confidence = 0.72
 
     summary = normalized
+    if intent == "file_reference":
+        summary = "Usuario informou que enviou um arquivo para consulta."
     if len(summary) > 180:
         summary = f"{summary[:177].rstrip()}..."
 

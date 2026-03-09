@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from typing import Any, Optional
 
@@ -89,15 +90,17 @@ class RAGService:
         for m in memories:
             content = ""
             mem_type = "memory"
+            metadata: dict[str, Any] = {}
             if isinstance(m, dict):
                 content = (
                     m.get("content", "")
                     or (m.get("payload") or {}).get("content", "")
                     or m.get("page_content", "")
                 )
+                metadata = (m.get("metadata") or {}) if isinstance(m.get("metadata"), dict) else {}
                 mem_type = (
                     m.get("type")
-                    or (m.get("metadata") or {}).get("type")
+                    or metadata.get("type")
                     or "memory"
                 )
             else:
@@ -107,9 +110,95 @@ class RAGService:
             if not content:
                 continue
             content_preview = content[:500] + "..." if len(content) > 500 else content
-            memory_lines.append(f"- [{mem_type}]: {content_preview}")
+            label = mem_type
+            if mem_type == "doc_chunk":
+                file_name = str(
+                    metadata.get("file_name")
+                    or metadata.get("title")
+                    or metadata.get("doc_id")
+                    or ""
+                ).strip()
+                if file_name:
+                    label = f"{mem_type}:{file_name}"
+            memory_lines.append(f"- [{label}]: {content_preview}")
 
         return "\n".join(memory_lines) if memory_lines else None
+
+    def _references_uploaded_material(self, message: str) -> bool:
+        text = (message or "").lower()
+        patterns = (
+            r"\barquivo\b",
+            r"\banexo\b",
+            r"\bdocumento\b",
+            r"\bupload\b",
+            r"\benviei\b",
+            r"\bmandei\b",
+            r"\bte mandei\b",
+            r"\battachment\b",
+            r"\battached\b",
+            r"\bsent\b",
+        )
+        return any(re.search(pattern, text) for pattern in patterns)
+
+    async def _conversation_document_context(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str,
+        limit: int = 3,
+    ) -> str | None:
+        client = get_async_qdrant_client()
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name(str(user_id)))
+        scroll_res = await client.scroll(
+            collection_name=collection_name,
+            scroll_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="metadata.type",
+                        match=qdrant_models.MatchValue(value="doc_chunk"),
+                    ),
+                    qdrant_models.FieldCondition(
+                        key="metadata.user_id",
+                        match=qdrant_models.MatchValue(value=str(user_id)),
+                    ),
+                    qdrant_models.FieldCondition(
+                        key="metadata.conversation_id",
+                        match=qdrant_models.MatchValue(value=str(conversation_id)),
+                    ),
+                ]
+            ),
+            limit=max(limit * 8, limit),
+            with_payload=True,
+        )
+        points = scroll_res[0] if isinstance(scroll_res, tuple) else (scroll_res or [])
+        docs: dict[str, dict[str, Any]] = {}
+        for point in points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            doc_id = str(metadata.get("doc_id") or "").strip()
+            if not doc_id:
+                continue
+            current = docs.get(doc_id)
+            if current is None:
+                docs[doc_id] = {
+                    "file_name": metadata.get("file_name") or doc_id,
+                    "summary": metadata.get("semantic_summary") or "",
+                    "preview": str(payload.get("content") or "").strip(),
+                }
+            if len(docs) >= limit:
+                break
+        if not docs:
+            return None
+        lines = ["Documentos anexados nesta conversa:"]
+        for item in list(docs.values())[:limit]:
+            detail = str(item.get("summary") or item.get("preview") or "").strip()
+            if len(detail) > 180:
+                detail = f"{detail[:177].rstrip()}..."
+            if detail:
+                lines.append(f"- {item.get('file_name')}: {detail}")
+            else:
+                lines.append(f"- {item.get('file_name')}")
+        return "\n".join(lines)
 
     def _emit_step_telemetry(
         self,
@@ -303,6 +392,19 @@ class RAGService:
             preference_context = user_preference_memory_service.format_preference_context(preference_items)
             generic_context = self._format_memories(memories)
             combined_context = self._combine_memory_context(preference_context, generic_context)
+            if conversation_id and self._references_uploaded_material(message):
+                try:
+                    conversation_doc_context = await self._conversation_document_context(
+                        user_id=str(user_id),
+                        conversation_id=str(conversation_id),
+                    )
+                except Exception as doc_exc:
+                    logger.warning("rag_conversation_document_context_failed", error=str(doc_exc))
+                    conversation_doc_context = None
+                combined_context = self._combine_memory_context(
+                    conversation_doc_context,
+                    combined_context,
+                )
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
             scores = [m.get("score") for m in memories]

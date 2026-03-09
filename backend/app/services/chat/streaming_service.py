@@ -20,7 +20,7 @@ from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.chat.chat_citation_service import (
     MANDATORY_CITATION_GUARD_TEXT,
     build_citation_status,
-    map_citation_hits,
+    collect_chat_citations,
 )
 from app.services.chat.chat_contracts import (
     build_agent_state,
@@ -472,69 +472,15 @@ class StreamingService:
             citations: list[dict[str, Any]] = []
             citations_retrieval_failed = False
             try:
-                from qdrant_client import models as qdrant_models
-
-                from app.core.embeddings.embedding_manager import aembed_text
-                from app.db.vector_store import (
-                    aget_or_create_collection,
-                    build_user_chat_collection_name,
-                    get_async_qdrant_client,
-                )
-
-                vec = await aembed_text(message)
-                coll = (
-                    await aget_or_create_collection(build_user_chat_collection_name(str(user_id)))
-                    if user_id
-                    else await aget_or_create_collection("janus_episodic_memory")
-                )
-
-                must: list[qdrant_models.FieldCondition] = []
-                if user_id:
-                    must.append(
-                        qdrant_models.FieldCondition(
-                            key="metadata.user_id", match=qdrant_models.MatchValue(value=str(user_id))
-                        )
-                    )
-                if conversation_id:
-                    must.append(
-                        qdrant_models.FieldCondition(
-                            key="metadata.session_id",
-                            match=qdrant_models.MatchValue(value=conversation_id),
-                        )
-                    )
-                must_not: list[qdrant_models.FieldCondition] = [
-                    qdrant_models.FieldCondition(
-                        key="metadata.status", match=qdrant_models.MatchValue(value="duplicate")
-                    )
-                ]
-
-                query_filter = (
-                    qdrant_models.Filter(must=must, must_not=must_not)
-                    if must
-                    else qdrant_models.Filter(must_not=must_not)
-                )
-                client = get_async_qdrant_client()
-                res = await client.query_points(
-                    collection_name=coll,
-                    query=vec,
+                citation_result = await collect_chat_citations(
+                    message=message,
+                    user_id=str(user_id) if user_id is not None else None,
+                    conversation_id=conversation_id,
+                    memory_service=getattr(self._rag_service, "_memory", None),
                     limit=5,
-                    with_payload=True,
-                    query_filter=query_filter,
                 )
-                hits = getattr(res, "points", res) or []
-                mapped_hits: list[dict[str, Any]] = []
-                for hit in hits:
-                    payload = getattr(hit, "payload", {}) or {}
-                    mapped_hits.append(
-                        {
-                            "id": getattr(hit, "id", None),
-                            "score": float(getattr(hit, "score", 0.0) or 0.0),
-                            "payload": payload,
-                            "metadata": payload.get("metadata") or {},
-                            "content": payload.get("content"),
-                        }
-                    )
-                citations = map_citation_hits(mapped_hits)
+                citations = citation_result.get("citations") or []
+                citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
             except Exception:
                 citations = []
                 citations_retrieval_failed = True
@@ -637,6 +583,8 @@ class StreamingService:
                     question=message,
                     role=role,
                     priority=priority,
+                    user_id=str(user_id) if user_id is not None else None,
+                    conversation_id=conversation_id,
                     progress_cb=_progress,
                 )
                 for progress_event in pending_progress_events:
