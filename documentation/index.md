@@ -69,6 +69,8 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 - [Contribution Guide](./contribution-guide.md)
 - [API Endpoint Matrix (Live)](./qa/api-endpoint-matrix.md)
 - [API Test Playbook](./qa/api-test-playbook.md)
+- [Incident Response Playbook](./qa/incident-response-playbook.md)
+- [Postmortem Template](./qa/postmortem-template.md)
 
 ## Existing Project Documentation
 

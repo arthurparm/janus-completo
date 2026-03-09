@@ -85,6 +85,8 @@ Comprehensive documentation is available in the `documentation/` directory:
 - [Deployment Split PC1/PC2](documentation/deployment-split-pc1-pc2.md)
 - [API Endpoint Matrix (Live)](documentation/qa/api-endpoint-matrix.md)
 - [API Test Playbook](documentation/qa/api-test-playbook.md)
+- [Incident Response Playbook](documentation/qa/incident-response-playbook.md)
+- [Postmortem Template](documentation/qa/postmortem-template.md)
 - [Domain SLOs and Alerts](documentation/qa/domain-slo-alerts.md)
 
 ## Roadmap / Backlog
