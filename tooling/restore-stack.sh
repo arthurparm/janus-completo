@@ -5,10 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR=""
 FORCE="false"
 SKIP_RABBIT_IMPORT="false"
+API_BASE_URL="http://localhost:8000"
+RABBITMQ_API_URL="http://localhost:15672"
 
 usage() {
   cat <<'EOF'
-Usage: tooling/restore-stack.sh --backup-dir <dir> [--force] [--skip-rabbitmq-definitions-import]
+Usage: tooling/restore-stack.sh --backup-dir <dir> [--force] [--skip-rabbitmq-definitions-import] [--api-base-url <url>] [--rabbitmq-api-url <url>]
 
 Restores cold backup archives created by tooling/backup-stack.sh.
 EOF
@@ -27,6 +29,14 @@ while [[ $# -gt 0 ]]; do
     --skip-rabbitmq-definitions-import)
       SKIP_RABBIT_IMPORT="true"
       shift
+      ;;
+    --api-base-url)
+      API_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --rabbitmq-api-url)
+      RABBITMQ_API_URL="${2:-}"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -100,22 +110,24 @@ docker compose up -d >/dev/null
 
 echo "Waiting for RabbitMQ before definitions import..."
 for _ in $(seq 1 60); do
-  if curl -s "http://localhost:15672" >/dev/null 2>&1; then
+  if curl -s "${RABBITMQ_API_URL%/}" >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
 
 if [[ "${SKIP_RABBIT_IMPORT}" == "false" && -f "${BACKUP_DIR}/rabbitmq-definitions.json" ]]; then
-  "${ROOT_DIR}/tooling/import-rabbitmq-definitions.sh" --input "${BACKUP_DIR}/rabbitmq-definitions.json" || {
+  "${ROOT_DIR}/tooling/import-rabbitmq-definitions.sh" \
+    --input "${BACKUP_DIR}/rabbitmq-definitions.json" \
+    --api-url "${RABBITMQ_API_URL}" || {
     echo "RabbitMQ definitions import failed (continuing)." >&2
   }
 fi
 
 echo "Running health checks..."
-curl -sf http://localhost:8000/health >/dev/null
-curl -sf http://localhost:8000/healthz >/dev/null
-curl -sf http://localhost:8000/api/v1/system/status >/dev/null
-curl -sf http://localhost:8000/api/v1/workers/status >/dev/null
+curl -sf "${API_BASE_URL%/}/health" >/dev/null
+curl -sf "${API_BASE_URL%/}/healthz" >/dev/null
+curl -sf "${API_BASE_URL%/}/api/v1/system/status" >/dev/null
+curl -sf "${API_BASE_URL%/}/api/v1/workers/status" >/dev/null
 
 echo "Restore completed from ${BACKUP_DIR}"

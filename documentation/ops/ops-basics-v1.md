@@ -79,6 +79,15 @@ O backup v1 para o stack para copiar os stores locais com consistencia simples.
 ./tooling/backup-stack.sh --skip-ollama
 ```
 
+Exemplo para ambiente remoto (PC Teste em `100.89.17.105`) via SSH:
+
+```bash
+ssh queliarte-server@100.89.17.105 \
+  "cd /caminho/do/repo/janus-completo && ./tooling/backup-stack.sh \
+    --skip-ollama \
+    --rabbitmq-api-url http://100.89.17.105:15672"
+```
+
 Saida padrao:
 
 - `outputs/backups/<timestamp>/manifest.json`
@@ -92,6 +101,7 @@ Saida padrao:
 - `--output-dir <dir>`: muda destino do backup
 - `--include-ollama`: inclui `backend/data/ollama` (pode ser grande)
 - `--no-restart`: nao sobe o stack no final (manutencao manual)
+- `--rabbitmq-api-url <url>`: endpoint da API de management do RabbitMQ
 
 ## Restore (cold backup v1)
 
@@ -101,6 +111,17 @@ Restore sobrescreve `backend/data/*` a partir de um backup gerado pelo script.
 
 ```bash
 ./tooling/restore-stack.sh --backup-dir outputs/backups/<timestamp> --force
+```
+
+Exemplo para ambiente remoto (PC Teste em `100.89.17.105`) via SSH:
+
+```bash
+ssh queliarte-server@100.89.17.105 \
+  "cd /caminho/do/repo/janus-completo && ./tooling/restore-stack.sh \
+    --backup-dir outputs/backups/<timestamp> \
+    --force \
+    --api-base-url http://100.89.17.105:8000 \
+    --rabbitmq-api-url http://100.89.17.105:15672"
 ```
 
 ### Comportamento
@@ -115,6 +136,8 @@ Restore sobrescreve `backend/data/*` a partir de um backup gerado pelo script.
 ### Flags uteis
 
 - `--skip-rabbitmq-definitions-import`
+- `--api-base-url <url>`: base da API para health checks pos-restore
+- `--rabbitmq-api-url <url>`: endpoint da API de management do RabbitMQ
 
 ## Config opcional: Google service account
 
@@ -129,10 +152,10 @@ Se nao usar essas integracoes, o arquivo pode permanecer ausente.
 
 ```bash
 docker compose ps
-curl -sf http://localhost:8000/health
-curl -sf http://localhost:8000/healthz
-curl -sf http://localhost:8000/api/v1/system/status
-curl -sf http://localhost:8000/api/v1/workers/status
+curl -sf http://100.89.17.105:8000/health
+curl -sf http://100.89.17.105:8000/healthz
+curl -sf http://100.89.17.105:8000/api/v1/system/status
+curl -sf http://100.89.17.105:8000/api/v1/workers/status
 docker compose logs --since=2m janus-api
 docker compose logs --since=2m rabbitmq
 docker compose logs --since=2m prometheus
