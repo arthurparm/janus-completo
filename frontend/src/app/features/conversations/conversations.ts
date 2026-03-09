@@ -1500,7 +1500,7 @@ export class ConversationsComponent {
         updated_at: now
       }
       this.conversations.update((items) => [meta, ...items])
-      this.selectedId.set(conversationId)
+      this.selectConversation(conversationId)
       if (navigateImmediately) {
         this.pendingConversationRouteId = null
         this.router.navigate(['/conversations', conversationId], { replaceUrl: true })
