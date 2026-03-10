@@ -24,6 +24,17 @@ def test_extract_secret_strips_trailing_punctuation():
     assert result["secret_value"] == "Abc12345"
 
 
+def test_extract_secret_normalizes_eh_colon_format():
+    svc = SecretMemoryService()
+
+    result = svc.extract_secret("Minha senha do wi-fi eh: Abc12345.")
+
+    assert result is not None
+    assert result["secret_label"] == "senha do wi-fi"
+    assert result["secret_value"] == "Abc12345"
+    assert result["masked_value"] == "Ab****45"
+
+
 def test_should_authorize_prompt_recall_requires_explicit_request():
     svc = SecretMemoryService()
 

@@ -323,10 +323,12 @@ class SecretMemoryService:
     def _normalize_label(self, label: str) -> str:
         lowered = str(label or "").strip().lower()
         lowered = re.sub(r"\s+", " ", lowered)
+        lowered = re.sub(r"(?:\s+(?:eh|é))+$", "", lowered).strip()
         return lowered[:120]
 
     def _normalize_secret_value(self, value: str) -> str:
         normalized = str(value or "").strip()
+        normalized = re.sub(r"^[\s:=\-]+", "", normalized)
         normalized = normalized.rstrip(" \t\r\n")
         normalized = re.sub(r"[.!?,;:]+$", "", normalized)
         return normalized[:1000]
