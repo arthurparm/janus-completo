@@ -647,3 +647,47 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-026] Vulnerabilidades de Code Injection e RCE
+- Problema atual: Uso de \`eval\`, \`exec\` e \`subprocess.Popen(..., shell=True)\` com inputs manipuláveis expondo vulnerabilidade de injeção de comandos operacionais/RCE (Bandit alerts).
+- Solucao proposta: Remover o \`shell=True\` por passagem de array no Popen, e substituir/blindar \`eval\`/\`exec\` com parsing restritivo como \`ast.literal_eval\`.
+- Impacto esperado: Correção imediata de risco crítico de segurança com possibilidade de remote code execution.
+- Riscos: Redução do conjunto de comandos suportados pelas ferramentas de shell no Windows/Linux se mal adaptadas.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-027] Criação de Arquivos Temporários Inseguros
+- Problema atual: Uso de strings como \`/tmp/...\` (\`log_aware_reflector.py\`) que causam quebra no Windows e não garantem nomes únicos ou permições restritas.
+- Solucao proposta: Substituir por \`tempfile.NamedTemporaryFile\` ou \`gettempdir()\` combinado a tratamentos de caminho.
+- Impacto esperado: Previne colisão e falhas no Windows.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-028] Abertura Insegura de URLs com urllib
+- Problema atual: \`backend/app/core/infrastructure/message_broker.py\` e \`backend/app/core/tools/agent_tools.py\` realizam fetch de URLs arbitrários sem checar scheme. Permite uso de \`file://\` e LFI (Local File Inclusion).
+- Solucao proposta: Implementar checagem restrita que obrigue \`http\` ou \`https\`.
+- Impacto esperado: Prevê acesso a arquivos do disco do backend.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-029] Exposição de Credenciais em CI/CD
+- Problema atual: Tooling de automação (ex: \`tooling/run_api_e2e_all.py\`) e scripts de testes (\`benchmark_complex_process.py\`, etc) listam ou printam abertamente credenciais que terminam loggadas em CI/CD.
+- Solucao proposta: Modificar utilitários de tooling para mascarar outputs de variáveis de ambiente do tipo *password*, *secret* ou *token*.
+- Impacto esperado: Respeito às políticas de segurança contra vazamento de credenciais.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia

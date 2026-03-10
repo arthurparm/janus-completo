@@ -73,3 +73,39 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+## Achados do dia (2026-03-10)
+
+### 7. Injeção de Código (Code Injection) e Execução Insegura
+**Descrição:** Identificado o uso de `eval` e `exec` com inputs que podem ser manipulados, assim como chamadas `subprocess.Popen(..., shell=True)` abrindo portas para injeção de comandos operacionais e RCE.
+**Evidências:**
+- `backend/app/core/infrastructure/python_sandbox.py`: Uso de `exec()` para avaliação de código dinâmico.
+- `backend/app/core/tools/launcher_tools.py`: Uso de `subprocess.Popen(..., shell=True)`.
+- `backend/app/core/tools/faulty_tools.py`: Uso de `eval()` para executar expressões.
+**Próximos passos:**
+- Substituir `shell=True` por listas de argumentos seguros no `subprocess`.
+- Adicionar validação estrita (AST parsing) antes de usar `eval` ou removê-lo completamente.
+- Registrar issue SG-026 no backlog (`melhorias-possiveis.md`).
+
+### 8. Hardcoded Paths para Arquivos Temporários
+**Descrição:** Caminhos como `/tmp/...` estão fixados no código. Isso pode causar conflitos de permissão, colisão de nomes ou falhas em ambientes Windows que não possuem `/tmp`.
+**Evidências:**
+- `backend/app/core/memory/log_aware_reflector.py`: Uso do caminho rígido `/tmp/janus.log`.
+**Próximos passos:**
+- Mudar para uso de `tempfile.gettempdir()` ou o `filesystem_manager` da aplicação.
+- Registrar issue SG-027 no backlog.
+
+### 9. Abertura Insegura de URLs
+**Descrição:** Chamadas inseguras para abrir URLs, que podem permitir acesso a arquivos locais via protocolo `file://`.
+**Evidências:**
+- Arquivos `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py` realizam aberturas de URL (via urllib ou similar) sem validar os schemes permitidos.
+**Próximos passos:**
+- Implementar validação de schemes garantindo apenas a utilização de `http` ou `https`.
+- Registrar issue SG-028 no backlog.
+
+### 10. Exposição de Senhas e Segredos em Logs e Scripts de Teste
+**Descrição:** Diversos scripts imprimem informações sensíveis ou credenciais em clear text, gerando risco de vazamento em ferramentas de CI/CD e logs (Credentials Leak).
+**Evidências:**
+- `tooling/run_api_e2e_all.py`: Linha 181 imprime explicitamente variáveis cujos nomes contêm "password" ou "secret".
+**Próximos passos:**
+- Filtrar/mascarar chaves que contêm palavras como password/secret/token nos scripts antes de enviá-los ao stdout.
+- Registrar issue SG-029 no backlog.
