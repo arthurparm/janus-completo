@@ -2,6 +2,20 @@
 
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
+\n## Achados do dia (10/03/2026)
+
+### 7. API Drift e Cobertura Baixa
+*   **API Drift**: Foi detectado que o percentual de cobertura da API é de apenas 11.64%, com 205 endpoints descobertos de um total de 232.
+*   **Problemas no RabbitMQ**: A aplicação backend está falhando silenciosamente no fallback para um modo offline sem conexão quando não consegue encontrar o serviço RabbitMQ, apontando para configurações frágeis de ambiente, e resiliência mascarando problemas.
+
+**Evidências:**
+*   O comando `python tooling/generate_api_coverage_report.py` revela `coverage=11.64% uncovered=205`. Arquivos gerados em `outputs/qa/api_coverage_report.json`.
+*   Logs do Uvicorn para o `app.core.infrastructure.message_broker`: `RabbitMQ indisponível; seguindo em modo offline sem conexão.` (Exceção `aiormq.exceptions.AMQPConnectionError`).
+
+**Próximos passos:**
+*   Aumentar a cobertura de testes para os 205 endpoints não cobertos.
+*   Corrigir o resiliência do RabbitMQ para não esconder erros de infraestrutura sem alertas apropriados.
+
 
 ## Achados do dia
 

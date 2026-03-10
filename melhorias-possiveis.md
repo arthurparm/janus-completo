@@ -647,3 +647,14 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### SG-030: Tratamento silencioso de erro do RabbitMQ
+- **Problema atual**: O `app.core.infrastructure.message_broker` cai silenciosamente para um modo offline caso o RabbitMQ falhe ao conectar no startup (`[Errno 111] Connection refused`), escondendo erros de infraestrutura crítica no backend e prosseguindo sem conexão.
+- **Solucao proposta**: Implementar circuit breaker rigoroso com telemetria visível para o RabbitMQ, evitando falhar aberto sem disparar alarmes (fail-open inseguro/opaco).
+- **Impacto esperado**: Maior clareza e controle na indisponibilidade do broker, prevenindo perda silenciosa de mensagens assíncronas em produção.
+- **Riscos**: Se a aplicação depender ativamente do RabbitMQ, a falha abrupta na inicialização pode travar o startup se a resiliência não for refinada (retries com backoff via tenacity e alertas).
+- **Dependencias**: RabbitMQ.
+- **Prioridade**: P1
+- **Esforco**: M
+- **Dono**: Time de Backend / SRE
+- **Status**: Aberta
