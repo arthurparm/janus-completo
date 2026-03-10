@@ -64,6 +64,56 @@ class MessageOrchestrationService:
         self._conversation_service = conversation_service
         self._outbox_service = outbox_service
 
+    def _should_use_light_chat(
+        self,
+        *,
+        message: str,
+        role: ModelRole,
+        understanding: dict[str, Any] | None,
+    ) -> bool:
+        if role != ModelRole.ORCHESTRATOR:
+            return False
+        if not understanding or understanding.get("intent") not in {"general", "question"}:
+            return False
+        max_chars = int(os.getenv("CHAT_LIGHT_MAX_MESSAGE_CHARS", "160"))
+        return len((message or "").strip()) <= max_chars
+
+    def _schedule_rag_index_message(
+        self,
+        *,
+        text: str,
+        conversation_id: str,
+        role: str,
+        user_id: str | None,
+        project_id: str | None,
+        identity_source: str,
+    ) -> None:
+        if not self._rag_service or not text:
+            return
+
+        async def _index() -> None:
+            try:
+                await self._rag_service.maybe_index_message(
+                    text=text,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    role=role,
+                    caller_endpoint="/api/v1/chat/message",
+                    transport="rest",
+                    identity_source=identity_source,
+                )
+            except Exception as e:
+                logger.warning(
+                    "rag_index_message_failed",
+                    conversation_id=conversation_id,
+                    project_id=project_id,
+                    role=role,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+
+        asyncio.create_task(_index())
+
     async def send_message(
         self,
         conversation_id: str,
@@ -93,12 +143,17 @@ class MessageOrchestrationService:
         if message and size_bytes > max_bytes:
             raise MessageTooLargeError(size_bytes, max_bytes)
         understanding = build_understanding_payload(message)
+        use_light_chat = self._should_use_light_chat(
+            message=message,
+            role=role,
+            understanding=understanding,
+        )
 
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
         relevant_memories = None
         knowledge_route = None
-        if self._rag_service:
+        if self._rag_service and not use_light_chat:
             knowledge_route = get_knowledge_routing_policy().resolve(
                 RouteIntent.CHAT_CONTEXT_RETRIEVAL,
                 user_id=user_id,
@@ -130,19 +185,14 @@ class MessageOrchestrationService:
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         in_tokens = estimate_tokens(self._prompt_service, prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
-        try:
-            if self._rag_service:
-                await self._rag_service.maybe_index_message(
-                    text=message,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    role="user",
-                    caller_endpoint="/api/v1/chat/message",
-                    transport="rest",
-                    identity_source=identity_source,
-                )
-        except Exception as e:
-            logger.warning("log_warning", message=f"Failed to index user message for {conversation_id}: {e}")
+        self._schedule_rag_index_message(
+            text=message,
+            conversation_id=conversation_id,
+            role="user",
+            user_id=user_id,
+            project_id=project_id,
+            identity_source=identity_source,
+        )
 
         if self._command_handler.is_command(message):
             start_t = _time.time()
@@ -386,45 +436,27 @@ class MessageOrchestrationService:
 
         try:
             start_t = _time.time()
-            conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
-            persona = conv.get("persona") or "assistant"
-            history = await asyncio.to_thread(
-                self._repo.get_recent_messages, conversation_id, limit=20
-            )
-
-            relevant_memories = None
-            if self._rag_service:
-                try:
-                    relevant_memories = await self._rag_service.retrieve_context(
-                        message,
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        caller_endpoint="/api/v1/chat/message",
-                        transport="rest",
-                        identity_source=identity_source,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "rag_context_retrieval_failed",
-                        conversation_id=conversation_id,
-                        error=str(e),
-                    )
-
-            initial_prompt = await self._prompt_service.build_prompt(
-                persona, history, message, conv.get("summary"), relevant_memories
-            )
-
-            result = await self._agent_loop.run_loop(
-                conversation_id=conversation_id,
-                initial_prompt=initial_prompt,
-                persona=persona,
-                message=message,
-                role=role,
-                priority=priority,
-                timeout_seconds=timeout_seconds,
-                user_id=user_id,
-                project_id=project_id,
-            )
+            if use_light_chat:
+                result = await self._llm.invoke_llm(
+                    prompt=prompt,
+                    role=role,
+                    priority=priority,
+                    timeout_seconds=timeout_seconds,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            else:
+                result = await self._agent_loop.run_loop(
+                    conversation_id=conversation_id,
+                    initial_prompt=prompt,
+                    persona=persona,
+                    message=message,
+                    role=role,
+                    priority=priority,
+                    timeout_seconds=timeout_seconds,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -446,25 +478,15 @@ class MessageOrchestrationService:
         out_tokens = estimate_tokens(self._prompt_service, assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
-        if self._rag_service:
-            try:
-                rag_text = clean_text or assistant_text
-                await self._rag_service.maybe_index_message(
-                    text=rag_text,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    caller_endpoint="/api/v1/chat/message",
-                    transport="rest",
-                    identity_source=identity_source,
-                )
-            except Exception as e:
-                logger.warning(
-                    "rag_index_message_failed",
-                    conversation_id=conversation_id,
-                    error_type=type(e).__name__,
-                    error=str(e),
-                )
+        rag_text = clean_text or assistant_text
+        self._schedule_rag_index_message(
+            text=rag_text,
+            conversation_id=conversation_id,
+            role="assistant",
+            user_id=user_id,
+            project_id=project_id,
+            identity_source=identity_source,
+        )
 
         try:
             provider = result.get("provider", "unknown")
