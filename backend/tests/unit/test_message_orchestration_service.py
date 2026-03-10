@@ -510,6 +510,53 @@ async def test_send_message_document_grounding_rechecks_false_negative_extractio
 
 
 @pytest.mark.asyncio
+async def test_send_message_document_grounding_negative_omits_irrelevant_snippet(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"answered":false,"answer":"","supported_points":[],"missing_information":["diabetes mellitus"]}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "indexed",
+                "chunks_indexed": 1,
+                "file_name": "stroke.txt",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-1",
+                    "title": "stroke.txt",
+                    "file_path": "stroke.txt",
+                    "source_type": "document",
+                    "snippet": "The document states that common acute warning signs of ischemic stroke include facial droop.",
+                }
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="No documento enviado, ele fala sobre diabetes mellitus?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert "Nao encontrei no documento" in result["response"]
+    assert "diabetes mellitus" in result["response"]
+    assert "facial droop" not in result["response"]
+
+
+@pytest.mark.asyncio
 async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_lookup(monkeypatch):
     repo = _FakeRepo()
     prompt = _FakePromptService()

@@ -441,6 +441,7 @@ class MessageOrchestrationService:
         supported_points = extraction.get("supported_points") or []
         missing_information = extraction.get("missing_information") or []
         answered = extraction.get("answered")
+        allow_missing = (answered is False) or (answered is None and not citations)
 
         lines: list[str] = ["Do documento:"]
         if answer:
@@ -457,14 +458,13 @@ class MessageOrchestrationService:
 
         if supported_lines:
             lines.extend(supported_lines)
-        elif citations:
+        elif citations and not allow_missing:
             lines.extend(
                 f"- {self._trim_document_snippet(citation.get('snippet'))}"
                 for citation in citations[:2]
                 if self._trim_document_snippet(citation.get("snippet"))
             )
 
-        allow_missing = (answered is False) or (answered is None and not citations)
         if not supported_lines:
             missing_lines = [
                 str(item).strip()
