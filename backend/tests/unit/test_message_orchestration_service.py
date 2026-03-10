@@ -160,6 +160,18 @@ def _stub_active_memory_capture(monkeypatch):
         "app.services.chat.message_orchestration_service.active_memory_service.maybe_capture_from_message",
         AsyncMock(return_value=None),
     )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.procedural_memory_service.list_rules",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.should_authorize_prompt_recall",
+        lambda _message: False,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.list_secrets",
+        AsyncMock(return_value=[]),
+    )
 
 
 def _build_service(
@@ -608,3 +620,53 @@ async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_l
     assert rag.retrieve_calls == 1
     assert rag.index_calls == 2
     assert agent_loop.kwargs["initial_prompt"] == "assistant:Implemente um endpoint de health check com teste."
+
+
+@pytest.mark.asyncio
+async def test_send_message_secret_recall_uses_explicit_authorized_path(monkeypatch):
+    repo = _FakeRepo()
+    service = _build_service(repo=repo)
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.should_authorize_prompt_recall",
+        lambda _message: True,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.list_secrets",
+        AsyncMock(
+            return_value=[
+                {
+                    "secret_label": "senha ficticia do wi-fi",
+                    "secret_value": "Abc12345",
+                }
+            ]
+        ),
+    )
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Qual é a minha senha fictícia do Wi-Fi?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert result["model"] == "secret_memory"
+    assert result["response"] == "senha ficticia do wi-fi: Abc12345"
+
+
+@pytest.mark.asyncio
+async def test_apply_response_memory_policies_appends_next_steps(monkeypatch):
+    service = _build_service()
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.procedural_memory_service.list_rules",
+        AsyncMock(return_value=[{"scope": "closing"}]),
+    )
+
+    result = await service.apply_response_memory_policies(
+        assistant_text="Resposta objetiva.",
+        user_message="Explique cache invalidation.",
+        user_id="user-1",
+        conversation_id="conv-1",
+    )
+
+    assert "Próximos passos:" in result

@@ -42,9 +42,11 @@ from app.services.chat.conversation_service import ConversationService
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
 from app.services.outbox_service import OutboxService
+from app.services.procedural_memory_service import procedural_memory_service
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 from app.services.active_memory_service import active_memory_service
+from app.services.secret_memory_service import secret_memory_service
 
 logger = structlog.get_logger(__name__)
 
@@ -285,6 +287,106 @@ class MessageOrchestrationService:
             - Se as evidencias forem insuficientes, deixe "supported_points" vazio e explique isso em "answer".
             """
         ).strip()
+
+    async def generate_secret_recall_reply(
+        self,
+        *,
+        message: str,
+        role: ModelRole,
+        user_id: str | None,
+        conversation_id: str | None,
+    ) -> dict[str, Any] | None:
+        if not user_id or not secret_memory_service.should_authorize_prompt_recall(message):
+            return None
+        items = await secret_memory_service.list_secrets(
+            user_id=str(user_id),
+            query=message,
+            conversation_id=conversation_id,
+            limit=1,
+            reveal=True,
+        )
+        if not items:
+            return {
+                "response": "Nao encontrei um segredo autorizado salvo para esse pedido.",
+                "provider": "janus",
+                "model": "secret_memory",
+                "role": role.value,
+                "citations": [],
+                "citation_status": {
+                    "mode": "optional",
+                    "status": "not_applicable",
+                    "count": 0,
+                    "reason": "secret_not_found",
+                },
+            }
+        secret_item = items[0]
+        label = str(secret_item.get("secret_label") or "segredo").strip()
+        value = str(secret_item.get("secret_value") or "").strip()
+        if not value:
+            return None
+        response = f"{label}: {value}"
+        return {
+            "response": response,
+            "provider": "janus",
+            "model": "secret_memory",
+            "role": role.value,
+            "citations": [],
+            "citation_status": {
+                "mode": "optional",
+                "status": "not_applicable",
+                "count": 0,
+                "reason": "secret_authorized",
+            },
+        }
+
+    async def apply_response_memory_policies(
+        self,
+        *,
+        assistant_text: str,
+        user_message: str,
+        user_id: str | None,
+        conversation_id: str,
+    ) -> str:
+        if not user_id or not str(assistant_text or "").strip():
+            return assistant_text
+        try:
+            rules = await procedural_memory_service.list_rules(
+                user_id=str(user_id),
+                conversation_id=conversation_id,
+                query=None,
+                limit=10,
+                active_only=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "procedural_memory_policy_lookup_failed",
+                conversation_id=conversation_id,
+                user_id=user_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return assistant_text
+
+        normalized_message = str(user_message or "").lower()
+        disable_next_steps = any(
+            token in normalized_message
+            for token in (
+                "sem proximos passos",
+                "sem próximos passos",
+                "nao termine com proximos passos",
+                "não termine com próximos passos",
+            )
+        )
+        needs_closing_steps = any(str(rule.get("scope") or "") == "closing" for rule in rules)
+        if needs_closing_steps and not disable_next_steps:
+            if "próximos passos" not in assistant_text.lower() and "proximos passos" not in assistant_text.lower():
+                assistant_text = (
+                    assistant_text.rstrip()
+                    + "\n\nPróximos passos:\n"
+                    + "1. Diga se quer aprofundar, resumir ou aplicar isso.\n"
+                    + "2. Se preferir, eu transformo a resposta em ações executáveis."
+                )
+        return assistant_text
 
     def _build_document_grounding_recheck_prompt(
         self,
@@ -1020,6 +1122,35 @@ class MessageOrchestrationService:
                 pass
             return attach_understanding(result_with_conv, understanding)
 
+        secret_result = await self.generate_secret_recall_reply(
+            message=message,
+            role=role,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        if secret_result is not None:
+            assistant_text = str(secret_result.get("response") or "")
+            await asyncio.to_thread(
+                self._repo.add_message,
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+            )
+            result_with_conv = dict(secret_result)
+            result_with_conv["conversation_id"] = conversation_id
+            try:
+                self.trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=secret_result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+            return attach_understanding(result_with_conv, understanding)
+
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
         relevant_memories = None
@@ -1090,7 +1221,12 @@ class MessageOrchestrationService:
                 pass
             raise ChatServiceError(str(e)) from e
 
-        assistant_text = result.get("response", "")
+        assistant_text = await self.apply_response_memory_policies(
+            assistant_text=str(result.get("response", "")),
+            user_message=message,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
         clean_text, ui = split_ui(assistant_text)
         await asyncio.to_thread(
             self._repo.add_message, conversation_id, role="assistant", text=assistant_text

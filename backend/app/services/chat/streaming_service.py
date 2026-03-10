@@ -275,6 +275,39 @@ class StreamingService:
             yield f"event: done\ndata: {done}\n\n"
             return
 
+        secret_result = await self._message_orchestration_service.generate_secret_recall_reply(
+            message=message,
+            role=role,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        if secret_result is not None:
+            assistant_text = str(secret_result.get("response") or "")
+            tok = json.dumps(
+                {"text": assistant_text, "timestamp": int(_time.time() * 1000)},
+                ensure_ascii=False,
+            )
+            yield f"event: token\ndata: {tok}\n\n"
+            yield f"event: partial\ndata: {tok}\n\n"
+            saved_message = self._repo.add_message(
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+            )
+            done = json.dumps(
+                {
+                    "conversation_id": conversation_id,
+                    "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
+                    "provider": secret_result.get("provider"),
+                    "model": secret_result.get("model"),
+                    "citations": [],
+                    "citation_status": secret_result.get("citation_status"),
+                },
+                ensure_ascii=False,
+            )
+            yield f"event: done\ndata: {done}\n\n"
+            return
+
         persona = conv.get("persona") or "assistant"
         history = self._repo.get_recent_messages(conversation_id, limit=20)
 
@@ -651,7 +684,12 @@ class StreamingService:
                 citations=citations,
                 retrieval_failed=citations_retrieval_failed,
             )
-            assistant_text = str(result.get("response") or "")
+            assistant_text = await self._message_orchestration_service.apply_response_memory_policies(
+                assistant_text=str(result.get("response") or ""),
+                user_message=message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+            )
             if citation_status.get("status") == "missing_required":
                 yield (
                     "event: cognitive_status\ndata: "
