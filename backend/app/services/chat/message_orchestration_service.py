@@ -365,6 +365,11 @@ class MessageOrchestrationService:
             for row in manifests
             if str(row.get("status") or "") == "indexed" and int(row.get("chunks_indexed") or 0) > 0
         ]
+        indexed_doc_ids = {
+            str(row.get("doc_id") or "")
+            for row in indexed_manifests
+            if str(row.get("doc_id") or "").strip()
+        }
         processing_manifests = [
             row
             for row in manifests
@@ -387,6 +392,24 @@ class MessageOrchestrationService:
                 conversation_id=conversation_id,
                 limit=6,
             )
+            if indexed_doc_ids:
+                citations = [
+                    citation
+                    for citation in citations
+                    if str(citation.get("doc_id") or "") in indexed_doc_ids
+                ]
+                if not citations:
+                    fallback_citations = await collect_document_citations(
+                        message="documento enviado",
+                        user_id=str(user_id) if user_id is not None else None,
+                        conversation_id=conversation_id,
+                        limit=6,
+                    )
+                    citations = [
+                        citation
+                        for citation in fallback_citations
+                        if str(citation.get("doc_id") or "") in indexed_doc_ids
+                    ]
         except Exception as exc:
             retrieval_failed = True
             logger.warning(
@@ -457,7 +480,7 @@ class MessageOrchestrationService:
                 "active": True,
                 "mode": "strict",
                 "manifest_statuses": [str(row.get("status") or "") for row in manifests],
-                "indexed_doc_ids": [str(row.get("doc_id") or "") for row in indexed_manifests],
+                "indexed_doc_ids": sorted(indexed_doc_ids),
             },
         }
 

@@ -382,6 +382,71 @@ async def test_send_message_document_grounding_returns_processing_notice_when_no
 
 
 @pytest.mark.asyncio
+async def test_send_message_document_grounding_ignores_processing_doc_chunks(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"answer":"O documento menciona facial droop e speech disturbance.",'
+            '"supported_points":[{"statement":"Ha mencao a facial droop.","citation_ids":[1]}],'
+            '"missing_information":[]}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-indexed",
+                "status": "indexed",
+                "chunks_indexed": 1,
+                "file_name": "indexed.txt",
+            },
+            {
+                "doc_id": "doc-processing",
+                "status": "processing",
+                "chunks_indexed": 40,
+                "file_name": "processing.txt",
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "doc_id": "doc-processing",
+                        "title": "processing.txt",
+                        "file_path": "processing.txt",
+                        "source_type": "document",
+                        "snippet": "Trecho parcial sem a resposta correta.",
+                    }
+                ],
+                [
+                    {
+                        "doc_id": "doc-indexed",
+                        "title": "indexed.txt",
+                        "file_path": "indexed.txt",
+                        "source_type": "document",
+                        "snippet": "Ischemic stroke signs include facial droop and speech disturbance.",
+                    }
+                ],
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="No documento enviado, quais sinais de AVC aparecem?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert "facial droop" in result["response"]
+    assert result["citations"][0]["doc_id"] == "doc-indexed"
+
+
+@pytest.mark.asyncio
 async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_lookup(monkeypatch):
     repo = _FakeRepo()
     prompt = _FakePromptService()
