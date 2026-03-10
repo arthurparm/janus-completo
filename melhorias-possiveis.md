@@ -97,7 +97,6 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-011 | Eliminar segredos default (config.py) e restringir CORS | P0 | S | feito (2026-02-20) |
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
-
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
 | SG-020 | Corrigir vulnerabilidade de SQL Injection no dedupe_service.py (f-strings) | P0 | M | aberto |
@@ -106,6 +105,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-023 | LGPD: Ofuscar comandos de voz capturados e logados em daemon.py | P1 | S | aberto |
 | SG-024 | Atualizar @hono/node-server no frontend para mitigar vulnerabilidade de alta severidade | P1 | S | aberto |
 | SG-025 | Substituir geradores pseudo-aleatorios padrao por secrets no auto_analysis.py | P2 | S | aberto |
+| SG-026 | Mitigar Command Injection (shell=True) e Code Injection em launcher_tools.py, python_sandbox.py e faulty_tools.py | P0 | S | aberto |
+| SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
+| SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
+| SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -647,3 +650,47 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-026] Vulnerabilidade de Code Injection e Execução Arbitrária
+- Problema atual: Uso de `subprocess.Popen` com `shell=True` (OS Command Injection) e também chamadas como `exec`/`eval` estão presentes em `backend/app/core/tools/launcher_tools.py`, `backend/app/core/infrastructure/python_sandbox.py` e `backend/app/core/tools/faulty_tools.py`.
+- Solucao proposta: Refatorar subprocess para usar listas de parâmetros removendo `shell=True`. Aplicar mecanismos de sandbox restrito para as camadas de interpretação de Python local e remover `exec`/`eval` não sanitizados.
+- Impacto esperado: Remoção da possibilidade de escalonamento de privilégio e execução indevida no host/container da API.
+- Riscos: Falhas de funcionalidade em ferramentas que dependam do Shell global ou de injeção dinâmica intencional.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-027] Criação Insegura de Arquivos Temporários
+- Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
+- Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
+- Impacto esperado: Arquivos temporários serão restritos e protegidos a nível de SO.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-028] Abertura de URL com Esquemas Arbitrários (SSRF / File Read)
+- Problema atual: Uso de `urllib.urlopen` em `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py` permitindo esquemas não HTTP (como `file://`), possibilitando Server-Side Request Forgery ou leitura arbitrária.
+- Solucao proposta: Forçar restrição e checagem de url explícita (`startswith('http://')` ou `'https://'`) antes de invocar a chamada ou delegar ao `httpx` / `requests` estritos.
+- Impacto esperado: Bloqueio de leitura de arquivos locais via API.
+- Riscos: Ferramentas de desenvolvimento podem parar se usarem esquemas locais intencionalmente.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-029] Exposição de Credenciais Hardcoded em Scripts
+- Problema atual: Scripts como `tooling/run_api_e2e_all.py`, `benchmark_complex_process.py` e `chaos_harness.py` efetuam log e print explícitos de secrets e senhas no stdout do processo.
+- Solucao proposta: Substituir prints dessas informações por ofuscações `***` ou variáveis de ambiente/mock (`SecretStr`).
+- Impacto esperado: Menor risco de exposição de credenciais em logs de sistema e ambientes de CI/CD.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

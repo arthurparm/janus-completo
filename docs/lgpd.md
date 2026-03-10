@@ -36,3 +36,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Adicionar Auditoria e Redação Visual:** No `windows_agent.py`, logar toda requisição com escopo, finalidade e ofuscar ativamente áreas sensíveis do display antes de retorná-lo.
 2. **Filtrar Logs do Daemon:** Integrar uma camada de _PII scrubbing_ aos canais do logger em `daemon.py` para os conteúdos textuais transcritos dos comandos vocais.
+
+## Achados do dia (2026-03-10)
+
+### Lacunas e Impacto
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** O `backend/app/core/tools/productivity_tools.py` continua registrando e-mails e tópicos no logger (.info) sem qualquer camada de _redaction_, permitindo que dados sensíveis cruciais caiam em dumps de logs estáticos (`janus.log`) para potenciais administradores ou atacantes lerem.
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** As listas na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` ficam no estado global, de modo que os lembretes ou notas de um usuário podem ser acessadas por outras threads e requests em concorrência se a chave/índice não garantir isolamento total (Sessão global exposta).
+
+### Próximos Passos
+1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
+2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
