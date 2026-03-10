@@ -106,6 +106,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-023 | LGPD: Ofuscar comandos de voz capturados e logados em daemon.py | P1 | S | aberto |
 | SG-024 | Atualizar @hono/node-server no frontend para mitigar vulnerabilidade de alta severidade | P1 | S | aberto |
 | SG-025 | Substituir geradores pseudo-aleatorios padrao por secrets no auto_analysis.py | P2 | S | aberto |
+| SG-026 | Vulnerabilidades de Injeção de Código (shell, exec, eval) | P1 | M | aberto |
+| SG-027 | Criação Insegura de Arquivos Temporários | P2 | S | aberto |
+| SG-028 | Práticas de Abertura de URL Inseguras e Potencial SSRF | P1 | S | aberto |
+| SG-029 | Segredos Expostos nos Testes/Toolings e Logs da Pipeline | P1 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -647,3 +651,47 @@ Copiar e preencher:
 - Esforco: M
 - Dono: a definir
 - Status: ideia
+
+### [SG-026] Vulnerabilidades de Injeção de Código (shell, exec, eval)
+- Problema atual: Uso de `shell=True`, `exec`, e `eval` em ferramentas de launcher e sandboxing.
+- Solucao proposta: Remover execuções de comandos vulneráveis com `shell=True`, validar strings rigorosamente para mitigar command injection e refatorar parsers de AST invés de `eval`/`exec`.
+- Impacto esperado: Menor superfície de ataque e mitigação contra RCE (Remote Code Execution).
+- Riscos: Redução de flexibilidade no executor de comandos.
+- Dependencias: Testes da execução do `launcher_tools.py` e `python_sandbox.py`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-027] Criação Insegura de Arquivos Temporários
+- Problema atual: Uso de caminhos fixos como `/tmp/janus.log` no módulo de reflexão (`log_aware_reflector.py`).
+- Solucao proposta: Utilizar diretórios temporários gerados em runtime com funções built-in como `tempfile.NamedTemporaryFile`.
+- Impacto esperado: Evita manipulação local de arquivos por usuários não autorizados no sistema operacional.
+- Riscos: Mínimos.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-028] Práticas de Abertura de URL Inseguras e Potencial SSRF
+- Problema atual: Uso de `urllib.urlopen` no `message_broker.py` e `agent_tools.py` permite schemes arbitrários (como `file:/`).
+- Solucao proposta: Sanitizar ou aplicar regex de validação para forçar estritamente os esquemas `http` ou `https`.
+- Impacto esperado: Fechamento de brechas de acesso a arquivos locais e exploits baseados em URL maliciosas injetadas (SSRF/LFI).
+- Riscos: Mínimo impacto nas funcionalidades regulares.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-029] Segredos Expostos nos Testes/Toolings e Logs da Pipeline
+- Problema atual: Scripts como `tooling/run_api_e2e_all.py` incluem senhas e logs vulneráveis exibindo/logando PII ou credenciais explicitamente.
+- Solucao proposta: Migrar dados de login e credenciais hardcoded nos arquivos Python de tooling para variáveis de ambiente `.env.test`, removendo as strings dos comandos CLI e evitando prints contínuos.
+- Impacto esperado: Remoção de vazamentos de secrets não intencionais na suíte de testes / automação QA.
+- Riscos: Alterações sutis no workflow atual para QA Engineer local.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

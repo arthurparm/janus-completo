@@ -83,3 +83,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Evidência:** Execução de `pip-audit` falhou.
 - **Descrição:** Ambiente restrito ou dependências conflitantes/faltantes impediram a varredura completa do `requirements.txt`.
 - **Ação Recomendada:** Garantir pré-instalação de ambiente reprodutível (lockfile) para as varreduras do `pip-audit`.
+
+## Achados do dia (2026-03-09)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Limpo / Sem novas dependências críticas**
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas por Bandit e Auditoria Técnica)
+
+### 12. Vulnerabilidades de Code Injection e Execução de Comandos (OS Command Injection e Eval)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`, `backend/app/core/infrastructure/python_sandbox.py`, `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Alta (Bandit B602, B603, B102, B307)
+- **Descrição:** Múltiplas instâncias de execução de comandos inseguros, incluindo uso de `shell=True` no `launcher_tools.py`, `exec` no `python_sandbox.py` e `eval` em `faulty_tools.py`.
+- **Ação Recomendada:** Refatorar a execução de comandos usando sintaxes de array/lista e desativar `shell=True`. Substituir `eval` e `exec` por bibliotecas seguras ou AST parsing se essencial.
+
+### 13. Criação de Arquivos Temporários Inseguros
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py`
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** O arquivo usa caminhos temporários estáticos em `/tmp/janus.log`, o que pode causar colisão de nomes ou ataques de manipulação de logs entre usuários no host ou contêiner.
+- **Ação Recomendada:** Utilizar módulos built-in seguros (`tempfile.NamedTemporaryFile` ou semelhante) com permissões isoladas.
+
+### 14. Unsafe URL Opening Practices
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`, `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de `urllib.urlopen` com URLs não estritamente controladas pode permitir exploração com schemes arbitrários (como `file:/`), possibilitando leitura local não autorizada (Local File Inclusion / SSRF).
+- **Ação Recomendada:** Adicionar validação de payload estrita que aceite somente schemes `http` ou `https`.

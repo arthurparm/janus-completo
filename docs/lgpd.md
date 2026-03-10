@@ -36,3 +36,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Adicionar Auditoria e Redação Visual:** No `windows_agent.py`, logar toda requisição com escopo, finalidade e ofuscar ativamente áreas sensíveis do display antes de retorná-lo.
 2. **Filtrar Logs do Daemon:** Integrar uma camada de _PII scrubbing_ aos canais do logger em `daemon.py` para os conteúdos textuais transcritos dos comandos vocais.
+
+## Achados do dia (2026-03-09)
+
+### Lacunas e Impacto
+- **Credenciais e Segredos em Arquivos de Teste:** Scripts em `tooling/` como `tooling/run_api_e2e_all.py`, `benchmark_complex_process.py`, e `chaos_harness.py` possuem logs ou parâmetros de linha de comando com senhas ("password") fixadas, representando risco de vazamento severo na infraestrutura e nos logs em pipelines CI/CD.
+
+### Próximos Passos
+1. **Redação de Credenciais e Senhas em Logs e Testes:** Remover senhas fixas (hardcoded) dos scripts de utilidade/infra em `tooling/` ou adicionar mecanismos para usar o `getpass` interativo. Loggers de QA nunca devem escrever tokens de autorização e/ou senhas em arquivos de persistência contínua ou no stdout.
