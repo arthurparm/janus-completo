@@ -73,6 +73,10 @@ class _FakePromptService:
 class _FakeMessageOrchestration:
     def __init__(self):
         self.calls = 0
+        self.grounded_result = None
+
+    async def generate_document_grounded_reply(self, **kwargs):
+        return self.grounded_result
 
     def trigger_post_response_events(
         self, conversation_id, user_message, assistant_text, result, user_id, project_id
@@ -298,3 +302,56 @@ async def test_streaming_service_missing_required_citations_emits_and_persists_g
     assert token_text
     assert token_text != MANDATORY_CITATION_GUARD_TEXT
     assert repo.messages[-1][0:3] == ("conv-1", "assistant", token_text)
+
+
+@pytest.mark.asyncio
+async def test_streaming_service_document_grounding_short_circuits_llm():
+    repo = _FakeRepo()
+    convo_service = ConversationService(repo)
+    msg_orch = _FakeMessageOrchestration()
+    msg_orch.grounded_result = {
+        "response": "Do documento:\n- O texto menciona facial droop.",
+        "provider": "janus",
+        "model": "document_grounding",
+        "citations": [
+            {
+                "doc_id": "doc-1",
+                "title": "stroke.txt",
+                "source_type": "document",
+                "snippet": "facial droop",
+            }
+        ],
+        "citation_status": {"mode": "optional", "status": "present", "count": 1, "reason": None},
+    }
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=_FakeLLM(),
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=None,
+        conversation_service=convo_service,
+        message_orchestration_service=msg_orch,
+    )
+
+    events = _parse_sse_chunks(
+        [
+            line
+            async for line in streaming.stream_message(
+                conversation_id="conv-1",
+                message="Quais sinais o documento cita?",
+                role=ModelRole.ORCHESTRATOR,
+                priority=ModelPriority.HIGH_QUALITY,
+                user_id="1",
+            )
+        ]
+    )
+
+    done = [payload for event, payload in events if event == "done" and isinstance(payload, dict)][-1]
+    assert done["model"] == "document_grounding"
+    assert done["citation_status"]["status"] == "present"
+    token_text = "".join(
+        str(payload.get("text") or "")
+        for event, payload in events
+        if event == "token" and isinstance(payload, dict)
+    )
+    assert "facial droop" in token_text

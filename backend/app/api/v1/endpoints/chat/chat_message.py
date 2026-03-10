@@ -204,26 +204,30 @@ async def send_message(
             ),
         )
 
-    try:
-        citation_result = await collect_chat_citations(
+    citations = result.get("citations")
+    citation_status = result.get("citation_status")
+    if not isinstance(citations, list) or not isinstance(citation_status, dict):
+        try:
+            citation_result = await collect_chat_citations(
+                message=payload.message,
+                user_id=str(user_id) if user_id is not None else None,
+                conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+                memory_service=memory,
+                limit=5,
+            )
+            citations = citation_result.get("citations") or []
+            citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
+        except Exception as e:
+            logger.warning("chat_message_citations_failed", error=str(e))
+            citations = []
+            citations_retrieval_failed = True
+        citation_status = build_citation_status(
             message=payload.message,
-            user_id=str(user_id) if user_id is not None else None,
-            conversation_id=str(result.get("conversation_id") or payload.conversation_id),
-            memory_service=memory,
-            limit=5,
+            citations=citations,
+            retrieval_failed=citations_retrieval_failed,
         )
-        citations = citation_result.get("citations") or []
-        citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
-    except Exception as e:
-        logger.warning("chat_message_citations_failed", error=str(e))
-        citations = []
-        citations_retrieval_failed = True
     result["citations"] = citations
-    result["citation_status"] = build_citation_status(
-        message=payload.message,
-        citations=citations,
-        retrieval_failed=citations_retrieval_failed,
-    )
+    result["citation_status"] = citation_status
     pending_action_id = None
     try:
         if result.get("pending_action_id") is not None:

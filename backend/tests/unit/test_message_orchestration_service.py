@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+from unittest.mock import AsyncMock
 
 from app.core.exceptions.chat_exceptions import MessageTooLargeError
 from app.core.llm import ModelPriority, ModelRole
@@ -142,6 +143,14 @@ class _FakeConversationService(ConversationService):
         self.validations.append((conversation_id, user_id, project_id))
 
 
+class _FakeManifestRepo:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    def list_manifests(self, **kwargs):
+        return list(self.rows)
+
+
 def _build_service(
     repo=None,
     llm_service=None,
@@ -150,6 +159,7 @@ def _build_service(
     agent_loop=None,
     rag_service=None,
     outbox_service=None,
+    manifest_repo=None,
 ):
     return MessageOrchestrationService(
         repo=repo or _FakeRepo(),
@@ -161,6 +171,7 @@ def _build_service(
         agent_loop=agent_loop or _FakeAgentLoop(),
         conversation_service=_FakeConversationService(),
         outbox_service=outbox_service,
+        manifest_repo=manifest_repo or _FakeManifestRepo(),
     )
 
 
@@ -220,7 +231,7 @@ async def test_send_message_agent_loop_path_persists_and_enqueues_post_event():
 
     result = await service.send_message(
         conversation_id="conv-1",
-        message="mensagem normal",
+        message="Implemente uma rotina de deploy com rollback e validacao completa.",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
         user_id="user-1",
@@ -284,6 +295,90 @@ async def test_send_message_light_chat_bypasses_agent_loop_and_skips_rag_lookup(
     assert rag.index_calls == 2
     assert result["provider"] == "dummy-llm"
     assert result["response"] == "resposta leve"
+
+
+@pytest.mark.asyncio
+async def test_send_message_document_grounding_uses_evidence_and_preserves_citations(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"answer":"O documento cita sinais neurologicos agudos.",'
+            '"supported_points":[{"statement":"O texto menciona facial droop.",'
+            '"citation_ids":[1]},{"statement":"O texto menciona speech disturbance.",'
+            '"citation_ids":[1]}],'
+            '"missing_information":[]}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "indexed",
+                "chunks_indexed": 3,
+                "file_name": "stroke.txt",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-1",
+                    "title": "stroke.txt",
+                    "file_path": "stroke.txt",
+                    "source_type": "document",
+                    "snippet": "Ischemic stroke warning signs include facial droop and speech disturbance.",
+                }
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Quais sinais de AVC o documento menciona?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert "Do documento:" in result["response"]
+    assert "facial droop" in result["response"]
+    assert "Nao encontrei no documento" not in result["response"]
+    assert result["citations"][0]["doc_id"] == "doc-1"
+    assert result["citation_status"]["status"] == "present"
+    assert llm.calls
+
+
+@pytest.mark.asyncio
+async def test_send_message_document_grounding_returns_processing_notice_when_no_indexed_docs():
+    repo = _FakeRepo()
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "processing",
+                "chunks_indexed": 0,
+                "file_name": "stroke.txt",
+            }
+        ]
+    )
+    llm = _FakeLLMService()
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Analise o arquivo que eu mandei",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert "ainda estao sendo processados" in result["response"]
+    assert result["model"] == "document_processing"
+    assert result["citation_status"]["status"] == "not_applicable"
+    assert not llm.calls
 
 
 @pytest.mark.asyncio

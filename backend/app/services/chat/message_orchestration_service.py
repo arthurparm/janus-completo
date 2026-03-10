@@ -1,11 +1,13 @@
 import asyncio
 import hashlib
 import os
+import textwrap
 import time as _time
 from typing import Any
 
 import structlog
 
+from app.core.agents.utils import parse_json_lenient
 from app.core.exceptions.chat_exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
@@ -22,6 +24,12 @@ from app.core.monitoring.chat_metrics import (
 from app.core.routing import RouteIntent, get_knowledge_routing_policy
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
+from app.repositories.document_manifest_repository import DocumentManifestRepository
+from app.services.chat.chat_citation_service import (
+    build_citation_status,
+    collect_document_citations,
+    references_uploaded_material,
+)
 from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
@@ -53,6 +61,7 @@ class MessageOrchestrationService:
         agent_loop: ChatAgentLoop,
         conversation_service: ConversationService,
         outbox_service: OutboxService | None = None,
+        manifest_repo: DocumentManifestRepository | None = None,
     ):
         self._repo = repo
         self._llm = llm_service
@@ -63,6 +72,7 @@ class MessageOrchestrationService:
         self._agent_loop = agent_loop
         self._conversation_service = conversation_service
         self._outbox_service = outbox_service
+        self._manifest_repo = manifest_repo or DocumentManifestRepository()
 
     def _should_use_light_chat(
         self,
@@ -114,6 +124,343 @@ class MessageOrchestrationService:
 
         asyncio.create_task(_index())
 
+    @staticmethod
+    def _trim_document_snippet(text: str | None, *, limit: int = 240) -> str:
+        normalized = " ".join(str(text or "").split())
+        if len(normalized) <= limit:
+            return normalized
+        return f"{normalized[: limit - 3].rstrip()}..."
+
+    def _list_document_manifests(
+        self,
+        *,
+        user_id: str | None,
+        conversation_id: str,
+    ) -> list[dict[str, Any]]:
+        if not user_id:
+            return []
+        try:
+            return self._manifest_repo.list_manifests(
+                user_id=str(user_id),
+                conversation_id=str(conversation_id),
+                limit=50,
+            )
+        except Exception as exc:
+            logger.warning(
+                "document_manifest_lookup_failed",
+                conversation_id=conversation_id,
+                user_id=user_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return []
+
+    def _should_use_document_grounding(
+        self,
+        *,
+        message: str,
+        understanding: dict[str, Any] | None,
+        manifests: list[dict[str, Any]],
+    ) -> bool:
+        if not manifests:
+            return False
+        if (understanding or {}).get("intent") == "file_reference":
+            return True
+        if references_uploaded_material(message):
+            return True
+        return True
+
+    def _build_document_processing_result(
+        self,
+        *,
+        message: str,
+        manifests: list[dict[str, Any]],
+        role: ModelRole,
+    ) -> dict[str, Any]:
+        processing = [
+            row
+            for row in manifests
+            if str(row.get("status") or "") in {"queued", "processing"}
+        ]
+        status = "processing" if any(str(row.get("status")) == "processing" for row in processing) else "queued"
+        file_names = [str(row.get("file_name") or "documento") for row in processing[:3]]
+        suffix = f" Arquivos: {', '.join(file_names)}." if file_names else ""
+        response = (
+            "Os documentos desta conversa ainda estao sendo processados. "
+            "Assim que a indexacao terminar, eu respondo com base no arquivo enviado."
+            f"{suffix}"
+        )
+        citations: list[dict[str, Any]] = []
+        return {
+            "response": response,
+            "provider": "janus",
+            "model": "document_processing",
+            "role": role.value,
+            "citations": citations,
+            "citation_status": {
+                "mode": "optional",
+                "status": "not_applicable",
+                "count": 0,
+                "reason": "documents_processing",
+            },
+            "document_grounding": {
+                "active": True,
+                "mode": "processing",
+                "manifest_statuses": [str(row.get("status") or "") for row in processing],
+            },
+        }
+
+    def _build_document_grounding_prompt(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+    ) -> str:
+        evidence_blocks: list[str] = []
+        for idx, citation in enumerate(citations, start=1):
+            source = (
+                citation.get("title")
+                or citation.get("file_path")
+                or citation.get("doc_id")
+                or f"Documento {idx}"
+            )
+            snippet = self._trim_document_snippet(citation.get("snippet"))
+            evidence_blocks.append(f"[{idx}] fonte={source}\n[trecho]\n{snippet}")
+        evidence_text = "\n\n".join(evidence_blocks)
+        return textwrap.dedent(
+            f"""
+            Voce esta respondendo uma pergunta sobre documentos enviados pelo usuario.
+            Use SOMENTE as evidencias abaixo. Nao use conhecimento externo, nao invente e nao negue informacao que esteja nos trechos.
+
+            Pergunta do usuario:
+            {message}
+
+            Evidencias:
+            {evidence_text}
+
+            Responda APENAS com JSON valido neste formato:
+            {{
+              "answer": "resposta curta e fiel ao documento",
+              "supported_points": [
+                {{"statement": "ponto suportado pelo documento", "citation_ids": [1]}}
+              ],
+              "missing_information": ["aspecto que nao aparece no documento"]
+            }}
+
+            Regras:
+            - "answer" deve descrever apenas o que esta suportado pelas evidencias.
+            - "supported_points" deve listar somente fatos presentes nas evidencias.
+            - "missing_information" so pode conter itens realmente ausentes.
+            - Se a evidencias forem insuficientes, deixe "supported_points" vazio e explique isso em "answer".
+            """
+        ).strip()
+
+    async def _extract_document_grounding(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+        role: ModelRole,
+        priority: ModelPriority,
+        timeout_seconds: int | None,
+        user_id: str | None,
+        project_id: str | None,
+    ) -> dict[str, Any] | None:
+        prompt = self._build_document_grounding_prompt(message=message, citations=citations)
+        extraction = await self._llm.invoke_llm(
+            prompt=prompt,
+            role=role,
+            priority=priority,
+            timeout_seconds=min(int(timeout_seconds or 30), 30),
+            user_id=user_id,
+            project_id=project_id,
+        )
+        raw_response = str(extraction.get("response") or "")
+        parsed = parse_json_lenient(raw_response)
+        if isinstance(parsed, dict):
+            return parsed
+        return None
+
+    def _format_document_grounded_response(
+        self,
+        *,
+        extraction: dict[str, Any] | None,
+        citations: list[dict[str, Any]],
+    ) -> str:
+        if not extraction:
+            top_snippets = [
+                self._trim_document_snippet(citation.get("snippet"))
+                for citation in citations[:3]
+                if self._trim_document_snippet(citation.get("snippet"))
+            ]
+            if not top_snippets:
+                return "Nao encontrei no documento trechos suficientes para responder com seguranca."
+            body = "\n".join(f"- {snippet}" for snippet in top_snippets)
+            return f"Do documento:\n{body}"
+
+        answer = str(extraction.get("answer") or "").strip()
+        supported_points = extraction.get("supported_points") or []
+        missing_information = extraction.get("missing_information") or []
+
+        lines: list[str] = ["Do documento:"]
+        if answer:
+            lines.append(answer)
+
+        supported_lines: list[str] = []
+        for item in supported_points:
+            if isinstance(item, dict):
+                statement = str(item.get("statement") or "").strip()
+            else:
+                statement = str(item or "").strip()
+            if statement:
+                supported_lines.append(f"- {statement}")
+
+        if supported_lines:
+            lines.extend(supported_lines)
+        elif citations:
+            lines.extend(
+                f"- {self._trim_document_snippet(citation.get('snippet'))}"
+                for citation in citations[:2]
+                if self._trim_document_snippet(citation.get("snippet"))
+            )
+
+        if not supported_lines:
+            missing_lines = [
+                str(item).strip()
+                for item in missing_information
+                if str(item or "").strip()
+            ]
+            if missing_lines:
+                lines.append("")
+                lines.append("Nao encontrei no documento:")
+                lines.extend(f"- {item}" for item in missing_lines)
+
+        return "\n".join(line for line in lines if line is not None).strip()
+
+    async def generate_document_grounded_reply(
+        self,
+        *,
+        conversation_id: str,
+        message: str,
+        role: ModelRole,
+        priority: ModelPriority,
+        timeout_seconds: int | None,
+        user_id: str | None,
+        project_id: str | None,
+        understanding: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        manifests = self._list_document_manifests(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        if not self._should_use_document_grounding(
+            message=message,
+            understanding=understanding,
+            manifests=manifests,
+        ):
+            return None
+
+        indexed_manifests = [
+            row
+            for row in manifests
+            if str(row.get("status") or "") == "indexed" and int(row.get("chunks_indexed") or 0) > 0
+        ]
+        processing_manifests = [
+            row
+            for row in manifests
+            if str(row.get("status") or "") in {"queued", "processing"}
+        ]
+
+        if not indexed_manifests and processing_manifests:
+            return self._build_document_processing_result(
+                message=message,
+                manifests=processing_manifests,
+                role=role,
+            )
+
+        citations: list[dict[str, Any]] = []
+        retrieval_failed = False
+        try:
+            citations = await collect_document_citations(
+                message=message,
+                user_id=str(user_id) if user_id is not None else None,
+                conversation_id=conversation_id,
+                limit=6,
+            )
+        except Exception as exc:
+            retrieval_failed = True
+            logger.warning(
+                "document_grounding_citation_lookup_failed",
+                conversation_id=conversation_id,
+                user_id=user_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+
+        citation_status = build_citation_status(
+            message=message,
+            citations=citations,
+            retrieval_failed=retrieval_failed,
+        )
+        if not citations:
+            response = "Nao encontrei no documento enviado trechos suficientes para responder com seguranca."
+            if processing_manifests:
+                response += " Ainda ha documentos desta conversa em processamento."
+            return {
+                "response": response,
+                "provider": "janus",
+                "model": "document_grounding",
+                "role": role.value,
+                "citations": citations,
+                "citation_status": citation_status,
+                "document_grounding": {
+                    "active": True,
+                    "mode": "no_evidence",
+                    "manifest_statuses": [str(row.get("status") or "") for row in manifests],
+                },
+            }
+
+        extraction: dict[str, Any] | None = None
+        provider = "janus"
+        model = "document_grounding"
+        try:
+            extraction = await self._extract_document_grounding(
+                message=message,
+                citations=citations,
+                role=role,
+                priority=priority,
+                timeout_seconds=timeout_seconds,
+                user_id=user_id,
+                project_id=project_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "document_grounding_extraction_failed",
+                conversation_id=conversation_id,
+                user_id=user_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+
+        response = self._format_document_grounded_response(
+            extraction=extraction,
+            citations=citations,
+        )
+        return {
+            "response": response,
+            "provider": provider,
+            "model": model,
+            "role": role.value,
+            "citations": citations,
+            "citation_status": citation_status,
+            "document_grounding": {
+                "active": True,
+                "mode": "strict",
+                "manifest_statuses": [str(row.get("status") or "") for row in manifests],
+                "indexed_doc_ids": [str(row.get("doc_id") or "") for row in indexed_manifests],
+            },
+        }
+
     async def send_message(
         self,
         conversation_id: str,
@@ -149,42 +496,8 @@ class MessageOrchestrationService:
             understanding=understanding,
         )
 
-        persona = conv.get("persona") or "assistant"
-        history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
-        relevant_memories = None
-        knowledge_route = None
-        if self._rag_service and not use_light_chat:
-            knowledge_route = get_knowledge_routing_policy().resolve(
-                RouteIntent.CHAT_CONTEXT_RETRIEVAL,
-                user_id=user_id,
-                include_graph=False,
-                query=message,
-            )
-            logger.info(
-                "chat.knowledge_routing_decision",
-                conversation_id=conversation_id,
-                rule_id=knowledge_route.rule_id,
-                primary=knowledge_route.primary.value,
-                fallback=knowledge_route.fallback,
-            )
-            relevant_memories = await self._rag_service.retrieve_context(
-                message,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                caller_endpoint="/api/v1/chat/message",
-                transport="rest",
-                identity_source=identity_source,
-                route_decision=knowledge_route,
-            )
-
-        prompt = await self._prompt_service.build_prompt(
-            persona, history, message, conv.get("summary"), relevant_memories
-        )
-
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
-        in_tokens = estimate_tokens(self._prompt_service, prompt)
-        CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
         self._schedule_rag_index_message(
             text=message,
             conversation_id=conversation_id,
@@ -433,6 +746,93 @@ class MessageOrchestrationService:
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
+
+        grounded_result = await self.generate_document_grounded_reply(
+            conversation_id=conversation_id,
+            message=message,
+            role=role,
+            priority=priority,
+            timeout_seconds=timeout_seconds,
+            user_id=user_id,
+            project_id=project_id,
+            understanding=understanding,
+        )
+        if grounded_result is not None:
+            start_t = _time.time()
+            assistant_text = str(grounded_result.get("response") or "")
+            clean_text, ui = split_ui(assistant_text)
+            elapsed = max(0.0, _time.time() - start_t)
+            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
+            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
+
+            await asyncio.to_thread(
+                self._repo.add_message,
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+            )
+            out_tokens = estimate_tokens(self._prompt_service, assistant_text)
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
+            self._schedule_rag_index_message(
+                text=clean_text or assistant_text,
+                conversation_id=conversation_id,
+                role="assistant",
+                user_id=user_id,
+                project_id=project_id,
+                identity_source=identity_source,
+            )
+
+            result_with_conv = dict(grounded_result)
+            result_with_conv["conversation_id"] = conversation_id
+            result_with_conv["response"] = clean_text
+            if ui:
+                result_with_conv["ui"] = ui
+            try:
+                self.trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=grounded_result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+            return attach_understanding(result_with_conv, understanding)
+
+        persona = conv.get("persona") or "assistant"
+        history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
+        relevant_memories = None
+        knowledge_route = None
+        if self._rag_service and not use_light_chat:
+            knowledge_route = get_knowledge_routing_policy().resolve(
+                RouteIntent.CHAT_CONTEXT_RETRIEVAL,
+                user_id=user_id,
+                include_graph=False,
+                query=message,
+            )
+            logger.info(
+                "chat.knowledge_routing_decision",
+                conversation_id=conversation_id,
+                rule_id=knowledge_route.rule_id,
+                primary=knowledge_route.primary.value,
+                fallback=knowledge_route.fallback,
+            )
+            relevant_memories = await self._rag_service.retrieve_context(
+                message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                caller_endpoint="/api/v1/chat/message",
+                transport="rest",
+                identity_source=identity_source,
+                route_decision=knowledge_route,
+            )
+
+        prompt = await self._prompt_service.build_prompt(
+            persona, history, message, conv.get("summary"), relevant_memories
+        )
+        in_tokens = estimate_tokens(self._prompt_service, prompt)
+        CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
 
         try:
             start_t = _time.time()

@@ -169,6 +169,107 @@ class StreamingService:
             + "\n\n"
         )
 
+        grounded_result = await self._message_orchestration_service.generate_document_grounded_reply(
+            conversation_id=conversation_id,
+            message=message,
+            role=role,
+            priority=priority,
+            timeout_seconds=timeout_seconds,
+            user_id=user_id,
+            project_id=project_id,
+            understanding=understanding,
+        )
+        if grounded_result is not None:
+            assistant_text = str(grounded_result.get("response") or "")
+            citations = grounded_result.get("citations") or []
+            citation_status = grounded_result.get("citation_status") or build_citation_status(
+                message=message,
+                citations=citations,
+            )
+            first_token = True
+            for i in range(0, len(assistant_text), 256):
+                chunk = assistant_text[i : i + 256]
+                tok = json.dumps(
+                    {"text": chunk, "timestamp": int(_time.time() * 1000)},
+                    ensure_ascii=False,
+                )
+                yield f"event: token\ndata: {tok}\n\n"
+                yield f"event: partial\ndata: {tok}\n\n"
+                if first_token:
+                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
+                    first_token = False
+                    try:
+                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
+
+                        CHAT_TTFT_SECONDS.labels(
+                            provider=str(grounded_result.get("provider") or "janus"),
+                            model=str(grounded_result.get("model") or "document_grounding"),
+                        ).observe(ttft_ms / 1000.0)
+                    except Exception:
+                        pass
+
+            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
+            saved_message = self._repo.add_message(
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+                metadata={
+                    "citations": citations,
+                    "citation_status": citation_status,
+                    "understanding": normalized_understanding,
+                    "confirmation": None,
+                    "agent_state": build_agent_state(
+                        stream_phase="completed",
+                        understanding=normalized_understanding,
+                        confirmation=None,
+                    ),
+                    "delivery_status": "completed",
+                    "provider": grounded_result.get("provider"),
+                    "model": grounded_result.get("model"),
+                },
+            )
+            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
+            try:
+                self._message_orchestration_service.trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=grounded_result,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
+
+            done_payload: dict[str, Any] = {
+                "conversation_id": conversation_id,
+                "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
+                "provider": grounded_result.get("provider"),
+                "model": grounded_result.get("model"),
+                "citations": citations,
+                "citation_status": citation_status,
+            }
+            _, ui = split_ui(assistant_text)
+            if ui:
+                done_payload["ui"] = ui
+            if normalized_understanding:
+                done_payload["understanding"] = normalized_understanding
+            agent_state = (
+                saved_message.get("agent_state")
+                if isinstance(saved_message, dict)
+                else None
+            ) or build_agent_state(
+                stream_phase="completed",
+                understanding=normalized_understanding,
+                confirmation=None,
+            )
+            if agent_state:
+                done_payload["agent_state"] = agent_state
+            done = json.dumps(done_payload, ensure_ascii=False)
+            yield f"event: done\ndata: {done}\n\n"
+            return
+
         persona = conv.get("persona") or "assistant"
         history = self._repo.get_recent_messages(conversation_id, limit=20)
 

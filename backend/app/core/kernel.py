@@ -18,6 +18,7 @@ from app.core.tools.os_tools import register_os_tools
 from app.core.workers import data_harvester as data_harvester_module
 from app.core.workers.async_consolidation_worker import start_consolidation_worker
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector
+from app.core.workers.document_ingestion_worker import start_document_ingestion_worker
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
@@ -29,6 +30,7 @@ from app.repositories.agent_repository import AgentRepository
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.repositories.collaboration_repository import CollaborationRepository
 from app.repositories.context_repository import ContextRepository
+from app.repositories.document_manifest_repository import DocumentManifestRepository
 
 # Repositories
 from app.repositories.knowledge_repository import KnowledgeRepository
@@ -109,6 +111,7 @@ class Kernel:
         self.observability_repo = None
         self.prompt_repo = None
         self.outbox_repo = None
+        self.document_manifest_repo = None
 
         # Services
         self.agent_service: AgentService | None = None
@@ -142,6 +145,7 @@ class Kernel:
         self.workers: list[Any] = []
         self._neural_training_task = None
         self._consolidation_consumer_task = None
+        self._document_ingestion_consumer_task = None
         self.scheduler = None
 
     @classmethod
@@ -273,6 +277,8 @@ class Kernel:
             self._neural_training_task.cancel()
         if self._consolidation_consumer_task:
             self._consolidation_consumer_task.cancel()
+        if self._document_ingestion_consumer_task:
+            self._document_ingestion_consumer_task.cancel()
 
         # Stop monitoring
         if self.monitor:
@@ -335,6 +341,7 @@ class Kernel:
             self.optimization_repo = OptimizationRepository()
             self.prompt_repo = PromptRepository()
             self.outbox_repo = OutboxRepository()
+            self.document_manifest_repo = DocumentManifestRepository()
 
             # Monitoring
             self.monitor = get_health_monitor()
@@ -351,10 +358,14 @@ class Kernel:
             self.reflexion_repo = ReflexionRepository(memory_service=self.memory_service)
             self.reflexion_service = ReflexionService(repo=self.reflexion_repo)
             self.tool_service = ToolService(self.tool_repo)
-            self.collaboration_service = CollaborationService(self.collaboration_repo)
-            self.document_service = DocumentIngestionService(self.memory_service)
-            self.observability_service = ObservabilityService(self.observability_repo)
             self.outbox_service = OutboxService(self.outbox_repo)
+            self.collaboration_service = CollaborationService(self.collaboration_repo)
+            self.document_service = DocumentIngestionService(
+                self.memory_service,
+                manifest_repo=self.document_manifest_repo,
+                outbox_service=self.outbox_service,
+            )
+            self.observability_service = ObservabilityService(self.observability_repo)
             from app.services.chat_event_logger import ChatEventDbLogger
 
             self.chat_event_logger = ChatEventDbLogger(self.observability_repo)
@@ -427,6 +438,10 @@ class Kernel:
                 self._consolidation_consumer_task = await start_consolidation_worker()
             except Exception as e:
                 logger.error("log_error", message=f"Failed to start async consolidation worker: {e}")
+            try:
+                self._document_ingestion_consumer_task = await start_document_ingestion_worker()
+            except Exception as e:
+                logger.error("log_error", message=f"Failed to start document ingestion worker: {e}")
 
             self._neural_training_task = await start_neural_training_worker()
 

@@ -50,6 +50,20 @@ class OutboxService:
             dedupe_key=dedupe_key,
         )
 
+    def enqueue_document_ingestion(
+        self,
+        *,
+        payload: dict[str, Any],
+        aggregate_id: str | None,
+        dedupe_key: str | None,
+    ) -> int:
+        return self._repo.enqueue(
+            event_type="document_ingestion",
+            payload_json=payload,
+            aggregate_id=aggregate_id,
+            dedupe_key=dedupe_key,
+        )
+
     async def dispatch_pending(self, *, limit: int = 50) -> dict[str, int]:
         claimed = self._repo.claim_pending(limit=limit)
         if not claimed:
@@ -79,12 +93,12 @@ class OutboxService:
             broker = await get_broker()
             message: Any = item.payload_json
             publish_kwargs: dict[str, Any] = {}
-            if item.event_type == "knowledge_consolidation":
+            if item.event_type in {"knowledge_consolidation", "document_ingestion"}:
                 # O consumidor da fila espera TaskMessage(**payload). O outbox persiste apenas o
                 # payload de negócio, então precisamos embrulhar no envelope canônico da fila.
                 task_message = TaskMessage(
                     task_id=f"outbox-{item.id}",
-                    task_type="knowledge_consolidation",
+                    task_type=str(item.event_type),
                     payload=item.payload_json if isinstance(item.payload_json, dict) else {"raw": item.payload_json},
                     timestamp=datetime.utcnow().timestamp(),
                 )
@@ -151,6 +165,8 @@ class OutboxService:
     def _resolve_queue(self, event_type: str) -> str:
         if event_type == "knowledge_consolidation":
             return str(QueueName.KNOWLEDGE_CONSOLIDATION.value)
+        if event_type == "document_ingestion":
+            return str(QueueName.DOCUMENT_INGESTION.value)
         raise ValueError(f"Unsupported outbox event type: {event_type}")
 
     def _update_gauges(self, *, stats: dict[str, int] | None = None) -> None:

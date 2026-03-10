@@ -182,6 +182,7 @@ class QueueName(str, Enum):
     TASKS_AGENT_DEBATE_PROPONENT = "janus.tasks.agent.debate.proponent"
     TASKS_AGENT_DEBATE_CRITIC = "janus.tasks.agent.debate.critic"
     TASKS_CODEX_WORKER = "janus.tasks.codex"
+    DOCUMENT_INGESTION = "janus.document.ingestion"
 
 
 # --- Knowledge Graph Schemas ---

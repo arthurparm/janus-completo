@@ -15,6 +15,7 @@ logger = structlog.get_logger(__name__)
 WORKER_NAMES: list[str] = [
     "memory_maintenance",
     "knowledge_consolidation",
+    "document_ingestion",
     "agent_tasks",
     "neural_training",
     "reflexion",
@@ -60,6 +61,7 @@ async def start_all_workers():
     from app.core.workers.auto_scaler import start_auto_scaler
     from app.core.workers.code_agent_worker import start_code_agent_worker
     from app.core.workers.codex_worker import start_codex_worker
+    from app.core.workers.document_ingestion_worker import start_document_ingestion_worker
     from app.core.workers.distillation_worker import start_distillation_worker
     from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
     from app.core.workers.debate_critic_worker import start_debate_critic_worker
@@ -87,6 +89,9 @@ async def start_all_workers():
     # Worker de consolidação de conhecimento
     consolidation_worker = await start_consolidation_worker()
     workers.append(consolidation_worker)
+
+    document_ingestion_worker = await start_document_ingestion_worker()
+    workers.append(document_ingestion_worker)
 
     # Worker de tarefas de agente
     agent_worker = await start_agent_tasks_worker()

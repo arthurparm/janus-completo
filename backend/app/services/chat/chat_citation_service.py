@@ -238,6 +238,30 @@ async def _recent_document_citations(
     return _map_document_hits(list(points)[:limit])
 
 
+async def collect_document_citations(
+    *,
+    message: str,
+    user_id: str | None,
+    conversation_id: str | None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    if not user_id:
+        return []
+    doc_citations = await _query_document_citations(
+        message=message,
+        user_id=str(user_id),
+        conversation_id=conversation_id,
+        limit=limit,
+    )
+    if not doc_citations and references_uploaded_material(message):
+        doc_citations = await _recent_document_citations(
+            user_id=str(user_id),
+            conversation_id=conversation_id,
+            limit=limit,
+        )
+    return _dedupe_citations(doc_citations, limit=limit)
+
+
 async def collect_chat_citations(
     *,
     message: str,
@@ -253,18 +277,12 @@ async def collect_chat_citations(
     if user_id:
         attempted_lookups += 1
         try:
-            doc_citations = await _query_document_citations(
+            doc_citations = await collect_document_citations(
                 message=message,
                 user_id=str(user_id),
                 conversation_id=conversation_id,
                 limit=limit,
             )
-            if not doc_citations and references_uploaded_material(message):
-                doc_citations = await _recent_document_citations(
-                    user_id=str(user_id),
-                    conversation_id=conversation_id,
-                    limit=limit,
-                )
             citations.extend(doc_citations)
             successful_lookups += 1
         except Exception:

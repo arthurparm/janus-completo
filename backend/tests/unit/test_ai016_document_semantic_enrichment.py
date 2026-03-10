@@ -14,9 +14,14 @@ class _CountResult:
 class _FakeQdrantClient:
     def __init__(self):
         self.upsert_points = None
+        self.deleted = False
 
     async def count(self, **_kwargs):
         return _CountResult(0)
+
+    async def delete(self, **_kwargs):
+        self.deleted = True
+        return None
 
     async def upsert(self, *, collection_name, points):
         self.upsert_points = points
