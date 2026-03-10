@@ -91,5 +91,6 @@ def test_format_preference_context_groups_do_and_dont():
     )
     assert text is not None
     assert "Preferências e Perfil:" in text
+    assert "Use estas preferências" in text
     assert "FAZER:" in text
     assert "NÃO FAZER:" in text

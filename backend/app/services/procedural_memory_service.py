@@ -227,7 +227,11 @@ class ProceduralMemoryService:
     def format_procedural_context(self, items: list[dict[str, Any]]) -> str | None:
         if not items:
             return None
-        lines = ["Instruções de Trabalho:"]
+        lines = [
+            "Instruções de Trabalho:",
+            "- Estas são instruções persistentes do usuário.",
+            "- Siga-as por padrão, salvo se a mensagem atual pedir algo diferente.",
+        ]
         for item in items[:5]:
             instruction = str(item.get("instruction_text") or item.get("content") or "").strip()
             if instruction:

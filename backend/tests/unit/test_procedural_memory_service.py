@@ -61,3 +61,15 @@ async def test_maybe_capture_builds_procedural_metadata(monkeypatch):
     assert metadata["scope"] == "closing"
     assert metadata["recall_policy"] == "always"
     assert metadata["retention_policy"] == "persistent"
+
+
+def test_format_procedural_context_emphasizes_priority():
+    svc = ProceduralMemoryService()
+
+    text = svc.format_procedural_context(
+        [{"instruction_text": "Sempre termine com próximos passos objetivos."}]
+    )
+
+    assert text is not None
+    assert "instruções persistentes do usuário" in text.lower()
+    assert "Sempre termine com próximos passos objetivos." in text

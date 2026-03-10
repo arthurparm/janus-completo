@@ -12,6 +12,16 @@ def test_extract_secret_masks_and_classifies_value():
     assert result["secret_label"] == "senha do wi-fi"
     assert result["masked_value"].startswith("Ab")
     assert result["masked_value"].endswith("45")
+    assert result["secret_value"] == "Abc12345"
+
+
+def test_extract_secret_strips_trailing_punctuation():
+    svc = SecretMemoryService()
+
+    result = svc.extract_secret("Minha senha ficticia do Wi-Fi é Abc12345.")
+
+    assert result is not None
+    assert result["secret_value"] == "Abc12345"
 
 
 def test_should_authorize_prompt_recall_requires_explicit_request():

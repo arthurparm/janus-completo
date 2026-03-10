@@ -60,7 +60,7 @@ def _get_fernet():
     try:
         from cryptography.fernet import Fernet  # type: ignore
 
-        key = getattr(settings, "MEMORY_ENCRYPTION_KEY", None)
+        key = getattr(settings, "MEMORY_ENCRYPTION_KEY", None) or getattr(settings, "AUTH_JWT_SECRET", None)
         if not key:
             return None
         # Aceita chave Fernet URL-safe base64 ou frase secreta (deriva via SHA-256)

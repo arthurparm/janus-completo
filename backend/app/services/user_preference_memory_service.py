@@ -272,7 +272,10 @@ class UserPreferenceMemoryService:
         if not do_items and not dont_items:
             return None
 
-        lines = ["Preferências e Perfil:"]
+        lines = [
+            "Preferências e Perfil:",
+            "- Use estas preferências para ajustar tom, profundidade e formato da resposta.",
+        ]
         if do_items:
             lines.append("FAZER:")
             lines.extend(f"- {text}" for text in do_items[:5])

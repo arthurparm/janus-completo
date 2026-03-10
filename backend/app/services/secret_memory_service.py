@@ -72,7 +72,7 @@ class SecretMemoryService:
             flags=re.IGNORECASE,
         )
         label = str(label_match.group("label") or "").strip()
-        value = str((value_match.group("value") if value_match else "") or "").strip()
+        value = self._normalize_secret_value(str((value_match.group("value") if value_match else "") or ""))
         if not label or not value:
             return None
 
@@ -262,7 +262,11 @@ class SecretMemoryService:
         )
         if not items:
             return None
-        lines = ["Segredos Autorizados:"]
+        lines = [
+            "Segredos Autorizados:",
+            "- O usuário pediu explicitamente estes valores nesta resposta.",
+            "- Você pode citá-los literalmente ao responder esta pergunta específica.",
+        ]
         for item in items[:limit]:
             label = str(item.get("secret_label") or "segredo").strip()
             secret_value = str(item.get("secret_value") or "").strip()
@@ -320,6 +324,12 @@ class SecretMemoryService:
         lowered = str(label or "").strip().lower()
         lowered = re.sub(r"\s+", " ", lowered)
         return lowered[:120]
+
+    def _normalize_secret_value(self, value: str) -> str:
+        normalized = str(value or "").strip()
+        normalized = normalized.rstrip(" \t\r\n")
+        normalized = re.sub(r"[.!?,;:]+$", "", normalized)
+        return normalized[:1000]
 
     def _mask_value(self, value: str) -> str:
         raw = str(value or "")

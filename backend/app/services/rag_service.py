@@ -143,7 +143,17 @@ class RAGService:
             role = str((memory.get("metadata") or {}).get("role") or "").strip()
             prefix = f"{role}: " if role else ""
             lines.append(f"- {prefix}{preview}")
-        return self._format_memory_block("Contexto Recente Relevante:", lines)
+        guidance = [
+            "- Use este bloco como contexto situacional recente.",
+            "- Não deixe fatos episódicos sobreporem instruções persistentes do usuário.",
+        ]
+        return self._format_memory_block("Contexto Recente Relevante:", [*guidance, *lines])
+
+    def _merge_memory_sections(self, sections: list[str | None]) -> str | None:
+        cleaned = [str(section).strip() for section in sections if str(section or "").strip()]
+        if not cleaned:
+            return None
+        return "\n\n".join(cleaned)
 
     def _score_episodic_memory(
         self,
@@ -477,12 +487,13 @@ class RAGService:
                     reveal=False,
                 )
 
-            combined_context = self._combine_memory_context(
-                episodic_context,
-                self._combine_memory_context(
+            combined_context = self._merge_memory_sections(
+                [
+                    secret_context,
+                    procedural_context,
                     semantic_context,
-                    self._combine_memory_context(procedural_context, secret_context),
-                ),
+                    episodic_context,
+                ]
             )
             if conversation_id and self._references_uploaded_material(message):
                 try:
@@ -493,9 +504,8 @@ class RAGService:
                 except Exception as doc_exc:
                     logger.warning("rag_conversation_document_context_failed", error=str(doc_exc))
                     conversation_doc_context = None
-                combined_context = self._combine_memory_context(
-                    conversation_doc_context,
-                    combined_context,
+                combined_context = self._merge_memory_sections(
+                    [conversation_doc_context, combined_context]
                 )
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
