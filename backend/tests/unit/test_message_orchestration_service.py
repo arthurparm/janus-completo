@@ -100,8 +100,11 @@ class _FakeLLMService:
 
     async def invoke_llm(self, **kwargs):
         self.calls.append(kwargs)
+        response = self.response
+        if isinstance(response, list):
+            response = response.pop(0)
         return {
-            "response": self.response,
+            "response": response,
             "provider": "dummy-llm",
             "model": "light-model",
             "role": kwargs["role"].value,
@@ -444,6 +447,66 @@ async def test_send_message_document_grounding_ignores_processing_doc_chunks(mon
 
     assert "facial droop" in result["response"]
     assert result["citations"][0]["doc_id"] == "doc-indexed"
+
+
+@pytest.mark.asyncio
+async def test_send_message_document_grounding_rechecks_false_negative_extraction(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=[
+            (
+                '{"answer":"Nenhum sinal especifico de AVC isquemico e mencionado.",'
+                '"supported_points":[],"missing_information":["sinais especificos de AVC isquemico"]}'
+            ),
+            (
+                '{"answered":true,"supported_points":[{"statement":"O documento menciona facial droop, arm weakness e speech disturbance.",'
+                '"citation_ids":[1],"quote":"common acute warning signs of ischemic stroke include facial droop, arm weakness, and speech disturbance"}],'
+                '"missing_information":[]}'
+            ),
+        ]
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "indexed",
+                "chunks_indexed": 1,
+                "file_name": "stroke.txt",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-1",
+                    "title": "stroke.txt",
+                    "file_path": "stroke.txt",
+                    "source_type": "document",
+                    "snippet": (
+                        "The document states that common acute warning signs of ischemic stroke "
+                        "include facial droop, arm weakness, and speech disturbance. Sudden "
+                        "unilateral numbness can also occur."
+                    ),
+                }
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="No documento enviado, quais sinais de AVC isquemico sao mencionados?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert "facial droop" in result["response"]
+    assert "speech disturbance" in result["response"]
+    assert "Nao encontrei no documento" not in result["response"]
+    assert len(llm.calls) == 2
 
 
 @pytest.mark.asyncio

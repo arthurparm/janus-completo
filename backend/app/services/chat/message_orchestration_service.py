@@ -125,7 +125,7 @@ class MessageOrchestrationService:
         asyncio.create_task(_index())
 
     @staticmethod
-    def _trim_document_snippet(text: str | None, *, limit: int = 240) -> str:
+    def _trim_document_snippet(text: str | None, *, limit: int = 480) -> str:
         normalized = " ".join(str(text or "").split())
         if len(normalized) <= limit:
             return normalized
@@ -242,7 +242,7 @@ class MessageOrchestrationService:
             {{
               "answer": "resposta curta e fiel ao documento",
               "supported_points": [
-                {{"statement": "ponto suportado pelo documento", "citation_ids": [1]}}
+                {{"statement": "ponto suportado pelo documento", "citation_ids": [1], "quote": "trecho exato copiado da evidencia"}}
               ],
               "missing_information": ["aspecto que nao aparece no documento"]
             }}
@@ -250,10 +250,148 @@ class MessageOrchestrationService:
             Regras:
             - "answer" deve descrever apenas o que esta suportado pelas evidencias.
             - "supported_points" deve listar somente fatos presentes nas evidencias.
+            - Cada item de "supported_points" deve incluir "quote" com um trecho exato copiado da evidencia.
             - "missing_information" so pode conter itens realmente ausentes.
-            - Se a evidencias forem insuficientes, deixe "supported_points" vazio e explique isso em "answer".
+            - Se qualquer evidencia responder total ou parcialmente a pergunta, NAO diga que a informacao esta ausente.
+            - Se as evidencias forem insuficientes, deixe "supported_points" vazio e explique isso em "answer".
             """
         ).strip()
+
+    def _build_document_grounding_recheck_prompt(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+    ) -> str:
+        evidence_blocks: list[str] = []
+        for idx, citation in enumerate(citations, start=1):
+            source = (
+                citation.get("title")
+                or citation.get("file_path")
+                or citation.get("doc_id")
+                or f"Documento {idx}"
+            )
+            snippet = self._trim_document_snippet(citation.get("snippet"), limit=640)
+            evidence_blocks.append(f"[{idx}] fonte={source}\n[trecho]\n{snippet}")
+        evidence_text = "\n\n".join(evidence_blocks)
+        return textwrap.dedent(
+            f"""
+            Voce vai verificar se as evidencias abaixo respondem a pergunta do usuario.
+            Use SOMENTE os trechos fornecidos. Nao use conhecimento externo.
+
+            Pergunta do usuario:
+            {message}
+
+            Evidencias:
+            {evidence_text}
+
+            Responda APENAS com JSON valido neste formato:
+            {{
+              "answered": true,
+              "supported_points": [
+                {{"statement": "resposta suportada pelo trecho", "citation_ids": [1], "quote": "trecho exato copiado da evidencia"}}
+              ],
+              "missing_information": ["aspecto que realmente nao foi encontrado"]
+            }}
+
+            Regras:
+            - Marque "answered" como true se qualquer trecho responder total ou parcialmente a pergunta.
+            - Toda resposta positiva precisa de pelo menos um item em "supported_points".
+            - Todo item de "supported_points" deve incluir "quote" exatamente como aparece na evidencia.
+            - Se houver uma resposta suportada, NAO liste esse mesmo ponto em "missing_information".
+            """
+        ).strip()
+
+    @staticmethod
+    def _normalize_document_text(value: str | None) -> str:
+        return " ".join(str(value or "").strip().split()).casefold()
+
+    def _sanitize_document_grounding_extraction(
+        self,
+        *,
+        extraction: dict[str, Any] | None,
+        citations: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if not isinstance(extraction, dict):
+            return None
+
+        sanitized_points: list[dict[str, Any]] = []
+        raw_points = extraction.get("supported_points") or []
+        for item in raw_points:
+            if not isinstance(item, dict):
+                continue
+            statement = str(item.get("statement") or "").strip()
+            quote = str(item.get("quote") or "").strip()
+            citation_ids = item.get("citation_ids") or []
+            normalized_quote = self._normalize_document_text(quote)
+            if not statement or not quote or not normalized_quote:
+                continue
+
+            matched_ids: list[int] = []
+            for citation_id in citation_ids:
+                try:
+                    idx = int(citation_id)
+                except (TypeError, ValueError):
+                    continue
+                if idx < 1 or idx > len(citations):
+                    continue
+                snippet = self._normalize_document_text(citations[idx - 1].get("snippet"))
+                if normalized_quote and normalized_quote in snippet:
+                    matched_ids.append(idx)
+            if not matched_ids:
+                continue
+            sanitized_points.append(
+                {
+                    "statement": statement,
+                    "citation_ids": matched_ids,
+                    "quote": quote,
+                }
+            )
+
+        missing_information = [
+            str(item).strip()
+            for item in (extraction.get("missing_information") or [])
+            if str(item or "").strip()
+        ]
+        sanitized: dict[str, Any] = {
+            "answer": str(extraction.get("answer") or "").strip(),
+            "supported_points": sanitized_points,
+            "missing_information": missing_information,
+        }
+        answered = extraction.get("answered")
+        if isinstance(answered, bool):
+            sanitized["answered"] = answered
+        return sanitized
+
+    async def _recheck_document_grounding(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+        role: ModelRole,
+        priority: ModelPriority,
+        timeout_seconds: int | None,
+        user_id: str | None,
+        project_id: str | None,
+    ) -> dict[str, Any] | None:
+        prompt = self._build_document_grounding_recheck_prompt(
+            message=message,
+            citations=citations,
+        )
+        extraction = await self._llm.invoke_llm(
+            prompt=prompt,
+            role=role,
+            priority=priority,
+            timeout_seconds=min(int(timeout_seconds or 30), 30),
+            user_id=user_id,
+            project_id=project_id,
+        )
+        raw_response = str(extraction.get("response") or "")
+        parsed = parse_json_lenient(raw_response)
+        return self._sanitize_document_grounding_extraction(
+            extraction=parsed if isinstance(parsed, dict) else None,
+            citations=citations,
+        )
 
     async def _extract_document_grounding(
         self,
@@ -277,9 +415,10 @@ class MessageOrchestrationService:
         )
         raw_response = str(extraction.get("response") or "")
         parsed = parse_json_lenient(raw_response)
-        if isinstance(parsed, dict):
-            return parsed
-        return None
+        return self._sanitize_document_grounding_extraction(
+            extraction=parsed if isinstance(parsed, dict) else None,
+            citations=citations,
+        )
 
     def _format_document_grounded_response(
         self,
@@ -301,6 +440,7 @@ class MessageOrchestrationService:
         answer = str(extraction.get("answer") or "").strip()
         supported_points = extraction.get("supported_points") or []
         missing_information = extraction.get("missing_information") or []
+        answered = extraction.get("answered")
 
         lines: list[str] = ["Do documento:"]
         if answer:
@@ -324,13 +464,14 @@ class MessageOrchestrationService:
                 if self._trim_document_snippet(citation.get("snippet"))
             )
 
+        allow_missing = (answered is False) or (answered is None and not citations)
         if not supported_lines:
             missing_lines = [
                 str(item).strip()
                 for item in missing_information
                 if str(item or "").strip()
             ]
-            if missing_lines:
+            if missing_lines and allow_missing:
                 lines.append("")
                 lines.append("Nao encontrei no documento:")
                 lines.extend(f"- {item}" for item in missing_lines)
@@ -464,6 +605,28 @@ class MessageOrchestrationService:
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
+
+        if citations and (not extraction or not (extraction.get("supported_points") or [])):
+            try:
+                rechecked = await self._recheck_document_grounding(
+                    message=message,
+                    citations=citations,
+                    role=role,
+                    priority=priority,
+                    timeout_seconds=timeout_seconds,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+                if rechecked:
+                    extraction = rechecked
+            except Exception as exc:
+                logger.warning(
+                    "document_grounding_recheck_failed",
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
 
         response = self._format_document_grounded_response(
             extraction=extraction,
