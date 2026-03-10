@@ -42,6 +42,47 @@ class _FakeClient:
         return ([], None)
 
 
+@pytest.fixture(autouse=True)
+def _stub_memory_class_helpers(monkeypatch):
+    async def _fake_list_preferences(**kwargs):
+        return []
+
+    async def _fake_list_rules(**kwargs):
+        return []
+
+    async def _fake_prompt_secrets(**kwargs):
+        return None
+
+    async def _fake_list_secrets(**kwargs):
+        return []
+
+    monkeypatch.setattr(
+        rag_module.user_preference_memory_service,
+        "list_preferences",
+        _fake_list_preferences,
+    )
+    monkeypatch.setattr(
+        rag_module.procedural_memory_service,
+        "list_rules",
+        _fake_list_rules,
+    )
+    monkeypatch.setattr(
+        rag_module.secret_memory_service,
+        "should_authorize_prompt_recall",
+        lambda _message: False,
+    )
+    monkeypatch.setattr(
+        rag_module.secret_memory_service,
+        "build_authorized_prompt_context",
+        _fake_prompt_secrets,
+    )
+    monkeypatch.setattr(
+        rag_module.secret_memory_service,
+        "list_secrets",
+        _fake_list_secrets,
+    )
+
+
 @pytest.mark.asyncio
 async def test_retrieve_context_emits_telemetry_with_required_fields(monkeypatch):
     emitted: list[dict] = []
@@ -65,6 +106,7 @@ async def test_retrieve_context_emits_telemetry_with_required_fields(monkeypatch
     context = await service.retrieve_context("find context", user_id="u-1", conversation_id="c-1")
 
     assert context is not None
+    assert "Contexto Recente Relevante:" in context
     assert "Important context" in context
     assert emitted
     event = emitted[-1]
@@ -149,7 +191,7 @@ async def test_retrieve_context_applies_rerank_and_reports_query_limit(monkeypat
     assert event["extra"]["query_limit"] == 6
     assert event["extra"]["rerank_applied"] is True
     assert event["extra"]["rerank_method"] == "fake_cross_encoder"
-    assert event["extra"]["rerank_candidate_count"] == 3
+    assert event["extra"]["rerank_candidate_count"] == 1
     assert event["extra"]["rerank_top_k"] == 2
 
 

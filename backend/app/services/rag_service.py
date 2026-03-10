@@ -17,10 +17,11 @@ from app.db.vector_store import (
     aget_or_create_collection,
     build_user_chat_collection_name,
     build_user_docs_collection_name,
-    build_user_memory_collection_name,
     get_async_qdrant_client,
 )
 from app.repositories.chat_repository import ChatRepository
+from app.services.procedural_memory_service import procedural_memory_service
+from app.services.secret_memory_service import secret_memory_service
 from app.services.semantic_reranker_service import get_semantic_reranker
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
@@ -123,6 +124,139 @@ class RAGService:
             memory_lines.append(f"- [{label}]: {content_preview}")
 
         return "\n".join(memory_lines) if memory_lines else None
+
+    def _format_memory_block(self, title: str, items: list[str]) -> str | None:
+        cleaned = [str(item).strip() for item in items if str(item or "").strip()]
+        if not cleaned:
+            return None
+        return "\n".join([title, *cleaned])
+
+    def _format_episodic_context(self, memories: list[dict[str, Any]]) -> str | None:
+        lines: list[str] = []
+        for memory in memories[:5]:
+            content = str(memory.get("content") or "").strip()
+            if not content:
+                continue
+            preview = content[:320].rstrip()
+            if len(content) > 320:
+                preview = f"{preview}..."
+            role = str((memory.get("metadata") or {}).get("role") or "").strip()
+            prefix = f"{role}: " if role else ""
+            lines.append(f"- {prefix}{preview}")
+        return self._format_memory_block("Contexto Recente Relevante:", lines)
+
+    def _score_episodic_memory(
+        self,
+        item: dict[str, Any],
+        *,
+        conversation_id: str | None,
+    ) -> float:
+        metadata = item.get("metadata") or {}
+        score = float(item.get("score") or 0.0)
+        if conversation_id and str(metadata.get("conversation_id") or "") == str(conversation_id):
+            score += 1.25
+        ts_ms = metadata.get("ts_ms") or metadata.get("timestamp")
+        try:
+            age_hours = max(0.0, (int(time.time() * 1000) - int(ts_ms)) / 3_600_000.0)
+        except Exception:
+            age_hours = 72.0
+        score += max(0.0, 0.8 - min(age_hours / 72.0, 0.8))
+        return score
+
+    async def _retrieve_episodic_context(
+        self,
+        *,
+        message: str,
+        user_id: str,
+        conversation_id: str | None,
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        vec = await aembed_text(message)
+        client = get_async_qdrant_client()
+        candidate_multiplier = max(1, int(getattr(settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)))
+        query_limit = (
+            max(int(limit), int(limit) * candidate_multiplier)
+            if bool(getattr(settings, "RAG_RERANK_ENABLED", True))
+            else int(limit)
+        )
+        coll = await aget_or_create_collection(build_user_chat_collection_name(str(user_id)))
+        res = await client.query_points(
+            collection_name=coll,
+            query=vec,
+            limit=query_limit,
+            with_payload=True,
+            query_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="metadata.user_id",
+                        match=qdrant_models.MatchValue(value=str(user_id)),
+                    )
+                ]
+            ),
+        )
+        hits = list(getattr(res, "points", res) or [])
+        memories = [
+            {
+                "content": (getattr(hit, "payload", {}) or {}).get("content", ""),
+                "metadata": (getattr(hit, "payload", {}) or {}).get("metadata") or {},
+                "type": ((getattr(hit, "payload", {}) or {}).get("metadata") or {}).get("type", "chat_msg"),
+                "score": getattr(hit, "score", None),
+            }
+            for hit in hits
+        ]
+        rerank_applied = False
+        rerank_method = "none"
+        rerank_candidate_count = len(memories)
+        if memories:
+            rerank_result = await self._reranker.rerank(query=message, items=memories, top_k=limit)
+            memories = rerank_result.items
+            rerank_applied = rerank_result.applied
+            rerank_method = rerank_result.method
+            rerank_candidate_count = int(rerank_result.candidate_count)
+        ranked = sorted(
+            memories,
+            key=lambda item: self._score_episodic_memory(item, conversation_id=conversation_id),
+            reverse=True,
+        )[:limit]
+        return ranked, {
+            "query_limit": int(query_limit),
+            "rerank_applied": rerank_applied,
+            "rerank_method": rerank_method,
+            "rerank_candidate_count": int(rerank_candidate_count),
+            "rerank_top_k": int(limit),
+        }
+
+    async def _retrieve_semantic_context(
+        self,
+        *,
+        message: str,
+        user_id: str,
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        items = await user_preference_memory_service.list_preferences(
+            user_id=str(user_id),
+            query=message,
+            limit=min(5, max(1, limit)),
+            active_only=True,
+        )
+        return items, user_preference_memory_service.format_preference_context(items)
+
+    async def _retrieve_procedural_context(
+        self,
+        *,
+        message: str,
+        user_id: str,
+        conversation_id: str | None,
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        items = await procedural_memory_service.list_rules(
+            user_id=str(user_id),
+            conversation_id=conversation_id,
+            query=message,
+            limit=min(5, max(1, limit)),
+            active_only=True,
+        )
+        return items, procedural_memory_service.format_procedural_context(items)
 
     def _references_uploaded_material(self, message: str) -> bool:
         text = (message or "").lower()
@@ -308,90 +442,48 @@ class RAGService:
             return None
 
         try:
-            try:
-                await user_preference_memory_service.maybe_capture_from_message(
-                    message=message,
-                    user_id=str(user_id),
-                    conversation_id=conversation_id,
-                )
-            except Exception as pref_exc:
-                logger.warning("user_preference_capture_failed_in_rag", error=str(pref_exc))
-
-            vec = await aembed_text(message)
-            client = get_async_qdrant_client()
-            candidate_multiplier = max(1, int(getattr(settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)))
-            query_limit = (
-                max(int(limit), int(limit) * candidate_multiplier)
-                if bool(getattr(settings, "RAG_RERANK_ENABLED", True))
-                else int(limit)
+            episodic_items, episodic_meta = await self._retrieve_episodic_context(
+                message=message,
+                user_id=str(user_id),
+                conversation_id=conversation_id,
+                limit=limit,
             )
-
-            must: list[qdrant_models.FieldCondition] = [
-                qdrant_models.FieldCondition(
-                    key="metadata.user_id",
-                    match=qdrant_models.MatchValue(value=str(user_id)),
+            semantic_items, semantic_context = await self._retrieve_semantic_context(
+                message=message,
+                user_id=str(user_id),
+                limit=limit,
+            )
+            procedural_items, procedural_context = await self._retrieve_procedural_context(
+                message=message,
+                user_id=str(user_id),
+                conversation_id=conversation_id,
+                limit=limit,
+            )
+            episodic_context = self._format_episodic_context(episodic_items)
+            secret_context = None
+            secret_items: list[dict[str, Any]] = []
+            if secret_memory_service.should_authorize_prompt_recall(message):
+                secret_context = await secret_memory_service.build_authorized_prompt_context(
+                    user_id=str(user_id),
+                    message=message,
+                    conversation_id=conversation_id,
+                    limit=min(3, max(1, limit)),
                 )
-            ]
-            # Não filtrar por session_id para permitir recuperar documentos/chunks globais do usuário
-            # (documentos ingeridos não têm session_id).
-
-            qfilter = qdrant_models.Filter(must=must)
-            hits: list[Any] = []
-            for collection_name in (
-                build_user_memory_collection_name(str(user_id)),
-                build_user_docs_collection_name(str(user_id)),
-                build_user_chat_collection_name(str(user_id)),
-            ):
-                coll = await aget_or_create_collection(collection_name)
-                res = await client.query_points(
-                    collection_name=coll,
-                    query=vec,
-                    limit=query_limit,
-                    with_payload=True,
-                    query_filter=qfilter,
-                )
-                hits.extend(getattr(res, "points", res) or [])
-
-            memories: list[dict[str, Any]] = []
-            for h in hits:
-                score = getattr(h, "score", None)
-                payload = getattr(h, "payload", {}) or {}
-                meta = payload.get("metadata") or {}
-                memories.append(
-                    {
-                        "content": payload.get("content", ""),
-                        "metadata": meta,
-                        "type": meta.get("type", "memory"),
-                        "score": score,
-                    }
-                )
-            preference_items: list[dict[str, Any]] = []
-            try:
-                preference_items = await user_preference_memory_service.list_preferences(
+                secret_items = await secret_memory_service.list_secrets(
                     user_id=str(user_id),
                     query=message,
-                    limit=min(5, max(1, limit)),
-                    active_only=True,
+                    conversation_id=conversation_id,
+                    limit=min(3, max(1, limit)),
+                    reveal=False,
                 )
-            except Exception as pref_exc:
-                logger.warning("user_preference_retrieve_failed_in_rag", error=str(pref_exc))
 
-            rerank_applied = False
-            rerank_method = "none"
-            rerank_candidate_count = len(memories)
-            if memories:
-                rerank_result = await self._reranker.rerank(query=message, items=memories, top_k=limit)
-                memories = rerank_result.items
-                rerank_applied = rerank_result.applied
-                rerank_method = rerank_result.method
-                rerank_candidate_count = int(rerank_result.candidate_count)
-            memories = [
-                item for item in memories
-                if str((item.get("metadata") or {}).get("type") or "").lower() != "user_preference"
-            ]
-            preference_context = user_preference_memory_service.format_preference_context(preference_items)
-            generic_context = self._format_memories(memories)
-            combined_context = self._combine_memory_context(preference_context, generic_context)
+            combined_context = self._combine_memory_context(
+                episodic_context,
+                self._combine_memory_context(
+                    semantic_context,
+                    self._combine_memory_context(procedural_context, secret_context),
+                ),
+            )
             if conversation_id and self._references_uploaded_material(message):
                 try:
                     conversation_doc_context = await self._conversation_document_context(
@@ -407,10 +499,11 @@ class RAGService:
                 )
 
             _RAG_OPS.labels("retrieve_context", "success").inc()
-            scores = [m.get("score") for m in memories]
+            scores = [m.get("score") for m in episodic_items]
             if combined_context:
-                _RAG_RESULTS.labels("retrieve_context").inc(len(memories))
-                logger.info("RAG enrichment: retrieved %d relevant memories", len(memories))
+                total_items = len(episodic_items) + len(semantic_items) + len(procedural_items) + len(secret_items)
+                _RAG_RESULTS.labels("retrieve_context").inc(total_items)
+                logger.info("RAG enrichment: retrieved %d relevant memories", total_items)
                 _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
                 self._emit_step_telemetry(
                     endpoint=caller_endpoint,
@@ -420,14 +513,17 @@ class RAGService:
                     confidence=confidence_from_scores(scores),
                     extra={
                         **telemetry_base,
-                        "result_count": len(memories),
+                        "result_count": total_items,
                         "limit": int(limit),
-                        "query_limit": int(query_limit),
-                        "rerank_applied": rerank_applied,
-                        "rerank_method": rerank_method,
-                        "rerank_candidate_count": int(rerank_candidate_count),
-                        "rerank_top_k": int(limit),
-                        "user_preferences_count": len(preference_items),
+                        "query_limit": int(episodic_meta["query_limit"]),
+                        "rerank_applied": episodic_meta["rerank_applied"],
+                        "rerank_method": episodic_meta["rerank_method"],
+                        "rerank_candidate_count": int(episodic_meta["rerank_candidate_count"]),
+                        "rerank_top_k": int(episodic_meta["rerank_top_k"]),
+                        "episodic_count": len(episodic_items),
+                        "user_preferences_count": len(semantic_items),
+                        "procedural_memory_count": len(procedural_items),
+                        "authorized_secret_count": len(secret_items),
                     },
                 )
                 return combined_context
@@ -443,12 +539,14 @@ class RAGService:
                     **telemetry_base,
                     "result_count": 0,
                     "limit": int(limit),
-                    "query_limit": int(query_limit),
-                    "rerank_applied": False,
-                    "rerank_method": "none",
-                    "rerank_candidate_count": int(rerank_candidate_count),
-                    "rerank_top_k": int(limit),
-                    "user_preferences_count": len(preference_items),
+                    "query_limit": int(episodic_meta["query_limit"]),
+                    "rerank_applied": episodic_meta["rerank_applied"],
+                    "rerank_method": episodic_meta["rerank_method"],
+                    "rerank_candidate_count": int(episodic_meta["rerank_candidate_count"]),
+                    "rerank_top_k": int(episodic_meta["rerank_top_k"]),
+                    "user_preferences_count": len(semantic_items),
+                    "procedural_memory_count": len(procedural_items),
+                    "authorized_secret_count": len(secret_items),
                 },
             )
             return None

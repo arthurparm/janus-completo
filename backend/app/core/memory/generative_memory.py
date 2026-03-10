@@ -59,6 +59,13 @@ class GenerativeMemoryService:
         metadata.setdefault("access_count", 0)
         metadata.setdefault("last_accessed_at", now_ms)
         metadata.setdefault("origin", "memory.generative")
+        metadata.setdefault("memory_class", type or "episodic")
+        metadata.setdefault("retention_policy", "default")
+        metadata.setdefault("recall_policy", "standard")
+        metadata.setdefault("sensitivity", "normal")
+        metadata.setdefault("stability_score", 0.5 if str(type or "") == "episodic" else 0.8)
+        metadata.setdefault("scope", "user")
+        metadata.setdefault("source_channel", metadata.get("origin") or "memory.generative")
         
         # 1. Calculate Importance
         if metadata.get("importance") is None:

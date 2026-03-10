@@ -73,11 +73,16 @@ def build_user_memory_collection_name(user_id: str) -> str:
     return f"user_memory_{_sanitize_user_fragment(user_id)}"
 
 
+def build_user_secret_collection_name(user_id: str) -> str:
+    return f"user_secret_{_sanitize_user_fragment(user_id)}"
+
+
 def get_user_collection_names(user_id: str) -> dict[str, str]:
     return {
         "chat": build_user_chat_collection_name(user_id),
         "docs": build_user_docs_collection_name(user_id),
         "memory": build_user_memory_collection_name(user_id),
+        "secret": build_user_secret_collection_name(user_id),
     }
 
 
@@ -162,6 +167,7 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.memory_class": PayloadSchemaType.KEYWORD,
                 "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.conversation_id": PayloadSchemaType.KEYWORD,
                 "metadata.session_id": PayloadSchemaType.KEYWORD,
@@ -169,6 +175,25 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
                 "metadata.status": PayloadSchemaType.KEYWORD,
                 "metadata.active": PayloadSchemaType.BOOL,
                 "metadata.preference_kind": PayloadSchemaType.KEYWORD,
+                "metadata.recall_policy": PayloadSchemaType.KEYWORD,
+                "metadata.retention_policy": PayloadSchemaType.KEYWORD,
+                "metadata.sensitivity": PayloadSchemaType.KEYWORD,
+                "metadata.scope": PayloadSchemaType.KEYWORD,
+                "metadata.timestamp": PayloadSchemaType.INTEGER,
+            },
+        )
+    if collection_name.startswith("user_secret_"):
+        return CollectionSpec(
+            name=collection_name,
+            payload_indexes={
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
+                "metadata.conversation_id": PayloadSchemaType.KEYWORD,
+                "metadata.secret_type": PayloadSchemaType.KEYWORD,
+                "metadata.secret_label": PayloadSchemaType.KEYWORD,
+                "metadata.secret_scope": PayloadSchemaType.KEYWORD,
+                "metadata.recall_policy": PayloadSchemaType.KEYWORD,
+                "metadata.sensitivity": PayloadSchemaType.KEYWORD,
+                "metadata.active": PayloadSchemaType.BOOL,
                 "metadata.timestamp": PayloadSchemaType.INTEGER,
             },
         )

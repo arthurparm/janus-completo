@@ -290,6 +290,7 @@ class MemoryService:
                 ),
                 "metadata": {
                     "type": "chat_msg",
+                    "memory_class": "episodic",
                     "user_id": str(user_id),
                     "session_id": str(session_id),
                     "conversation_id": str(session_id),
@@ -297,6 +298,12 @@ class MemoryService:
                     "timestamp": now_ms,
                     "ts_ms": now_ms,
                     "origin": "chat.index_interaction",
+                    "retention_policy": "rolling_window",
+                    "recall_policy": "session_priority",
+                    "sensitivity": "normal",
+                    "stability_score": 0.35,
+                    "scope": "session",
+                    "source_channel": "chat",
                 },
             }
 

@@ -158,6 +158,11 @@ class StreamingService:
         yield f"event: protocol\ndata: {proto}\n\n"
 
         self._repo.add_message(conversation_id, role="user", text=message)
+        self._message_orchestration_service.schedule_active_memory_capture(
+            message=message,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
         ack = json.dumps({"conversation_id": conversation_id}, ensure_ascii=False)
         yield f"event: ack\ndata: {ack}\n\n"
         yield (

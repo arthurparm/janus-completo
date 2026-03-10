@@ -44,6 +44,7 @@ from app.services.chat_command_handler import ChatCommandHandler
 from app.services.outbox_service import OutboxService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
+from app.services.active_memory_service import active_memory_service
 
 logger = structlog.get_logger(__name__)
 
@@ -123,6 +124,34 @@ class MessageOrchestrationService:
                 )
 
         asyncio.create_task(_index())
+
+    def schedule_active_memory_capture(
+        self,
+        *,
+        message: str,
+        user_id: str | None,
+        conversation_id: str,
+    ) -> None:
+        if not user_id or not str(message or "").strip():
+            return
+
+        async def _capture() -> None:
+            try:
+                await active_memory_service.maybe_capture_from_message(
+                    message=message,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "active_memory_capture_failed",
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+
+        asyncio.create_task(_capture())
 
     @staticmethod
     def _trim_document_snippet(text: str | None, *, limit: int = 480) -> str:
@@ -684,6 +713,11 @@ class MessageOrchestrationService:
 
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
+        self.schedule_active_memory_capture(
+            message=message,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
         self._schedule_rag_index_message(
             text=message,
             conversation_id=conversation_id,

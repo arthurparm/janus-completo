@@ -34,6 +34,13 @@ class ExperienceMetadata(BaseModel):
     source_agent: str | None = None
     status: str | None = None
     ts_ms: int | None = None
+    memory_class: str | None = None
+    retention_policy: str | None = None
+    recall_policy: str | None = None
+    sensitivity: str | None = None
+    stability_score: float | None = None
+    scope: str | None = None
+    source_channel: str | None = None
     
     # Generative Memory Fields (Park et al. 2023)
     importance: float | None = Field(default=None, ge=0.0, le=10.0, description="Importance score (0-10)")
@@ -155,6 +162,13 @@ class VectorCollection(str, Enum):
     """Nomes das coleções no Banco de Dados Vetorial (Qdrant)."""
 
     EPISODIC_MEMORY = "janus_episodic_memory"
+
+
+class MemoryClass(str, Enum):
+    EPISODIC = "episodic"
+    SEMANTIC = "semantic"
+    PROCEDURAL = "procedural"
+    SECRET = "secret"
 
 
 class QueueName(str, Enum):

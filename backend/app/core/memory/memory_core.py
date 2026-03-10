@@ -420,6 +420,7 @@ class MemoryCore:
         metadata.setdefault("origin", "unknown")
         metadata.setdefault("source_kind", "generic")
         metadata.setdefault("content_kind", payload_type or "episodic")
+        metadata.setdefault("memory_class", payload_type or "episodic")
         metadata.setdefault("strong_memory", False)
         metadata.setdefault("consolidation_status", "pending")
         metadata.setdefault("neo4j_sync_status", "pending")
@@ -431,6 +432,12 @@ class MemoryCore:
         metadata.setdefault("local_only", False)
         metadata.setdefault("summary_version", None)
         metadata.setdefault("memory_key", None)
+        metadata.setdefault("retention_policy", "default")
+        metadata.setdefault("recall_policy", "standard")
+        metadata.setdefault("sensitivity", "normal")
+        metadata.setdefault("stability_score", 0.5)
+        metadata.setdefault("scope", "session")
+        metadata.setdefault("source_channel", metadata.get("origin") or "unknown")
 
     async def aupdate_metadata(self, experience_id: str, metadata_patch: dict[str, Any]) -> None:
         if not metadata_patch:

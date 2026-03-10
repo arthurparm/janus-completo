@@ -18,6 +18,7 @@ from app.db.vector_store import (
 )
 from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
+from app.services.secret_memory_service import secret_memory_service
 from app.services.user_preference_memory_service import user_preference_memory_service
 
 router = APIRouter()
@@ -30,6 +31,12 @@ class MemoryTimelineItem(BaseModel):
     metadata: dict[str, Any] | None = None
     score: float | None = None
     composite_id: str | None = None
+    memory_class: str | None = None
+    retention_policy: str | None = None
+    recall_policy: str | None = None
+    sensitivity: str | None = None
+    stability_score: float | None = None
+    scope: str | None = None
 
 
 class UserPreferenceMemoryItem(BaseModel):
@@ -46,8 +53,39 @@ class UserPreferenceMemoryItem(BaseModel):
     active: bool = True
     origin: str | None = None
     dedupe_key: str | None = None
+    memory_class: str | None = None
+    retention_policy: str | None = None
+    recall_policy: str | None = None
+    sensitivity: str | None = None
+    stability_score: float | None = None
     metadata: dict[str, Any] | None = None
     score: float | None = None
+
+
+class SecretMemoryCreateRequest(BaseModel):
+    label: str
+    value: str
+    secret_type: str | None = None
+    secret_scope: str | None = None
+    conversation_id: str | None = None
+    user_id: str | None = None
+
+
+class SecretMemoryItem(BaseModel):
+    id: str | None = None
+    ts_ms: int | None = None
+    secret_label: str
+    secret_type: str | None = None
+    secret_scope: str | None = None
+    masked_value: str | None = None
+    active: bool = True
+    conversation_id: str | None = None
+    memory_class: str | None = None
+    retention_policy: str | None = None
+    recall_policy: str | None = None
+    sensitivity: str | None = None
+    stability_score: float | None = None
+    metadata: dict[str, Any] | None = None
 
 
 def _parse_iso_to_ms(value: str | None) -> int | None:
@@ -84,6 +122,12 @@ def _experience_to_item(exp: ScoredExperience) -> MemoryTimelineItem:
         ts_ms=ts_ms,
         metadata=meta_dict,
         score=exp.score,
+        memory_class=meta_dict.get("memory_class"),
+        retention_policy=meta_dict.get("retention_policy"),
+        recall_policy=meta_dict.get("recall_policy"),
+        sensitivity=meta_dict.get("sensitivity"),
+        stability_score=meta_dict.get("stability_score"),
+        scope=meta_dict.get("scope"),
     )
 
 
@@ -97,6 +141,12 @@ def _point_to_item(point: Any) -> MemoryTimelineItem:
         metadata=meta,
         score=getattr(point, "score", None),
         composite_id=payload.get("composite_id"),
+        memory_class=meta.get("memory_class"),
+        retention_policy=meta.get("retention_policy"),
+        recall_policy=meta.get("recall_policy"),
+        sensitivity=meta.get("sensitivity"),
+        stability_score=meta.get("stability_score"),
+        scope=meta.get("scope"),
     )
 
 
@@ -328,4 +378,84 @@ async def get_user_preferences(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve user preferences",
+        )
+
+
+@router.get("/secrets", response_model=list[SecretMemoryItem])
+async def get_user_secrets(
+    request: Request,
+    user_id: str | None = Query(None, description="User ID"),
+    conversation_id: str | None = Query(None, description="Optional conversation filter"),
+    query: str | None = Query(None, description="Optional semantic query"),
+    limit: int = Query(20, ge=1, le=100),
+    active_only: bool = Query(True),
+):
+    resolved_user_id = resolve_user_scope_id(request, user_id)
+    if not resolved_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required (query param or authenticated actor)",
+        )
+    try:
+        items = await secret_memory_service.list_secrets(
+            user_id=str(resolved_user_id),
+            conversation_id=conversation_id,
+            query=query,
+            limit=limit,
+            active_only=active_only,
+            reveal=False,
+        )
+        return [SecretMemoryItem(**item) for item in items]
+    except Exception as exc:
+        logger.error("log_error", message=f"Error listing user secrets: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user secrets",
+        )
+
+
+@router.post("/secrets", response_model=SecretMemoryItem, status_code=status.HTTP_201_CREATED)
+async def add_user_secret(
+    request: Request,
+    body: SecretMemoryCreateRequest,
+):
+    resolved_user_id = resolve_user_scope_id(request, body.user_id)
+    if not resolved_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required (body or authenticated actor)",
+        )
+    try:
+        stored = await secret_memory_service.store_secret(
+            user_id=str(resolved_user_id),
+            label=body.label,
+            value=body.value,
+            secret_type=body.secret_type or secret_memory_service._infer_secret_type(body.label),
+            secret_scope=body.secret_scope,
+            conversation_id=body.conversation_id,
+            source="memory.secret_api",
+        )
+        item = {
+            **stored,
+            "memory_class": "secret",
+            "retention_policy": "persistent",
+            "recall_policy": "explicit_only",
+            "sensitivity": "secret",
+            "stability_score": 0.98,
+            "active": True,
+            "conversation_id": body.conversation_id,
+            "metadata": {
+                "memory_class": "secret",
+                "retention_policy": "persistent",
+                "recall_policy": "explicit_only",
+                "sensitivity": "secret",
+                "stability_score": 0.98,
+            },
+        }
+        return SecretMemoryItem(**item)
+    except Exception as exc:
+        logger.error("log_error", message=f"Error storing user secret: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store user secret",
         )

@@ -154,6 +154,14 @@ class _FakeManifestRepo:
         return list(self.rows)
 
 
+@pytest.fixture(autouse=True)
+def _stub_active_memory_capture(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.active_memory_service.maybe_capture_from_message",
+        AsyncMock(return_value=None),
+    )
+
+
 def _build_service(
     repo=None,
     llm_service=None,

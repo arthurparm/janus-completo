@@ -40,6 +40,10 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
         captured["checked_dedupe_key"] = dedupe_key
         return False
 
+    async def _fake_deactivate_scope_conflicts(*, user_id: str, scope: str, keep_dedupe_key: str) -> None:
+        captured["deactivated_scope"] = scope
+        captured["deactivated_dedupe_key"] = keep_dedupe_key
+
     async def _fake_add_memory(content: str, type: str, metadata: dict):
         captured["content"] = content
         captured["type"] = type
@@ -47,6 +51,7 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
         return _FakeExperience()
 
     monkeypatch.setattr(svc, "_preference_exists", _fake_exists)
+    monkeypatch.setattr(svc, "_deactivate_scope_conflicts", _fake_deactivate_scope_conflicts)
     monkeypatch.setattr(
         "app.services.user_preference_memory_service.generative_memory_service.add_memory",
         _fake_add_memory,
@@ -63,11 +68,16 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
     assert captured["type"] == "semantic"
     metadata = captured["metadata"]
     assert metadata["type"] == "user_preference"
+    assert metadata["memory_class"] == "semantic"
     assert metadata["preference_kind"] == "dont"
     assert metadata["user_id"] == "1"
     assert metadata["conversation_id"] == "42"
     assert metadata["session_id"] == "42"
     assert metadata["origin"] == "chat.user_preference_extractor"
+    assert metadata["retention_policy"] == "persistent"
+    assert metadata["recall_policy"] == "always"
+    assert metadata["sensitivity"] == "normal"
+    assert metadata["stability_score"] >= 0.8
     assert metadata["active"] is True
 
 
@@ -80,6 +90,6 @@ def test_format_preference_context_groups_do_and_dont():
         ]
     )
     assert text is not None
+    assert "Preferências e Perfil:" in text
     assert "FAZER:" in text
     assert "NÃO FAZER:" in text
-
