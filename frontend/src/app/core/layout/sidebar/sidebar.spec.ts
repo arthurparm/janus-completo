@@ -3,6 +3,7 @@ import {signal} from '@angular/core';
 import {RouterTestingModule} from '@angular/router/testing';
 
 import {Sidebar} from './sidebar';
+import {AuthService} from '../../auth/auth.service';
 import {GlobalStateStore} from '../../state/global-state.store';
 
 class MockGlobalStateStore {
@@ -10,6 +11,10 @@ class MockGlobalStateStore {
   services = signal<any[]>([]);
   workers = signal<any[]>([]);
 }
+
+const authMock = {
+  isAdmin: signal(false)
+};
 
 describe('Sidebar', () => {
   let component: Sidebar;
@@ -19,6 +24,7 @@ describe('Sidebar', () => {
     await TestBed.configureTestingModule({
       imports: [Sidebar, RouterTestingModule],
       providers: [
+        { provide: AuthService, useValue: authMock },
         { provide: GlobalStateStore, useClass: MockGlobalStateStore }
       ]
     })

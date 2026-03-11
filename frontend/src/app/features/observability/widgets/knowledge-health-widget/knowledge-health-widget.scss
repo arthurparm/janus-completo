@@ -1,4 +1,4 @@
-@import '../system-status-widget/system-status-widget.scss';
+@use '../system-status-widget/system-status-widget';
 
 .connection-grid {
     display: grid;
