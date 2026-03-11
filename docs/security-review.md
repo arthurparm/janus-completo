@@ -125,3 +125,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-11)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Executado**: 6 vulnerabilidades encontradas (5 Altas, 1 Moderada), afetando `@hono/node-server`, `dompurify`, `express-rate-limit`, `hono`, `immutable` e `tar`.
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, falta de lockfile no ambiente restrito).
+- [x] Revisão manual de código - Verificação de modificações nos arquivos de configuração e código gerado na janela (incluindo `backend/app/config.py`).
+
+### Gaps e Sugestões
+- **Componente:** `backend/app/config.py`
+  - **Evidência:** O parâmetro `AUTH_TRUST_X_USER_ID_HEADER: bool = True` permanece como padrão na nova refatoração do config.
+  - **Severidade Sugerida:** Alta (Impersonation bypass via header, reincidência do SG-016).
+  - **Ação Recomendada:** Configurar `AUTH_TRUST_X_USER_ID_HEADER = False` nos defaults de produção e documentar o uso seguro em ambientes locais apenas via feature flag.
+
+- **Componente:** Dependências Frontend (`npm audit`)
+  - **Evidência:** Vulnerabilidades em múltiplas dependências (conforme mapeado em SG-024). A persistência reforça a necessidade de atualização.
+  - **Severidade Sugerida:** Alta
+  - **Ação Recomendada:** Executar `npm audit fix` ou atualizar manualmente os pacotes críticos para evitar falhas de injeção e bypass.

@@ -109,6 +109,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Alertas claros e fallback seguro para falhas de conexao no RabbitMQ (message_broker.py) | P1 | S | ideia |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -749,3 +750,13 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] Fuga de Alerta em Conexões RabbitMQ Silenciosas
+- Problema atual: O backend `app.core.infrastructure.message_broker` falha em modo silenciado (`[Errno 111] Connection refused`) e cai para modo offline sem emitir um alerta claro no log ou dashboard, o que pode causar queda de serviço não notada.
+- Solucao proposta: Implementar alertas explícitos no logger para métricas e tentativas repetidas no message broker, subindo ao dashboard de observabilidade.
+- Impacto esperado: Menor downtime e detecção proativa de falhas de comunicação com a mensageria.
+- Riscos: Nenhum
+- Dependencias: Observabilidade Service
+- Prioridade: P1
+- Esforco: S
+- Dono: Squad Plataforma
+- Status: ideia
