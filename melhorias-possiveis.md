@@ -100,6 +100,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-020 | Corrigir vulnerabilidade de SQL Injection no dedupe_service.py (f-strings) | P0 | M | aberto |
+| SG-021 | Implementar autenticacao nos endpoints FastAPI expostos em windows_agent.py | P0 | S | aberto |
+| SG-022 | LGPD: Adicionar minimizacao e auditoria nas capturas de tela do windows_agent.py | P1 | M | aberto |
+| SG-023 | LGPD: Ofuscar comandos de voz capturados e logados em daemon.py | P1 | S | aberto |
+| SG-024 | Atualizar @hono/node-server no frontend para mitigar vulnerabilidade de alta severidade | P1 | S | aberto |
+| SG-025 | Substituir geradores pseudo-aleatorios padrao por secrets no auto_analysis.py | P2 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade

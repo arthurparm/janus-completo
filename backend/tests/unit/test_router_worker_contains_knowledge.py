@@ -84,6 +84,7 @@ async def test_router_terminal_task_to_router_is_consumed_without_republish(monk
     msg = TaskMessage(
         task_id="t1",
         task_type="task_state",
+        timestamp=1.0,
         payload={
             "task_state": TaskState(
                 task_id="t1",
@@ -130,6 +131,7 @@ async def test_router_corrects_non_terminal_self_loop_and_republishes(monkeypatc
     msg = TaskMessage(
         task_id="t2",
         task_type="task_state",
+        timestamp=1.0,
         payload={
             "task_state": TaskState(
                 task_id="t2",
@@ -147,3 +149,56 @@ async def test_router_corrects_non_terminal_self_loop_and_republishes(monkeypatc
     assert _FakeCollaborationService.last_state is not None
     assert _FakeCollaborationService.last_state.next_agent_role == "thinker"
     assert publishes == []  # no knowledge side effects on non-terminal state
+
+
+@pytest.mark.asyncio
+async def test_router_escapes_repeated_route_loop_with_alternative_role(monkeypatch):
+    class _FakeBroker:
+        async def publish(self, **kwargs):
+            raise AssertionError("should not publish side-effects for in-progress task")
+
+    class _FakeCollaborationService:
+        last_state = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def pass_task(self, state):
+            type(self).last_state = state
+
+        def maybe_finalize_autonomy_goal(self, _state):
+            raise AssertionError("should not finalize non-terminal task")
+
+    monkeypatch.setattr(router_worker, "get_broker", AsyncMock(return_value=_FakeBroker()))
+    monkeypatch.setattr(router_worker, "CollaborationService", _FakeCollaborationService)
+
+    msg = TaskMessage(
+        task_id="t3",
+        task_type="task_state",
+        timestamp=1.0,
+        payload={
+            "task_state": TaskState(
+                task_id="t3",
+                original_goal="Gerar correção",
+                next_agent_role="coder",
+                status="in_progress",
+                data_payload={},
+                history=[
+                    {"agent_role": "router", "action": "routed", "notes": "next=coder"},
+                    {"agent_role": "router", "action": "routed", "notes": "next=coder"},
+                    {"agent_role": "router", "action": "routed", "notes": "next=coder"},
+                ],
+            ).model_dump()
+        },
+    )
+
+    await router_worker.process_router_task(msg)
+
+    assert _FakeCollaborationService.last_state is not None
+    assert _FakeCollaborationService.last_state.next_agent_role == "thinker"
+    assert any(
+        (event.get("action") if isinstance(event, dict) else event.action) == "router_loop_escape"
+        and "from=coder to=thinker"
+        in ((event.get("notes") if isinstance(event, dict) else event.notes) or "")
+        for event in _FakeCollaborationService.last_state.history
+    )
