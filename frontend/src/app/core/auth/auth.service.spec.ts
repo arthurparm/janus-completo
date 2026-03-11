@@ -5,6 +5,14 @@ import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
 
 describe('AuthService', () => {
   let http: HttpTestingController
+  const meEndpoint = `${API_BASE_URL}/v1/auth/local/me`
+
+  const waitForAuthReady = async (svc: AuthService, maxTicks = 8): Promise<void> => {
+    for (let i = 0; i < maxTicks; i += 1) {
+      if (svc.authReady()) return
+      await Promise.resolve()
+    }
+  }
 
   beforeEach(() => {
     localStorage.clear()
@@ -111,25 +119,56 @@ describe('AuthService', () => {
     localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
 
     const svc = TestBed.inject(AuthService)
-    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/me`)
+    const req = http.expectOne(meEndpoint)
     expect(req.request.method).toBe('GET')
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
-    await Promise.resolve()
+    await waitForAuthReady(svc)
     expect(svc.isAuthenticated()).toBe(true)
     expect(svc.currentUserValue?.email).toBe('a@b.com')
+    expect(svc.authReady()).toBe(true)
   })
 
   it('deve restaurar sessao quando existir token na sessionStorage', async () => {
     sessionStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
 
     const svc = TestBed.inject(AuthService)
-    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/me`)
+    const req = http.expectOne(meEndpoint)
     expect(req.request.method).toBe('GET')
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
-    await Promise.resolve()
+    await waitForAuthReady(svc)
     expect(svc.isAuthenticated()).toBe(true)
     expect(svc.currentUserValue?.email).toBe('a@b.com')
+    expect(svc.authReady()).toBe(true)
+  })
+
+  it('deve concluir inicializacao sem chamar /me quando nao houver token persistido', async () => {
+    const svc = TestBed.inject(AuthService)
+
+    http.expectNone(meEndpoint)
+    await waitForAuthReady(svc)
+
+    expect(svc.isAuthenticated()).toBe(false)
+    expect(svc.currentUserValue).toBeNull()
+    expect(svc.authReady()).toBe(true)
+  })
+
+  it('deve limpar sessao persistida quando restauracao via /me falhar', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+    sessionStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+
+    const svc = TestBed.inject(AuthService)
+    const req = http.expectOne(meEndpoint)
+    expect(req.request.method).toBe('GET')
+    req.flush({ detail: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' })
+
+    await waitForAuthReady(svc)
+
+    expect(svc.isAuthenticated()).toBe(false)
+    expect(svc.currentUserValue).toBeNull()
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(svc.authReady()).toBe(true)
   })
 })
