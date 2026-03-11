@@ -24,6 +24,17 @@ from app.services.collaboration_service import CollaborationService
 
 logger = structlog.get_logger(__name__)
 
+_LOOP_ESCAPE_MIN_REPEATS = 3
+_ROUTER_HISTORY_SCAN_WINDOW = 8
+_ALTERNATIVE_ROLE_BY_AGENT = {
+    "coder": "thinker",
+    "thinker": "professor",
+    "professor": "thinker",
+    "sandbox": "thinker",
+    "red_team": "blue_team",
+    "blue_team": "professor",
+}
+
 
 async def _decompose_complex_task(goal: str) -> str:
     """Usa o prompt task_decomposition para analisar requisições complexas."""
@@ -82,6 +93,49 @@ def _contains_knowledge_payload(state: TaskState) -> bool:
     return has_tool or has_sandbox or goal_match
 
 
+def _extract_routed_role(notes: str | None) -> str | None:
+    if not notes:
+        return None
+    if not notes.startswith("next="):
+        return None
+    candidate = notes.removeprefix("next=").strip().split(" ", 1)[0].strip().lower()
+    if not candidate:
+        return None
+    return candidate
+
+
+def _is_repeated_route_loop(state: TaskState, next_role: str) -> bool:
+    target = (next_role or "").strip().lower()
+    if not target:
+        return False
+
+    consecutive = 0
+    scanned = 0
+    for event in reversed(state.history):
+        if scanned >= _ROUTER_HISTORY_SCAN_WINDOW:
+            break
+        scanned += 1
+        if (event.agent_role or "").lower() != "router":
+            continue
+        if (event.action or "").lower() != "routed":
+            continue
+        routed_role = _extract_routed_role(event.notes)
+        if not routed_role:
+            continue
+        if routed_role == target:
+            consecutive += 1
+            if consecutive >= _LOOP_ESCAPE_MIN_REPEATS:
+                return True
+        else:
+            break
+    return False
+
+
+def _choose_loop_escape_role(next_role: str) -> str:
+    role = (next_role or "").strip().lower()
+    return _ALTERNATIVE_ROLE_BY_AGENT.get(role, "thinker")
+
+
 @protect_against_poison_pills(
     queue_name=QueueName.TASKS_ROUTER.value,
     extract_message_id=lambda task: task.task_id,
@@ -129,6 +183,30 @@ async def process_router_task(task: TaskMessage) -> None:
                     inferred_next_role=inferred,
                 )
                 state.next_agent_role = inferred
+
+            # Anti-loop: se o mesmo próximo agente vem sendo roteado repetidamente,
+            # forçar estratégia alternativa para destravar a execução.
+            repeated_loop = _is_repeated_route_loop(state, state.next_agent_role or "")
+            if repeated_loop:
+                previous_role = (state.next_agent_role or "").lower()
+                escaped_role = _choose_loop_escape_role(previous_role)
+                logger.warning(
+                    "router_repeated_route_loop_escape",
+                    task_id=state.task_id,
+                    status=state.status,
+                    previous_next_role=previous_role,
+                    escaped_next_role=escaped_role,
+                    repeats_required=_LOOP_ESCAPE_MIN_REPEATS,
+                )
+                state.history.append(
+                    {
+                        "agent_role": "router",
+                        "action": "router_loop_escape",
+                        "notes": f"from={previous_role} to={escaped_role}",
+                        "timestamp": datetime.utcnow().timestamp(),
+                    }
+                )
+                state.next_agent_role = escaped_role
 
         # Nova lógica: se tarefa concluída com conhecimento, encaminhar ao consolidator
         success_like = is_success_terminal_status(state.status)
