@@ -329,7 +329,7 @@ class JanusLabManager:
             "QDRANT_PORT": "6333",
             "NEO4J_URI": "bolt://janus_neo4j:7687",
             "NEO4J_USER": os.getenv("NEO4J_USER", "neo4j"),
-            "NEO4J_PASSWORD": os.getenv("NEO4J_PASSWORD", "password"),
+            "NEO4J_PASSWORD": os.getenv("NEO4J_PASSWORD", "__REQUIRED__"),
             # Disable features that could cause side effects
             "DISABLE_WORKERS": "true",
             "DISABLE_SCHEDULER": "true",

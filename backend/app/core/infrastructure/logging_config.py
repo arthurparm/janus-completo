@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import sys
+from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
@@ -255,6 +256,42 @@ def setup_logging(
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
+
+def cleanup_rotated_log_files(log_file: str, retention_days: int) -> dict[str, Any]:
+    """Delete rotated log files older than `retention_days`.
+
+    Keeps the active log file untouched and removes only rotated siblings
+    (e.g. janus.log.1, janus.log.2...).
+    """
+    if retention_days <= 0:
+        raise ValueError("retention_days must be greater than zero.")
+    if not log_file:
+        return {"removed": 0, "scanned": 0}
+
+    base_path = os.path.abspath(log_file)
+    base_dir = os.path.dirname(base_path) or "."
+    base_name = os.path.basename(base_path)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    scanned = 0
+    removed = 0
+    for name in os.listdir(base_dir):
+        if not name.startswith(base_name):
+            continue
+        full_path = os.path.join(base_dir, name)
+        if full_path == base_path or not os.path.isfile(full_path):
+            continue
+        scanned += 1
+        try:
+            modified = datetime.fromtimestamp(os.path.getmtime(full_path), tz=timezone.utc)
+            if modified < cutoff:
+                os.remove(full_path)
+                removed += 1
+        except FileNotFoundError:
+            continue
+
+    return {"removed": removed, "scanned": scanned}
 
 
 def setup_tracing(app=None):

@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from logging.handlers import RotatingFileHandler
 
 import pytest
@@ -9,7 +10,11 @@ if sys.version_info < (3, 10):
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
-from app.core.infrastructure.logging_config import _normalize_legacy_structlog_event, setup_logging
+from app.core.infrastructure.logging_config import (
+    _normalize_legacy_structlog_event,
+    cleanup_rotated_log_files,
+    setup_logging,
+)
 
 
 def test_normalize_legacy_structlog_event_rewrites_log_info_message():
@@ -55,3 +60,34 @@ def test_setup_logging_uses_rotating_file_handlers(monkeypatch, tmp_path):
     assert len(handlers) >= 2
     assert all(h.maxBytes == 2048 for h in handlers)
     assert all(h.backupCount == 3 for h in handlers)
+
+
+def test_cleanup_rotated_log_files_removes_only_old_rotated_files(tmp_path):
+    main_log = tmp_path / "janus.log"
+    rotated_old = tmp_path / "janus.log.1"
+    rotated_new = tmp_path / "janus.log.2"
+
+    main_log.write_text("active")
+    rotated_old.write_text("old")
+    rotated_new.write_text("new")
+
+    now = time.time()
+    old_time = now - (15 * 24 * 60 * 60)
+    recent_time = now - (2 * 24 * 60 * 60)
+    os.utime(rotated_old, (old_time, old_time))
+    os.utime(rotated_new, (recent_time, recent_time))
+
+    result = cleanup_rotated_log_files(str(main_log), retention_days=7)
+    assert result["removed"] == 1
+    assert result["scanned"] >= 2
+    assert main_log.exists()
+    assert not rotated_old.exists()
+    assert rotated_new.exists()
+
+
+def test_cleanup_rotated_log_files_requires_positive_retention(tmp_path):
+    main_log = tmp_path / "janus.log"
+    main_log.write_text("active")
+
+    with pytest.raises(ValueError):
+        cleanup_rotated_log_files(str(main_log), retention_days=0)

@@ -206,6 +206,21 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     run(cmd, cwd=REPO_ROOT)
 
 
+def cmd_checklist(args: argparse.Namespace) -> None:
+    checklist_script = REPO_ROOT / "tooling" / "exit_checklist.py"
+    cmd = [
+        sys.executable,
+        str(checklist_script),
+        "--type",
+        str(args.task_type),
+        "--format",
+        str(args.format),
+    ]
+    if args.out:
+        cmd.extend(["--out", str(args.out)])
+    run(cmd, cwd=REPO_ROOT)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Unified local developer workflow for janus-completo.",
@@ -229,6 +244,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable TLS certificate verification (disabled by default for self-signed envs).",
     )
+    checklist_parser = subparsers.add_parser(
+        "checklist",
+        help="Generate AG-007 output checklist by task type (codigo/docs/deploy).",
+    )
+    checklist_parser.add_argument("--type", dest="task_type", choices=("codigo", "docs", "deploy"), required=True)
+    checklist_parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
+    checklist_parser.add_argument("--out", default="")
     return parser.parse_args()
 
 
@@ -245,6 +267,8 @@ def main() -> int:
         cmd_down()
     elif command == "doctor":
         cmd_doctor(args)
+    elif command == "checklist":
+        cmd_checklist(args)
     else:
         raise RuntimeError(f"Unknown command: {command}")
     return 0

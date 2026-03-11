@@ -544,6 +544,7 @@ class AppSettings(BaseSettings):
     LOG_SAMPLING_RATE: float = 1.0
     LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024
     LOG_FILE_BACKUP_COUNT: int = 5
+    LOG_FILE_RETENTION_DAYS: int = 14
     AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
     AUDIT_RETENTION_DAYS: int = 30
     OQ_SLO_WINDOW_MINUTES: int = 15

@@ -368,7 +368,31 @@ async def initialize_default_jobs(scheduler: SchedulerService):
     # Job: Daily Cleanup (diário às 3h)
     async def daily_cleanup():
         logger.info("Executando limpeza diária...")
-        # Implementar limpeza de logs, cache, etc.
+        try:
+            import os
+
+            from app.core.infrastructure.logging_config import cleanup_rotated_log_files
+
+            retention_days = max(1, int(getattr(settings, "LOG_FILE_RETENTION_DAYS", 14)))
+            if os.path.isdir("/app/app"):
+                log_file = "/app/app/janus.log"
+            else:
+                log_file = os.path.join(os.getcwd(), "janus.log")
+            error_log_file = os.path.join(os.path.dirname(log_file), "janus-errors.log")
+
+            main_cleanup = cleanup_rotated_log_files(log_file, retention_days)
+            error_cleanup = cleanup_rotated_log_files(error_log_file, retention_days)
+            logger.info(
+                "log_info",
+                message="Limpeza diária de logs concluída",
+                retention_days=retention_days,
+                main_logs_removed=main_cleanup.get("removed", 0),
+                main_logs_scanned=main_cleanup.get("scanned", 0),
+                error_logs_removed=error_cleanup.get("removed", 0),
+                error_logs_scanned=error_cleanup.get("scanned", 0),
+            )
+        except Exception as e:
+            logger.error("log_error", message=f"Daily cleanup failed: {e}")
 
     scheduler.register_job(
         name="daily_cleanup",
