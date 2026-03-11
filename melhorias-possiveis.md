@@ -749,3 +749,13 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [OQ-017] Aumentar a cobertura automatizada da matriz de API
+- Problema atual: O relatório de drift e cobertura gerado por `tooling/generate_api_coverage_report.py` aponta uma cobertura end-to-end de apenas 11.95% dos 226 endpoints.
+- Solucao proposta: Desenvolver gradativamente testes de e2e e testes automatizados de contrato para os endpoints "uncovered", integrando os cenários na rotina diária e no CI.
+- Impacto esperado: Maior segurança ao efetuar deploys, reduzindo o risco de quebra de contrato (API drift) em produção.
+- Riscos: Overhead de manutenção em caso de endpoints instáveis.
+- Dependencias: Matriz de cobertura gerada pelo backend (`tooling/extract_api_inventory.py`).
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: ideia

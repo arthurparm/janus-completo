@@ -113,3 +113,29 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-11)
+
+### 11. Monitoramento de Segurança Tailscale (Segurança/Operações)
+**Descrição:** O script de setup do Tailscale foi significativamente expandido para incluir monitoramento ativo de segurança, alertas e um plano de resposta a incidentes, reforçando a segurança da conectividade da infraestrutura.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Adição de funções `Configure-SecurityMonitoring`, `Configure-IncidentResponse` e `Test-SecurityConfiguration` que geram o script `tailscale-security-monitor.ps1` rodando em background.
+
+**Próximos passos:**
+- Documentar a presença deste monitoramento no manual de operações e garantir que os alertas gerados (ex: latency e safe mode) sejam integrados com a stack de observabilidade principal (Grafana/Prometheus).
+
+### 12. Testes de Sistema de Debate LangGraph (Qualidade/Arquitetura)
+**Descrição:** Foi adicionado um script de teste focado no orquestrador de debate baseado em LangGraph, indicando progresso na estabilização dos fluxos multi-agente assíncronos.
+**Evidências:**
+- `tooling/test_debate_system.py`: Script autônomo criado para rodar o `debate_graph` com streaming assíncrono e avaliar as respostas de código e crítica.
+
+**Próximos passos:**
+- Converter ou integrar esse teste exploratório no conjunto de testes de integração do pytest (`qa/`) para ser executado no CI de forma automatizada.
+
+### 13. Cobertura de Testes de API (Métricas/Qualidade)
+**Descrição:** O relatório diário de drift de contratos e cobertura de API revelou que de 226 endpoints detectados, a cobertura atual é de apenas 11.95% (199 endpoints descobertos sem validação ponta a ponta na matriz).
+**Evidências:**
+- Execução de `python tooling/generate_api_coverage_report.py` gerou `outputs/qa/api_coverage_report.json` com estatística: `[summary] endpoints=226 coverage=11.95% uncovered=199`.
+
+**Próximos passos:**
+- Adicionar uma meta de melhoria no `melhorias-possiveis.md` (OQ-017) focada em aumentar a cobertura automatizada da matriz de API gradativamente.
