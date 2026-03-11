@@ -125,3 +125,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-11)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada na última varredura mantida).
+- [x] Revisão manual de código via Bandit e varredura Linter.
+
+### 17. Vulnerabilidade no Parser de Documentos XML
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média (Bandit B314)
+- **Descrição:** O arquivo faz uso de `xml.etree.ElementTree.fromstring` para realizar o parseamento de arquivos XML (no caso, lendo o `word/document.xml` extraído de pacotes zip de DOCX). A biblioteca padrão do Python é sabidamente vulnerável a ataques de XML (como Billion Laughs ou Quadratic Blowup) se o conteúdo vier de uma origem não confiável.
+- **Ação Recomendada:** Substituir o uso do parser padrão da Standard Library pelas versões protegidas encontradas na biblioteca `defusedxml` ou desabilitar explicitamente parsing the entidades externas/ataques de DTD (Defused XML).
+
+### 18. Interface de Rede Exposta Insegura em Windows Agent
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média (Bandit B104)
+- **Descrição:** O script do agente é instanciado no uvicorn usando o host `0.0.0.0` (linha 329), o que resulta em "Possible binding to all interfaces". Em combinação com a ausência de autenticação (item 9), isso permite que qualquer host com visibilidade de rede possa enviar requisições e interagir com as chamadas de Sistema Operacional (OS API).
+- **Ação Recomendada:** Restringir o binding para o loopback (127.0.0.1) ou exigir configurações explícitas e rigorosas se o objetivo for acesso através de containeres.
+
+### 19. Falta de Timeout em Requisições HTTP
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py`, `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/conftest.py`, `backend/tests/e2e/test_api_endpoints.py`
+- **Gravidade:** Média (Bandit B113)
+- **Descrição:** Múltiplas instâncias de chamadas para `requests.get()` ou `requests.post()` não definem um argumento `timeout`. Isso pode causar bloqueio/hang indefinido nas requisições, consumindo recursos no servidor se o destino travar (Tarpit / Slowloris).
+- **Ação Recomendada:** Adicionar consistentemente um valor de `timeout` (ex: `timeout=10`) a todas as chamadas de rede baseadas na library `requests` ao longo de scripts e ferramentas.
+
+### 20. Persistência de Vulnerabilidades do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas dependências do frontend seguem reportando vulnerabilidades altas, englobando `@hono/node-server`, `dompurify`, `express-rate-limit`, `hono`, `immutable` e `tar`.
+- **Ação Recomendada:** Urge planejar e executar as correções de pacotes (`npm audit fix`) e mitigação das falhas no frontend.

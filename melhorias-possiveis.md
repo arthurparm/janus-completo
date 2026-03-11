@@ -109,6 +109,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-031 | Mitigar vulnerabilidade de XML no document_parser_service.py (usar defusedxml) | P1 | S | aberto |
+| SG-032 | Restringir bind address de 0.0.0.0 no windows_agent.py | P1 | S | aberto |
+| SG-033 | Adicionar timeouts em todas chamadas requests em scripts e testes | P2 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -748,4 +751,36 @@ Copiar e preencher:
 - Prioridade: P1
 - Esforco: S
 - Dono: a definir
+- Status: aberto
+### [SG-031] Vulnerabilidade no parser de Documentos XML (Bandit B314)
+- Problema atual: O arquivo `backend/app/services/document_parser_service.py` utiliza a biblioteca padrão do Python (`xml.etree.ElementTree.fromstring`) para converter e ler os arquivos internos (`word/document.xml`) dos pacotes DOCX, configurando o risco inerente de ataques de bomba XML ou referências externas maliciosas.
+- Solucao proposta: Modificar o parser para a implementação segura da biblioteca `defusedxml` ou desabilitar explicitamente nas configurações do parser as chamadas a entidades externas e manipulações agressivas em cascata.
+- Impacto esperado: Maior resiliência contra arquivos forjados visando travar o backend via parsing XML e mitigação de advertências de severidade média/alta (Bandit).
+- Riscos: Adicionar dependência ou modificar a conversão requer garantia que o parser seguro seja inteiramente compatível com os esquemas da MS Word.
+- Dependencias: Avaliar se já existe dependência `defusedxml` no backend, senão adicionar.
+- Prioridade: P1
+- Esforco: S
+- Dono: Squad Backend / Tech Lead
+- Status: aberto
+
+### [SG-032] Interface de Rede Exposta Insegura (Bandit B104)
+- Problema atual: O `backend/windows_agent.py` sobe o servidor FastAPI usando a interface de rede total (0.0.0.0) na porta 5001, ficando exposto para a rede. Associado à ausência de Auth no agent, a vulnerabilidade amplia seu grau de risco.
+- Solucao proposta: Ajustar o bind adress no argumento `host` da chamada do uvicorn para escutar apenas o loopback (`127.0.0.1`) ou atrelar rigorosamente em configurações `.env` qual interface é apropriada conforme o ambiente Docker, priorizando sempre restrições máximas.
+- Impacto esperado: Redução da superfície de ataque; o sistema não ficará escutando requisições indiscriminadas fora da máquina ou do ambiente onde for contido.
+- Riscos: Pode quebrar as comunicações atuais entre o backend conteinerizado e o Agente se eles estiverem dependendo do hostname/resolução externa da máquina física (host).
+- Dependencias: Definição topológica das chamadas container->host.
+- Prioridade: P1
+- Esforco: S
+- Dono: Arquitetura / Security Ops
+- Status: aberto
+
+### [SG-033] Chamadas sem Timeout na library HTTP Requests (Bandit B113)
+- Problema atual: Em `backend/scripts/test_tool_evolution_chat.py`, `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/conftest.py`, e `backend/tests/e2e/test_api_endpoints.py`, as requisições `requests.get()` e `.post()` são feitas sem o parâmetro `timeout`, o que pode acarretar falhas ou travar indefenidamente ("hang") o pipeline de testes ou os scripts locais em caso de o servidor destino sofrer lentidão grave ou responder sem fechar as conexões.
+- Solucao proposta: Impor strict timeouts (ex: 10 ou 15 segundos) em todas as requisições sincrônicas feitas via library standard requests.
+- Impacto esperado: Execução de rotinas e testes mais estáveis e menos susceptíveis a ficar consumindo recursos travados na máquina hospedeira.
+- Riscos: Testes de ponta-a-ponta que envolvam o disparo de LLMs muito pesados e assíncronos que naturalmente exijam tempos de resposta elevados. (Se for este o caso, o timeout pode ser parametrizável ou amplo).
+- Dependencias: Levantamento dos SLAs e limites de latência entre testes locais e APIs do projeto.
+- Prioridade: P2
+- Esforco: S
+- Dono: QA / Engenharia
 - Status: aberto

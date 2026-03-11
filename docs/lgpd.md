@@ -46,3 +46,14 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-11)
+
+### Lacunas e Impacto
+- **Persistência de Gaps Anteriores:** Os riscos de privacidade levantados em dias anteriores permanecem pendentes. A saber:
+  - Continuam a ser logados dados textuais em claro das transcrições de voz capturadas pelo `daemon.py`, o que representa um fluxo de dados biométricos processados e logados sem minimização.
+  - O `windows_agent.py` mantêm expostas funções de captura e retorno de tela integral (screenshot) da área de trabalho do usuário, sem a presença de uma camada nativa ou pós-processada de redação para mitigar o trânsito e o acesso à eventuais PII renderizados na tela.
+  - O sistema de log do `productivity_tools.py` não foi atualizado, persistindo a emissão de registros contendo cabeçalhos de email originais (como Remetente, Destinatário, e Assuntos).
+
+### Próximos Passos
+1. **Priorização e Remediation:** Avançar o mais rapidamente possível com as resoluções (itens P0 e P1 mapeados no arquivo `melhorias-possiveis.md`) concernentes a esses componentes. O isolamento em banco de dados e as restrições por ACL das anotações e dos eventos globais em `productivity_tools.py` devem ser atacadas, além da máscara via regex em `logging_config.py` ou `memory/security.py`.
