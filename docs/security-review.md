@@ -125,3 +125,52 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-12)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitações ambientais mantidas)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 17. Vazamento de PII em logs de Chat e Collaboration
+- **Caminho:** `backend/app/services/chat_service.py` e `backend/app/services/collaboration_service.py`
+- **Gravidade:** Alta
+- **Descrição:** Os serviços `ChatCommandHandler`, `ChatEventPublisher` e `CollaborationService` loggam conteúdo sensível de mensagens e artefatos, o que constitui risco de PII/LGPD.
+- **Ação Recomendada:** Aplicar redação (PII redaction) antes de loggar, ou usar logs estruturados com restrição de acesso e ofuscação de dados textuais.
+
+### 18. Rate Limiting Fail-Closed
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`
+- **Gravidade:** Média
+- **Descrição:** O middleware bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) ao invés de fail-open, reduzindo a disponibilidade.
+- **Ação Recomendada:** Configurar a política do Rate Limit para modo `fail-open`.
+
+### 19. Fuga de Autenticação em Workspaces API
+- **Caminho:** `backend/app/api/v1/endpoints/workspace.py`
+- **Gravidade:** Crítica
+- **Descrição:** Endpoints usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ, permitindo acessos anônimos para gerenciar estados.
+- **Ação Recomendada:** Adicionar dependência de autenticação (ex: `Depends(get_current_user)`) aos endpoints do workspace.
+
+### 20. Vulnerabilidade do Header X-User-Id (Impersonation)
+- **Caminho:** `backend/app/core/infrastructure/auth.py`
+- **Gravidade:** Crítica
+- **Descrição:** Confia no header `X-User-Id` por padrão se `AUTH_TRUST_X_USER_ID_HEADER=True`, possibilitando Bypass/Impersonation irrestrito.
+- **Ação Recomendada:** Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT/Token robusto.
+
+### 21. Endpoint de Auth exposto a brute-force
+- **Caminho:** `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Alta
+- **Descrição:** Rotas de login e refresh não possuem rate limiter (`@limiter.limit`), sendo expostas a ataques de dicionário e brute-force.
+- **Ação Recomendada:** Decorar a rota de login com `@limiter.limit("5/minute")`.
+
+### 22. Vazamento contínuo de PII e estado global inseguro (Produtividade)
+- **Caminho:** `backend/app/core/tools/productivity_tools.py`
+- **Gravidade:** Alta
+- **Descrição:** Armazena listas globais (`_notes`, `_calendar_events`), vazando contexto entre requisições. O logger de `send_email` grava emails e ids abertos.
+- **Ação Recomendada:** Remover variáveis globais e usar repositório restrito. Ofuscar IDs, e-mails e assuntos no logger.
+
+### 23. XML External Entity (XXE) Vulnerability
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** Uso de `xml.etree.ElementTree.fromstring` para parse de arquivos DOCX, permitindo ataques de XML External Entity (XXE) ou bomb. Identificado pelo Bandit (B405, B314).
+- **Ação Recomendada:** Substituir `xml.etree.ElementTree` pelo equivalente seguro `defusedxml.ElementTree`.

@@ -749,3 +749,46 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] RabbitMQ Connection Silent Fail-Open
+- Problema atual: O backend `app.core.infrastructure.message_broker` exibe um "silent fail-open" onde falhas de conexão com o RabbitMQ causam transição para modo offline sem alertas críticos no pipeline.
+- Solucao proposta: Implementar uma notificação ou trigger de alerta severo (como sentry/prometheus panic) no log_error quando falhas de conexão de message broker persistirem ou excederem limites.
+- Impacto esperado: Maior resiliência e resposta a quedas críticas do RabbitMQ.
+- Riscos: Redução de disponibilidade caso a alteração engesesse a tolerância a falhas intencional no script atual.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade de XXE no parser de Documentos
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza o interpretador nativo do python `xml.etree.ElementTree.fromstring` para parsear blocos de texto XML na leitura de DOCX, expondo o backend a External Entity Processing attack (XXE).
+- Solucao proposta: Substituir por `defusedxml` nas importações e chamadas de parsing XML de todo projeto, mapeado pela auditoria do Bandit B314 e B405.
+- Impacto esperado: Remoção imediata de risco crítico mapeado por linter de injeção externa de entidades.
+- Riscos: Nenhuma.
+- Dependencias: Adição do pacote `defusedxml` no `requirements.txt`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Risco de Exposição no Windows Agent via 0.0.0.0
+- Problema atual: O script host `backend/windows_agent.py` sobe o servidor Uvicorn na interface 0.0.0.0 (todas as redes), permitindo que acessos sem autenticação possam comprometer a máquina em caso de exposição externa.
+- Solucao proposta: Restringir a rede exposta a `localhost` caso o container não exija um gateway remoto explícito ou requerer token.
+- Impacto esperado: Acesso confinado ao escopo de rede segura.
+- Riscos: Container backend Docker pode perder acesso se não estiver na rede permitida.
+- Dependencias: Avaliar a configuração do bridge container/host de rede atual.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Vulnerabilidade de Hang e Timeout em Test Scripts (Requests)
+- Problema atual: O script `tooling/extract_api_inventory.py` e outros endpoints podem depender de `requests` calls que não possuem `timeout` explícitos.
+- Solucao proposta: Forçar todos os `urllib`, `requests` e HTTP calls sem async a portarem `timeout=X` via wrapper/auditoria sistemática, evitando resource exhaustion.
+- Impacto esperado: Mitigação de DDos ou interrupções.
+- Riscos: Configurar limites pequenos demais e interromper requisições lentas por natureza.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto

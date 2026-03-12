@@ -46,3 +46,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-12)
+
+### Lacunas e Impacto
+- **Vazamento por Logging:** O `ChatEventPublisher`, `CollaborationService` e `ChatCommandHandler` estão gravando partes do conteúdo dos usuários, como prévias e meta-dados de payloads, de forma não ofuscada nos arquivos de log estáticos da aplicação (`janus.log`).
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** As listas na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` ficam no estado global, de modo que os lembretes ou notas de um usuário podem ser acessados por outras threads e requests em concorrência se a chave não garantir isolamento total. O `send_email` também registra e-mails e assuntos no logger sem redação.
+
+### Próximos Passos
+1. **Mascarar Logs e Artefatos:** Integrar a camada de redação (`app.core.memory.security.redact_pii_text_only`) antes de gravar mensagens e eventos em logs.
+2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` para uma persistência transacional por sessão de usuário no DB.
