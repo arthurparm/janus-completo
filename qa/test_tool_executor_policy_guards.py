@@ -270,6 +270,66 @@ async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persiste
 
 
 @pytest.mark.asyncio
+async def test_execute_tool_calls_redacts_nested_tokens_before_pending_persistence(monkeypatch):
+    created = {}
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            return "ok"
+
+    class DummyPendingRepo:
+        def create(self, **kwargs):
+            created.update(kwargs)
+            return SimpleNamespace(id=1001)
+
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy(require_confirmation=True, tool_allowed=True)
+
+    outputs = await service.execute_tool_calls(
+        calls=[
+            {
+                "name": "schema_tool",
+                "args": {
+                    "value": 2,
+                    "headers": {"Authorization": "Bearer abc.def.ghi"},
+                    "session": {"token": "ghp_supersecrettokenvalue1234567890"},
+                    "email": "owner@example.com",
+                    "command": "echo ok",
+                },
+            }
+        ],
+        policy=policy,
+        user_id="u-78",
+    )
+
+    assert outputs[0]["name"] == "schema_tool"
+    assert "Pending action id: 1001" in outputs[0]["result"]
+    stored = created.get("args_json", "")
+    assert "Bearer abc.def.ghi" not in stored
+    assert "ghp_supersecrettokenvalue1234567890" not in stored
+    assert "owner@example.com" not in stored
+    assert "[REDACTED_SECRET]" in stored
+    assert "[REDACTED_EMAIL]" in stored
+    assert "echo ok" in stored
+
+
+@pytest.mark.asyncio
 async def test_execute_tool_calls_records_redacted_args_in_telemetry(monkeypatch):
     captured = {}
     tool = _SchemaTool()

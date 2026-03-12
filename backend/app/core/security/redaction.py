@@ -27,6 +27,8 @@ _INLINE_SECRET_PATTERNS = (
     re.compile(r"(?i)\b(eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9._-]{10,})\b"),
 )
 
+_SENSITIVE_VALUE_MASK = "[REDACTED_SECRET]"
+
 
 def _looks_sensitive_key(key: str | None) -> bool:
     if not key:
@@ -47,10 +49,8 @@ def _mask_secret_text(value: str) -> str:
 
 
 def _mask_value(value: Any) -> str:
-    text = str(value or "")
-    if len(text) <= 6:
-        return "[REDACTED]"
-    return f"{text[:2]}***{text[-2:]}"
+    _ = value
+    return _SENSITIVE_VALUE_MASK
 
 
 def redact_sensitive_payload(value: Any, key_hint: str | None = None) -> Any:
