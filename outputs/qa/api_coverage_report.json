@@ -1,24 +1,24 @@
 {
   "metadata": {
-    "generated_at": "2026-02-23T21:08:03.155511+00:00",
-    "source_matrix_generated_at": "2026-02-23T21:05:41.317111+00:00",
+    "generated_at": "2026-03-12T21:32:51.440529+00:00",
+    "source_matrix_generated_at": "2026-03-12T21:32:28.813031+00:00",
     "source_matrix_mode": "api_inventory_fallback",
     "issue_id": "OQ-011"
   },
   "target": {
     "expected_endpoints": 229,
-    "observed_endpoints": 226,
-    "target_met": false,
-    "endpoint_gap": 3
+    "observed_endpoints": 232,
+    "target_met": true,
+    "endpoint_gap": 0
   },
   "summary": {
-    "total_endpoints": 226,
-    "covered_endpoints": 24,
-    "uncovered_endpoints": 202,
-    "coverage_percent": 10.62,
+    "total_endpoints": 232,
+    "covered_endpoints": 27,
+    "uncovered_endpoints": 205,
+    "coverage_percent": 11.64,
     "runtime_validated_endpoints": 6,
     "runtime_failed_endpoints": 0,
-    "test_referenced_endpoints": 18
+    "test_referenced_endpoints": 21
   },
   "by_module": [
     {
@@ -54,12 +54,12 @@
     {
       "module": "Auth",
       "total": 8,
-      "covered": 0,
-      "not_covered": 8,
+      "covered": 1,
+      "not_covered": 7,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 0,
-      "coverage_percent": 0.0
+      "test_referenced": 1,
+      "coverage_percent": 12.5
     },
     {
       "module": "Auto Analysis",
@@ -74,18 +74,18 @@
     {
       "module": "Autonomy",
       "total": 11,
-      "covered": 0,
-      "not_covered": 11,
+      "covered": 1,
+      "not_covered": 10,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 0,
-      "coverage_percent": 0.0
+      "test_referenced": 1,
+      "coverage_percent": 9.09
     },
     {
       "module": "AutonomyHistory",
-      "total": 3,
+      "total": 4,
       "covered": 0,
-      "not_covered": 3,
+      "not_covered": 4,
       "runtime_validated": 0,
       "runtime_failed": 0,
       "test_referenced": 0,
@@ -94,12 +94,12 @@
     {
       "module": "Chat",
       "total": 11,
-      "covered": 4,
-      "not_covered": 7,
+      "covered": 5,
+      "not_covered": 6,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 4,
-      "coverage_percent": 36.36
+      "test_referenced": 5,
+      "coverage_percent": 45.45
     },
     {
       "module": "Collaboration",
@@ -223,13 +223,13 @@
     },
     {
       "module": "Observability",
-      "total": 22,
+      "total": 24,
       "covered": 1,
-      "not_covered": 21,
+      "not_covered": 23,
       "runtime_validated": 0,
       "runtime_failed": 0,
       "test_referenced": 1,
-      "coverage_percent": 4.55
+      "coverage_percent": 4.17
     },
     {
       "module": "Optimization",
@@ -313,9 +313,9 @@
     },
     {
       "module": "Tasks",
-      "total": 6,
+      "total": 8,
       "covered": 0,
-      "not_covered": 6,
+      "not_covered": 8,
       "runtime_validated": 0,
       "runtime_failed": 0,
       "test_referenced": 0,
@@ -333,13 +333,13 @@
     },
     {
       "module": "unknown",
-      "total": 4,
+      "total": 5,
       "covered": 1,
-      "not_covered": 3,
+      "not_covered": 4,
       "runtime_validated": 1,
       "runtime_failed": 0,
       "test_referenced": 0,
-      "coverage_percent": 25.0
+      "coverage_percent": 20.0
     },
     {
       "module": "Users",
@@ -408,19 +408,6 @@
       "module": "Auth",
       "operation_id": "firebase_exchange_api_v1_auth_firebase_exchange_post",
       "summary": "Firebase Exchange",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/local/login",
-      "module": "Auth",
-      "operation_id": "local_login_api_v1_auth_local_login_post",
-      "summary": "Local Login",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -624,19 +611,6 @@
       "smoke_error": null
     },
     {
-      "method": "POST",
-      "path": "/api/v1/autonomy/start",
-      "module": "Autonomy",
-      "operation_id": "start_autonomy_api_v1_autonomy_start_post",
-      "summary": "Inicia o AutonomyLoop contínuo",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
       "method": "GET",
       "path": "/api/v1/autonomy/status",
       "module": "Autonomy",
@@ -690,6 +664,19 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+      "module": "AutonomyHistory",
+      "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
+      "summary": "Lista enqueues de uma execução de autonomia",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/autonomy/history/runs/{run_id}/steps",
       "module": "AutonomyHistory",
       "operation_id": "list_steps_api_v1_autonomy_history_runs__run_id__steps_get",
@@ -707,19 +694,6 @@
       "module": "Chat",
       "operation_id": "list_conversations_api_v1_chat_conversations_get",
       "summary": "Lista conversas com filtros de RBAC",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/chat/stream/{conversation_id}",
-      "module": "Chat",
-      "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
-      "summary": "Streaming de resposta via SSE",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -2029,6 +2003,19 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/observability/anomalies/predictive",
+      "module": "Observability",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/observability/audit/export",
       "module": "Observability",
       "operation_id": "export_audit_events_api_v1_observability_audit_export_get",
@@ -2267,6 +2254,19 @@
       "module": "Observability",
       "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
       "summary": "Dashboard de pipeline por request_id",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/slo/domains",
+      "module": "Observability",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -2756,6 +2756,32 @@
       "smoke_error": null
     },
     {
+      "method": "POST",
+      "path": "/api/v1/tasks/outbox/reconcile",
+      "module": "Tasks",
+      "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+      "summary": "Reencaminha eventos do outbox para reconciliação",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/outbox/stats",
+      "module": "Tasks",
+      "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+      "summary": "Retorna estatísticas do outbox transacional",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
       "method": "GET",
       "path": "/api/v1/tasks/queue/{queue_name}",
       "module": "Tasks",
@@ -2891,6 +2917,19 @@
       "module": "unknown",
       "operation_id": "add_generative_memory_api_v1_memory_generative_post",
       "summary": "Add Generative Memory",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/preferences",
+      "module": "unknown",
+      "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
+      "summary": "Get User Preferences",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -3050,9 +3089,9 @@
       "module": "Auth",
       "operation_id": "local_login_api_v1_auth_local_login_post",
       "summary": "Local Login",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null
@@ -3258,9 +3297,9 @@
       "module": "Autonomy",
       "operation_id": "start_autonomy_api_v1_autonomy_start_post",
       "summary": "Inicia o AutonomyLoop contínuo",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null
@@ -3310,6 +3349,19 @@
       "module": "AutonomyHistory",
       "operation_id": "get_run_api_v1_autonomy_history_runs__run_id__get",
       "summary": "Obtém uma execução específica",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+      "module": "AutonomyHistory",
+      "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
+      "summary": "Lista enqueues de uma execução de autonomia",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -3388,9 +3440,9 @@
       "module": "Chat",
       "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
       "summary": "Streaming de resposta via SSE",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null
@@ -4762,6 +4814,19 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/observability/anomalies/predictive",
+      "module": "Observability",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/observability/audit/events",
       "module": "Observability",
       "operation_id": "audit_events_api_v1_observability_audit_events_get",
@@ -5013,6 +5078,19 @@
       "module": "Observability",
       "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
       "summary": "Dashboard de pipeline por request_id",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/slo/domains",
+      "module": "Observability",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -5606,6 +5684,32 @@
       "smoke_error": null
     },
     {
+      "method": "POST",
+      "path": "/api/v1/tasks/outbox/reconcile",
+      "module": "Tasks",
+      "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+      "summary": "Reencaminha eventos do outbox para reconciliação",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/outbox/stats",
+      "module": "Tasks",
+      "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+      "summary": "Retorna estatísticas do outbox transacional",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
       "method": "GET",
       "path": "/api/v1/tasks/queue/{queue_name}",
       "module": "Tasks",
@@ -5780,6 +5884,19 @@
       "module": "unknown",
       "operation_id": "add_generative_memory_api_v1_memory_generative_post",
       "summary": "Add Generative Memory",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/preferences",
+      "module": "unknown",
+      "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
+      "summary": "Get User Preferences",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
