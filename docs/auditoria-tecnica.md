@@ -113,3 +113,45 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-12)
+
+### 11. Silent Fail-Open em Quedas de Conexão com RabbitMQ (Confiabilidade)
+**Descrição:** Observou-se que o backend `app.core.infrastructure.message_broker` falha silenciosamente capturando exceções gerais (`except Exception: pass`) em múltiplas chamadas (`channel.default_exchange.publish`, getters da Management API, e callbacks de consumo). Isso pode esconder indisponibilidades do RabbitMQ e colocar a aplicação em modo offline sem nenhum disparo de alerta claro (Silent Fail-Open).
+**Evidências:**
+- `backend/app/core/infrastructure/message_broker.py`: Blocos `try...except Exception: pass` engolem erros críticos (como `[Errno 111] Connection refused`) em métodos centrais como `_consume_loop` e envio de mensagens via `default_exchange.publish`.
+
+**Próximos passos:**
+- Adicionar logs explícitos nas cláusulas de exceção antes de dar `pass` ou ignorar.
+- Integrar os alertas com as métricas do serviço de observabilidade.
+- Acompanhamento sob a issue SG-030 em `melhorias-possiveis.md`.
+
+### 12. Vulnerabilidades Mapeadas de Código Fonte (Bandit - B314 e B108)
+**Descrição:** O analisador estático (Bandit) identificou vulnerabilidades relacionadas ao parsing de arquivos XML e hardcode de caminhos temporários.
+**Evidências:**
+- `backend/app/services/document_parser_service.py`: Utiliza `xml.etree.ElementTree.fromstring` para realizar o parsing de artefatos DOCX. O uso da biblioteca nativa é vulnerável a ataques XML (como Billion Laughs ou XXE), sendo sinalizado como B314 pelo Bandit.
+- `backend/app/core/memory/log_aware_reflector.py`: Utiliza um caminho `"/tmp/janus.log"` predefinido, sendo categorizado como uso inseguro de temp directory (B108).
+- Scripts como `backend/app/core/infrastructure/python_sandbox.py` contêm `try...except Exception: pass` e chamadas a `exec()` (B102, ignorado se estritamente validado mas preocupante).
+
+**Próximos passos:**
+- Substituir o uso de `xml.etree.ElementTree` pelo pacote seguro `defusedxml` nas dependências.
+- Mover a definição dos caminhos temporários para usar a API nativa do Python `tempfile`.
+- Acompanhamento sob a issue SG-031 em `melhorias-possiveis.md`.
+
+### 13. Exposição Indevida do Agente Windows
+**Descrição:** Reavaliação de riscos revelou que a aplicação do agente local `backend/windows_agent.py` não só está desprovida de autenticação, como sobe o servidor Uvicorn em `0.0.0.0:5001`.
+**Evidências:**
+- `backend/windows_agent.py`: Linha `uvicorn.run(app, host="0.0.0.0", port=5001, log_level="info")` permite acesso de qualquer dispositivo na LAN, permitindo execução RCE / screenshots para qualquer atacante não autorizado na rede interna.
+
+**Próximos passos:**
+- Redefinir `host` para `127.0.0.1` restringindo acesso a rede de loopback.
+- Acompanhamento sob a issue SG-032.
+
+### 14. Fragilidade em Chamadas de Rede de Testes e Scripts
+**Descrição:** Testes e toolings de E2E chamam a rede via `urllib` ou `requests` sem garantir configurações de Timeout adequadas, o que pode bloquear CI/CD pipelines indefinidamente.
+**Evidências:**
+- Chamadas `urlopen` em `backend/app/core/infrastructure/message_broker.py` ou requisições na suite de E2E perdem parametrização de timeout (verificação secundária do Bandit e QA pipelines).
+
+**Próximos passos:**
+- Parametrizar tempos de resposta (timeouts) para 5s a 10s em scripts dependentes de rede.
+- Acompanhamento sob a issue SG-033.

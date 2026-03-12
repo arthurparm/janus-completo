@@ -109,6 +109,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Alertas claros e fallback seguro para falhas de conexao no RabbitMQ (message_broker.py) | P1 | S | ideia |
+| SG-031 | Mitigar vulnerabilidade de XML Attacks (B314) substituindo xml.etree.ElementTree por defusedxml no parser DOCX | P1 | S | aberto |
+| SG-032 | Restringir bind de IP (0.0.0.0) do windows_agent.py mitigando exposicao indevida na rede local | P0 | S | aberto |
+| SG-033 | Adicionar timeouts em scripts de teste usando bibliotecas de requests HTTP para evitar hangs | P2 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -746,6 +750,49 @@ Copiar e preencher:
 - Riscos: Nenhum.
 - Dependencias: Nenhuma.
 - Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+### [SG-030] Fuga de Alerta em Conexões RabbitMQ Silenciosas
+- Problema atual: O backend `app.core.infrastructure.message_broker` exibe um silent fail-open onde falhas de conexao RabbitMQ (`[Errno 111] Connection refused`) causam queda do servico para modo offline sem alertas claros.
+- Solucao proposta: Implementar alertas explicitos e retry/backoff rigoroso para perdas de conexao com a mensageria e metricas expostas em observability_service.
+- Impacto esperado: Menor downtime, deteccao proativa de falhas de comunicacao com RabbitMQ.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-031] Vulnerabilidade de XML Attacks no parser de DOCX (Bandit B314)
+- Problema atual: `backend/app/services/document_parser_service.py` usa `xml.etree.ElementTree.fromstring` ao inves de `defusedxml` para ler conteudo XML interno de DOCX, possibilitando injecao de entidades externas e denial of service (Billion Laughs).
+- Solucao proposta: Substituir a biblioteca padrao do python por `defusedxml.ElementTree.fromstring` nas rotinas de parsing de documentos Office.
+- Impacto esperado: Protecao contra payloads XML maliciosos mascarados em anexos `.docx`.
+- Riscos: Nenhum.
+- Dependencias: Adicao do pacote `defusedxml` no requirements.txt.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Risco de Exposicao de Host no Agent Windows
+- Problema atual: O `backend/windows_agent.py` efetua bind no host `0.0.0.0` em vez de loopback `127.0.0.1`, o que abre a porta 5001 para ser acessada e controlada (Remote Code Execution, Screenshot) de outros hosts na mesma rede local se nao houver firewall estrito.
+- Solucao proposta: Mudar o IP de escuta (host) do uvicorn para `127.0.0.1` ou restringir as configuracoes de rede associadas (somado ao SG-021 AuthN).
+- Impacto esperado: Mitigacao da superficie de ataque de RCE e prevencao de acesso malicioso local na LAN.
+- Riscos: Quebra do acesso de conteineres do Docker caso dependam dessa interface (mas o padrao recomendado eh firewall via auth/Docker network).
+- Dependencias: SG-021.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Timeouts faltantes em scripts de toolings/testes
+- Problema atual: Testes de sistema frequentemente fazem requests HTTP sem prever ou especificar parametro `timeout` na chamada (`urlopen` / `requests`), podendo causar hang infinito em pipelines de integracao e CI/CD.
+- Solucao proposta: Obrigatoriedade de `timeout` de 5 ou 10 segundos nas chamadas em rede do ecossistema de infraestrutura de QA e Tooling do repositório.
+- Impacto esperado: Menos lockups de recursos, falha rapida em CI caso a integracao fique offline.
+- Riscos: Falsos positivos de indisponibilidade se a API demorar sob carga durante testes longos.
+- Dependencias: Nenhuma.
+- Prioridade: P2
 - Esforco: S
 - Dono: a definir
 - Status: aberto
