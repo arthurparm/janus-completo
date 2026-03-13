@@ -6,7 +6,7 @@ Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
 import structlog
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 try:
@@ -112,7 +112,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                             "event_type": "memory_consolidated",
                             "agent_role": "knowledge_curator",
                             "content": f"Memória consolidada: {result['entities_created']} novas entidades conectadas.",
-                            "timestamp": datetime.utcnow().timestamp(),
+                            "timestamp": datetime.now(UTC).timestamp(),
                             "task_id": task.task_id,
                             "metadata": {
                                 "entities_count": result["entities_created"],
@@ -133,6 +133,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                 logger.warning("log_warning", message=f"Falha ao publicar evento de memória: {evt_err}")
 
         elif consolidation_mode == "knowledge_space":
+            from app.core.kernel import Kernel
             from app.services.knowledge_space_service import KnowledgeSpaceService
 
             knowledge_space_id = str(payload.get("knowledge_space_id") or "").strip()
@@ -143,7 +144,11 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                     "knowledge_space_id e user_id são obrigatórios para modo 'knowledge_space'"
                 )
 
-            result = await KnowledgeSpaceService().consolidate_space(
+            kernel = Kernel.get_instance()
+            result = await KnowledgeSpaceService(
+                manifest_repo=getattr(kernel, "document_manifest_repo", None),
+                llm_service=getattr(kernel, "llm_service", None),
+            ).consolidate_space(
                 knowledge_space_id=knowledge_space_id,
                 user_id=user_id,
                 limit_docs=limit_docs,
@@ -175,7 +180,7 @@ async def publish_consolidation_task(
         task_id=str(uuid.uuid4()),
         task_type="knowledge_consolidation",
         payload=payload,
-        timestamp=datetime.utcnow().timestamp(),
+        timestamp=datetime.now(UTC).timestamp(),
     )
     serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
     await broker.publish(

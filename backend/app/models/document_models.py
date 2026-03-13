@@ -14,6 +14,7 @@ class DocumentManifest(Base):
     knowledge_space_id = Column(String(255), nullable=True)
     source_type = Column(String(64), nullable=True)
     source_id = Column(String(255), nullable=True)
+    doc_role = Column(String(32), nullable=True)
     edition_or_version = Column(String(128), nullable=True)
     language = Column(String(32), nullable=True)
     parent_collection_id = Column(String(255), nullable=True)

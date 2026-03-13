@@ -136,6 +136,15 @@ class KnowledgeSpaceRepository:
             "last_consolidated_at": (
                 row.last_consolidated_at.isoformat() if row.last_consolidated_at is not None else None
             ),
+            "sections_total": int(row.sections_total or 0),
+            "sections_indexed": int(row.sections_indexed or 0),
+            "sections_skipped_as_noise": int(row.sections_skipped_as_noise or 0),
+            "canonical_frames_total": int(row.canonical_frames_total or 0),
+            "consolidation_quality_score": (
+                float(row.consolidation_quality_score)
+                if row.consolidation_quality_score not in (None, "")
+                else 0.0
+            ),
             "created_at": row.created_at.isoformat() if row.created_at is not None else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at is not None else None,
         }

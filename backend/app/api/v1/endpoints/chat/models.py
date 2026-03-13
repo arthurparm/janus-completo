@@ -88,6 +88,9 @@ class ChatMessageResponse(BaseModel):
     knowledge_space_id: str | None = None
     mode_used: str | None = None
     base_used: str | None = None
+    answer_strategy: str | None = None
+    evidence_count: int = 0
+    source_roles_used: list[str] = Field(default_factory=list)
     source_scope: dict[str, Any] | None = None
     gaps_or_conflicts: list[str] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)
@@ -110,6 +113,9 @@ class ChatMessage(BaseModel):
     knowledge_space_id: str | None = None
     mode_used: str | None = None
     base_used: str | None = None
+    answer_strategy: str | None = None
+    evidence_count: int = 0
+    source_roles_used: list[str] = Field(default_factory=list)
     source_scope: dict[str, Any] | None = None
     gaps_or_conflicts: list[str] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)

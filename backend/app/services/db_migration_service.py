@@ -505,10 +505,26 @@ class DBMigrationService:
                     "knowledge_spaces.idx_knowledge_spaces_user_status",
                     applied,
                 )
+            knowledge_space_columns = {
+                "sections_total": "ALTER TABLE knowledge_spaces ADD COLUMN sections_total INTEGER NOT NULL DEFAULT 0",
+                "sections_indexed": "ALTER TABLE knowledge_spaces ADD COLUMN sections_indexed INTEGER NOT NULL DEFAULT 0",
+                "sections_skipped_as_noise": "ALTER TABLE knowledge_spaces ADD COLUMN sections_skipped_as_noise INTEGER NOT NULL DEFAULT 0",
+                "canonical_frames_total": "ALTER TABLE knowledge_spaces ADD COLUMN canonical_frames_total INTEGER NOT NULL DEFAULT 0",
+                "consolidation_quality_score": "ALTER TABLE knowledge_spaces ADD COLUMN consolidation_quality_score VARCHAR(32) NULL",
+            }
+            for column, sql in knowledge_space_columns.items():
+                if not self._column_exists(s, "knowledge_spaces", column):
+                    self._execute_ddl(
+                        s,
+                        sql,
+                        f"knowledge_spaces.{column}",
+                        applied,
+                    )
             document_manifest_columns = {
                 "knowledge_space_id": "ALTER TABLE document_manifests ADD COLUMN knowledge_space_id VARCHAR(255) NULL",
                 "source_type": "ALTER TABLE document_manifests ADD COLUMN source_type VARCHAR(64) NULL",
                 "source_id": "ALTER TABLE document_manifests ADD COLUMN source_id VARCHAR(255) NULL",
+                "doc_role": "ALTER TABLE document_manifests ADD COLUMN doc_role VARCHAR(32) NULL",
                 "edition_or_version": "ALTER TABLE document_manifests ADD COLUMN edition_or_version VARCHAR(128) NULL",
                 "language": "ALTER TABLE document_manifests ADD COLUMN language VARCHAR(32) NULL",
                 "parent_collection_id": "ALTER TABLE document_manifests ADD COLUMN parent_collection_id VARCHAR(255) NULL",

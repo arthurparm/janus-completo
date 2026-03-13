@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import re
 import time
 from collections import Counter
@@ -11,7 +13,9 @@ import structlog
 from fastapi import HTTPException, Request, status
 from qdrant_client import models
 
+from app.core.agents.utils import parse_json_lenient
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
+from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
 from app.db.vector_store import (
     aget_or_create_collection,
@@ -27,6 +31,23 @@ logger = structlog.get_logger(__name__)
 _SOURCE_TYPES = {"book", "manual", "course", "collection", "documentation"}
 _QUERY_MODES = {"auto", "quick_lookup", "canonical_answer"}
 _SPACE_READY_STATUSES = {"ready", "partial"}
+_DOC_ROLES = {"base", "supplement", "reference", "appendix"}
+_SECTION_ROLES = {
+    "front_matter",
+    "core_rules",
+    "supplement_rules",
+    "appendix",
+    "optional_rules",
+    "table_like",
+    "noise",
+}
+_ANSWER_STRATEGIES = {"comparative", "sequence", "scope", "locator"}
+_CANONICAL_POINT_TYPES = {
+    "knowledge_canonical_summary",
+    "knowledge_evidence_anchor",
+    "knowledge_flow_step",
+    "knowledge_comparison_frame",
+}
 _STOPWORDS = {
     "a",
     "ao",
@@ -114,6 +135,38 @@ _HEADING_KEYWORDS = {
     "sumário",
     "tesouro",
 }
+_FRONT_MATTER_KEYWORDS = {
+    "apresentacao",
+    "apresentação",
+    "creditos",
+    "créditos",
+    "introducao",
+    "introdução",
+    "prefacio",
+    "prefácio",
+    "sumario",
+    "sumário",
+}
+_APPENDIX_KEYWORDS = {"anexo", "apendice", "apêndice", "glossario", "glossário", "indice", "índice"}
+_OPTIONAL_KEYWORDS = {"opcional", "variacao", "variação", "alternativa", "extra", "avancado", "avançado"}
+_SUPPLEMENT_KEYWORDS = {
+    "suplemento",
+    "expansao",
+    "expansão",
+    "complemento",
+    "herois",
+    "heróis",
+    "atlas",
+    "guia",
+}
+_REFERENCE_KEYWORDS = {"faq", "referencia", "referência", "resumo", "gm", "mestre", "screen"}
+_NOISE_PATTERNS = (
+    r"^p[aá]g(?:ina)?\.?\s*\d+$",
+    r"^\d+$",
+    r"^\d+\s*/\s*\d+$",
+    r"^(?:todos os direitos reservados|impresso no brasil|copyright)\b",
+    r"^isbn\b",
+)
 
 
 class KnowledgeSpaceService:
@@ -122,9 +175,11 @@ class KnowledgeSpaceService:
         *,
         manifest_repo: DocumentManifestRepository | None = None,
         space_repo: KnowledgeSpaceRepository | None = None,
+        llm_service: Any | None = None,
     ) -> None:
         self._manifest_repo = manifest_repo or DocumentManifestRepository()
         self._space_repo = space_repo or KnowledgeSpaceRepository()
+        self._llm = llm_service
 
     def build_space_id(self, user_id: str) -> str:
         return f"ks:{user_id}:{uuid4().hex}"
@@ -201,6 +256,11 @@ class KnowledgeSpaceService:
             "chunks_total": chunks_total,
             "chunks_indexed": chunks_indexed,
             "progress": progress,
+            "sections_total": int(space.get("sections_total") or 0),
+            "sections_indexed": int(space.get("sections_indexed") or 0),
+            "sections_skipped_as_noise": int(space.get("sections_skipped_as_noise") or 0),
+            "canonical_frames_total": int(space.get("canonical_frames_total") or 0),
+            "consolidation_quality_score": float(space.get("consolidation_quality_score") or 0.0),
         }
 
     def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str) -> dict[str, Any]:
@@ -219,6 +279,7 @@ class KnowledgeSpaceService:
         user_id: str,
         source_type: str | None = None,
         source_id: str | None = None,
+        doc_role: str | None = None,
         edition_or_version: str | None = None,
         language: str | None = None,
         parent_collection_id: str | None = None,
@@ -232,6 +293,7 @@ class KnowledgeSpaceService:
             knowledge_space_id=knowledge_space_id,
             source_type=source_type or space.get("source_type"),
             source_id=source_id or space.get("source_id"),
+            doc_role=doc_role or manifest.get("doc_role") or self._infer_doc_role(manifest, space),
             edition_or_version=edition_or_version or space.get("edition_or_version"),
             language=language or space.get("language"),
             parent_collection_id=parent_collection_id or space.get("parent_collection_id"),
@@ -274,6 +336,7 @@ class KnowledgeSpaceService:
             }
 
         sections: list[dict[str, Any]] = []
+        skipped_sections = 0
         documents_processed = 0
         for manifest in manifests:
             points = await self._load_document_points(
@@ -288,18 +351,22 @@ class KnowledgeSpaceService:
                 points,
                 key=lambda item: int(((item.get("metadata") or {}).get("index") or 0)),
             )
-            text = "\n".join(
-                str(item.get("content") or "").strip() for item in ordered_chunks if str(item.get("content") or "").strip()
-            ).strip()
-            if not text:
-                continue
-            sections.extend(
-                self._build_structured_sections(
-                    text=text,
-                    manifest=manifest,
-                    knowledge_space=space,
-                )
+            built_sections = self._build_structured_sections(
+                points=ordered_chunks,
+                manifest=manifest,
+                knowledge_space=space,
             )
+            for section in built_sections:
+                if section["section_role"] in {"noise", "table_like"}:
+                    skipped_sections += 1
+                    continue
+                sections.append(section)
+
+        sections = await self._enrich_sections_with_llm(sections, knowledge_space=space)
+        consolidation_metrics = self._build_consolidation_metrics(
+            sections=sections,
+            skipped_sections=skipped_sections,
+        )
 
         canonical_points = await self._index_canonical_sections(
             user_id=str(user_id),
@@ -313,19 +380,33 @@ class KnowledgeSpaceService:
             sections=sections,
         )
 
-        summary = self._build_consolidation_summary(space=space, manifests=manifests, sections=sections)
+        summary = self._build_consolidation_summary(
+            space=space,
+            manifests=manifests,
+            sections=sections,
+            metrics=consolidation_metrics,
+        )
         status_value = "ready" if sections else "partial"
         self._space_repo.mark_consolidation(
             knowledge_space_id,
             status=status_value,
             summary=summary,
             last_consolidated_at=datetime.now(UTC),
+            sections_total=int(consolidation_metrics["sections_total"]),
+            sections_indexed=int(consolidation_metrics["sections_indexed"]),
+            sections_skipped_as_noise=int(consolidation_metrics["sections_skipped_as_noise"]),
+            canonical_frames_total=int(consolidation_metrics["canonical_frames_total"]),
+            consolidation_quality_score=str(consolidation_metrics["consolidation_quality_score"]),
         )
         return {
             "knowledge_space_id": knowledge_space_id,
             "status": status_value,
             "documents_total": int(documents_processed),
-            "sections_total": int(len(sections)),
+            "sections_total": int(consolidation_metrics["sections_total"]),
+            "sections_indexed": int(consolidation_metrics["sections_indexed"]),
+            "sections_skipped_as_noise": int(consolidation_metrics["sections_skipped_as_noise"]),
+            "canonical_frames_total": int(consolidation_metrics["canonical_frames_total"]),
+            "consolidation_quality_score": float(consolidation_metrics["consolidation_quality_score"]),
             "canonical_points_indexed": int(canonical_points),
             "summary": summary,
         }
@@ -378,6 +459,7 @@ class KnowledgeSpaceService:
         knowledge_space_id: str | None,
         source_type: str | None,
         source_id: str | None,
+        doc_role: str | None,
         edition_or_version: str | None,
         language: str | None,
         parent_collection_id: str | None,
@@ -385,10 +467,14 @@ class KnowledgeSpaceService:
         normalized_source_type = str(source_type or "documentation").strip().lower()
         if normalized_source_type not in _SOURCE_TYPES:
             normalized_source_type = "documentation"
+        normalized_doc_role = str(doc_role or "").strip().lower() or None
+        if normalized_doc_role not in _DOC_ROLES:
+            normalized_doc_role = None
         return {
             "knowledge_space_id": str(knowledge_space_id) if knowledge_space_id else None,
             "source_type": normalized_source_type,
             "source_id": str(source_id) if source_id else None,
+            "doc_role": normalized_doc_role,
             "edition_or_version": str(edition_or_version) if edition_or_version else None,
             "language": str(language) if language else None,
             "parent_collection_id": str(parent_collection_id) if parent_collection_id else None,
@@ -463,28 +549,46 @@ class KnowledgeSpaceService:
     def _build_structured_sections(
         self,
         *,
-        text: str,
+        text: str | None = None,
+        points: list[dict[str, Any]] | None = None,
         manifest: dict[str, Any],
         knowledge_space: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        lines = [line.strip() for line in str(text or "").splitlines()]
+        doc_role = self._infer_doc_role(manifest, knowledge_space)
+        prepared_lines = self._prepare_document_lines(text=text, points=points)
         sections: list[dict[str, Any]] = []
         current_title = "Visão Geral"
         current_lines: list[str] = []
+        current_chunk_ids: list[str] = []
         order = 0
 
         def flush() -> None:
-            nonlocal order, current_lines, current_title
+            nonlocal order, current_lines, current_title, current_chunk_ids
             body = "\n".join(item for item in current_lines if item).strip()
             if not body:
                 return
             normalized_title = self._normalize_heading_title(current_title)
-            if sections and str(sections[-1]["title"]).strip() == normalized_title:
+            section_role = self._classify_section(
+                title=normalized_title,
+                body=body,
+                doc_role=doc_role,
+                order=order + 1,
+            )
+            applies_to = self._infer_applies_to(normalized_title, body, section_role=section_role)
+            if sections and str(sections[-1]["title"]).strip() == normalized_title and sections[-1]["doc_role"] == doc_role:
                 merged_body = f"{sections[-1]['body']}\n{body}".strip()
                 sections[-1]["body"] = merged_body
                 sections[-1]["summary"] = self._summarize_text(merged_body)
+                sections[-1]["canonical_summary"] = self._summarize_text(merged_body, max_chars=440)
                 sections[-1]["concepts"] = self._extract_concepts(merged_body, title=normalized_title)
+                sections[-1]["applies_to"] = sorted(
+                    set(sections[-1].get("applies_to") or []).union(applies_to)
+                )
+                sections[-1]["evidence_span_ids"] = sorted(
+                    set(sections[-1].get("evidence_span_ids") or []).union(current_chunk_ids)
+                )
                 current_lines = []
+                current_chunk_ids = []
                 return
             order += 1
             section_key = build_deterministic_point_id(
@@ -504,27 +608,46 @@ class KnowledgeSpaceService:
                     "order": order,
                     "body": body,
                     "summary": self._summarize_text(body),
+                    "canonical_summary": self._summarize_text(body, max_chars=440),
                     "concepts": self._extract_concepts(body, title=normalized_title),
+                    "doc_role": doc_role,
+                    "section_role": section_role,
+                    "applies_to": applies_to,
+                    "is_optional_rule": bool(section_role == "optional_rules"),
+                    "extends_or_overrides": self._infer_extends_or_overrides(normalized_title, body, doc_role),
+                    "evidence_span_ids": sorted(set(current_chunk_ids)),
+                    "body_excerpt": self._trim_text(body, max_chars=520),
+                    "classification_source": "heuristic",
                 }
             )
             current_lines = []
+            current_chunk_ids = []
 
-        for line in lines:
-            if not line:
+        for line in prepared_lines:
+            line_text = str(line.get("text") or "").strip()
+            chunk_id = str(line.get("chunk_id") or "").strip()
+            if not line_text:
                 continue
-            if self._is_heading(line):
-                normalized_heading = self._normalize_heading_title(line)
+            if line.get("kind") == "heading":
+                normalized_heading = self._normalize_heading_title(line_text)
                 if normalized_heading == self._normalize_heading_title(current_title) and not current_lines:
                     continue
                 flush()
                 current_title = normalized_heading
                 continue
-            current_lines.append(line)
+            current_lines.append(line_text)
+            if chunk_id:
+                current_chunk_ids.append(chunk_id)
         flush()
 
         if sections:
             return sections
-        fallback_summary = self._summarize_text(text)
+        fallback_text = str(text or "").strip()
+        if not fallback_text and points:
+            fallback_text = "\n".join(
+                str(item.get("content") or "").strip() for item in points if str(item.get("content") or "").strip()
+            ).strip()
+        fallback_summary = self._summarize_text(fallback_text)
         return [
             {
                 "section_id": build_deterministic_point_id(
@@ -539,11 +662,185 @@ class KnowledgeSpaceService:
                 "knowledge_space_id": knowledge_space.get("knowledge_space_id"),
                 "title": "Visão Geral",
                 "order": 1,
-                "body": text,
+                "body": fallback_text,
                 "summary": fallback_summary,
-                "concepts": self._extract_concepts(text, title="Visão Geral"),
+                "canonical_summary": self._summarize_text(fallback_text, max_chars=440),
+                "concepts": self._extract_concepts(fallback_text, title="Visão Geral"),
+                "doc_role": doc_role,
+                "section_role": "core_rules",
+                "applies_to": self._infer_applies_to("Visão Geral", fallback_text, section_role="core_rules"),
+                "is_optional_rule": False,
+                "extends_or_overrides": self._infer_extends_or_overrides("Visão Geral", fallback_text, doc_role),
+                "evidence_span_ids": [
+                    str(item.get("id"))
+                    for item in (points or [])
+                    if item.get("id") is not None
+                ],
+                "body_excerpt": self._trim_text(fallback_text, max_chars=520),
+                "classification_source": "fallback",
             }
         ]
+
+    def _prepare_document_lines(
+        self,
+        *,
+        text: str | None,
+        points: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        raw_entries: list[dict[str, Any]] = []
+        if points:
+            for point in points:
+                chunk_id = point.get("id")
+                chunk_text = self._clean_document_text(str(point.get("content") or ""))
+                for line in chunk_text.splitlines():
+                    raw_entries.append({"text": line.strip(), "chunk_id": chunk_id})
+        else:
+            for line in self._clean_document_text(str(text or "")).splitlines():
+                raw_entries.append({"text": line.strip(), "chunk_id": None})
+
+        repeated_candidates = Counter(
+            self._normalize_line_key(item["text"])
+            for item in raw_entries
+            if self._is_repeated_noise_candidate(item["text"])
+        )
+        repeated_noise = {
+            key
+            for key, count in repeated_candidates.items()
+            if key and count >= 4
+        }
+
+        prepared: list[dict[str, Any]] = []
+        for item in raw_entries:
+            line = self._normalize_inline_text(item["text"])
+            if not line:
+                continue
+            line_key = self._normalize_line_key(line)
+            if line_key in repeated_noise:
+                continue
+            if self._is_noise_line(line):
+                continue
+            if self._looks_like_table_line(line):
+                continue
+            prepared.append(
+                {
+                    "text": line,
+                    "chunk_id": item.get("chunk_id"),
+                    "kind": "heading" if self._is_heading(line) else "body",
+                }
+            )
+        return prepared
+
+    def _clean_document_text(self, text: str) -> str:
+        normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+        normalized = re.sub(r"(\w)-\n(?=[a-zà-ÿ])", r"\1", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r"[ \t]+\n", "\n", normalized)
+        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+        return normalized
+
+    def _normalize_inline_text(self, value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip()).strip()
+
+    def _normalize_line_key(self, value: str) -> str:
+        normalized = self._normalize_inline_text(value).casefold()
+        normalized = re.sub(r"\d+", "#", normalized)
+        return normalized
+
+    def _is_repeated_noise_candidate(self, value: str) -> bool:
+        line = self._normalize_inline_text(value)
+        return 3 <= len(line) <= 80 and (line.isupper() or bool(re.search(r"\d", line)))
+
+    def _is_noise_line(self, value: str) -> bool:
+        line = self._normalize_inline_text(value)
+        lowered = line.casefold()
+        if not line:
+            return True
+        if any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in _NOISE_PATTERNS):
+            return True
+        if re.search(r"\.{4,}", line):
+            return True
+        if re.search(r"\b(?:sum[áa]rio|table of contents)\b.*\.{2,}", lowered):
+            return True
+        return False
+
+    def _looks_like_table_line(self, value: str) -> bool:
+        line = self._normalize_inline_text(value)
+        if not line:
+            return False
+        if re.search(r"(?:\|\s*){2,}", line):
+            return True
+        if re.search(r"(?:R\$|T\$|\$)\s*[\d.,]+", line) and len(line.split()) >= 4:
+            return True
+        tokens = line.split()
+        numeric_tokens = sum(bool(re.search(r"[\d%$]", token)) for token in tokens)
+        return len(tokens) >= 5 and numeric_tokens >= max(3, len(tokens) // 2)
+
+    def _classify_section(
+        self,
+        title: str,
+        body: str,
+        *,
+        doc_role: str,
+        order: int,
+    ) -> str:
+        content = f"{title} {body}".casefold()
+        title_key = self._normalize_heading_token(title)
+        if order <= 2 and any(keyword in content for keyword in _FRONT_MATTER_KEYWORDS):
+            return "front_matter"
+        if title_key in _APPENDIX_KEYWORDS or any(keyword in content for keyword in _APPENDIX_KEYWORDS):
+            return "appendix"
+        if any(keyword in content for keyword in _OPTIONAL_KEYWORDS):
+            return "optional_rules"
+        if self._looks_like_table_line(body):
+            return "table_like"
+        if len(body.split()) < 15 and order > 2:
+            return "noise"
+        if doc_role == "supplement":
+            return "supplement_rules"
+        return "core_rules"
+
+    def _infer_applies_to(self, title: str, body: str, *, section_role: str) -> list[str]:
+        content = f"{title} {body}".casefold()
+        applies_to: list[str] = []
+        if any(token in content for token in ("personagem", "atribut", "classe", "raça", "raca", "origem", "perícia", "pericia")):
+            applies_to.append("base_creation")
+        if any(token in content for token in ("poder", "talento", "magia", "equipamento", "arma", "distin")):
+            applies_to.append("character_options")
+        if any(token in content for token in ("passo", "sequência", "sequencia", "etapa", "procedimento")):
+            applies_to.append("workflow")
+        if section_role == "optional_rules":
+            applies_to.append("optional_rules")
+        if not applies_to:
+            applies_to.append("general_rules")
+        return applies_to
+
+    def _infer_extends_or_overrides(self, title: str, body: str, doc_role: str) -> str | None:
+        content = f"{title} {body}".casefold()
+        if any(token in content for token in ("substitui", "sobrescreve", "override", "em vez de")):
+            return "overrides"
+        if doc_role == "supplement" or any(token in content for token in ("adiciona", "novas opções", "novo poder", "complementa", "expande")):
+            return "extends"
+        return None
+
+    def _infer_doc_role(self, manifest: dict[str, Any], knowledge_space: dict[str, Any]) -> str:
+        explicit = str(manifest.get("doc_role") or "").strip().lower()
+        if explicit in _DOC_ROLES:
+            return explicit
+        haystack = " ".join(
+            str(value or "")
+            for value in (
+                manifest.get("file_name"),
+                manifest.get("source_id"),
+                manifest.get("source_type"),
+                knowledge_space.get("name"),
+            )
+        ).casefold()
+        if any(keyword in haystack for keyword in _APPENDIX_KEYWORDS):
+            return "appendix"
+        if any(keyword in haystack for keyword in _REFERENCE_KEYWORDS):
+            return "reference"
+        if any(keyword in haystack for keyword in _SUPPLEMENT_KEYWORDS):
+            return "supplement"
+        return "base"
 
     def _is_heading(self, line: str) -> bool:
         normalized = str(line or "").strip()
@@ -595,6 +892,12 @@ class KnowledgeSpaceService:
     def _normalize_heading_token(self, token: str) -> str:
         return re.sub(r"[^A-Za-zÀ-ÿ]", "", str(token or "").strip()).lower()
 
+    def _trim_text(self, text: str | None, *, max_chars: int) -> str:
+        normalized = re.sub(r"\s+", " ", str(text or "").strip())
+        if len(normalized) <= max_chars:
+            return normalized
+        return f"{normalized[: max_chars - 3].rstrip()}..."
+
     def _chunk_rows(self, rows: list[dict[str, Any]], *, batch_size: int) -> list[list[dict[str, Any]]]:
         if batch_size <= 0:
             return [rows]
@@ -616,6 +919,133 @@ class KnowledgeSpaceService:
         counts = Counter(token for token in tokens if token not in _STOPWORDS)
         return [item for item, _ in counts.most_common(limit)]
 
+    async def _enrich_sections_with_llm(
+        self,
+        sections: list[dict[str, Any]],
+        *,
+        knowledge_space: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        if not sections or self._llm is None:
+            return sections
+        max_sections = int(os.getenv("KNOWLEDGE_SPACE_LLM_SECTION_LIMIT", "40") or 40)
+        semaphore = asyncio.Semaphore(3)
+        enriched: list[dict[str, Any]] = []
+
+        async def _enrich_one(section: dict[str, Any]) -> dict[str, Any]:
+            if len(section.get("body", "").split()) < 40:
+                return section
+            prompt = self._build_section_enrichment_prompt(section=section, knowledge_space=knowledge_space)
+            async with semaphore:
+                try:
+                    result = await self._llm.invoke_llm(
+                        prompt=prompt,
+                        role=ModelRole.KNOWLEDGE_CURATOR,
+                        priority=ModelPriority.HIGH_QUALITY,
+                        timeout_seconds=45,
+                        task_type="knowledge_space_consolidation",
+                        complexity="medium",
+                    )
+                    parsed = parse_json_lenient(str(result.get("response") or ""))
+                except Exception:
+                    return section
+            return self._merge_llm_section_enrichment(section=section, payload=parsed if isinstance(parsed, dict) else None)
+
+        enrichable = sections[:max_sections]
+        preserved = sections[max_sections:]
+        results = await asyncio.gather(*[_enrich_one(section) for section in enrichable])
+        enriched.extend(results)
+        enriched.extend(preserved)
+        return enriched
+
+    def _build_section_enrichment_prompt(
+        self,
+        *,
+        section: dict[str, Any],
+        knowledge_space: dict[str, Any],
+    ) -> str:
+        allowed_roles = ", ".join(sorted(_SECTION_ROLES))
+        return (
+            "Você está consolidando conhecimento documental em uma base canônica.\n"
+            "Responda APENAS com JSON válido.\n\n"
+            f"Knowledge space: {knowledge_space.get('name')}\n"
+            f"Documento: {section.get('file_name')}\n"
+            f"Papel do documento: {section.get('doc_role')}\n"
+            f"Título da seção: {section.get('title')}\n"
+            f"Resumo heurístico: {section.get('canonical_summary')}\n"
+            f"Texto da seção:\n{section.get('body_excerpt')}\n\n"
+            "Formato:\n"
+            "{\n"
+            '  "canonical_summary": "resumo curto e fiel",\n'
+            f'  "section_role": "{allowed_roles}",\n'
+            '  "applies_to": ["base_creation|character_options|workflow|optional_rules|general_rules"],\n'
+            '  "extends_or_overrides": "extends|overrides|none",\n'
+            '  "is_optional_rule": false\n'
+            "}\n\n"
+            "Regras:\n"
+            "- Não invente fatos.\n"
+            "- Preserve o papel documental entre livro base, suplemento e apêndice.\n"
+            "- Use apenas informações explícitas no trecho.\n"
+            "- Se a seção parecer ruído, use section_role=noise.\n"
+        )
+
+    def _merge_llm_section_enrichment(
+        self,
+        *,
+        section: dict[str, Any],
+        payload: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not payload:
+            return section
+        merged = dict(section)
+        summary = self._trim_text(str(payload.get("canonical_summary") or ""), max_chars=440)
+        if summary:
+            merged["canonical_summary"] = summary
+            merged["summary"] = self._trim_text(summary, max_chars=360)
+        section_role = str(payload.get("section_role") or "").strip().lower()
+        if section_role in _SECTION_ROLES:
+            merged["section_role"] = section_role
+            merged["is_optional_rule"] = bool(section_role == "optional_rules")
+        applies_to = [
+            str(item).strip()
+            for item in (payload.get("applies_to") or [])
+            if str(item or "").strip()
+        ]
+        if applies_to:
+            merged["applies_to"] = sorted(set(applies_to))
+        extends_or_overrides = str(payload.get("extends_or_overrides") or "").strip().lower()
+        if extends_or_overrides in {"extends", "overrides"}:
+            merged["extends_or_overrides"] = extends_or_overrides
+        elif extends_or_overrides == "none":
+            merged["extends_or_overrides"] = None
+        if "is_optional_rule" in payload:
+            merged["is_optional_rule"] = bool(payload.get("is_optional_rule"))
+        merged["classification_source"] = "llm"
+        return merged
+
+    def _build_consolidation_metrics(
+        self,
+        *,
+        sections: list[dict[str, Any]],
+        skipped_sections: int,
+    ) -> dict[str, Any]:
+        sections_total = len(sections) + max(0, int(skipped_sections))
+        sections_indexed = len(sections)
+        canonical_frames_total = sum(
+            1
+            for item in sections
+            if item.get("section_role") in {"core_rules", "supplement_rules", "optional_rules"}
+        )
+        useful_ratio = sections_indexed / max(1, sections_total)
+        canonical_ratio = canonical_frames_total / max(1, sections_indexed)
+        quality_score = round(min(1.0, (useful_ratio * 0.55) + (canonical_ratio * 0.45)), 4)
+        return {
+            "sections_total": sections_total,
+            "sections_indexed": sections_indexed,
+            "sections_skipped_as_noise": int(skipped_sections),
+            "canonical_frames_total": canonical_frames_total,
+            "consolidation_quality_score": quality_score,
+        }
+
     async def _index_canonical_sections(
         self,
         *,
@@ -633,10 +1063,6 @@ class KnowledgeSpaceService:
                 filter=models.Filter(
                     must=[
                         models.FieldCondition(
-                            key="metadata.type",
-                            match=models.MatchValue(value="knowledge_canonical_summary"),
-                        ),
-                        models.FieldCondition(
                             key="metadata.user_id",
                             match=models.MatchValue(value=str(user_id)),
                         ),
@@ -644,21 +1070,59 @@ class KnowledgeSpaceService:
                             key="metadata.knowledge_space_id",
                             match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
                         ),
+                        models.FieldCondition(
+                            key="metadata.origin",
+                            match=models.MatchValue(value="knowledge_space.consolidation"),
+                        ),
                     ]
                 )
             ),
         )
-        texts = [f"{item['title']}\n{item['summary']}\n{' '.join(item['concepts'])}" for item in sections]
-        vectors = await aembed_texts(texts)
+        records: list[tuple[dict[str, Any], str, str, str]] = []
+        for section in sections:
+            records.append(
+                (
+                    section,
+                    "knowledge_canonical_summary",
+                    section["canonical_summary"],
+                    f"{section['title']}\n{section['canonical_summary']}\n{' '.join(section['concepts'])}",
+                )
+            )
+            records.append(
+                (
+                    section,
+                    "knowledge_evidence_anchor",
+                    section["body_excerpt"],
+                    f"{section['title']}\n{section['body_excerpt']}",
+                )
+            )
+            if "workflow" in (section.get("applies_to") or []):
+                records.append(
+                    (
+                        section,
+                        "knowledge_flow_step",
+                        section["canonical_summary"],
+                        f"etapa {section['order']} {section['title']}\n{section['canonical_summary']}",
+                    )
+                )
+            if section.get("doc_role") in {"base", "supplement"}:
+                comparison_text = (
+                    f"{section.get('doc_role')}: {section['title']}. "
+                    f"{section['canonical_summary']}"
+                )
+                records.append((section, "knowledge_comparison_frame", comparison_text, comparison_text))
+
+        vectors = await aembed_texts([record[3] for record in records])
         points: list[models.PointStruct] = []
         now_ms = int(time.time() * 1000)
-        for section, vector in zip(sections, vectors, strict=False):
+        for record, vector in zip(records, vectors, strict=False):
+            section, point_type, content, embedding_text = record
             payload = {
-                "type": "knowledge_canonical_summary",
+                "type": point_type,
                 "ts_ms": now_ms,
-                "content": section["summary"],
+                "content": content,
                 "metadata": {
-                    "type": "knowledge_canonical_summary",
+                    "type": point_type,
                     "user_id": str(user_id),
                     "knowledge_space_id": str(knowledge_space["knowledge_space_id"]),
                     "doc_id": str(section["doc_id"]),
@@ -669,15 +1133,30 @@ class KnowledgeSpaceService:
                     "concepts": section["concepts"],
                     "source_type": "document",
                     "origin": "knowledge_space.consolidation",
+                    "doc_role": section.get("doc_role"),
+                    "section_role": section.get("section_role"),
+                    "applies_to": section.get("applies_to") or [],
+                    "is_optional_rule": bool(section.get("is_optional_rule")),
+                    "extends_or_overrides": section.get("extends_or_overrides"),
+                    "answer_strategy": (
+                        "comparative"
+                        if point_type == "knowledge_comparison_frame"
+                        else "sequence"
+                        if point_type == "knowledge_flow_step"
+                        else "scope"
+                    ),
+                    "embedding_text": embedding_text[:1200],
+                    "evidence_span_ids": section.get("evidence_span_ids") or [],
                     "timestamp": now_ms,
                 },
             }
             points.append(
                 models.PointStruct(
                     id=build_deterministic_point_id(
-                        "knowledge-canonical-summary",
+                        "knowledge-canonical-point",
                         knowledge_space["knowledge_space_id"],
                         section["section_id"],
+                        point_type,
                     ),
                     vector=vector,
                     payload=payload,
@@ -726,6 +1205,7 @@ class KnowledgeSpaceService:
                 "user_id": str(user_id),
                 "source_type": manifest.get("source_type"),
                 "source_id": manifest.get("source_id"),
+                "doc_role": manifest.get("doc_role") or self._infer_doc_role(manifest, knowledge_space),
                 "edition_or_version": manifest.get("edition_or_version"),
                 "language": manifest.get("language"),
             }
@@ -741,6 +1221,7 @@ class KnowledgeSpaceService:
                     w.user_id = work.user_id,
                     w.source_type = work.source_type,
                     w.source_id = work.source_id,
+                    w.doc_role = work.doc_role,
                     w.edition_or_version = work.edition_or_version,
                     w.language = work.language,
                     w.updated_at = timestamp()
@@ -752,6 +1233,24 @@ class KnowledgeSpaceService:
                 },
                 operation="knowledge_space_graph_work_batch",
             )
+            base_doc_ids = [item["doc_id"] for item in work_rows if item.get("doc_role") == "base"]
+            supplement_links = [
+                {"supplement_doc_id": item["doc_id"], "base_doc_id": base_doc_id}
+                for item in work_rows
+                if item.get("doc_role") == "supplement"
+                for base_doc_id in base_doc_ids
+            ]
+            if supplement_links:
+                await graph.execute(
+                    """
+                    UNWIND $links AS link
+                    MATCH (supp:Work {doc_id: link.supplement_doc_id})
+                    MATCH (base:Work {doc_id: link.base_doc_id})
+                    MERGE (supp)-[:SUPPLEMENTS]->(base)
+                    """,
+                    {"links": supplement_links},
+                    operation="knowledge_space_graph_supplement_batch",
+                )
         grouped: dict[str, list[dict[str, Any]]] = {}
         section_rows: list[dict[str, Any]] = []
         concept_rows: list[dict[str, Any]] = []
@@ -765,6 +1264,11 @@ class KnowledgeSpaceService:
                     "title": section["title"],
                     "summary": section["summary"],
                     "order": int(section["order"]),
+                    "doc_role": section.get("doc_role"),
+                    "section_role": section.get("section_role"),
+                    "applies_to": section.get("applies_to") or [],
+                    "is_optional_rule": bool(section.get("is_optional_rule")),
+                    "extends_or_overrides": section.get("extends_or_overrides"),
                     "summary_id": build_deterministic_point_id(
                         "graph-summary",
                         section["knowledge_space_id"],
@@ -784,6 +1288,11 @@ class KnowledgeSpaceService:
                     s.title = section.title,
                     s.summary = section.summary,
                     s.order = section.order,
+                    s.doc_role = section.doc_role,
+                    s.section_role = section.section_role,
+                    s.applies_to = section.applies_to,
+                    s.is_optional_rule = section.is_optional_rule,
+                    s.extends_or_overrides = section.extends_or_overrides,
                     s.updated_at = timestamp()
                 MERGE (w)-[:CONTAINS]->(s)
                 MERGE (cs:CanonicalSummary {summary_id: section.summary_id})
@@ -833,13 +1342,24 @@ class KnowledgeSpaceService:
         space: dict[str, Any],
         manifests: list[dict[str, Any]],
         sections: list[dict[str, Any]],
+        metrics: dict[str, Any],
     ) -> str:
         titles = [str(item["title"]).strip() for item in sections[:3] if str(item["title"]).strip()]
         docs = [str(item.get("file_name") or item.get("doc_id") or "").strip() for item in manifests[:3]]
+        roles = sorted(
+            {
+                str(item.get("doc_role") or self._infer_doc_role(item, space)).strip()
+                for item in manifests
+                if str(item.get("file_name") or "").strip()
+            }
+        )
         return (
             f"Espaço '{space['name']}' consolidado com {len(manifests)} documento(s) "
-            f"e {len(sections)} seção(ões). "
+            f"e {metrics['sections_indexed']} seção(ões) úteis de {metrics['sections_total']} detectadas. "
             f"Documentos: {', '.join(item for item in docs if item)}. "
+            f"Papéis: {', '.join(item for item in roles if item) or 'base'}. "
+            f"Frames canônicos: {metrics['canonical_frames_total']}. "
+            f"Qualidade estimada: {metrics['consolidation_quality_score']:.2f}. "
             f"Seções-chave: {', '.join(item for item in titles if item) or 'visão geral'}."
         ).strip()
 
@@ -854,6 +1374,13 @@ class KnowledgeSpaceService:
         )
         if len(editions) > 1:
             conflicts.append(f"Múltiplas edições/versões associadas ao espaço: {', '.join(editions)}.")
+        roles = {
+            str(item.get("doc_role") or self._infer_doc_role(item, space)).strip()
+            for item in manifests
+            if str(item.get("file_name") or "").strip()
+        }
+        if roles and "base" not in roles:
+            conflicts.append("Não há documento marcado como base; a resposta pode ficar dominada por suplemento ou referência.")
         if space.get("parent_collection_id"):
             conflicts.append("Espaço vinculado a coleção; respostas podem depender da ordem declarada dos volumes.")
         return conflicts
@@ -869,32 +1396,47 @@ class KnowledgeSpaceService:
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
-        result = await client.query_points(
-            collection_name=collection_name,
-            query=vector,
-            limit=max(1, int(limit)),
-            with_payload=True,
-            query_filter=models.Filter(
-                must=[
-                    models.FieldCondition(
-                        key="metadata.type",
-                        match=models.MatchValue(value="knowledge_canonical_summary"),
-                    ),
-                    models.FieldCondition(
-                        key="metadata.user_id",
-                        match=models.MatchValue(value=str(user_id)),
-                    ),
-                    models.FieldCondition(
-                        key="metadata.knowledge_space_id",
-                        match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
-                    ),
-                ]
-            ),
+        answer_strategy = self._detect_answer_strategy(question)
+        candidate_points: list[Any] = []
+        for point_type in self._resolve_canonical_query_types(answer_strategy):
+            result = await client.query_points(
+                collection_name=collection_name,
+                query=vector,
+                limit=max(6, int(limit) * 4),
+                with_payload=True,
+                query_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="metadata.type",
+                            match=models.MatchValue(value=point_type),
+                        ),
+                        models.FieldCondition(
+                            key="metadata.user_id",
+                            match=models.MatchValue(value=str(user_id)),
+                        ),
+                        models.FieldCondition(
+                            key="metadata.knowledge_space_id",
+                            match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                        ),
+                    ]
+                ),
+            )
+            candidate_points.extend(list(getattr(result, "points", result) or []))
+
+        selected = self._select_canonical_candidates(
+            points=candidate_points,
+            question=question,
+            answer_strategy=answer_strategy,
+            limit=limit,
         )
-        points = list(getattr(result, "points", result) or [])
-        citations = [self._map_citation(point, snippet_limit=320) for point in points]
-        confidence = self._average_score(points)
-        answer = self._render_canonical_answer(points)
+        citations = [self._map_citation(item["point"], snippet_limit=320) for item in selected]
+        confidence = self._average_score([item["point"] for item in selected])
+        answer = self._render_canonical_answer(selected, answer_strategy=answer_strategy)
+        gaps = self._build_canonical_gaps(
+            selected=selected,
+            answer_strategy=answer_strategy,
+            confidence=confidence,
+        )
         return {
             "answer": answer,
             "mode_used": "canonical_answer",
@@ -902,8 +1444,133 @@ class KnowledgeSpaceService:
             "source_scope": self._build_source_scope(knowledge_space),
             "citations": citations,
             "confidence": confidence,
-            "gaps_or_conflicts": [] if citations else ["Nenhum summary canônico relevante foi recuperado."],
+            "gaps_or_conflicts": gaps if citations else ["Nenhum summary canônico relevante foi recuperado."],
+            "answer_strategy": answer_strategy,
+            "evidence_count": len(citations),
+            "source_roles_used": sorted({str(item["doc_role"]) for item in selected if item.get("doc_role")}),
         }
+
+    def _resolve_canonical_query_types(self, answer_strategy: str) -> list[str]:
+        point_types = ["knowledge_canonical_summary", "knowledge_evidence_anchor"]
+        if answer_strategy == "sequence":
+            point_types.append("knowledge_flow_step")
+        if answer_strategy == "comparative":
+            point_types.append("knowledge_comparison_frame")
+        return point_types
+
+    def _detect_answer_strategy(self, question: str) -> str:
+        lowered = str(question or "").casefold()
+        if self._prefer_locator(question):
+            return "locator"
+        if any(token in lowered for token in ("compar", "diferen", "versus", "vs", "amplia", "suplement")):
+            return "comparative"
+        if any(token in lowered for token in ("passo", "sequên", "sequenc", "etapa", "ordem", "como fazer", "processo")):
+            return "sequence"
+        return "scope"
+
+    def _prefer_locator(self, question: str) -> bool:
+        lowered = str(question or "").casefold()
+        return any(token in lowered for token in ("página", "pagina", "trecho", "onde", "citação", "citacao"))
+
+    def _select_canonical_candidates(
+        self,
+        *,
+        points: list[Any],
+        question: str,
+        answer_strategy: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        question_terms = {
+            token
+            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", str(question or "").casefold())
+            if token not in _STOPWORDS
+        }
+        for point in points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            section_id = str(metadata.get("section_id") or getattr(point, "id", ""))
+            content = str(payload.get("content") or "").strip()
+            title = str(metadata.get("section_title") or "").strip()
+            concepts = [str(item).strip().casefold() for item in (metadata.get("concepts") or []) if str(item).strip()]
+            lexical_overlap = sum(1 for token in question_terms if token in content.casefold() or token in title.casefold() or token in concepts)
+            base_score = float(getattr(point, "score", 0.0) or 0.0)
+            rerank_score = base_score
+            doc_role = str(metadata.get("doc_role") or "base").strip().lower() or "base"
+            section_role = str(metadata.get("section_role") or "core_rules").strip().lower() or "core_rules"
+            if answer_strategy in {"scope", "sequence"} and doc_role == "base":
+                rerank_score += 0.14
+            if answer_strategy == "comparative" and doc_role == "supplement":
+                rerank_score += 0.12
+            if section_role == "core_rules":
+                rerank_score += 0.08
+            if section_role == "supplement_rules":
+                rerank_score += 0.06
+            if section_role == "optional_rules":
+                rerank_score -= 0.04
+            if answer_strategy == "sequence" and "workflow" in (metadata.get("applies_to") or []):
+                rerank_score += 0.12
+            rerank_score += min(0.18, lexical_overlap * 0.03)
+            existing = grouped.get(section_id)
+            if existing is None or rerank_score > existing["rerank_score"]:
+                grouped[section_id] = {
+                    "point": point,
+                    "section_id": section_id,
+                    "doc_id": str(metadata.get("doc_id") or ""),
+                    "doc_role": doc_role,
+                    "section_role": section_role,
+                    "section_order": int(metadata.get("section_order") or 0),
+                    "title": title,
+                    "content": content,
+                    "applies_to": metadata.get("applies_to") or [],
+                    "rerank_score": rerank_score,
+                }
+        ordered = sorted(
+            grouped.values(),
+            key=lambda item: (-item["rerank_score"], item["section_order"] or 999999),
+        )
+        selected: list[dict[str, Any]] = []
+        if answer_strategy == "comparative":
+            used_doc_roles: set[str] = set()
+            for item in ordered:
+                if len(selected) >= max(1, int(limit)):
+                    break
+                if item["doc_role"] in used_doc_roles:
+                    continue
+                selected.append(item)
+                used_doc_roles.add(item["doc_role"])
+            if len(selected) < max(1, int(limit)):
+                selected_ids = {item["section_id"] for item in selected}
+                for item in ordered:
+                    if len(selected) >= max(1, int(limit)):
+                        break
+                    if item["section_id"] in selected_ids:
+                        continue
+                    selected.append(item)
+                    selected_ids.add(item["section_id"])
+            return selected
+        for item in ordered:
+            if len(selected) >= max(1, int(limit)):
+                break
+            selected.append(item)
+        return selected
+
+    def _build_canonical_gaps(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        answer_strategy: str,
+        confidence: float,
+    ) -> list[str]:
+        gaps: list[str] = []
+        roles = {str(item.get("doc_role") or "") for item in selected if str(item.get("doc_role") or "")}
+        if answer_strategy == "comparative" and len(roles) < 2:
+            gaps.append("Resposta comparativa com baixa diversidade de fontes; apenas um papel documental dominou a evidência.")
+        if confidence < 0.35:
+            gaps.append("Evidência consolidada fraca; resposta parcial para evitar inferência indevida.")
+        if any(item.get("section_role") == "optional_rules" for item in selected) and answer_strategy != "comparative":
+            gaps.append("Parte da evidência vem de regras opcionais; valide se elas se aplicam ao seu caso.")
+        return gaps
 
     async def _query_quick_lookup(
         self,
@@ -942,6 +1609,15 @@ class KnowledgeSpaceService:
             "citations": citations,
             "confidence": self._average_score(points),
             "gaps_or_conflicts": [] if citations else ["Nenhum chunk relevante foi recuperado para a pergunta."],
+            "answer_strategy": "locator",
+            "evidence_count": len(citations),
+            "source_roles_used": sorted(
+                {
+                    str(((getattr(point, "payload", {}) or {}).get("metadata") or {}).get("doc_role") or "")
+                    for point in points
+                    if str(((getattr(point, "payload", {}) or {}).get("metadata") or {}).get("doc_role") or "")
+                }
+            ),
         }
 
     def _build_source_scope(self, knowledge_space: dict[str, Any]) -> dict[str, Any]:
@@ -954,20 +1630,67 @@ class KnowledgeSpaceService:
             "language": knowledge_space.get("language"),
             "parent_collection_id": knowledge_space.get("parent_collection_id"),
             "consolidation_status": knowledge_space.get("consolidation_status"),
+            "sections_total": int(knowledge_space.get("sections_total") or 0),
+            "sections_indexed": int(knowledge_space.get("sections_indexed") or 0),
+            "sections_skipped_as_noise": int(knowledge_space.get("sections_skipped_as_noise") or 0),
+            "canonical_frames_total": int(knowledge_space.get("canonical_frames_total") or 0),
+            "consolidation_quality_score": float(knowledge_space.get("consolidation_quality_score") or 0.0),
         }
 
-    def _render_canonical_answer(self, points: list[Any]) -> str:
-        if not points:
+    def _render_canonical_answer(self, selected: list[dict[str, Any]], *, answer_strategy: str) -> str:
+        if not selected:
             return "A base consolidada ainda não possui evidência suficiente para responder com segurança."
-        lines = ["Base consolidada indica:"]
-        for point in points[:3]:
-            payload = getattr(point, "payload", {}) or {}
-            metadata = payload.get("metadata") or {}
-            title = str(metadata.get("section_title") or metadata.get("file_name") or "Seção").strip()
-            summary = re.sub(r"\s+", " ", str(payload.get("content") or "").strip())
-            if not summary:
-                continue
-            lines.append(f"- {title}: {summary}")
+        if answer_strategy == "comparative":
+            return self._render_comparative_answer(selected)
+        if answer_strategy == "sequence":
+            return self._render_sequence_answer(selected)
+        return self._render_scope_answer(selected)
+
+    def _render_comparative_answer(self, selected: list[dict[str, Any]]) -> str:
+        grouped: dict[str, dict[str, Any]] = {}
+        for item in selected:
+            grouped.setdefault(str(item.get("doc_role") or "base"), item)
+        base = grouped.get("base")
+        supplement = grouped.get("supplement")
+        lines = ["Síntese curta:"]
+        if base and supplement:
+            lines.append(
+                f"O material base define o núcleo da regra, enquanto o suplemento amplia ou especializa opções relacionadas."
+            )
+        else:
+            lines.append("A base consolidada recuperou evidência principal, mas a comparação entre papéis documentais ficou parcial.")
+        if base:
+            lines.append(f"Base: {base['title']} - {self._trim_text(base['content'], max_chars=260)}")
+        if supplement:
+            lines.append(
+                f"Suplemento: {supplement['title']} - {self._trim_text(supplement['content'], max_chars=260)}"
+            )
+        for role in ("reference", "appendix"):
+            if grouped.get(role):
+                lines.append(
+                    f"{role.capitalize()}: {grouped[role]['title']} - {self._trim_text(grouped[role]['content'], max_chars=220)}"
+                )
+        return "\n".join(lines)
+
+    def _render_sequence_answer(self, selected: list[dict[str, Any]]) -> str:
+        ordered = sorted(selected, key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]))
+        lines = ["Sequência sugerida pela base consolidada:"]
+        for index, item in enumerate(ordered[:4], start=1):
+            prefix = f"{index}. "
+            suffix = ""
+            if item.get("doc_role") == "supplement":
+                suffix = " (suplemento amplia esta etapa)"
+            lines.append(f"{prefix}{item['title']}: {self._trim_text(item['content'], max_chars=220)}{suffix}")
+        return "\n".join(lines)
+
+    def _render_scope_answer(self, selected: list[dict[str, Any]]) -> str:
+        primary = selected[0]
+        lines = [f"Síntese curta: {self._trim_text(primary['content'], max_chars=260)}"]
+        if primary.get("doc_role") == "base":
+            lines.append("Regra principal: a evidência dominante veio do material base.")
+        for item in selected[1:3]:
+            note = "Extensão" if item.get("doc_role") == "supplement" else "Contexto"
+            lines.append(f"{note}: {item['title']} - {self._trim_text(item['content'], max_chars=220)}")
         return "\n".join(lines)
 
     def _render_quick_answer(self, points: list[Any], *, knowledge_space: dict[str, Any]) -> str:
@@ -1005,6 +1728,8 @@ class KnowledgeSpaceService:
             "index": metadata.get("index"),
             "score": float(getattr(point, "score", 0.0) or 0.0),
             "source_type": metadata.get("source_type") or "document",
+            "doc_role": metadata.get("doc_role"),
+            "section_role": metadata.get("section_role"),
             "snippet": snippet,
         }
 
@@ -1040,5 +1765,7 @@ class KnowledgeSpaceService:
 
 def get_knowledge_space_service(request: Request) -> KnowledgeSpaceService:
     if not hasattr(request.app.state, "knowledge_space_service"):
-        request.app.state.knowledge_space_service = KnowledgeSpaceService()
+        request.app.state.knowledge_space_service = KnowledgeSpaceService(
+            llm_service=getattr(request.app.state, "llm_service", None)
+        )
     return request.app.state.knowledge_space_service

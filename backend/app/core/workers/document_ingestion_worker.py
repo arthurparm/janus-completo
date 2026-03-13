@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -68,6 +68,7 @@ async def process_document_ingestion_task(task: TaskMessage) -> None:
 
                     await KnowledgeSpaceService(
                         manifest_repo=manifest_repo,
+                        llm_service=getattr(kernel, "llm_service", None),
                     ).consolidate_space(
                         knowledge_space_id=knowledge_space_id,
                         user_id=str(manifest.get("user_id")),
@@ -100,7 +101,7 @@ async def publish_document_ingestion_task(payload: dict[str, Any]) -> dict[str, 
         task_id=str(uuid.uuid4()),
         task_type="document_ingestion",
         payload=payload,
-        timestamp=datetime.utcnow().timestamp(),
+        timestamp=datetime.now(UTC).timestamp(),
     )
     serialized = msgpack.packb(task_message.model_dump(), use_bin_type=True)
     await broker.publish(

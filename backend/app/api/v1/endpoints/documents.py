@@ -108,6 +108,7 @@ class UploadResponse(BaseModel):
     consolidation: dict[str, Any] | None = None
     semantic: dict[str, Any] | None = None
     knowledge_space_id: str | None = None
+    doc_role: str | None = None
 
 
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -122,6 +123,7 @@ async def upload_document(
     knowledge_space_id: str | None = Form(None),
     source_type: str | None = Form(None),
     source_id: str | None = Form(None),
+    doc_role: str | None = Form(None),
     edition_or_version: str | None = Form(None),
     language: str | None = Form(None),
     parent_collection_id: str | None = Form(None),
@@ -144,6 +146,7 @@ async def upload_document(
                 knowledge_space_id=knowledge_space_id,
                 source_type=source_type,
                 source_id=source_id,
+                doc_role=doc_role,
                 edition_or_version=edition_or_version,
                 language=language,
                 parent_collection_id=parent_collection_id,
@@ -181,6 +184,7 @@ async def upload_document(
         status_endpoint=result.get("status_endpoint"),
         semantic=result.get("semantic"),
         knowledge_space_id=knowledge_space_id,
+        doc_role=doc_role,
     )
 
 
@@ -262,6 +266,7 @@ class DocListItem(BaseModel):
     knowledge_space_id: str | None = None
     source_type: str | None = None
     source_id: str | None = None
+    doc_role: str | None = None
     edition_or_version: str | None = None
     language: str | None = None
     parent_collection_id: str | None = None
@@ -290,6 +295,7 @@ def _build_legacy_doc_list_item(doc_id: str, payload: dict[str, Any]) -> DocList
         knowledge_space_id=payload.get("knowledge_space_id"),
         source_type=payload.get("source_type"),
         source_id=payload.get("source_id"),
+        doc_role=payload.get("doc_role"),
         edition_or_version=payload.get("edition_or_version"),
         language=payload.get("language"),
         parent_collection_id=payload.get("parent_collection_id"),
@@ -338,6 +344,7 @@ async def list_documents(
                 knowledge_space_id=row.get("knowledge_space_id"),
                 source_type=row.get("source_type"),
                 source_id=row.get("source_id"),
+                doc_role=row.get("doc_role"),
                 edition_or_version=row.get("edition_or_version"),
                 language=row.get("language"),
                 parent_collection_id=row.get("parent_collection_id"),
@@ -460,6 +467,7 @@ class LinkUrlResponse(BaseModel):
     chunks: int
     semantic: dict[str, Any] | None = None
     knowledge_space_id: str | None = None
+    doc_role: str | None = None
 
 
 @router.post("/link-url", response_model=LinkUrlResponse)
@@ -470,6 +478,7 @@ async def link_url(
     knowledge_space_id: str | None = Form(None),
     source_type: str | None = Form(None),
     source_id: str | None = Form(None),
+    doc_role: str | None = Form(None),
     edition_or_version: str | None = Form(None),
     language: str | None = Form(None),
     parent_collection_id: str | None = Form(None),
@@ -501,6 +510,7 @@ async def link_url(
         knowledge_space_id=knowledge_space_id,
         source_type=source_type,
         source_id=source_id,
+        doc_role=doc_role,
         edition_or_version=edition_or_version,
         language=language,
         parent_collection_id=parent_collection_id,
@@ -513,6 +523,7 @@ async def link_url(
             knowledge_space_id=knowledge_space_id,
             source_type=source_type,
             source_id=source_id,
+            doc_role=doc_role,
             edition_or_version=edition_or_version,
             language=language,
             parent_collection_id=parent_collection_id,
@@ -536,6 +547,7 @@ async def link_url(
         chunks=result.get("chunks"),
         semantic=result.get("semantic"),
         knowledge_space_id=knowledge_space_id,
+        doc_role=doc_role,
     )
 
 

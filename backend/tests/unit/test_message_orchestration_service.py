@@ -604,6 +604,9 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
             "answer": "Base consolidada indica:\n- Capítulo 1: ordem de estudo.",
             "mode_used": "canonical_answer",
             "base_used": "consolidated",
+            "answer_strategy": "sequence",
+            "evidence_count": 1,
+            "source_roles_used": ["base"],
             "source_scope": {
                 "knowledge_space_id": "ks-1",
                 "consolidation_status": "ready",
@@ -641,6 +644,7 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
     assert "Base consolidada indica" in result["response"]
     assert repo.message_records[-1]["metadata"]["knowledge_space_id"] == "ks-1"
     assert repo.message_records[-1]["metadata"]["mode_used"] == "canonical_answer"
+    assert repo.message_records[-1]["metadata"]["answer_strategy"] == "sequence"
     assert query_space.await_args.kwargs["mode"] == "canonical_answer"
 
 

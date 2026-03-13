@@ -102,6 +102,7 @@ class DocumentIngestionService:
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
         source_id: str | None = None,
+        doc_role: str | None = None,
         edition_or_version: str | None = None,
         language: str | None = None,
         parent_collection_id: str | None = None,
@@ -120,6 +121,7 @@ class DocumentIngestionService:
             knowledge_space_id=str(knowledge_space_id) if knowledge_space_id is not None else None,
             source_type=str(source_type) if source_type is not None else None,
             source_id=str(source_id) if source_id is not None else None,
+            doc_role=str(doc_role) if doc_role is not None else None,
             edition_or_version=(
                 str(edition_or_version) if edition_or_version is not None else None
             ),
@@ -245,6 +247,7 @@ class DocumentIngestionService:
                 ),
                 source_type=str(manifest["source_type"]) if manifest.get("source_type") else None,
                 source_id=str(manifest["source_id"]) if manifest.get("source_id") else None,
+                doc_role=str(manifest["doc_role"]) if manifest.get("doc_role") else None,
                 edition_or_version=(
                     str(manifest["edition_or_version"]) if manifest.get("edition_or_version") else None
                 ),
@@ -308,6 +311,7 @@ class DocumentIngestionService:
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
         source_id: str | None = None,
+        doc_role: str | None = None,
         edition_or_version: str | None = None,
         language: str | None = None,
         parent_collection_id: str | None = None,
@@ -322,6 +326,7 @@ class DocumentIngestionService:
             knowledge_space_id=knowledge_space_id,
             source_type=source_type,
             source_id=source_id,
+            doc_role=doc_role,
             edition_or_version=edition_or_version,
             language=language,
             parent_collection_id=parent_collection_id,
@@ -340,6 +345,7 @@ class DocumentIngestionService:
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
         source_id: str | None = None,
+        doc_role: str | None = None,
         edition_or_version: str | None = None,
         language: str | None = None,
         parent_collection_id: str | None = None,
@@ -452,6 +458,7 @@ class DocumentIngestionService:
                         "knowledge_space_id": knowledge_space_id,
                         "source_type": source_type,
                         "source_id": source_id,
+                        "doc_role": doc_role,
                         "edition_or_version": edition_or_version,
                         "language": language,
                         "parent_collection_id": parent_collection_id,

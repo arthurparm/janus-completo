@@ -38,6 +38,11 @@ class _DummyKnowledgeSpaceService:
             "consolidation_status": "not_started",
             "consolidation_summary": None,
             "last_consolidated_at": None,
+            "sections_total": 0,
+            "sections_indexed": 0,
+            "sections_skipped_as_noise": 0,
+            "canonical_frames_total": 0,
+            "consolidation_quality_score": 0.0,
         }
 
     def list_spaces(self, **kwargs):
@@ -55,6 +60,11 @@ class _DummyKnowledgeSpaceService:
                 "consolidation_status": "ready",
                 "consolidation_summary": "ok",
                 "last_consolidated_at": None,
+                "sections_total": 8,
+                "sections_indexed": 6,
+                "sections_skipped_as_noise": 2,
+                "canonical_frames_total": 5,
+                "consolidation_quality_score": 0.82,
             }
         ]
 
@@ -86,6 +96,11 @@ class _DummyKnowledgeSpaceService:
             "consolidation_status": "processing",
             "consolidation_summary": "queued",
             "last_consolidated_at": None,
+            "sections_total": 0,
+            "sections_indexed": 0,
+            "sections_skipped_as_noise": 0,
+            "canonical_frames_total": 0,
+            "consolidation_quality_score": 0.0,
         }
 
     def get_space_status(self, *, knowledge_space_id: str, user_id: str):
@@ -110,6 +125,11 @@ class _DummyKnowledgeSpaceService:
             "chunks_total": 10,
             "chunks_indexed": 4,
             "progress": 0.4,
+            "sections_total": 8,
+            "sections_indexed": 6,
+            "sections_skipped_as_noise": 2,
+            "canonical_frames_total": 5,
+            "consolidation_quality_score": 0.82,
         }
 
     def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str):
@@ -129,6 +149,9 @@ class _DummyKnowledgeSpaceService:
             "answer": "Base consolidada indica:\n- Capítulo 1: introdução.",
             "mode_used": "canonical_answer",
             "base_used": "consolidated",
+            "answer_strategy": "sequence",
+            "evidence_count": 1,
+            "source_roles_used": ["base"],
             "source_scope": {"knowledge_space_id": kwargs["knowledge_space_id"]},
             "citations": [{"doc_id": "doc-1", "file_name": "livro.pdf"}],
             "confidence": 0.91,

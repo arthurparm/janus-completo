@@ -146,6 +146,11 @@ class KnowledgeSpaceResponse(BaseModel):
     consolidation_status: str
     consolidation_summary: str | None = None
     last_consolidated_at: str | None = None
+    sections_total: int = 0
+    sections_indexed: int = 0
+    sections_skipped_as_noise: int = 0
+    canonical_frames_total: int = 0
+    consolidation_quality_score: float = 0.0
 
 
 class KnowledgeSpaceStatusResponse(KnowledgeSpaceResponse):
@@ -167,6 +172,7 @@ class AttachDocumentRequest(BaseModel):
     user_id: str | None = None
     source_type: str | None = None
     source_id: str | None = None
+    doc_role: str | None = None
     edition_or_version: str | None = None
     language: str | None = None
     parent_collection_id: str | None = None
@@ -188,6 +194,9 @@ class KnowledgeSpaceQueryResponse(BaseModel):
     answer: str
     mode_used: str
     base_used: str
+    answer_strategy: str = "scope"
+    evidence_count: int = 0
+    source_roles_used: list[str] = []
     source_scope: dict[str, Any]
     citations: list[dict[str, Any]]
     confidence: float
@@ -638,6 +647,7 @@ async def attach_document_to_space(
         user_id=str(user_id),
         source_type=payload.source_type,
         source_id=payload.source_id,
+        doc_role=payload.doc_role,
         edition_or_version=payload.edition_or_version,
         language=payload.language,
         parent_collection_id=payload.parent_collection_id,

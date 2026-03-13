@@ -300,7 +300,7 @@ class MessageOrchestrationService:
         )
         if not knowledge_space_id:
             return None
-        service = KnowledgeSpaceService(manifest_repo=self._manifest_repo)
+        service = KnowledgeSpaceService(manifest_repo=self._manifest_repo, llm_service=self._llm)
         source_scope = service.get_space(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
         mode = self._resolve_knowledge_space_mode(
             message=message,
@@ -1263,6 +1263,9 @@ class MessageOrchestrationService:
                     "knowledge_space_id": grounded_result.get("knowledge_space_id"),
                     "mode_used": grounded_result.get("mode_used"),
                     "base_used": grounded_result.get("base_used"),
+                    "answer_strategy": grounded_result.get("answer_strategy"),
+                    "evidence_count": grounded_result.get("evidence_count"),
+                    "source_roles_used": grounded_result.get("source_roles_used"),
                     "source_scope": grounded_result.get("source_scope"),
                     "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts"),
                     "citations": grounded_result.get("citations"),

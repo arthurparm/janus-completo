@@ -22,6 +22,7 @@ class DocumentManifestRepository:
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
         source_id: str | None = None,
+        doc_role: str | None = None,
         edition_or_version: str | None = None,
         language: str | None = None,
         parent_collection_id: str | None = None,
@@ -42,6 +43,7 @@ class DocumentManifestRepository:
                 ),
                 source_type=str(source_type) if source_type is not None else None,
                 source_id=str(source_id) if source_id is not None else None,
+                doc_role=str(doc_role) if doc_role is not None else None,
                 edition_or_version=(
                     str(edition_or_version) if edition_or_version is not None else None
                 ),
@@ -233,6 +235,7 @@ class DocumentManifestRepository:
             ),
             "source_type": row.source_type,
             "source_id": row.source_id,
+            "doc_role": row.doc_role,
             "edition_or_version": row.edition_or_version,
             "language": row.language,
             "parent_collection_id": row.parent_collection_id,
