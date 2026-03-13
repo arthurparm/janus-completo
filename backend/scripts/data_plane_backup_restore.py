@@ -95,7 +95,9 @@ class DataPlaneBackupRestoreCLI:
             "created_at": datetime.now(UTC).isoformat(),
             "dry_run": bool(args.dry_run),
             "target_host": args.target_host,
+            "source": self._build_source_descriptor(),
             "components": self.components,
+            "versions": {},
             "artifacts": [],
             "checks": {},
             "steps": [],
@@ -104,8 +106,101 @@ class DataPlaneBackupRestoreCLI:
     def execute(self) -> dict[str, Any]:
         operation = getattr(self, f"_run_{self.args.command}")
         operation()
+        self.manifest["versions"] = self._capture_versions()
         _json_dump(self.manifest_path, self.manifest)
         return self.manifest
+
+    def _build_source_descriptor(self) -> dict[str, Any]:
+        return {
+            "target_host": self.args.target_host,
+            "target_user": self.args.target_user,
+            "postgres": {
+                "dsn_provided": bool(self.args.postgres_dsn),
+                "verify_dsn_provided": bool(self.args.postgres_verify_dsn),
+                "container": self.args.postgres_container,
+                "database": self.args.postgres_db,
+                "user": self.args.postgres_user,
+            },
+            "neo4j": {
+                "uri": self.args.neo4j_uri,
+                "container": self.args.neo4j_container,
+                "restore_container": self.args.neo4j_restore_container,
+                "user": self.args.neo4j_user,
+            },
+            "qdrant": {
+                "url": self.args.qdrant_url,
+                "collections": _split_csv(self.args.qdrant_collections),
+            },
+        }
+
+    def _capture_versions(self) -> dict[str, Any]:
+        if self.args.dry_run:
+            return {component: {"status": "skipped", "reason": "dry-run"} for component in self.components}
+
+        versions: dict[str, Any] = {}
+        if "postgres" in self.components:
+            versions["postgres"] = self._detect_postgres_version()
+        if "neo4j" in self.components:
+            versions["neo4j"] = self._detect_neo4j_version()
+        if "qdrant" in self.components:
+            versions["qdrant"] = self._detect_qdrant_version()
+        return versions
+
+    def _detect_postgres_version(self) -> dict[str, Any]:
+        query = text("SELECT version()")
+        dsn = self.args.postgres_verify_dsn or self.args.postgres_dsn
+        if dsn:
+            engine = create_engine(dsn)
+            try:
+                with engine.connect() as connection:
+                    version = connection.execute(query).scalar_one()
+            finally:
+                engine.dispose()
+            return {"status": "ok", "version": str(version)}
+
+        if not self.args.postgres_container:
+            return {"status": "skipped", "reason": "missing-postgres-source"}
+
+        command = self._docker_exec_command(
+            self.args.postgres_container,
+            f"psql -U {shlex.quote(self.args.postgres_user)} -d {shlex.quote(self.args.postgres_db)} -tAc 'SELECT version()'",
+        )
+        version = self.runner.capture_text(command).strip()
+        return {"status": "ok", "version": version}
+
+    def _detect_neo4j_version(self) -> dict[str, Any]:
+        if not (self.args.neo4j_uri and self.args.neo4j_user and self.args.neo4j_password):
+            return {"status": "skipped", "reason": "missing-neo4j-credentials"}
+        driver = GraphDatabase.driver(
+            self.args.neo4j_uri,
+            auth=(self.args.neo4j_user, self.args.neo4j_password),
+        )
+        try:
+            with driver.session() as session:
+                record = session.run(
+                    "CALL dbms.components() YIELD name, versions RETURN name, versions[0] AS version LIMIT 1"
+                ).single()
+        finally:
+            driver.close()
+        return {"status": "ok", "component": record["name"], "version": record["version"]}
+
+    def _detect_qdrant_version(self) -> dict[str, Any]:
+        if not self.args.qdrant_url:
+            return {"status": "skipped", "reason": "missing-qdrant-url"}
+        response = requests.get(
+            f"{self._qdrant_base_url()}/",
+            headers=self._qdrant_headers(),
+            timeout=30,
+            verify=not self.args.insecure,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return {
+            "status": "ok",
+            "title": payload.get("title"),
+            "version": payload.get("version"),
+            "commit": payload.get("commit"),
+        }
 
     def _record_step(self, component: str, action: str, detail: dict[str, Any]) -> None:
         self.manifest["steps"].append({"component": component, "action": action, **detail})
