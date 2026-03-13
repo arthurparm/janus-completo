@@ -176,6 +176,36 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     assert any(item["doc_role"] == "supplement" for item in selected)
 
 
+def test_select_quick_lookup_points_boosts_explicit_supplement_match():
+    service = KnowledgeSpaceService()
+    points = [
+        SimpleNamespace(
+            id="base",
+            score=0.7,
+            payload={
+                "content": "Escolha sua raça e classe para começar.",
+                "metadata": {"doc_role": "base", "file_name": "base.pdf"},
+            },
+        ),
+        SimpleNamespace(
+            id="supp",
+            score=0.55,
+            payload={
+                "content": "Novas raças: duende, eiradaan, meio-elfo, sátiro e galokk.",
+                "metadata": {"doc_role": "supplement", "file_name": "supp.pdf"},
+            },
+        ),
+    ]
+
+    selected = service._select_quick_lookup_points(
+        points=points,
+        question="Em que trecho o livro fala sobre novas opções de raças?",
+        limit=1,
+    )
+
+    assert selected[0].id == "supp"
+
+
 def test_build_consolidation_metrics_rewards_useful_sections():
     service = KnowledgeSpaceService()
 

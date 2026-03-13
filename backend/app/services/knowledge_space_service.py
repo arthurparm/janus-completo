@@ -1613,7 +1613,7 @@ class KnowledgeSpaceService:
         result = await client.query_points(
             collection_name=collection_name,
             query=vector,
-            limit=max(1, int(limit)),
+            limit=max(6, int(limit) * 4),
             with_payload=True,
             query_filter=models.Filter(
                 must=[
@@ -1627,25 +1627,62 @@ class KnowledgeSpaceService:
             ),
         )
         points = list(getattr(result, "points", result) or [])
-        citations = [self._map_citation(point, snippet_limit=220) for point in points]
+        selected = self._select_quick_lookup_points(points=points, question=question, limit=limit)
+        citations = [self._map_citation(point, snippet_limit=220) for point in selected]
         return {
-            "answer": self._render_quick_answer(points, knowledge_space=knowledge_space),
+            "answer": self._render_quick_answer(selected, knowledge_space=knowledge_space),
             "mode_used": "quick_lookup",
             "base_used": "chunk_only",
             "source_scope": self._build_source_scope(knowledge_space),
             "citations": citations,
-            "confidence": self._average_score(points),
+            "confidence": self._average_score(selected),
             "gaps_or_conflicts": [] if citations else ["Nenhum chunk relevante foi recuperado para a pergunta."],
             "answer_strategy": "locator",
             "evidence_count": len(citations),
             "source_roles_used": sorted(
                 {
                     str(((getattr(point, "payload", {}) or {}).get("metadata") or {}).get("doc_role") or "")
-                    for point in points
+                    for point in selected
                     if str(((getattr(point, "payload", {}) or {}).get("metadata") or {}).get("doc_role") or "")
                 }
             ),
         }
+
+    def _select_quick_lookup_points(
+        self,
+        *,
+        points: list[Any],
+        question: str,
+        limit: int,
+    ) -> list[Any]:
+        lowered_question = str(question or "").casefold()
+        question_terms = {
+            token
+            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", lowered_question)
+            if token not in _STOPWORDS
+        }
+        ranked: list[tuple[float, Any]] = []
+        for point in points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            content = str(payload.get("content") or "")
+            title = str(metadata.get("section_title") or metadata.get("file_name") or "")
+            lexical_overlap = sum(
+                1 for token in question_terms if token in content.casefold() or token in title.casefold()
+            )
+            rerank_score = float(getattr(point, "score", 0.0) or 0.0) + min(0.24, lexical_overlap * 0.04)
+            doc_role = str(metadata.get("doc_role") or "").strip().lower()
+            if doc_role == "supplement" and any(
+                token in lowered_question for token in ("nov", "adicion", "suplement", "herois", "heróis")
+            ):
+                rerank_score += 0.08
+            if any(token in lowered_question for token in ("raça", "raças", "raca", "racas")) and any(
+                token in content.casefold() for token in ("raça", "raças", "raca", "racas")
+            ):
+                rerank_score += 0.06
+            ranked.append((rerank_score, point))
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return [point for _, point in ranked[: max(1, int(limit))]]
 
     def _build_source_scope(self, knowledge_space: dict[str, Any]) -> dict[str, Any]:
         return {
