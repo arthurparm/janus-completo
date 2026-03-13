@@ -109,6 +109,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Silent fail-open no message broker | P1 | S | aberto |
+| SG-031 | Vulnerabilidade XML Attack / XXE no Document Parser | P1 | S | aberto |
+| SG-032 | Novas vulnerabilidades de dependencias no Frontend (npm audit) | P1 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -748,4 +751,36 @@ Copiar e preencher:
 - Prioridade: P1
 - Esforco: S
 - Dono: a definir
+- Status: aberto
+### [SG-030] Silent fail-open no message broker
+- Problema atual: O `backend/app/core/infrastructure/message_broker.py` exibe um silent fail-open no qual falhas de conexão causam drop para modo offline sem alertas.
+- Solucao proposta: Implementar alerta claro quando falha a conexão.
+- Impacto esperado: Melhor detecção de falhas.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma
+- Prioridade: P1
+- Esforco: S
+- Dono: Squad de Segurança
+- Status: aberto
+
+### [SG-031] Vulnerabilidade XML Attack / XXE no Document Parser
+- Problema atual: O `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring`, que é vulnerável a ataques de XML via input não sanitizado.
+- Solucao proposta: Utilizar `defusedxml.ElementTree` em vez da biblioteca padrão.
+- Impacto esperado: Prevenção de ataques de XML External Entity e Denial of Service via XML.
+- Riscos: Quebra do parser de documentos caso a substituição não for equivalente.
+- Dependencias: Nenhuma
+- Prioridade: P1
+- Esforco: S
+- Dono: Squad de Segurança
+- Status: aberto
+
+### [SG-032] Novas vulnerabilidades de dependências no Frontend (npm audit)
+- Problema atual: A varredura via `npm audit` detectou 17 vulnerabilidades ativas (maioria High) afetando múltiplos pacotes como `@angular/animations`, `@angular/core`, `hono`, `tar`, `express-rate-limit`, `flatted`, entre outros.
+- Solucao proposta: Executar `npm audit fix` ou atualizar as versões afetadas manualmente.
+- Impacto esperado: Eliminar as vulnerabilidades de XSS, SSRF e Hardlink Path Traversal, mitigando ataques pelo browser/frontend.
+- Riscos: Breaking changes nas atualizações de pacotes do Angular.
+- Dependencias: QA de Frontend
+- Prioridade: P1
+- Esforco: M
+- Dono: Squad de Segurança
 - Status: aberto

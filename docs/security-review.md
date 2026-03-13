@@ -125,3 +125,32 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-13)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas com pacotes que exigem lockfile e ambiente consistente como tflite-runtime).
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas).
+
+### 17. Vulnerabilidade de XML External Entity (XXE) / XML Attack
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta (Bandit B314/B405)
+- **Descrição:** Uso de `xml.etree.ElementTree.fromstring` para parsear conteúdo não confiável, sendo vulnerável a ataques de XML (como XXE e Billion Laughs).
+- **Ação Recomendada:** Substituir `xml.etree.ElementTree` por `defusedxml` ou invocar `defusedxml.defuse_stdlib()`.
+
+### 18. Silent fail-open no Message Broker
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Alta
+- **Descrição:** Falhas de conexão do RabbitMQ causam silent fail-open e sistema dropa para offline mode sem alertar.
+- **Ação Recomendada:** Adicionar alerting claro para offline mode do message broker.
+
+### 19. Novas Vulnerabilidades no Frontend (npm audit)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas vulnerabilidades de alta severidade foram identificadas nas dependências do frontend (ex: acesso a arquivos via hono, XSS, etc. no total de 17 vulnerabilidades ativas afetando pacotes como `@angular/animations`, `@angular/core`, `hono`, `tar`, `express-rate-limit`, `flatted`, entre outros).
+- **Ação Recomendada:** Atualizar dependências afetadas usando `npm audit fix` ou atualizando manualmente para versões seguras.
+
+### 20. Arquivos de Banco de Dados SQLite em Diretório de Produção
+- **Descrição:** Embora não seja um achado da auditoria, os itens previamente mapeados continuam abertos, como a injeção SQL no dedupe_service (SG-020) e RCE no launcher_tools (SG-026).
+- **Ação Recomendada:** Mitigar o quanto antes priorizando itens críticos.

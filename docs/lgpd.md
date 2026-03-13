@@ -46,3 +46,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-13)
+
+### Lacunas e Impacto
+- **Sem novas violações LGPD detectadas na varredura automatizada:** O foco permanece nos itens em aberto, como mascarar logs em tools (PII de email) e refatorar estado global de `_notes` e `_calendar_events`.
+
+### Próximos Passos
+1. Continuar a refatoração e mitigação dos itens reportados em 2026-03-10 para a camada de persistência e `_PII_PATTERNS`.
