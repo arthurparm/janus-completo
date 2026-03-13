@@ -53,10 +53,10 @@ async def process_consolidation_task(task: TaskMessage) -> None:
         f"task_id={task.task_id}, type={task.task_type}"
     )
 
-    try:
-        payload = task.payload
-        consolidation_mode = payload.get("mode", "batch")
+    payload = task.payload
+    consolidation_mode = payload.get("mode", "batch")
 
+    try:
         if consolidation_mode == "batch":
             # Consolidação em lote
             limit = payload.get("limit", 10)
@@ -166,6 +166,26 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             raise ValueError(f"Modo de consolidação desconhecido: {consolidation_mode}")
 
     except Exception as e:
+        if consolidation_mode == "knowledge_space":
+            knowledge_space_id = str(payload.get("knowledge_space_id") or "").strip()
+            user_id = str(payload.get("user_id") or "").strip()
+            if knowledge_space_id and user_id:
+                try:
+                    from app.services.knowledge_space_service import KnowledgeSpaceService
+
+                    KnowledgeSpaceService()._space_repo.mark_consolidation(
+                        knowledge_space_id,
+                        status="failed",
+                        summary=f"Falha na consolidação estrutural: {e}",
+                    )
+                except Exception:
+                    logger.warning(
+                        "log_warning",
+                        message=(
+                            "Não foi possível marcar o knowledge space como failed após erro "
+                            f"na tarefa {task.task_id}."
+                        ),
+                    )
         logger.error("log_error", message=f"Erro ao processar tarefa de consolidação {task.task_id}: {e}", exc_info=True)
         raise
 

@@ -111,12 +111,27 @@ class KnowledgeSpaceRepository:
         status: str,
         summary: str | None = None,
         last_consolidated_at: datetime | None = None,
+        sections_total: int | None = None,
+        sections_indexed: int | None = None,
+        sections_skipped_as_noise: int | None = None,
+        canonical_frames_total: int | None = None,
+        consolidation_quality_score: str | float | None = None,
     ) -> dict[str, Any] | None:
         fields: dict[str, Any] = {"consolidation_status": str(status)}
         if summary is not None:
             fields["consolidation_summary"] = summary
         if last_consolidated_at is not None:
             fields["last_consolidated_at"] = last_consolidated_at
+        if sections_total is not None:
+            fields["sections_total"] = int(sections_total)
+        if sections_indexed is not None:
+            fields["sections_indexed"] = int(sections_indexed)
+        if sections_skipped_as_noise is not None:
+            fields["sections_skipped_as_noise"] = int(sections_skipped_as_noise)
+        if canonical_frames_total is not None:
+            fields["canonical_frames_total"] = int(canonical_frames_total)
+        if consolidation_quality_score is not None:
+            fields["consolidation_quality_score"] = str(consolidation_quality_score)
         return self.update_space(knowledge_space_id, **fields)
 
     def _serialize(self, row: KnowledgeSpace) -> dict[str, Any]:
