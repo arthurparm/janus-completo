@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from neo4j import GraphDatabase
+from sqlalchemy import create_engine, text
 
 
 def _utc_stamp() -> str:
@@ -205,16 +207,15 @@ class DataPlaneBackupRestoreCLI:
             return {"status": "skipped", "reason": "dry-run"}
         if not self.args.postgres_verify_dsn:
             return {"status": "skipped", "reason": "missing-postgres-verify-dsn"}
-        output = self.runner.capture_text(
-            [
-                "psql",
-                self.args.postgres_verify_dsn,
-                "-At",
-                "-c",
-                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';",
-            ]
-        ).strip()
-        return {"status": "ok", "public_table_count": int(output or "0")}
+        engine = create_engine(self.args.postgres_verify_dsn)
+        try:
+            with engine.connect() as connection:
+                value = connection.execute(
+                    text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
+                ).scalar_one()
+        finally:
+            engine.dispose()
+        return {"status": "ok", "public_table_count": int(value or 0)}
 
     def _backup_neo4j(self) -> None:
         artifact = self.run_dir / "neo4j.dump"
@@ -256,31 +257,21 @@ class DataPlaneBackupRestoreCLI:
             return {"status": "skipped", "reason": "dry-run"}
         if not (self.args.neo4j_uri and self.args.neo4j_user and self.args.neo4j_password):
             return {"status": "skipped", "reason": "missing-neo4j-credentials"}
-        node_count = self.runner.capture_text(
-            [
-                "cypher-shell",
-                "-a",
-                self.args.neo4j_uri,
-                "-u",
-                self.args.neo4j_user,
-                "-p",
-                self.args.neo4j_password,
-                "MATCH (n) RETURN count(n);",
-            ]
-        ).strip()
-        rel_count = self.runner.capture_text(
-            [
-                "cypher-shell",
-                "-a",
-                self.args.neo4j_uri,
-                "-u",
-                self.args.neo4j_user,
-                "-p",
-                self.args.neo4j_password,
-                "MATCH ()-[r]->() RETURN count(r);",
-            ]
-        ).strip()
-        return {"status": "ok", "node_count": int(node_count or "0"), "relationship_count": int(rel_count or "0")}
+        driver = GraphDatabase.driver(
+            self.args.neo4j_uri,
+            auth=(self.args.neo4j_user, self.args.neo4j_password),
+        )
+        try:
+            with driver.session() as session:
+                node_count = session.run("MATCH (n) RETURN count(n) AS total").single()["total"]
+                rel_count = session.run("MATCH ()-[r]->() RETURN count(r) AS total").single()["total"]
+        finally:
+            driver.close()
+        return {
+            "status": "ok",
+            "node_count": int(node_count or 0),
+            "relationship_count": int(rel_count or 0),
+        }
 
     def _qdrant_headers(self) -> dict[str, str]:
         headers = {}
