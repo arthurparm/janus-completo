@@ -1437,63 +1437,68 @@ class KnowledgeSpaceService:
                 )
                 records.append((section, "knowledge_comparison_frame", comparison_text, comparison_text))
 
-        vectors = await aembed_texts([record[3] for record in records])
-        points: list[models.PointStruct] = []
+        batch_size = int(os.getenv("KNOWLEDGE_SPACE_CANONICAL_EMBED_BATCH_SIZE", "96") or 96)
         now_ms = int(time.time() * 1000)
-        for record, vector in zip(records, vectors, strict=False):
-            section, point_type, content, embedding_text = record
-            payload = {
-                "type": point_type,
-                "ts_ms": now_ms,
-                "content": content,
-                "metadata": {
+        total_points = 0
+        for batch_start in range(0, len(records), max(1, batch_size)):
+            record_batch = records[batch_start : batch_start + max(1, batch_size)]
+            vectors = await aembed_texts([record[3] for record in record_batch])
+            points: list[models.PointStruct] = []
+            for record, vector in zip(record_batch, vectors, strict=False):
+                section, point_type, content, embedding_text = record
+                payload = {
                     "type": point_type,
-                    "user_id": str(user_id),
-                    "knowledge_space_id": str(knowledge_space["knowledge_space_id"]),
-                    "doc_id": str(section["doc_id"]),
-                    "file_name": section["file_name"],
-                    "section_id": section["section_id"],
-                    "section_title": section["title"],
-                    "section_order": int(section["order"]),
-                    "concepts": section["concepts"],
-                    "source_type": "document",
-                    "origin": "knowledge_space.consolidation",
-                    "doc_role": section.get("doc_role"),
-                    "section_role": section.get("section_role"),
-                    "applies_to": section.get("applies_to") or [],
-                    "is_optional_rule": bool(section.get("is_optional_rule")),
-                    "extends_or_overrides": section.get("extends_or_overrides"),
-                    "is_useful": bool(section.get("is_useful")),
-                    "noise_score": float(section.get("noise_score") or 0.0),
-                    "heading_quality_score": float(section.get("heading_quality_score") or 0.0),
-                    "content_density_score": float(section.get("content_density_score") or 0.0),
-                    "usefulness_score": float(section.get("usefulness_score") or 0.0),
-                    "answer_strategy": (
-                        "comparative"
-                        if point_type == "knowledge_comparison_frame"
-                        else "sequence"
-                        if point_type == "knowledge_flow_step"
-                        else "scope"
-                    ),
-                    "embedding_text": embedding_text[:1200],
-                    "evidence_span_ids": section.get("evidence_span_ids") or [],
-                    "timestamp": now_ms,
-                },
-            }
-            points.append(
-                models.PointStruct(
-                    id=build_deterministic_point_id(
-                        "knowledge-canonical-point",
-                        knowledge_space["knowledge_space_id"],
-                        section["section_id"],
-                        point_type,
-                    ),
-                    vector=vector,
-                    payload=payload,
+                    "ts_ms": now_ms,
+                    "content": content,
+                    "metadata": {
+                        "type": point_type,
+                        "user_id": str(user_id),
+                        "knowledge_space_id": str(knowledge_space["knowledge_space_id"]),
+                        "doc_id": str(section["doc_id"]),
+                        "file_name": section["file_name"],
+                        "section_id": section["section_id"],
+                        "section_title": section["title"],
+                        "section_order": int(section["order"]),
+                        "concepts": section["concepts"],
+                        "source_type": "document",
+                        "origin": "knowledge_space.consolidation",
+                        "doc_role": section.get("doc_role"),
+                        "section_role": section.get("section_role"),
+                        "applies_to": section.get("applies_to") or [],
+                        "is_optional_rule": bool(section.get("is_optional_rule")),
+                        "extends_or_overrides": section.get("extends_or_overrides"),
+                        "is_useful": bool(section.get("is_useful")),
+                        "noise_score": float(section.get("noise_score") or 0.0),
+                        "heading_quality_score": float(section.get("heading_quality_score") or 0.0),
+                        "content_density_score": float(section.get("content_density_score") or 0.0),
+                        "usefulness_score": float(section.get("usefulness_score") or 0.0),
+                        "answer_strategy": (
+                            "comparative"
+                            if point_type == "knowledge_comparison_frame"
+                            else "sequence"
+                            if point_type == "knowledge_flow_step"
+                            else "scope"
+                        ),
+                        "embedding_text": embedding_text[:1200],
+                        "evidence_span_ids": section.get("evidence_span_ids") or [],
+                        "timestamp": now_ms,
+                    },
+                }
+                points.append(
+                    models.PointStruct(
+                        id=build_deterministic_point_id(
+                            "knowledge-canonical-point",
+                            knowledge_space["knowledge_space_id"],
+                            section["section_id"],
+                            point_type,
+                        ),
+                        vector=vector,
+                        payload=payload,
+                    )
                 )
-            )
-        await client.upsert(collection_name=collection_name, points=points)
-        return len(points)
+            await client.upsert(collection_name=collection_name, points=points)
+            total_points += len(points)
+        return total_points
 
     async def _persist_structure_graph(
         self,
