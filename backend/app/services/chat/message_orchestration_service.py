@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import os
+import re
 import textwrap
 import time as _time
 from typing import Any
@@ -30,6 +31,7 @@ from app.services.chat.chat_citation_service import (
     collect_document_citations,
     references_uploaded_material,
 )
+from app.services.knowledge_space_service import KnowledgeSpaceService
 from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
@@ -185,6 +187,106 @@ class MessageOrchestrationService:
                 error=str(exc),
             )
             return []
+
+    @staticmethod
+    def _extract_knowledge_space_ids(manifests: list[dict[str, Any]]) -> list[str]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for row in manifests:
+            value = str(row.get("knowledge_space_id") or "").strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            ordered.append(value)
+        return ordered
+
+    def _resolve_knowledge_space_id(
+        self,
+        *,
+        manifests: list[dict[str, Any]],
+        requested_knowledge_space_id: str | None,
+    ) -> str | None:
+        explicit = str(requested_knowledge_space_id or "").strip()
+        if explicit:
+            return explicit
+        candidates = self._extract_knowledge_space_ids(manifests)
+        if len(candidates) == 1:
+            return candidates[0]
+        return None
+
+    @staticmethod
+    def _prefer_canonical_answer(message: str, understanding: dict[str, Any] | None) -> bool:
+        intent = str((understanding or {}).get("intent") or "").strip().lower()
+        if intent in {"file_reference", "study", "analysis"}:
+            return True
+        lowered = str(message or "").lower()
+        patterns = (
+            r"\bsequencia\b",
+            r"\bsequência\b",
+            r"\bpasso a passo\b",
+            r"\bworkflow\b",
+            r"\bprocesso\b",
+            r"\bcomo faco\b",
+            r"\bcomo faço\b",
+            r"\bplano\b",
+            r"\bdependen",
+            r"\bpre[- ]?requisito\b",
+            r"\bordem\b",
+            r"\bcole[cç][aã]o\b",
+        )
+        return any(re.search(pattern, lowered) for pattern in patterns)
+
+    async def _generate_knowledge_space_reply(
+        self,
+        *,
+        manifests: list[dict[str, Any]],
+        requested_knowledge_space_id: str | None,
+        conversation_id: str,
+        message: str,
+        role: ModelRole,
+        user_id: str | None,
+        understanding: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not user_id:
+            return None
+        knowledge_space_id = self._resolve_knowledge_space_id(
+            manifests=manifests,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+        if not knowledge_space_id:
+            return None
+        service = KnowledgeSpaceService(manifest_repo=self._manifest_repo)
+        mode = "canonical_answer" if self._prefer_canonical_answer(message, understanding) else "quick_lookup"
+        result = await service.query_space(
+            knowledge_space_id=knowledge_space_id,
+            user_id=str(user_id),
+            question=message,
+            mode=mode,
+            limit=6,
+        )
+        result["provider"] = "janus"
+        result["model"] = "knowledge_space"
+        result["role"] = role.value
+        result["conversation_id"] = conversation_id
+        result["knowledge_space_id"] = knowledge_space_id
+        result["response"] = str(result.get("response") or result.get("answer") or "").strip()
+        result.setdefault("citation_status", build_citation_status(message=message, citations=result.get("citations") or []))
+
+        source_scope = result.get("source_scope") or {}
+        consolidation_status = str(source_scope.get("consolidation_status") or "").strip()
+        if result.get("base_used") == "chunk_only" and consolidation_status not in {"ready", "partial"}:
+            cta = (
+                f"/api/v1/knowledge/spaces/{knowledge_space_id}/consolidate"
+            )
+            result["response"] = (
+                f"{result.get('answer')}\n\n"
+                "Este knowledge space ainda nao foi consolidado estruturalmente. "
+                f"Para respostas canônicas, inicie a consolidação em `{cta}`."
+            ).strip()
+            gaps = list(result.get("gaps_or_conflicts") or [])
+            gaps.append("Knowledge space sem consolidação pronta; resposta entregue via chunk_only.")
+            result["gaps_or_conflicts"] = gaps
+        return result
 
     def _should_use_document_grounding(
         self,
@@ -619,12 +721,24 @@ class MessageOrchestrationService:
         timeout_seconds: int | None,
         user_id: str | None,
         project_id: str | None,
+        requested_knowledge_space_id: str | None = None,
         understanding: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
         manifests = self._list_document_manifests(
             user_id=user_id,
             conversation_id=conversation_id,
         )
+        knowledge_space_result = await self._generate_knowledge_space_reply(
+            manifests=manifests,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+            conversation_id=conversation_id,
+            message=message,
+            role=role,
+            user_id=user_id,
+            understanding=understanding,
+        )
+        if knowledge_space_result is not None:
+            return knowledge_space_result
         if not self._should_use_document_grounding(
             message=message,
             understanding=understanding,
@@ -787,6 +901,7 @@ class MessageOrchestrationService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
     ) -> dict[str, Any]:
         try:
@@ -1077,6 +1192,7 @@ class MessageOrchestrationService:
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            requested_knowledge_space_id=knowledge_space_id,
             understanding=understanding,
         )
         if grounded_result is not None:
@@ -1092,6 +1208,17 @@ class MessageOrchestrationService:
                 conversation_id,
                 role="assistant",
                 text=assistant_text,
+                metadata={
+                    "knowledge_space_id": grounded_result.get("knowledge_space_id"),
+                    "mode_used": grounded_result.get("mode_used"),
+                    "base_used": grounded_result.get("base_used"),
+                    "source_scope": grounded_result.get("source_scope"),
+                    "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts"),
+                    "citations": grounded_result.get("citations"),
+                    "citation_status": grounded_result.get("citation_status"),
+                    "provider": grounded_result.get("provider"),
+                    "model": grounded_result.get("model"),
+                },
             )
             out_tokens = estimate_tokens(self._prompt_service, assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)

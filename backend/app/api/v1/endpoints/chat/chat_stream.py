@@ -34,6 +34,7 @@ async def stream_message(
     timeout_seconds: int | None = None,
     user_id: str | None = None,
     project_id: str | None = None,
+    knowledge_space_id: str | None = None,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
@@ -151,6 +152,7 @@ async def stream_message(
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            knowledge_space_id=knowledge_space_id,
             identity_source=identity_ctx.identity_source,
             requested_role=role,
             routing_decision=routing_decision,

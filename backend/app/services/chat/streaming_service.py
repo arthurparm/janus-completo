@@ -72,6 +72,7 @@ class StreamingService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
         requested_role: str | None = None,
         routing_decision: Any | None = None,
@@ -182,6 +183,7 @@ class StreamingService:
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            requested_knowledge_space_id=knowledge_space_id,
             understanding=understanding,
         )
         if grounded_result is not None:
@@ -219,6 +221,11 @@ class StreamingService:
                 role="assistant",
                 text=assistant_text,
                 metadata={
+                    "knowledge_space_id": grounded_result.get("knowledge_space_id"),
+                    "mode_used": grounded_result.get("mode_used"),
+                    "base_used": grounded_result.get("base_used"),
+                    "source_scope": grounded_result.get("source_scope"),
+                    "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts"),
                     "citations": citations,
                     "citation_status": citation_status,
                     "understanding": normalized_understanding,
@@ -254,6 +261,11 @@ class StreamingService:
                 "model": grounded_result.get("model"),
                 "citations": citations,
                 "citation_status": citation_status,
+                "knowledge_space_id": grounded_result.get("knowledge_space_id"),
+                "mode_used": grounded_result.get("mode_used"),
+                "base_used": grounded_result.get("base_used"),
+                "source_scope": grounded_result.get("source_scope"),
+                "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts") or [],
             }
             _, ui = split_ui(assistant_text)
             if ui:

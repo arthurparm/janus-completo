@@ -166,6 +166,7 @@ class ChatService:
         timeout_seconds: int | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
     ) -> dict[str, Any]:
         return await self._message_orchestration_service.send_message(
@@ -176,6 +177,7 @@ class ChatService:
             timeout_seconds=timeout_seconds,
             user_id=user_id,
             project_id=project_id,
+            knowledge_space_id=knowledge_space_id,
             identity_source=identity_source,
         )
 

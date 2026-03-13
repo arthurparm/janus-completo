@@ -62,11 +62,23 @@ async def process_document_ingestion_task(task: TaskMessage) -> None:
         manifest = manifest_repo.get_manifest(doc_id) if manifest_repo is not None else None
         if knowledge_service is not None and manifest is not None:
             try:
-                await knowledge_service.consolidate_document(
-                    user_id=str(manifest.get("user_id")),
-                    doc_id=doc_id,
-                    limit=50,
-                )
+                knowledge_space_id = str(manifest.get("knowledge_space_id") or "").strip()
+                if knowledge_space_id:
+                    from app.services.knowledge_space_service import KnowledgeSpaceService
+
+                    await KnowledgeSpaceService(
+                        manifest_repo=manifest_repo,
+                    ).consolidate_space(
+                        knowledge_space_id=knowledge_space_id,
+                        user_id=str(manifest.get("user_id")),
+                        limit_docs=20,
+                    )
+                else:
+                    await knowledge_service.consolidate_document(
+                        user_id=str(manifest.get("user_id")),
+                        doc_id=doc_id,
+                        limit=50,
+                    )
             except Exception as exc:
                 logger.warning(
                     "document_auto_consolidation_failed",

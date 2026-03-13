@@ -64,6 +64,33 @@ class DBMigrationService:
             return "ALTER TABLE audit_events ADD COLUMN details_json JSONB NULL"
         return "ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL"
 
+    def _message_json_column_sql(self, *, dialect: str, column: str) -> str:
+        if dialect in ("postgresql", "postgres"):
+            return f"ALTER TABLE messages ADD COLUMN {column} JSONB NULL"
+        return f"ALTER TABLE messages ADD COLUMN {column} TEXT NULL"
+
+    def _knowledge_spaces_table_sql(self, *, dialect: str) -> str:
+        pk_sql = "id SERIAL PRIMARY KEY" if dialect in ("postgresql", "postgres") else "id INTEGER PRIMARY KEY AUTOINCREMENT"
+        return f"""
+                    CREATE TABLE IF NOT EXISTS knowledge_spaces (
+                        {pk_sql},
+                        knowledge_space_id VARCHAR(255) NOT NULL UNIQUE,
+                        user_id VARCHAR(128) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        source_type VARCHAR(64) NOT NULL DEFAULT 'documentation',
+                        source_id VARCHAR(255) NULL,
+                        edition_or_version VARCHAR(128) NULL,
+                        language VARCHAR(32) NULL,
+                        parent_collection_id VARCHAR(255) NULL,
+                        description TEXT NULL,
+                        consolidation_status VARCHAR(32) NOT NULL DEFAULT 'not_started',
+                        consolidation_summary TEXT NULL,
+                        last_consolidated_at TIMESTAMP NULL,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+
     def validate_schema(self) -> dict[str, Any]:
         s = self._get_session()
         try:
@@ -98,9 +125,14 @@ class DBMigrationService:
                 self._index_exists(s, "messages", "idx_message_session_ts"),
             )
             for column in (
+                "knowledge_space_id",
+                "mode_used",
+                "base_used",
                 "citations_json",
                 "citation_status_json",
                 "ui_json",
+                "source_scope_json",
+                "gaps_or_conflicts_json",
                 "understanding_json",
                 "confirmation_json",
                 "agent_state_json",
@@ -187,6 +219,38 @@ class DBMigrationService:
                 "simulation_version",
                 "column",
                 self._column_exists(s, "pending_actions", "simulation_version"),
+            )
+            for column in (
+                "knowledge_space_id",
+                "source_type",
+                "source_id",
+                "edition_or_version",
+                "language",
+                "parent_collection_id",
+            ):
+                add(
+                    "document_manifests",
+                    column,
+                    "column",
+                    self._column_exists(s, "document_manifests", column),
+                )
+            add(
+                "knowledge_spaces",
+                "knowledge_space_id",
+                "column",
+                self._column_exists(s, "knowledge_spaces", "knowledge_space_id"),
+            )
+            add(
+                "knowledge_spaces",
+                "idx_knowledge_spaces_user",
+                "index",
+                self._index_exists(s, "knowledge_spaces", "idx_knowledge_spaces_user"),
+            )
+            add(
+                "knowledge_spaces",
+                "idx_knowledge_spaces_user_status",
+                "index",
+                self._index_exists(s, "knowledge_spaces", "idx_knowledge_spaces_user_status"),
             )
             add(
                 consent_table,
@@ -418,6 +482,73 @@ class DBMigrationService:
                     f"{consent_table}.idx_privacy_consent_user_scope",
                     applied,
                 )
+            try:
+                self._execute_ddl(
+                    s,
+                    self._knowledge_spaces_table_sql(dialect=dialect),
+                    "knowledge_spaces.create_table",
+                    applied,
+                )
+            except Exception:
+                pass
+            if not self._index_exists(s, "knowledge_spaces", "idx_knowledge_spaces_user"):
+                self._execute_ddl(
+                    s,
+                    "CREATE INDEX idx_knowledge_spaces_user ON knowledge_spaces (user_id)",
+                    "knowledge_spaces.idx_knowledge_spaces_user",
+                    applied,
+                )
+            if not self._index_exists(s, "knowledge_spaces", "idx_knowledge_spaces_user_status"):
+                self._execute_ddl(
+                    s,
+                    "CREATE INDEX idx_knowledge_spaces_user_status ON knowledge_spaces (user_id, consolidation_status)",
+                    "knowledge_spaces.idx_knowledge_spaces_user_status",
+                    applied,
+                )
+            document_manifest_columns = {
+                "knowledge_space_id": "ALTER TABLE document_manifests ADD COLUMN knowledge_space_id VARCHAR(255) NULL",
+                "source_type": "ALTER TABLE document_manifests ADD COLUMN source_type VARCHAR(64) NULL",
+                "source_id": "ALTER TABLE document_manifests ADD COLUMN source_id VARCHAR(255) NULL",
+                "edition_or_version": "ALTER TABLE document_manifests ADD COLUMN edition_or_version VARCHAR(128) NULL",
+                "language": "ALTER TABLE document_manifests ADD COLUMN language VARCHAR(32) NULL",
+                "parent_collection_id": "ALTER TABLE document_manifests ADD COLUMN parent_collection_id VARCHAR(255) NULL",
+            }
+            for column, sql in document_manifest_columns.items():
+                if not self._column_exists(s, "document_manifests", column):
+                    self._execute_ddl(
+                        s,
+                        sql,
+                        f"document_manifests.{column}",
+                        applied,
+                    )
+            if not self._index_exists(s, "document_manifests", "idx_document_manifests_space"):
+                self._execute_ddl(
+                    s,
+                    "CREATE INDEX idx_document_manifests_space ON document_manifests (user_id, knowledge_space_id)",
+                    "document_manifests.idx_document_manifests_space",
+                    applied,
+                )
+            message_text_columns = {
+                "knowledge_space_id": "ALTER TABLE messages ADD COLUMN knowledge_space_id VARCHAR(255) NULL",
+                "mode_used": "ALTER TABLE messages ADD COLUMN mode_used VARCHAR(64) NULL",
+                "base_used": "ALTER TABLE messages ADD COLUMN base_used VARCHAR(64) NULL",
+            }
+            for column, sql in message_text_columns.items():
+                if not self._column_exists(s, "messages", column):
+                    self._execute_ddl(
+                        s,
+                        sql,
+                        f"messages.{column}",
+                        applied,
+                    )
+            for column in ("source_scope_json", "gaps_or_conflicts_json"):
+                if not self._column_exists(s, "messages", column):
+                    self._execute_ddl(
+                        s,
+                        self._message_json_column_sql(dialect=dialect, column=column),
+                        f"messages.{column}",
+                        applied,
+                    )
             # AuditEvent evolution
             try:
                 s.execute(text("ALTER TABLE audit_events ADD COLUMN justification TEXT NULL"))

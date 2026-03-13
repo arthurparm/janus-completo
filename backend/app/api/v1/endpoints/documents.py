@@ -107,6 +107,7 @@ class UploadResponse(BaseModel):
     status_endpoint: str | None = None
     consolidation: dict[str, Any] | None = None
     semantic: dict[str, Any] | None = None
+    knowledge_space_id: str | None = None
 
 
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -118,6 +119,12 @@ async def upload_document(
     service: DocumentIngestionService = Depends(get_doc_service),
     auto_consolidate: bool | None = Form(False),
     conversation_id: str | None = Form(None),
+    knowledge_space_id: str | None = Form(None),
+    source_type: str | None = Form(None),
+    source_id: str | None = Form(None),
+    edition_or_version: str | None = Form(None),
+    language: str | None = Form(None),
+    parent_collection_id: str | None = Form(None),
 ):
     import time as _t
 
@@ -134,6 +141,12 @@ async def upload_document(
                 file=file,
                 user_id=uid,
                 conversation_id=conversation_id,
+                knowledge_space_id=knowledge_space_id,
+                source_type=source_type,
+                source_id=source_id,
+                edition_or_version=edition_or_version,
+                language=language,
+                parent_collection_id=parent_collection_id,
                 auto_consolidate=bool(auto_consolidate),
             )
     except DocumentFileTooLargeError as exc:
@@ -167,6 +180,7 @@ async def upload_document(
         message=result.get("message"),
         status_endpoint=result.get("status_endpoint"),
         semantic=result.get("semantic"),
+        knowledge_space_id=knowledge_space_id,
     )
 
 
@@ -179,6 +193,7 @@ async def search_documents(
     query: str = Query(...),
     user_id: str | None = None,
     doc_id: str | None = None,
+    knowledge_space_id: str | None = None,
     limit: int = 5,
     min_score: float | None = None,
     request: Request = None,
@@ -201,6 +216,13 @@ async def search_documents(
     if doc_id:
         must.append(
             models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))
+        )
+    if knowledge_space_id:
+        must.append(
+            models.FieldCondition(
+                key="metadata.knowledge_space_id",
+                match=models.MatchValue(value=knowledge_space_id),
+            )
         )
     sc_filter = models.Filter(must=must)
     cm = _tracer.start_as_current_span("docs.search") if _OTEL else nullcontext()
@@ -226,6 +248,8 @@ async def search_documents(
                 "file_name": meta.get("file_name"),
                 "index": meta.get("index"),
                 "timestamp": meta.get("timestamp"),
+                "knowledge_space_id": meta.get("knowledge_space_id"),
+                "section_title": meta.get("section_title"),
             }
         )
     _DOC_SEARCH_REQ.labels("success").inc()
@@ -235,6 +259,12 @@ async def search_documents(
 
 class DocListItem(BaseModel):
     doc_id: str
+    knowledge_space_id: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    edition_or_version: str | None = None
+    language: str | None = None
+    parent_collection_id: str | None = None
     file_name: str | None
     chunks: int
     chunks_total: int = 0
@@ -257,6 +287,12 @@ class DocListResponse(BaseModel):
 def _build_legacy_doc_list_item(doc_id: str, payload: dict[str, Any]) -> DocListItem:
     return DocListItem(
         doc_id=doc_id,
+        knowledge_space_id=payload.get("knowledge_space_id"),
+        source_type=payload.get("source_type"),
+        source_id=payload.get("source_id"),
+        edition_or_version=payload.get("edition_or_version"),
+        language=payload.get("language"),
+        parent_collection_id=payload.get("parent_collection_id"),
         file_name=payload.get("file_name"),
         chunks=int(payload.get("chunks", 0)),
         chunks_total=int(payload.get("chunks", 0)),
@@ -274,6 +310,7 @@ def _build_legacy_doc_list_item(doc_id: str, payload: dict[str, Any]) -> DocList
 async def list_documents(
     user_id: str | None = None,
     conversation_id: str | None = None,
+    knowledge_space_id: str | None = None,
     request: Request = None,
     limit: int = 100,
 ):
@@ -285,6 +322,7 @@ async def list_documents(
     manifest_rows = service._manifest_repo.list_manifests(
         user_id=uid,
         conversation_id=conversation_id,
+        knowledge_space_id=knowledge_space_id,
         limit=limit,
     )
     items: list[DocListItem] = []
@@ -297,6 +335,12 @@ async def list_documents(
         items.append(
             DocListItem(
                 doc_id=doc_id,
+                knowledge_space_id=row.get("knowledge_space_id"),
+                source_type=row.get("source_type"),
+                source_id=row.get("source_id"),
+                edition_or_version=row.get("edition_or_version"),
+                language=row.get("language"),
+                parent_collection_id=row.get("parent_collection_id"),
                 file_name=row.get("file_name"),
                 chunks=chunks_total,
                 chunks_total=chunks_total,
@@ -325,6 +369,13 @@ async def list_documents(
                 key="metadata.conversation_id", match=models.MatchValue(value=conversation_id)
             )
         )
+    if knowledge_space_id:
+        must.append(
+            models.FieldCondition(
+                key="metadata.knowledge_space_id",
+                match=models.MatchValue(value=knowledge_space_id),
+            )
+        )
     qfilter = models.Filter(must=must)
     scroll_res = await client.scroll(
         collection_name=coll,
@@ -349,6 +400,12 @@ async def list_documents(
             "semantic_doc_type": meta.get("semantic_doc_type"),
             "semantic_confidence": meta.get("semantic_confidence"),
             "semantic_summary": meta.get("semantic_summary"),
+            "knowledge_space_id": meta.get("knowledge_space_id"),
+            "source_type": meta.get("source_type"),
+            "source_id": meta.get("source_id"),
+            "edition_or_version": meta.get("edition_or_version"),
+            "language": meta.get("language"),
+            "parent_collection_id": meta.get("parent_collection_id"),
         }
         current["chunks"] = int(current.get("chunks", 0)) + 1
         ts = int(meta.get("timestamp") or 0)
@@ -402,6 +459,7 @@ class LinkUrlResponse(BaseModel):
     status: str
     chunks: int
     semantic: dict[str, Any] | None = None
+    knowledge_space_id: str | None = None
 
 
 @router.post("/link-url", response_model=LinkUrlResponse)
@@ -409,6 +467,12 @@ async def link_url(
     url: str = Form(...),
     user_id: str | None = None,
     conversation_id: str | None = Form(None),
+    knowledge_space_id: str | None = Form(None),
+    source_type: str | None = Form(None),
+    source_id: str | None = Form(None),
+    edition_or_version: str | None = Form(None),
+    language: str | None = Form(None),
+    parent_collection_id: str | None = Form(None),
     request: Request = None,
     service: DocumentIngestionService = Depends(get_doc_service),
 ):
@@ -434,12 +498,24 @@ async def link_url(
         content_type=content_type,
         data=data,
         conversation_id=conversation_id,
+        knowledge_space_id=knowledge_space_id,
+        source_type=source_type,
+        source_id=source_id,
+        edition_or_version=edition_or_version,
+        language=language,
+        parent_collection_id=parent_collection_id,
     )
     if result.get("status") == "indexed":
         service._manifest_repo.create_manifest(
             doc_id=result.get("doc_id"),
             user_id=uid,
             conversation_id=conversation_id,
+            knowledge_space_id=knowledge_space_id,
+            source_type=source_type,
+            source_id=source_id,
+            edition_or_version=edition_or_version,
+            language=language,
+            parent_collection_id=parent_collection_id,
             file_name=filename,
             content_type=content_type,
             file_size_bytes=len(data or b""),
@@ -459,12 +535,19 @@ async def link_url(
         status=result.get("status"),
         chunks=result.get("chunks"),
         semantic=result.get("semantic"),
+        knowledge_space_id=knowledge_space_id,
     )
 
 
 class DocStatusResponse(BaseModel):
     doc_id: str
     user_id: str
+    knowledge_space_id: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    edition_or_version: str | None = None
+    language: str | None = None
+    parent_collection_id: str | None = None
     status: str
     chunks_total: int = 0
     chunks_indexed: int
@@ -490,6 +573,8 @@ def _build_doc_samples(points: list[Any]) -> list[dict[str, Any]]:
                 "content": payload.get("content"),
                 "semantic_doc_type": meta.get("semantic_doc_type"),
                 "semantic_confidence": meta.get("semantic_confidence"),
+                "knowledge_space_id": meta.get("knowledge_space_id"),
+                "section_title": meta.get("section_title"),
             }
         )
     return samples
@@ -545,6 +630,12 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
         return DocStatusResponse(
             doc_id=doc_id,
             user_id=uid,
+            knowledge_space_id=manifest.get("knowledge_space_id"),
+            source_type=manifest.get("source_type"),
+            source_id=manifest.get("source_id"),
+            edition_or_version=manifest.get("edition_or_version"),
+            language=manifest.get("language"),
+            parent_collection_id=manifest.get("parent_collection_id"),
             status=str(manifest.get("status") or "queued"),
             chunks_total=int(manifest.get("chunks_total") or 0),
             chunks_indexed=int(manifest.get("chunks_indexed") or 0),
@@ -579,6 +670,12 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
     return DocStatusResponse(
         doc_id=doc_id,
         user_id=uid,
+        knowledge_space_id=None,
+        source_type=None,
+        source_id=None,
+        edition_or_version=None,
+        language=None,
+        parent_collection_id=None,
         status="indexed",
         chunks_total=total,
         chunks_indexed=total,

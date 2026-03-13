@@ -18,6 +18,7 @@ from app.models.pending_action_models import PendingAction
 from app.models.tool_usage_models import ToolDailyUsage
 from app.models.outbox_models import OutboxEvent
 from app.models.document_models import DocumentManifest
+from app.models.knowledge_space_models import KnowledgeSpace
 from app.models.user_models import AuditEvent, Consent, Message, OAuthToken, Profile, Role, Session, User, UserRole
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "ToolDailyUsage",
     "OutboxEvent",
     "DocumentManifest",
+    "KnowledgeSpace",
     "User",
     "Profile",
     "Role",

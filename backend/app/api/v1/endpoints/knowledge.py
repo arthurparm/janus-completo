@@ -2,11 +2,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from app.core.security.request_guard import resolve_user_scope_id
 from app.models.knowledge import CodeEntity
+from app.services.knowledge_space_service import (
+    KnowledgeSpaceService,
+    get_knowledge_space_service,
+)
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
+from app.core.workers.async_consolidation_worker import publish_consolidation_task
 
 router = APIRouter(tags=["Knowledge"])
 logger = structlog.get_logger(__name__)
@@ -114,6 +120,78 @@ class ConsolidationRequest(BaseModel):
 class ConsolidationResponse(BaseModel):
     message: str
     stats: dict[str, Any]
+
+
+class KnowledgeSpaceCreateRequest(BaseModel):
+    name: str
+    user_id: str | None = None
+    source_type: str = "documentation"
+    source_id: str | None = None
+    edition_or_version: str | None = None
+    language: str | None = None
+    parent_collection_id: str | None = None
+    description: str | None = None
+
+
+class KnowledgeSpaceResponse(BaseModel):
+    knowledge_space_id: str
+    user_id: str
+    name: str
+    source_type: str
+    source_id: str | None = None
+    edition_or_version: str | None = None
+    language: str | None = None
+    parent_collection_id: str | None = None
+    description: str | None = None
+    consolidation_status: str
+    consolidation_summary: str | None = None
+    last_consolidated_at: str | None = None
+
+
+class KnowledgeSpaceStatusResponse(KnowledgeSpaceResponse):
+    documents_total: int = 0
+    documents_indexed: int = 0
+    documents_processing: int = 0
+    documents_queued: int = 0
+    documents_failed: int = 0
+    chunks_total: int = 0
+    chunks_indexed: int = 0
+    progress: float = 0.0
+
+
+class KnowledgeSpaceListResponse(BaseModel):
+    items: list[KnowledgeSpaceResponse]
+
+
+class AttachDocumentRequest(BaseModel):
+    user_id: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    edition_or_version: str | None = None
+    language: str | None = None
+    parent_collection_id: str | None = None
+
+
+class KnowledgeSpaceConsolidationRequest(BaseModel):
+    user_id: str | None = None
+    limit_docs: int = 20
+
+
+class KnowledgeSpaceQueryRequest(BaseModel):
+    user_id: str | None = None
+    question: str
+    mode: str = "auto"
+    limit: int = 5
+
+
+class KnowledgeSpaceQueryResponse(BaseModel):
+    answer: str
+    mode_used: str
+    base_used: str
+    source_scope: dict[str, Any]
+    citations: list[dict[str, Any]]
+    confidence: float
+    gaps_or_conflicts: list[str]
 
 
 # --- Endpoints ---
@@ -469,3 +547,151 @@ async def classes_implementations(
 ):
     rows = await service.get_classes_implementing(protocol=protocol)
     return [CodeEntity(**row) for row in rows]
+
+
+@router.post(
+    "/spaces",
+    response_model=KnowledgeSpaceResponse,
+    summary="Cria um knowledge space isolado por obra/coleção",
+)
+async def create_knowledge_space(
+    payload: KnowledgeSpaceCreateRequest,
+    request: Request,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    user_id = resolve_user_scope_id(request, payload.user_id)
+    if not user_id:
+        raise HTTPException(
+            status_code=422,
+            detail="user_id necessário",
+        )
+    row = service.create_space(
+        user_id=str(user_id),
+        name=payload.name,
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        edition_or_version=payload.edition_or_version,
+        language=payload.language,
+        parent_collection_id=payload.parent_collection_id,
+        description=payload.description,
+    )
+    return KnowledgeSpaceResponse(**row)
+
+
+@router.get(
+    "/spaces",
+    response_model=KnowledgeSpaceListResponse,
+    summary="Lista knowledge spaces do usuário",
+)
+async def list_knowledge_spaces(
+    request: Request,
+    user_id: str | None = None,
+    limit: int = 100,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    resolved_user_id = resolve_user_scope_id(request, user_id)
+    if not resolved_user_id:
+        raise HTTPException(status_code=422, detail="user_id necessário")
+    rows = service.list_spaces(user_id=str(resolved_user_id), limit=limit)
+    return KnowledgeSpaceListResponse(items=[KnowledgeSpaceResponse(**row) for row in rows])
+
+
+@router.get(
+    "/spaces/{knowledge_space_id}",
+    response_model=KnowledgeSpaceStatusResponse,
+    summary="Retorna status e progresso de um knowledge space",
+)
+async def get_knowledge_space_status(
+    knowledge_space_id: str,
+    request: Request,
+    user_id: str | None = None,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    resolved_user_id = resolve_user_scope_id(request, user_id)
+    if not resolved_user_id:
+        raise HTTPException(status_code=422, detail="user_id necessário")
+    row = service.get_space_status(
+        knowledge_space_id=knowledge_space_id,
+        user_id=str(resolved_user_id),
+    )
+    return KnowledgeSpaceStatusResponse(**row)
+
+
+@router.post(
+    "/spaces/{knowledge_space_id}/documents/{doc_id}/attach",
+    response_model=dict,
+    summary="Associa um documento existente a um knowledge space",
+)
+async def attach_document_to_space(
+    knowledge_space_id: str,
+    doc_id: str,
+    payload: AttachDocumentRequest,
+    request: Request,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    user_id = resolve_user_scope_id(request, payload.user_id)
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id necessário")
+    row = await service.attach_document(
+        knowledge_space_id=knowledge_space_id,
+        doc_id=doc_id,
+        user_id=str(user_id),
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        edition_or_version=payload.edition_or_version,
+        language=payload.language,
+        parent_collection_id=payload.parent_collection_id,
+    )
+    return {"status": "ok", "document": row}
+
+
+@router.post(
+    "/spaces/{knowledge_space_id}/consolidate",
+    response_model=ConsolidationResponse,
+    summary="Consolida estruturalmente um knowledge space",
+)
+async def consolidate_knowledge_space(
+    knowledge_space_id: str,
+    payload: KnowledgeSpaceConsolidationRequest,
+    request: Request,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    user_id = resolve_user_scope_id(request, payload.user_id)
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id necessário")
+    service.mark_consolidation_requested(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
+    stats = await publish_consolidation_task(
+        {
+            "mode": "knowledge_space",
+            "knowledge_space_id": knowledge_space_id,
+            "user_id": str(user_id),
+            "limit_docs": payload.limit_docs,
+        },
+        correlation_id=knowledge_space_id,
+    )
+    stats["status_url"] = f"/api/v1/knowledge/spaces/{knowledge_space_id}?user_id={user_id}"
+    return ConsolidationResponse(message="Consolidação estrutural publicada.", stats=stats)
+
+
+@router.post(
+    "/spaces/{knowledge_space_id}/query",
+    response_model=KnowledgeSpaceQueryResponse,
+    summary="Consulta knowledge space com fallback canônico para chunk_only",
+)
+async def query_knowledge_space(
+    knowledge_space_id: str,
+    payload: KnowledgeSpaceQueryRequest,
+    request: Request,
+    service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
+):
+    user_id = resolve_user_scope_id(request, payload.user_id)
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id necessário")
+    result = await service.query_space(
+        knowledge_space_id=knowledge_space_id,
+        user_id=str(user_id),
+        question=payload.question,
+        mode=payload.mode,
+        limit=payload.limit,
+    )
+    return KnowledgeSpaceQueryResponse(**result)

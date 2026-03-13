@@ -12,6 +12,11 @@ export interface StreamDone {
   message_id?: string
   provider?: string
   model?: string
+  knowledge_space_id?: string
+  mode_used?: string
+  base_used?: string
+  source_scope?: Record<string, unknown> | null
+  gaps_or_conflicts?: string[]
   citations?: Citation[]
   citation_status?: CitationStatus
   understanding?: ChatUnderstanding
@@ -52,6 +57,7 @@ export interface StartParams {
   priority?: string
   timeoutSeconds?: number
   projectId?: string
+  knowledgeSpaceId?: string
 }
 
 interface ParsedSseEvent {
@@ -108,6 +114,9 @@ export class ChatStreamService {
     })
     if (typeof params.timeoutSeconds !== 'undefined') {
       qs.set('timeout_seconds', String(params.timeoutSeconds))
+    }
+    if (params.knowledgeSpaceId) {
+      qs.set('knowledge_space_id', params.knowledgeSpaceId)
     }
     const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(params.conversationId)}?${qs.toString()}`
     this.logger.debug('[ChatStreamService] URL construída', { url })
@@ -381,6 +390,11 @@ export class ChatStreamService {
           message_id: parsed?.message_id,
           provider: parsed?.provider,
           model: parsed?.model,
+          knowledge_space_id: parsed?.knowledge_space_id,
+          mode_used: parsed?.mode_used,
+          base_used: parsed?.base_used,
+          source_scope: parsed?.source_scope,
+          gaps_or_conflicts: parsed?.gaps_or_conflicts,
           citations: parsed?.citations,
           citation_status: parsed?.citation_status,
           understanding: parsed?.understanding,

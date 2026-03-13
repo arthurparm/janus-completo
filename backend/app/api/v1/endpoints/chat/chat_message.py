@@ -156,6 +156,7 @@ async def send_message(
             timeout_seconds=payload.timeout_seconds,
             user_id=user_id,
             project_id=payload.project_id,
+            knowledge_space_id=payload.knowledge_space_id,
             identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:

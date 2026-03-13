@@ -99,6 +99,12 @@ class DocumentIngestionService:
         file: UploadFile,
         user_id: str,
         conversation_id: str | None,
+        knowledge_space_id: str | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
+        edition_or_version: str | None = None,
+        language: str | None = None,
+        parent_collection_id: str | None = None,
         auto_consolidate: bool = False,
     ) -> dict[str, Any]:
         doc_id = self.build_doc_id(user_id)
@@ -111,6 +117,16 @@ class DocumentIngestionService:
             doc_id=doc_id,
             user_id=str(user_id),
             conversation_id=str(conversation_id) if conversation_id is not None else None,
+            knowledge_space_id=str(knowledge_space_id) if knowledge_space_id is not None else None,
+            source_type=str(source_type) if source_type is not None else None,
+            source_id=str(source_id) if source_id is not None else None,
+            edition_or_version=(
+                str(edition_or_version) if edition_or_version is not None else None
+            ),
+            language=str(language) if language is not None else None,
+            parent_collection_id=(
+                str(parent_collection_id) if parent_collection_id is not None else None
+            ),
             file_name=filename,
             content_type=content_type,
             file_size_bytes=0,
@@ -224,6 +240,20 @@ class DocumentIngestionService:
                 content_type=str(manifest.get("content_type") or ""),
                 data=data,
                 conversation_id=str(manifest["conversation_id"]) if manifest.get("conversation_id") else None,
+                knowledge_space_id=(
+                    str(manifest["knowledge_space_id"]) if manifest.get("knowledge_space_id") else None
+                ),
+                source_type=str(manifest["source_type"]) if manifest.get("source_type") else None,
+                source_id=str(manifest["source_id"]) if manifest.get("source_id") else None,
+                edition_or_version=(
+                    str(manifest["edition_or_version"]) if manifest.get("edition_or_version") else None
+                ),
+                language=str(manifest["language"]) if manifest.get("language") else None,
+                parent_collection_id=(
+                    str(manifest["parent_collection_id"])
+                    if manifest.get("parent_collection_id")
+                    else None
+                ),
                 file_size_bytes=int(manifest.get("file_size_bytes") or len(data)),
                 progress_cb=self._progress_callback(doc_id),
             )
@@ -275,6 +305,12 @@ class DocumentIngestionService:
         content_type: str,
         data: bytes,
         conversation_id: str | None = None,
+        knowledge_space_id: str | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
+        edition_or_version: str | None = None,
+        language: str | None = None,
+        parent_collection_id: str | None = None,
     ) -> dict[str, Any]:
         return await self._ingest_payload(
             doc_id=self.build_doc_id(user_id),
@@ -283,6 +319,12 @@ class DocumentIngestionService:
             content_type=content_type,
             data=data,
             conversation_id=conversation_id,
+            knowledge_space_id=knowledge_space_id,
+            source_type=source_type,
+            source_id=source_id,
+            edition_or_version=edition_or_version,
+            language=language,
+            parent_collection_id=parent_collection_id,
             file_size_bytes=len(data or b""),
         )
 
@@ -295,6 +337,12 @@ class DocumentIngestionService:
         content_type: str,
         data: bytes,
         conversation_id: str | None = None,
+        knowledge_space_id: str | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
+        edition_or_version: str | None = None,
+        language: str | None = None,
+        parent_collection_id: str | None = None,
         file_size_bytes: int = 0,
         progress_cb: Callable[..., Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
@@ -401,6 +449,12 @@ class DocumentIngestionService:
                         "user_id": str(user_id),
                         "doc_id": doc_id,
                         "file_name": filename,
+                        "knowledge_space_id": knowledge_space_id,
+                        "source_type": source_type,
+                        "source_id": source_id,
+                        "edition_or_version": edition_or_version,
+                        "language": language,
+                        "parent_collection_id": parent_collection_id,
                         "timestamp": ts_ms,
                         "ts_ms": ts_ms,
                         "index": chunk_index,
@@ -469,4 +523,3 @@ class DocumentIngestionService:
             )
         except Exception as exc:
             logger.debug("document_points_cleanup_failed", doc_id=doc_id, error=str(exc))
-

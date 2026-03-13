@@ -13,6 +13,7 @@ class _FakeRepo:
     def __init__(self):
         self.conversation = {"persona": "assistant", "summary": None, "messages": []}
         self.messages = []
+        self.message_records = []
         self.recent_calls = 0
 
     def get_conversation(self, conversation_id):
@@ -26,6 +27,14 @@ class _FakeRepo:
 
     def add_message(self, conversation_id, role, text, metadata=None):
         self.messages.append((conversation_id, role, text))
+        self.message_records.append(
+            {
+                "conversation_id": conversation_id,
+                "role": role,
+                "text": text,
+                "metadata": metadata or {},
+            }
+        )
 
 
 class _FakePromptService:
@@ -574,6 +583,56 @@ async def test_send_message_document_grounding_negative_omits_irrelevant_snippet
     assert "Nao encontrei no documento" in result["response"]
     assert "diabetes mellitus" in result["response"]
     assert "facial droop" not in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkeypatch):
+    repo = _FakeRepo()
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "indexed",
+                "chunks_indexed": 4,
+                "file_name": "livro.pdf",
+                "knowledge_space_id": "ks-1",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.KnowledgeSpaceService.query_space",
+        AsyncMock(
+            return_value={
+                "answer": "Base consolidada indica:\n- Capítulo 1: ordem de estudo.",
+                "mode_used": "canonical_answer",
+                "base_used": "consolidated",
+                "source_scope": {
+                    "knowledge_space_id": "ks-1",
+                    "consolidation_status": "ready",
+                },
+                "citations": [{"doc_id": "doc-1", "file_name": "livro.pdf"}],
+                "confidence": 0.93,
+                "gaps_or_conflicts": [],
+            }
+        ),
+    )
+    service = _build_service(repo=repo, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Qual a sequência do material?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert result["knowledge_space_id"] == "ks-1"
+    assert result["mode_used"] == "canonical_answer"
+    assert result["base_used"] == "consolidated"
+    assert result["source_scope"]["knowledge_space_id"] == "ks-1"
+    assert "Base consolidada indica" in result["response"]
+    assert repo.message_records[-1]["metadata"]["knowledge_space_id"] == "ks-1"
+    assert repo.message_records[-1]["metadata"]["mode_used"] == "canonical_answer"
 
 
 @pytest.mark.asyncio

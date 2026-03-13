@@ -132,6 +132,31 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             except Exception as evt_err:
                 logger.warning("log_warning", message=f"Falha ao publicar evento de memória: {evt_err}")
 
+        elif consolidation_mode == "knowledge_space":
+            from app.services.knowledge_space_service import KnowledgeSpaceService
+
+            knowledge_space_id = str(payload.get("knowledge_space_id") or "").strip()
+            user_id = str(payload.get("user_id") or "").strip()
+            limit_docs = int(payload.get("limit_docs", 20) or 20)
+            if not knowledge_space_id or not user_id:
+                raise ValueError(
+                    "knowledge_space_id e user_id são obrigatórios para modo 'knowledge_space'"
+                )
+
+            result = await KnowledgeSpaceService().consolidate_space(
+                knowledge_space_id=knowledge_space_id,
+                user_id=user_id,
+                limit_docs=limit_docs,
+            )
+
+            logger.info(
+                "log_info",
+                message=(
+                    "✓ Consolidação estrutural do knowledge space concluída: "
+                    f"{result['documents_total']} documento(s), {result['sections_total']} seção(ões)."
+                ),
+            )
+
         else:
             raise ValueError(f"Modo de consolidação desconhecido: {consolidation_mode}")
 

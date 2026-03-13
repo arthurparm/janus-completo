@@ -74,9 +74,14 @@ class ChatRepository:
             "text": msg.get("text", ""),
         }
         for key in (
+            "knowledge_space_id",
+            "mode_used",
+            "base_used",
             "citations",
             "citation_status",
             "ui",
+            "source_scope",
+            "gaps_or_conflicts",
             "understanding",
             "confirmation",
             "agent_state",

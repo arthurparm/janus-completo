@@ -211,6 +211,7 @@ export interface ChatMessageRequest {
   timeout_seconds?: number;
   user_id?: string;
   project_id?: string;
+  knowledge_space_id?: string;
 }
 export interface CitationStatus {
   mode: 'required' | 'optional' | string;
@@ -270,6 +271,11 @@ export interface ChatMessage {
   role: string;
   text: string;
   timestamp: number;
+  knowledge_space_id?: string;
+  mode_used?: string;
+  base_used?: string;
+  source_scope?: Record<string, unknown> | null;
+  gaps_or_conflicts?: string[];
   citations?: Citation[]
   citation_status?: CitationStatus;
   reasoning?: string;
@@ -328,6 +334,11 @@ export interface ChatMessageResponse {
   role: string;
   conversation_id: string;
   message_id?: string;
+  knowledge_space_id?: string;
+  mode_used?: string;
+  base_used?: string;
+  source_scope?: Record<string, unknown> | null;
+  gaps_or_conflicts?: string[];
   citations: Citation[];
   citation_status?: CitationStatus;
   ui?: { type: string; data: any };
@@ -431,6 +442,76 @@ export interface DocSearchResultItem {
 
 export interface DocSearchResponse {
   results: DocSearchResultItem[];
+}
+
+export interface KnowledgeSpace {
+  knowledge_space_id: string;
+  user_id: string;
+  name: string;
+  source_type: string;
+  source_id?: string | null;
+  edition_or_version?: string | null;
+  language?: string | null;
+  parent_collection_id?: string | null;
+  description?: string | null;
+  consolidation_status: string;
+  consolidation_summary?: string | null;
+  last_consolidated_at?: string | null;
+}
+
+export interface KnowledgeSpaceStatus extends KnowledgeSpace {
+  documents_total: number;
+  documents_indexed: number;
+  documents_processing: number;
+  documents_queued: number;
+  documents_failed: number;
+  chunks_total: number;
+  chunks_indexed: number;
+  progress: number;
+}
+
+export interface KnowledgeSpaceCreateRequest {
+  name: string;
+  user_id?: string;
+  source_type?: string;
+  source_id?: string;
+  edition_or_version?: string;
+  language?: string;
+  parent_collection_id?: string;
+  description?: string;
+}
+
+export interface KnowledgeSpaceListResponse {
+  items: KnowledgeSpace[];
+}
+
+export interface KnowledgeSpaceAttachRequest {
+  user_id?: string;
+  source_type?: string;
+  source_id?: string;
+  edition_or_version?: string;
+  language?: string;
+  parent_collection_id?: string;
+}
+
+export interface KnowledgeSpaceConsolidationResponse {
+  message: string;
+  stats: {
+    status: string;
+    task_id?: string;
+    status_url?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface KnowledgeSpaceQueryResponse {
+  answer: string;
+  mode_used: string;
+  base_used: string;
+  source_scope: Record<string, unknown>;
+  citations: Citation[];
+  confidence: number;
+  gaps_or_conflicts: string[];
 }
 
 export interface GenerativeMemoryItem {
@@ -1222,7 +1303,7 @@ export class BackendApiService {
     return this.http.post<ChatStartResponse>(this.buildUrl(`/api/v1/chat/start`), body)
   }
 
-  sendChatMessage(conversation_id: string, content: string, role: string = 'orchestrator', priority: string = 'fast_and_cheap', timeout_seconds?: number, user_id?: string, project_id?: string): Observable<ChatMessageResponse & { citations?: Citation[] }> {
+  sendChatMessage(conversation_id: string, content: string, role: string = 'orchestrator', priority: string = 'fast_and_cheap', timeout_seconds?: number, user_id?: string, project_id?: string, knowledge_space_id?: string): Observable<ChatMessageResponse & { citations?: Citation[] }> {
     // Validate required fields
     // Validate required fields
     if (!conversation_id || conversation_id.trim().length < 1) {
@@ -1247,6 +1328,7 @@ export class BackendApiService {
     if (typeof timeout_seconds !== 'undefined') body.timeout_seconds = timeout_seconds
     if (user_id) body.user_id = user_id
     if (project_id) body.project_id = project_id
+    if (knowledge_space_id) body.knowledge_space_id = knowledge_space_id
 
     this.logger.debug('[BackendApiService] Sending chat message payload', body);
 
@@ -1759,6 +1841,73 @@ export class BackendApiService {
     const headers = userId ? this.headersFor(userId) : undefined
     return this.http.delete<{ status: string; doc_id: string }>(
       this.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  createKnowledgeSpace(payload: KnowledgeSpaceCreateRequest): Observable<KnowledgeSpace> {
+    const headers = payload.user_id ? this.headersFor(payload.user_id) : undefined
+    return this.http.post<KnowledgeSpace>(
+      this.buildUrl('/api/v1/knowledge/spaces'),
+      payload,
+      headers ? { headers } : undefined
+    )
+  }
+
+  listKnowledgeSpaces(userId?: string, limit: number = 100): Observable<KnowledgeSpaceListResponse> {
+    const qs = new URLSearchParams()
+    if (userId) qs.set('user_id', String(userId))
+    qs.set('limit', String(limit))
+    const headers = userId ? this.headersFor(userId) : undefined
+    return this.http.get<KnowledgeSpaceListResponse>(
+      this.buildUrl(`/api/v1/knowledge/spaces?${qs.toString()}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  getKnowledgeSpaceStatus(knowledgeSpaceId: string, userId?: string): Observable<KnowledgeSpaceStatus> {
+    const qs = new URLSearchParams()
+    if (userId) qs.set('user_id', String(userId))
+    const headers = userId ? this.headersFor(userId) : undefined
+    return this.http.get<KnowledgeSpaceStatus>(
+      this.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}${qs.toString() ? '?' + qs.toString() : ''}`),
+      headers ? { headers } : undefined
+    )
+  }
+
+  attachDocumentToKnowledgeSpace(
+    knowledgeSpaceId: string,
+    docId: string,
+    payload: KnowledgeSpaceAttachRequest = {},
+  ): Observable<{ status: string; document: Record<string, unknown> }> {
+    const headers = payload.user_id ? this.headersFor(payload.user_id) : undefined
+    return this.http.post<{ status: string; document: Record<string, unknown> }>(
+      this.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/documents/${encodeURIComponent(docId)}/attach`),
+      payload,
+      headers ? { headers } : undefined
+    )
+  }
+
+  consolidateKnowledgeSpace(
+    knowledgeSpaceId: string,
+    payload: { user_id?: string; limit_docs?: number } = {},
+  ): Observable<KnowledgeSpaceConsolidationResponse> {
+    const headers = payload.user_id ? this.headersFor(payload.user_id) : undefined
+    return this.http.post<KnowledgeSpaceConsolidationResponse>(
+      this.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/consolidate`),
+      payload,
+      headers ? { headers } : undefined
+    )
+  }
+
+  queryKnowledgeSpace(
+    knowledgeSpaceId: string,
+    payload: { user_id?: string; question: string; mode?: string; limit?: number },
+  ): Observable<KnowledgeSpaceQueryResponse> {
+    const headers = payload.user_id ? this.headersFor(payload.user_id) : undefined
+    return this.http.post<KnowledgeSpaceQueryResponse>(
+      this.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/query`),
+      payload,
       headers ? { headers } : undefined
     )
   }

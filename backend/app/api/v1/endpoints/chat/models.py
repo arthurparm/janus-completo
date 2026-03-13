@@ -22,6 +22,7 @@ class ChatMessageRequest(BaseModel):
     timeout_seconds: int | None = None
     user_id: str | None = Field(None)
     project_id: str | None = Field(None)
+    knowledge_space_id: str | None = Field(None)
 
 
 class ChatCitationStatus(BaseModel):
@@ -84,6 +85,11 @@ class ChatMessageResponse(BaseModel):
     role: str
     conversation_id: str
     message_id: str | None = None
+    knowledge_space_id: str | None = None
+    mode_used: str | None = None
+    base_used: str | None = None
+    source_scope: dict[str, Any] | None = None
+    gaps_or_conflicts: list[str] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)
     citation_status: ChatCitationStatus = Field(default_factory=ChatCitationStatus)
     ui: dict[str, Any] | None = None
@@ -101,6 +107,11 @@ class ChatMessage(BaseModel):
     timestamp: float
     role: str
     text: str
+    knowledge_space_id: str | None = None
+    mode_used: str | None = None
+    base_used: str | None = None
+    source_scope: dict[str, Any] | None = None
+    gaps_or_conflicts: list[str] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)
     citation_status: ChatCitationStatus | dict[str, Any] | None = None
     ui: dict[str, Any] | None = None

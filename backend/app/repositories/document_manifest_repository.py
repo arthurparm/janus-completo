@@ -19,6 +19,12 @@ class DocumentManifestRepository:
         doc_id: str,
         user_id: str,
         conversation_id: str | None,
+        knowledge_space_id: str | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
+        edition_or_version: str | None = None,
+        language: str | None = None,
+        parent_collection_id: str | None = None,
         file_name: str,
         content_type: str | None,
         file_size_bytes: int = 0,
@@ -31,6 +37,18 @@ class DocumentManifestRepository:
                 doc_id=doc_id,
                 user_id=str(user_id),
                 conversation_id=str(conversation_id) if conversation_id is not None else None,
+                knowledge_space_id=(
+                    str(knowledge_space_id) if knowledge_space_id is not None else None
+                ),
+                source_type=str(source_type) if source_type is not None else None,
+                source_id=str(source_id) if source_id is not None else None,
+                edition_or_version=(
+                    str(edition_or_version) if edition_or_version is not None else None
+                ),
+                language=str(language) if language is not None else None,
+                parent_collection_id=(
+                    str(parent_collection_id) if parent_collection_id is not None else None
+                ),
                 file_name=file_name,
                 content_type=content_type,
                 file_size_bytes=int(file_size_bytes or 0),
@@ -63,6 +81,7 @@ class DocumentManifestRepository:
         *,
         user_id: str,
         conversation_id: str | None = None,
+        knowledge_space_id: str | None = None,
         limit: int = 100,
         statuses: Iterable[str] | None = None,
     ) -> list[dict[str, Any]]:
@@ -71,6 +90,8 @@ class DocumentManifestRepository:
             query = session.query(DocumentManifest).filter(DocumentManifest.user_id == str(user_id))
             if conversation_id is not None:
                 query = query.filter(DocumentManifest.conversation_id == str(conversation_id))
+            if knowledge_space_id is not None:
+                query = query.filter(DocumentManifest.knowledge_space_id == str(knowledge_space_id))
             if statuses:
                 query = query.filter(DocumentManifest.status.in_([str(s) for s in statuses]))
             rows = (
@@ -207,6 +228,14 @@ class DocumentManifestRepository:
             "doc_id": str(row.doc_id),
             "user_id": str(row.user_id),
             "conversation_id": str(row.conversation_id) if row.conversation_id is not None else None,
+            "knowledge_space_id": (
+                str(row.knowledge_space_id) if row.knowledge_space_id is not None else None
+            ),
+            "source_type": row.source_type,
+            "source_id": row.source_id,
+            "edition_or_version": row.edition_or_version,
+            "language": row.language,
+            "parent_collection_id": row.parent_collection_id,
             "file_name": row.file_name,
             "content_type": row.content_type,
             "file_size_bytes": int(row.file_size_bytes or 0),
