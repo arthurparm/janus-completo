@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 from types import SimpleNamespace
@@ -268,3 +269,98 @@ def test_build_consolidation_metrics_rewards_useful_sections():
     assert metrics["sections_indexed"] == 3
     assert metrics["canonical_frames_total"] == 3
     assert metrics["consolidation_quality_score"] > 0.6
+
+
+def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():
+    service = KnowledgeSpaceService()
+    service.get_space = lambda **kwargs: {  # type: ignore[method-assign]
+        "knowledge_space_id": "ks-1",
+        "consolidation_status": "ready",
+        "canonical_frames_total": 0,
+        "sections_indexed": 0,
+    }
+    service._manifest_repo = SimpleNamespace(list_manifests=lambda **kwargs: [])
+    called = {"canonical": False}
+
+    async def fake_canonical(**kwargs):
+        called["canonical"] = True
+        return {"mode_used": "canonical_answer", "citations": [{"doc_id": "doc-1"}]}
+
+    async def fake_quick(**kwargs):
+        return {
+            "answer": "quick",
+            "mode_used": "quick_lookup",
+            "base_used": "chunk_only",
+            "answer_strategy": "locator",
+            "source_scope": {"knowledge_space_id": "ks-1"},
+            "citations": [],
+            "confidence": 0.4,
+            "gaps_or_conflicts": [],
+        }
+
+    service._query_canonical = fake_canonical  # type: ignore[method-assign]
+    service._query_quick_lookup = fake_quick  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        service.query_space(
+            knowledge_space_id="ks-1",
+            user_id="user-1",
+            question="Como o suplemento amplia a regra base?",
+            mode="auto",
+            limit=5,
+        )
+    )
+
+    assert result["mode_used"] == "quick_lookup"
+    assert called["canonical"] is False
+
+
+def test_query_space_falls_back_when_canonical_times_out():
+    service = KnowledgeSpaceService()
+    service.get_space = lambda **kwargs: {  # type: ignore[method-assign]
+        "knowledge_space_id": "ks-1",
+        "consolidation_status": "ready",
+        "canonical_frames_total": 4,
+        "sections_indexed": 8,
+    }
+    service._manifest_repo = SimpleNamespace(list_manifests=lambda **kwargs: [])
+
+    async def fake_canonical(**kwargs):
+        await asyncio.sleep(0.05)
+        return {"mode_used": "canonical_answer", "citations": [{"doc_id": "doc-1"}]}
+
+    async def fake_quick(**kwargs):
+        return {
+            "answer": "quick",
+            "mode_used": "quick_lookup",
+            "base_used": "chunk_only",
+            "answer_strategy": "locator",
+            "source_scope": {"knowledge_space_id": "ks-1"},
+            "citations": [],
+            "confidence": 0.4,
+            "gaps_or_conflicts": [],
+        }
+
+    service._query_canonical = fake_canonical  # type: ignore[method-assign]
+    service._query_quick_lookup = fake_quick  # type: ignore[method-assign]
+
+    previous = os.environ.get("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS")
+    os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = "0.01"
+    try:
+        result = asyncio.run(
+            service.query_space(
+                knowledge_space_id="ks-1",
+                user_id="user-1",
+                question="Modo canônico explícito",
+                mode="canonical_answer",
+                limit=5,
+            )
+        )
+    finally:
+        if previous is None:
+            os.environ.pop("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", None)
+        else:
+            os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = previous
+
+    assert result["mode_used"] == "quick_lookup"
+    assert any("tempo limite" in item for item in result["gaps_or_conflicts"])

@@ -444,6 +444,13 @@ class KnowledgeSpaceService:
         )
         gaps_or_conflicts = self._detect_scope_conflicts(space=space, manifests=manifests)
         prefer_locator = self._prefer_locator(question)
+        canonical_timeout_seconds = float(
+            os.getenv("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", "12") or 12
+        )
+        has_canonical_metrics = bool(
+            int(space.get("canonical_frames_total") or 0) > 0
+            or int(space.get("sections_indexed") or 0) > 0
+        )
 
         if normalized_mode == "auto" and prefer_locator:
             quick = await self._query_quick_lookup(
@@ -455,17 +462,37 @@ class KnowledgeSpaceService:
             quick["gaps_or_conflicts"] = [*gaps_or_conflicts, *quick.get("gaps_or_conflicts", [])]
             return quick
 
-        if normalized_mode in {"auto", "canonical_answer"} and str(space.get("consolidation_status") or "") in _SPACE_READY_STATUSES:
-            canonical = await self._query_canonical(
-                knowledge_space=space,
-                user_id=str(user_id),
-                question=question,
-                limit=limit,
+        should_try_canonical = (
+            normalized_mode == "canonical_answer"
+            or (
+                normalized_mode == "auto"
+                and str(space.get("consolidation_status") or "") in _SPACE_READY_STATUSES
+                and has_canonical_metrics
             )
-            if canonical.get("citations"):
-                canonical["gaps_or_conflicts"] = [*gaps_or_conflicts, *canonical.get("gaps_or_conflicts", [])]
-                return canonical
-            gaps_or_conflicts.append("Nenhuma evidência consolidada recuperável; fallback para chunks.")
+        )
+        if should_try_canonical:
+            try:
+                canonical = await asyncio.wait_for(
+                    self._query_canonical(
+                        knowledge_space=space,
+                        user_id=str(user_id),
+                        question=question,
+                        limit=limit,
+                    ),
+                    timeout=canonical_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                gaps_or_conflicts.append(
+                    "Consulta canônica excedeu o tempo limite; fallback para chunks."
+                )
+            else:
+                if canonical.get("citations"):
+                    canonical["gaps_or_conflicts"] = [
+                        *gaps_or_conflicts,
+                        *canonical.get("gaps_or_conflicts", []),
+                    ]
+                    return canonical
+                gaps_or_conflicts.append("Nenhuma evidência consolidada recuperável; fallback para chunks.")
 
         quick = await self._query_quick_lookup(
             knowledge_space=space,
