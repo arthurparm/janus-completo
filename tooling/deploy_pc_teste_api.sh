@@ -26,14 +26,19 @@ build_with_compose() {
 }
 
 build_with_docker() {
-  echo "Executando fallback via docker build..."
-  docker build \
+  echo "Executando fallback via docker buildx + docker load..."
+  local archive_path
+  archive_path="$(mktemp /tmp/janus-api-build.XXXXXX.tar)"
+  docker buildx build \
     --progress plain \
+    --output "type=docker,dest=${archive_path}" \
     --target final \
     --build-arg "JANUS_BUILD_REF=$JANUS_BUILD_REF" \
-    -t janus-completo-janus-api:latest \
+    --tag janus-completo-janus-api:latest \
     -f backend/docker/Dockerfile \
     backend
+  docker load -i "$archive_path"
+  rm -f "$archive_path"
 }
 
 if ! build_with_compose; then
