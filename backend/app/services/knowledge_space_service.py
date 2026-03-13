@@ -431,6 +431,17 @@ class KnowledgeSpaceService:
             limit=200,
         )
         gaps_or_conflicts = self._detect_scope_conflicts(space=space, manifests=manifests)
+        prefer_locator = self._prefer_locator(question)
+
+        if normalized_mode == "auto" and prefer_locator:
+            quick = await self._query_quick_lookup(
+                knowledge_space=space,
+                user_id=str(user_id),
+                question=question,
+                limit=limit,
+            )
+            quick["gaps_or_conflicts"] = [*gaps_or_conflicts, *quick.get("gaps_or_conflicts", [])]
+            return quick
 
         if normalized_mode in {"auto", "canonical_answer"} and str(space.get("consolidation_status") or "") in _SPACE_READY_STATUSES:
             canonical = await self._query_canonical(
@@ -1462,10 +1473,10 @@ class KnowledgeSpaceService:
         lowered = str(question or "").casefold()
         if self._prefer_locator(question):
             return "locator"
-        if any(token in lowered for token in ("compar", "diferen", "versus", "vs", "amplia", "suplement")):
-            return "comparative"
         if any(token in lowered for token in ("passo", "sequên", "sequenc", "etapa", "ordem", "como fazer", "processo")):
             return "sequence"
+        if any(token in lowered for token in ("compar", "diferen", "versus", "vs", "amplia", "suplement")):
+            return "comparative"
         return "scope"
 
     def _prefer_locator(self, question: str) -> bool:

@@ -94,6 +94,18 @@ def test_detect_answer_strategy_prefers_comparative_and_sequence():
 
     assert service._detect_answer_strategy("Como o suplemento amplia a regra base?") == "comparative"
     assert service._detect_answer_strategy("Qual a sequência passo a passo para criar o personagem?") == "sequence"
+    assert (
+        service._detect_answer_strategy(
+            "Qual a sequência para criar um personagem usando o livro base e em que etapa o suplemento adiciona opções?"
+        )
+        == "sequence"
+    )
+
+
+def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
+    service = KnowledgeSpaceService()
+
+    assert service._detect_answer_strategy("Em que trecho ou seção o livro fala sobre novas opções de raças?") == "locator"
 
 
 def test_build_consolidation_metrics_rewards_useful_sections():
