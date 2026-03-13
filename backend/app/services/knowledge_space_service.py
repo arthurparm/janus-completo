@@ -260,6 +260,11 @@ class KnowledgeSpaceService:
             progress = round(min(1.0, chunks_indexed / max(1, chunks_total)), 4)
         elif total > 0:
             progress = round(indexed / max(1, total), 4)
+        space = self._reconcile_ready_processing_space(
+            knowledge_space=space,
+            documents_processing=processing,
+            documents_queued=queued,
+        )
         return {
             **space,
             "documents_total": total,
@@ -276,6 +281,36 @@ class KnowledgeSpaceService:
             "canonical_frames_total": int(space.get("canonical_frames_total") or 0),
             "consolidation_quality_score": float(space.get("consolidation_quality_score") or 0.0),
         }
+
+    def _reconcile_ready_processing_space(
+        self,
+        *,
+        knowledge_space: dict[str, Any],
+        documents_processing: int = 0,
+        documents_queued: int = 0,
+    ) -> dict[str, Any]:
+        if str(knowledge_space.get("consolidation_status") or "") != "processing":
+            return knowledge_space
+        if int(knowledge_space.get("sections_indexed") or 0) <= 0:
+            return knowledge_space
+        if int(knowledge_space.get("canonical_frames_total") or 0) <= 0:
+            return knowledge_space
+        if int(documents_processing) > 0 or int(documents_queued) > 0:
+            return knowledge_space
+        reconciled = self._space_repo.mark_consolidation(
+            str(knowledge_space["knowledge_space_id"]),
+            status="ready",
+            summary=(
+                str(knowledge_space.get("consolidation_summary") or "").strip()
+                or "Base canônica disponível."
+            ),
+            sections_total=int(knowledge_space.get("sections_total") or 0),
+            sections_indexed=int(knowledge_space.get("sections_indexed") or 0),
+            sections_skipped_as_noise=int(knowledge_space.get("sections_skipped_as_noise") or 0),
+            canonical_frames_total=int(knowledge_space.get("canonical_frames_total") or 0),
+            consolidation_quality_score=float(knowledge_space.get("consolidation_quality_score") or 0.0),
+        )
+        return reconciled or knowledge_space
 
     def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str) -> dict[str, Any]:
         self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)

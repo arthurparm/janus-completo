@@ -480,3 +480,36 @@ def test_query_space_falls_back_when_canonical_times_out():
 
     assert result["mode_used"] == "quick_lookup"
     assert any("tempo limite" in item for item in result["gaps_or_conflicts"])
+
+
+def test_reconcile_ready_processing_space_promotes_space_without_active_documents():
+    service = KnowledgeSpaceService()
+    service._space_repo = SimpleNamespace(
+        mark_consolidation=lambda knowledge_space_id, **kwargs: {
+            "knowledge_space_id": knowledge_space_id,
+            "consolidation_status": kwargs["status"],
+            "consolidation_summary": kwargs["summary"],
+            "sections_total": kwargs["sections_total"],
+            "sections_indexed": kwargs["sections_indexed"],
+            "sections_skipped_as_noise": kwargs["sections_skipped_as_noise"],
+            "canonical_frames_total": kwargs["canonical_frames_total"],
+            "consolidation_quality_score": float(kwargs["consolidation_quality_score"]),
+        }
+    )
+
+    reconciled = service._reconcile_ready_processing_space(
+        knowledge_space={
+            "knowledge_space_id": "ks-1",
+            "consolidation_status": "processing",
+            "consolidation_summary": "Consolidação estrutural em andamento.",
+            "sections_total": 10,
+            "sections_indexed": 7,
+            "sections_skipped_as_noise": 3,
+            "canonical_frames_total": 5,
+            "consolidation_quality_score": 0.81,
+        },
+        documents_processing=0,
+        documents_queued=0,
+    )
+
+    assert reconciled["consolidation_status"] == "ready"
