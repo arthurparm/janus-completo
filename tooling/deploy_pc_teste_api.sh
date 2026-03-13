@@ -12,9 +12,11 @@ fi
 export JANUS_BUILD_REF="${JANUS_BUILD_REF:-$(git rev-parse HEAD)}"
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
 BUILD_TIMEOUT_SECONDS="${BUILD_TIMEOUT_SECONDS:-420}"
+USE_SOURCE_MOUNT="${USE_SOURCE_MOUNT:-1}"
 COMPOSE_CMD=(docker compose -f docker-compose.pc1.yml --env-file .env.pc1)
 
 echo "JANUS_BUILD_REF=$JANUS_BUILD_REF"
+echo "USE_SOURCE_MOUNT=$USE_SOURCE_MOUNT"
 
 build_with_compose() {
   echo "Executando build via docker compose..."
@@ -41,12 +43,14 @@ build_with_docker() {
   rm -f "$archive_path"
 }
 
-if ! build_with_compose; then
-  echo "Build via docker compose falhou ou excedeu timeout. Aplicando fallback."
-  build_with_docker
+if [[ "$USE_SOURCE_MOUNT" != "1" ]]; then
+  if ! build_with_compose; then
+    echo "Build via docker compose falhou ou excedeu timeout. Aplicando fallback."
+    build_with_docker
+  fi
 fi
 
-"${COMPOSE_CMD[@]}" up -d janus-api
+"${COMPOSE_CMD[@]}" up -d --force-recreate janus-api
 
 echo "Aguardando health da API..."
 for _ in $(seq 1 60); do

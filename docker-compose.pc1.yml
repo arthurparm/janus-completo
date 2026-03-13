@@ -68,6 +68,8 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/scripts:/app/scripts:ro
       - janus_app_data:/app/data
       - janus_workspace:/app/workspace
     extra_hosts:
