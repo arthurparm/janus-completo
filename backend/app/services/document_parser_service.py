@@ -196,9 +196,13 @@ class DocumentParserService:
     def _parse_pdf_pypdf2(self, data: bytes) -> str:
         """Primary PDF parser using PyPDF2."""
         import io
-        import PyPDF2
 
-        reader = PyPDF2.PdfReader(io.BytesIO(data))
+        try:
+            from PyPDF2 import PdfReader  # type: ignore[import-not-found]
+        except ModuleNotFoundError:
+            from pypdf import PdfReader  # type: ignore[import-not-found]
+
+        reader = PdfReader(io.BytesIO(data))
         texts = []
 
         for page in getattr(reader, "pages", []) or []:
