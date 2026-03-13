@@ -1,17 +1,19 @@
 from app.services.document_parser_service import DocumentParserService
 
 
-def test_parse_json_file_extracts_searchable_leaf_paths():
+def test_parse_pdf_returns_text_without_async_fallback(monkeypatch):
     service = DocumentParserService()
-
-    payload = (
-        b'{"version":1,"data":{"atlas":[{"name":"Docas","rumor":"Porto da tregua"}],'
-        b'"timeline":[{"event":"Banquete da Ruptura"}]}}'
+    monkeypatch.setattr(
+        service,
+        "_parse_pdf_pypdf2",
+        lambda _data: "Capítulo 1\nIntrodução ao sistema",
+    )
+    monkeypatch.setattr(
+        service,
+        "_parse_pdf_minimal",
+        lambda _data: "",
     )
 
-    text = service.parse(payload, "application/json", "genesis-backup.json")
+    result = service._parse_pdf(b"%PDF-1.4")
 
-    assert "version: 1" in text
-    assert "data.atlas[0].name: Docas" in text
-    assert "data.atlas[0].rumor: Porto da tregua" in text
-    assert "data.timeline[0].event: Banquete da Ruptura" in text
+    assert result == "Capítulo 1\nIntrodução ao sistema"

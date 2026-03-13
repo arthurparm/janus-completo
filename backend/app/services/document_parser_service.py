@@ -6,10 +6,11 @@ Extracts text from various document formats.
 import json
 import re
 import time
+
 import structlog
-from app.core.infrastructure.fallback_chain import FallbackChain
-from app.core.monitoring.document_metrics import get_metrics_recorder
+
 from app.core.exceptions.document_exceptions import ExtractionFailedError
+from app.core.monitoring.document_metrics import get_metrics_recorder
 
 logger = structlog.get_logger(__name__)
 
@@ -166,17 +167,25 @@ class DocumentParserService:
         """Parse PDF file with fallback strategies."""
         t0 = time.perf_counter()
 
-        # Try PyPDF2
-        chain = FallbackChain(
-            strategies=[
-                lambda: self._parse_pdf_pypdf2(data),
-                lambda: self._parse_pdf_minimal(data),
-            ],
-            component_name="pdf_parse",
-        )
-
         try:
-            text = chain.execute()
+            last_error: Exception | None = None
+            for strategy in (self._parse_pdf_pypdf2, self._parse_pdf_minimal):
+                try:
+                    text = strategy(data)
+                    if text:
+                        self._metrics.record_parse("pdf", "success", time.perf_counter() - t0)
+                        return text
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning(
+                        "fallback_strategy_failed",
+                        component="pdf_parse",
+                        strategy_name=strategy.__name__,
+                        error_type=type(exc).__name__,
+                        error_msg=str(exc),
+                    )
+            if last_error is not None:
+                raise last_error
             self._metrics.record_parse("pdf", "success", time.perf_counter() - t0)
             return text
         except Exception as e:
