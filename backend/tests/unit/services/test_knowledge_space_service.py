@@ -193,6 +193,33 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     assert any(item["doc_role"] == "supplement" for item in selected)
 
 
+def test_render_sequence_answer_lists_base_before_supplement_extensions():
+    service = KnowledgeSpaceService()
+
+    answer = service._render_sequence_answer(
+        [
+            {
+                "doc_role": "supplement",
+                "section_order": 1,
+                "rerank_score": 0.8,
+                "title": "Capítulo 1: Campeões de Arton",
+                "content": "Amplia com novas opções.",
+            },
+            {
+                "doc_role": "base",
+                "section_order": 9,
+                "rerank_score": 0.7,
+                "title": "9. Toques Finais",
+                "content": "Fecha a criação do personagem.",
+            },
+        ]
+    )
+
+    lines = answer.splitlines()
+    assert "[Base]" in lines[1]
+    assert "[Suplemento]" in lines[2]
+
+
 def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile("Em que trecho o livro fala sobre novas opções de raças?")

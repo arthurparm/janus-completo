@@ -31,7 +31,7 @@ logger = structlog.get_logger(__name__)
 
 _SOURCE_TYPES = {"book", "manual", "course", "collection", "documentation"}
 _QUERY_MODES = {"auto", "quick_lookup", "canonical_answer"}
-_SPACE_READY_STATUSES = {"ready", "partial"}
+_SPACE_READY_STATUSES = {"ready", "partial", "processing"}
 _DOC_ROLES = {"base", "supplement", "reference", "appendix"}
 _SECTION_ROLES = {
     "front_matter",
@@ -387,31 +387,51 @@ class KnowledgeSpaceService:
             knowledge_space=space,
             sections=sections,
         )
-        await self._persist_structure_graph(
-            user_id=str(user_id),
-            knowledge_space=space,
-            manifests=manifests,
-            sections=sections,
-        )
-
         summary = self._build_consolidation_summary(
             space=space,
             manifests=manifests,
             sections=sections,
             metrics=consolidation_metrics,
         )
+        last_consolidated_at = datetime.now(UTC)
         status_value = "ready" if sections else "partial"
         self._space_repo.mark_consolidation(
             knowledge_space_id,
             status=status_value,
             summary=summary,
-            last_consolidated_at=datetime.now(UTC),
+            last_consolidated_at=last_consolidated_at,
             sections_total=int(consolidation_metrics["sections_total"]),
             sections_indexed=int(consolidation_metrics["sections_indexed"]),
             sections_skipped_as_noise=int(consolidation_metrics["sections_skipped_as_noise"]),
             canonical_frames_total=int(consolidation_metrics["canonical_frames_total"]),
             consolidation_quality_score=str(consolidation_metrics["consolidation_quality_score"]),
         )
+        try:
+            await self._persist_structure_graph(
+                user_id=str(user_id),
+                knowledge_space=space,
+                manifests=manifests,
+                sections=sections,
+            )
+        except Exception as exc:
+            logger.warning(
+                "knowledge_space_graph_persist_failed",
+                knowledge_space_id=str(knowledge_space_id),
+                user_id=str(user_id),
+                error=str(exc),
+            )
+            summary = f"{summary} Persistência de grafo ficou parcial: {exc}"
+            self._space_repo.mark_consolidation(
+                knowledge_space_id,
+                status=status_value,
+                summary=summary,
+                last_consolidated_at=last_consolidated_at,
+                sections_total=int(consolidation_metrics["sections_total"]),
+                sections_indexed=int(consolidation_metrics["sections_indexed"]),
+                sections_skipped_as_noise=int(consolidation_metrics["sections_skipped_as_noise"]),
+                canonical_frames_total=int(consolidation_metrics["canonical_frames_total"]),
+                consolidation_quality_score=str(consolidation_metrics["consolidation_quality_score"]),
+            )
         return {
             "knowledge_space_id": knowledge_space_id,
             "status": status_value,
@@ -1850,7 +1870,7 @@ class KnowledgeSpaceService:
             if section_role == "supplement_rules":
                 rerank_score += 0.06
             if section_role == "optional_rules":
-                rerank_score -= 0.04
+                rerank_score -= 0.04 if answer_strategy != "sequence" else 0.18
             if answer_strategy == "sequence" and "workflow" in (metadata.get("applies_to") or []):
                 rerank_score += 0.12
             rerank_score += min(0.24, lexical_overlap * 0.05)
@@ -1860,6 +1880,8 @@ class KnowledgeSpaceService:
             rerank_score -= min(0.28, noise_score * 0.28)
             if heading_quality_score < 0.20:
                 rerank_score -= 0.10
+            if answer_strategy == "sequence" and (heading_quality_score < 0.35 or noise_score > 0.45):
+                rerank_score -= 0.24
             if question_terms and lexical_overlap == 0 and query_profile.get("expects_exact_evidence"):
                 rerank_score -= 0.20
             if answer_strategy == "comparative" and lexical_overlap == 0 and doc_role == "supplement":
@@ -1915,6 +1937,10 @@ class KnowledgeSpaceService:
                 break
             if answer_strategy == "sequence" and item["doc_role"] == "supplement" and not any(
                 row["doc_role"] == "base" for row in selected
+            ):
+                continue
+            if answer_strategy == "sequence" and item["doc_role"] == "supplement" and any(
+                row["doc_role"] == "supplement" for row in selected
             ):
                 continue
             if item["lexical_overlap"] == 0 and query_profile.get("expects_exact_evidence") and answer_strategy != "sequence":
@@ -2136,7 +2162,23 @@ class KnowledgeSpaceService:
         return "\n".join(lines)
 
     def _render_sequence_answer(self, selected: list[dict[str, Any]]) -> str:
-        ordered = sorted(selected, key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]))
+        base_items = sorted(
+            [item for item in selected if item.get("doc_role") == "base"],
+            key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]),
+        )
+        supplement_items = sorted(
+            [item for item in selected if item.get("doc_role") == "supplement"],
+            key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]),
+        )
+        context_items = sorted(
+            [
+                item
+                for item in selected
+                if item.get("doc_role") not in {"base", "supplement"}
+            ],
+            key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]),
+        )
+        ordered = base_items + supplement_items + context_items
         lines = ["Sequência sugerida pela base consolidada:"]
         for index, item in enumerate(ordered[:4], start=1):
             role_label = "Base" if item.get("doc_role") == "base" else "Suplemento" if item.get("doc_role") == "supplement" else "Contexto"
