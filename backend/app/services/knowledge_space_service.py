@@ -5,7 +5,7 @@ import os
 import re
 import time
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -372,7 +372,9 @@ class KnowledgeSpaceService:
             )
             sections.extend(built_sections)
 
-        sections = await self._enrich_sections_with_llm(sections, knowledge_space=space)
+        heuristic_sections, initial_skipped = self._finalize_sections(sections)
+        skipped_sections += initial_skipped
+        sections = await self._enrich_sections_with_llm(heuristic_sections, knowledge_space=space)
         sections, extra_skipped = self._finalize_sections(sections)
         skipped_sections += extra_skipped
         consolidation_metrics = self._build_consolidation_metrics(
@@ -1129,9 +1131,15 @@ class KnowledgeSpaceService:
     ) -> list[dict[str, Any]]:
         if not sections or self._llm is None:
             return sections
-        max_sections = int(os.getenv("KNOWLEDGE_SPACE_LLM_SECTION_LIMIT", "40") or 40)
+        max_sections = int(os.getenv("KNOWLEDGE_SPACE_LLM_SECTION_LIMIT", "18") or 18)
+        overall_timeout = float(
+            os.getenv("KNOWLEDGE_SPACE_LLM_ENRICH_TIMEOUT_SECONDS", "150") or 150
+        )
         semaphore = asyncio.Semaphore(3)
-        enriched: list[dict[str, Any]] = []
+        selected_ids = {
+            str(item.get("section_id") or "")
+            for item in self._select_sections_for_llm_enrichment(sections, max_sections=max_sections)
+        }
 
         async def _enrich_one(section: dict[str, Any]) -> dict[str, Any]:
             if len(section.get("body", "").split()) < 40:
@@ -1152,12 +1160,100 @@ class KnowledgeSpaceService:
                     return section
             return self._merge_llm_section_enrichment(section=section, payload=parsed if isinstance(parsed, dict) else None)
 
-        enrichable = sections[:max_sections]
-        preserved = sections[max_sections:]
-        results = await asyncio.gather(*[_enrich_one(section) for section in enrichable])
-        enriched.extend(results)
-        enriched.extend(preserved)
-        return enriched
+        tasks: list[asyncio.Future[Any] | asyncio.Task[Any]] = []
+        section_order = {str(section.get("section_id") or ""): index for index, section in enumerate(sections)}
+        for section in sections:
+            section_id = str(section.get("section_id") or "")
+            if section_id in selected_ids:
+                tasks.append(asyncio.create_task(_enrich_one(section)))
+            else:
+                future = asyncio.get_running_loop().create_future()
+                future.set_result(section)
+                tasks.append(future)
+        try:
+            results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=overall_timeout)
+        except asyncio.TimeoutError:
+            for task in tasks:
+                if isinstance(task, asyncio.Task) and not task.done():
+                    task.cancel()
+            logger.warning(
+                "knowledge_space_llm_enrichment_timeout",
+                knowledge_space_id=str(knowledge_space.get("knowledge_space_id") or ""),
+                selected_sections=len(selected_ids),
+                timeout_seconds=overall_timeout,
+            )
+            return sections
+        ordered_results = sorted(
+            results,
+            key=lambda item: section_order.get(str(item.get("section_id") or ""), 999999),
+        )
+        return ordered_results
+
+    def _select_sections_for_llm_enrichment(
+        self,
+        sections: list[dict[str, Any]],
+        *,
+        max_sections: int,
+    ) -> list[dict[str, Any]]:
+        if max_sections <= 0:
+            return []
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        fallback: list[dict[str, Any]] = []
+        for section in sections:
+            section_role = str(section.get("section_role") or "").strip().lower()
+            if section_role in {"noise", "table_like", "front_matter"}:
+                continue
+            if len(str(section.get("body") or "").split()) < 40:
+                continue
+            usefulness = float(section.get("usefulness_score") or 0.0)
+            if usefulness < 0.46:
+                continue
+            doc_role = str(section.get("doc_role") or "base").strip().lower() or "base"
+            grouped[doc_role].append(section)
+            fallback.append(section)
+        for rows in grouped.values():
+            rows.sort(
+                key=lambda item: (
+                    -float(item.get("usefulness_score") or 0.0),
+                    -float(item.get("heading_quality_score") or 0.0),
+                    int(item.get("order") or 0),
+                )
+            )
+        fallback.sort(
+            key=lambda item: (
+                -float(item.get("usefulness_score") or 0.0),
+                -float(item.get("heading_quality_score") or 0.0),
+                int(item.get("order") or 0),
+            )
+        )
+        selected: list[dict[str, Any]] = []
+        selected_ids: set[str] = set()
+        roles_by_priority = ["base", "supplement", "reference", "appendix"]
+        for role in roles_by_priority:
+            row = next(
+                (
+                    item
+                    for item in grouped.get(role, [])
+                    if str(item.get("section_id") or "") not in selected_ids
+                ),
+                None,
+            )
+            if row is None:
+                continue
+            selected.append(row)
+            selected_ids.add(str(row.get("section_id") or ""))
+            if len(selected) >= max_sections:
+                break
+        if len(selected) < max_sections:
+            for row in fallback:
+                section_id = str(row.get("section_id") or "")
+                if section_id in selected_ids:
+                    continue
+                selected.append(row)
+                selected_ids.add(section_id)
+                if len(selected) >= max_sections:
+                    break
+        return selected
 
     def _build_section_enrichment_prompt(
         self,

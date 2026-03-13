@@ -223,11 +223,17 @@ class DocumentIngestionService:
 
         storage_path = manifest.get("storage_path")
         if not storage_path or not Path(str(storage_path)).exists():
+            recovered = await self._recover_indexed_document_without_staged_file(manifest=manifest)
+            if recovered is not None:
+                return recovered
             self._manifest_repo.mark_failed(
                 doc_id,
                 status="failed",
                 error_code="missing_storage_file",
-                error_message="Arquivo staged não encontrado",
+                error_message=(
+                    "Arquivo staged não encontrado. Se o upload foi interrompido por restart/recreate, "
+                    "reenvie o documento para indexação."
+                ),
             )
             raise FileNotFoundError(f"Arquivo staged não encontrado para {doc_id}")
 
@@ -294,6 +300,65 @@ class DocumentIngestionService:
             raise
         finally:
             self.cleanup_staged_file(storage_path)
+
+    async def _recover_indexed_document_without_staged_file(
+        self,
+        *,
+        manifest: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        doc_id = str(manifest.get("doc_id") or "").strip()
+        user_id = str(manifest.get("user_id") or "").strip()
+        if not doc_id or not user_id:
+            return None
+        existing_chunks = int(manifest.get("chunks_indexed") or 0)
+        if existing_chunks <= 0:
+            existing_chunks = await async_count_points(
+                build_user_docs_collection_name(user_id),
+                models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="metadata.type",
+                            match=models.MatchValue(value="doc_chunk"),
+                        ),
+                        models.FieldCondition(
+                            key="metadata.user_id",
+                            match=models.MatchValue(value=user_id),
+                        ),
+                        models.FieldCondition(
+                            key="metadata.doc_id",
+                            match=models.MatchValue(value=doc_id),
+                        ),
+                    ]
+                ),
+            )
+        if existing_chunks <= 0:
+            return None
+        self._manifest_repo.mark_completed(
+            doc_id,
+            chunks_total=existing_chunks,
+            chunks_indexed=existing_chunks,
+            semantic_doc_type=manifest.get("semantic_doc_type"),
+            semantic_summary=manifest.get("semantic_summary"),
+            semantic_confidence=manifest.get("semantic_confidence"),
+        )
+        logger.warning(
+            "document_ingestion_recovered_without_staged_file",
+            doc_id=doc_id,
+            user_id=user_id,
+            chunks_indexed=existing_chunks,
+        )
+        return {
+            "doc_id": doc_id,
+            "chunks": existing_chunks,
+            "chunks_indexed": existing_chunks,
+            "status": "indexed",
+            "semantic": {
+                "doc_type": manifest.get("semantic_doc_type"),
+                "summary": manifest.get("semantic_summary"),
+                "confidence": manifest.get("semantic_confidence"),
+            },
+            "recovered_without_staged_file": True,
+        }
 
     def _progress_callback(self, doc_id: str) -> Callable[..., Awaitable[None]]:
         async def _callback(**kwargs: Any) -> None:

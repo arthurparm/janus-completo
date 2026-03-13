@@ -271,6 +271,95 @@ def test_build_consolidation_metrics_rewards_useful_sections():
     assert metrics["consolidation_quality_score"] > 0.6
 
 
+def test_select_sections_for_llm_enrichment_prioritizes_roles_and_quality():
+    service = KnowledgeSpaceService()
+
+    selected = service._select_sections_for_llm_enrichment(
+        [
+            {
+                "section_id": "base-weak",
+                "doc_role": "base",
+                "section_role": "core_rules",
+                "body": "palavras " * 50,
+                "usefulness_score": 0.48,
+                "heading_quality_score": 0.40,
+                "order": 3,
+            },
+            {
+                "section_id": "base-strong",
+                "doc_role": "base",
+                "section_role": "core_rules",
+                "body": "palavras " * 70,
+                "usefulness_score": 0.88,
+                "heading_quality_score": 0.90,
+                "order": 1,
+            },
+            {
+                "section_id": "supp-strong",
+                "doc_role": "supplement",
+                "section_role": "supplement_rules",
+                "body": "palavras " * 70,
+                "usefulness_score": 0.86,
+                "heading_quality_score": 0.85,
+                "order": 2,
+            },
+            {
+                "section_id": "noise",
+                "doc_role": "base",
+                "section_role": "noise",
+                "body": "palavras " * 70,
+                "usefulness_score": 0.99,
+                "heading_quality_score": 0.99,
+                "order": 4,
+            },
+        ],
+        max_sections=2,
+    )
+
+    assert [item["section_id"] for item in selected] == ["base-strong", "supp-strong"]
+
+
+def test_enrich_sections_with_llm_returns_original_sections_on_timeout():
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_invoke_llm(**kwargs):
+        await asyncio.sleep(0.05)
+        return {"response": "{}"}
+
+    service._llm.invoke_llm = fake_invoke_llm
+    sections = [
+        {
+            "section_id": "base-1",
+            "doc_role": "base",
+            "section_role": "core_rules",
+            "body": "palavras " * 80,
+            "usefulness_score": 0.8,
+            "heading_quality_score": 0.8,
+            "order": 1,
+            "title": "Capítulo 1",
+            "canonical_summary": "Resumo",
+            "body_excerpt": "Trecho",
+        }
+    ]
+
+    previous = os.environ.get("KNOWLEDGE_SPACE_LLM_ENRICH_TIMEOUT_SECONDS")
+    os.environ["KNOWLEDGE_SPACE_LLM_ENRICH_TIMEOUT_SECONDS"] = "0.01"
+    try:
+        result = asyncio.run(
+            service._enrich_sections_with_llm(
+                sections,
+                knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+            )
+        )
+    finally:
+        if previous is None:
+            os.environ.pop("KNOWLEDGE_SPACE_LLM_ENRICH_TIMEOUT_SECONDS", None)
+        else:
+            os.environ["KNOWLEDGE_SPACE_LLM_ENRICH_TIMEOUT_SECONDS"] = previous
+
+    assert result == sections
+
+
 def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():
     service = KnowledgeSpaceService()
     service.get_space = lambda **kwargs: {  # type: ignore[method-assign]
