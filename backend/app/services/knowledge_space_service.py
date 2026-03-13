@@ -63,6 +63,58 @@ _STOPWORDS = {
     "uma",
 }
 
+_HEADING_KEYWORDS = {
+    "anexo",
+    "apendice",
+    "apêndice",
+    "apresentacao",
+    "apresentação",
+    "ameaças",
+    "ameacas",
+    "capitulo",
+    "capítulo",
+    "classes",
+    "conceitos",
+    "conclusao",
+    "conclusão",
+    "creditos",
+    "créditos",
+    "distincoes",
+    "distinções",
+    "equipamento",
+    "exemplos",
+    "exercicios",
+    "exercícios",
+    "glossario",
+    "glossário",
+    "indice",
+    "índice",
+    "introducao",
+    "introdução",
+    "magia",
+    "metodologia",
+    "objetivos",
+    "origens",
+    "parte",
+    "pericias",
+    "perícias",
+    "poderes",
+    "prefacio",
+    "prefácio",
+    "racas",
+    "raças",
+    "referencias",
+    "referências",
+    "recompensas",
+    "regras",
+    "resumo",
+    "secao",
+    "seção",
+    "sumario",
+    "sumário",
+    "tesouro",
+}
+
 
 class KnowledgeSpaceService:
     def __init__(
@@ -426,13 +478,21 @@ class KnowledgeSpaceService:
             body = "\n".join(item for item in current_lines if item).strip()
             if not body:
                 return
+            normalized_title = self._normalize_heading_title(current_title)
+            if sections and str(sections[-1]["title"]).strip() == normalized_title:
+                merged_body = f"{sections[-1]['body']}\n{body}".strip()
+                sections[-1]["body"] = merged_body
+                sections[-1]["summary"] = self._summarize_text(merged_body)
+                sections[-1]["concepts"] = self._extract_concepts(merged_body, title=normalized_title)
+                current_lines = []
+                return
             order += 1
             section_key = build_deterministic_point_id(
                 "knowledge-section",
                 knowledge_space.get("knowledge_space_id"),
                 manifest.get("doc_id"),
                 order,
-                current_title,
+                normalized_title,
             )
             sections.append(
                 {
@@ -440,11 +500,11 @@ class KnowledgeSpaceService:
                     "doc_id": manifest.get("doc_id"),
                     "file_name": manifest.get("file_name"),
                     "knowledge_space_id": knowledge_space.get("knowledge_space_id"),
-                    "title": current_title,
+                    "title": normalized_title,
                     "order": order,
                     "body": body,
                     "summary": self._summarize_text(body),
-                    "concepts": self._extract_concepts(body, title=current_title),
+                    "concepts": self._extract_concepts(body, title=normalized_title),
                 }
             )
             current_lines = []
@@ -453,8 +513,11 @@ class KnowledgeSpaceService:
             if not line:
                 continue
             if self._is_heading(line):
+                normalized_heading = self._normalize_heading_title(line)
+                if normalized_heading == self._normalize_heading_title(current_title) and not current_lines:
+                    continue
                 flush()
-                current_title = line
+                current_title = normalized_heading
                 continue
             current_lines.append(line)
         flush()
@@ -484,19 +547,53 @@ class KnowledgeSpaceService:
 
     def _is_heading(self, line: str) -> bool:
         normalized = str(line or "").strip()
-        if len(normalized) < 4 or len(normalized) > 120:
+        if len(normalized) < 4 or len(normalized) > 90:
             return False
-        if re.match(r"^\d+(?:\.\d+)*\s+.+", normalized):
+        if re.search(r"\.{2,}", normalized):
+            return False
+        if "," in normalized:
+            return False
+        numeric_match = re.match(r"^(\d+(?:\.\d+)*)\.?\s+(.+)$", normalized)
+        if numeric_match:
+            remainder = str(numeric_match.group(2) or "").strip()
+            if len(remainder) > 80:
+                return False
+            if remainder.count(".") > 1:
+                return False
             return True
-        if normalized.endswith(":") and len(normalized.split()) <= 10:
+        if normalized.endswith(":"):
+            tokens = [token for token in normalized[:-1].split() if token]
+            if not tokens or len(tokens) > 6:
+                return False
+            first_token = self._normalize_heading_token(tokens[0])
+            if first_token in _HEADING_KEYWORDS:
+                return True
+            if normalized[:-1].isupper() and not re.search(r"\d", normalized):
+                return True
+            return tokens[0][:1].isupper()
+        if re.search(r"[.!?;]", normalized):
+            return False
+        if re.search(r"\b(?:https?://|www\.)", normalized, flags=re.IGNORECASE):
+            return False
+        if re.search(r"(?:R\$|T\$|\$)\s*\d", normalized):
+            return False
+        if normalized.isupper() and len(normalized.split()) <= 6 and not re.search(r"\d", normalized):
             return True
-        if normalized.isupper() and len(normalized.split()) <= 10:
-            return True
-        letters = re.sub(r"[^A-Za-zÀ-ÿ ]", "", normalized)
+        letters = re.sub(r"[^A-Za-zÀ-ÿ0-9 -]", "", normalized)
         tokens = [token for token in letters.split() if token]
-        if 1 <= len(tokens) <= 8 and all(token[:1].isupper() for token in tokens if token[:1].isalpha()):
+        if not tokens or len(tokens) > 6:
+            return False
+        if self._normalize_heading_token(tokens[0]) in _HEADING_KEYWORDS:
             return True
+        if any(re.search(r"\d", token) for token in tokens):
+            return False
         return False
+
+    def _normalize_heading_title(self, line: str) -> str:
+        return re.sub(r"\s+", " ", str(line or "").strip().rstrip(":")).strip()
+
+    def _normalize_heading_token(self, token: str) -> str:
+        return re.sub(r"[^A-Za-zÀ-ÿ]", "", str(token or "").strip()).lower()
 
     def _summarize_text(self, text: str, max_chars: int = 360) -> str:
         clean = re.sub(r"\s+", " ", str(text or "")).strip()

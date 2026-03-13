@@ -41,3 +41,35 @@ def test_detect_scope_conflicts_reports_multiple_editions():
 
     assert any("Múltiplas edições/versões" in item for item in conflicts)
     assert any("coleção" in item for item in conflicts)
+
+
+def test_is_heading_rejects_table_and_sentence_like_lines():
+    service = KnowledgeSpaceService()
+
+    assert service._is_heading("Capítulo 2") is True
+    assert service._is_heading("Regras Opcionais") is True
+    assert service._is_heading("Tesouro Nenhum.") is False
+    assert service._is_heading("Virotes (20) T$ 2 — — — — 1") is False
+    assert service._is_heading("Canalizar Energia. Positiva.") is False
+
+
+def test_build_structured_sections_merges_repeated_heading_blocks():
+    service = KnowledgeSpaceService()
+
+    sections = service._build_structured_sections(
+        text=(
+            "Capítulo 1\n"
+            "Primeira parte.\n"
+            "Capítulo 1\n"
+            "Segunda parte.\n"
+            "Capítulo 2\n"
+            "Terceira parte.\n"
+        ),
+        manifest={"doc_id": "doc-1", "file_name": "livro.pdf"},
+        knowledge_space={"knowledge_space_id": "ks-1"},
+    )
+
+    assert len(sections) == 2
+    assert sections[0]["title"] == "Capítulo 1"
+    assert "Primeira parte." in sections[0]["body"]
+    assert "Segunda parte." in sections[0]["body"]
