@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteIntent, RouteTarget, get_knowledge_routing_policy
 from app.core.security.request_guard import resolve_user_scope_id
+from app.services.code_hybrid_search_service import get_code_hybrid_search_service
 from app.services.memory_service import MemoryService, get_memory_service
 
 try:
@@ -105,6 +106,17 @@ async def rag_search(
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     service: MemoryService = Depends(get_memory_service),
 ):
+    route_decision = get_knowledge_routing_policy().resolve(
+        RouteIntent.RAG_SEARCH,
+        user_id=None,
+        include_graph=False,
+        query=query,
+    )
+    route_meta = {
+        "route.rule_id": route_decision.rule_id,
+        "route.primary": route_decision.primary.value,
+        "route.fallback": route_decision.fallback,
+    }
     filters: dict[str, Any] = {}
     if type is not None:
         filters["type"] = type
@@ -177,7 +189,7 @@ async def rag_search(
         started_at=_start,
         scores=[r.get("score") for r in results if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(results)},
+        extra={"result_count": len(results), **route_meta},
     )
 
     return RAGSearchResponse(answer=answer, citations=citations)
@@ -204,6 +216,17 @@ async def rag_user_chat_search(
     from qdrant_client import models
 
     started_at = time.perf_counter()
+    route_decision = get_knowledge_routing_policy().resolve(
+        RouteIntent.RAG_USER_CHAT_SEARCH,
+        user_id=user_id,
+        include_graph=False,
+        query=query,
+    )
+    route_meta = {
+        "route.rule_id": route_decision.rule_id,
+        "route.primary": route_decision.primary.value,
+        "route.fallback": route_decision.fallback,
+    }
     # Async
     try:
         collection_name = await aget_or_create_collection(
@@ -220,6 +243,7 @@ async def rag_user_chat_search(
             started_at=started_at,
             confidence=0.0,
             error_code=type(e).__name__,
+            extra=route_meta,
         )
         return RAGUserChatResponse(answer="Erro na busca.", citations=[])
 
@@ -313,7 +337,7 @@ async def rag_user_chat_search(
         started_at=_start,
         scores=[r.get("score") for r in items if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(items)},
+        extra={"result_count": len(items), **route_meta},
     )
     return RAGUserChatResponse(answer=answer, citations=citations)
 
@@ -338,6 +362,17 @@ async def rag_productivity_search(
     from qdrant_client import models
 
     started_at = time.perf_counter()
+    route_decision = get_knowledge_routing_policy().resolve(
+        RouteIntent.RAG_PRODUCTIVITY_SEARCH,
+        user_id=user_id,
+        include_graph=False,
+        query=query,
+    )
+    route_meta = {
+        "route.rule_id": route_decision.rule_id,
+        "route.primary": route_decision.primary.value,
+        "route.fallback": route_decision.fallback,
+    }
     try:
         coll = await aget_or_create_collection(build_user_memory_collection_name(user_id))
         vec = await aembed_text(query)
@@ -350,6 +385,7 @@ async def rag_productivity_search(
             started_at=started_at,
             confidence=0.0,
             error_code=e.__class__.__name__,
+            extra=route_meta,
         )
         return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
 
@@ -444,7 +480,7 @@ async def rag_productivity_search(
         started_at=_start,
         scores=[r.get("score") for r in items if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(items)},
+        extra={"result_count": len(items), **route_meta},
     )
     return RAGProductivityResponse(answer=answer, citations=citations)
 
@@ -590,7 +626,7 @@ class RAGHybridResponse(BaseModel):
 @router.get(
     "/hybrid_search",
     response_model=RAGHybridResponse,
-    summary="Busca híbrida (vetor + grafo) em conhecimento pessoal",
+    summary="Busca híbrida de código (lexical + vetor + grafo)",
 )
 async def rag_hybrid_search(
     query: str,
@@ -598,21 +634,9 @@ async def rag_hybrid_search(
     limit: int = 5,
     min_score: float | None = None,
     http: Request = None,
-    service: MemoryService = Depends(get_memory_service),
 ):
     started_at = time.perf_counter()
     uid = resolve_user_scope_id(http, user_id)
-    if not uid:
-        _emit_rag_step(
-            endpoint="/rag/hybrid_search",
-            step="vector_retrieval",
-            source="hybrid",
-            db="qdrant+neo4j",
-            started_at=started_at,
-            confidence=0.0,
-            error_code="SKIPPED_MISSING_USER_ID",
-        )
-        return RAGHybridResponse(answer="", citations=[])
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_HYBRID_SEARCH,
         user_id=uid,
@@ -627,140 +651,106 @@ async def rag_hybrid_search(
     route_targets = {route_decision.primary, *route_decision.secondary}
     vector_enabled = RouteTarget.QDRANT in route_targets
     graph_enabled = RouteTarget.NEO4J in route_targets
-
-    import time as _t
-
-    _start = _t.perf_counter()
-    vector_error_code: str | None = None
-    results_vec: list[dict[str, Any]] = []
-    if vector_enabled:
-        cm = _tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext()
-        try:
-            with cm:  # type: ignore
-                # Exclui duplicados na busca vetorial híbrida
-                results_vec = await service.recall_filtered(
-                    query=query,
-                    filters={"metadata.user_id": uid, "status_not": "duplicate"},
-                    limit=limit,
-                    min_score=min_score,
-                )
-            _RAG_REQ.labels("hybrid", "success").inc()
-            _RAG_LAT.labels("hybrid", "success").observe(max(0.0, _t.perf_counter() - _start))
-        except Exception as e:
-            _RAG_REQ.labels("hybrid", "error").inc()
-            _RAG_LAT.labels("hybrid", "error").observe(max(0.0, _t.perf_counter() - _start))
-            vector_error_code = type(e).__name__
-            results_vec = []
-    else:
-        vector_error_code = "SKIPPED_BY_ROUTE_POLICY"
+    service = get_code_hybrid_search_service()
+    cm = _tracer.start_as_current_span("rag.hybrid") if _OTEL else nullcontext()
+    error_code: str | None = None
     try:
-        _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(results_vec))
-        for r in results_vec:
-            s = float(r.get("score", 0.0) or 0.0)
-            _RAG_SCORES.labels("hybrid").observe(max(0.0, min(1.0, s)))
-    except Exception:
-        pass
+        with cm:  # type: ignore
+            result = await service.search(
+                query=query,
+                limit=limit,
+                min_score=min_score,
+                user_id=uid,
+                route_decision=route_decision,
+            )
+        _RAG_REQ.labels("hybrid", "success").inc()
+        _RAG_LAT.labels("hybrid", "success").observe(max(0.0, time.perf_counter() - started_at))
+    except Exception as exc:
+        _RAG_REQ.labels("hybrid", "error").inc()
+        _RAG_LAT.labels("hybrid", "error").observe(max(0.0, time.perf_counter() - started_at))
+        error_code = type(exc).__name__
+        result = {
+            "answer": "",
+            "citations": [],
+            "items": [],
+            "metrics": {"lexical_count": 0, "vector_count": 0, "graph_count": 0},
+            "errors": {"hybrid": error_code},
+        }
+
+    citations = list(result.get("citations") or [])
+    items = list(result.get("items") or [])
+    metrics = result.get("metrics") or {}
+    result_errors = result.get("errors") or {}
+    item_scores = [item.get("score") for item in items if isinstance(item, dict)]
+
+    _emit_rag_step(
+        endpoint="/rag/hybrid_search",
+        step="lexical_retrieval",
+        source="lexical",
+        db="neo4j",
+        started_at=started_at,
+        scores=[
+            citation.get("score")
+            for citation in citations
+            if isinstance(citation, dict) and citation.get("source") == "lexical"
+        ],
+        error_code=result_errors.get("lexical") if graph_enabled else "SKIPPED_BY_ROUTE_POLICY",
+        extra={"result_count": int(metrics.get("lexical_count", 0) or 0), **route_meta},
+    )
     _emit_rag_step(
         endpoint="/rag/hybrid_search",
         step="vector_retrieval",
         source="vector",
         db="qdrant",
-        started_at=_start,
-        scores=[r.get("score") for r in results_vec if isinstance(r, dict)],
-        error_code=vector_error_code,
-        extra={"result_count": len(results_vec), **route_meta},
+        started_at=started_at,
+        scores=[
+            citation.get("score")
+            for citation in citations
+            if isinstance(citation, dict) and citation.get("source") == "vector"
+        ],
+        error_code=result_errors.get("vector") if vector_enabled else "SKIPPED_BY_ROUTE_POLICY",
+        extra={"result_count": int(metrics.get("vector_count", 0) or 0), **route_meta},
     )
-    from app.db.graph import get_graph_db
-    from app.repositories.knowledge_repository import KnowledgeRepository
-
-    graph_start = time.perf_counter()
-    graph_error_code: str | None = None
-    concepts: list[dict[str, Any]] = []
-    if graph_enabled:
-        try:
-            kr = KnowledgeRepository(await get_graph_db())
-            concepts = await kr.find_related_concepts(concept=query, max_depth=2, limit=limit)
-        except Exception as e:
-            graph_error_code = type(e).__name__
-            concepts = []
-    else:
-        graph_error_code = "SKIPPED_BY_ROUTE_POLICY"
-    graph_scores: list[float] = []
-    for c in concepts:
-        try:
-            graph_scores.append(1.0 / (1.0 + float(c.get("distance") or 1.0)))
-        except Exception:
-            continue
     _emit_rag_step(
         endpoint="/rag/hybrid_search",
         step="graph_retrieval",
         source="graph",
         db="neo4j",
-        started_at=graph_start,
-        scores=graph_scores,
-        error_code=graph_error_code,
-        extra={"result_count": len(concepts), **route_meta},
+        started_at=started_at,
+        scores=[
+            citation.get("score")
+            for citation in citations
+            if isinstance(citation, dict) and citation.get("source") == "graph"
+        ],
+        error_code=result_errors.get("graph") if graph_enabled else "SKIPPED_BY_ROUTE_POLICY",
+        extra={"result_count": int(metrics.get("graph_count", 0) or 0), **route_meta},
     )
-    citations: list[dict[str, Any]] = []
-    for r in results_vec:
-        meta = r.get("metadata") or {}
-        citations.append(
-            {
-                "source": "vector",
-                "score": r.get("score"),
-                "type": meta.get("type"),
-                "id": r.get("id"),
-                "doc_id": meta.get("doc_id"),
-                "file_path": meta.get("file_path"),
-                "origin": meta.get("origin"),
-            }
-        )
-    for c in concepts:
-        citations.append(
-            {
-                "source": "graph",
-                "concept": c.get("concept"),
-                "relationship": c.get("relationship"),
-                "distance": c.get("distance"),
-            }
-        )
-    from app.config import settings
+    _emit_rag_step(
+        endpoint="/rag/hybrid_search",
+        step="merge_results",
+        source="hybrid",
+        db="qdrant+neo4j",
+        started_at=started_at,
+        scores=item_scores,
+        confidence=confidence_from_scores(item_scores),
+        error_code=error_code,
+        extra={
+            "vector_enabled": vector_enabled,
+            "graph_enabled": graph_enabled,
+            "lexical_count": int(metrics.get("lexical_count", 0) or 0),
+            "vector_count": int(metrics.get("vector_count", 0) or 0),
+            "graph_count": int(metrics.get("graph_count", 0) or 0),
+            "citation_count": len(citations),
+            "user_id_present": bool(uid),
+            **route_meta,
+        },
+    )
+    try:
+        _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(citations))
+        for citation in citations:
+            score = float(citation.get("score", 0.0) or 0.0)
+            _RAG_SCORES.labels("hybrid").observe(max(0.0, min(1.0, score)))
+    except Exception:
+        pass
 
-    wv = float(getattr(settings, "RAG_HYBRID_VECTOR_WEIGHT", 0.7))
-    wg = float(getattr(settings, "RAG_HYBRID_GRAPH_WEIGHT", 0.3))
-
-    def _score_vec(r: dict[str, Any]) -> float:
-        try:
-            s = float(r.get("score") or 0.0)
-            return wv * max(0.0, min(1.0, s))
-        except Exception:
-            return 0.0
-
-    def _score_concept(c: dict[str, Any]) -> float:
-        try:
-            d = float(c.get("distance") or 1.0)
-            return wg * max(0.0, 1.0 / (1.0 + d))
-        except Exception:
-            return 0.0
-
-    merged: list[dict[str, Any]] = []
-    for r in results_vec:
-        merged.append(
-            {"type": "vector", "content": str(r.get("content") or ""), "score": _score_vec(r)}
-        )
-    for c in concepts:
-        merged.append(
-            {
-                "type": "graph",
-                "content": f"Related concept: {c.get('concept')} via {c.get('relationship')}",
-                "score": _score_concept(c),
-            }
-        )
-    merged.sort(key=lambda x: x.get("score", 0.0), reverse=True)
-    snippets: list[str] = []
-    for m in merged[: max(1, min(3, limit))]:
-        t = str(m.get("content") or "")
-        if t:
-            snippets.append(t[:300])
-    answer = "\n\n".join(snippets) if snippets else "Nenhum trecho relevante encontrado."
-    return RAGHybridResponse(answer=answer, citations=citations)
+    return RAGHybridResponse(answer=str(result.get("answer") or ""), citations=citations[:limit])

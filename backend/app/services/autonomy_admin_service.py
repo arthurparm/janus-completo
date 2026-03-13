@@ -22,6 +22,7 @@ from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience, GraphRelationship
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.autonomy_admin_repository import AutonomyAdminRepository
+from app.services.code_hybrid_search_service import get_code_hybrid_search_service
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
 from app.services.meta_agent_service import get_meta_agent_service
@@ -1694,50 +1695,33 @@ class AutonomyAdminService:
     async def _recall_self_study_memories(
         self, *, question: str, limit: int = 5
     ) -> list[dict[str, Any]]:
-        filters = {
-            "origin": "self_study",
-            "strong_memory": True,
-            "source_kind": "code_file",
-            "content_kind": "code_summary",
-            "neo4j_sync_status": "linked",
-        }
         try:
-            memory_db = await get_memory_db()
-            recalled = await memory_db.arecall_filtered(
+            service = get_code_hybrid_search_service()
+            result = await service.search(
                 query=question,
-                filters=filters,
                 limit=limit,
                 min_score=0.1,
+                user_id=None,
             )
-            if not recalled:
-                recalled = await memory_db.arecall_filtered(
-                    query=question,
-                    filters={
-                        "origin": "self_study",
-                        "strong_memory": True,
-                        "source_kind": "code_file",
-                        "content_kind": "code_summary",
-                    },
-                    limit=limit,
-                    min_score=0.1,
-                )
         except Exception as exc:
             logger.warning("admin_code_qa_self_study_qdrant_failed", error=str(exc))
             return []
 
         rows: list[dict[str, Any]] = []
-        for item in recalled or []:
-            metadata = item.metadata or {}
-            rel = self._normalize_repo_path(metadata.get("file_path"))
+        for item in result.get("items") or []:
+            rel = self._normalize_repo_path(item.get("file_path"))
             if not self._is_allowed_file_path(rel):
+                continue
+            summary = str(item.get("content") or "").strip()
+            if not summary:
                 continue
             rows.append(
                 {
                     "file_path": rel,
-                    "summary": str(item.content or "").strip(),
-                    "updated_at": metadata.get("captured_at"),
-                    "score": getattr(item, "score", 0.0),
-                    "source": "qdrant",
+                    "summary": summary,
+                    "updated_at": None,
+                    "score": item.get("score", 0.0),
+                    "source": item.get("source") or "hybrid",
                 }
             )
         return rows

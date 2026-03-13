@@ -64,6 +64,7 @@ class KnowledgeRoutingPolicy:
         if (
             self._mode == "deterministic"
             and not user_id
+            and _intent_requires_user_scope(key)
             and decision.primary == RouteTarget.QDRANT
             and RouteTarget.POSTGRES in decision.secondary
         ):
@@ -92,6 +93,14 @@ def _normalize_intent(intent: RouteIntent | str) -> str:
     if isinstance(intent, RouteIntent):
         return intent.value
     return str(intent or "").strip().lower()
+
+
+def _intent_requires_user_scope(intent: str) -> bool:
+    return intent in {
+        RouteIntent.CHAT_CONTEXT_RETRIEVAL.value,
+        RouteIntent.RAG_USER_CHAT_SEARCH.value,
+        RouteIntent.RAG_PRODUCTIVITY_SEARCH.value,
+    }
 
 
 def _parse_target(raw: Any, *, fallback: RouteTarget) -> RouteTarget:

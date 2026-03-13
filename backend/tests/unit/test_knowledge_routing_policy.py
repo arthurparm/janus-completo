@@ -30,6 +30,21 @@ def test_missing_user_id_falls_back_from_qdrant_to_postgres():
     assert decision.rule_id.endswith(".missing_user_fallback")
 
 
+def test_hybrid_route_without_user_id_keeps_global_code_path():
+    policy = load_knowledge_routing_policy()
+
+    decision = policy.resolve(
+        RouteIntent.RAG_HYBRID_SEARCH,
+        user_id=None,
+        include_graph=True,
+        query="memory_core",
+    )
+
+    assert decision.primary == RouteTarget.QDRANT
+    assert RouteTarget.NEO4J in decision.secondary
+    assert not decision.rule_id.endswith(".missing_user_fallback")
+
+
 def test_unknown_intent_uses_default_postgres_route():
     policy = load_knowledge_routing_policy()
 
