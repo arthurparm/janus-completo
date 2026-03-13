@@ -595,6 +595,11 @@ class KnowledgeSpaceService:
     def _normalize_heading_token(self, token: str) -> str:
         return re.sub(r"[^A-Za-zÀ-ÿ]", "", str(token or "").strip()).lower()
 
+    def _chunk_rows(self, rows: list[dict[str, Any]], *, batch_size: int) -> list[list[dict[str, Any]]]:
+        if batch_size <= 0:
+            return [rows]
+        return [rows[index : index + batch_size] for index in range(0, len(rows), batch_size)]
+
     def _summarize_text(self, text: str, max_chars: int = 360) -> str:
         clean = re.sub(r"\s+", " ", str(text or "")).strip()
         if not clean:
@@ -714,50 +719,45 @@ class KnowledgeSpaceService:
             },
             operation="knowledge_space_graph_root",
         )
-        for manifest in manifests:
+        work_rows = [
+            {
+                "doc_id": str(manifest["doc_id"]),
+                "file_name": manifest.get("file_name"),
+                "user_id": str(user_id),
+                "source_type": manifest.get("source_type"),
+                "source_id": manifest.get("source_id"),
+                "edition_or_version": manifest.get("edition_or_version"),
+                "language": manifest.get("language"),
+            }
+            for manifest in manifests
+        ]
+        if work_rows:
             await graph.execute(
                 """
                 MATCH (ks:KnowledgeSpace {id: $knowledge_space_id})
-                MERGE (w:Work {doc_id: $doc_id})
-                SET w.file_name = $file_name,
-                    w.user_id = $user_id,
-                    w.source_type = $source_type,
-                    w.source_id = $source_id,
-                    w.edition_or_version = $edition_or_version,
-                    w.language = $language,
+                UNWIND $works AS work
+                MERGE (w:Work {doc_id: work.doc_id})
+                SET w.file_name = work.file_name,
+                    w.user_id = work.user_id,
+                    w.source_type = work.source_type,
+                    w.source_id = work.source_id,
+                    w.edition_or_version = work.edition_or_version,
+                    w.language = work.language,
                     w.updated_at = timestamp()
                 MERGE (ks)-[:CONTAINS]->(w)
                 """,
                 {
                     "knowledge_space_id": str(knowledge_space["knowledge_space_id"]),
-                    "doc_id": str(manifest["doc_id"]),
-                    "file_name": manifest.get("file_name"),
-                    "user_id": str(user_id),
-                    "source_type": manifest.get("source_type"),
-                    "source_id": manifest.get("source_id"),
-                    "edition_or_version": manifest.get("edition_or_version"),
-                    "language": manifest.get("language"),
+                    "works": work_rows,
                 },
-                operation="knowledge_space_graph_work",
+                operation="knowledge_space_graph_work_batch",
             )
         grouped: dict[str, list[dict[str, Any]]] = {}
+        section_rows: list[dict[str, Any]] = []
+        concept_rows: list[dict[str, Any]] = []
         for section in sections:
             grouped.setdefault(str(section["doc_id"]), []).append(section)
-            await graph.execute(
-                """
-                MATCH (w:Work {doc_id: $doc_id})
-                MERGE (s:Section {section_id: $section_id})
-                SET s.knowledge_space_id = $knowledge_space_id,
-                    s.title = $title,
-                    s.summary = $summary,
-                    s.order = $order,
-                    s.updated_at = timestamp()
-                MERGE (w)-[:CONTAINS]->(s)
-                MERGE (cs:CanonicalSummary {summary_id: $summary_id})
-                SET cs.body = $summary,
-                    cs.updated_at = timestamp()
-                MERGE (s)-[:SUPPORTED_BY]->(cs)
-                """,
+            section_rows.append(
                 {
                     "doc_id": str(section["doc_id"]),
                     "section_id": str(section["section_id"]),
@@ -770,34 +770,61 @@ class KnowledgeSpaceService:
                         section["knowledge_space_id"],
                         section["section_id"],
                     ),
-                },
-                operation="knowledge_space_graph_section",
+                }
             )
             for concept in section["concepts"]:
-                await graph.execute(
-                    """
-                    MATCH (s:Section {section_id: $section_id})
-                    MERGE (c:Concept {name: $concept})
-                    SET c.updated_at = timestamp()
-                    MERGE (s)-[:DEFINES]->(c)
-                    """,
-                    {"section_id": str(section["section_id"]), "concept": concept},
-                    operation="knowledge_space_graph_concept",
-                )
+                concept_rows.append({"section_id": str(section["section_id"]), "concept": concept})
+        for batch in self._chunk_rows(section_rows, batch_size=100):
+            await graph.execute(
+                """
+                UNWIND $sections AS section
+                MATCH (w:Work {doc_id: section.doc_id})
+                MERGE (s:Section {section_id: section.section_id})
+                SET s.knowledge_space_id = section.knowledge_space_id,
+                    s.title = section.title,
+                    s.summary = section.summary,
+                    s.order = section.order,
+                    s.updated_at = timestamp()
+                MERGE (w)-[:CONTAINS]->(s)
+                MERGE (cs:CanonicalSummary {summary_id: section.summary_id})
+                SET cs.body = section.summary,
+                    cs.updated_at = timestamp()
+                MERGE (s)-[:SUPPORTED_BY]->(cs)
+                """,
+                {"sections": batch},
+                operation="knowledge_space_graph_section_batch",
+            )
+        for batch in self._chunk_rows(concept_rows, batch_size=250):
+            await graph.execute(
+                """
+                UNWIND $concepts AS item
+                MATCH (s:Section {section_id: item.section_id})
+                MERGE (c:Concept {name: item.concept})
+                SET c.updated_at = timestamp()
+                MERGE (s)-[:DEFINES]->(c)
+                """,
+                {"concepts": batch},
+                operation="knowledge_space_graph_concept_batch",
+            )
         for doc_id, rows in grouped.items():
             ordered = sorted(rows, key=lambda item: int(item["order"]))
-            for previous, current in zip(ordered, ordered[1:], strict=False):
+            sequence_rows = [
+                {
+                    "previous_id": str(previous["section_id"]),
+                    "current_id": str(current["section_id"]),
+                }
+                for previous, current in zip(ordered, ordered[1:], strict=False)
+            ]
+            for batch in self._chunk_rows(sequence_rows, batch_size=250):
                 await graph.execute(
                     """
-                    MATCH (a:Section {section_id: $previous_id})
-                    MATCH (b:Section {section_id: $current_id})
+                    UNWIND $links AS link
+                    MATCH (a:Section {section_id: link.previous_id})
+                    MATCH (b:Section {section_id: link.current_id})
                     MERGE (a)-[:NEXT_SECTION]->(b)
                     """,
-                    {
-                        "previous_id": str(previous["section_id"]),
-                        "current_id": str(current["section_id"]),
-                    },
-                    operation="knowledge_space_graph_sequence",
+                    {"links": batch},
+                    operation="knowledge_space_graph_sequence_batch",
                 )
 
     def _build_consolidation_summary(
