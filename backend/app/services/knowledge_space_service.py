@@ -1492,6 +1492,7 @@ class KnowledgeSpaceService:
         limit: int,
     ) -> list[dict[str, Any]]:
         grouped: dict[str, dict[str, Any]] = {}
+        lowered_question = str(question or "").casefold()
         question_terms = {
             token
             for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", str(question or "").casefold())
@@ -1564,6 +1565,21 @@ class KnowledgeSpaceService:
             if len(selected) >= max(1, int(limit)):
                 break
             selected.append(item)
+        if answer_strategy == "sequence" and any(
+            token in lowered_question for token in ("suplement", "amplia", "adiciona", "herois", "heróis")
+        ):
+            selected_ids = {item["section_id"] for item in selected}
+            has_supplement = any(item.get("doc_role") == "supplement" for item in selected)
+            if not has_supplement:
+                for item in ordered:
+                    if item["section_id"] in selected_ids:
+                        continue
+                    if item.get("doc_role") != "supplement":
+                        continue
+                    selected.append(item)
+                    if len(selected) > max(1, int(limit)):
+                        selected = selected[: max(1, int(limit)) - 1] + [item]
+                    break
         return selected
 
     def _build_canonical_gaps(

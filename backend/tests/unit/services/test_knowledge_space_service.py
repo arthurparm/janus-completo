@@ -1,5 +1,6 @@
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
@@ -106,6 +107,73 @@ def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
     service = KnowledgeSpaceService()
 
     assert service._detect_answer_strategy("Em que trecho ou seção o livro fala sobre novas opções de raças?") == "locator"
+
+
+def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
+    service = KnowledgeSpaceService()
+    points = [
+        SimpleNamespace(
+            id="base-1",
+            score=0.8,
+            payload={
+                "content": "Passo base de criação.",
+                "metadata": {
+                    "section_id": "base-1",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow"],
+                    "concepts": ["personagem"],
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="base-2",
+            score=0.75,
+            payload={
+                "content": "Outro passo base.",
+                "metadata": {
+                    "section_id": "base-2",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 2,
+                    "section_title": "Toques Finais",
+                    "applies_to": ["workflow"],
+                    "concepts": ["ficha"],
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-1",
+            score=0.5,
+            payload={
+                "content": "Suplemento adiciona novas opções nesta etapa.",
+                "metadata": {
+                    "section_id": "supp-1",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 3,
+                    "section_title": "Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["opções"],
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções?",
+        answer_strategy="sequence",
+        limit=2,
+    )
+
+    assert len(selected) == 2
+    assert any(item["doc_role"] == "supplement" for item in selected)
 
 
 def test_build_consolidation_metrics_rewards_useful_sections():
