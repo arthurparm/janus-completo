@@ -717,6 +717,50 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-030] RabbitMQ Silent Fail-Open Issue
+- Problema atual: O message_broker (`backend/app/core/infrastructure/message_broker.py`) cai em falha silenciosa ao perder conexão (`[Errno 111] Connection refused`) com o RabbitMQ em vez de enviar alertas ou re-tentar de forma persistente alertável.
+- Solucao proposta: Implementar uma camada de heartbeat rigorosa e circuit breaker que notifique no logger `ALERT` quando houver fail-open para o modo offline.
+- Impacto esperado: Menor tempo de inatividade indetectável em produção e filas presas.
+- Riscos: Excesso de alertas durante manutenções programadas ou transient network drops.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Parser Inseguro de XML para Documentos
+- Problema atual: O arquivo `backend/app/services/document_parser_service.py` utiliza o módulo padrão `xml.etree.ElementTree` que é vulnerável a ataques de injeção XML (XXE/Billion Laughs) ao processar pacotes DOCX de origem não confiável.
+- Solucao proposta: Substituir as chamadas de `xml.etree.ElementTree` pelo wrapper seguro oferecido pelo pacote `defusedxml`.
+- Impacto esperado: Blindagem da API de ingestão contra exploração de denial of service ou vazamento via entidades externas de XML.
+- Riscos: Nenhum, já que a compatibilidade entre a interface do `defusedxml` e a biblioteca nativa é completa.
+- Dependencias: Inclusão de `defusedxml` no `requirements.txt`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Configuração Insegura de Bind Local no Windows Agent
+- Problema atual: O script local de controle (`backend/windows_agent.py`) levanta na rede fazendo bind via `uvicorn.run` no host global `0.0.0.0` e sem autenticação.
+- Solucao proposta: Alterar para `127.0.0.1` ou limitar aos IPs do Docker Internal Network.
+- Impacto esperado: Eliminar a exposição acidental de endpoints intrusivos em redes WiFi ou locais do desenvolvedor.
+- Riscos: A conectividade entre container e o hospedeiro deve ser checada se depender de IP explícito invés de DNS da docker engine (`host.docker.internal`).
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Chamadas HTTP Sem Timeout no Tooling
+- Problema atual: Múltiplos scripts de automação ou teste em `tooling/` e `qa/` fazem o uso da biblioteca `requests` (ex: `requests.get`) ou abrem sessões sem a propriedade global `timeout=` forçada.
+- Solucao proposta: Criar wrappers ou forçar timeout padronizado nestas requisições.
+- Impacto esperado: Menor incidência de CI jobs "travados" por requisições esquecidas ou servidores instáveis.
+- Riscos: Tarefas legítimas mais longas sofrerem TimeoutException antes do fim.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

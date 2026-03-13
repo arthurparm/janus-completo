@@ -113,3 +113,41 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (Atual)
+
+### 11. Silent Fail-Open no RabbitMQ (Message Broker)
+**Descrição:** Observou-se que falhas de conexão severas (`[Errno 111] Connection refused`) no RabbitMQ não emitem alertas bloqueantes de imediato nem escalam o erro para os sistemas de notificação com severidade adequada, resultando num downgrade silencioso para o modo "offline" de orquestração.
+**Evidências:**
+- Lógicas na infraestrutura do `backend/app/core/infrastructure/message_broker.py` capturam exceções e efetuam fallback para bypass do sistema de filas.
+
+**Próximos passos:**
+- Instrumentar heartbeats ou circuit breaking logs (`ALERT` level) no serviço sempre que o downgrade para offline acontecer de forma inesperada.
+- Adicionado SG-030 no backlog técnico (`melhorias-possiveis.md`).
+
+### 12. Vulnerabilidade de injeção em Parse de XML e DOCX
+**Descrição:** Identificou-se que o parser de leitura de relatórios ou documentos extrai metadados através de métodos vulneráveis do core do Python (`xml.etree.ElementTree`). Arquivos corrompidos ou mal-intencionados podem se aproveitar desta fragilidade via XXE exploits.
+**Evidências:**
+- `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para realizar parses do contexto.
+
+**Próximos passos:**
+- Instalar a biblioteca `defusedxml` e refatorar as chamadas trocando para `defusedxml.ElementTree.fromstring`.
+- Adicionado SG-031 no backlog técnico.
+
+### 13. Bind Vulnerável e Exposição de Rede do Agente OS
+**Descrição:** Semelhante a ausência de AuthN detectada anteriormente (SG-021), notou-se o uso direto do host `0.0.0.0` no lançamento da rede do `backend/windows_agent.py`.
+**Evidências:**
+- O servidor sobe permitindo conexões de qualquer placa de rede no SO (apontado pelo Bandit test suite via B104).
+
+**Próximos passos:**
+- Trocar o Bind padrão de `uvicorn.run` para restringir as rotas para rede interna/127.0.0.1 ou restringir via firewall configurado pelo startup.
+- Adicionado SG-032 no backlog técnico.
+
+### 14. Requests assíncronas / Test tooling suscetíveis a hangs
+**Descrição:** Múltiplas ferramentas de QA ou diagnóstico que dependem da API do back-end para rodar validações e testes chamam a lib `requests` sem injetar ou forçar a property `timeout`. Isso acarreta risco de "hanging" e processos zumbis nos CI runners.
+**Evidências:**
+- Scripts em `qa/` e `tooling/` como `tooling/run_api_e2e_all.py` instanciam `requests.Session()` ou chamam `requests.get` ou `.post` de forma cega, apenas confiando na reatividade imediata do host.
+
+**Próximos passos:**
+- Modificar estes scripts de ferramenta definindo um timeout obrigatório em milisegundos de acordo com o threshold razoável de resposta do server.
+- Adicionado SG-033 no backlog técnico.
