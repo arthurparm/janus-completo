@@ -244,6 +244,43 @@ class MessageOrchestrationService:
         )
         return any(re.search(pattern, lowered) for pattern in patterns)
 
+    @staticmethod
+    def _prefer_quick_lookup(message: str, understanding: dict[str, Any] | None) -> bool:
+        intent = str((understanding or {}).get("intent") or "").strip().lower()
+        if intent == "file_reference":
+            return True
+        lowered = str(message or "").lower()
+        patterns = (
+            r"\bonde\b",
+            r"\bem que pagina\b",
+            r"\bem que página\b",
+            r"\bqual pagina\b",
+            r"\bqual página\b",
+            r"\bcite\b",
+            r"\bcitacao\b",
+            r"\bcitação\b",
+            r"\btrecho\b",
+            r"\bpagina\b",
+            r"\bpágina\b",
+            r"\blocaliz",
+        )
+        return any(re.search(pattern, lowered) for pattern in patterns)
+
+    def _resolve_knowledge_space_mode(
+        self,
+        *,
+        message: str,
+        understanding: dict[str, Any] | None,
+        requested_knowledge_space_id: str | None,
+        source_scope: dict[str, Any] | None,
+    ) -> str:
+        if self._prefer_quick_lookup(message, understanding):
+            return "quick_lookup"
+        consolidation_status = str((source_scope or {}).get("consolidation_status") or "").strip().lower()
+        if requested_knowledge_space_id and consolidation_status in {"ready", "partial"}:
+            return "canonical_answer"
+        return "canonical_answer" if self._prefer_canonical_answer(message, understanding) else "quick_lookup"
+
     async def _generate_knowledge_space_reply(
         self,
         *,
@@ -264,7 +301,13 @@ class MessageOrchestrationService:
         if not knowledge_space_id:
             return None
         service = KnowledgeSpaceService(manifest_repo=self._manifest_repo)
-        mode = "canonical_answer" if self._prefer_canonical_answer(message, understanding) else "quick_lookup"
+        source_scope = service.get_space(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
+        mode = self._resolve_knowledge_space_mode(
+            message=message,
+            understanding=understanding,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+            source_scope=source_scope,
+        )
         result = await service.query_space(
             knowledge_space_id=knowledge_space_id,
             user_id=str(user_id),

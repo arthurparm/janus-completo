@@ -599,22 +599,30 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
             }
         ]
     )
+    query_space = AsyncMock(
+        return_value={
+            "answer": "Base consolidada indica:\n- Capítulo 1: ordem de estudo.",
+            "mode_used": "canonical_answer",
+            "base_used": "consolidated",
+            "source_scope": {
+                "knowledge_space_id": "ks-1",
+                "consolidation_status": "ready",
+            },
+            "citations": [{"doc_id": "doc-1", "file_name": "livro.pdf"}],
+            "confidence": 0.93,
+            "gaps_or_conflicts": [],
+        }
+    )
     monkeypatch.setattr(
         "app.services.chat.message_orchestration_service.KnowledgeSpaceService.query_space",
-        AsyncMock(
-            return_value={
-                "answer": "Base consolidada indica:\n- Capítulo 1: ordem de estudo.",
-                "mode_used": "canonical_answer",
-                "base_used": "consolidated",
-                "source_scope": {
-                    "knowledge_space_id": "ks-1",
-                    "consolidation_status": "ready",
-                },
-                "citations": [{"doc_id": "doc-1", "file_name": "livro.pdf"}],
-                "confidence": 0.93,
-                "gaps_or_conflicts": [],
-            }
-        ),
+        query_space,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.KnowledgeSpaceService.get_space",
+        lambda self, *, knowledge_space_id, user_id: {
+            "knowledge_space_id": knowledge_space_id,
+            "consolidation_status": "ready",
+        },
     )
     service = _build_service(repo=repo, manifest_repo=manifest_repo)
 
@@ -633,6 +641,7 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
     assert "Base consolidada indica" in result["response"]
     assert repo.message_records[-1]["metadata"]["knowledge_space_id"] == "ks-1"
     assert repo.message_records[-1]["metadata"]["mode_used"] == "canonical_answer"
+    assert query_space.await_args.kwargs["mode"] == "canonical_answer"
 
 
 def test_prefer_canonical_answer_for_comparative_question():
@@ -642,6 +651,32 @@ def test_prefer_canonical_answer_for_comparative_question():
         "Como Heróis de Arton complementa o livro base? Diferencie o que cada um adiciona.",
         {"intent": "question"},
     )
+
+
+def test_resolve_knowledge_space_mode_prefers_canonical_for_explicit_ready_space():
+    service = _build_service()
+
+    mode = service._resolve_knowledge_space_mode(
+        message="Como Heróis de Arton complementa o livro base?",
+        understanding={"intent": "question"},
+        requested_knowledge_space_id="ks-1",
+        source_scope={"consolidation_status": "ready"},
+    )
+
+    assert mode == "canonical_answer"
+
+
+def test_resolve_knowledge_space_mode_keeps_quick_lookup_for_locator_prompt():
+    service = _build_service()
+
+    mode = service._resolve_knowledge_space_mode(
+        message="Em que página o livro fala do treinador?",
+        understanding={"intent": "question"},
+        requested_knowledge_space_id="ks-1",
+        source_scope={"consolidation_status": "ready"},
+    )
+
+    assert mode == "quick_lookup"
 
 
 @pytest.mark.asyncio
