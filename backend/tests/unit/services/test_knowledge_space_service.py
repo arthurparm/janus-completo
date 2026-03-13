@@ -111,6 +111,9 @@ def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
 
 def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções?"
+    )
     points = [
         SimpleNamespace(
             id="base-1",
@@ -126,6 +129,10 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
                     "section_title": "Capítulo Um",
                     "applies_to": ["workflow"],
                     "concepts": ["personagem"],
+                    "usefulness_score": 0.8,
+                    "heading_quality_score": 0.7,
+                    "content_density_score": 0.7,
+                    "noise_score": 0.1,
                 },
             },
         ),
@@ -143,6 +150,10 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
                     "section_title": "Toques Finais",
                     "applies_to": ["workflow"],
                     "concepts": ["ficha"],
+                    "usefulness_score": 0.7,
+                    "heading_quality_score": 0.6,
+                    "content_density_score": 0.6,
+                    "noise_score": 0.1,
                 },
             },
         ),
@@ -160,6 +171,10 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
                     "section_title": "Campeões de Arton",
                     "applies_to": ["workflow", "character_options"],
                     "concepts": ["opções"],
+                    "usefulness_score": 0.8,
+                    "heading_quality_score": 0.8,
+                    "content_density_score": 0.7,
+                    "noise_score": 0.1,
                 },
             },
         ),
@@ -168,6 +183,7 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     selected = service._select_canonical_candidates(
         points=points,
         question="Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções?",
+        query_profile=query_profile,
         answer_strategy="sequence",
         limit=2,
     )
@@ -178,6 +194,7 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
 
 def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile("Em que trecho o livro fala sobre novas opções de raças?")
     points = [
         SimpleNamespace(
             id="base",
@@ -200,10 +217,39 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     selected = service._select_quick_lookup_points(
         points=points,
         question="Em que trecho o livro fala sobre novas opções de raças?",
+        query_profile=query_profile,
         limit=1,
     )
 
     assert selected[0].id == "supp"
+
+
+def test_finalize_sections_filters_noise_and_keeps_useful_rule():
+    service = KnowledgeSpaceService()
+
+    sections, skipped = service._finalize_sections(
+        [
+            {
+                "title": "Capítulo 1",
+                "body": "Escolha seus atributos, origem, raça e classe para montar o personagem.",
+                "section_role": "core_rules",
+                "order": 1,
+                "evidence_span_ids": ["a", "b"],
+            },
+            {
+                "title": "SUMÁRIO",
+                "body": "Capítulo 1 ........ 3 Capítulo 2 ........ 9",
+                "section_role": "front_matter",
+                "order": 2,
+                "evidence_span_ids": ["c"],
+            },
+        ]
+    )
+
+    assert len(sections) == 1
+    assert skipped == 1
+    assert sections[0]["is_useful"] is True
+    assert sections[0]["usefulness_score"] > 0.4
 
 
 def test_build_consolidation_metrics_rewards_useful_sections():
@@ -211,9 +257,9 @@ def test_build_consolidation_metrics_rewards_useful_sections():
 
     metrics = service._build_consolidation_metrics(
         sections=[
-            {"section_role": "core_rules"},
-            {"section_role": "supplement_rules"},
-            {"section_role": "optional_rules"},
+            {"section_role": "core_rules", "usefulness_score": 0.82},
+            {"section_role": "supplement_rules", "usefulness_score": 0.77},
+            {"section_role": "optional_rules", "usefulness_score": 0.61},
         ],
         skipped_sections=2,
     )
@@ -221,4 +267,4 @@ def test_build_consolidation_metrics_rewards_useful_sections():
     assert metrics["sections_total"] == 5
     assert metrics["sections_indexed"] == 3
     assert metrics["canonical_frames_total"] == 3
-    assert metrics["consolidation_quality_score"] > 0.5
+    assert metrics["consolidation_quality_score"] > 0.6

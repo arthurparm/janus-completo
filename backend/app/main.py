@@ -293,6 +293,7 @@ def healthz():
 @app.get("/health", tags=["System"], summary="Health (detailed)")
 def health():
     """Health check detalhado com informações do sistema"""
+    build_ref = str(os.getenv("JANUS_BUILD_REF") or "").strip() or None
     health_info = {
         "status": "ok",
         "service": settings.APP_NAME,
@@ -307,6 +308,8 @@ def health():
         if settings.TAILSCALE_SERVE_ENABLED
         else None,
     }
+    if build_ref:
+        health_info["build_ref"] = build_ref
     return health_info
 
 

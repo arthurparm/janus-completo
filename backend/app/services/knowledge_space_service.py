@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import time
+import unicodedata
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
@@ -167,6 +168,19 @@ _NOISE_PATTERNS = (
     r"^(?:todos os direitos reservados|impresso no brasil|copyright)\b",
     r"^isbn\b",
 )
+_GENERIC_HEADING_KEYWORDS = {
+    "capitulo",
+    "capítulo",
+    "parte",
+    "secao",
+    "seção",
+    "topico",
+    "tópico",
+    "visao",
+    "visão",
+    "geral",
+}
+_LOW_SIGNAL_QUERY_TOKENS = {"onde", "trecho", "pagina", "página", "secao", "seção", "capitulo", "capítulo"}
 
 
 class KnowledgeSpaceService:
@@ -356,13 +370,11 @@ class KnowledgeSpaceService:
                 manifest=manifest,
                 knowledge_space=space,
             )
-            for section in built_sections:
-                if section["section_role"] in {"noise", "table_like"}:
-                    skipped_sections += 1
-                    continue
-                sections.append(section)
+            sections.extend(built_sections)
 
         sections = await self._enrich_sections_with_llm(sections, knowledge_space=space)
+        sections, extra_skipped = self._finalize_sections(sections)
+        skipped_sections += extra_skipped
         consolidation_metrics = self._build_consolidation_metrics(
             sections=sections,
             skipped_sections=skipped_sections,
@@ -903,6 +915,158 @@ class KnowledgeSpaceService:
     def _normalize_heading_token(self, token: str) -> str:
         return re.sub(r"[^A-Za-zÀ-ÿ]", "", str(token or "").strip()).lower()
 
+    def _normalize_search_text(self, value: str) -> str:
+        normalized = unicodedata.normalize("NFKD", str(value or ""))
+        normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+        normalized = normalized.casefold()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized.strip()
+
+    def _tokenize_search_terms(self, value: str, *, min_len: int = 3) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9_-]{%d,}" % max(1, int(min_len)), self._normalize_search_text(value))
+            if token not in _STOPWORDS and token not in _LOW_SIGNAL_QUERY_TOKENS
+        }
+
+    def _score_heading_quality(self, title: str) -> float:
+        normalized = self._normalize_heading_title(title)
+        searchable = self._normalize_search_text(normalized)
+        tokens = [token for token in searchable.split() if token]
+        if not tokens:
+            return 0.0
+        score = 0.18
+        if len(tokens) <= 7:
+            score += 0.18
+        else:
+            score -= 0.10
+        if any(token in _HEADING_KEYWORDS for token in tokens):
+            score += 0.22
+        if re.match(r"^\d+(?:\.\d+)*\.?\s+", normalized):
+            score += 0.18
+        if normalized.isupper() and len(tokens) <= 6:
+            score += 0.08
+        if any(token in _GENERIC_HEADING_KEYWORDS for token in tokens) and len(set(tokens)) <= 2:
+            score -= 0.25
+        if re.search(r"[.!?;]", normalized):
+            score -= 0.25
+        if re.search(r"\.{2,}", normalized):
+            score -= 0.20
+        if sum(char.isdigit() for char in normalized) >= max(4, len(normalized) // 3):
+            score -= 0.12
+        return round(max(0.0, min(1.0, score)), 4)
+
+    def _score_content_density(self, body: str) -> float:
+        clean = re.sub(r"\s+", " ", str(body or "").strip())
+        if not clean:
+            return 0.0
+        tokens = re.findall(r"[A-Za-zÀ-ÿ0-9_-]+", clean)
+        if not tokens:
+            return 0.0
+        alpha_tokens = [token for token in tokens if re.search(r"[A-Za-zÀ-ÿ]", token)]
+        unique_ratio = len(set(token.casefold() for token in alpha_tokens)) / max(1, len(alpha_tokens))
+        alpha_ratio = len(alpha_tokens) / max(1, len(tokens))
+        score = 0.12
+        score += min(0.38, len(alpha_tokens) / 120)
+        score += unique_ratio * 0.24
+        score += alpha_ratio * 0.18
+        if len(alpha_tokens) < 25:
+            score -= 0.18
+        if self._looks_like_table_line(clean):
+            score -= 0.22
+        if re.search(r"\.{4,}", clean):
+            score -= 0.12
+        return round(max(0.0, min(1.0, score)), 4)
+
+    def _score_noise(self, *, title: str, body: str, section_role: str, order: int) -> float:
+        searchable_title = self._normalize_search_text(title)
+        searchable_body = self._normalize_search_text(body)
+        score = 0.0
+        if section_role == "noise":
+            score += 0.62
+        if section_role == "table_like":
+            score += 0.48
+        if section_role == "front_matter":
+            score += 0.20
+        if order <= 2 and any(keyword in searchable_title or keyword in searchable_body for keyword in _FRONT_MATTER_KEYWORDS):
+            score += 0.18
+        if len(body.split()) < 40:
+            score += 0.16
+        if re.search(r"\.{4,}", searchable_title) or re.search(r"\.{4,}", searchable_body):
+            score += 0.20
+        if any(re.search(pattern, searchable_title, flags=re.IGNORECASE) for pattern in _NOISE_PATTERNS):
+            score += 0.22
+        return round(max(0.0, min(1.0, score)), 4)
+
+    def _apply_section_quality(self, section: dict[str, Any]) -> dict[str, Any]:
+        heading_quality_score = self._score_heading_quality(str(section.get("title") or ""))
+        content_density_score = self._score_content_density(str(section.get("body") or ""))
+        noise_score = self._score_noise(
+            title=str(section.get("title") or ""),
+            body=str(section.get("body") or ""),
+            section_role=str(section.get("section_role") or "core_rules"),
+            order=int(section.get("order") or 0),
+        )
+        role_bonus = {
+            "core_rules": 0.22,
+            "supplement_rules": 0.18,
+            "optional_rules": 0.07,
+            "appendix": 0.02,
+            "front_matter": -0.12,
+            "table_like": -0.25,
+            "noise": -0.32,
+        }.get(str(section.get("section_role") or "core_rules"), 0.0)
+        evidence_bonus = min(0.08, len(section.get("evidence_span_ids") or []) * 0.02)
+        usefulness_score = (
+            0.14
+            + (heading_quality_score * 0.24)
+            + (content_density_score * 0.34)
+            + role_bonus
+            + evidence_bonus
+            - (noise_score * 0.42)
+        )
+        usefulness_score = round(max(0.0, min(1.0, usefulness_score)), 4)
+        is_useful = (
+            usefulness_score >= 0.42
+            and noise_score < 0.70
+            and str(section.get("section_role") or "") not in {"noise", "table_like", "front_matter"}
+            and content_density_score >= 0.18
+        )
+        merged = dict(section)
+        merged["heading_quality_score"] = heading_quality_score
+        merged["content_density_score"] = content_density_score
+        merged["noise_score"] = noise_score
+        merged["usefulness_score"] = usefulness_score
+        merged["is_useful"] = bool(is_useful)
+        return merged
+
+    def _finalize_sections(self, sections: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+        if not sections:
+            return [], 0
+        decorated = [self._apply_section_quality(section) for section in sections]
+        useful = [section for section in decorated if section.get("is_useful")]
+        if not useful:
+            best = max(decorated, key=lambda item: float(item.get("usefulness_score") or 0.0))
+            best["is_useful"] = True
+            useful = [best]
+        useful.sort(key=lambda item: int(item.get("order") or 0))
+        return useful, max(0, len(decorated) - len(useful))
+
+    def _build_query_profile(self, question: str) -> dict[str, Any]:
+        lowered = self._normalize_search_text(question)
+        terms = self._tokenize_search_terms(question)
+        explicit_locator = self._prefer_locator(question)
+        asks_for_supplement = any(token in lowered for token in ("suplement", "herois", "herois de arton", "adiciona", "novas opcoes"))
+        asks_for_base = any(token in lowered for token in ("livro base", "regra principal", "nucleo", "núcleo"))
+        return {
+            "normalized": lowered,
+            "terms": terms,
+            "explicit_locator": explicit_locator,
+            "asks_for_supplement": asks_for_supplement,
+            "asks_for_base": asks_for_base,
+            "expects_exact_evidence": explicit_locator or any(token in lowered for token in ("onde", "trecho", "pagina", "página")),
+        }
+
     def _trim_text(self, text: str | None, *, max_chars: int) -> str:
         normalized = re.sub(r"\s+", " ", str(text or "").strip())
         if len(normalized) <= max_chars:
@@ -1048,7 +1212,14 @@ class KnowledgeSpaceService:
         )
         useful_ratio = sections_indexed / max(1, sections_total)
         canonical_ratio = canonical_frames_total / max(1, sections_indexed)
-        quality_score = round(min(1.0, (useful_ratio * 0.55) + (canonical_ratio * 0.45)), 4)
+        usefulness_quality = sum(float(item.get("usefulness_score") or 0.0) for item in sections) / max(1, sections_indexed)
+        quality_score = round(
+            min(
+                1.0,
+                (useful_ratio * 0.30) + (canonical_ratio * 0.25) + (usefulness_quality * 0.45),
+            ),
+            4,
+        )
         return {
             "sections_total": sections_total,
             "sections_indexed": sections_indexed,
@@ -1149,6 +1320,11 @@ class KnowledgeSpaceService:
                     "applies_to": section.get("applies_to") or [],
                     "is_optional_rule": bool(section.get("is_optional_rule")),
                     "extends_or_overrides": section.get("extends_or_overrides"),
+                    "is_useful": bool(section.get("is_useful")),
+                    "noise_score": float(section.get("noise_score") or 0.0),
+                    "heading_quality_score": float(section.get("heading_quality_score") or 0.0),
+                    "content_density_score": float(section.get("content_density_score") or 0.0),
+                    "usefulness_score": float(section.get("usefulness_score") or 0.0),
                     "answer_strategy": (
                         "comparative"
                         if point_type == "knowledge_comparison_frame"
@@ -1280,6 +1456,8 @@ class KnowledgeSpaceService:
                     "applies_to": section.get("applies_to") or [],
                     "is_optional_rule": bool(section.get("is_optional_rule")),
                     "extends_or_overrides": section.get("extends_or_overrides"),
+                    "is_useful": bool(section.get("is_useful")),
+                    "usefulness_score": float(section.get("usefulness_score") or 0.0),
                     "summary_id": build_deterministic_point_id(
                         "graph-summary",
                         section["knowledge_space_id"],
@@ -1304,6 +1482,8 @@ class KnowledgeSpaceService:
                     s.applies_to = section.applies_to,
                     s.is_optional_rule = section.is_optional_rule,
                     s.extends_or_overrides = section.extends_or_overrides,
+                    s.is_useful = section.is_useful,
+                    s.usefulness_score = section.usefulness_score,
                     s.updated_at = timestamp()
                 MERGE (w)-[:CONTAINS]->(s)
                 MERGE (cs:CanonicalSummary {summary_id: section.summary_id})
@@ -1396,6 +1576,25 @@ class KnowledgeSpaceService:
             conflicts.append("Espaço vinculado a coleção; respostas podem depender da ordem declarada dos volumes.")
         return conflicts
 
+    def _lexical_overlap(self, *, text: str, title: str, concepts: list[str], query_terms: set[str]) -> int:
+        searchable_text = self._normalize_search_text(text)
+        searchable_title = self._normalize_search_text(title)
+        searchable_concepts = {self._normalize_search_text(item) for item in concepts if self._normalize_search_text(item)}
+        return sum(
+            1
+            for token in query_terms
+            if token in searchable_text or token in searchable_title or token in searchable_concepts
+        )
+
+    def _classify_chunk_match(self, *, point_score: float, lexical_overlap: int, explicit_locator: bool) -> str:
+        if lexical_overlap >= 2:
+            return "exact_match"
+        if lexical_overlap >= 1 and point_score >= 0.30:
+            return "strong_semantic"
+        if not explicit_locator and point_score >= 0.55:
+            return "strong_semantic"
+        return "weak_semantic"
+
     async def _query_canonical(
         self,
         *,
@@ -1408,6 +1607,7 @@ class KnowledgeSpaceService:
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
         answer_strategy = self._detect_answer_strategy(question)
+        query_profile = self._build_query_profile(question)
         candidate_points: list[Any] = []
         for point_type in self._resolve_canonical_query_types(answer_strategy):
             result = await client.query_points(
@@ -1437,6 +1637,7 @@ class KnowledgeSpaceService:
         selected = self._select_canonical_candidates(
             points=candidate_points,
             question=question,
+            query_profile=query_profile,
             answer_strategy=answer_strategy,
             limit=limit,
         )
@@ -1447,6 +1648,7 @@ class KnowledgeSpaceService:
             selected=selected,
             answer_strategy=answer_strategy,
             confidence=confidence,
+            query_profile=query_profile,
         )
         return {
             "answer": answer,
@@ -1488,16 +1690,13 @@ class KnowledgeSpaceService:
         *,
         points: list[Any],
         question: str,
+        query_profile: dict[str, Any],
         answer_strategy: str,
         limit: int,
     ) -> list[dict[str, Any]]:
         grouped: dict[str, dict[str, Any]] = {}
-        lowered_question = str(question or "").casefold()
-        question_terms = {
-            token
-            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", str(question or "").casefold())
-            if token not in _STOPWORDS
-        }
+        lowered_question = str(query_profile.get("normalized") or self._normalize_search_text(question))
+        question_terms = set(query_profile.get("terms") or [])
         for point in points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
@@ -1505,11 +1704,20 @@ class KnowledgeSpaceService:
             content = str(payload.get("content") or "").strip()
             title = str(metadata.get("section_title") or "").strip()
             concepts = [str(item).strip().casefold() for item in (metadata.get("concepts") or []) if str(item).strip()]
-            lexical_overlap = sum(1 for token in question_terms if token in content.casefold() or token in title.casefold() or token in concepts)
+            lexical_overlap = self._lexical_overlap(
+                text=content,
+                title=title,
+                concepts=concepts,
+                query_terms=question_terms,
+            )
             base_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = base_score
             doc_role = str(metadata.get("doc_role") or "base").strip().lower() or "base"
             section_role = str(metadata.get("section_role") or "core_rules").strip().lower() or "core_rules"
+            usefulness_score = float(metadata.get("usefulness_score") or 0.0)
+            heading_quality_score = float(metadata.get("heading_quality_score") or 0.0)
+            content_density_score = float(metadata.get("content_density_score") or 0.0)
+            noise_score = float(metadata.get("noise_score") or 0.0)
             if answer_strategy in {"scope", "sequence"} and doc_role == "base":
                 rerank_score += 0.14
             if answer_strategy == "comparative" and doc_role == "supplement":
@@ -1522,7 +1730,21 @@ class KnowledgeSpaceService:
                 rerank_score -= 0.04
             if answer_strategy == "sequence" and "workflow" in (metadata.get("applies_to") or []):
                 rerank_score += 0.12
-            rerank_score += min(0.18, lexical_overlap * 0.03)
+            rerank_score += min(0.24, lexical_overlap * 0.05)
+            rerank_score += min(0.18, usefulness_score * 0.18)
+            rerank_score += min(0.10, heading_quality_score * 0.08)
+            rerank_score += min(0.08, content_density_score * 0.06)
+            rerank_score -= min(0.28, noise_score * 0.28)
+            if heading_quality_score < 0.20:
+                rerank_score -= 0.10
+            if question_terms and lexical_overlap == 0 and query_profile.get("expects_exact_evidence"):
+                rerank_score -= 0.20
+            if answer_strategy == "comparative" and lexical_overlap == 0 and doc_role == "supplement":
+                rerank_score -= 0.08
+            if query_profile.get("asks_for_supplement") and doc_role == "supplement":
+                rerank_score += 0.08
+            if query_profile.get("asks_for_base") and doc_role == "base":
+                rerank_score += 0.06
             existing = grouped.get(section_id)
             if existing is None or rerank_score > existing["rerank_score"]:
                 grouped[section_id] = {
@@ -1535,6 +1757,8 @@ class KnowledgeSpaceService:
                     "title": title,
                     "content": content,
                     "applies_to": metadata.get("applies_to") or [],
+                    "usefulness_score": usefulness_score,
+                    "lexical_overlap": lexical_overlap,
                     "rerank_score": rerank_score,
                 }
         ordered = sorted(
@@ -1543,28 +1767,39 @@ class KnowledgeSpaceService:
         )
         selected: list[dict[str, Any]] = []
         if answer_strategy == "comparative":
-            used_doc_roles: set[str] = set()
+            base_item = next((item for item in ordered if item["doc_role"] == "base"), None)
+            supplement_item = next((item for item in ordered if item["doc_role"] == "supplement"), None)
+            for item in (base_item, supplement_item):
+                if item is None:
+                    continue
+                if item["lexical_overlap"] == 0 and query_profile.get("expects_exact_evidence"):
+                    continue
+                selected.append(item)
+            selected_ids = {item["section_id"] for item in selected}
             for item in ordered:
                 if len(selected) >= max(1, int(limit)):
                     break
-                if item["doc_role"] in used_doc_roles:
+                if item["section_id"] in selected_ids:
+                    continue
+                if item["doc_role"] == "supplement" and not supplement_item and item["lexical_overlap"] == 0:
                     continue
                 selected.append(item)
-                used_doc_roles.add(item["doc_role"])
-            if len(selected) < max(1, int(limit)):
-                selected_ids = {item["section_id"] for item in selected}
-                for item in ordered:
-                    if len(selected) >= max(1, int(limit)):
-                        break
-                    if item["section_id"] in selected_ids:
-                        continue
-                    selected.append(item)
-                    selected_ids.add(item["section_id"])
+                selected_ids.add(item["section_id"])
             return selected
+        used_doc_ids: set[str] = set()
         for item in ordered:
             if len(selected) >= max(1, int(limit)):
                 break
+            if answer_strategy == "sequence" and item["doc_role"] == "supplement" and not any(
+                row["doc_role"] == "base" for row in selected
+            ):
+                continue
+            if item["lexical_overlap"] == 0 and query_profile.get("expects_exact_evidence") and answer_strategy != "sequence":
+                continue
+            if item["doc_id"] in used_doc_ids and item["doc_role"] != "supplement" and answer_strategy != "scope":
+                continue
             selected.append(item)
+            used_doc_ids.add(item["doc_id"])
         if answer_strategy == "sequence" and any(
             token in lowered_question for token in ("suplement", "amplia", "adiciona", "herois", "heróis")
         ):
@@ -1575,6 +1810,8 @@ class KnowledgeSpaceService:
                     if item["section_id"] in selected_ids:
                         continue
                     if item.get("doc_role") != "supplement":
+                        continue
+                    if item["lexical_overlap"] == 0 and query_profile.get("expects_exact_evidence"):
                         continue
                     selected.append(item)
                     if len(selected) > max(1, int(limit)):
@@ -1588,6 +1825,7 @@ class KnowledgeSpaceService:
         selected: list[dict[str, Any]],
         answer_strategy: str,
         confidence: float,
+        query_profile: dict[str, Any],
     ) -> list[str]:
         gaps: list[str] = []
         roles = {str(item.get("doc_role") or "") for item in selected if str(item.get("doc_role") or "")}
@@ -1597,6 +1835,10 @@ class KnowledgeSpaceService:
             gaps.append("Evidência consolidada fraca; resposta parcial para evitar inferência indevida.")
         if any(item.get("section_role") == "optional_rules" for item in selected) and answer_strategy != "comparative":
             gaps.append("Parte da evidência vem de regras opcionais; valide se elas se aplicam ao seu caso.")
+        if query_profile.get("expects_exact_evidence") and selected and not any(int(item.get("lexical_overlap") or 0) > 0 for item in selected):
+            gaps.append("A base consolidada recuperou contexto relevante, mas sem apoio lexical forte para a formulação exata da pergunta.")
+        if answer_strategy == "sequence" and query_profile.get("asks_for_supplement") and "supplement" not in roles:
+            gaps.append("A sequência principal foi encontrada, mas faltou uma extensão clara vinda do suplemento.")
         return gaps
 
     async def _query_quick_lookup(
@@ -1610,10 +1852,11 @@ class KnowledgeSpaceService:
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
+        query_profile = self._build_query_profile(question)
         result = await client.query_points(
             collection_name=collection_name,
             query=vector,
-            limit=max(6, int(limit) * 4),
+            limit=max(10, int(limit) * 6),
             with_payload=True,
             query_filter=models.Filter(
                 must=[
@@ -1627,7 +1870,12 @@ class KnowledgeSpaceService:
             ),
         )
         points = list(getattr(result, "points", result) or [])
-        selected = self._select_quick_lookup_points(points=points, question=question, limit=limit)
+        selected = self._select_quick_lookup_points(
+            points=points,
+            question=question,
+            query_profile=query_profile,
+            limit=limit,
+        )
         citations = [self._map_citation(point, snippet_limit=220) for point in selected]
         return {
             "answer": self._render_quick_answer(selected, knowledge_space=knowledge_space),
@@ -1636,7 +1884,11 @@ class KnowledgeSpaceService:
             "source_scope": self._build_source_scope(knowledge_space),
             "citations": citations,
             "confidence": self._average_score(selected),
-            "gaps_or_conflicts": [] if citations else ["Nenhum chunk relevante foi recuperado para a pergunta."],
+            "gaps_or_conflicts": (
+                []
+                if citations
+                else ["Nenhum chunk com suporte lexical suficiente foi recuperado para a pergunta."]
+            ),
             "answer_strategy": "locator",
             "evidence_count": len(citations),
             "source_roles_used": sorted(
@@ -1653,36 +1905,62 @@ class KnowledgeSpaceService:
         *,
         points: list[Any],
         question: str,
+        query_profile: dict[str, Any],
         limit: int,
     ) -> list[Any]:
-        lowered_question = str(question or "").casefold()
-        question_terms = {
-            token
-            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", lowered_question)
-            if token not in _STOPWORDS
-        }
-        ranked: list[tuple[float, Any]] = []
+        lowered_question = str(query_profile.get("normalized") or self._normalize_search_text(question))
+        question_terms = set(query_profile.get("terms") or [])
+        ranked: list[tuple[float, int, Any]] = []
         for point in points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             content = str(payload.get("content") or "")
             title = str(metadata.get("section_title") or metadata.get("file_name") or "")
-            lexical_overlap = sum(
-                1 for token in question_terms if token in content.casefold() or token in title.casefold()
+            lexical_overlap = self._lexical_overlap(
+                text=content,
+                title=title,
+                concepts=[],
+                query_terms=question_terms,
             )
-            rerank_score = float(getattr(point, "score", 0.0) or 0.0) + min(0.24, lexical_overlap * 0.04)
+            point_score = float(getattr(point, "score", 0.0) or 0.0)
+            rerank_score = point_score + min(0.28, lexical_overlap * 0.06)
             doc_role = str(metadata.get("doc_role") or "").strip().lower()
-            if doc_role == "supplement" and any(
-                token in lowered_question for token in ("nov", "adicion", "suplement", "herois", "heróis")
+            searchable_content = self._normalize_search_text(content)
+            if doc_role == "supplement" and query_profile.get("asks_for_supplement"):
+                rerank_score += 0.10
+            if any(token in lowered_question for token in ("raca", "racas")) and any(
+                token in searchable_content for token in ("raca", "racas")
             ):
+                rerank_score += 0.10
+            if re.search(r"\.{4,}", content) or len(searchable_content.split()) < 12:
+                rerank_score -= 0.14
+            match_class = self._classify_chunk_match(
+                point_score=point_score,
+                lexical_overlap=lexical_overlap,
+                explicit_locator=bool(query_profile.get("explicit_locator")),
+            )
+            if match_class == "exact_match":
                 rerank_score += 0.08
-            if any(token in lowered_question for token in ("raça", "raças", "raca", "racas")) and any(
-                token in content.casefold() for token in ("raça", "raças", "raca", "racas")
-            ):
-                rerank_score += 0.06
-            ranked.append((rerank_score, point))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        return [point for _, point in ranked[: max(1, int(limit))]]
+            elif match_class == "weak_semantic":
+                rerank_score -= 0.12
+            ranked.append((rerank_score, lexical_overlap, point))
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        minimum_match_classes = {"exact_match", "strong_semantic"}
+        selected: list[Any] = []
+        for _, lexical_overlap, point in ranked:
+            match_class = self._classify_chunk_match(
+                point_score=float(getattr(point, "score", 0.0) or 0.0),
+                lexical_overlap=lexical_overlap,
+                explicit_locator=bool(query_profile.get("explicit_locator")),
+            )
+            if query_profile.get("expects_exact_evidence") and match_class not in minimum_match_classes:
+                continue
+            selected.append(point)
+            if len(selected) >= max(1, int(limit)):
+                break
+        if selected:
+            return selected
+        return [point for _, _, point in ranked[: max(1, int(limit))]]
 
     def _build_source_scope(self, knowledge_space: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -1718,21 +1996,19 @@ class KnowledgeSpaceService:
         supplement = grouped.get("supplement")
         lines = ["Síntese curta:"]
         if base and supplement:
-            lines.append(
-                f"O material base define o núcleo da regra, enquanto o suplemento amplia ou especializa opções relacionadas."
-            )
+            lines.append("O livro base traz a regra principal; o suplemento entra como ampliação pontual e não como substituição.")
         else:
-            lines.append("A base consolidada recuperou evidência principal, mas a comparação entre papéis documentais ficou parcial.")
+            lines.append("A comparação ficou parcial; a base consolidada não recuperou evidência forte o bastante para os dois papéis documentais.")
         if base:
-            lines.append(f"Base: {base['title']} - {self._trim_text(base['content'], max_chars=260)}")
+            lines.append(f"Base: {base['title']} - {self._trim_text(base['content'], max_chars=220)}")
         if supplement:
             lines.append(
-                f"Suplemento: {supplement['title']} - {self._trim_text(supplement['content'], max_chars=260)}"
+                f"Suplemento: {supplement['title']} - {self._trim_text(supplement['content'], max_chars=220)}"
             )
         for role in ("reference", "appendix"):
             if grouped.get(role):
                 lines.append(
-                    f"{role.capitalize()}: {grouped[role]['title']} - {self._trim_text(grouped[role]['content'], max_chars=220)}"
+                    f"{role.capitalize()}: {grouped[role]['title']} - {self._trim_text(grouped[role]['content'], max_chars=180)}"
                 )
         return "\n".join(lines)
 
@@ -1740,21 +2016,21 @@ class KnowledgeSpaceService:
         ordered = sorted(selected, key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]))
         lines = ["Sequência sugerida pela base consolidada:"]
         for index, item in enumerate(ordered[:4], start=1):
-            prefix = f"{index}. "
-            suffix = ""
-            if item.get("doc_role") == "supplement":
-                suffix = " (suplemento amplia esta etapa)"
-            lines.append(f"{prefix}{item['title']}: {self._trim_text(item['content'], max_chars=220)}{suffix}")
+            role_label = "Base" if item.get("doc_role") == "base" else "Suplemento" if item.get("doc_role") == "supplement" else "Contexto"
+            suffix = " (ampliação)" if item.get("doc_role") == "supplement" else ""
+            lines.append(
+                f"{index}. [{role_label}] {item['title']}: {self._trim_text(item['content'], max_chars=180)}{suffix}"
+            )
         return "\n".join(lines)
 
     def _render_scope_answer(self, selected: list[dict[str, Any]]) -> str:
         primary = selected[0]
-        lines = [f"Síntese curta: {self._trim_text(primary['content'], max_chars=260)}"]
+        lines = [f"Síntese curta: {self._trim_text(primary['content'], max_chars=220)}"]
         if primary.get("doc_role") == "base":
             lines.append("Regra principal: a evidência dominante veio do material base.")
         for item in selected[1:3]:
             note = "Extensão" if item.get("doc_role") == "supplement" else "Contexto"
-            lines.append(f"{note}: {item['title']} - {self._trim_text(item['content'], max_chars=220)}")
+            lines.append(f"{note}: {item['title']} - {self._trim_text(item['content'], max_chars=180)}")
         return "\n".join(lines)
 
     def _render_quick_answer(self, points: list[Any], *, knowledge_space: dict[str, Any]) -> str:
@@ -1766,13 +2042,15 @@ class KnowledgeSpaceService:
         lines = ["Trechos relevantes encontrados:"]
         for point in points[:3]:
             payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
             snippet = re.sub(r"\s+", " ", str(payload.get("content") or "").strip())
             if not snippet:
                 continue
             trimmed = snippet[:220].rstrip()
             if len(snippet) > 220:
                 trimmed = f"{trimmed}..."
-            lines.append(f"- {trimmed}")
+            title = str(metadata.get("section_title") or metadata.get("file_name") or "Trecho").strip()
+            lines.append(f"- {title}: {trimmed}")
         return "\n".join(lines)
 
     def _map_citation(self, point: Any, *, snippet_limit: int) -> dict[str, Any]:

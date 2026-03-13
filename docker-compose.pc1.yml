@@ -3,6 +3,8 @@ services:
     build:
       context: ./backend
       dockerfile: docker/Dockerfile
+      args:
+        JANUS_BUILD_REF: ${JANUS_BUILD_REF:-local-dev}
     image: janus-completo-janus-api:latest
     container_name: janus_api
     init: true
@@ -10,6 +12,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      - JANUS_BUILD_REF=${JANUS_BUILD_REF:-local-dev}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env.pc1}
       - AUTH_ADMIN_CPF_ALLOWLIST=${AUTH_ADMIN_CPF_ALLOWLIST:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-["http://localhost:4300"]}

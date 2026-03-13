@@ -645,7 +645,7 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
     assert repo.message_records[-1]["metadata"]["knowledge_space_id"] == "ks-1"
     assert repo.message_records[-1]["metadata"]["mode_used"] == "canonical_answer"
     assert repo.message_records[-1]["metadata"]["answer_strategy"] == "sequence"
-    assert query_space.await_args.kwargs["mode"] == "canonical_answer"
+    assert query_space.await_args.kwargs["mode"] == "auto"
 
 
 def test_prefer_canonical_answer_for_comparative_question():
@@ -657,7 +657,7 @@ def test_prefer_canonical_answer_for_comparative_question():
     )
 
 
-def test_resolve_knowledge_space_mode_prefers_canonical_for_explicit_ready_space():
+def test_resolve_knowledge_space_mode_delegates_to_service_auto_mode():
     service = _build_service()
 
     mode = service._resolve_knowledge_space_mode(
@@ -667,10 +667,10 @@ def test_resolve_knowledge_space_mode_prefers_canonical_for_explicit_ready_space
         source_scope={"consolidation_status": "ready"},
     )
 
-    assert mode == "canonical_answer"
+    assert mode == "auto"
 
 
-def test_resolve_knowledge_space_mode_keeps_quick_lookup_for_locator_prompt():
+def test_resolve_knowledge_space_mode_stays_auto_for_locator_prompt():
     service = _build_service()
 
     mode = service._resolve_knowledge_space_mode(
@@ -680,7 +680,7 @@ def test_resolve_knowledge_space_mode_keeps_quick_lookup_for_locator_prompt():
         source_scope={"consolidation_status": "ready"},
     )
 
-    assert mode == "quick_lookup"
+    assert mode == "auto"
 
 
 @pytest.mark.asyncio

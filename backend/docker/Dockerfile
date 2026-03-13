@@ -99,6 +99,7 @@ FROM runtime-base as final
 
 # SysAdmin capability needs docker-ce-cli only in runtime service image.
 USER root
+ARG JANUS_BUILD_REF=local-dev
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -108,6 +109,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
     apt-get update && apt-get install -y --no-install-recommends docker-ce-cli
+ENV JANUS_BUILD_REF=${JANUS_BUILD_REF}
+LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF}
 USER janus
 
 # Expose port

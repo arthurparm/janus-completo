@@ -274,12 +274,7 @@ class MessageOrchestrationService:
         requested_knowledge_space_id: str | None,
         source_scope: dict[str, Any] | None,
     ) -> str:
-        if self._prefer_quick_lookup(message, understanding):
-            return "quick_lookup"
-        consolidation_status = str((source_scope or {}).get("consolidation_status") or "").strip().lower()
-        if requested_knowledge_space_id and consolidation_status in {"ready", "partial"}:
-            return "canonical_answer"
-        return "canonical_answer" if self._prefer_canonical_answer(message, understanding) else "quick_lookup"
+        return "auto"
 
     async def _generate_knowledge_space_reply(
         self,
