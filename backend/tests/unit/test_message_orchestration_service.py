@@ -635,6 +635,15 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
     assert repo.message_records[-1]["metadata"]["mode_used"] == "canonical_answer"
 
 
+def test_prefer_canonical_answer_for_comparative_question():
+    service = _build_service()
+
+    assert service._prefer_canonical_answer(
+        "Como Heróis de Arton complementa o livro base? Diferencie o que cada um adiciona.",
+        {"intent": "question"},
+    )
+
+
 @pytest.mark.asyncio
 async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_lookup(monkeypatch):
     repo = _FakeRepo()
