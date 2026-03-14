@@ -46,3 +46,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-14)
+
+### Lacunas e Impacto
+- **Metadados Sensíveis em Logger de Produtividade:** A ferramenta `send_email` em `backend/app/core/tools/productivity_tools.py` registra o e-mail de destino (`to`) e o assunto (`subject`) não mascarados nos logs da aplicação através de extra params (`logger.info("[EMAIL]", extra=...)`). Embora os patterns de redação estejam em `memory/security.py`, eles não estão cobrindo esse fluxo específico.
+- **Persistência de Memória Global e Risco de Vazamento Cruzado:** As anotações (`_notes`) e eventos de calendário (`_calendar_events`) mantidos em escopo global em `productivity_tools.py` criam uma brecha não transacional, resultando num potencial vazamento de estado PII e contexto se acessado por falha ou race conditions de threads, ignorando limites de tenant (identificado na arquitetura de tooling da sprint recente).
+
+### Próximos Passos
+1. **Sanitizar Metadata de Ferramentas:** Importar e utilizar `redact_pii_text_only` de `backend/app/core/memory/security.py` nos parâmetros PII (ex. `to` e `subject`) antes da formatação e passagem ao `structlog` via kwargs.
+2. **Desacoplar Estado Global:** Remover `_notes` e `_calendar_events` e criar coleções restritas ou utilizar a API centralizada do serviço transacional (`DataRetentionService` / `Database`) para isolar os dados por UUID do usuário.

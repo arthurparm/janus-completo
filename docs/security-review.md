@@ -125,3 +125,42 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-14)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 17. Vulnerabilidade a Ataques XML (Bypass/Entity Expansion)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O serviço usa `xml.etree.ElementTree.fromstring` para analisar conteúdos de documentos DOCX, o que é vulnerável a ataques XML (como external entity expansion - XXE). Deve ser substituído por `defusedxml` para evitar negação de serviço ou vazamento de dados. (SG-031)
+- **Ação Recomendada:** Importar e utilizar `defusedxml.ElementTree.fromstring` ao invés da biblioteca padrão.
+
+### 18. Falha Silenciosa de Conexão com RabbitMQ
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média
+- **Descrição:** O `MessageBroker` apresenta um padrão de falha silenciosa ('fail-open') onde, se a conexão inicial com o RabbitMQ for recusada (`[Errno 111] Connection refused`), o sistema rebaixa para um modo offline sem gerar alertas consistentes de nível crítico para observabilidade. (SG-030)
+- **Ação Recomendada:** Ajustar a estratégia de conexão para propagar o erro criticamente se essencial, ou integrar alertas de HealthCheck claros no dashboard.
+
+### 19. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Atualização no scan detectou novas vulnerabilidades nas dependências:
+  - `dompurify` (Moderada) - Cross-site Scripting vulnerability
+  - `hono` (Alta) - Arbitrary file access via serveStatic vulnerability
+- **Ação Recomendada:** Executar `npm update @hono/node-server dompurify` e corrigir dependências.
+
+### 20. Endpoint Exposto em Todas as Interfaces (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Alta
+- **Descrição:** O script do agente liga-se à interface `0.0.0.0` no startup, expondo a aplicação (que não possui autenticação, conforme detectado anteriormente no SG-021) à rede local inteira. (SG-032)
+- **Ação Recomendada:** Limitar o binding para `127.0.0.1` ou introduzir camada de autenticação antes de expor a todas as interfaces.
+
+### 21. Requisições sem Timeout em Scripts de Teste
+- **Caminho:** `qa/` e `tooling/` (vários scripts)
+- **Gravidade:** Baixa / Média
+- **Descrição:** O uso de chamadas da biblioteca `requests` (ex. `requests.get`, `requests.post`) sem um parâmetro de `timeout` definido pode causar o travamento permanente da esteira de testes/CD caso o servidor não responda. (SG-033)
+- **Ação Recomendada:** Adicionar um tempo limite global explícito a todas as chamadas `requests` nos scripts de testes.

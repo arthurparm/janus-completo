@@ -749,3 +749,54 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+| ID | Descrição | Prioridade | Esforço | Status |
+|---|---|---|---|---|
+| SG-030 | Corrigir fail-open silencioso no MessageBroker (RabbitMQ connection refused) | P1 | M | aberto |
+| SG-031 | Substituir xml.etree por defusedxml no parser de DOCX (document_parser_service.py) contra ataques XML | P0 | S | aberto |
+| SG-032 | Corrigir binding de 0.0.0.0 em todas interfaces no windows_agent.py | P0 | S | aberto |
+| SG-033 | Adicionar timeout explícito nas requisições da biblioteca requests (scripts qa/tooling) | P1 | S | aberto |
+
+### [SG-030] Fail-open Silencioso no Message Broker (RabbitMQ)
+- **Problema atual**: Quando a conexão com RabbitMQ falha (`[Errno 111] Connection refused`), o `MessageBroker` em `backend/app/core/infrastructure/message_broker.py` rebaixa para modo offline falhando silenciosamente e omitindo alertas críticos (fail-open) ou causando timeout.
+- **Solucao proposta**: Definir política explícita de fail-closed para o broker em modos de produção ou propagar o alerta no nível adequado para o Prometheus (`observability_service`).
+- **Impacto esperado**: Melhoria na visibilidade de incidentes de infraestrutura sem comprometer resiliência (fail-fast vs fail-open) e prevenção de perda de mensagens de tasks.
+- **Riscos**: Se a aplicação estiver acoplada a esse fail-open local para executar em devs sem RabbitMQ, deve haver split de ambientes (ex: ignorar em dev, alertar em prod).
+- **Dependencias**: RabbitMQ infra.
+- **Prioridade**: P1
+- **Esforco**: M
+- **Dono**: Time de Backend/Platform
+- **Status**: aberto
+
+### [SG-031] Vulnerabilidade a Ataques XML no Parser DOCX (XXE)
+- **Problema atual**: O `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring`, suscetível a negação de serviço via manipulação de entidades XML em documentos falsificados.
+- **Solucao proposta**: Substituir pelo parse seguro `defusedxml.ElementTree.fromstring`.
+- **Impacto esperado**: Remoção da superfície de ataque via upload de documentos (.docx).
+- **Riscos**: Mínimos (API é compatível).
+- **Dependencias**: Nenhuma
+- **Prioridade**: P0
+- **Esforco**: S
+- **Dono**: Time de Backend
+- **Status**: aberto
+
+### [SG-032] Endpoint Agente Bind a 0.0.0.0 Sem Autenticação
+- **Problema atual**: O daemon local no Windows (`backend/windows_agent.py`) escuta em todas as interfaces de rede no host por padrão (host='0.0.0.0') em endpoints altamente privilegiados.
+- **Solucao proposta**: Modificar o Uvicorn startup para escutar exclusivamente em `127.0.0.1` e reforçar a necessidade do SG-021.
+- **Impacto esperado**: Eliminação do acesso indevido da LAN e mitiga RCE e vazamento de captura de tela.
+- **Riscos**: Se for estritamente necessária uma gestão em rede local, AuthN deverá ser premissa e bind continuará 0.0.0.0 sob restrição de firewall.
+- **Dependencias**: Configuração de Infra local.
+- **Prioridade**: P0
+- **Esforco**: S
+- **Dono**: Time de Infra/Security
+- **Status**: aberto
+
+### [SG-033] Requisições em Scripts de Testes/Tooling Sem Timeout
+- **Problema atual**: Scripts na raiz `qa/` e `tooling/` usam `requests.get` e `requests.post` sem argumentos de timeout, que por padrão da biblioteca aguardam indefinidamente, travando pipelines de CI e dificultando reprodutibilidade.
+- **Solucao proposta**: Parametrizar obrigatoriamente `timeout=10` (ou ideal para a chamada) globalmente nestes scripts.
+- **Impacto esperado**: Prevenção de travamentos do worker de build.
+- **Riscos**: Falsos negativos no timeout.
+- **Dependencias**: Nenhuma.
+- **Prioridade**: P1
+- **Esforco**: S
+- **Dono**: Time de QA
+- **Status**: aberto
