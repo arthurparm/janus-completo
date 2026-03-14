@@ -84,6 +84,37 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Descrição:** Ambiente restrito ou dependências conflitantes/faltantes impediram a varredura completa do `requirements.txt`.
 - **Ação Recomendada:** Garantir pré-instalação de ambiente reprodutível (lockfile) para as varreduras do `pip-audit`.
 
+## Achados do dia (2026-03-17)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Falhou** (vulnerabilidades encontradas)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: dependência `tflite-runtime==2.14.0` não encontrada para a versão atual do Python/OS)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 17. Bind de Servidor em Interface Global (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Alta
+- **Descrição:** O script vincula o servidor FastAPI em `0.0.0.0` no startup, expondo a API a todas as interfaces de rede do host.
+- **Ação Recomendada:** Alterar o bind para `127.0.0.1` ou implementar Autenticação/Autorização estrita nos endpoints.
+
+### 18. XML Parsing Vulnerável a Ataques
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O serviço usa `xml.etree.ElementTree.fromstring` para fazer parse do conteúdo DOCX, o que é sabido ser vulnerável a ataques de XML (ex: XXE).
+- **Ação Recomendada:** Substituir a biblioteca padrão pela `defusedxml` para parsing seguro.
+
+### 19. Falha Silenciosa em Message Broker (Fail-Open)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média
+- **Descrição:** O backend exibe uma falha aberta silenciosa onde falhas de conexão com o RabbitMQ (`[Errno 111] Connection refused`) levam o sistema para um modo offline sem gerar alertas explícitos.
+- **Ação Recomendada:** Implementar alertas de degradação e falha no Observability Service para notificar ativamente o estado offline.
+
+### 20. Ausência de Timeout em Requisições HTTP
+- **Caminho:** `tooling/` (scripts de testes)
+- **Gravidade:** Média
+- **Descrição:** Os scripts de teste do backend utilizam a biblioteca `requests` para chamadas de API sem definir um `timeout`, o que pode causar travamentos indefinidos (hangs) e consome recursos.
+- **Ação Recomendada:** Adicionar timeouts explícitos em todas as chamadas HTTP (ex: `requests.get(url, timeout=10)`).
+
 ## Achados do dia (2026-03-10)
 
 ### Checklist executado

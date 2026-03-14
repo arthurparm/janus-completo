@@ -46,3 +46,18 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-17)
+
+### Checklist executado
+- [x] Mapeamento de novos fluxos de dados sensíveis (Logs, Banco, Memória).
+- [x] Verificação de ofuscação e minimização de dados PII em repositórios/serviços.
+- [x] Atualização do registro de conformidade de retenção de dados e pontuação de risco LGPD.
+
+### Lacunas e Impacto
+- **Captura e Retenção Contínua (Windows Agent):** O uso da ferramenta de screenshots no `windows_agent.py` carece de auditoria efetiva sobre _o que_ foi capturado (contexto da tela), correndo o risco constante de arquivar indevidamente informações visuais PII presentes na área de trabalho do usuário.
+- **Risco Contínuo de Exposição em Tools:** A exposição de destinatários e tópicos (`user_id`, `to`, `subject`) via `logger.info` no `productivity_tools.py` (`send_email`) não sofreu mitigações ou alterações para ofuscar (mascarar) estes dados nas instâncias do serviço.
+
+### Próximos Passos
+1. **Implementar Mascaramento Visual:** Estudar uma ferramenta ou biblioteca (como integração com OCR + Reconhecimento) para extrair/ofuscar áreas com padrões de texto PII em telas capturadas.
+2. **Urgência na Aplicação de Filtros:** Priorizar a resolução da issue de mascaramento de log nas `productivity_tools.py` integrando com o `structlog` ou aplicando regex estrita nas strings originais.

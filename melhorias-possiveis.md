@@ -109,6 +109,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Corrigir falha silenciosa em conexao RabbitMQ (Message Broker fail-open) | P1 | M | aberto |
+| SG-031 | Substituir xml.etree por defusedxml no parseamento de DOCX do document_parser_service.py | P0 | S | aberto |
+| SG-032 | Alterar bind do FastAPI em windows_agent.py de 0.0.0.0 para interface segura (127.0.0.1) | P0 | S | aberto |
+| SG-033 | Adicionar timeout explicito a todas as chamadas `requests` em testes no tooling/ | P2 | S | aberto |
+| SG-034 | Aplicar mascara visual em screenshots capturados pelo windows_agent.py para evitar PII e dados sensiveis visuais | P1 | M | aberto |
+| SG-035 | Ofuscar/Mascarar e-mails e topicos (user_id, to, subject) nos logs gerados pelo send_email no productivity_tools.py | P0 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -712,6 +718,72 @@ Copiar e preencher:
 - Impacto esperado: Remoção da possibilidade de escalonamento de privilégio e execução indevida no host/container da API.
 - Riscos: Falhas de funcionalidade em ferramentas que dependam do Shell global ou de injeção dinâmica intencional.
 - Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Falha Silenciosa no Message Broker RabbitMQ (Fail-Open)
+- Problema atual: Erros de conexão no `backend/app/core/infrastructure/message_broker.py` com o RabbitMQ (`[Errno 111] Connection refused`) causam queda para "offline mode" no sistema, sem emitir alertas claros.
+- Solucao proposta: Implementar alertas proativos e relatórios de métricas de degradação e offline via Observability Service para notificar administradores.
+- Impacto esperado: Operação observável do estado de comunicação do sistema; falhas tornam-se reportadas e gerenciadas.
+- Riscos: Overhead temporário em casos intermitentes.
+- Dependencias: Observability Service.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Risco de Parsing XML Inseguro (XML Vulnerability)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para analisar e decodificar dados XML injetados em DOCX (Arquivos Zip), criando possibilidade de falhas XXE (XML eXternal Entity).
+- Solucao proposta: Alterar para parsers nativos seguros como `defusedxml` nas importações que lidam com XML ou forçar restrição de esquemas nas avaliações.
+- Impacto esperado: Proteção em nível parsers do Python contra vulnerabilidades severas de injeção em leitura de arquivo.
+- Riscos: Quebra de parse para algumas peculiaridades raras no schema Office.
+- Dependencias: Instalação da dependência `defusedxml`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Bind Exposto a Network Externo (`0.0.0.0`)
+- Problema atual: A rotina padrão `windows_agent.py` sobe na porta 5001 associada a todas as interfaces de rede host (via `"0.0.0.0"`), expondo a API de SO diretamente ao tráfego se firewalls não bloquearem.
+- Solucao proposta: Restringir bind address para `"127.0.0.1"` forçando requisições e canais apenas internos da sub-rede do container.
+- Impacto esperado: Fechamento de um dos vetores de penetração lateral e acesso desautorizado de features cruciais (Screenshot, Notifications).
+- Riscos: Apenas necessitar de pequenos ajustes se o container Janus estiver distribuído.
+- Dependencias: Docker host network policies.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Timeouts Faltantes em Requisições (Resiliência)
+- Problema atual: `requests` sendo utilizado em testes do diretório `tooling/` não predefine nenhum parâmetro `timeout`, possibilitando travamentos e consumindo CI time-slots indevidamente em caso de degradação de rede.
+- Solucao proposta: Parametrizar tempos de `timeout` limite estritos para todas as chamadas.
+- Impacto esperado: Finalização correta ou fail-fast em scripts automáticos e pre-pipelines de validação.
+- Riscos: Falsos positivos em instâncias/testes que sejam morosos (acima de 30-60s).
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-034] Mascaramento Visual para LGPD no Windows Agent
+- Problema atual: A ferramenta `windows_agent.py` captura a tela via `ImageGrab.grab()` sem minimizar ou anonimizar o conteúdo PII (como e-mails ou conversas privadas) presente visualmente no host.
+- Solucao proposta: Aplicar mascaramento ou detecção por reconhecimento nas áreas capturadas, garantindo ofuscação de campos de texto ou janelas indesejadas que não tenham recebido consentimento explícito, antes de trafegá-las na rede e persisti-las nos artefatos.
+- Impacto esperado: Aumento estrito de privacidade em conformidade com o princípio de Minimização da LGPD, reduzindo o escopo visual exposto.
+- Riscos: Pode ofuscar dados contextuais relevantes que o agente deveria compreender, degradando as features que demandam "leitura de tela" total.
+- Dependencias: Integração com bibliotecas de OCR e detecção na hora da captura.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-035] Vazamento Contínuo de e-mails em Productivity Tools (LGPD)
+- Problema atual: A ferramenta `send_email` no arquivo `backend/app/core/tools/productivity_tools.py` emite abertamente um log de informações contendo o `user_id`, `to` (destinatário) e `subject` (assunto), criando acúmulo de PII não mascarado que pode ficar acessível para quem consome o agregador de logs.
+- Solucao proposta: Adicionar filtro direto no logger aplicando restrições e hashes com base nas regras `_PII_PATTERNS`, de forma semelhante aos módulos de core security da memória.
+- Impacto esperado: Mascaramento efetivo das saídas do logger, garantindo proteção ao PII trafegado nas funções de envio de email.
+- Riscos: Logs com menos contexto durante incidentes para suporte investigativo.
+- Dependencias: Referências do regex em `memory/security.py`.
 - Prioridade: P0
 - Esforco: S
 - Dono: a definir
