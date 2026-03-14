@@ -748,4 +748,24 @@ Copiar e preencher:
 - Prioridade: P1
 - Esforco: S
 - Dono: a definir
+- Status: aberto### [DX-013] Padronização da validação de pipelines LangGraph
+- Problema atual: Testes cruciais de pipelines como o de debate (`tooling/test_debate_system.py`) foram introduzidos como scripts isolados que instanciam `asyncio.run(main())` e não estão integrados à suíte padrão do Pytest.
+- Solucao proposta: Migrar ou adaptar o script `test_debate_system.py` para dentro da arquitetura de QA (`qa/`), utilizando fixtures assíncronas do Pytest e transformando os prints de stdout em assertions rastreáveis para uso na CI.
+- Impacto esperado: Maior confiabilidade e reprodutibilidade nas execuções de grafos complexos do LangGraph, detectando regressões a cada novo pull request.
+- Riscos: Dificuldade em mockar as dependências reais (LLM e estado de memória) que o script originalmente instanciaria localmente sem impactar o tempo da CI.
+- Dependencias: Pytest-asyncio.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Mitigar Drift de API e ampliação de cobertura de testes (Tools, Workers, Tasks)
+- Problema atual: O inventário gerado por QA relata uma extração de 226 endpoints da API, diferente dos 228 (ou 229) documentados como meta no escopo anterior. Além disso, rotas chaves em `/api/v1/tools`, `/api/v1/workers` e `/api/v1/tasks` constam como não cobertas (`not_covered`).
+- Solucao proposta: Investigar e resolver as rotas depreciadas/removidas na codebase para alinhar a baseline do QA com a nova realidade da API (226). Adicionar testes básicos (smoke tests/contract tests) nos módulos de Tools, Workers e Tasks na pasta `qa/`.
+- Impacto esperado: Aumento da transparência da estabilidade da API e atingimento da meta de paridade (100% dos endpoints cobertos/verificados por pelo menos um teste de smoke).
+- Riscos: Testar rotas de workers/tools dinâmicos pode ser frágil sem o uso adequado de mocks.
+- Dependencias: API Coverage Tool.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
 - Status: aberto

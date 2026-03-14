@@ -3,6 +3,24 @@
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
+## Achados do dia (2026-03-14)
+
+### 11. Testes e Scripts fora do Padrão CI (Cód/Testes)
+**Descrição:** Os scripts e testes recém-adicionados no diretório `tooling/` (ex: `seed-repro-scenarios.ps1`, `start_services.ps1` e principalmente `test_debate_system.py`) fogem da padronização e automação providas pelo Pytest e ferramentas de integração contínua, rodando de forma isolada com instâncias diretas como `asyncio.run(main())` e prints para o stdout, limitando a validação automatizada de regressão de pipelines críticos baseados em LangGraph.
+**Evidências:**
+- `tooling/test_debate_system.py`: Executa o orchestrator diretamente `debate_graph.astream(initial_state)` fora do framework de CI, tornando suas verificações manuais e não reproduzíveis na pipeline automatizada.
+
+**Próximos passos:**
+- Inserir a issue `[DX-013]` no `melhorias-possiveis.md` visando migrar ou integrar a lógica do teste `tooling/test_debate_system.py` na suíte oficial do `qa/` e no runner via `poetry run pytest`.
+
+### 12. Drift e Gap de Cobertura API (QA/Contrato)
+**Descrição:** A varredura contínua de contratos de API extraiu um total de 226 endpoints operacionais, enquanto a meta estipulada em especificações anteriores previa 228/229. Além da discrepância volumétrica, diversas rotas novas nos módulos `Tools`, `Workers` e `Tasks` estão marcadas como `not_covered` nos relatórios diários de QA.
+**Evidências:**
+- `outputs/qa/api_coverage_report.json`: Relatório registra `"total_endpoints": 226`.
+
+**Próximos passos:**
+- Documentar a issue `[OQ-017]` para investigar e mitigar a diferença do inventário e ampliar a cobertura de endpoint para módulos recém adicionados.
+
 ## Achados do dia
 
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
