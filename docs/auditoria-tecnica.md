@@ -113,3 +113,49 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-09)
+
+### 11. Fail-Open Silencioso do RabbitMQ
+**Descrição:** O backend apresenta uma falha de fail-open onde erros de conexão do RabbitMQ (`[Errno 111] Connection refused`) forçam o sistema para modo offline sem emitir alertas claros.
+**Evidências:**
+- `backend/app/core/infrastructure/message_broker.py`: A falha na conexão joga o sistema para "offline mode" de forma silenciosa e transparente.
+
+**Próximos passos:**
+- Adicionar issue SG-030 no backlog técnico para implementar Circuit Breaker ou alertas explícitos.
+
+### 12. Vulnerabilidade de XML Parsing (Billion Laughs / XXE)
+**Descrição:** O parsing de arquivos DOCX baseia-se em biblioteca vulnerável a ataques XML.
+**Evidências:**
+- `backend/app/services/document_parser_service.py`: Uso de `xml.etree.ElementTree.fromstring` que não é seguro contra expansion attacks.
+
+**Próximos passos:**
+- Substituir pelo `defusedxml.ElementTree` e adicionar no `requirements.txt`.
+- Adicionado issue SG-031 no backlog.
+
+### 13. Risco de Rede no Agente Windows (Binding Aberto)
+**Descrição:** O agente de Windows sobe uma instância FastAPI escutando em todas as interfaces (`0.0.0.0`), expondo capacidades arriscadas para a rede local.
+**Evidências:**
+- `backend/windows_agent.py`: Binding default configurado como `0.0.0.0`.
+
+**Próximos passos:**
+- Alterar bind default para `127.0.0.1`.
+- Adicionado issue SG-032 no backlog.
+
+### 14. Chamadas HTTP Sem Timeout em Testes (Reliability)
+**Descrição:** Scripts de testes de backend utilizam a biblioteca `requests` sem configurar o parâmetro de timeout, o que pode causar hangs indeterminados.
+**Evidências:**
+- Scripts em `qa/` e `tooling/`: Chamadas explícitas via `requests.get/post` sem estipular timeout.
+
+**Próximos passos:**
+- Adicionar o parâmetro `timeout` nas requisições do pytest/tooling.
+- Adicionado issue SG-033 no backlog.
+
+### 15. Scripts de Teste Bypassing CI Pipeline
+**Descrição:** Testes e verificadores não integrados que acabam sendo omitidos do pipeline padrão de qualidade automatizado.
+**Evidências:**
+- `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1`: Execução isolada fora do padrão da suíte do diretório `qa/`.
+
+**Próximos passos:**
+- Migrar esses scripts ou seus envelopes de validação para integrarem-se ao Pytest na suíte principal.
+- Adicionado issue DX-013 no backlog.

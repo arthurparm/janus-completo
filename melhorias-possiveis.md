@@ -109,6 +109,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Corrigir fail-open silencioso do RabbitMQ que derruba o sistema offline sem alertas | P1 | M | aberto |
+| SG-031 | Substituir xml.etree.ElementTree por defusedxml no document_parser_service.py (vulnerabilidade XML) | P1 | S | aberto |
+| SG-032 | Alterar bind do windows_agent.py de 0.0.0.0 para localhost (risco de rede) | P1 | S | aberto |
+| SG-033 | Adicionar timeouts em chamadas requests nos testes para evitar hangs | P2 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -186,6 +190,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
 | DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | concluido (2026-03-03) |
+| DX-013 | Integrar scripts de testes isolados do tooling/ ao pipeline padrão do Pytest CI | P2 | M | aberto |
 
 ---
 
@@ -747,5 +752,60 @@ Copiar e preencher:
 - Dependencias: Nenhuma.
 - Prioridade: P1
 - Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Fail-Open Silencioso do RabbitMQ
+- Problema atual: O backend `app.core.infrastructure.message_broker` possui uma falha de fail-open onde erros de conexão do RabbitMQ (`[Errno 111] Connection refused`) forçam o sistema para modo offline sem emitir alertas claros.
+- Solucao proposta: Implementar alertas explícitos (circuit breaker / observability logs) e tentativas de reconexão exponenciais em vez de fail-open silencioso.
+- Impacto esperado: Maior resiliência e visibilidade sobre a saúde do message broker.
+- Riscos: Reduzir disponibilidade caso as tentativas de reconexão bloqueiem a thread principal.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade de XML Parsing (Billion Laughs / XXE)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para realizar o parse de arquivos DOCX, que é vulnerável a ataques XML (como external entity expansion).
+- Solucao proposta: Substituir `xml.etree.ElementTree` pelo módulo `defusedxml` para mitigar ataques.
+- Impacto esperado: Prevenção de vulnerabilidades de segurança relacionadas ao processamento de documentos não confiáveis.
+- Riscos: Nenhum.
+- Dependencias: Incluir `defusedxml` no `requirements.txt`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Risco de Rede no Agente Windows (Binding Aberto)
+- Problema atual: O `backend/windows_agent.py` sobe o servidor FastAPI escutando em todas as interfaces (`0.0.0.0`), permitindo que a rede local acesse os endpoints (inclusive operações destrutivas como capturas de tela e TTS).
+- Solucao proposta: Alterar o bind para `127.0.0.1` (localhost) por padrão.
+- Impacto esperado: Diminuição drástica da superfície de ataque, restringindo o acesso local.
+- Riscos: A comunicação entre componentes pode falhar se estiverem em redes virtuais não-locais, exigindo reconfiguração controlada.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Chamadas HTTP Sem Timeout em Testes (Reliability)
+- Problema atual: Scripts de testes de backend estão utilizando a biblioteca `requests` para fazer requisições sem definir o parâmetro de `timeout`, o que pode causar travamentos (hangs) no CI em caso de instabilidade da rede ou do servidor.
+- Solucao proposta: Parametrizar tempos de resposta máximos definindo globalmente ou individualmente o `timeout` nas chamadas.
+- Impacto esperado: Execução de CI determinística e prevenção de locks duradouros.
+- Riscos: Possível quebra de testes em cenários de alta latência proposital se o timeout for curto demais.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Scripts de Teste Bypassing CI Pipeline
+- Problema atual: Scripts como `tooling/test_debate_system.py` e `seed-repro-scenarios.ps1` executam testes de forma isolada do suite `qa/`, não sendo capturados pelas rotinas padrão do Pytest CI.
+- Solucao proposta: Migrar ou envelopar a lógica desses scripts sob a suíte central do Pytest para assegurar relatórios padronizados.
+- Impacto esperado: Cobertura automatizada integrada e validação de regressão ponta a ponta mais robusta.
+- Riscos: Necessidade de refatorar setups para prover ambiente mockado compatível.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: M
 - Dono: a definir
 - Status: aberto
