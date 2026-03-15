@@ -749,3 +749,68 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] Falha Silenciosa de Conexão RabbitMQ (Fail-open)
+- Problema atual: A infraestrutura do broker `app.core.infrastructure.message_broker` exibe um comportamento silencioso fail-open onde falhas de conexão do RabbitMQ (`[Errno 111] Connection refused`) causam queda para o modo offline sem alertas claros.
+- Solucao proposta: Implementar log/alerta crítico imediato ao detectar falha de conexão e possivelmente integrar com o observability_service para disparar webhook/email para administradores.
+- Impacto esperado: Melhora na visibilidade de falhas do broker, garantindo rápida reação operacional.
+- Riscos: Overhead de alertas caso a rede esteja muito instável (mitigável via circuit breaker).
+- Dependencias: observability_service.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-031] Vulnerabilidade de XML Parsing (Document Parser)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para parsear conteúdos DOCX, o que é vulnerável a ataques de XML (ex: XXE).
+- Solucao proposta: Substituir por `defusedxml` ou desabilitar features externas do parser nativo para proteção contra injeção de entidades externas.
+- Impacto esperado: Proteção contra um vetor crítico de exfiltração de dados locais.
+- Riscos: Pequena mudança na biblioteca de extração DOCX/XML.
+- Dependencias: `defusedxml`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-032] Risco de Exposição do Windows Agent
+- Problema atual: O `backend/windows_agent.py` script se vincula a `0.0.0.0` (todas as interfaces) na inicialização, expondo o servidor FastAPI para toda a rede invés de apenas localhost ou container-network.
+- Solucao proposta: Alterar para vincular apenas a `127.0.0.1` ou usar um proxy reverso para restrição de IP, combinando com a implementação de Auth já registrada (SG-021).
+- Impacto esperado: Previne acessos indevidos vindos da LAN do host.
+- Riscos: Redirecionamento Docker pode necessitar ajuste se não rodar na host network.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-033] Ausência de Timeout em Requisições HTTP (Testes/Tooling)
+- Problema atual: O código em `tooling/` (ex: `generate_api_matrix.py`, `run_full_process_validation.py`, `qa_request_support.py`) utiliza `requests` sem timeouts ou com tratamento inconsistente.
+- Solucao proposta: Impor uso de timeout (ex: `timeout=10`) obrigatório em todas as chamadas `requests.get/post/etc` em todo o tooling/qa.
+- Impacto esperado: Testes e automações resilientes que não travam builds infinitamente.
+- Riscos: Possível flakiness de CI caso a latência da API suba acima do timeout.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [DX-013] Scripts Isolados Bypassam Pytest CI
+- Problema atual: Test scripts em `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) bypassam os pipelines de CI de Pytest padronizados por utilizarem execução isolada ao invés de estarem no pacote `qa/`.
+- Solucao proposta: Refatorar scripts como `test_debate_system.py` para dentro da suíte do Pytest (`qa/`) garantindo execução e rastreabilidade na CI.
+- Impacto esperado: Maior visibilidade e cobertura validada de testes end-to-end do debate system e demais fluxos.
+- Riscos: Dependência em fixture de banco/LLMs que precisará ser adequadamente mockada.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [DX-014] Refatoração do Frontend Conversations God Object
+- Problema atual: `frontend/src/app/features/conversations/conversations.ts` é excessivamente complexo (aprox. 1700 linhas) concentrando UI, roteamento, estado local e manipulação de eventos de chat.
+- Solucao proposta: Decompor o componente usando Container-Presenter pattern e delegar lógica de estado à Store (NgRx).
+- Impacto esperado: Facilidade de manutenção e testes no frontend.
+- Riscos: Regressões visuais ou quebras no fluxo do chat durante o refactoring.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: ideia

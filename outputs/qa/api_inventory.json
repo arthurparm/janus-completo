@@ -1,14 +1,14 @@
 {
   "metadata": {
-    "generated_at": "2026-02-13T11:26:54.938272",
+    "generated_at": "2026-03-15T21:28:09.925365",
     "source": "OpenAPI Specification",
     "version": "1.0"
   },
   "statistics": {
-    "total_endpoints": 228,
+    "total_endpoints": 232,
     "by_method": {
-      "POST": 94,
-      "GET": 123,
+      "POST": 93,
+      "GET": 128,
       "DELETE": 6,
       "PATCH": 2,
       "PUT": 3
@@ -16,23 +16,23 @@
     "by_module": {
       "Collaboration - Workspace": 5,
       "System": 5,
-      "unknown": 4,
+      "unknown": 5,
       "Knowledge": 21,
       "RAG": 5,
       "Documents": 6,
-      "Productivity": 13,
+      "Productivity": 11,
       "Agent": 1,
       "Optimization": 6,
       "Admin": 1,
       "Learning": 12,
-      "Tasks": 6,
+      "Tasks": 8,
       "Context": 6,
       "Sandbox": 3,
       "Reflexion": 5,
       "Tools": 8,
       "LLM": 12,
       "Collaboration": 11,
-      "Observability": 22,
+      "Observability": 24,
       "Meta-Agent": 6,
       "Chat": 11,
       "Users": 6,
@@ -40,7 +40,7 @@
       "Autonomy": 11,
       "Workers": 3,
       "Assistant": 1,
-      "AutonomyHistory": 3,
+      "AutonomyHistory": 4,
       "Consents": 3,
       "PendingActions": 5,
       "Evaluation": 5,
@@ -51,9 +51,9 @@
     },
     "by_auth": {
       "requires_auth": 0,
-      "public": 228
+      "public": 232
     },
-    "extraction_timestamp": "2026-02-13T11:26:54.938272"
+    "extraction_timestamp": "2026-03-15T21:28:09.925213"
   },
   "endpoints": [
     {
@@ -1932,6 +1932,24 @@
           "in": "query",
           "required": false,
           "schema": "integer"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "conversation_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
         }
       ],
       "response_schemas": {
@@ -1971,10 +1989,79 @@
           "in": "query",
           "required": false,
           "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "conversation_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "session_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
         }
       ],
       "response_schemas": {
         "200": "#/components/schemas/Experience",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/memory/preferences",
+      "method": "GET",
+      "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
+      "summary": "Get User Preferences",
+      "tags": [],
+      "module": "unknown",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "conversation_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "query",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        },
+        {
+          "name": "active_only",
+          "in": "query",
+          "required": false,
+          "schema": "boolean"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/UserPreferenceMemoryItem'}, 'title': 'Response Get User Preferences Api V1 Memory Preferences Get'}",
         "422": "#/components/schemas/HTTPValidationError"
       },
       "has_frontend": null,
@@ -2422,6 +2509,49 @@
       "user_impact": null
     },
     {
+      "path": "/api/v1/tasks/outbox/stats",
+      "method": "GET",
+      "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+      "summary": "Retorna estatísticas do outbox transacional",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/OutboxStatsResponse"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/tasks/outbox/reconcile",
+      "method": "POST",
+      "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+      "summary": "Reencaminha eventos do outbox para reconciliação",
+      "tags": [
+        "Tasks"
+      ],
+      "module": "Tasks",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/OutboxReconcileRequest",
+      "parameters": [],
+      "response_schemas": {
+        "200": "#/components/schemas/OutboxReconcileResponse",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
       "path": "/api/v1/context/current",
       "method": "GET",
       "operation_id": "get_current_context_api_v1_context_current_get",
@@ -2761,7 +2891,7 @@
           "name": "timeframe_seconds",
           "in": "query",
           "required": false,
-          "schema": "unknown"
+          "schema": "integer"
         },
         {
           "name": "min_score",
@@ -3744,6 +3874,82 @@
       "user_impact": null
     },
     {
+      "path": "/api/v1/observability/slo/domains",
+      "method": "GET",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "window_minutes",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_events",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/observability/anomalies/predictive",
+      "method": "GET",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "tags": [
+        "Observability"
+      ],
+      "module": "Observability",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "window_hours",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "bucket_minutes",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "min_events",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
       "path": "/api/v1/observability/llm/usage",
       "method": "GET",
       "operation_id": "llm_usage_api_v1_observability_llm_usage_get",
@@ -3838,7 +4044,7 @@
       ],
       "module": "Observability",
       "requires_auth": false,
-      "request_body_schema": "#/components/schemas/PromoteQuarantineRequest",
+      "request_body_schema": "#/components/schemas/app__api__v1__endpoints__observability__PromoteQuarantineRequest",
       "parameters": [],
       "response_schemas": {
         "200": "{}",
@@ -4482,97 +4688,6 @@
       "user_impact": null
     },
     {
-      "path": "/api/v1/chat/{conversation_id}/rename",
-      "method": "PUT",
-      "operation_id": "rename_conversation_api_v1_chat__conversation_id__rename_put",
-      "summary": "Renomeia uma conversa",
-      "tags": [
-        "Chat"
-      ],
-      "module": "Chat",
-      "requires_auth": false,
-      "request_body_schema": "#/components/schemas/ChatRenameRequest",
-      "parameters": [
-        {
-          "name": "conversation_id",
-          "in": "path",
-          "required": true,
-          "schema": "string"
-        }
-      ],
-      "response_schemas": {
-        "200": "{}",
-        "422": "#/components/schemas/HTTPValidationError"
-      },
-      "has_frontend": null,
-      "has_tests": null,
-      "tier": null,
-      "priority": null,
-      "user_impact": null
-    },
-    {
-      "path": "/api/v1/chat/health",
-      "method": "GET",
-      "operation_id": "chat_health_api_v1_chat_health_get",
-      "summary": "Verifica o status do serviço de chat",
-      "tags": [
-        "Chat"
-      ],
-      "module": "Chat",
-      "requires_auth": false,
-      "request_body_schema": null,
-      "parameters": [],
-      "response_schemas": {
-        "200": "{}"
-      },
-      "has_frontend": null,
-      "has_tests": null,
-      "tier": null,
-      "priority": null,
-      "user_impact": null
-    },
-    {
-      "path": "/api/v1/chat/{conversation_id}",
-      "method": "DELETE",
-      "operation_id": "delete_conversation_api_v1_chat__conversation_id__delete",
-      "summary": "Apaga uma conversa",
-      "tags": [
-        "Chat"
-      ],
-      "module": "Chat",
-      "requires_auth": false,
-      "request_body_schema": null,
-      "parameters": [
-        {
-          "name": "conversation_id",
-          "in": "path",
-          "required": true,
-          "schema": "string"
-        },
-        {
-          "name": "user_id",
-          "in": "query",
-          "required": false,
-          "schema": "unknown"
-        },
-        {
-          "name": "project_id",
-          "in": "query",
-          "required": false,
-          "schema": "unknown"
-        }
-      ],
-      "response_schemas": {
-        "200": "{}",
-        "422": "#/components/schemas/HTTPValidationError"
-      },
-      "has_frontend": null,
-      "has_tests": null,
-      "tier": null,
-      "priority": null,
-      "user_impact": null
-    },
-    {
       "path": "/api/v1/chat/stream/{conversation_id}",
       "method": "GET",
       "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
@@ -4702,6 +4817,97 @@
       "user_impact": null
     },
     {
+      "path": "/api/v1/chat/{conversation_id}/rename",
+      "method": "PUT",
+      "operation_id": "rename_conversation_api_v1_chat__conversation_id__rename_put",
+      "summary": "Renomeia uma conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": "#/components/schemas/ChatRenameRequest",
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/health",
+      "method": "GET",
+      "operation_id": "chat_health_api_v1_chat_health_get",
+      "summary": "Verifica o status do serviço de chat",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [],
+      "response_schemas": {
+        "200": "{}"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/chat/{conversation_id}",
+      "method": "DELETE",
+      "operation_id": "delete_conversation_api_v1_chat__conversation_id__delete",
+      "summary": "Apaga uma conversa",
+      "tags": [
+        "Chat"
+      ],
+      "module": "Chat",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "conversation_id",
+          "in": "path",
+          "required": true,
+          "schema": "string"
+        },
+        {
+          "name": "user_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        },
+        {
+          "name": "project_id",
+          "in": "query",
+          "required": false,
+          "schema": "unknown"
+        }
+      ],
+      "response_schemas": {
+        "200": "{}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
       "path": "/api/v1/users/",
       "method": "POST",
       "operation_id": "create_user_api_v1_users__post",
@@ -4791,7 +4997,7 @@
       ],
       "module": "Users",
       "requires_auth": false,
-      "request_body_schema": "#/components/schemas/ConsentRequest",
+      "request_body_schema": "#/components/schemas/app__api__v1__endpoints__users__ConsentRequest",
       "parameters": [
         {
           "name": "user_id",
@@ -4801,7 +5007,7 @@
         }
       ],
       "response_schemas": {
-        "200": "#/components/schemas/ConsentResponse",
+        "200": "#/components/schemas/app__api__v1__endpoints__users__ConsentResponse",
         "422": "#/components/schemas/HTTPValidationError"
       },
       "has_frontend": null,
@@ -5380,6 +5586,41 @@
       ],
       "response_schemas": {
         "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/StepItem'}, 'title': 'Response List Steps Api V1 Autonomy History Runs  Run Id  Steps Get'}",
+        "422": "#/components/schemas/HTTPValidationError"
+      },
+      "has_frontend": null,
+      "has_tests": null,
+      "tier": null,
+      "priority": null,
+      "user_impact": null
+    },
+    {
+      "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+      "method": "GET",
+      "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
+      "summary": "Lista enqueues de uma execução de autonomia",
+      "tags": [
+        "AutonomyHistory"
+      ],
+      "module": "AutonomyHistory",
+      "requires_auth": false,
+      "request_body_schema": null,
+      "parameters": [
+        {
+          "name": "run_id",
+          "in": "path",
+          "required": true,
+          "schema": "integer"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": "integer"
+        }
+      ],
+      "response_schemas": {
+        "200": "{'type': 'array', 'items': {'$ref': '#/components/schemas/EnqueueLedgerItem'}, 'title': 'Response List Enqueues Api V1 Autonomy History Runs  Run Id  Enqueues Get'}",
         "422": "#/components/schemas/HTTPValidationError"
       },
       "has_frontend": null,
