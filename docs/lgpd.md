@@ -46,3 +46,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-15)
+
+### Lacunas e Impacto
+- **Exposição de Agent de Monitoramento em Rede (Windows Agent):** O serviço FastAPI em `backend/windows_agent.py` está configurado para escutar em `0.0.0.0` (todas as interfaces) na porta 5001, sem autenticação. Considerando que ele possui endpoints com capacidade de capturar telas e logs (PII explícito / Biometria visual), qualquer ator com acesso à mesma rede pode requisitar snapshots e roubar dados em tela, configurando um vazamento de dados de alta severidade do ponto de vista da LGPD (Falha de controle de acesso aos dados).
+
+### Próximos Passos
+1. **Restringir Interface e Aplicar Auth:** Alterar o bind address do `windows_agent.py` para `127.0.0.1` de forma a restringir acessos apenas à máquina local, além de implementar tokens de autorização/mTLS para prevenir requisições indevidas.

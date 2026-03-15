@@ -125,3 +125,40 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-15)
+
+### Checklist executado
+- [x] npm audit (frontend) - **17 vulnerabilidades (1 moderate, 16 high)**
+- [x] pip-audit (backend) - **No known vulnerabilities found**
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas).
+
+### 17. Vulnerabilidades em Dependências do Frontend (@angular/*, @hono/node-server, dompurify, express-rate-limit, tar)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit`, totalizando 17 vulnerabilidades (1 moderada, 16 altas), incluindo problemas com XSS, bypass de autorização, bypass de rate limiting, e prototype pollution.
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar as dependências e resolver as vulnerabilidades encontradas. Monitorar e aplicar updates manuais se o `audit fix` falhar.
+
+### 18. Silent Fail-Open no RabbitMQ (Message Broker)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média
+- **Descrição:** O `MessageBroker` apresenta um fail-open silencioso caso falhe ao conectar no RabbitMQ (`[Errno 111] Connection refused`), caindo para modo offline sem emitir um alerta claro de indisponibilidade da fila. Isso pode mascarar falhas de infraestrutura.
+- **Ação Recomendada:** Adicionar logs apropriados ou métricas de alerta quando o broker falha na conexão e cai em modo offline, permitindo melhor visibilidade.
+
+### 19. Vulnerabilidade XXE no Document Parser
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O serviço de extração de DOCX utiliza `xml.etree.ElementTree.fromstring` que é vulnerável a ataques de XML External Entity (XXE), permitindo injeção e leitura de arquivos ou Server-Side Request Forgery.
+- **Ação Recomendada:** Substituir o uso do parser padrão por uma alternativa segura contra XXE, como `defusedxml`.
+
+### 20. Windows Agent Escutando em Todas as Interfaces (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O servidor FastAPI embutido em `windows_agent.py` está rodando em `host="0.0.0.0"`, expondo os endpoints não autenticados na rede local inteira.
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` (localhost) e garantir a implementação de autenticação nos endpoints de captura de tela e interação de SO.
+
+### 21. Chamadas HTTP sem Timeout em Scripts de Tooling
+- **Caminho:** Arquivos em `tooling/` (ex: `run_api_e2e_all.py`, `run_sprint_http_e2e.py`)
+- **Gravidade:** Média / Confiabilidade
+- **Descrição:** Chamadas utilizando a biblioteca `requests` muitas vezes carecem de configuração de `timeout`, o que pode causar suspensão infinita dos scripts de teste ou integração, afetando a resiliência do pipeline CI/CD.
+- **Ação Recomendada:** Adicionar e padronizar o uso de timeouts em todas as chamadas com `requests` (e.g., `requests.get(url, timeout=10)`).

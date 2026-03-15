@@ -749,3 +749,46 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] RabbitMQ MessageBroker com Silent Fail-Open
+- Problema atual: O `backend/app/core/infrastructure/message_broker.py` apresenta falha silenciosa (`[Errno 111] Connection refused`), ativando modo offline sem emissão de alertas ou logs críticos, ocultando interrupções no ambiente de produção.
+- Solucao proposta: Registrar logs de erro/alertas claros (estruturados) durante falhas de conexão no broker antes de assumir estado offline degradado.
+- Impacto esperado: Melhor visibilidade de rede e disponibilidade da fila, evitando falso-positivos em monitoramento.
+- Riscos: Redução de disponibilidade caso a política de reconexão comece a estourar a API com erros não tratados.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade XXE via XML ElementTree em DOCX
+- Problema atual: O `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para realizar parsing do conteúdo em documentos DOCX, sendo suscetível a ataques de injeção XXE (XML External Entity).
+- Solucao proposta: Substituir `xml.etree.ElementTree` pelo módulo `defusedxml` para parsing de XML externo seguro.
+- Impacto esperado: Mitigação de SSRF ou roubo de arquivos via payloads maliciosos acoplados em documentos em formato DOCX providos pelo usuário.
+- Riscos: Possível quebra na formatação ou parsing de DOCX caso `defusedxml` requeira tratamento especial para namespaces do MS Word.
+- Dependencias: Instalar/verificar pacote `defusedxml`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Risco de Rede por Bind Host Global no Windows Agent
+- Problema atual: O serviço FastAPI embarcado em `backend/windows_agent.py` opera em modo `host="0.0.0.0"`, permitindo acesso pela rede externa a recursos do host sem qualquer autenticação (como tirar print screen da tela, vazando PII).
+- Solucao proposta: Alterar para `host="127.0.0.1"` garantindo apenas acesso da própria máquina e introduzir mecanismos rigorosos de AuthN/AuthZ.
+- Impacto esperado: Diminuição drástica de superfície de ataque e mitigação contra vazamento indiscriminado de dados de monitoramento da tela.
+- Riscos: Impede o controle do agente vindo de outro node no cluster sem VPN, mTLS ou encaminhamento de porta, caso fosse esse o objetivo arquitetural.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Risco de Confiabilidade com Requests Sem Timeout
+- Problema atual: Scripts de tooling de testes e benchmarks (`tooling/run_api_e2e_all.py`, etc) utilizam rotinas síncronas com a biblioteca `requests` sem configurar parâmetros de `timeout`, expondo pipelines CI/CD ao risco de hangings infinitos.
+- Solucao proposta: Adicionar um `timeout` (ex: `timeout=15`) em todas as invocações `requests.get()`, `requests.post()` etc.
+- Impacto esperado: Maior estabilidade e resiliência na automação CI/CD da API.
+- Riscos: Testes de endpoints lentos podem gerar falso-positivos de TimeoutError, demandando ajustes para rotas pesadas.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
