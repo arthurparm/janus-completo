@@ -717,6 +717,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-030] Vulnerabilidade XSS em Dependências do Frontend (@angular/compiler)
+- Problema atual: A varredura via `npm audit` detectou falha de alta gravidade em `@angular/compiler` (XSS in i18n attribute bindings - `GHSA-g93w-mfhg-p222`).
+- Solucao proposta: Executar `npm update @angular/compiler` ou `npm audit fix` para mitigar o risco XSS.
+- Impacto esperado: Prevenir vulnerabilidades de Cross-site Scripting via i18n na aplicação frontend.
+- Riscos: Pode ser necessário atualizar partes do framework Angular caso afete dependências peer.
+- Dependencias: Pacotes Frontend.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade DoS em Dependência flatted no Frontend
+- Problema atual: A dependência `flatted` (`<3.4.0`) possui falha que permite Unbounded recursion DoS no processo `parse()` (`GHSA-25h7-pfq9-p65f`).
+- Solucao proposta: Executar `npm audit fix` no frontend para elevar a versão do `flatted`.
+- Impacto esperado: Evitar que payloads envenenados matem o loop do NodeJS ou travem as instâncias de runtime no browser.
+- Riscos: Nenhum.
+- Dependencias: Pacotes Frontend.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

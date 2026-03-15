@@ -125,3 +125,18 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-15)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (comando não encontrado no ambiente atual)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas). Nenhuma nova vulnerabilidade direta no backend encontrada desde a última execução.
+
+### 17. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Novas dependências do frontend foram identificadas como vulneráveis pelo `npm audit`:
+  - `@angular/compiler` (Alta) - XSS in i18n attribute bindings (`GHSA-g93w-mfhg-p222`)
+  - `flatted` (Alta) - Unbounded recursion DoS in parse() revive phase (`GHSA-25h7-pfq9-p65f`)
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar as dependências e resolver as vulnerabilidades encontradas.
