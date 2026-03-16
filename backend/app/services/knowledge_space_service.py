@@ -145,6 +145,87 @@ _TASK_TARGET_STOPWORDS = {
     "usando",
     "use",
 }
+_ENTITY_NOISE_TOKENS = {
+    "agora",
+    "algum",
+    "alguma",
+    "algumas",
+    "alguns",
+    "aqui",
+    "cada",
+    "coisa",
+    "coisas",
+    "como",
+    "dado",
+    "dessa",
+    "deste",
+    "duas",
+    "ela",
+    "elas",
+    "ele",
+    "eles",
+    "essa",
+    "essas",
+    "esse",
+    "esses",
+    "esta",
+    "estas",
+    "este",
+    "estes",
+    "forma",
+    "isso",
+    "mais",
+    "manual",
+    "mesmo",
+    "nao",
+    "não",
+    "ordem",
+    "outra",
+    "outras",
+    "outro",
+    "outros",
+    "puder",
+    "quando",
+    "seu",
+    "seus",
+    "sua",
+    "suas",
+    "tambem",
+    "também",
+    "tres",
+    "três",
+    "uma",
+    "umas",
+    "um",
+    "uns",
+    "vazio",
+    "voce",
+    "você",
+}
+_THEME_NOISE_TOKENS = _ENTITY_NOISE_TOKENS | {
+    "contem",
+    "contém",
+    "depois",
+    "entao",
+    "então",
+    "fazer",
+    "feito",
+    "fica",
+    "ficam",
+    "grande",
+    "maior",
+    "menor",
+    "pode",
+    "podem",
+    "recebe",
+    "recebem",
+    "sera",
+    "será",
+    "sao",
+    "são",
+    "tem",
+    "ter",
+}
 
 _HEADING_KEYWORDS = {
     "anexo",
@@ -1664,6 +1745,26 @@ class KnowledgeSpaceService:
             return ""
         return " ".join(tokens[:2]).strip()
 
+    def _sanitize_entity_candidate(self, value: str | None, *, max_tokens: int = 3) -> str:
+        normalized = self._normalize_search_text(value)
+        raw_tokens = re.findall(r"[a-zà-ÿ0-9_-]{3,}", normalized)
+        tokens = [
+            token
+            for token in raw_tokens
+            if token not in _STOPWORDS
+            and token not in _TASK_TARGET_STOPWORDS
+            and token not in _ENTITY_NOISE_TOKENS
+        ]
+        if not tokens:
+            return ""
+        if len(tokens) > max(1, int(max_tokens)):
+            return ""
+        if all(token.isdigit() for token in tokens):
+            return ""
+        if any(len(token) <= 2 for token in tokens):
+            return ""
+        return " ".join(tokens).strip()
+
     def _select_strict_topic_phrases(self, *, topic_terms: set[str], topic_phrases: set[str]) -> set[str]:
         scored: list[tuple[int, int, str]] = []
         for phrase in topic_phrases:
@@ -1736,7 +1837,7 @@ class KnowledgeSpaceService:
         return [item for item, _ in counts.most_common(limit)]
 
     def _extract_entities(self, text: str, *, title: str, limit: int = 6) -> list[str]:
-        searchable_title = self._sanitize_task_target_phrase(title)
+        searchable_title = self._sanitize_entity_candidate(title)
         normalized_title = self._normalize_search_text(title)
         normalized_body = self._normalize_search_text(text)
         candidates: list[str] = []
@@ -1749,14 +1850,26 @@ class KnowledgeSpaceService:
             token not in _TASK_TARGET_STOPWORDS for token in title_terms
         ):
             candidates.append(searchable_title)
+        title_patterns = (
+            r"^(?:poder(?:es)?|magia|classe|origem|receita|tecnica|técnica|metodo|método|procedimento|distincao|distinção)\s+(?:de|do|da|dos|das)\s+(.+)$",
+            r"^(?:guia|manual|introducao|introdução)\s+(?:de|do|da)\s+(.+)$",
+        )
+        for pattern in title_patterns:
+            match = re.match(pattern, normalized_title)
+            if not match:
+                continue
+            candidate = self._sanitize_entity_candidate(match.group(1))
+            if candidate:
+                candidates.append(candidate)
         patterns = (
             r"\b([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\s+(?:é|e|são|sao)\s+(?:uma|um|o|a)\b",
             r"\b([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\s+(?:permite|permitem|oferece|oferecem|recebe|recebem|usa|usam)\b",
             r"\b(?:variante de|receita de|tecnica de|técnica de|metodo de|método de|procedimento de|classe de|origem de)\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\b",
+            r"\b(?:poder(?:es)?|magia|classe|origem|tecnica|técnica|metodo|método|procedimento)\s+(?:de|do|da|dos|das)\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\b",
         )
         for pattern in patterns:
             for match in re.finditer(pattern, normalized_body):
-                candidate = self._sanitize_task_target_phrase(match.group(1))
+                candidate = self._sanitize_entity_candidate(match.group(1))
                 if candidate:
                     candidates.append(candidate)
         deduped: list[str] = []
@@ -1765,6 +1878,8 @@ class KnowledgeSpaceService:
             if not item or item in seen:
                 continue
             if all(token in _TASK_TARGET_STOPWORDS for token in item.split()):
+                continue
+            if any(token in _ENTITY_NOISE_TOKENS for token in item.split()):
                 continue
             seen.add(item)
             deduped.append(item)
@@ -1790,6 +1905,8 @@ class KnowledgeSpaceService:
             if concept in entity_tokens:
                 continue
             if concept in _TASK_TARGET_STOPWORDS:
+                continue
+            if concept in _THEME_NOISE_TOKENS:
                 continue
             themes.append(concept)
             if len(themes) >= max(1, int(limit)):
@@ -2500,6 +2617,35 @@ class KnowledgeSpaceService:
             if phrase and (phrase in searchable_text or phrase in searchable_title or phrase in searchable_concepts)
         )
         return term_hits, phrase_hits
+
+    def _count_conflicting_entities(
+        self,
+        *,
+        entities: list[str],
+        target_terms: set[str],
+        target_phrases: set[str],
+    ) -> tuple[int, int]:
+        if not entities:
+            return 0, 0
+        matched = 0
+        conflicting = 0
+        normalized_target_phrases = {
+            self._normalize_search_text(item)
+            for item in target_phrases
+            if self._normalize_search_text(item)
+        }
+        for entity in entities:
+            normalized_entity = self._normalize_search_text(entity)
+            if not normalized_entity:
+                continue
+            entity_terms = self._tokenize_search_terms(normalized_entity, min_len=3)
+            phrase_match = normalized_entity in normalized_target_phrases
+            term_match = bool(entity_terms & target_terms)
+            if phrase_match or term_match:
+                matched += 1
+                continue
+            conflicting += 1
+        return matched, conflicting
 
     def _phrase_overlap(self, *, text: str, title: str, query_phrases: set[str]) -> int:
         searchable_text = self._normalize_search_text(text)
@@ -3248,6 +3394,11 @@ class KnowledgeSpaceService:
                 target_terms=target_terms,
                 target_phrases=target_phrases,
             )
+            matched_entities, conflicting_entities = self._count_conflicting_entities(
+                entities=entities,
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
             base_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = base_score
             doc_role = str(metadata.get("doc_role") or "base").strip().lower() or "base"
@@ -3360,6 +3511,12 @@ class KnowledgeSpaceService:
                         rerank_score -= 0.22
                 else:
                     rerank_score += 0.12
+                if matched_entities > 0:
+                    rerank_score += min(0.18, matched_entities * 0.12)
+                if conflicting_entities > 0:
+                    rerank_score -= min(0.42, conflicting_entities * 0.14)
+                    if matched_entities == 0 and doc_role == "supplement":
+                        rerank_score -= 0.18
             if (
                 answer_strategy == "sequence"
                 and query_profile.get("asks_for_creation")
@@ -3389,6 +3546,8 @@ class KnowledgeSpaceService:
                     "topic_phrase_overlap": topic_phrase_overlap,
                     "target_term_overlap": target_term_overlap,
                     "target_phrase_overlap": target_phrase_overlap,
+                    "matched_entities": matched_entities,
+                    "conflicting_entities": conflicting_entities,
                     "rerank_score": rerank_score,
                 }
         ordered = sorted(
@@ -3503,6 +3662,13 @@ class KnowledgeSpaceService:
                         and item["doc_role"] == "supplement"
                         and int(item.get("target_term_overlap") or 0) <= 0
                         and int(item.get("target_phrase_overlap") or 0) <= 0
+                    ):
+                        continue
+                    if (
+                        query_profile.get("has_explicit_target")
+                        and item["doc_role"] == "supplement"
+                        and int(item.get("matched_entities") or 0) <= 0
+                        and int(item.get("conflicting_entities") or 0) > 0
                     ):
                         continue
                 sequence_selected.append(item)

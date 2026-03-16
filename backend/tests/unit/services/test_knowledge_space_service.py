@@ -102,6 +102,18 @@ def test_extract_entities_finds_specific_entity_from_definition_like_text():
     assert "cavaleiro mistico" in entities
 
 
+def test_extract_entities_discards_generic_pronoun_heavy_candidates():
+    service = KnowledgeSpaceService()
+
+    entities = service._extract_entities(
+        "Essa honra permite que você receba um benefício quando usa sua postura.",
+        title="Poderes da distinção",
+    )
+
+    assert "essa honra" not in entities
+    assert all("voce" not in item for item in entities)
+
+
 def test_infer_doc_role_detects_supplement_by_filename():
     service = KnowledgeSpaceService()
 
@@ -893,6 +905,7 @@ def test_select_canonical_candidates_prefers_target_matching_entity_for_task_exe
                     "section_title": "Classes Variantes",
                     "applies_to": ["workflow", "character_options"],
                     "concepts": ["cavaleiro", "cavaleiro místico", "magia arcana"],
+                    "entities": ["cavaleiro mistico", "cavaleiro"],
                     "usefulness_score": 0.84,
                     "heading_quality_score": 0.82,
                     "content_density_score": 0.76,
@@ -904,7 +917,7 @@ def test_select_canonical_candidates_prefers_target_matching_entity_for_task_exe
             id="supp-bardo",
             score=0.8,
             payload={
-                "content": "Bardo Marcial é uma variante de bardo com cargas arcanas e marciais.",
+                "content": "Cavaleiro e bardo aparecem juntos neste bloco, mas a variante principal aqui é Bardo Marcial.",
                 "metadata": {
                     "section_id": "supp-bardo",
                     "doc_id": "supp-doc",
@@ -914,6 +927,7 @@ def test_select_canonical_candidates_prefers_target_matching_entity_for_task_exe
                     "section_title": "Classes Variantes",
                     "applies_to": ["workflow", "character_options"],
                     "concepts": ["bardo", "bardo marcial", "cargas arcanas"],
+                    "entities": ["bardo marcial", "bardo"],
                     "usefulness_score": 0.86,
                     "heading_quality_score": 0.83,
                     "content_density_score": 0.78,
