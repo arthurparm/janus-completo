@@ -437,6 +437,23 @@ def test_base_creation_foundation_section_rejects_flavor_and_accepts_real_creati
     ) is True
 
 
+def test_supplement_creation_extension_section_rejects_optional_and_accepts_character_options():
+    service = KnowledgeSpaceService()
+
+    assert service._is_supplement_creation_extension_section(
+        title="4 Regras Opcionais",
+        content="Este é o último capítulo do livro e traz regras opcionais para aventuras variadas.",
+        section_role="optional_rules",
+        applies_to=["workflow", "character_options"],
+    ) is False
+    assert service._is_supplement_creation_extension_section(
+        title="Capítulo 1: Campeões de Arton",
+        content="Este capítulo apresenta novas opções para construir seu personagem, com novas raças e classes variantes.",
+        section_role="supplement_rules",
+        applies_to=["workflow", "character_options"],
+    ) is True
+
+
 def test_filter_points_by_doc_ids_drops_stale_space_points():
     service = KnowledgeSpaceService()
     points = [
@@ -636,6 +653,89 @@ def test_select_canonical_candidates_rejects_flavor_base_for_creation_sequence()
     assert len(selected) == 2
     assert selected[0]["section_id"] == "base-good"
     assert all(item["section_id"] != "base-flavor" for item in selected)
+
+
+def test_select_canonical_candidates_prefers_creation_supplement_over_optional_rules():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+    )
+    points = [
+        SimpleNamespace(
+            id="base-good",
+            score=0.78,
+            payload={
+                "content": "Criação de personagem: primeiro defina atributos, depois escolha raça, classe e origem.",
+                "metadata": {
+                    "section_id": "base-good",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 5,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "usefulness_score": 0.88,
+                    "heading_quality_score": 0.83,
+                    "content_density_score": 0.79,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-optional",
+            score=0.91,
+            payload={
+                "content": "Este é o último capítulo do livro e traz regras opcionais para aventuras variadas e diferentes.",
+                "metadata": {
+                    "section_id": "supp-optional",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "optional_rules",
+                    "section_order": 4,
+                    "section_title": "4 Regras Opcionais",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["regras opcionais"],
+                    "usefulness_score": 0.82,
+                    "heading_quality_score": 0.74,
+                    "content_density_score": 0.75,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-good",
+            score=0.66,
+            payload={
+                "content": "Heróis de Arton acrescenta novas opções para criar o personagem, como novas raças e classes variantes.",
+                "metadata": {
+                    "section_id": "supp-good",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["novas opções", "raças"],
+                    "usefulness_score": 0.84,
+                    "heading_quality_score": 0.86,
+                    "content_density_score": 0.76,
+                    "noise_score": 0.07,
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=2,
+    )
+
+    assert len(selected) == 2
+    assert selected[1]["section_id"] == "supp-good"
 
 
 def test_upsert_points_resilient_splits_large_batches_on_failure():

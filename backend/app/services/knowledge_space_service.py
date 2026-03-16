@@ -1234,6 +1234,40 @@ class KnowledgeSpaceService:
         applies_to_set = {str(item).strip().lower() for item in applies_to if str(item).strip()}
         return creation_hits >= 4 and bool({"base_creation", "workflow"} & applies_to_set)
 
+    def _is_supplement_creation_extension_section(
+        self,
+        *,
+        title: str,
+        content: str,
+        section_role: str,
+        applies_to: list[str] | set[str] | tuple[str, ...],
+    ) -> bool:
+        if section_role == "optional_rules":
+            return False
+        if self._looks_like_editorial_content(title=title, body=content):
+            return False
+        if self._looks_like_table_of_contents_chunk(title=title, content=content):
+            return False
+        searchable = self._normalize_search_text(f"{title} {content}")
+        applies_to_set = {str(item).strip().lower() for item in applies_to if str(item).strip()}
+        if self._is_sequence_anchor(title=title, content=content, doc_role="supplement"):
+            return True
+        if {"character_options", "workflow"} & applies_to_set and any(
+            token in searchable
+            for token in (
+                "novas opcoes",
+                "novas opções",
+                "novas racas",
+                "novas raças",
+                "classes variantes",
+                "origens",
+                "poderes de raca",
+                "poderes de raça",
+            )
+        ):
+            return True
+        return False
+
     def _apply_section_quality(self, section: dict[str, Any]) -> dict[str, Any]:
         heading_quality_score = self._score_heading_quality(str(section.get("title") or ""))
         content_density_score = self._score_content_density(str(section.get("body") or ""))
@@ -2383,6 +2417,12 @@ class KnowledgeSpaceService:
                 section_role=section_role,
                 applies_to=applies_to,
             )
+            is_supplement_creation_extension = self._is_supplement_creation_extension_section(
+                title=title,
+                content=content,
+                section_role=section_role,
+                applies_to=applies_to,
+            )
             source_target_match = any(
                 hint in searchable_title or hint in searchable_file_name for hint in source_hints
             )
@@ -2407,6 +2447,11 @@ class KnowledgeSpaceService:
                     rerank_score += 0.32
                 else:
                     rerank_score -= 0.55
+            if answer_strategy == "sequence" and query_profile.get("asks_for_creation") and doc_role == "supplement":
+                if is_supplement_creation_extension:
+                    rerank_score += 0.24
+                else:
+                    rerank_score -= 0.28
             if answer_strategy == "sequence" and self._is_sequence_anchor(
                 title=title,
                 content=content,
@@ -2479,6 +2524,7 @@ class KnowledgeSpaceService:
                     "content": content,
                     "applies_to": applies_to,
                     "is_base_creation_foundation": is_base_creation_foundation,
+                    "is_supplement_creation_extension": is_supplement_creation_extension,
                     "usefulness_score": usefulness_score,
                     "lexical_overlap": lexical_overlap,
                     "topic_lexical_overlap": topic_lexical_overlap,
@@ -2556,9 +2602,15 @@ class KnowledgeSpaceService:
                     if item["doc_role"] == "supplement"
                     and item["section_id"] not in selected_ids
                     and (
-                        item["lexical_overlap"] > 0
-                        or item["phrase_overlap"] > 0
-                        or {"character_options", "workflow"} & set(item.get("applies_to") or [])
+                        bool(item.get("is_supplement_creation_extension"))
+                        or (
+                            not query_profile.get("asks_for_creation")
+                            and (
+                                item["lexical_overlap"] > 0
+                                or item["phrase_overlap"] > 0
+                                or {"character_options", "workflow"} & set(item.get("applies_to") or [])
+                            )
+                        )
                     )
                 ]
                 if supplement_candidates:
@@ -2693,6 +2745,8 @@ class KnowledgeSpaceService:
             query_profile=query_profile,
             limit=limit,
         )
+        if query_profile.get("explicit_locator") and selected:
+            selected = selected[:1]
         citations = [self._map_citation(point, snippet_limit=220) for point in selected]
         return {
             "answer": self._render_quick_answer(selected, knowledge_space=knowledge_space),
