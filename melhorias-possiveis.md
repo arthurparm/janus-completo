@@ -749,3 +749,57 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] Message Broker Silent Fail-Open sem Alerta
+- Problema atual: Conexões falhas ao RabbitMQ (`Connection refused`) no `backend/app/core/infrastructure/message_broker.py` causam queda silenciosa do serviço para offline.
+- Solucao proposta: Implementar alertas claros e mecanismo de circuit breaker para mitigar falhas em vez de ignorá-las silenciosamente.
+- Impacto esperado: Maior resiliência, previsibilidade e observabilidade.
+- Riscos: Overhead temporário na gestão de fila.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade de XML Parsing (XXE / Billion Laughs)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza o módulo padrão vulnerável `xml.etree.ElementTree.fromstring` para parse de arquivos XML extraídos de DOCX.
+- Solucao proposta: Migrar para `defusedxml` (`defusedxml.ElementTree.fromstring`).
+- Impacto esperado: Mitigação de injeções XML que visam sobrecarga do host ou SSRF.
+- Riscos: Necessidade de adição da dependência no ambiente de execução.
+- Dependencias: Adição de `defusedxml` no requirements.txt.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Serviços Expostos na Rede Host (Bind em 0.0.0.0)
+- Problema atual: `backend/windows_agent.py` escuta em `0.0.0.0:5001` sem controle de acesso, expondo APIs perigosas na rede inteira.
+- Solucao proposta: Fazer bind em localhost (`127.0.0.1`) por padrão e inserir mTLS ou Token para binds remotos.
+- Impacto esperado: Fechamento de vetor grave de exploração remota/lateral.
+- Riscos: Redirecionamento em proxy precisa ser revisto.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Ausência de Timeout nas Conexões de Rede
+- Problema atual: Chamadas assíncronas/síncronas no diretório `tooling/` usam `requests` sem tempo de timeout máximo parametrizado.
+- Solucao proposta: Definir timeouts explícitos globalmente (ex: `timeout=10`) nas invocações.
+- Impacto esperado: Menor risco de hangs do processo e exaustão de threads, maior proteção em CI.
+- Riscos: Timeouts curtos demais podem causar interrupção prematura.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-023] Captura Biométrica Não-Minimizada em Logs
+- Problema atual: A interface `backend/app/interfaces/daemon/daemon.py` registra interações e comandos de voz (biometria em texto claro) sem ofuscação diretamente nos logs.
+- Solucao proposta: Integrar ofuscação aos logs (PII scrubbing) para prevenir exposição direta da transcrição sensível.
+- Impacto esperado: Conformidade LGPD com minimização de retenção de dados sensíveis.
+- Riscos: Dificuldade marginal em debuggar os logs de comandos falhos no daemon.
+- Dependencias: Camada de mascaramento em `logging_config.py` e regex de PII do projeto.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

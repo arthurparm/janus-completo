@@ -46,3 +46,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-16)
+
+### Lacunas e Impacto
+- **Captura Biométrica Não-Minimizada:** A interface `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz e interações (informações possivelmente sensíveis que são consideradas dados biométricos diretos ou indiretos) nos logs da aplicação em claro, violando princípios de minimização e propósito da coleta (SG-023).
+
+### Próximos Passos
+1. **Redação Dinâmica:** Integrar a rotina de ofuscação de PII aos canais do logger do Daemon, prevenindo transcrições e trechos diretos de voz de fluírem diretamente para o armazenamento longo de log em modo inseguro.

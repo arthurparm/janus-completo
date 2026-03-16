@@ -125,3 +125,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-16)
+
+### Checklist executado
+- [x] npm audit (frontend) - **17 vulnerabilidades (1 moderate, 16 high)**
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, requisitos python version não batem e falta de lockfile/dependência em sandbox sem network acesso total).
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas).
+
+### 17. Vulnerabilidade de XML Parsing (XML Attack)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O serviço utiliza `xml.etree.ElementTree.fromstring` para realizar parse de arquivos DOCX que são arquivos XML comprimidos. Esta prática é sabidamente vulnerável a ataques de injeção de XML (XXE/Billion Laughs), podendo comprometer o host (SG-031).
+- **Ação Recomendada:** Substituir a biblioteca padrão pelo pacote `defusedxml` (`defusedxml.ElementTree.fromstring`) para mitigar vulnerabilidades estruturais XML.
+
+### 18. Message Broker Silent Fail-Open (Drop para Offline)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Alta
+- **Descrição:** Falhas de conexão ao RabbitMQ (`[Errno 111] Connection refused`) causam com que o sistema drope silenciosamente para modo offline de fila sem gerar alertas explícitos (Silent fail-open) (SG-030).
+- **Ação Recomendada:** Adicionar observabilidade/alertas e configurar degradação graciosa com tentativas de reconexão baseadas em circuit breaker explícito.
+
+### 19. Bind em Interface Global Insegura (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Alta
+- **Descrição:** O script `windows_agent.py` sobe os serviços escutando na interface `0.0.0.0`, expondo todos os endpoints à rede externa indiscriminadamente. Em conjunto com a ausência de autenticação já mapeada, é um risco crítico de intrusão lateral na rede (SG-032).
+- **Ação Recomendada:** Restringir o bind à interface de loopback (`127.0.0.1`) ou adicionar autenticação forte (mTLS/Token).
+
+### 20. Conexões de Teste Suscetíveis a Hangs (Sem Timeout)
+- **Caminho:** `tooling/` / Scripts de Teste (diversos)
+- **Gravidade:** Média
+- **Descrição:** Scripts de teste executam requests com a biblioteca `requests` sem especificar o argumento de timeout, tornando a execução vulnerável a indisponibilidades parciais na rede e potenciais hangs infinitos (SG-033).
+- **Ação Recomendada:** Parametrizar tempos de `timeout` curtos (ex: `timeout=10`) em todas as invocações de sockets/requests nos scripts e rotinas de tooling.
