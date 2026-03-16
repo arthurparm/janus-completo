@@ -289,6 +289,38 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     assert all(item.id != "supp-noisy" for item in selected[:1])
 
 
+def test_select_quick_lookup_points_prefers_exact_topic_phrase_when_available():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
+    points = [
+        SimpleNamespace(
+            id="generic-racas",
+            score=0.88,
+            payload={
+                "content": "As raças moldam a personalidade e a história dos heróis.",
+                "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
+            },
+        ),
+        SimpleNamespace(
+            id="exact-novas-racas",
+            score=0.63,
+            payload={
+                "content": "Nov as Raças 9 Campeões de Arton traz novas raças para personagens jogadores.",
+                "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
+            },
+        ),
+    ]
+
+    selected = service._select_quick_lookup_points(
+        points=points,
+        question="Em que trecho Heróis de Arton fala sobre novas raças?",
+        query_profile=query_profile,
+        limit=2,
+    )
+
+    assert [item.id for item in selected] == ["exact-novas-racas"]
+
+
 def test_build_query_profile_separates_source_and_topic_terms():
     service = KnowledgeSpaceService()
 
@@ -367,6 +399,23 @@ def test_creation_foundation_signal_rejects_editorial_and_accepts_character_crea
         content="Leonel Caldela é editor executivo da revista Dragão Brasil e editor sênior da Jambô Editora.",
         doc_role="base",
     ) is False
+
+
+def test_base_creation_foundation_section_rejects_flavor_and_accepts_real_creation_flow():
+    service = KnowledgeSpaceService()
+
+    assert service._is_base_creation_foundation_section(
+        title="2. Grupo de Heróis",
+        content="Tormenta20 é sobre um grupo de heróis e suas aventuras no cenário.",
+        section_role="core_rules",
+        applies_to=["workflow", "base_creation"],
+    ) is False
+    assert service._is_base_creation_foundation_section(
+        title="Capítulo Um",
+        content="Criação de personagem: defina atributos, escolha raça, classe e origem para montar seu personagem.",
+        section_role="core_rules",
+        applies_to=["workflow", "base_creation"],
+    ) is True
 
 
 def test_filter_points_by_doc_ids_drops_stale_space_points():
@@ -484,6 +533,90 @@ def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequenc
     assert len(selected) == 2
     assert selected[0]["section_id"] == "base-good"
     assert all(item["section_id"] != "base-editorial" for item in selected)
+
+
+def test_select_canonical_candidates_rejects_flavor_base_for_creation_sequence():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+    )
+    points = [
+        SimpleNamespace(
+            id="base-flavor",
+            score=0.93,
+            payload={
+                "content": "Tormenta20 é sobre um grupo de heróis. O jogo apresenta personagem, raça, classe e origem como conceitos gerais.",
+                "metadata": {
+                    "section_id": "base-flavor",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 1,
+                    "section_title": "2. Grupo de Heróis",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["personagem", "raça", "classe", "origem"],
+                    "usefulness_score": 0.81,
+                    "heading_quality_score": 0.74,
+                    "content_density_score": 0.72,
+                    "noise_score": 0.06,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="base-good",
+            score=0.78,
+            payload={
+                "content": "Criação de personagem: primeiro defina atributos, depois escolha raça, classe e origem.",
+                "metadata": {
+                    "section_id": "base-good",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 5,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "usefulness_score": 0.88,
+                    "heading_quality_score": 0.83,
+                    "content_density_score": 0.79,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-good",
+            score=0.66,
+            payload={
+                "content": "Heróis de Arton acrescenta novas opções para criar o personagem, como novas raças.",
+                "metadata": {
+                    "section_id": "supp-good",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["novas opções", "raças"],
+                    "usefulness_score": 0.84,
+                    "heading_quality_score": 0.86,
+                    "content_density_score": 0.76,
+                    "noise_score": 0.07,
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=2,
+    )
+
+    assert len(selected) == 2
+    assert selected[0]["section_id"] == "base-good"
+    assert all(item["section_id"] != "base-flavor" for item in selected)
 
 
 def test_upsert_points_resilient_splits_large_batches_on_failure():

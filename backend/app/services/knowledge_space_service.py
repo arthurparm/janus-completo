@@ -1152,6 +1152,65 @@ class KnowledgeSpaceService:
         creation_tokens = ("atribut", "raca", "raça", "classe", "origem", "personagem")
         return sum(1 for token in creation_tokens if token in searchable) >= 3
 
+    def _looks_like_premise_or_flavor_section(self, *, title: str, content: str) -> bool:
+        searchable = self._normalize_search_text(f"{title} {content}")
+        return any(
+            token in searchable
+            for token in (
+                "grupo de herois",
+                "grupo de heróis",
+                "tormenta20 e sobre",
+                "tormenta20 é sobre",
+                "o jogo e sobre",
+                "o jogo é sobre",
+                "campanhas de tormenta20",
+                "visao geral",
+                "visão geral",
+            )
+        )
+
+    def _is_base_creation_foundation_section(
+        self,
+        *,
+        title: str,
+        content: str,
+        section_role: str,
+        applies_to: list[str] | set[str] | tuple[str, ...],
+    ) -> bool:
+        if section_role != "core_rules":
+            return False
+        if self._looks_like_editorial_content(title=title, body=content):
+            return False
+        if self._looks_like_premise_or_flavor_section(title=title, content=content):
+            return False
+        if self._is_low_trust_sequence_title(title):
+            return False
+        if self._looks_like_specific_option_chunk(title=title, content=content):
+            return False
+        searchable = self._normalize_search_text(f"{title} {content}")
+        creation_terms = ("atribut", "raca", "raça", "classe", "origem")
+        creation_hits = sum(1 for token in creation_terms if token in searchable)
+        workflow_hits = sum(
+            1
+            for token in ("criacao", "criação", "criar", "construcao", "construção", "personagem", "defina", "escolha")
+            if token in searchable
+        )
+        if any(
+            token in searchable
+            for token in (
+                "criacao de personagem",
+                "criação de personagem",
+                "capitulo um",
+                "capítulo um",
+                "passo a passo",
+            )
+        ):
+            return True
+        if creation_hits >= 3 and workflow_hits >= 2:
+            return True
+        applies_to_set = {str(item).strip().lower() for item in applies_to if str(item).strip()}
+        return creation_hits >= 4 and bool({"base_creation", "workflow"} & applies_to_set)
+
     def _apply_section_quality(self, section: dict[str, Any]) -> dict[str, Any]:
         heading_quality_score = self._score_heading_quality(str(section.get("title") or ""))
         content_density_score = self._score_content_density(str(section.get("body") or ""))
@@ -2260,6 +2319,12 @@ class KnowledgeSpaceService:
             applies_to = metadata.get("applies_to") or []
             searchable_title = self._normalize_search_text(title)
             searchable_file_name = self._normalize_search_text(file_name)
+            is_base_creation_foundation = self._is_base_creation_foundation_section(
+                title=title,
+                content=content,
+                section_role=section_role,
+                applies_to=applies_to,
+            )
             source_target_match = any(
                 hint in searchable_title or hint in searchable_file_name for hint in source_hints
             )
@@ -2279,6 +2344,11 @@ class KnowledgeSpaceService:
                 "base_creation" in applies_to or "workflow" in applies_to
             ):
                 rerank_score += 0.14
+            if answer_strategy == "sequence" and query_profile.get("asks_for_creation") and doc_role == "base":
+                if is_base_creation_foundation:
+                    rerank_score += 0.32
+                else:
+                    rerank_score -= 0.55
             if answer_strategy == "sequence" and self._is_sequence_anchor(
                 title=title,
                 content=content,
@@ -2292,6 +2362,8 @@ class KnowledgeSpaceService:
                     rerank_score -= 0.22
             if answer_strategy == "sequence" and self._is_low_trust_sequence_title(title):
                 rerank_score -= 0.28
+            if answer_strategy == "sequence" and self._looks_like_premise_or_flavor_section(title=title, content=content):
+                rerank_score -= 0.36
             if answer_strategy == "sequence" and self._looks_like_specific_option_chunk(title=title, content=content):
                 rerank_score -= 0.22
             if self._looks_like_editorial_content(title=title, body=content):
@@ -2348,6 +2420,7 @@ class KnowledgeSpaceService:
                     "title": title,
                     "content": content,
                     "applies_to": applies_to,
+                    "is_base_creation_foundation": is_base_creation_foundation,
                     "usefulness_score": usefulness_score,
                     "lexical_overlap": lexical_overlap,
                     "topic_lexical_overlap": topic_lexical_overlap,
@@ -2401,28 +2474,18 @@ class KnowledgeSpaceService:
                 creation_candidates = [
                     item
                     for item in base_candidates
-                    if (
-                        {"base_creation", "workflow"} & set(item.get("applies_to") or [])
-                        and (
-                            self._has_creation_foundation_signal(
-                                title=str(item.get("title") or ""),
-                                content=str(item.get("content") or ""),
-                                doc_role=str(item.get("doc_role") or "base"),
-                            )
-                            or self._is_sequence_anchor(
-                                title=str(item.get("title") or ""),
-                                content=str(item.get("content") or ""),
-                                doc_role=str(item.get("doc_role") or "base"),
-                            )
-                        )
-                    )
+                    if bool(item.get("is_base_creation_foundation"))
                 ]
                 if creation_candidates:
                     base_candidates = creation_candidates
             if query_profile.get("asks_for_ordering"):
                 base_candidates = sorted(
                     base_candidates,
-                    key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]),
+                    key=lambda item: (
+                        0 if item.get("is_base_creation_foundation") else 1,
+                        item["section_order"] or 999999,
+                        -item["rerank_score"],
+                    ),
                 )
             if base_candidates:
                 primary_base = base_candidates[0]
@@ -2610,7 +2673,7 @@ class KnowledgeSpaceService:
         query_phrases = set(query_profile.get("phrases") or [])
         topic_phrases = set(query_profile.get("topic_phrases") or query_phrases)
         source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
-        ranked: list[tuple[float, int, Any]] = []
+        ranked: list[dict[str, Any]] = []
         for point in points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
@@ -2691,40 +2754,48 @@ class KnowledgeSpaceService:
                 rerank_score += 0.08
             elif match_class == "weak_semantic":
                 rerank_score -= 0.12
-            ranked.append((rerank_score, max(lexical_overlap, topic_lexical_overlap), point))
-        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            ranked.append(
+                {
+                    "rerank_score": rerank_score,
+                    "lexical_overlap": lexical_overlap,
+                    "topic_lexical_overlap": topic_lexical_overlap,
+                    "phrase_overlap": phrase_overlap,
+                    "topic_phrase_overlap": topic_phrase_overlap,
+                    "source_target_match": source_target_match,
+                    "match_class": match_class,
+                    "point": point,
+                }
+            )
+        ranked.sort(
+            key=lambda item: (item["rerank_score"], max(item["lexical_overlap"], item["topic_lexical_overlap"])),
+            reverse=True,
+        )
+        exact_topic_phrase_exists = any(int(item["topic_phrase_overlap"]) > 0 for item in ranked)
+        exact_topic_phrase_from_target_source_exists = any(
+            int(item["topic_phrase_overlap"]) > 0 and bool(item["source_target_match"])
+            for item in ranked
+        )
         minimum_match_classes = {"exact_match", "strong_semantic"}
         selected: list[Any] = []
         seen_ids: set[str] = set()
-        for _, lexical_overlap, point in ranked:
+        for ranked_item in ranked:
+            lexical_overlap = int(ranked_item["lexical_overlap"])
+            point = ranked_item["point"]
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             content = str(payload.get("content") or "")
             point_id = str(getattr(point, "id", "") or "")
             if point_id and point_id in seen_ids:
                 continue
-            phrase_overlap = self._phrase_overlap(
-                text=content,
-                title=f"{metadata.get('section_title') or ''} {metadata.get('file_name') or ''}",
-                query_phrases=query_phrases,
-            )
-            topic_lexical_overlap = self._lexical_overlap(
-                text=content,
-                title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
-                concepts=[],
-                query_terms=topic_terms,
-            )
-            topic_phrase_overlap = self._phrase_overlap(
-                text=content,
-                title=str(metadata.get("section_title") or ""),
-                query_phrases=topic_phrases,
-            )
-            match_class = self._classify_chunk_match(
-                point_score=float(getattr(point, "score", 0.0) or 0.0),
-                lexical_overlap=lexical_overlap,
-                phrase_overlap=phrase_overlap,
-                explicit_locator=bool(query_profile.get("explicit_locator")),
-            )
+            phrase_overlap = int(ranked_item["phrase_overlap"])
+            topic_lexical_overlap = int(ranked_item["topic_lexical_overlap"])
+            topic_phrase_overlap = int(ranked_item["topic_phrase_overlap"])
+            source_target_match = bool(ranked_item["source_target_match"])
+            match_class = str(ranked_item["match_class"])
+            if exact_topic_phrase_from_target_source_exists and not (topic_phrase_overlap > 0 and source_target_match):
+                continue
+            if not exact_topic_phrase_from_target_source_exists and exact_topic_phrase_exists and topic_phrase_overlap == 0:
+                continue
             if (
                 query_profile.get("expects_exact_evidence")
                 and topic_phrases
@@ -2748,7 +2819,7 @@ class KnowledgeSpaceService:
             return selected
         if query_profile.get("expects_exact_evidence"):
             return []
-        return [point for _, _, point in ranked[: max(1, int(limit))]]
+        return [item["point"] for item in ranked[: max(1, int(limit))]]
 
     def _build_source_scope(self, knowledge_space: dict[str, Any]) -> dict[str, Any]:
         return {
