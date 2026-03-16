@@ -2083,7 +2083,11 @@ class KnowledgeSpaceService:
                 ),
             )
             candidate_points.extend(list(getattr(result, "points", result) or []))
-            if query_profile.get("asks_for_sequence") or query_profile.get("expects_exact_evidence"):
+            if self._should_scroll_canonical_point_type(
+                point_type=point_type,
+                query_profile=query_profile,
+                answer_strategy=answer_strategy,
+            ):
                 candidate_points.extend(
                     await self._scroll_points(
                         collection_name=collection_name,
@@ -2135,6 +2139,21 @@ class KnowledgeSpaceService:
             "evidence_count": len(citations),
             "source_roles_used": sorted({str(item["doc_role"]) for item in selected if item.get("doc_role")}),
         }
+
+    def _should_scroll_canonical_point_type(
+        self,
+        *,
+        point_type: str,
+        query_profile: dict[str, Any],
+        answer_strategy: str,
+    ) -> bool:
+        if query_profile.get("expects_exact_evidence"):
+            return point_type == "knowledge_evidence_anchor"
+        if answer_strategy == "sequence":
+            return point_type == "knowledge_flow_step"
+        if answer_strategy == "comparative" and query_profile.get("asks_for_supplement"):
+            return point_type == "knowledge_comparison_frame"
+        return False
 
     def _resolve_canonical_query_types(self, answer_strategy: str) -> list[str]:
         point_types = ["knowledge_canonical_summary", "knowledge_evidence_anchor"]
@@ -2668,10 +2687,14 @@ class KnowledgeSpaceService:
         ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
         minimum_match_classes = {"exact_match", "strong_semantic"}
         selected: list[Any] = []
+        seen_ids: set[str] = set()
         for _, lexical_overlap, point in ranked:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             content = str(payload.get("content") or "")
+            point_id = str(getattr(point, "id", "") or "")
+            if point_id and point_id in seen_ids:
+                continue
             phrase_overlap = self._phrase_overlap(
                 text=content,
                 title=f"{metadata.get('section_title') or ''} {metadata.get('file_name') or ''}",
@@ -2698,7 +2721,7 @@ class KnowledgeSpaceService:
                 query_profile.get("expects_exact_evidence")
                 and topic_phrases
                 and topic_phrase_overlap == 0
-                and topic_lexical_overlap < 1
+                and topic_lexical_overlap < 2
             ):
                 continue
             if query_profile.get("expects_exact_evidence") and match_class not in minimum_match_classes:
@@ -2709,6 +2732,8 @@ class KnowledgeSpaceService:
             ):
                 continue
             selected.append(point)
+            if point_id:
+                seen_ids.add(point_id)
             if len(selected) >= max(1, int(limit)):
                 break
         if selected:

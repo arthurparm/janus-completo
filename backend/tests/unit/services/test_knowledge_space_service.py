@@ -382,6 +382,26 @@ def test_filter_points_by_doc_ids_drops_stale_space_points():
     assert filtered[0].payload["metadata"]["doc_id"] == "doc-current"
 
 
+def test_should_scroll_canonical_point_type_focuses_by_strategy():
+    service = KnowledgeSpaceService()
+
+    assert service._should_scroll_canonical_point_type(
+        point_type="knowledge_flow_step",
+        query_profile={"asks_for_sequence": True},
+        answer_strategy="sequence",
+    ) is True
+    assert service._should_scroll_canonical_point_type(
+        point_type="knowledge_canonical_summary",
+        query_profile={"asks_for_sequence": True},
+        answer_strategy="sequence",
+    ) is False
+    assert service._should_scroll_canonical_point_type(
+        point_type="knowledge_evidence_anchor",
+        query_profile={"expects_exact_evidence": True},
+        answer_strategy="locator",
+    ) is True
+
+
 def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequence():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
