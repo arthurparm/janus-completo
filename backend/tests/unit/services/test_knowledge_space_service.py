@@ -330,8 +330,10 @@ def test_build_query_profile_separates_source_and_topic_terms():
     assert "arton" in profile["source_terms"]
     assert "novas" in profile["topic_terms"]
     assert "racas" in profile["topic_terms"]
+    assert "fala" not in profile["topic_terms"]
     assert "herois de arton" not in profile["topic_phrases"]
     assert "novas racas" in profile["topic_phrases"]
+    assert profile["strict_topic_phrases"] == {"novas racas"}
 
 
 def test_phrase_overlap_handles_ocr_split_tokens():

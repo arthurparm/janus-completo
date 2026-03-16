@@ -181,7 +181,30 @@ _GENERIC_HEADING_KEYWORDS = {
     "visão",
     "geral",
 }
-_LOW_SIGNAL_QUERY_TOKENS = {"onde", "trecho", "pagina", "página", "secao", "seção", "capitulo", "capítulo"}
+_LOW_SIGNAL_QUERY_TOKENS = {
+    "acrescenta",
+    "adiciona",
+    "capitulo",
+    "capítulo",
+    "cobre",
+    "define",
+    "diz",
+    "em",
+    "etapa",
+    "explica",
+    "fala",
+    "falar",
+    "mostra",
+    "onde",
+    "pagina",
+    "página",
+    "ponto",
+    "secao",
+    "seção",
+    "trata",
+    "traz",
+    "trecho",
+}
 _MARKETING_KEYWORDS = {
     "seu jogo nunca foi",
     "centenas de combina",
@@ -1328,12 +1351,17 @@ class KnowledgeSpaceService:
             for phrase in phrases
             if not all(token in source_terms for token in self._tokenize_search_terms(phrase, min_len=3))
         }
+        strict_topic_phrases = self._select_strict_topic_phrases(
+            topic_terms=topic_terms,
+            topic_phrases=topic_phrases,
+        )
         return {
             "normalized": lowered,
             "terms": terms,
             "topic_terms": topic_terms,
             "phrases": phrases,
             "topic_phrases": topic_phrases,
+            "strict_topic_phrases": strict_topic_phrases,
             "explicit_locator": explicit_locator,
             "asks_for_supplement": asks_for_supplement,
             "asks_for_base": asks_for_base,
@@ -1343,6 +1371,24 @@ class KnowledgeSpaceService:
             "source_hints": source_hints,
             "source_terms": source_terms,
             "expects_exact_evidence": explicit_locator or any(token in lowered for token in ("onde", "trecho", "pagina", "página")),
+        }
+
+    def _select_strict_topic_phrases(self, *, topic_terms: set[str], topic_phrases: set[str]) -> set[str]:
+        scored: list[tuple[int, int, str]] = []
+        for phrase in topic_phrases:
+            phrase_terms = self._tokenize_search_terms(phrase, min_len=3)
+            coverage = len(phrase_terms & topic_terms)
+            if coverage <= 0:
+                continue
+            scored.append((coverage, len(phrase_terms), phrase))
+        if not scored:
+            return set()
+        max_coverage = max(item[0] for item in scored)
+        min_token_count = min(item[1] for item in scored if item[0] == max_coverage)
+        return {
+            phrase
+            for coverage, token_count, phrase in scored
+            if coverage == max_coverage and token_count == min_token_count
         }
 
     def _extract_query_phrases(self, question: str) -> set[str]:
@@ -2672,6 +2718,7 @@ class KnowledgeSpaceService:
         topic_terms = set(query_profile.get("topic_terms") or question_terms)
         query_phrases = set(query_profile.get("phrases") or [])
         topic_phrases = set(query_profile.get("topic_phrases") or query_phrases)
+        strict_topic_phrases = set(query_profile.get("strict_topic_phrases") or topic_phrases)
         source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
         ranked: list[dict[str, Any]] = []
         for point in points:
@@ -2702,10 +2749,16 @@ class KnowledgeSpaceService:
                 title=title,
                 query_phrases=topic_phrases,
             )
+            strict_topic_phrase_overlap = self._phrase_overlap(
+                text=content,
+                title=title,
+                query_phrases=strict_topic_phrases,
+            )
             point_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = point_score + min(0.28, lexical_overlap * 0.06) + min(0.32, phrase_overlap * 0.12)
             rerank_score += min(0.18, topic_lexical_overlap * 0.08)
             rerank_score += min(0.22, topic_phrase_overlap * 0.14)
+            rerank_score += min(0.18, strict_topic_phrase_overlap * 0.16)
             doc_role = str(metadata.get("doc_role") or "").strip().lower()
             searchable_content = self._normalize_search_text(content)
             searchable_file_name = self._normalize_search_text(file_name)
@@ -2761,6 +2814,7 @@ class KnowledgeSpaceService:
                     "topic_lexical_overlap": topic_lexical_overlap,
                     "phrase_overlap": phrase_overlap,
                     "topic_phrase_overlap": topic_phrase_overlap,
+                    "strict_topic_phrase_overlap": strict_topic_phrase_overlap,
                     "source_target_match": source_target_match,
                     "match_class": match_class,
                     "point": point,
@@ -2769,6 +2823,11 @@ class KnowledgeSpaceService:
         ranked.sort(
             key=lambda item: (item["rerank_score"], max(item["lexical_overlap"], item["topic_lexical_overlap"])),
             reverse=True,
+        )
+        strict_topic_phrase_exists = any(int(item["strict_topic_phrase_overlap"]) > 0 for item in ranked)
+        strict_topic_phrase_from_target_source_exists = any(
+            int(item["strict_topic_phrase_overlap"]) > 0 and bool(item["source_target_match"])
+            for item in ranked
         )
         exact_topic_phrase_exists = any(int(item["topic_phrase_overlap"]) > 0 for item in ranked)
         exact_topic_phrase_from_target_source_exists = any(
@@ -2790,16 +2849,21 @@ class KnowledgeSpaceService:
             phrase_overlap = int(ranked_item["phrase_overlap"])
             topic_lexical_overlap = int(ranked_item["topic_lexical_overlap"])
             topic_phrase_overlap = int(ranked_item["topic_phrase_overlap"])
+            strict_topic_phrase_overlap = int(ranked_item["strict_topic_phrase_overlap"])
             source_target_match = bool(ranked_item["source_target_match"])
             match_class = str(ranked_item["match_class"])
+            if strict_topic_phrase_from_target_source_exists and not (strict_topic_phrase_overlap > 0 and source_target_match):
+                continue
+            if not strict_topic_phrase_from_target_source_exists and strict_topic_phrase_exists and strict_topic_phrase_overlap == 0:
+                continue
             if exact_topic_phrase_from_target_source_exists and not (topic_phrase_overlap > 0 and source_target_match):
                 continue
             if not exact_topic_phrase_from_target_source_exists and exact_topic_phrase_exists and topic_phrase_overlap == 0:
                 continue
             if (
                 query_profile.get("expects_exact_evidence")
-                and topic_phrases
-                and topic_phrase_overlap == 0
+                and strict_topic_phrases
+                and strict_topic_phrase_overlap == 0
                 and topic_lexical_overlap < 2
             ):
                 continue
