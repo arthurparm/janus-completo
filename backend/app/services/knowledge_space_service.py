@@ -4237,25 +4237,41 @@ class KnowledgeSpaceService:
         values = [float(getattr(point, "score", 0.0) or 0.0) for point in points]
         return round(sum(values) / max(1, len(values)), 4)
 
+    def _is_retryable_qdrant_scroll_error(self, exc: Exception) -> bool:
+        message = self._normalize_search_text(str(exc))
+        return "408" in message or "timeout" in message or "responsehandlingexception" in message
+
     async def _scroll_points(
         self,
         *,
         collection_name: str,
         query_filter: models.Filter,
         batch_size: int = 128,
+        min_batch_size: int = 16,
     ) -> list[Any]:
         client = get_async_qdrant_client()
         offset = None
         rows: list[Any] = []
+        current_batch_size = max(1, int(batch_size))
+        minimum_batch_size = max(1, int(min_batch_size))
         while True:
-            points, offset = await client.scroll(
-                collection_name=collection_name,
-                scroll_filter=query_filter,
-                limit=max(1, int(batch_size)),
-                with_payload=True,
-                offset=offset,
-            )
+            try:
+                points, offset = await client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=query_filter,
+                    limit=current_batch_size,
+                    with_payload=True,
+                    offset=offset,
+                )
+            except Exception as exc:
+                if current_batch_size > minimum_batch_size and self._is_retryable_qdrant_scroll_error(exc):
+                    current_batch_size = max(minimum_batch_size, current_batch_size // 2)
+                    await asyncio.sleep(0.2)
+                    continue
+                raise
             rows.extend(points or [])
+            if current_batch_size < max(1, int(batch_size)):
+                current_batch_size = min(max(1, int(batch_size)), current_batch_size * 2)
             if offset is None:
                 break
         return rows

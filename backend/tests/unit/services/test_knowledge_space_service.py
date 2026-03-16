@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
+import app.services.knowledge_space_service as knowledge_space_module
 from app.services.knowledge_space_service import KnowledgeSpaceService
 
 
@@ -993,6 +994,42 @@ def test_upsert_points_resilient_splits_large_batches_on_failure():
 
     assert client.calls[0] == 6
     assert all(size <= 3 for size in client.calls[1:])
+
+
+def test_scroll_points_retries_with_smaller_batch_after_timeout():
+    service = KnowledgeSpaceService()
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def scroll(self, *, collection_name, scroll_filter, limit, with_payload, offset):
+            del collection_name, scroll_filter, with_payload
+            self.calls.append((limit, offset))
+            if limit >= 128:
+                raise RuntimeError("Unexpected Response: 408 (Request Timeout)")
+            if offset is None:
+                return [SimpleNamespace(id="a", payload={"metadata": {}})], "next"
+            return [SimpleNamespace(id="b", payload={"metadata": {}})], None
+
+    fake_client = FakeClient()
+    original_get_client = knowledge_space_module.get_async_qdrant_client
+    knowledge_space_module.get_async_qdrant_client = lambda: fake_client
+    try:
+        rows = asyncio.run(
+            service._scroll_points(
+                collection_name="col",
+                query_filter=SimpleNamespace(),
+                batch_size=128,
+                min_batch_size=32,
+            )
+        )
+    finally:
+        knowledge_space_module.get_async_qdrant_client = original_get_client
+
+    assert [row.id for row in rows] == ["a", "b"]
+    assert fake_client.calls[0][0] == 128
+    assert fake_client.calls[1][0] == 64
 
 
 def test_finalize_sections_filters_noise_and_keeps_useful_rule():
