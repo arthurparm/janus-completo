@@ -748,6 +748,88 @@ def test_select_canonical_candidates_prefers_creation_supplement_over_optional_r
     assert selected[1]["section_id"] == "supp-good"
 
 
+def test_select_canonical_candidates_allows_additional_grounded_sections_for_task_execution():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha completa de personagem usando as regras do livro base e do suplemento."
+    )
+    points = [
+        SimpleNamespace(
+            id="base-intro",
+            score=0.84,
+            payload={
+                "content": "Criação de personagem: defina atributos, escolha raça, classe e origem.",
+                "metadata": {
+                    "section_id": "base-intro",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "usefulness_score": 0.9,
+                    "heading_quality_score": 0.86,
+                    "content_density_score": 0.8,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="base-extra",
+            score=0.78,
+            payload={
+                "content": "As perícias treinadas e equipamentos iniciais são definidos pela classe e pela origem.",
+                "metadata": {
+                    "section_id": "base-extra",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 2,
+                    "section_title": "Classes e Origens",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["perícias", "equipamentos", "classe", "origem"],
+                    "usefulness_score": 0.86,
+                    "heading_quality_score": 0.82,
+                    "content_density_score": 0.79,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-extra",
+            score=0.72,
+            payload={
+                "content": "Heróis de Arton oferece novas raças, origens e classes variantes para a ficha.",
+                "metadata": {
+                    "section_id": "supp-extra",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["novas raças", "origens", "classes variantes"],
+                    "usefulness_score": 0.84,
+                    "heading_quality_score": 0.84,
+                    "content_density_score": 0.77,
+                    "noise_score": 0.04,
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Crie uma ficha completa de personagem usando as regras do livro base e do suplemento.",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=4,
+    )
+
+    assert [item["section_id"] for item in selected] == ["base-intro", "supp-extra", "base-extra"]
+
+
 def test_upsert_points_resilient_splits_large_batches_on_failure():
     service = KnowledgeSpaceService()
 
@@ -1070,6 +1152,82 @@ def test_query_canonical_returns_task_strategy_for_execution_queries():
 
     assert result["answer"] == "Artefato final grounded."
     assert result["answer_strategy"] == "task"
+
+
+def test_collect_operational_support_points_targets_selected_docs_without_scroll_for_tasks():
+    service = KnowledgeSpaceService()
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def query_points(self, **kwargs):
+            self.calls.append(kwargs)
+            doc_id = None
+            for condition in kwargs["query_filter"].must:
+                if getattr(condition, "key", "") == "metadata.doc_id":
+                    doc_id = condition.match.value
+            return SimpleNamespace(
+                points=[
+                    SimpleNamespace(
+                        id=f"p-{doc_id}",
+                        payload={
+                            "content": f"Trecho do documento {doc_id}",
+                            "metadata": {
+                                "doc_id": doc_id,
+                                "doc_role": "base" if doc_id == "base-doc" else "supplement",
+                                "file_name": f"{doc_id}.pdf",
+                                "chunk_index": 1,
+                            },
+                        },
+                        score=0.8,
+                    )
+                ]
+            )
+
+    import app.services.knowledge_space_service as module
+
+    original_get_client = module.get_async_qdrant_client
+    original_get_collection = module.aget_or_create_collection
+    original_embed = module.aembed_text
+    try:
+        fake_client = FakeClient()
+        module.get_async_qdrant_client = lambda: fake_client
+
+        async def fake_get_collection(name):
+            return "col"
+
+        async def fake_embed(text):
+            return [0.0] * 3
+
+        module.aget_or_create_collection = fake_get_collection
+        module.aembed_text = fake_embed
+
+        async def fail_scroll(**kwargs):
+            raise AssertionError("scroll should not be used for targeted task support")
+
+        service._scroll_points = fail_scroll  # type: ignore[method-assign]
+
+        result = asyncio.run(
+            service._collect_operational_support_points(
+                knowledge_space={"knowledge_space_id": "ks-1"},
+                user_id="user-1",
+                question="Crie uma ficha completa com base nas regras do livro.",
+                limit=4,
+                active_doc_ids={"base-doc", "supp-doc"},
+                selected_sections=[
+                    {"doc_id": "base-doc", "doc_role": "base", "title": "Capítulo Um", "content": "Criação."},
+                    {"doc_id": "supp-doc", "doc_role": "supplement", "title": "Campeões de Arton", "content": "Novas opções."},
+                ],
+            )
+        )
+    finally:
+        module.get_async_qdrant_client = original_get_client
+        module.aget_or_create_collection = original_get_collection
+        module.aembed_text = original_embed
+
+    assert [point.id for point in result] == ["p-base-doc", "p-supp-doc"]
+    assert len(fake_client.calls) == 2
 
 
 def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():

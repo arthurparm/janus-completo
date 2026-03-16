@@ -2410,32 +2410,26 @@ class KnowledgeSpaceService:
         question: str,
         limit: int,
         active_doc_ids: set[str] | None,
+        selected_sections: list[dict[str, Any]] | None = None,
     ) -> list[Any]:
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
-        vector = await aembed_text(question)
         query_profile = self._build_query_profile(question)
-        result = await client.query_points(
-            collection_name=collection_name,
-            query=vector,
-            limit=max(10, int(limit) * 6),
-            with_payload=True,
-            query_filter=models.Filter(
-                must=[
-                    models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-                    models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
-                    models.FieldCondition(
-                        key="metadata.knowledge_space_id",
-                        match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
-                    ),
-                ]
-            ),
-        )
-        points = list(getattr(result, "points", result) or [])
-        if query_profile.get("source_hints") or query_profile.get("asks_for_task_execution"):
-            points.extend(
-                await self._scroll_points(
+        points: list[Any] = []
+        if query_profile.get("asks_for_task_execution") and selected_sections:
+            seen_point_ids: set[str] = set()
+            for section in selected_sections[: max(2, min(6, int(limit)) )]:
+                doc_id = str(section.get("doc_id") or "").strip()
+                doc_role = str(section.get("doc_role") or "base").strip().lower() or "base"
+                section_title = str(section.get("title") or "").strip()
+                section_content = self._trim_text(str(section.get("content") or ""), max_chars=280)
+                targeted_query = f"{question}\n{section_title}\n{section_content}".strip()
+                vector = await aembed_text(targeted_query)
+                result = await client.query_points(
                     collection_name=collection_name,
+                    query=vector,
+                    limit=3 if doc_role == "base" else 2,
+                    with_payload=True,
                     query_filter=models.Filter(
                         must=[
                             models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
@@ -2444,11 +2438,53 @@ class KnowledgeSpaceService:
                                 key="metadata.knowledge_space_id",
                                 match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
                             ),
+                            models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
                         ]
                     ),
-                    batch_size=256,
                 )
+                for point in list(getattr(result, "points", result) or []):
+                    point_id = str(getattr(point, "id", "") or "")
+                    if point_id and point_id in seen_point_ids:
+                        continue
+                    points.append(point)
+                    if point_id:
+                        seen_point_ids.add(point_id)
+        else:
+            vector = await aembed_text(question)
+            result = await client.query_points(
+                collection_name=collection_name,
+                query=vector,
+                limit=max(10, int(limit) * 6),
+                with_payload=True,
+                query_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                        models.FieldCondition(
+                            key="metadata.knowledge_space_id",
+                            match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                        ),
+                    ]
+                ),
             )
+            points = list(getattr(result, "points", result) or [])
+            if query_profile.get("source_hints"):
+                points.extend(
+                    await self._scroll_points(
+                        collection_name=collection_name,
+                        query_filter=models.Filter(
+                            must=[
+                                models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                                models.FieldCondition(
+                                    key="metadata.knowledge_space_id",
+                                    match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                                ),
+                            ]
+                        ),
+                        batch_size=256,
+                    )
+                )
         points = self._filter_points_by_doc_ids(points, active_doc_ids=active_doc_ids)
         return self._select_quick_lookup_points(
             points=points,
@@ -2527,6 +2563,7 @@ class KnowledgeSpaceService:
             question=question,
             limit=limit,
             active_doc_ids=active_doc_ids,
+            selected_sections=selected,
         )
         prompt = self._build_operational_prompt(
             question=question,
@@ -2824,10 +2861,23 @@ class KnowledgeSpaceService:
                     break
                 if item["section_id"] in selected_ids:
                     continue
-                if item["doc_role"] in {"base", "supplement"} and item["doc_id"] in {
-                    row["doc_id"] for row in sequence_selected
-                }:
+                if (
+                    not query_profile.get("asks_for_task_execution")
+                    and item["doc_role"] in {"base", "supplement"}
+                    and item["doc_id"] in {row["doc_id"] for row in sequence_selected}
+                ):
                     continue
+                if query_profile.get("asks_for_task_execution") and item["doc_role"] in {"base", "supplement"}:
+                    if item["doc_role"] == "base" and not (
+                        item.get("is_base_creation_foundation")
+                        or {"base_creation", "workflow"} & set(item.get("applies_to") or [])
+                    ):
+                        continue
+                    if item["doc_role"] == "supplement" and not (
+                        item.get("is_supplement_creation_extension")
+                        or {"character_options", "workflow"} & set(item.get("applies_to") or [])
+                    ):
+                        continue
                 sequence_selected.append(item)
                 selected_ids.add(item["section_id"])
             return sequence_selected
