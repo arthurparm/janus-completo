@@ -195,6 +195,10 @@ class KnowledgeSpaceQueryResponse(BaseModel):
     mode_used: str
     base_used: str
     answer_strategy: str = "scope"
+    estimated_wait_seconds: int = 0
+    estimated_wait_range_seconds: list[int] = []
+    processing_profile: str | None = None
+    processing_notice: str | None = None
     evidence_count: int = 0
     source_roles_used: list[str] = []
     source_scope: dict[str, Any]

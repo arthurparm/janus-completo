@@ -274,6 +274,10 @@ export interface ChatMessage {
   knowledge_space_id?: string;
   mode_used?: string;
   base_used?: string;
+  estimated_wait_seconds?: number;
+  estimated_wait_range_seconds?: number[];
+  processing_profile?: string;
+  processing_notice?: string | null;
   source_scope?: Record<string, unknown> | null;
   gaps_or_conflicts?: string[];
   citations?: Citation[]
@@ -337,6 +341,10 @@ export interface ChatMessageResponse {
   knowledge_space_id?: string;
   mode_used?: string;
   base_used?: string;
+  estimated_wait_seconds?: number;
+  estimated_wait_range_seconds?: number[];
+  processing_profile?: string;
+  processing_notice?: string | null;
   source_scope?: Record<string, unknown> | null;
   gaps_or_conflicts?: string[];
   citations: Citation[];

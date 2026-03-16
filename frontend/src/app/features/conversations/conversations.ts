@@ -51,6 +51,10 @@ interface ChatMessageView {
   role: ChatRole
   text: string
   timestamp: number
+  estimated_wait_seconds?: number
+  estimated_wait_range_seconds?: number[]
+  processing_profile?: string
+  processing_notice?: string
   citations?: Citation[]
   understanding?: ChatUnderstanding
   citation_status?: CitationStatus
@@ -1648,6 +1652,10 @@ export class ConversationsComponent {
         backendMessageId: done.message_id,
         text: finalText,
         streaming: false,
+        estimated_wait_seconds: done.estimated_wait_seconds,
+        estimated_wait_range_seconds: done.estimated_wait_range_seconds,
+        processing_profile: done.processing_profile,
+        processing_notice: done.processing_notice || undefined,
         citations: done.citations || [],
         citation_status: done.citation_status,
         understanding: done.understanding,
@@ -1666,6 +1674,9 @@ export class ConversationsComponent {
     const modelParts = [done.provider, done.model].filter(Boolean)
     const modelLabel = modelParts.length ? ` (${modelParts.join(' / ')})` : ''
     const citationsCount = done.citations?.length || 0
+    if (done.processing_notice) {
+      this.appendThought('agent', 'Estimativa', done.processing_notice)
+    }
     this.appendThought('stream', 'Resposta concluida', `Streaming finalizado${modelLabel}. Citacoes: ${citationsCount}.`)
     this.queueScroll()
     this.loadConversations()
@@ -1837,6 +1848,9 @@ export class ConversationsComponent {
   }
 
   private cognitiveStatusText(state: string, reason?: string): string {
+    if (state === 'knowledge_wait_estimate') {
+      return reason || 'Consulta grounded iniciada; isso pode demorar.'
+    }
     if (state === 'studying_codebase') {
       return reason || 'Estudando a base para responder com seguranca; isso pode demorar.'
     }

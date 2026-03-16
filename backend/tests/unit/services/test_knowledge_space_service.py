@@ -1443,8 +1443,28 @@ def test_query_space_uses_extended_timeout_for_task_execution_queries():
         else:
             os.environ["KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS"] = previous_task_timeout
 
-    assert result["mode_used"] == "canonical_answer"
-    assert result["answer_strategy"] == "task"
+
+def test_estimate_query_timing_marks_task_queries_as_deep_and_slow():
+    service = KnowledgeSpaceService()
+    service.get_space = lambda **kwargs: {  # type: ignore[method-assign]
+        "knowledge_space_id": "ks-1",
+        "name": "KS",
+        "sections_indexed": 580,
+        "documents_indexed": 2,
+    }
+
+    hint = service.estimate_query_timing(
+        knowledge_space_id="ks-1",
+        user_id="user-1",
+        question="Crie uma ficha completa usando o livro base e o suplemento.",
+        mode="auto",
+    )
+
+    assert hint["processing_profile"] == "deep_task"
+    assert hint["estimated_mode"] == "canonical_answer"
+    assert hint["estimated_answer_strategy"] == "task"
+    assert hint["estimated_wait_range_seconds"][0] >= 30
+    assert "priorizar qualidade" in str(hint["processing_notice"]).lower()
 
 
 def test_reconcile_ready_processing_space_promotes_space_without_active_documents():

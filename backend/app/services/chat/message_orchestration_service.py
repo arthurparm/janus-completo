@@ -334,6 +334,34 @@ class MessageOrchestrationService:
             result["gaps_or_conflicts"] = gaps
         return result
 
+    def build_knowledge_space_runtime_notice(
+        self,
+        *,
+        conversation_id: str,
+        message: str,
+        user_id: str | None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if not user_id:
+            return None
+        manifests = self._list_document_manifests(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        knowledge_space_id = self._resolve_knowledge_space_id(
+            manifests=manifests,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+        if not knowledge_space_id:
+            return None
+        service = KnowledgeSpaceService(manifest_repo=self._manifest_repo, llm_service=self._llm)
+        return service.estimate_query_timing(
+            knowledge_space_id=knowledge_space_id,
+            user_id=str(user_id),
+            question=message,
+            mode="auto",
+        )
+
     def _should_use_document_grounding(
         self,
         *,
@@ -1259,6 +1287,10 @@ class MessageOrchestrationService:
                     "mode_used": grounded_result.get("mode_used"),
                     "base_used": grounded_result.get("base_used"),
                     "answer_strategy": grounded_result.get("answer_strategy"),
+                    "estimated_wait_seconds": grounded_result.get("estimated_wait_seconds"),
+                    "estimated_wait_range_seconds": grounded_result.get("estimated_wait_range_seconds"),
+                    "processing_profile": grounded_result.get("processing_profile"),
+                    "processing_notice": grounded_result.get("processing_notice"),
                     "evidence_count": grounded_result.get("evidence_count"),
                     "source_roles_used": grounded_result.get("source_roles_used"),
                     "source_scope": grounded_result.get("source_scope"),

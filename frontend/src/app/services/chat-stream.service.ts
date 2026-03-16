@@ -15,6 +15,10 @@ export interface StreamDone {
   knowledge_space_id?: string
   mode_used?: string
   base_used?: string
+  estimated_wait_seconds?: number
+  estimated_wait_range_seconds?: number[]
+  processing_profile?: string
+  processing_notice?: string | null
   source_scope?: Record<string, unknown> | null
   gaps_or_conflicts?: string[]
   citations?: Citation[]
@@ -393,6 +397,10 @@ export class ChatStreamService {
           knowledge_space_id: parsed?.knowledge_space_id,
           mode_used: parsed?.mode_used,
           base_used: parsed?.base_used,
+          estimated_wait_seconds: parsed?.estimated_wait_seconds,
+          estimated_wait_range_seconds: parsed?.estimated_wait_range_seconds,
+          processing_profile: parsed?.processing_profile,
+          processing_notice: parsed?.processing_notice,
           source_scope: parsed?.source_scope,
           gaps_or_conflicts: parsed?.gaps_or_conflicts,
           citations: parsed?.citations,

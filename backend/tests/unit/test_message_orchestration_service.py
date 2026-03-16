@@ -777,3 +777,48 @@ async def test_apply_response_memory_policies_appends_next_steps(monkeypatch):
     )
 
     assert "Próximos passos:" in result
+
+
+def test_build_knowledge_space_runtime_notice_returns_estimate_for_resolved_space(monkeypatch):
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "knowledge_space_id": "ks-1",
+                "status": "indexed",
+                "chunks_indexed": 10,
+            }
+        ]
+    )
+    service = _build_service(manifest_repo=manifest_repo)
+
+    class _FakeKnowledgeSpaceService:
+        def __init__(self, manifest_repo=None, llm_service=None):
+            self.manifest_repo = manifest_repo
+            self.llm_service = llm_service
+
+        def estimate_query_timing(self, **kwargs):
+            return {
+                "estimated_wait_seconds": 48,
+                "estimated_wait_range_seconds": [35, 60],
+                "processing_profile": "deep_task",
+                "processing_notice": "Consulta profunda em andamento. Estimativa: 35-60s.",
+                "estimated_mode": "canonical_answer",
+                "estimated_answer_strategy": "task",
+            }
+
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.KnowledgeSpaceService",
+        _FakeKnowledgeSpaceService,
+    )
+
+    result = service.build_knowledge_space_runtime_notice(
+        conversation_id="conv-1",
+        message="Crie uma ficha completa usando os livros.",
+        user_id="user-1",
+        requested_knowledge_space_id=None,
+    )
+
+    assert result is not None
+    assert result["processing_profile"] == "deep_task"
+    assert result["estimated_wait_range_seconds"] == [35, 60]

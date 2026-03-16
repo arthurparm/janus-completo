@@ -563,6 +563,13 @@ class KnowledgeSpaceService:
         gaps_or_conflicts = self._detect_scope_conflicts(space=space, manifests=manifests)
         prefer_locator = self._prefer_locator(question)
         query_profile = self._build_query_profile(question)
+        timing_hint = self._build_query_timing_hint(
+            knowledge_space=space,
+            question=question,
+            mode=normalized_mode,
+            query_profile=query_profile,
+            prefer_locator=prefer_locator,
+        )
         canonical_timeout_seconds = float(
             os.getenv("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", "12") or 12
         )
@@ -585,7 +592,7 @@ class KnowledgeSpaceService:
                 active_doc_ids=active_doc_ids,
             )
             quick["gaps_or_conflicts"] = [*gaps_or_conflicts, *quick.get("gaps_or_conflicts", [])]
-            return quick
+            return self._merge_query_timing_hint(quick, timing_hint=timing_hint)
 
         should_try_canonical = (
             normalized_mode == "canonical_answer"
@@ -617,7 +624,7 @@ class KnowledgeSpaceService:
                         *gaps_or_conflicts,
                         *canonical.get("gaps_or_conflicts", []),
                     ]
-                    return canonical
+                    return self._merge_query_timing_hint(canonical, timing_hint=timing_hint)
                 gaps_or_conflicts.append("Nenhuma evidência consolidada recuperável; fallback para chunks.")
 
         quick = await self._query_quick_lookup(
@@ -628,7 +635,95 @@ class KnowledgeSpaceService:
             active_doc_ids=active_doc_ids,
         )
         quick["gaps_or_conflicts"] = [*gaps_or_conflicts, *quick.get("gaps_or_conflicts", [])]
-        return quick
+        return self._merge_query_timing_hint(quick, timing_hint=timing_hint)
+
+    def estimate_query_timing(
+        self,
+        *,
+        knowledge_space_id: str,
+        user_id: str,
+        question: str,
+        mode: str = "auto",
+    ) -> dict[str, Any]:
+        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        normalized_mode = str(mode or "auto").strip().lower()
+        if normalized_mode not in _QUERY_MODES:
+            normalized_mode = "auto"
+        query_profile = self._build_query_profile(question)
+        return self._build_query_timing_hint(
+            knowledge_space=space,
+            question=question,
+            mode=normalized_mode,
+            query_profile=query_profile,
+            prefer_locator=self._prefer_locator(question),
+        )
+
+    def _build_query_timing_hint(
+        self,
+        *,
+        knowledge_space: dict[str, Any],
+        question: str,
+        mode: str,
+        query_profile: dict[str, Any] | None = None,
+        prefer_locator: bool | None = None,
+    ) -> dict[str, Any]:
+        query_profile = query_profile or self._build_query_profile(question)
+        prefer_locator = self._prefer_locator(question) if prefer_locator is None else bool(prefer_locator)
+        sections_indexed = int(knowledge_space.get("sections_indexed") or 0)
+        docs_total = max(
+            1,
+            int(knowledge_space.get("documents_indexed") or 0)
+            or int(knowledge_space.get("documents_total") or 0)
+            or 1,
+        )
+        if query_profile.get("asks_for_task_execution"):
+            effective_mode = "canonical_answer"
+            profile = "deep_task"
+            min_seconds = 28 + (docs_total * 4) + min(24, sections_indexed // 85)
+            max_seconds = min_seconds + 30 + min(30, sections_indexed // 70)
+            strategy = "task"
+            notice = (
+                f"Consulta profunda em andamento. Estimativa: {min_seconds}-{max_seconds}s. "
+                "Janus vai priorizar qualidade e evidência, não velocidade."
+            )
+        elif mode == "quick_lookup" or (mode == "auto" and prefer_locator):
+            effective_mode = "quick_lookup"
+            profile = "fast_lookup"
+            min_seconds = max(2, 2 + min(3, docs_total))
+            max_seconds = min_seconds + 5
+            strategy = "locator"
+            notice = None
+        else:
+            effective_mode = "canonical_answer"
+            profile = "grounded"
+            min_seconds = 8 + (docs_total * 2) + min(12, sections_indexed // 140)
+            max_seconds = min_seconds + 16 + min(12, sections_indexed // 120)
+            strategy = self._detect_answer_strategy(question)
+            notice = (
+                f"Consulta grounded em andamento. Estimativa: {min_seconds}-{max_seconds}s. "
+                "Janus está priorizando qualidade sobre tempo de resposta."
+            )
+        return {
+            "estimated_wait_seconds": int(round((min_seconds + max_seconds) / 2)),
+            "estimated_wait_range_seconds": [int(min_seconds), int(max_seconds)],
+            "processing_notice": notice,
+            "processing_profile": profile,
+            "estimated_mode": effective_mode,
+            "estimated_answer_strategy": strategy,
+        }
+
+    def _merge_query_timing_hint(
+        self,
+        result: dict[str, Any],
+        *,
+        timing_hint: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = dict(result)
+        merged["estimated_wait_seconds"] = int(timing_hint.get("estimated_wait_seconds") or 0)
+        merged["estimated_wait_range_seconds"] = list(timing_hint.get("estimated_wait_range_seconds") or [])
+        merged["processing_profile"] = str(timing_hint.get("processing_profile") or "")
+        merged["processing_notice"] = timing_hint.get("processing_notice")
+        return merged
 
     def _build_scope_payload(
         self,

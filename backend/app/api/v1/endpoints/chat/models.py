@@ -89,6 +89,10 @@ class ChatMessageResponse(BaseModel):
     mode_used: str | None = None
     base_used: str | None = None
     answer_strategy: str | None = None
+    estimated_wait_seconds: int = 0
+    estimated_wait_range_seconds: list[int] = Field(default_factory=list)
+    processing_profile: str | None = None
+    processing_notice: str | None = None
     evidence_count: int = 0
     source_roles_used: list[str] = Field(default_factory=list)
     source_scope: dict[str, Any] | None = None
@@ -114,6 +118,10 @@ class ChatMessage(BaseModel):
     mode_used: str | None = None
     base_used: str | None = None
     answer_strategy: str | None = None
+    estimated_wait_seconds: int = 0
+    estimated_wait_range_seconds: list[int] = Field(default_factory=list)
+    processing_profile: str | None = None
+    processing_notice: str | None = None
     evidence_count: int = 0
     source_roles_used: list[str] = Field(default_factory=list)
     source_scope: dict[str, Any] | None = None

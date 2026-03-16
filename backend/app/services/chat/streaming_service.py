@@ -174,6 +174,28 @@ class StreamingService:
             )
             + "\n\n"
         )
+        try:
+            runtime_notice = self._message_orchestration_service.build_knowledge_space_runtime_notice(
+                conversation_id=conversation_id,
+                message=message,
+                user_id=user_id,
+                requested_knowledge_space_id=knowledge_space_id,
+            )
+        except Exception:
+            runtime_notice = None
+        if runtime_notice and runtime_notice.get("processing_notice"):
+            yield (
+                "event: cognitive_status\ndata: "
+                + json.dumps(
+                    {
+                        "state": "knowledge_wait_estimate",
+                        "reason": str(runtime_notice.get("processing_notice") or ""),
+                        "timestamp": int(_time.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
 
         grounded_result = await self._message_orchestration_service.generate_document_grounded_reply(
             conversation_id=conversation_id,
@@ -225,6 +247,10 @@ class StreamingService:
                     "mode_used": grounded_result.get("mode_used"),
                     "base_used": grounded_result.get("base_used"),
                     "answer_strategy": grounded_result.get("answer_strategy"),
+                    "estimated_wait_seconds": grounded_result.get("estimated_wait_seconds"),
+                    "estimated_wait_range_seconds": grounded_result.get("estimated_wait_range_seconds"),
+                    "processing_profile": grounded_result.get("processing_profile"),
+                    "processing_notice": grounded_result.get("processing_notice"),
                     "evidence_count": grounded_result.get("evidence_count"),
                     "source_roles_used": grounded_result.get("source_roles_used"),
                     "source_scope": grounded_result.get("source_scope"),
@@ -268,6 +294,10 @@ class StreamingService:
                 "mode_used": grounded_result.get("mode_used"),
                 "base_used": grounded_result.get("base_used"),
                 "answer_strategy": grounded_result.get("answer_strategy"),
+                "estimated_wait_seconds": grounded_result.get("estimated_wait_seconds"),
+                "estimated_wait_range_seconds": grounded_result.get("estimated_wait_range_seconds"),
+                "processing_profile": grounded_result.get("processing_profile"),
+                "processing_notice": grounded_result.get("processing_notice"),
                 "evidence_count": grounded_result.get("evidence_count"),
                 "source_roles_used": grounded_result.get("source_roles_used") or [],
                 "source_scope": grounded_result.get("source_scope"),
