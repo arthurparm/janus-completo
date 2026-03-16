@@ -116,6 +116,16 @@ def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
     assert service._detect_answer_strategy("Em que trecho ou seção o livro fala sobre novas opções de raças?") == "locator"
 
 
+def test_build_query_profile_flags_task_execution_for_grounded_creation():
+    service = KnowledgeSpaceService()
+
+    profile = service._build_query_profile(
+        "Crie uma ficha completa usando somente as regras aprendidas do livro e explique as escolhas."
+    )
+
+    assert profile["asks_for_task_execution"] is True
+
+
 def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
@@ -938,6 +948,128 @@ def test_enrich_sections_with_llm_forces_ollama_only_policy():
     assert captured["policy_overrides"]["strict_provider"] is True
     assert captured["policy_overrides"]["disable_failover"] is True
     assert captured["policy_overrides"]["disable_response_cache"] is True
+
+
+def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
+    captured = {}
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_invoke_llm(**kwargs):
+        captured.update(kwargs)
+        return {"response": "Ficha final baseada nas evidências."}
+
+    async def fake_collect_support_points(**kwargs):
+        return [
+            SimpleNamespace(
+                payload={
+                    "content": "Trecho de apoio com escolhas e atributos.",
+                    "metadata": {"doc_role": "base", "file_name": "livro.pdf", "chunk_index": 12},
+                }
+            )
+        ]
+
+    service._llm.invoke_llm = fake_invoke_llm
+    service._collect_operational_support_points = fake_collect_support_points  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        service._render_operational_answer(
+                selected=[
+                    {
+                        "doc_role": "base",
+                        "title": "Capítulo Um",
+                        "section_role": "core_rules",
+                        "content": "Regras para construção de personagem.",
+                        "section_order": 1,
+                        "rerank_score": 0.8,
+                    }
+                ],
+            retrieval_strategy="sequence",
+            knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+            user_id="user-1",
+            question="Crie uma ficha completa usando as regras do livro.",
+            limit=4,
+            active_doc_ids={"doc-1"},
+        )
+    )
+
+    assert result == "Ficha final baseada nas evidências."
+    assert captured["priority"].value == "local_only"
+    assert captured["policy_overrides"]["provider"] == "ollama"
+    assert captured["policy_overrides"]["strict_provider"] is True
+    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["policy_overrides"]["disable_response_cache"] is True
+
+
+def test_query_canonical_returns_task_strategy_for_execution_queries():
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_collect_support_points(**kwargs):
+        return []
+
+    async def fake_render_operational_answer(**kwargs):
+        return "Artefato final grounded."
+
+    service._collect_operational_support_points = fake_collect_support_points  # type: ignore[method-assign]
+    service._render_operational_answer = fake_render_operational_answer  # type: ignore[method-assign]
+    service._select_canonical_candidates = lambda **kwargs: [  # type: ignore[method-assign]
+        {
+            "point": SimpleNamespace(
+                id="p-1",
+                payload={
+                    "content": "Regras para construção de personagem.",
+                    "metadata": {
+                        "doc_id": "doc-1",
+                        "file_name": "livro.pdf",
+                        "section_title": "Capítulo Um",
+                        "doc_role": "base",
+                        "section_role": "core_rules",
+                    },
+                },
+                score=0.77,
+            ),
+            "doc_role": "base",
+            "section_role": "core_rules",
+            "title": "Capítulo Um",
+            "content": "Regras para construção de personagem.",
+            "lexical_overlap": 2,
+        }
+    ]
+
+    class FakeClient:
+        async def query_points(self, **kwargs):
+            return SimpleNamespace(points=[])
+
+    import app.services.knowledge_space_service as module
+
+    original_get_client = module.get_async_qdrant_client
+    original_get_collection = module.aget_or_create_collection
+    original_embed = module.aembed_text
+    try:
+        module.get_async_qdrant_client = lambda: FakeClient()
+        async def fake_get_collection(name):
+            return "col"
+        async def fake_embed(text):
+            return [0.0] * 3
+        module.aget_or_create_collection = fake_get_collection
+        module.aembed_text = fake_embed
+        service._scroll_points = fake_collect_support_points  # type: ignore[method-assign]
+
+        result = asyncio.run(
+            service._query_canonical(
+                knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+                user_id="user-1",
+                question="Crie uma ficha completa usando as regras do livro.",
+                limit=4,
+                active_doc_ids={"doc-1"},
+            )
+        )
+    finally:
+        module.get_async_qdrant_client = original_get_client
+        module.aget_or_create_collection = original_get_collection
+        module.aembed_text = original_embed
+
+    assert result["answer"] == "Artefato final grounded."
+    assert result["answer_strategy"] == "task"
 
 
 def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():

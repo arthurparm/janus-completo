@@ -43,7 +43,7 @@ _SECTION_ROLES = {
     "table_like",
     "noise",
 }
-_ANSWER_STRATEGIES = {"comparative", "sequence", "scope", "locator"}
+_ANSWER_STRATEGIES = {"comparative", "sequence", "scope", "locator", "task"}
 _CANONICAL_POINT_TYPES = {
     "knowledge_canonical_summary",
     "knowledge_evidence_anchor",
@@ -1327,6 +1327,30 @@ class KnowledgeSpaceService:
         terms = self._tokenize_search_terms(question)
         phrases = self._extract_query_phrases(question)
         explicit_locator = self._prefer_locator(question)
+        asks_for_task_execution = any(
+            token in lowered
+            for token in (
+                "crie ",
+                "criar ",
+                "monte ",
+                "montar ",
+                "elabore ",
+                "elaborar ",
+                "gere ",
+                "gerar ",
+                "resolva ",
+                "resolver ",
+                "calcule ",
+                "calcular ",
+                "demonstre ",
+                "demonstrar ",
+                "ficha",
+                "parecer",
+                "peticao",
+                "petição",
+                "plano de estudo",
+            )
+        )
         asks_for_creation = any(
             token in lowered
             for token in (
@@ -1397,6 +1421,7 @@ class KnowledgeSpaceService:
             "topic_phrases": topic_phrases,
             "strict_topic_phrases": strict_topic_phrases,
             "explicit_locator": explicit_locator,
+            "asks_for_task_execution": asks_for_task_execution,
             "asks_for_supplement": asks_for_supplement,
             "asks_for_base": asks_for_base,
             "asks_for_creation": asks_for_creation,
@@ -2215,10 +2240,11 @@ class KnowledgeSpaceService:
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
-        answer_strategy = self._detect_answer_strategy(question)
         query_profile = self._build_query_profile(question)
+        retrieval_strategy = self._detect_answer_strategy(question)
+        answer_strategy = "task" if query_profile.get("asks_for_task_execution") else retrieval_strategy
         candidate_points: list[Any] = []
-        for point_type in self._resolve_canonical_query_types(answer_strategy):
+        for point_type in self._resolve_canonical_query_types(retrieval_strategy):
             result = await client.query_points(
                 collection_name=collection_name,
                 query=vector,
@@ -2245,7 +2271,7 @@ class KnowledgeSpaceService:
             if self._should_scroll_canonical_point_type(
                 point_type=point_type,
                 query_profile=query_profile,
-                answer_strategy=answer_strategy,
+                answer_strategy=retrieval_strategy,
             ):
                 candidate_points.extend(
                     await self._scroll_points(
@@ -2274,15 +2300,26 @@ class KnowledgeSpaceService:
             points=candidate_points,
             question=question,
             query_profile=query_profile,
-            answer_strategy=answer_strategy,
+            answer_strategy=retrieval_strategy,
             limit=limit,
         )
         citations = [self._map_citation(item["point"], snippet_limit=320) for item in selected]
         confidence = self._average_score([item["point"] for item in selected])
-        answer = self._render_canonical_answer(selected, answer_strategy=answer_strategy)
+        if query_profile.get("asks_for_task_execution") and selected:
+            answer = await self._render_operational_answer(
+                selected=selected,
+                retrieval_strategy=retrieval_strategy,
+                knowledge_space=knowledge_space,
+                user_id=user_id,
+                question=question,
+                limit=limit,
+                active_doc_ids=active_doc_ids,
+            )
+        else:
+            answer = self._render_canonical_answer(selected, answer_strategy=retrieval_strategy)
         gaps = self._build_canonical_gaps(
             selected=selected,
-            answer_strategy=answer_strategy,
+            answer_strategy=retrieval_strategy,
             confidence=confidence,
             query_profile=query_profile,
         )
@@ -2349,6 +2386,165 @@ class KnowledgeSpaceService:
         if any(token in lowered for token in ("compar", "diferen", "versus", "vs", "amplia", "suplement")):
             return "comparative"
         return "scope"
+
+    def _build_ollama_only_policy(self, *, model: str) -> dict[str, Any]:
+        return {
+            "provider": "ollama",
+            "model": model,
+            "strict_provider": True,
+            "disable_failover": True,
+            "disable_response_cache": True,
+        }
+
+    async def _collect_operational_support_points(
+        self,
+        *,
+        knowledge_space: dict[str, Any],
+        user_id: str,
+        question: str,
+        limit: int,
+        active_doc_ids: set[str] | None,
+    ) -> list[Any]:
+        client = get_async_qdrant_client()
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
+        vector = await aembed_text(question)
+        query_profile = self._build_query_profile(question)
+        result = await client.query_points(
+            collection_name=collection_name,
+            query=vector,
+            limit=max(10, int(limit) * 6),
+            with_payload=True,
+            query_filter=models.Filter(
+                must=[
+                    models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                    models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                    models.FieldCondition(
+                        key="metadata.knowledge_space_id",
+                        match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                    ),
+                ]
+            ),
+        )
+        points = list(getattr(result, "points", result) or [])
+        if query_profile.get("source_hints") or query_profile.get("asks_for_task_execution"):
+            points.extend(
+                await self._scroll_points(
+                    collection_name=collection_name,
+                    query_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                            models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                            models.FieldCondition(
+                                key="metadata.knowledge_space_id",
+                                match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                            ),
+                        ]
+                    ),
+                    batch_size=256,
+                )
+            )
+        points = self._filter_points_by_doc_ids(points, active_doc_ids=active_doc_ids)
+        return self._select_quick_lookup_points(
+            points=points,
+            question=question,
+            query_profile=query_profile,
+            limit=max(3, min(8, int(limit) + 2)),
+        )
+
+    def _build_operational_prompt(
+        self,
+        *,
+        question: str,
+        retrieval_strategy: str,
+        selected: list[dict[str, Any]],
+        support_points: list[Any],
+        knowledge_space: dict[str, Any],
+    ) -> str:
+        canonical_evidence: list[str] = []
+        for index, item in enumerate(selected, start=1):
+            canonical_evidence.append(
+                (
+                    f"[{index}] role={item.get('doc_role') or 'base'} "
+                    f"title={item.get('title') or 'Sem título'} "
+                    f"section_role={item.get('section_role') or 'core_rules'} "
+                    f"content={self._trim_text(str(item.get('content') or ''), max_chars=520)}"
+                )
+            )
+        support_evidence: list[str] = []
+        for index, point in enumerate(support_points[:6], start=1):
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            support_evidence.append(
+                (
+                    f"[{index}] role={metadata.get('doc_role') or 'base'} "
+                    f"file={metadata.get('file_name') or 'documento'} "
+                    f"chunk={metadata.get('chunk_index')} "
+                    f"content={self._trim_text(str(payload.get('content') or ''), max_chars=420)}"
+                )
+            )
+        return (
+            "Você é um executor de tarefas ancorado em evidências.\n"
+            "Use somente as evidências fornecidas abaixo para executar a tarefa do usuário.\n"
+            "Se faltar informação necessária para concluir com segurança, diga exatamente o que falta.\n"
+            "Não invente regras, números, fórmulas, atributos, artigos, valores ou resultados fora da evidência.\n"
+            "Se a tarefa pedir criação de artefato, entregue o artefato final e explique as escolhas usando as evidências.\n\n"
+            f"Espaço: {knowledge_space.get('name') or 'Knowledge Space'}\n"
+            f"Estratégia recuperada: {retrieval_strategy}\n"
+            f"Pergunta do usuário: {question}\n\n"
+            "Evidências canônicas:\n"
+            f"{chr(10).join(canonical_evidence) or 'Nenhuma'}\n\n"
+            "Evidências de apoio:\n"
+            f"{chr(10).join(support_evidence) or 'Nenhuma'}\n\n"
+            "Resposta esperada:\n"
+            "1. Execute a tarefa de forma direta.\n"
+            "2. Explique as escolhas ou passos usando somente a evidência disponível.\n"
+            "3. Se houver lacunas, finalize com 'Informações faltando:' seguido da lista objetiva.\n"
+        )
+
+    async def _render_operational_answer(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        retrieval_strategy: str,
+        knowledge_space: dict[str, Any],
+        user_id: str,
+        question: str,
+        limit: int,
+        active_doc_ids: set[str] | None,
+    ) -> str:
+        fallback = self._render_canonical_answer(selected, answer_strategy=retrieval_strategy)
+        if self._llm is None:
+            return fallback
+        support_points = await self._collect_operational_support_points(
+            knowledge_space=knowledge_space,
+            user_id=user_id,
+            question=question,
+            limit=limit,
+            active_doc_ids=active_doc_ids,
+        )
+        prompt = self._build_operational_prompt(
+            question=question,
+            retrieval_strategy=retrieval_strategy,
+            selected=selected,
+            support_points=support_points,
+            knowledge_space=knowledge_space,
+        )
+        try:
+            result = await self._llm.invoke_llm(
+                prompt=prompt,
+                role=ModelRole.ORCHESTRATOR,
+                priority=ModelPriority.LOCAL_ONLY,
+                timeout_seconds=60,
+                task_type="knowledge_space_task_execution",
+                complexity="medium",
+                policy_overrides=self._build_ollama_only_policy(
+                    model=getattr(settings, "OLLAMA_ORCHESTRATOR_MODEL", "gpt-oss:20b")
+                ),
+            )
+        except Exception:
+            return fallback
+        response = str(result.get("response") or "").strip()
+        return response or fallback
 
     def _prefer_locator(self, question: str) -> bool:
         lowered = str(question or "").casefold()
