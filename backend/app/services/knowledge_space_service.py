@@ -7,6 +7,7 @@ import time
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -2418,7 +2419,7 @@ class KnowledgeSpaceService:
         query_profile = self._build_query_profile(question)
         points: list[Any] = []
         if query_profile.get("asks_for_task_execution") and selected_sections:
-            seen_point_ids: set[str] = set()
+            scored_points: dict[str, Any] = {}
             role_to_doc_ids: dict[str, list[str]] = defaultdict(list)
             for section in selected_sections:
                 doc_id = str(section.get("doc_id") or "").strip()
@@ -2452,6 +2453,8 @@ class KnowledgeSpaceService:
                         "base",
                     )
                     targeted_query = f"{question}\n{label}\n{step_query}".strip()
+                    support_query_terms = self._tokenize_search_terms(step_query)
+                    support_query_phrases = self._extract_query_phrases(step_query)
                     vector = await aembed_text(targeted_query)
                     result = await client.query_points(
                         collection_name=collection_name,
@@ -2472,11 +2475,48 @@ class KnowledgeSpaceService:
                     )
                     for point in list(getattr(result, "points", result) or []):
                         point_id = str(getattr(point, "id", "") or "")
-                        if point_id and point_id in seen_point_ids:
+                        payload = getattr(point, "payload", {}) or {}
+                        metadata = payload.get("metadata") or {}
+                        content = str(payload.get("content") or "")
+                        title = str(metadata.get("section_title") or metadata.get("title") or metadata.get("file_name") or "")
+                        concepts = [
+                            str(item).strip().casefold()
+                            for item in (metadata.get("concepts") or [])
+                            if str(item).strip()
+                        ]
+                        local_score = float(getattr(point, "score", 0.0) or 0.0)
+                        local_score += 0.12 * self._lexical_overlap(
+                            text=content,
+                            title=title,
+                            concepts=concepts,
+                            query_terms=support_query_terms,
+                        )
+                        local_score += 0.18 * self._phrase_overlap(
+                            text=content,
+                            title=title,
+                            query_phrases=support_query_phrases,
+                        )
+                        local_score += 0.05 if role_hint == doc_role else 0.0
+                        local_score += 0.02 if "workflow" in (metadata.get("applies_to") or []) else 0.0
+                        existing = scored_points.get(point_id)
+                        if existing is not None and float(getattr(existing, "score", 0.0) or 0.0) >= local_score:
                             continue
-                        points.append(point)
-                        if point_id:
-                            seen_point_ids.add(point_id)
+                        payload_copy = dict(payload)
+                        metadata_copy = dict(metadata)
+                        metadata_copy["_janus_support_label"] = label
+                        metadata_copy["_janus_support_query"] = step_query
+                        payload_copy["metadata"] = metadata_copy
+                        scored_points[point_id] = SimpleNamespace(
+                            id=point_id or getattr(point, "id", ""),
+                            payload=payload_copy,
+                            score=local_score,
+                        )
+            ordered = sorted(
+                scored_points.values(),
+                key=lambda item: float(getattr(item, "score", 0.0) or 0.0),
+                reverse=True,
+            )
+            return ordered[: max(4, min(10, int(limit) + 4))]
         else:
             vector = await aembed_text(question)
             result = await client.query_points(
