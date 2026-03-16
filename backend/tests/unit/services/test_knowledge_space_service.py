@@ -1167,6 +1167,74 @@ def test_query_space_falls_back_when_canonical_times_out():
     assert any("tempo limite" in item for item in result["gaps_or_conflicts"])
 
 
+def test_query_space_uses_extended_timeout_for_task_execution_queries():
+    service = KnowledgeSpaceService()
+    service.get_space = lambda **kwargs: {  # type: ignore[method-assign]
+        "knowledge_space_id": "ks-1",
+        "consolidation_status": "ready",
+        "canonical_frames_total": 4,
+        "sections_indexed": 8,
+    }
+    service._manifest_repo = SimpleNamespace(list_manifests=lambda **kwargs: [])
+
+    async def fake_canonical(**kwargs):
+        await asyncio.sleep(0.05)
+        return {
+            "answer": "artefato grounded",
+            "mode_used": "canonical_answer",
+            "base_used": "consolidated",
+            "answer_strategy": "task",
+            "source_scope": {"knowledge_space_id": "ks-1"},
+            "citations": [{"doc_id": "doc-1"}],
+            "confidence": 0.8,
+            "gaps_or_conflicts": [],
+            "evidence_count": 1,
+            "source_roles_used": ["base"],
+        }
+
+    async def fake_quick(**kwargs):
+        return {
+            "answer": "quick",
+            "mode_used": "quick_lookup",
+            "base_used": "chunk_only",
+            "answer_strategy": "locator",
+            "source_scope": {"knowledge_space_id": "ks-1"},
+            "citations": [],
+            "confidence": 0.4,
+            "gaps_or_conflicts": [],
+        }
+
+    service._query_canonical = fake_canonical  # type: ignore[method-assign]
+    service._query_quick_lookup = fake_quick  # type: ignore[method-assign]
+
+    previous_timeout = os.environ.get("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS")
+    previous_task_timeout = os.environ.get("KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS")
+    os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = "0.01"
+    os.environ["KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS"] = "0.2"
+    try:
+        result = asyncio.run(
+            service.query_space(
+                knowledge_space_id="ks-1",
+                user_id="user-1",
+                question="Crie uma ficha completa usando as regras do livro.",
+                mode="canonical_answer",
+                limit=5,
+            )
+        )
+    finally:
+        if previous_timeout is None:
+            os.environ.pop("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", None)
+        else:
+            os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = previous_timeout
+        if previous_task_timeout is None:
+            os.environ.pop("KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS", None)
+        else:
+            os.environ["KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS"] = previous_task_timeout
+
+    assert result["mode_used"] == "canonical_answer"
+    assert result["answer_strategy"] == "task"
+
+
 def test_reconcile_ready_processing_space_promotes_space_without_active_documents():
     service = KnowledgeSpaceService()
     service._space_repo = SimpleNamespace(

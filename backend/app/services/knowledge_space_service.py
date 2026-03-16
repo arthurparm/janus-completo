@@ -561,9 +561,15 @@ class KnowledgeSpaceService:
         }
         gaps_or_conflicts = self._detect_scope_conflicts(space=space, manifests=manifests)
         prefer_locator = self._prefer_locator(question)
+        query_profile = self._build_query_profile(question)
         canonical_timeout_seconds = float(
             os.getenv("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", "12") or 12
         )
+        if query_profile.get("asks_for_task_execution"):
+            canonical_timeout_seconds = max(
+                canonical_timeout_seconds,
+                float(os.getenv("KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS", "75") or 75),
+            )
         has_canonical_metrics = bool(
             int(space.get("canonical_frames_total") or 0) > 0
             or int(space.get("sections_indexed") or 0) > 0
