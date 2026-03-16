@@ -2139,6 +2139,18 @@ class KnowledgeSpaceService:
             return True
         return False
 
+    def _looks_like_table_of_contents_chunk(self, *, title: str, content: str) -> bool:
+        searchable = self._normalize_search_text(f"{title} {content}")
+        numeric_entries = len(re.findall(r"\b\d+\b", searchable))
+        heading_hits = sum(
+            1
+            for token in ("capitulo", "capítulo", "sumario", "sumário", "indice", "índice", "parte", "secao", "seção")
+            if token in searchable
+        )
+        if re.search(r"\.{4,}", content):
+            return True
+        return numeric_entries >= 3 and heading_hits >= 2
+
     def _classify_chunk_match(
         self,
         *,
@@ -2768,6 +2780,8 @@ class KnowledgeSpaceService:
             )
             if self._looks_like_editorial_content(title=title, body=content):
                 rerank_score -= 0.42
+            if self._looks_like_table_of_contents_chunk(title=title, content=content):
+                rerank_score -= 0.36
             if doc_role == "supplement" and query_profile.get("asks_for_supplement"):
                 rerank_score += 0.10
             if source_target_match:
@@ -2874,11 +2888,30 @@ class KnowledgeSpaceService:
                 body=content,
             ):
                 continue
+            if self._looks_like_table_of_contents_chunk(
+                title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
+                content=content,
+            ):
+                continue
             selected.append(point)
             if point_id:
                 seen_ids.add(point_id)
             if len(selected) >= max(1, int(limit)):
                 break
+        if selected and query_profile.get("expects_exact_evidence") and strict_topic_phrases:
+            strict_selected: list[Any] = []
+            for point in selected:
+                payload = getattr(point, "payload", {}) or {}
+                metadata = payload.get("metadata") or {}
+                content = str(payload.get("content") or "")
+                title = str(metadata.get("section_title") or metadata.get("file_name") or "")
+                if self._looks_like_table_of_contents_chunk(title=title, content=content):
+                    continue
+                if self._phrase_overlap(text=content, title=title, query_phrases=strict_topic_phrases) <= 0:
+                    continue
+                strict_selected.append(point)
+            if strict_selected:
+                return strict_selected[: max(1, int(limit))]
         if selected:
             return selected
         if query_profile.get("expects_exact_evidence"):

@@ -309,6 +309,14 @@ def test_select_quick_lookup_points_prefers_exact_topic_phrase_when_available():
                 "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
             },
         ),
+        SimpleNamespace(
+            id="toc-novas-racas",
+            score=0.74,
+            payload={
+                "content": "Capitulo 1: Campeões de Arton .... 6 Novas Raças .... 8 Duende .... 8 Eiradaan .... 12",
+                "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
+            },
+        ),
     ]
 
     selected = service._select_quick_lookup_points(
@@ -319,6 +327,15 @@ def test_select_quick_lookup_points_prefers_exact_topic_phrase_when_available():
     )
 
     assert [item.id for item in selected] == ["exact-novas-racas"]
+
+
+def test_table_of_contents_chunk_is_detected_as_noise_for_locator():
+    service = KnowledgeSpaceService()
+
+    assert service._looks_like_table_of_contents_chunk(
+        title="T20 - Herois de Arton v1.1.pdf",
+        content="Capitulo 1: Campeões de Arton .... 6 Novas Raças .... 8 Duende .... 8 Eiradaan .... 12",
+    ) is True
 
 
 def test_build_query_profile_separates_source_and_topic_terms():
