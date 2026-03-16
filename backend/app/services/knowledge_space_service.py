@@ -1765,6 +1765,41 @@ class KnowledgeSpaceService:
             return ""
         return " ".join(tokens).strip()
 
+    def _sanitize_theme_candidate(self, value: str | None, *, max_tokens: int = 3) -> str:
+        normalized = self._normalize_search_text(value)
+        tokens = [
+            token
+            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", normalized)
+            if token not in _STOPWORDS
+            and token not in _THEME_NOISE_TOKENS
+        ]
+        if not tokens:
+            return ""
+        if len(tokens) > max(1, int(max_tokens)):
+            return ""
+        if len(tokens) == 1 and tokens[0] in _TASK_TARGET_STOPWORDS:
+            return ""
+        return " ".join(tokens).strip()
+
+    def _should_accept_llm_entity_candidate(
+        self,
+        entity: str,
+        *,
+        title: str,
+        body: str,
+    ) -> bool:
+        normalized_entity = self._normalize_search_text(entity)
+        entity_tokens = self._tokenize_search_terms(normalized_entity, min_len=3)
+        if not entity_tokens:
+            return False
+        if len(entity_tokens) >= 2:
+            return True
+        title_terms = self._tokenize_search_terms(title, min_len=3)
+        if entity_tokens & title_terms:
+            return True
+        body_prefix_terms = self._tokenize_search_terms(" ".join(str(body or "").split()[:24]), min_len=3)
+        return bool(entity_tokens & body_prefix_terms)
+
     def _select_strict_topic_phrases(self, *, topic_terms: set[str], topic_phrases: set[str]) -> set[str]:
         scored: list[tuple[int, int, str]] = []
         for phrase in topic_phrases:
@@ -2116,20 +2151,43 @@ class KnowledgeSpaceService:
             merged["extends_or_overrides"] = None
         if "is_optional_rule" in payload:
             merged["is_optional_rule"] = bool(payload.get("is_optional_rule"))
-        entities = [
-            self._sanitize_task_target_phrase(str(item))
-            for item in (payload.get("entities") or [])
-            if self._sanitize_task_target_phrase(str(item))
+        heuristic_entities = [
+            self._sanitize_entity_candidate(str(item))
+            for item in (section.get("entities") or [])
+            if self._sanitize_entity_candidate(str(item))
         ]
-        if entities:
-            merged["entities"] = sorted(dict.fromkeys(entities))
+        entities = []
+        for item in (payload.get("entities") or []):
+            candidate = self._sanitize_entity_candidate(str(item))
+            if not candidate:
+                continue
+            if not self._should_accept_llm_entity_candidate(
+                candidate,
+                title=str(section.get("title") or ""),
+                body=str(section.get("body") or ""),
+            ):
+                continue
+            entities.append(candidate)
+        merged_entities = sorted(dict.fromkeys(heuristic_entities + entities))
+        if merged_entities:
+            merged["entities"] = merged_entities
         themes = [
-            self._normalize_search_text(str(item))
+            self._sanitize_theme_candidate(str(item))
             for item in (payload.get("themes") or [])
-            if self._normalize_search_text(str(item))
+            if self._sanitize_theme_candidate(str(item))
         ]
-        if themes:
-            merged["themes"] = sorted(dict.fromkeys(themes))
+        merged_themes = sorted(
+            dict.fromkeys(
+                [
+                    self._sanitize_theme_candidate(str(item))
+                    for item in (section.get("themes") or [])
+                    if self._sanitize_theme_candidate(str(item))
+                ]
+                + themes
+            )
+        )
+        if merged_themes:
+            merged["themes"] = merged_themes
         merged["classification_source"] = "llm"
         return merged
 

@@ -114,6 +114,25 @@ def test_extract_entities_discards_generic_pronoun_heavy_candidates():
     assert all("voce" not in item for item in entities)
 
 
+def test_merge_llm_section_enrichment_keeps_heuristics_when_llm_entities_are_noise():
+    service = KnowledgeSpaceService()
+
+    merged = service._merge_llm_section_enrichment(
+        section={
+            "section_id": "sec-1",
+            "entities": ["cavaleiro mistico"],
+            "themes": ["magia arcana"],
+        },
+        payload={
+            "entities": ["essa honra", "voce"],
+            "themes": ["pode", "sua", "magia arcana"],
+        },
+    )
+
+    assert merged["entities"] == ["cavaleiro mistico"]
+    assert merged["themes"] == ["magia arcana"]
+
+
 def test_infer_doc_role_detects_supplement_by_filename():
     service = KnowledgeSpaceService()
 
