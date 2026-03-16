@@ -308,6 +308,30 @@ def test_low_trust_sequence_title_penalizes_marketing_blocks():
     assert service._is_low_trust_sequence_title("Capítulo Um") is False
 
 
+def test_sequence_anchor_identifies_base_and_supplement_chapters():
+    service = KnowledgeSpaceService()
+
+    assert service._is_sequence_anchor(
+        title="Capítulo Um",
+        content="Este capítulo traz as regras para a construção de personagens jogadores — como determinar seus atributos, raça, classe e origem.",
+        doc_role="base",
+    ) is True
+    assert service._is_sequence_anchor(
+        title="Capítulo 1: Campeões de Arton",
+        content="Este capítulo apresenta diversas novas opções para construir seu personagem.",
+        doc_role="supplement",
+    ) is True
+
+
+def test_looks_like_specific_option_chunk_identifies_itemized_rules():
+    service = KnowledgeSpaceService()
+
+    assert service._looks_like_specific_option_chunk(
+        title="Equipamento Real",
+        content="Pré-requisito: Int 3. • Engenhoqueiro. • Farmacêutico.",
+    ) is True
+
+
 def test_finalize_sections_filters_noise_and_keeps_useful_rule():
     service = KnowledgeSpaceService()
 

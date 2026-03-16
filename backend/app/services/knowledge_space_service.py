@@ -181,6 +181,16 @@ _GENERIC_HEADING_KEYWORDS = {
     "geral",
 }
 _LOW_SIGNAL_QUERY_TOKENS = {"onde", "trecho", "pagina", "página", "secao", "seção", "capitulo", "capítulo"}
+_MARKETING_KEYWORDS = {
+    "seu jogo nunca foi",
+    "centenas de combina",
+    "instrucoes para mestres",
+    "instruções para mestres",
+    "historia e geografia de arton",
+    "história e geografia de arton",
+    "linha de tempo",
+    "goblin de ouro",
+}
 
 
 class KnowledgeSpaceService:
@@ -1079,6 +1089,8 @@ class KnowledgeSpaceService:
             score += 0.18
         if len(body.split()) < 40:
             score += 0.16
+        if any(keyword in searchable_title or keyword in searchable_body for keyword in _MARKETING_KEYWORDS):
+            score += 0.40
         if re.search(r"\.{4,}", searchable_title) or re.search(r"\.{4,}", searchable_body):
             score += 0.20
         if any(re.search(pattern, searchable_title, flags=re.IGNORECASE) for pattern in _NOISE_PATTERNS):
@@ -1880,6 +1892,38 @@ class KnowledgeSpaceService:
             return True
         return False
 
+    def _is_sequence_anchor(self, *, title: str, content: str, doc_role: str) -> bool:
+        searchable_title = self._normalize_search_text(title)
+        searchable_content = self._normalize_search_text(content)
+        if doc_role == "base" and any(
+            token in searchable_title for token in ("capitulo um", "capítulo um", "criacao de personagens", "criação de personagens")
+        ):
+            return True
+        if doc_role == "base" and all(
+            token in searchable_content for token in ("atribut", "raca", "classe")
+        ):
+            return True
+        if doc_role == "supplement" and any(
+            token in searchable_title for token in ("campeoes de arton", "campeões de arton", "capitulo 1", "capítulo 1")
+        ):
+            return True
+        if doc_role == "supplement" and all(
+            token in searchable_content for token in ("novas", "opcoes")
+        ):
+            return True
+        return False
+
+    def _looks_like_specific_option_chunk(self, *, title: str, content: str) -> bool:
+        searchable_title = self._normalize_search_text(title)
+        searchable_content = self._normalize_search_text(content)
+        if any(token in searchable_title for token in ("equipamento real", "meditacao mistica", "meditação mística")):
+            return True
+        if searchable_content.count("pré-requisito") >= 1 or searchable_content.count("pre-requisito") >= 1:
+            return True
+        if searchable_content.count("•") >= 3:
+            return True
+        return False
+
     def _classify_chunk_match(
         self,
         *,
@@ -2091,6 +2135,12 @@ class KnowledgeSpaceService:
                 "base_creation" in applies_to or "workflow" in applies_to
             ):
                 rerank_score += 0.14
+            if answer_strategy == "sequence" and self._is_sequence_anchor(
+                title=title,
+                content=content,
+                doc_role=doc_role,
+            ):
+                rerank_score += 0.26
             if answer_strategy == "sequence" and query_profile.get("asks_for_ordering") and doc_role == "base":
                 section_order = int(metadata.get("section_order") or 999999)
                 rerank_score += max(0.0, 0.18 - min(0.18, max(0, section_order - 1) * 0.015))
@@ -2098,6 +2148,8 @@ class KnowledgeSpaceService:
                     rerank_score -= 0.22
             if answer_strategy == "sequence" and self._is_low_trust_sequence_title(title):
                 rerank_score -= 0.28
+            if answer_strategy == "sequence" and self._looks_like_specific_option_chunk(title=title, content=content):
+                rerank_score -= 0.22
             rerank_score += min(0.24, lexical_overlap * 0.05)
             rerank_score += min(0.30, phrase_overlap * 0.10)
             rerank_score += min(0.18, usefulness_score * 0.18)
