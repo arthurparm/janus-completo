@@ -86,6 +86,65 @@ _STOPWORDS = {
     "um",
     "uma",
 }
+_TASK_TARGET_STOPWORDS = {
+    "atributo",
+    "atributos",
+    "base",
+    "calculo",
+    "cálculo",
+    "capitulo",
+    "capítulo",
+    "classe",
+    "classes",
+    "completo",
+    "criar",
+    "criacao",
+    "criação",
+    "defina",
+    "definir",
+    "entregue",
+    "equipamento",
+    "equipamentos",
+    "escolha",
+    "escolher",
+    "etapa",
+    "etapas",
+    "explique",
+    "explicar",
+    "ficha",
+    "final",
+    "iniciais",
+    "itens",
+    "livro",
+    "magia",
+    "magias",
+    "metodo",
+    "método",
+    "nivel",
+    "nível",
+    "opcao",
+    "opções",
+    "opcao",
+    "opcional",
+    "opcoes",
+    "origem",
+    "origens",
+    "passo",
+    "personagem",
+    "poder",
+    "poderes",
+    "preencha",
+    "preencher",
+    "raça",
+    "raca",
+    "regras",
+    "somente",
+    "suplemento",
+    "tabela",
+    "tabelas",
+    "usando",
+    "use",
+}
 
 _HEADING_KEYWORDS = {
     "anexo",
@@ -1515,6 +1574,17 @@ class KnowledgeSpaceService:
             topic_terms=topic_terms,
             topic_phrases=topic_phrases,
         )
+        target_phrases = self._extract_task_target_phrases(
+            question=question,
+            topic_phrases=topic_phrases,
+            source_terms=source_terms,
+        )
+        target_terms = {
+            token
+            for phrase in target_phrases
+            for token in self._tokenize_search_terms(phrase, min_len=3)
+            if token not in source_terms and token not in _TASK_TARGET_STOPWORDS
+        }
         return {
             "normalized": lowered,
             "terms": terms,
@@ -1522,6 +1592,9 @@ class KnowledgeSpaceService:
             "phrases": phrases,
             "topic_phrases": topic_phrases,
             "strict_topic_phrases": strict_topic_phrases,
+            "target_terms": target_terms,
+            "target_phrases": target_phrases,
+            "has_explicit_target": bool(target_terms or target_phrases),
             "explicit_locator": explicit_locator,
             "asks_for_task_execution": asks_for_task_execution,
             "asks_for_supplement": asks_for_supplement,
@@ -1533,6 +1606,50 @@ class KnowledgeSpaceService:
             "source_terms": source_terms,
             "expects_exact_evidence": explicit_locator or any(token in lowered for token in ("onde", "trecho", "pagina", "página")),
         }
+
+    def _extract_task_target_phrases(
+        self,
+        *,
+        question: str,
+        topic_phrases: set[str],
+        source_terms: set[str],
+    ) -> set[str]:
+        normalized = self._normalize_search_text(question)
+        candidates: set[str] = set()
+        patterns = (
+            r"\bpara\s+(?:um|uma|o|a)\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
+            r"\bsobre\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
+            r"\b(?:receita|parecer|analise|análise|resumo|modelo|ficha|plano|roteiro|guia|explicacao|explicação)\s+de\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
+        )
+        for pattern in patterns:
+            for match in re.finditer(pattern, normalized):
+                candidate = self._sanitize_task_target_phrase(match.group(1))
+                if candidate:
+                    candidates.add(candidate)
+        if candidates:
+            return candidates
+        for phrase in topic_phrases:
+            phrase_terms = {
+                token
+                for token in self._tokenize_search_terms(phrase, min_len=3)
+                if token not in source_terms and token not in _TASK_TARGET_STOPWORDS
+            }
+            if not phrase_terms:
+                continue
+            if len(phrase_terms) <= 2:
+                candidates.add(" ".join(sorted(phrase_terms)))
+        return {item for item in candidates if item}
+
+    def _sanitize_task_target_phrase(self, value: str | None) -> str:
+        normalized = self._normalize_search_text(value)
+        tokens = [
+            token
+            for token in re.findall(r"[a-zà-ÿ0-9_-]{3,}", normalized)
+            if token not in _STOPWORDS and token not in _TASK_TARGET_STOPWORDS
+        ]
+        if not tokens:
+            return ""
+        return " ".join(tokens[:2]).strip()
 
     def _select_strict_topic_phrases(self, *, topic_terms: set[str], topic_phrases: set[str]) -> set[str]:
         scored: list[tuple[int, int, str]] = []
@@ -2237,6 +2354,36 @@ class KnowledgeSpaceService:
             if token in searchable_text or token in searchable_title or token in searchable_concepts
         )
 
+    def _target_overlap(
+        self,
+        *,
+        text: str,
+        title: str,
+        concepts: list[str],
+        target_terms: set[str],
+        target_phrases: set[str],
+    ) -> tuple[int, int]:
+        if not target_terms and not target_phrases:
+            return 0, 0
+        searchable_text = self._normalize_search_text(text)
+        searchable_title = self._normalize_search_text(title)
+        searchable_concepts = {
+            self._normalize_search_text(item)
+            for item in concepts
+            if self._normalize_search_text(item)
+        }
+        term_hits = sum(
+            1
+            for token in target_terms
+            if token in searchable_text or token in searchable_title or token in searchable_concepts
+        )
+        phrase_hits = sum(
+            1
+            for phrase in target_phrases
+            if phrase and (phrase in searchable_text or phrase in searchable_title or phrase in searchable_concepts)
+        )
+        return term_hits, phrase_hits
+
     def _phrase_overlap(self, *, text: str, title: str, query_phrases: set[str]) -> int:
         searchable_text = self._normalize_search_text(text)
         searchable_title = self._normalize_search_text(title)
@@ -2688,7 +2835,9 @@ class KnowledgeSpaceService:
         question: str,
         selected: list[dict[str, Any]],
         knowledge_space: dict[str, Any],
+        query_profile: dict[str, Any] | None = None,
     ) -> str:
+        query_profile = query_profile or self._build_query_profile(question)
         canonical_evidence: list[str] = []
         for index, item in enumerate(selected[:6], start=1):
             concepts = ", ".join(str(concept) for concept in (item.get("concepts") or [])[:6]) or "nenhum"
@@ -2706,6 +2855,7 @@ class KnowledgeSpaceService:
             "Responda APENAS com JSON válido.\n\n"
             f"Knowledge space: {knowledge_space.get('name') or 'Knowledge Space'}\n"
             f"Pergunta do usuário: {question}\n\n"
+            f"Alvo principal inferido: {', '.join(query_profile.get('target_phrases') or query_profile.get('target_terms') or []) or 'nenhum alvo explícito'}\n\n"
             "Seções canônicas disponíveis:\n"
             f"{chr(10).join(canonical_evidence) or 'Nenhuma'}\n\n"
             "Gere um plano compacto para buscar evidências suficientes para executar a tarefa.\n"
@@ -2731,6 +2881,7 @@ class KnowledgeSpaceService:
         selected: list[dict[str, Any]],
         knowledge_space: dict[str, Any],
     ) -> dict[str, Any]:
+        query_profile = self._build_query_profile(question)
         fallback = {
             "steps": self._build_fallback_operational_plan(selected_sections=selected),
             "user_decisions": [],
@@ -2742,6 +2893,7 @@ class KnowledgeSpaceService:
             question=question,
             selected=selected,
             knowledge_space=knowledge_space,
+            query_profile=query_profile,
         )
         try:
             result = await self._llm.invoke_llm(
@@ -2789,6 +2941,7 @@ class KnowledgeSpaceService:
         knowledge_space: dict[str, Any],
         support_plan: dict[str, Any] | None = None,
     ) -> str:
+        query_profile = self._build_query_profile(question)
         canonical_evidence: list[str] = []
         for index, item in enumerate(selected, start=1):
             canonical_evidence.append(
@@ -2830,6 +2983,7 @@ class KnowledgeSpaceService:
             f"Espaço: {knowledge_space.get('name') or 'Knowledge Space'}\n"
             f"Estratégia recuperada: {retrieval_strategy}\n"
             f"Pergunta do usuário: {question}\n\n"
+            f"Alvo principal inferido: {', '.join(query_profile.get('target_phrases') or query_profile.get('target_terms') or []) or 'nenhum alvo explícito'}\n\n"
             "Evidências canônicas:\n"
             f"{chr(10).join(canonical_evidence) or 'Nenhuma'}\n\n"
             "Plano de apoio:\n"
@@ -2920,6 +3074,8 @@ class KnowledgeSpaceService:
         topic_terms = set(query_profile.get("topic_terms") or question_terms)
         query_phrases = set(query_profile.get("phrases") or [])
         topic_phrases = set(query_profile.get("topic_phrases") or query_phrases)
+        target_terms = set(query_profile.get("target_terms") or [])
+        target_phrases = set(query_profile.get("target_phrases") or [])
         source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
         for point in points:
             payload = getattr(point, "payload", {}) or {}
@@ -2950,6 +3106,13 @@ class KnowledgeSpaceService:
                 text=content,
                 title=title,
                 query_phrases=topic_phrases,
+            )
+            target_term_overlap, target_phrase_overlap = self._target_overlap(
+                text=content,
+                title=title,
+                concepts=concepts,
+                target_terms=target_terms,
+                target_phrases=target_phrases,
             )
             base_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = base_score
@@ -3026,6 +3189,8 @@ class KnowledgeSpaceService:
             rerank_score += min(0.30, phrase_overlap * 0.10)
             rerank_score += min(0.16, topic_lexical_overlap * 0.06)
             rerank_score += min(0.18, topic_phrase_overlap * 0.12)
+            rerank_score += min(0.20, target_term_overlap * 0.10)
+            rerank_score += min(0.28, target_phrase_overlap * 0.18)
             rerank_score += min(0.18, usefulness_score * 0.18)
             rerank_score += min(0.10, heading_quality_score * 0.08)
             rerank_score += min(0.08, content_density_score * 0.06)
@@ -3054,6 +3219,13 @@ class KnowledgeSpaceService:
                 rerank_score += 0.08
             if query_profile.get("asks_for_base") and doc_role == "base":
                 rerank_score += 0.06
+            if query_profile.get("asks_for_task_execution") and query_profile.get("has_explicit_target"):
+                if target_term_overlap == 0 and target_phrase_overlap == 0:
+                    rerank_score -= 0.30
+                    if self._looks_like_specific_option_chunk(title=title, content=content):
+                        rerank_score -= 0.22
+                else:
+                    rerank_score += 0.12
             if (
                 answer_strategy == "sequence"
                 and query_profile.get("asks_for_creation")
@@ -3081,6 +3253,8 @@ class KnowledgeSpaceService:
                     "topic_lexical_overlap": topic_lexical_overlap,
                     "phrase_overlap": phrase_overlap,
                     "topic_phrase_overlap": topic_phrase_overlap,
+                    "target_term_overlap": target_term_overlap,
+                    "target_phrase_overlap": target_phrase_overlap,
                     "rerank_score": rerank_score,
                 }
         ordered = sorted(
@@ -3188,6 +3362,13 @@ class KnowledgeSpaceService:
                     if item["doc_role"] == "supplement" and not (
                         item.get("is_supplement_creation_extension")
                         or {"character_options", "workflow"} & set(item.get("applies_to") or [])
+                    ):
+                        continue
+                    if (
+                        query_profile.get("has_explicit_target")
+                        and item["doc_role"] == "supplement"
+                        and int(item.get("target_term_overlap") or 0) <= 0
+                        and int(item.get("target_phrase_overlap") or 0) <= 0
                     ):
                         continue
                 sequence_selected.append(item)
@@ -3349,6 +3530,8 @@ class KnowledgeSpaceService:
         query_phrases = set(query_profile.get("phrases") or [])
         topic_phrases = set(query_profile.get("topic_phrases") or query_phrases)
         strict_topic_phrases = set(query_profile.get("strict_topic_phrases") or topic_phrases)
+        target_terms = set(query_profile.get("target_terms") or [])
+        target_phrases = set(query_profile.get("target_phrases") or [])
         source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
         ranked: list[dict[str, Any]] = []
         for point in points:
@@ -3384,11 +3567,20 @@ class KnowledgeSpaceService:
                 title=title,
                 query_phrases=strict_topic_phrases,
             )
+            target_term_overlap, target_phrase_overlap = self._target_overlap(
+                text=content,
+                title=title,
+                concepts=[],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
             point_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = point_score + min(0.28, lexical_overlap * 0.06) + min(0.32, phrase_overlap * 0.12)
             rerank_score += min(0.18, topic_lexical_overlap * 0.08)
             rerank_score += min(0.22, topic_phrase_overlap * 0.14)
             rerank_score += min(0.18, strict_topic_phrase_overlap * 0.16)
+            rerank_score += min(0.18, target_term_overlap * 0.10)
+            rerank_score += min(0.22, target_phrase_overlap * 0.16)
             doc_role = str(metadata.get("doc_role") or "").strip().lower()
             searchable_content = self._normalize_search_text(content)
             searchable_file_name = self._normalize_search_text(file_name)
@@ -3429,6 +3621,11 @@ class KnowledgeSpaceService:
                     rerank_score -= 0.14
             if re.search(r"\.{4,}", content) or len(searchable_content.split()) < 12:
                 rerank_score -= 0.14
+            if query_profile.get("asks_for_task_execution") and query_profile.get("has_explicit_target"):
+                if target_term_overlap == 0 and target_phrase_overlap == 0:
+                    rerank_score -= 0.30
+                else:
+                    rerank_score += 0.10
             match_class = self._classify_chunk_match(
                 point_score=point_score,
                 lexical_overlap=lexical_overlap,
@@ -3447,6 +3644,8 @@ class KnowledgeSpaceService:
                     "phrase_overlap": phrase_overlap,
                     "topic_phrase_overlap": topic_phrase_overlap,
                     "strict_topic_phrase_overlap": strict_topic_phrase_overlap,
+                    "target_term_overlap": target_term_overlap,
+                    "target_phrase_overlap": target_phrase_overlap,
                     "source_target_match": source_target_match,
                     "match_class": match_class,
                     "point": point,
@@ -3484,6 +3683,8 @@ class KnowledgeSpaceService:
             strict_topic_phrase_overlap = int(ranked_item["strict_topic_phrase_overlap"])
             source_target_match = bool(ranked_item["source_target_match"])
             match_class = str(ranked_item["match_class"])
+            target_term_overlap = int(ranked_item["target_term_overlap"])
+            target_phrase_overlap = int(ranked_item["target_phrase_overlap"])
             if strict_topic_phrase_from_target_source_exists and not (strict_topic_phrase_overlap > 0 and source_target_match):
                 continue
             if not strict_topic_phrase_from_target_source_exists and strict_topic_phrase_exists and strict_topic_phrase_overlap == 0:
@@ -3500,6 +3701,13 @@ class KnowledgeSpaceService:
             ):
                 continue
             if query_profile.get("expects_exact_evidence") and match_class not in minimum_match_classes:
+                continue
+            if (
+                query_profile.get("asks_for_task_execution")
+                and query_profile.get("has_explicit_target")
+                and target_term_overlap == 0
+                and target_phrase_overlap == 0
+            ):
                 continue
             if self._looks_like_editorial_content(
                 title=str(metadata.get("section_title") or metadata.get("file_name") or ""),

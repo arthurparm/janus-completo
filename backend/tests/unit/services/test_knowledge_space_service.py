@@ -80,6 +80,17 @@ def test_build_structured_sections_merges_repeated_heading_blocks():
     assert sections[0]["evidence_span_ids"] == []
 
 
+def test_build_query_profile_extracts_explicit_task_target_generically():
+    service = KnowledgeSpaceService()
+
+    profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base."
+    )
+
+    assert profile["has_explicit_target"] is True
+    assert "cavaleiro" in profile["target_terms"]
+
+
 def test_infer_doc_role_detects_supplement_by_filename():
     service = KnowledgeSpaceService()
 
@@ -828,6 +839,88 @@ def test_select_canonical_candidates_allows_additional_grounded_sections_for_tas
     )
 
     assert [item["section_id"] for item in selected] == ["base-intro", "supp-extra", "base-extra"]
+
+
+def test_select_canonical_candidates_prefers_target_matching_entity_for_task_execution():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e o suplemento."
+    )
+    points = [
+        SimpleNamespace(
+            id="base-intro",
+            score=0.84,
+            payload={
+                "content": "Criação de personagem: defina atributos, escolha raça, classe e origem.",
+                "metadata": {
+                    "section_id": "base-intro",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "usefulness_score": 0.9,
+                    "heading_quality_score": 0.86,
+                    "content_density_score": 0.8,
+                    "noise_score": 0.05,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-cavaleiro",
+            score=0.77,
+            payload={
+                "content": "Cavaleiro Místico é uma variante de cavaleiro com acesso a magia arcana e poderes próprios.",
+                "metadata": {
+                    "section_id": "supp-cavaleiro",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 2,
+                    "section_title": "Classes Variantes",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["cavaleiro", "cavaleiro místico", "magia arcana"],
+                    "usefulness_score": 0.84,
+                    "heading_quality_score": 0.82,
+                    "content_density_score": 0.76,
+                    "noise_score": 0.04,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-bardo",
+            score=0.8,
+            payload={
+                "content": "Bardo Marcial é uma variante de bardo com cargas arcanas e marciais.",
+                "metadata": {
+                    "section_id": "supp-bardo",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 3,
+                    "section_title": "Classes Variantes",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["bardo", "bardo marcial", "cargas arcanas"],
+                    "usefulness_score": 0.86,
+                    "heading_quality_score": 0.83,
+                    "content_density_score": 0.78,
+                    "noise_score": 0.04,
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e o suplemento.",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=3,
+    )
+
+    assert [item["section_id"] for item in selected] == ["base-intro", "supp-cavaleiro"]
 
 
 def test_upsert_points_resilient_splits_large_batches_on_failure():
