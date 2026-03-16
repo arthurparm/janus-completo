@@ -332,6 +332,34 @@ def test_looks_like_specific_option_chunk_identifies_itemized_rules():
     ) is True
 
 
+def test_upsert_points_resilient_splits_large_batches_on_failure():
+    service = KnowledgeSpaceService()
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def upsert(self, *, collection_name, points):
+            self.calls.append(len(points))
+            if len(points) > 2:
+                raise RuntimeError("too big")
+
+    client = FakeClient()
+    points = [SimpleNamespace(id=str(index)) for index in range(6)]
+
+    asyncio.run(
+        service._upsert_points_resilient(
+            client=client,
+            collection_name="col",
+            points=points,
+            min_batch_size=2,
+        )
+    )
+
+    assert client.calls[0] == 6
+    assert all(size <= 3 for size in client.calls[1:])
+
+
 def test_finalize_sections_filters_noise_and_keeps_useful_rule():
     service = KnowledgeSpaceService()
 

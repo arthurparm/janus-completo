@@ -1564,7 +1564,7 @@ class KnowledgeSpaceService:
                 )
                 records.append((section, "knowledge_comparison_frame", comparison_text, comparison_text))
 
-        batch_size = int(os.getenv("KNOWLEDGE_SPACE_CANONICAL_EMBED_BATCH_SIZE", "96") or 96)
+        batch_size = int(os.getenv("KNOWLEDGE_SPACE_CANONICAL_EMBED_BATCH_SIZE", "48") or 48)
         now_ms = int(time.time() * 1000)
         total_points = 0
         for batch_start in range(0, len(records), max(1, batch_size)):
@@ -1623,9 +1623,43 @@ class KnowledgeSpaceService:
                         payload=payload,
                     )
                 )
-            await client.upsert(collection_name=collection_name, points=points)
+            await self._upsert_points_resilient(
+                client=client,
+                collection_name=collection_name,
+                points=points,
+            )
             total_points += len(points)
         return total_points
+
+    async def _upsert_points_resilient(
+        self,
+        *,
+        client: Any,
+        collection_name: str,
+        points: list[models.PointStruct],
+        min_batch_size: int = 8,
+    ) -> None:
+        if not points:
+            return
+        try:
+            await client.upsert(collection_name=collection_name, points=points)
+            return
+        except Exception:
+            if len(points) <= max(1, int(min_batch_size)):
+                raise
+        midpoint = max(1, len(points) // 2)
+        await self._upsert_points_resilient(
+            client=client,
+            collection_name=collection_name,
+            points=points[:midpoint],
+            min_batch_size=min_batch_size,
+        )
+        await self._upsert_points_resilient(
+            client=client,
+            collection_name=collection_name,
+            points=points[midpoint:],
+            min_batch_size=min_batch_size,
+        )
 
     async def _persist_structure_graph(
         self,
