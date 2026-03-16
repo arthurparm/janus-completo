@@ -267,6 +267,25 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     assert selected[0].id == "supp"
 
 
+def test_phrase_overlap_handles_ocr_split_tokens():
+    service = KnowledgeSpaceService()
+
+    overlap = service._phrase_overlap(
+        text="Nov as Raças 9 Campeões de Arton",
+        title="T20 - Herois de Arton v1.1.pdf",
+        query_phrases={"novas racas"},
+    )
+
+    assert overlap == 1
+
+
+def test_low_trust_sequence_title_penalizes_marketing_blocks():
+    service = KnowledgeSpaceService()
+
+    assert service._is_low_trust_sequence_title("35 ORIGENS. Decida o passado de") is True
+    assert service._is_low_trust_sequence_title("Capítulo Um") is False
+
+
 def test_finalize_sections_filters_noise_and_keeps_useful_rule():
     service = KnowledgeSpaceService()
 

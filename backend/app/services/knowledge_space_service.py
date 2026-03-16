@@ -1006,6 +1006,9 @@ class KnowledgeSpaceService:
         normalized = re.sub(r"\s+", " ", normalized)
         return normalized.strip()
 
+    def _compact_search_text(self, value: str) -> str:
+        return re.sub(r"\s+", "", self._normalize_search_text(value))
+
     def _tokenize_search_terms(self, value: str, *, min_len: int = 3) -> set[str]:
         return {
             token
@@ -1849,7 +1852,33 @@ class KnowledgeSpaceService:
     def _phrase_overlap(self, *, text: str, title: str, query_phrases: set[str]) -> int:
         searchable_text = self._normalize_search_text(text)
         searchable_title = self._normalize_search_text(title)
-        return sum(1 for phrase in query_phrases if phrase and (phrase in searchable_text or phrase in searchable_title))
+        compact_text = self._compact_search_text(text)
+        compact_title = self._compact_search_text(title)
+        return sum(
+            1
+            for phrase in query_phrases
+            if phrase
+            and (
+                phrase in searchable_text
+                or phrase in searchable_title
+                or self._compact_search_text(phrase) in compact_text
+                or self._compact_search_text(phrase) in compact_title
+            )
+        )
+
+    def _is_low_trust_sequence_title(self, title: str) -> bool:
+        normalized = self._normalize_heading_title(title)
+        if not normalized:
+            return False
+        if re.match(r"^\d{2,}\s+[A-ZÀ-Ý]{3,}", normalized):
+            return True
+        uppercase_tokens = [
+            token for token in re.findall(r"[A-Za-zÀ-ÿ]+", normalized) if token.isupper() and len(token) >= 3
+        ]
+        searchable = self._normalize_search_text(normalized)
+        if len(uppercase_tokens) >= 2 and "capitulo" not in searchable and "capítulo" not in searchable:
+            return True
+        return False
 
     def _classify_chunk_match(
         self,
@@ -2045,6 +2074,8 @@ class KnowledgeSpaceService:
                 rerank_score += max(0.0, 0.18 - min(0.18, max(0, section_order - 1) * 0.015))
                 if any(token in searchable_title for token in ("toques finais", "finais", "final")):
                     rerank_score -= 0.22
+            if answer_strategy == "sequence" and self._is_low_trust_sequence_title(title):
+                rerank_score -= 0.28
             rerank_score += min(0.24, lexical_overlap * 0.05)
             rerank_score += min(0.30, phrase_overlap * 0.10)
             rerank_score += min(0.18, usefulness_score * 0.18)
@@ -2324,8 +2355,16 @@ class KnowledgeSpaceService:
                 token in searchable_content for token in ("raca", "racas")
             ):
                 rerank_score += 0.10
+            if any(token in lowered_question for token in ("raca", "racas")) and not any(
+                token in searchable_content or token in self._compact_search_text(content)
+                for token in ("raca", "racas")
+            ):
+                rerank_score -= 0.10
             if "novas racas" in query_phrases and "novas racas" not in searchable_content:
-                rerank_score -= 0.14
+                if "novasracas" in self._compact_search_text(content):
+                    rerank_score += 0.16
+                else:
+                    rerank_score -= 0.14
             if re.search(r"\.{4,}", content) or len(searchable_content.split()) < 12:
                 rerank_score -= 0.14
             match_class = self._classify_chunk_match(
