@@ -109,6 +109,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Atualizar multiplas dependencias criticas do Frontend (npm audit) | P1 | M | aberto |
+| SG-031 | Remediar limitacao de auditoria do pip-audit e resolver tflite-runtime | P1 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -714,6 +716,28 @@ Copiar e preencher:
 - Dependencias: Nenhuma.
 - Prioridade: P0
 - Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Atualizar múltiplas dependências críticas do Frontend (npm audit)
+- Problema atual: A varredura de rotina do `npm audit` identificou 17 vulnerabilidades de alto impacto ou moderado nas dependências `@angular/*`, `@hono/node-server`, `dompurify`, `express-rate-limit`, `flatted`, `hono`, `immutable` e `tar`.
+- Solucao proposta: Atualizar as dependências e resolver restrições via `npm audit fix`, atualizações de `package.json` em sub-árvores ou _overrides_.
+- Impacto esperado: Redução substancial de superfície de ataque para injeções XSS, DoS, Path Traversal e Prototype Pollution no ecossistema Web.
+- Riscos: Breaking changes no frontend caso ocorram atualizações major das libs de framework.
+- Dependencias: Depende de alocação de equipe Frontend para testar e garantir UI components pós atualização.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Remediar limitação de auditoria do pip-audit e resolver tflite-runtime
+- Problema atual: O workflow da auditoria não foi capaz de processar as dependências devido ao travamento em restrições do Python atreladas à dependência `tflite-runtime==2.14.0`.
+- Solucao proposta: Adicionar um `lockfile` restrito (`poetry.lock` exportado estrito ou semelhante) isolado para a checagem que omite requisitos incompatíveis com o mock do container de build. Alternativamente, mockar o pacote no ambiente de CI da auditoria.
+- Impacto esperado: Auditoria Python executando ininterruptamente sem falso-negativos por queda da CLI de auditoria.
+- Riscos: Omissão temporária da dependência na auditoria, caso se escolha o caminho de bypass.
+- Dependencias: Depende de alocação DevEx.
+- Prioridade: P1
+- Esforco: M
 - Dono: a definir
 - Status: aberto
 

@@ -125,3 +125,30 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-16)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: dependência `tflite-runtime==2.14.0` não satisfeita/resolvida)
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas)
+
+### 17. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Análise diária identificou vulnerabilidades ativas em dependências do frontend (17 problemas relatados):
+  - `@angular/*` (Alta) - Vulnerabilidades de pacote.
+  - `@hono/node-server` (Alta) - Authorization Bypass via path encode bypass (`GHSA-wc8c-qw6v-h7f6`).
+  - `dompurify` (Moderada) - Cross-site Scripting vulnerability (`GHSA-v2wj-7wpq-c8vv`).
+  - `express-rate-limit` (Alta) - IPv4-mapped IPv6 bypass em dual-stack networks (`GHSA-46wh-pxpv-q5gq`).
+  - `flatted` (Alta) - Unbounded recursion DoS em revive phase (`GHSA-25h7-pfq9-p65f`).
+  - `hono` (Alta) - Múltiplas vulnerabilidades de injection (Cookies, SSE, serveStatic) e Prototype Pollution (`GHSA-q5qw-h33p-qvwr`).
+  - `immutable` (Alta) - Prototype Pollution (`GHSA-wf6x-7x77-mvgw`).
+  - `tar` (Alta) - Path Traversal vulnerabilities (`GHSA-qffp-2rhf-9h96`, `GHSA-9ppj-qmqm-q256`).
+- **Ação Recomendada:** Executar `npm audit fix` para mitigar, caso compatível. Caso contrário, forçar atualizações ou usar overrides no pacote para suprir as falhas.
+
+### Limitação de Auditoria
+- **Componente:** Dependências do Backend (`pip-audit`)
+- **Evidência:** Execução de `pip-audit` falhou com *Could not find a version that satisfies the requirement tflite-runtime==2.14.0*.
+- **Descrição:** O `pip-audit` não completou o rastreio por conta de restrições de ambiente vinculadas ao python constraint com o pacote `tflite-runtime==2.14.0`.
+- **Ação Recomendada:** Adicionar lockfile agnóstico para pip-audit ou mockar dependências bloqueantes no setup de auditoria.

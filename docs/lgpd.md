@@ -46,3 +46,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-16)
+
+### Lacunas e Impacto
+- **Nenhum Novo GAP de LGPD Observado:** A varredura de código sobre os deltas mais recentes das últimas 24 horas não revelou injeções ou implementações explícitas adicionais com novas interações diretas e sensíveis de manipulação de PII.
+
+### Próximos Passos
+- **Mitigação Ativa Pendente:** É imperativo tratar o acúmulo das brechas atuais (`SG-014`, `SG-019`, `SG-022`, `SG-023`) para blindar a aplicação contra os riscos residuais identificados na revisão anterior. Concentrar as horas de engenharia na sanitização via PII masking antes de criar novos manipuladores de dados.

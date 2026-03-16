@@ -1,6 +1,199 @@
 {
   "auditReportVersion": 2,
   "vulnerabilities": {
+    "@angular/animations": {
+      "name": "@angular/animations",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/core"
+      ],
+      "effects": [],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/animations"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/common": {
+      "name": "@angular/common",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/core"
+      ],
+      "effects": [],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/common"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/compiler": {
+      "name": "@angular/compiler",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1114603,
+          "name": "@angular/compiler",
+          "dependency": "@angular/compiler",
+          "title": "Angular vulnerable to XSS in i18n attribute bindings",
+          "url": "https://github.com/advisories/GHSA-g93w-mfhg-p222",
+          "severity": "high",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=20.0.0-next.0.0.0 <20.3.18"
+        }
+      ],
+      "effects": [
+        "@angular/compiler-cli",
+        "@angular/core",
+        "@angular/platform-browser-dynamic"
+      ],
+      "range": "20.0.0-next.1 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/compiler"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/compiler-cli": {
+      "name": "@angular/compiler-cli",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/compiler"
+      ],
+      "effects": [],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/compiler-cli"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/core": {
+      "name": "@angular/core",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/compiler",
+        {
+          "source": 1114606,
+          "name": "@angular/core",
+          "dependency": "@angular/core",
+          "title": "Angular vulnerable to XSS in i18n attribute bindings",
+          "url": "https://github.com/advisories/GHSA-g93w-mfhg-p222",
+          "severity": "high",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=20.0.0-next.0.0.0 <20.3.18"
+        }
+      ],
+      "effects": [
+        "@angular/animations",
+        "@angular/common",
+        "@angular/forms",
+        "@angular/platform-browser",
+        "@angular/router",
+        "@angular/service-worker"
+      ],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/core"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/forms": {
+      "name": "@angular/forms",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/common",
+        "@angular/core",
+        "@angular/platform-browser"
+      ],
+      "effects": [],
+      "range": "4.4.0-RC.0 - 4.4.0 || 20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/forms"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/platform-browser": {
+      "name": "@angular/platform-browser",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/animations",
+        "@angular/common",
+        "@angular/core"
+      ],
+      "effects": [
+        "@angular/forms"
+      ],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/platform-browser"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/platform-browser-dynamic": {
+      "name": "@angular/platform-browser-dynamic",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/common",
+        "@angular/compiler",
+        "@angular/core",
+        "@angular/platform-browser"
+      ],
+      "effects": [],
+      "range": "20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/platform-browser-dynamic"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/router": {
+      "name": "@angular/router",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/common",
+        "@angular/core",
+        "@angular/platform-browser"
+      ],
+      "effects": [],
+      "range": "10.0.0-next.0 - 10.0.0-rc.1 || 20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/router"
+      ],
+      "fixAvailable": true
+    },
+    "@angular/service-worker": {
+      "name": "@angular/service-worker",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@angular/core"
+      ],
+      "effects": [],
+      "range": "10.0.0-next.0 - 10.0.0-rc.1 || 20.0.0-next.0 - 20.3.17",
+      "nodes": [
+        "node_modules/@angular/service-worker"
+      ],
+      "fixAvailable": true
+    },
     "@hono/node-server": {
       "name": "@hono/node-server",
       "severity": "high",
@@ -65,7 +258,7 @@
       "isDirect": false,
       "via": [
         {
-          "source": 1114145,
+          "source": 1114194,
           "name": "express-rate-limit",
           "dependency": "express-rate-limit",
           "title": "express-rate-limit: IPv4-mapped IPv6 addresses bypass per-client rate limiting on servers with dual-stack network",
@@ -85,6 +278,35 @@
       "range": "8.2.0 - 8.2.1",
       "nodes": [
         "node_modules/express-rate-limit"
+      ],
+      "fixAvailable": true
+    },
+    "flatted": {
+      "name": "flatted",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1114526,
+          "name": "flatted",
+          "dependency": "flatted",
+          "title": "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+          "url": "https://github.com/advisories/GHSA-25h7-pfq9-p65f",
+          "severity": "high",
+          "cwe": [
+            "CWE-674"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<3.4.0"
+        }
+      ],
+      "effects": [],
+      "range": "<3.4.0",
+      "nodes": [
+        "node_modules/flatted"
       ],
       "fixAvailable": true
     },
@@ -141,10 +363,26 @@
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
           },
           "range": "<4.12.4"
+        },
+        {
+          "source": 1114341,
+          "name": "hono",
+          "dependency": "hono",
+          "title": "Hono vulnerable to Prototype Pollution possible through __proto__ key allowed in parseBody({ dot: true })",
+          "url": "https://github.com/advisories/GHSA-v8w9-8mx6-g223",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 4.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+          },
+          "range": "<4.12.7"
         }
       ],
       "effects": [],
-      "range": "<=4.12.3",
+      "range": "<=4.12.6",
       "nodes": [
         "node_modules/hono"
       ],
@@ -185,7 +423,7 @@
       "isDirect": false,
       "via": [
         {
-          "source": 1114071,
+          "source": 1114200,
           "name": "tar",
           "dependency": "tar",
           "title": "tar has Hardlink Path Traversal via Drive-Relative Linkpath",
@@ -200,10 +438,26 @@
             "vectorString": null
           },
           "range": "<=7.5.9"
+        },
+        {
+          "source": 1114302,
+          "name": "tar",
+          "dependency": "tar",
+          "title": "node-tar Symlink Path Traversal via Drive-Relative Linkpath",
+          "url": "https://github.com/advisories/GHSA-9ppj-qmqm-q256",
+          "severity": "high",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=7.5.10"
         }
       ],
       "effects": [],
-      "range": "<=7.5.9",
+      "range": "<=7.5.10",
       "nodes": [
         "node_modules/tar"
       ],
@@ -215,9 +469,9 @@
       "info": 0,
       "low": 0,
       "moderate": 1,
-      "high": 5,
+      "high": 16,
       "critical": 0,
-      "total": 6
+      "total": 17
     },
     "dependencies": {
       "prod": 190,
