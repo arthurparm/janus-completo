@@ -2145,6 +2145,14 @@ class KnowledgeSpaceService:
             sequence_selected: list[dict[str, Any]] = []
             selected_ids: set[str] = set()
             base_candidates = [item for item in ordered if item["doc_role"] == "base"]
+            trustworthy_base_candidates = [
+                item
+                for item in base_candidates
+                if not self._is_low_trust_sequence_title(str(item.get("title") or ""))
+                and float(item.get("usefulness_score") or 0.0) >= 0.45
+            ]
+            if trustworthy_base_candidates:
+                base_candidates = trustworthy_base_candidates
             if query_profile.get("asks_for_creation"):
                 creation_candidates = [
                     item for item in base_candidates if {"base_creation", "workflow"} & set(item.get("applies_to") or [])
@@ -2395,6 +2403,8 @@ class KnowledgeSpaceService:
                 phrase_overlap=phrase_overlap,
                 explicit_locator=bool(query_profile.get("explicit_locator")),
             )
+            if query_profile.get("expects_exact_evidence") and query_phrases and phrase_overlap == 0 and lexical_overlap < 2:
+                continue
             if query_profile.get("expects_exact_evidence") and match_class not in minimum_match_classes:
                 continue
             selected.append(point)

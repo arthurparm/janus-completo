@@ -123,6 +123,27 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     )
     points = [
         SimpleNamespace(
+            id="base-marketing",
+            score=0.85,
+            payload={
+                "content": "Seu aventureiro para criar centenas de combinações únicas.",
+                "metadata": {
+                    "section_id": "base-marketing",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 1,
+                    "section_title": "35 ORIGENS. Decida o passado de",
+                    "applies_to": ["workflow"],
+                    "concepts": ["personagem"],
+                    "usefulness_score": 0.7,
+                    "heading_quality_score": 0.7,
+                    "content_density_score": 0.7,
+                    "noise_score": 0.1,
+                },
+            },
+        ),
+        SimpleNamespace(
             id="base-1",
             score=0.8,
             payload={
@@ -132,9 +153,9 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
                     "doc_id": "base-doc",
                     "doc_role": "base",
                     "section_role": "core_rules",
-                    "section_order": 1,
+                    "section_order": 2,
                     "section_title": "Capítulo Um",
-                    "applies_to": ["workflow"],
+                    "applies_to": ["workflow", "base_creation"],
                     "concepts": ["personagem"],
                     "usefulness_score": 0.8,
                     "heading_quality_score": 0.7,
@@ -265,6 +286,7 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     )
 
     assert selected[0].id == "supp"
+    assert all(item.id != "supp-noisy" for item in selected[:1])
 
 
 def test_phrase_overlap_handles_ocr_split_tokens():
