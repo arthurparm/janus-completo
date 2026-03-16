@@ -1139,17 +1139,94 @@ class KnowledgeSpaceService:
     def _build_query_profile(self, question: str) -> dict[str, Any]:
         lowered = self._normalize_search_text(question)
         terms = self._tokenize_search_terms(question)
+        phrases = self._extract_query_phrases(question)
         explicit_locator = self._prefer_locator(question)
-        asks_for_supplement = any(token in lowered for token in ("suplement", "herois", "herois de arton", "adiciona", "novas opcoes"))
-        asks_for_base = any(token in lowered for token in ("livro base", "regra principal", "nucleo", "núcleo"))
+        asks_for_creation = any(
+            token in lowered
+            for token in (
+                "criacao de personagem",
+                "criação de personagem",
+                "criar personagem",
+                "construir personagem",
+                "construcao de personagem",
+                "construção de personagem",
+                "ficha",
+            )
+        )
+        asks_for_ordering = any(
+            token in lowered
+            for token in (
+                "primeiro",
+                "depois",
+                "em que ponto",
+                "em que etapa",
+                "sequencia",
+                "sequência",
+                "passo",
+                "ordem",
+            )
+        )
+        asks_for_supplement = any(
+            token in lowered
+            for token in (
+                "suplement",
+                "herois",
+                "herois de arton",
+                "heróis de arton",
+                "adiciona",
+                "novas opcoes",
+                "novas opções",
+                "acrescenta",
+                "amplia",
+            )
+        )
+        asks_for_base = any(
+            token in lowered for token in ("livro base", "regra principal", "nucleo", "núcleo", "jogo do ano")
+        )
+        source_hints = [
+            hint
+            for hint in ("herois de arton", "jogo do ano", "livro base")
+            if hint in lowered
+        ]
         return {
             "normalized": lowered,
             "terms": terms,
+            "phrases": phrases,
             "explicit_locator": explicit_locator,
             "asks_for_supplement": asks_for_supplement,
             "asks_for_base": asks_for_base,
+            "asks_for_creation": asks_for_creation,
+            "asks_for_ordering": asks_for_ordering,
+            "asks_for_sequence": asks_for_creation or asks_for_ordering,
+            "source_hints": source_hints,
             "expects_exact_evidence": explicit_locator or any(token in lowered for token in ("onde", "trecho", "pagina", "página")),
         }
+
+    def _extract_query_phrases(self, question: str) -> set[str]:
+        normalized = self._normalize_search_text(question)
+        tokens = [
+            token
+            for token in re.findall(r"[a-z0-9_-]{3,}", normalized)
+            if token not in _STOPWORDS and token not in _LOW_SIGNAL_QUERY_TOKENS
+        ]
+        phrases: set[str] = set()
+        for size in (3, 2):
+            for index in range(0, max(0, len(tokens) - size + 1)):
+                phrase = " ".join(tokens[index : index + size]).strip()
+                if len(phrase) >= 8:
+                    phrases.add(phrase)
+        for explicit in (
+            "herois de arton",
+            "jogo do ano",
+            "livro base",
+            "criacao de personagem",
+            "criar personagem",
+            "novas racas",
+            "novas opcoes",
+        ):
+            if explicit in normalized:
+                phrases.add(explicit)
+        return phrases
 
     def _trim_text(self, text: str | None, *, max_chars: int) -> str:
         normalized = re.sub(r"\s+", " ", str(text or "").strip())
@@ -1769,7 +1846,21 @@ class KnowledgeSpaceService:
             if token in searchable_text or token in searchable_title or token in searchable_concepts
         )
 
-    def _classify_chunk_match(self, *, point_score: float, lexical_overlap: int, explicit_locator: bool) -> str:
+    def _phrase_overlap(self, *, text: str, title: str, query_phrases: set[str]) -> int:
+        searchable_text = self._normalize_search_text(text)
+        searchable_title = self._normalize_search_text(title)
+        return sum(1 for phrase in query_phrases if phrase and (phrase in searchable_text or phrase in searchable_title))
+
+    def _classify_chunk_match(
+        self,
+        *,
+        point_score: float,
+        lexical_overlap: int,
+        phrase_overlap: int,
+        explicit_locator: bool,
+    ) -> str:
+        if phrase_overlap >= 1:
+            return "exact_match"
         if lexical_overlap >= 2:
             return "exact_match"
         if lexical_overlap >= 1 and point_score >= 0.30:
@@ -1858,7 +1949,25 @@ class KnowledgeSpaceService:
         lowered = str(question or "").casefold()
         if self._prefer_locator(question):
             return "locator"
-        if any(token in lowered for token in ("passo", "sequên", "sequenc", "etapa", "ordem", "como fazer", "processo")):
+        if any(
+            token in lowered
+            for token in (
+                "passo",
+                "sequên",
+                "sequenc",
+                "etapa",
+                "ordem",
+                "como fazer",
+                "processo",
+                "primeiro",
+                "depois",
+                "criacao de personagem",
+                "criação de personagem",
+                "criar personagem",
+                "ficha",
+                "em que ponto",
+            )
+        ):
             return "sequence"
         if any(token in lowered for token in ("compar", "diferen", "versus", "vs", "amplia", "suplement")):
             return "comparative"
@@ -1880,18 +1989,26 @@ class KnowledgeSpaceService:
         grouped: dict[str, dict[str, Any]] = {}
         lowered_question = str(query_profile.get("normalized") or self._normalize_search_text(question))
         question_terms = set(query_profile.get("terms") or [])
+        query_phrases = set(query_profile.get("phrases") or [])
+        source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
         for point in points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             section_id = str(metadata.get("section_id") or getattr(point, "id", ""))
             content = str(payload.get("content") or "").strip()
             title = str(metadata.get("section_title") or "").strip()
+            file_name = str(metadata.get("file_name") or "").strip()
             concepts = [str(item).strip().casefold() for item in (metadata.get("concepts") or []) if str(item).strip()]
             lexical_overlap = self._lexical_overlap(
                 text=content,
                 title=title,
                 concepts=concepts,
                 query_terms=question_terms,
+            )
+            phrase_overlap = self._phrase_overlap(
+                text=content,
+                title=f"{title} {file_name}",
+                query_phrases=query_phrases,
             )
             base_score = float(getattr(point, "score", 0.0) or 0.0)
             rerank_score = base_score
@@ -1901,6 +2018,12 @@ class KnowledgeSpaceService:
             heading_quality_score = float(metadata.get("heading_quality_score") or 0.0)
             content_density_score = float(metadata.get("content_density_score") or 0.0)
             noise_score = float(metadata.get("noise_score") or 0.0)
+            applies_to = metadata.get("applies_to") or []
+            searchable_title = self._normalize_search_text(title)
+            searchable_file_name = self._normalize_search_text(file_name)
+            source_target_match = any(
+                hint in searchable_title or hint in searchable_file_name for hint in source_hints
+            )
             if answer_strategy in {"scope", "sequence"} and doc_role == "base":
                 rerank_score += 0.14
             if answer_strategy == "comparative" and doc_role == "supplement":
@@ -1911,9 +2034,19 @@ class KnowledgeSpaceService:
                 rerank_score += 0.06
             if section_role == "optional_rules":
                 rerank_score -= 0.04 if answer_strategy != "sequence" else 0.18
-            if answer_strategy == "sequence" and "workflow" in (metadata.get("applies_to") or []):
+            if answer_strategy == "sequence" and "workflow" in applies_to:
                 rerank_score += 0.12
+            if answer_strategy == "sequence" and query_profile.get("asks_for_creation") and (
+                "base_creation" in applies_to or "workflow" in applies_to
+            ):
+                rerank_score += 0.14
+            if answer_strategy == "sequence" and query_profile.get("asks_for_ordering") and doc_role == "base":
+                section_order = int(metadata.get("section_order") or 999999)
+                rerank_score += max(0.0, 0.18 - min(0.18, max(0, section_order - 1) * 0.015))
+                if any(token in searchable_title for token in ("toques finais", "finais", "final")):
+                    rerank_score -= 0.22
             rerank_score += min(0.24, lexical_overlap * 0.05)
+            rerank_score += min(0.30, phrase_overlap * 0.10)
             rerank_score += min(0.18, usefulness_score * 0.18)
             rerank_score += min(0.10, heading_quality_score * 0.08)
             rerank_score += min(0.08, content_density_score * 0.06)
@@ -1922,7 +2055,11 @@ class KnowledgeSpaceService:
                 rerank_score -= 0.10
             if answer_strategy == "sequence" and (heading_quality_score < 0.35 or noise_score > 0.45):
                 rerank_score -= 0.24
-            if question_terms and lexical_overlap == 0 and query_profile.get("expects_exact_evidence"):
+            if source_hints and not source_target_match and query_profile.get("asks_for_supplement"):
+                rerank_score -= 0.12
+            if source_target_match:
+                rerank_score += 0.14
+            if question_terms and lexical_overlap == 0 and phrase_overlap == 0 and query_profile.get("expects_exact_evidence"):
                 rerank_score -= 0.20
             if answer_strategy == "comparative" and lexical_overlap == 0 and doc_role == "supplement":
                 rerank_score -= 0.08
@@ -1941,9 +2078,10 @@ class KnowledgeSpaceService:
                     "section_order": int(metadata.get("section_order") or 0),
                     "title": title,
                     "content": content,
-                    "applies_to": metadata.get("applies_to") or [],
+                    "applies_to": applies_to,
                     "usefulness_score": usefulness_score,
                     "lexical_overlap": lexical_overlap,
+                    "phrase_overlap": phrase_overlap,
                     "rerank_score": rerank_score,
                 }
         ordered = sorted(
@@ -1966,11 +2104,59 @@ class KnowledgeSpaceService:
                     break
                 if item["section_id"] in selected_ids:
                     continue
-                if item["doc_role"] == "supplement" and not supplement_item and item["lexical_overlap"] == 0:
+                if item["doc_role"] == "supplement" and not supplement_item and item["lexical_overlap"] == 0 and item["phrase_overlap"] == 0:
                     continue
                 selected.append(item)
                 selected_ids.add(item["section_id"])
             return selected
+        if answer_strategy == "sequence":
+            sequence_limit = max(1, int(limit))
+            sequence_selected: list[dict[str, Any]] = []
+            selected_ids: set[str] = set()
+            base_candidates = [item for item in ordered if item["doc_role"] == "base"]
+            if query_profile.get("asks_for_creation"):
+                creation_candidates = [
+                    item for item in base_candidates if {"base_creation", "workflow"} & set(item.get("applies_to") or [])
+                ]
+                if creation_candidates:
+                    base_candidates = creation_candidates
+            if query_profile.get("asks_for_ordering"):
+                base_candidates = sorted(
+                    base_candidates,
+                    key=lambda item: (item["section_order"] or 999999, -item["rerank_score"]),
+                )
+            if base_candidates:
+                primary_base = base_candidates[0]
+                sequence_selected.append(primary_base)
+                selected_ids.add(primary_base["section_id"])
+            if query_profile.get("asks_for_supplement"):
+                supplement_candidates = [
+                    item
+                    for item in ordered
+                    if item["doc_role"] == "supplement"
+                    and item["section_id"] not in selected_ids
+                    and (
+                        item["lexical_overlap"] > 0
+                        or item["phrase_overlap"] > 0
+                        or {"character_options", "workflow"} & set(item.get("applies_to") or [])
+                    )
+                ]
+                if supplement_candidates:
+                    supplement = supplement_candidates[0]
+                    sequence_selected.append(supplement)
+                    selected_ids.add(supplement["section_id"])
+            for item in ordered:
+                if len(sequence_selected) >= sequence_limit:
+                    break
+                if item["section_id"] in selected_ids:
+                    continue
+                if item["doc_role"] in {"base", "supplement"} and item["doc_id"] in {
+                    row["doc_id"] for row in sequence_selected
+                }:
+                    continue
+                sequence_selected.append(item)
+                selected_ids.add(item["section_id"])
+            return sequence_selected
         used_doc_ids: set[str] = set()
         for item in ordered:
             if len(selected) >= max(1, int(limit)):
@@ -2099,33 +2285,53 @@ class KnowledgeSpaceService:
     ) -> list[Any]:
         lowered_question = str(query_profile.get("normalized") or self._normalize_search_text(question))
         question_terms = set(query_profile.get("terms") or [])
+        query_phrases = set(query_profile.get("phrases") or [])
+        source_hints = {self._normalize_search_text(item) for item in (query_profile.get("source_hints") or []) if item}
         ranked: list[tuple[float, int, Any]] = []
         for point in points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             content = str(payload.get("content") or "")
             title = str(metadata.get("section_title") or metadata.get("file_name") or "")
+            file_name = str(metadata.get("file_name") or "")
             lexical_overlap = self._lexical_overlap(
                 text=content,
                 title=title,
                 concepts=[],
                 query_terms=question_terms,
             )
+            phrase_overlap = self._phrase_overlap(
+                text=content,
+                title=f"{title} {file_name}",
+                query_phrases=query_phrases,
+            )
             point_score = float(getattr(point, "score", 0.0) or 0.0)
-            rerank_score = point_score + min(0.28, lexical_overlap * 0.06)
+            rerank_score = point_score + min(0.28, lexical_overlap * 0.06) + min(0.32, phrase_overlap * 0.12)
             doc_role = str(metadata.get("doc_role") or "").strip().lower()
             searchable_content = self._normalize_search_text(content)
+            searchable_file_name = self._normalize_search_text(file_name)
+            searchable_title = self._normalize_search_text(title)
+            source_target_match = any(
+                hint in searchable_file_name or hint in searchable_title for hint in source_hints
+            )
             if doc_role == "supplement" and query_profile.get("asks_for_supplement"):
                 rerank_score += 0.10
+            if source_target_match:
+                rerank_score += 0.16
+            elif source_hints:
+                rerank_score -= 0.12
             if any(token in lowered_question for token in ("raca", "racas")) and any(
                 token in searchable_content for token in ("raca", "racas")
             ):
                 rerank_score += 0.10
+            if "novas racas" in query_phrases and "novas racas" not in searchable_content:
+                rerank_score -= 0.14
             if re.search(r"\.{4,}", content) or len(searchable_content.split()) < 12:
                 rerank_score -= 0.14
             match_class = self._classify_chunk_match(
                 point_score=point_score,
                 lexical_overlap=lexical_overlap,
+                phrase_overlap=phrase_overlap,
                 explicit_locator=bool(query_profile.get("explicit_locator")),
             )
             if match_class == "exact_match":
@@ -2137,9 +2343,17 @@ class KnowledgeSpaceService:
         minimum_match_classes = {"exact_match", "strong_semantic"}
         selected: list[Any] = []
         for _, lexical_overlap, point in ranked:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            phrase_overlap = self._phrase_overlap(
+                text=str(payload.get("content") or ""),
+                title=f"{metadata.get('section_title') or ''} {metadata.get('file_name') or ''}",
+                query_phrases=query_phrases,
+            )
             match_class = self._classify_chunk_match(
                 point_score=float(getattr(point, "score", 0.0) or 0.0),
                 lexical_overlap=lexical_overlap,
+                phrase_overlap=phrase_overlap,
                 explicit_locator=bool(query_profile.get("explicit_locator")),
             )
             if query_profile.get("expects_exact_evidence") and match_class not in minimum_match_classes:

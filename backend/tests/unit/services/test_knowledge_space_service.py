@@ -102,6 +102,12 @@ def test_detect_answer_strategy_prefers_comparative_and_sequence():
         )
         == "sequence"
     )
+    assert (
+        service._detect_answer_strategy(
+            "Na criação de personagem, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+        )
+        == "sequence"
+    )
 
 
 def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
@@ -190,6 +196,7 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     )
 
     assert len(selected) == 2
+    assert selected[0]["title"] == "Capítulo Um"
     assert any(item["doc_role"] == "supplement" for item in selected)
 
 
@@ -222,7 +229,7 @@ def test_render_sequence_answer_lists_base_before_supplement_extensions():
 
 def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     service = KnowledgeSpaceService()
-    query_profile = service._build_query_profile("Em que trecho o livro fala sobre novas opções de raças?")
+    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
     points = [
         SimpleNamespace(
             id="base",
@@ -237,7 +244,15 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
             score=0.55,
             payload={
                 "content": "Novas raças: duende, eiradaan, meio-elfo, sátiro e galokk.",
-                "metadata": {"doc_role": "supplement", "file_name": "supp.pdf"},
+                "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
+            },
+        ),
+        SimpleNamespace(
+            id="supp-noisy",
+            score=0.62,
+            payload={
+                "content": "Como pensa e age um Cavaleiro do Corvo. E isso é valioso para qualquer ser humano.",
+                "metadata": {"doc_role": "supplement", "file_name": "T20 - Herois de Arton v1.1.pdf"},
             },
         ),
     ]
