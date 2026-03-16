@@ -649,6 +649,45 @@ def test_enrich_sections_with_llm_returns_original_sections_on_timeout():
     assert result == sections
 
 
+def test_enrich_sections_with_llm_forces_ollama_only_policy():
+    captured = {}
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_invoke_llm(**kwargs):
+        captured.update(kwargs)
+        return {"response": '{"canonical_summary":"Resumo fiel","section_role":"core_rules"}'}
+
+    service._llm.invoke_llm = fake_invoke_llm
+    sections = [
+        {
+            "section_id": "base-1",
+            "doc_role": "base",
+            "section_role": "core_rules",
+            "body": "palavras " * 80,
+            "usefulness_score": 0.8,
+            "heading_quality_score": 0.8,
+            "order": 1,
+            "title": "Capítulo 1",
+            "canonical_summary": "Resumo",
+            "body_excerpt": "Trecho",
+        }
+    ]
+
+    result = asyncio.run(
+        service._enrich_sections_with_llm(
+            sections,
+            knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+        )
+    )
+
+    assert result[0]["canonical_summary"] == "Resumo fiel"
+    assert captured["priority"].value == "local_only"
+    assert captured["policy_overrides"]["provider"] == "ollama"
+    assert captured["policy_overrides"]["strict_provider"] is True
+    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["policy_overrides"]["disable_response_cache"] is True
+
+
 def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():
     service = KnowledgeSpaceService()
     service.get_space = lambda **kwargs: {  # type: ignore[method-assign]

@@ -14,6 +14,7 @@ import structlog
 from fastapi import HTTPException, Request, status
 from qdrant_client import models
 
+from app.config import settings
 from app.core.agents.utils import parse_json_lenient
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
 from app.core.llm import ModelPriority, ModelRole
@@ -1365,10 +1366,17 @@ class KnowledgeSpaceService:
                     result = await self._llm.invoke_llm(
                         prompt=prompt,
                         role=ModelRole.KNOWLEDGE_CURATOR,
-                        priority=ModelPriority.HIGH_QUALITY,
+                        priority=ModelPriority.LOCAL_ONLY,
                         timeout_seconds=45,
                         task_type="knowledge_space_consolidation",
                         complexity="medium",
+                        policy_overrides={
+                            "provider": "ollama",
+                            "model": getattr(settings, "OLLAMA_CURATOR_MODEL", "qwen2.5:14b"),
+                            "strict_provider": True,
+                            "disable_failover": True,
+                            "disable_response_cache": True,
+                        },
                     )
                     parsed = parse_json_lenient(str(result.get("response") or ""))
                 except Exception:

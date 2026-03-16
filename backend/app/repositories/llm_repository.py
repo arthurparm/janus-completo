@@ -76,8 +76,27 @@ class LLMRepository:
                             span.set_attribute("janus.trace_id", tid)
                     except Exception:
                         pass
+            explicit_provider = None
+            explicit_model = None
+            strict_provider = False
+            disable_failover = False
+            disable_response_cache = False
+            if isinstance(llm_config, dict):
+                explicit_provider = llm_config.get("provider")
+                explicit_model = llm_config.get("model")
+                strict_provider = bool(llm_config.get("strict_provider"))
+                disable_failover = bool(llm_config.get("disable_failover")) or strict_provider
+                disable_response_cache = bool(llm_config.get("disable_response_cache")) or strict_provider
+
             # Cache de resposta: tentativa de hit antes de chamar provedor
-            cached = rc_get(prompt, role.value, priority.value)
+            cached = None if disable_response_cache else rc_get(prompt, role.value, priority.value)
+            if cached and strict_provider:
+                cached_provider = cached.get("provider")
+                cached_model = cached.get("model")
+                if explicit_provider and str(cached_provider or "").strip().lower() != str(explicit_provider).strip().lower():
+                    cached = None
+                elif explicit_model and str(cached_model or "").strip() != str(explicit_model).strip():
+                    cached = None
             if cached:
                 logger.info("Resposta retornada do cache de prompts/respostas.")
                 if _OTEL and span is not None:
@@ -99,11 +118,6 @@ class LLMRepository:
 
             client = None
             try:
-                explicit_provider = (
-                    llm_config.get("provider") if isinstance(llm_config, dict) else None
-                )
-                explicit_model = llm_config.get("model") if isinstance(llm_config, dict) else None
-
                 if (
                     user_id
                     and getattr(settings, "LLM_AB_EXPERIMENT_ID", None)
@@ -212,6 +226,8 @@ class LLMRepository:
 
             return enriched
         except Exception as e:
+            if disable_failover:
+                raise
             logger.warning(
                 "Falha na invocação inicial; tentando failover por provedor.", exc_info=True
             )
