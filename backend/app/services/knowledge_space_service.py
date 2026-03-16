@@ -1936,6 +1936,28 @@ class KnowledgeSpaceService:
                 ),
             )
             candidate_points.extend(list(getattr(result, "points", result) or []))
+            if query_profile.get("asks_for_sequence") or query_profile.get("expects_exact_evidence"):
+                candidate_points.extend(
+                    await self._scroll_points(
+                        collection_name=collection_name,
+                        query_filter=models.Filter(
+                            must=[
+                                models.FieldCondition(
+                                    key="metadata.type",
+                                    match=models.MatchValue(value=point_type),
+                                ),
+                                models.FieldCondition(
+                                    key="metadata.user_id",
+                                    match=models.MatchValue(value=str(user_id)),
+                                ),
+                                models.FieldCondition(
+                                    key="metadata.knowledge_space_id",
+                                    match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                                ),
+                            ]
+                        ),
+                    )
+                )
 
         selected = self._select_canonical_candidates(
             points=candidate_points,
@@ -2284,6 +2306,26 @@ class KnowledgeSpaceService:
             ),
         )
         points = list(getattr(result, "points", result) or [])
+        if query_profile.get("expects_exact_evidence") or query_profile.get("source_hints"):
+            points.extend(
+                await self._scroll_points(
+                    collection_name=collection_name,
+                    query_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                            models.FieldCondition(
+                                key="metadata.user_id",
+                                match=models.MatchValue(value=str(user_id)),
+                            ),
+                            models.FieldCondition(
+                                key="metadata.knowledge_space_id",
+                                match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                            ),
+                        ]
+                    ),
+                    batch_size=256,
+                )
+            )
         selected = self._select_quick_lookup_points(
             points=points,
             question=question,
