@@ -91,6 +91,17 @@ def test_build_query_profile_extracts_explicit_task_target_generically():
     assert "cavaleiro" in profile["target_terms"]
 
 
+def test_extract_entities_finds_specific_entity_from_definition_like_text():
+    service = KnowledgeSpaceService()
+
+    entities = service._extract_entities(
+        "Cavaleiro Místico é uma variante de cavaleiro com acesso a magia arcana.",
+        title="Classes Variantes",
+    )
+
+    assert "cavaleiro mistico" in entities
+
+
 def test_infer_doc_role_detects_supplement_by_filename():
     service = KnowledgeSpaceService()
 

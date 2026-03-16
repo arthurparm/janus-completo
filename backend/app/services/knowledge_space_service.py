@@ -908,10 +908,17 @@ class KnowledgeSpaceService:
             applies_to = self._infer_applies_to(normalized_title, body, section_role=section_role)
             if sections and str(sections[-1]["title"]).strip() == normalized_title and sections[-1]["doc_role"] == doc_role:
                 merged_body = f"{sections[-1]['body']}\n{body}".strip()
+                merged_entities = self._extract_entities(merged_body, title=normalized_title)
                 sections[-1]["body"] = merged_body
                 sections[-1]["summary"] = self._summarize_text(merged_body)
                 sections[-1]["canonical_summary"] = self._summarize_text(merged_body, max_chars=440)
                 sections[-1]["concepts"] = self._extract_concepts(merged_body, title=normalized_title)
+                sections[-1]["entities"] = merged_entities
+                sections[-1]["themes"] = self._extract_themes(
+                    merged_body,
+                    title=normalized_title,
+                    entities=merged_entities,
+                )
                 sections[-1]["applies_to"] = sorted(
                     set(sections[-1].get("applies_to") or []).union(applies_to)
                 )
@@ -929,6 +936,7 @@ class KnowledgeSpaceService:
                 order,
                 normalized_title,
             )
+            entities = self._extract_entities(body, title=normalized_title)
             sections.append(
                 {
                     "section_id": section_key,
@@ -941,6 +949,8 @@ class KnowledgeSpaceService:
                     "summary": self._summarize_text(body),
                     "canonical_summary": self._summarize_text(body, max_chars=440),
                     "concepts": self._extract_concepts(body, title=normalized_title),
+                    "entities": entities,
+                    "themes": self._extract_themes(body, title=normalized_title, entities=entities),
                     "doc_role": doc_role,
                     "section_role": section_role,
                     "applies_to": applies_to,
@@ -979,6 +989,7 @@ class KnowledgeSpaceService:
                 str(item.get("content") or "").strip() for item in points if str(item.get("content") or "").strip()
             ).strip()
         fallback_summary = self._summarize_text(fallback_text)
+        fallback_entities = self._extract_entities(fallback_text, title="Visão Geral")
         return [
             {
                 "section_id": build_deterministic_point_id(
@@ -997,6 +1008,8 @@ class KnowledgeSpaceService:
                 "summary": fallback_summary,
                 "canonical_summary": self._summarize_text(fallback_text, max_chars=440),
                 "concepts": self._extract_concepts(fallback_text, title="Visão Geral"),
+                "entities": fallback_entities,
+                "themes": self._extract_themes(fallback_text, title="Visão Geral", entities=fallback_entities),
                 "doc_role": doc_role,
                 "section_role": "core_rules",
                 "applies_to": self._infer_applies_to("Visão Geral", fallback_text, section_role="core_rules"),
@@ -1722,6 +1735,67 @@ class KnowledgeSpaceService:
         counts = Counter(token for token in tokens if token not in _STOPWORDS)
         return [item for item, _ in counts.most_common(limit)]
 
+    def _extract_entities(self, text: str, *, title: str, limit: int = 6) -> list[str]:
+        searchable_title = self._sanitize_task_target_phrase(title)
+        normalized_title = self._normalize_search_text(title)
+        normalized_body = self._normalize_search_text(text)
+        candidates: list[str] = []
+        title_terms = {
+            token
+            for token in self._tokenize_search_terms(normalized_title, min_len=3)
+            if token not in _STOPWORDS
+        }
+        if searchable_title and searchable_title not in _TASK_TARGET_STOPWORDS and any(
+            token not in _TASK_TARGET_STOPWORDS for token in title_terms
+        ):
+            candidates.append(searchable_title)
+        patterns = (
+            r"\b([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\s+(?:é|e|são|sao)\s+(?:uma|um|o|a)\b",
+            r"\b([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\s+(?:permite|permitem|oferece|oferecem|recebe|recebem|usa|usam)\b",
+            r"\b(?:variante de|receita de|tecnica de|técnica de|metodo de|método de|procedimento de|classe de|origem de)\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})\b",
+        )
+        for pattern in patterns:
+            for match in re.finditer(pattern, normalized_body):
+                candidate = self._sanitize_task_target_phrase(match.group(1))
+                if candidate:
+                    candidates.append(candidate)
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for item in candidates:
+            if not item or item in seen:
+                continue
+            if all(token in _TASK_TARGET_STOPWORDS for token in item.split()):
+                continue
+            seen.add(item)
+            deduped.append(item)
+            if len(deduped) >= max(1, int(limit)):
+                break
+        return deduped
+
+    def _extract_themes(
+        self,
+        text: str,
+        *,
+        title: str,
+        entities: list[str] | None = None,
+        limit: int = 6,
+    ) -> list[str]:
+        entity_tokens = {
+            token
+            for item in (entities or [])
+            for token in self._tokenize_search_terms(item, min_len=3)
+        }
+        themes: list[str] = []
+        for concept in self._extract_concepts(text, title=title, limit=max(limit * 2, 8)):
+            if concept in entity_tokens:
+                continue
+            if concept in _TASK_TARGET_STOPWORDS:
+                continue
+            themes.append(concept)
+            if len(themes) >= max(1, int(limit)):
+                break
+        return themes
+
     async def _enrich_sections_with_llm(
         self,
         sections: list[dict[str, Any]],
@@ -1881,6 +1955,8 @@ class KnowledgeSpaceService:
             "{\n"
             '  "canonical_summary": "resumo curto e fiel",\n'
             f'  "section_role": "{allowed_roles}",\n'
+            '  "entities": ["entidade principal 1"],\n'
+            '  "themes": ["tema principal 1"],\n'
             '  "applies_to": ["base_creation|character_options|workflow|optional_rules|general_rules"],\n'
             '  "extends_or_overrides": "extends|overrides|none",\n'
             '  "is_optional_rule": false\n'
@@ -1923,6 +1999,20 @@ class KnowledgeSpaceService:
             merged["extends_or_overrides"] = None
         if "is_optional_rule" in payload:
             merged["is_optional_rule"] = bool(payload.get("is_optional_rule"))
+        entities = [
+            self._sanitize_task_target_phrase(str(item))
+            for item in (payload.get("entities") or [])
+            if self._sanitize_task_target_phrase(str(item))
+        ]
+        if entities:
+            merged["entities"] = sorted(dict.fromkeys(entities))
+        themes = [
+            self._normalize_search_text(str(item))
+            for item in (payload.get("themes") or [])
+            if self._normalize_search_text(str(item))
+        ]
+        if themes:
+            merged["themes"] = sorted(dict.fromkeys(themes))
         merged["classification_source"] = "llm"
         return merged
 
@@ -1996,7 +2086,13 @@ class KnowledgeSpaceService:
                     section,
                     "knowledge_canonical_summary",
                     section["canonical_summary"],
-                    f"{section['title']}\n{section['canonical_summary']}\n{' '.join(section['concepts'])}",
+                    (
+                        f"{section['title']}\n"
+                        f"{section['canonical_summary']}\n"
+                        f"{' '.join(section['concepts'])}\n"
+                        f"{' '.join(section.get('entities') or [])}\n"
+                        f"{' '.join(section.get('themes') or [])}"
+                    ),
                 )
             )
             records.append(
@@ -2046,6 +2142,8 @@ class KnowledgeSpaceService:
                         "section_title": section["title"],
                         "section_order": int(section["order"]),
                         "concepts": section["concepts"],
+                        "entities": section.get("entities") or [],
+                        "themes": section.get("themes") or [],
                         "source_type": "document",
                         "origin": "knowledge_space.consolidation",
                         "doc_role": section.get("doc_role"),
@@ -2209,6 +2307,7 @@ class KnowledgeSpaceService:
         grouped: dict[str, list[dict[str, Any]]] = {}
         section_rows: list[dict[str, Any]] = []
         concept_rows: list[dict[str, Any]] = []
+        entity_rows: list[dict[str, Any]] = []
         for section in sections:
             grouped.setdefault(str(section["doc_id"]), []).append(section)
             section_rows.append(
@@ -2222,6 +2321,8 @@ class KnowledgeSpaceService:
                     "doc_role": section.get("doc_role"),
                     "section_role": section.get("section_role"),
                     "applies_to": section.get("applies_to") or [],
+                    "entities": section.get("entities") or [],
+                    "themes": section.get("themes") or [],
                     "is_optional_rule": bool(section.get("is_optional_rule")),
                     "extends_or_overrides": section.get("extends_or_overrides"),
                     "is_useful": bool(section.get("is_useful")),
@@ -2235,6 +2336,8 @@ class KnowledgeSpaceService:
             )
             for concept in section["concepts"]:
                 concept_rows.append({"section_id": str(section["section_id"]), "concept": concept})
+            for entity in section.get("entities") or []:
+                entity_rows.append({"section_id": str(section["section_id"]), "entity": entity})
         for batch in self._chunk_rows(section_rows, batch_size=100):
             await graph.execute(
                 """
@@ -2248,6 +2351,8 @@ class KnowledgeSpaceService:
                     s.doc_role = section.doc_role,
                     s.section_role = section.section_role,
                     s.applies_to = section.applies_to,
+                    s.entities = section.entities,
+                    s.themes = section.themes,
                     s.is_optional_rule = section.is_optional_rule,
                     s.extends_or_overrides = section.extends_or_overrides,
                     s.is_useful = section.is_useful,
@@ -2273,6 +2378,18 @@ class KnowledgeSpaceService:
                 """,
                 {"concepts": batch},
                 operation="knowledge_space_graph_concept_batch",
+            )
+        for batch in self._chunk_rows(entity_rows, batch_size=250):
+            await graph.execute(
+                """
+                UNWIND $entities AS item
+                MATCH (s:Section {section_id: item.section_id})
+                MERGE (e:Entity {name: item.entity})
+                SET e.updated_at = timestamp()
+                MERGE (s)-[:ABOUT]->(e)
+                """,
+                {"entities": batch},
+                operation="knowledge_space_graph_entity_batch",
             )
         for doc_id, rows in grouped.items():
             ordered = sorted(rows, key=lambda item: int(item["order"]))
@@ -2725,7 +2842,18 @@ class KnowledgeSpaceService:
                             str(item).strip().casefold()
                             for item in (metadata.get("concepts") or [])
                             if str(item).strip()
+                        ] + [
+                            str(item).strip().casefold()
+                            for item in (metadata.get("entities") or [])
+                            if str(item).strip()
                         ]
+                        target_term_overlap, target_phrase_overlap = self._target_overlap(
+                            text=content,
+                            title=title,
+                            concepts=concepts,
+                            target_terms=set(query_profile.get("target_terms") or []),
+                            target_phrases=set(query_profile.get("target_phrases") or []),
+                        )
                         local_score = float(getattr(point, "score", 0.0) or 0.0)
                         local_score += 0.12 * self._lexical_overlap(
                             text=content,
@@ -2738,8 +2866,12 @@ class KnowledgeSpaceService:
                             title=title,
                             query_phrases=support_query_phrases,
                         )
+                        local_score += min(0.24, target_term_overlap * 0.12)
+                        local_score += min(0.30, target_phrase_overlap * 0.18)
                         local_score += 0.05 if role_hint == doc_role else 0.0
                         local_score += 0.02 if "workflow" in (metadata.get("applies_to") or []) else 0.0
+                        if query_profile.get("has_explicit_target") and target_term_overlap == 0 and target_phrase_overlap == 0:
+                            local_score -= 0.38
                         existing = scored_points.get(point_id)
                         if existing is not None and float(getattr(existing, "score", 0.0) or 0.0) >= local_score:
                             continue
@@ -3085,16 +3217,18 @@ class KnowledgeSpaceService:
             title = str(metadata.get("section_title") or "").strip()
             file_name = str(metadata.get("file_name") or "").strip()
             concepts = [str(item).strip().casefold() for item in (metadata.get("concepts") or []) if str(item).strip()]
+            entities = [str(item).strip().casefold() for item in (metadata.get("entities") or []) if str(item).strip()]
+            overlap_terms = concepts + entities
             lexical_overlap = self._lexical_overlap(
                 text=content,
                 title=title,
-                concepts=concepts,
+                concepts=overlap_terms,
                 query_terms=question_terms,
             )
             topic_lexical_overlap = self._lexical_overlap(
                 text=content,
                 title=title,
-                concepts=concepts,
+                concepts=overlap_terms,
                 query_terms=topic_terms,
             )
             phrase_overlap = self._phrase_overlap(
@@ -3110,7 +3244,7 @@ class KnowledgeSpaceService:
             target_term_overlap, target_phrase_overlap = self._target_overlap(
                 text=content,
                 title=title,
-                concepts=concepts,
+                concepts=overlap_terms,
                 target_terms=target_terms,
                 target_phrases=target_phrases,
             )
