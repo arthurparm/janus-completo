@@ -113,3 +113,32 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-12)
+
+### 11. Comportamento Fail-Open Silencioso em Conexões
+**Descrição:** Observou-se no componente de mensageria que, quando não é possível se conectar ao broker (RabbitMQ), a falha é silenciosa e o sistema entra em modo "offline" de forma imediata. O log gerado classifica o evento primário como ERROR, mas logo em seguida silencia e apenas segue offline sem alertas restritivos/visíveis de degradação massiva de funcionalidade na interface.
+**Evidências:**
+- `backend/app/core/infrastructure/message_broker.py`: No bloco de fallback da função `connect()`, erros no `localhost` também são suprimidos (`except Exception as e2: logger.warning(..., exc_info=e2); self._connection = None`).
+
+**Próximos passos:**
+- Refatorar a captura da exceção para propagar ou acionar um alerta no painel de observabilidade.
+- Adicionar o item SG-030 no `melhorias-possiveis.md`.
+
+### 12. Vulnerabilidades Mapeadas de Código Fonte (XML)
+**Descrição:** Foi verificado que a rotina responsável pelo processamento de arquivos DOCX carrega os conteúdos XML de forma insegura. O uso nativo do ElementTree com conteúdos originários de uploads permite falhas como a injeção XXE (XML External Entity).
+**Evidências:**
+- `backend/app/services/document_parser_service.py`: Método `_parse_docx(self, data: bytes) -> str` usa internamente `from xml.etree import ElementTree as ET` e `root = ET.fromstring(xml)`. Mapeado no Bandit (B314).
+
+**Próximos passos:**
+- Adicionar a biblioteca `defusedxml` nas dependências e modificar o parseamento `ET.fromstring(xml)` em `document_parser_service.py`.
+- Documentar item SG-031 no `melhorias-possiveis.md`.
+
+### 13. Isolamento de Pipeline e Testes sem Pytest
+**Descrição:** O repositório contém alguns scripts na pasta `tooling/` que deveriam ser englobados pela pipeline tradicional de validação contínua (CI). Esses scripts não fazem parte da suíte `qa/` no formato validado pelo `pytest`, causando falsa sensação de cobertura ou falha silenciosa.
+**Evidências:**
+- `tooling/test_debate_system.py`: Escrito com execução crua em modo script (via `asyncio.run(main())`) em vez de utilizar as declarações `@pytest.mark.asyncio`.
+
+**Próximos passos:**
+- Migrar esses scripts para a suite `qa/` convertendo-os em unit ou end-to-end (e2e) via Pytest.
+- Documentar item DX-013 no `melhorias-possiveis.md`.

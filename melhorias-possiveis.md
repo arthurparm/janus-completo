@@ -109,6 +109,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Corrigir falha silenciosa (fail-open) sem alerta em falhas de conexao no message_broker.py | P1 | S | aberto |
+| SG-031 | Substituir xml.etree.ElementTree por defusedxml no document_parser_service.py (vulnerabilidade XML) | P1 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -186,6 +188,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
 | DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | concluido (2026-03-03) |
+| DX-013 | Integrar scripts de testes isolados em tooling/ na pipeline do Pytest (qa/) para CI | P2 | M | aberto |
 
 ---
 
@@ -714,6 +717,39 @@ Copiar e preencher:
 - Dependencias: Nenhuma.
 - Prioridade: P0
 - Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Message Broker com comportamento Fail-Open Silencioso
+- Problema atual: O `app.core.infrastructure.message_broker` exibe um comportamento silent fail-open quando ocorrem falhas de conexão com RabbitMQ (ex: `[Errno 111] Connection refused`), rebaixando o sistema para modo offline sem emitir um alerta claro.
+- Solucao proposta: Implementar uma notificação ou métrica de alerta explícita antes de aceitar o estado offline, ou definir um threshold de falhas críticas.
+- Impacto esperado: Maior visibilidade operacional sobre quedas de mensageria e interrupções assíncronas.
+- Riscos: Aumento do volume de logs/alertas (noise) em caso de instabilidade pontual.
+- Dependencias: Módulo de alertas e métricas.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade a ataques XML no parser de documentos
+- Problema atual: O `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para extrair texto de arquivos DOCX, o que é suscetível a ataques de injeção XML (XXE, billion laughs).
+- Solucao proposta: Substituir a biblioteca padrão `xml.etree.ElementTree` pelo pacote `defusedxml`.
+- Impacto esperado: Proteção imediata contra ataques baseados na manipulação de payloads XML.
+- Riscos: Nenhuma falha esperada, sendo `defusedxml` um substituto direto.
+- Dependencias: Adição de `defusedxml` no `requirements.txt`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Scripts de teste isolados contornando a CI (Pytest)
+- Problema atual: Scripts de validação na pasta `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam verificações de forma isolada, não integrando com a suíte `qa/` padrão do Pytest.
+- Solucao proposta: Refatorar esses scripts como testes válidos do Pytest ou agrupá-los em um step da pipeline oficial para garantir validação automatizada de regressões.
+- Impacto esperado: Maior cobertura de código automatizada e garantia de não-regressão em componentes críticos.
+- Riscos: Aumento no tempo de execução da CI e possíveis quebras iniciais devido a dependências ou teardowns incorretos.
+- Dependencias: Pipeline de CI do repositório.
+- Prioridade: P2
+- Esforco: M
 - Dono: a definir
 - Status: aberto
 
