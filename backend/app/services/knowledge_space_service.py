@@ -2411,6 +2411,7 @@ class KnowledgeSpaceService:
         limit: int,
         active_doc_ids: set[str] | None,
         selected_sections: list[dict[str, Any]] | None = None,
+        support_plan: dict[str, Any] | None = None,
     ) -> list[Any]:
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
@@ -2418,37 +2419,64 @@ class KnowledgeSpaceService:
         points: list[Any] = []
         if query_profile.get("asks_for_task_execution") and selected_sections:
             seen_point_ids: set[str] = set()
-            for section in selected_sections[: max(2, min(6, int(limit)) )]:
+            role_to_doc_ids: dict[str, list[str]] = defaultdict(list)
+            for section in selected_sections:
                 doc_id = str(section.get("doc_id") or "").strip()
                 doc_role = str(section.get("doc_role") or "base").strip().lower() or "base"
-                section_title = str(section.get("title") or "").strip()
-                section_content = self._trim_text(str(section.get("content") or ""), max_chars=280)
-                targeted_query = f"{question}\n{section_title}\n{section_content}".strip()
-                vector = await aembed_text(targeted_query)
-                result = await client.query_points(
-                    collection_name=collection_name,
-                    query=vector,
-                    limit=3 if doc_role == "base" else 2,
-                    with_payload=True,
-                    query_filter=models.Filter(
-                        must=[
-                            models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-                            models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
-                            models.FieldCondition(
-                                key="metadata.knowledge_space_id",
-                                match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
-                            ),
-                            models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
-                        ]
-                    ),
-                )
-                for point in list(getattr(result, "points", result) or []):
-                    point_id = str(getattr(point, "id", "") or "")
-                    if point_id and point_id in seen_point_ids:
-                        continue
-                    points.append(point)
-                    if point_id:
-                        seen_point_ids.add(point_id)
+                if doc_id and doc_id not in role_to_doc_ids[doc_role]:
+                    role_to_doc_ids[doc_role].append(doc_id)
+            planned_steps = list((support_plan or {}).get("steps") or [])
+            if not planned_steps:
+                planned_steps = self._build_fallback_operational_plan(selected_sections=selected_sections)
+            for step in planned_steps[: max(3, min(8, int(limit) + 2))]:
+                role_hint = str(step.get("doc_role_hint") or "either").strip().lower() or "either"
+                label = str(step.get("label") or "").strip()
+                step_query = str(step.get("query") or "").strip()
+                if not step_query:
+                    continue
+                target_doc_ids: list[str] = []
+                if role_hint in {"base", "supplement", "reference", "appendix"}:
+                    target_doc_ids.extend(role_to_doc_ids.get(role_hint, []))
+                if not target_doc_ids:
+                    for section in selected_sections[: max(2, min(6, int(limit)))]:
+                        doc_id = str(section.get("doc_id") or "").strip()
+                        if doc_id and doc_id not in target_doc_ids:
+                            target_doc_ids.append(doc_id)
+                for doc_id in target_doc_ids[:2]:
+                    doc_role = next(
+                        (
+                            str(section.get("doc_role") or "base").strip().lower() or "base"
+                            for section in selected_sections
+                            if str(section.get("doc_id") or "").strip() == doc_id
+                        ),
+                        "base",
+                    )
+                    targeted_query = f"{question}\n{label}\n{step_query}".strip()
+                    vector = await aembed_text(targeted_query)
+                    result = await client.query_points(
+                        collection_name=collection_name,
+                        query=vector,
+                        limit=3 if doc_role == "base" else 2,
+                        with_payload=True,
+                        query_filter=models.Filter(
+                            must=[
+                                models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
+                                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                                models.FieldCondition(
+                                    key="metadata.knowledge_space_id",
+                                    match=models.MatchValue(value=str(knowledge_space["knowledge_space_id"])),
+                                ),
+                                models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
+                            ]
+                        ),
+                    )
+                    for point in list(getattr(result, "points", result) or []):
+                        point_id = str(getattr(point, "id", "") or "")
+                        if point_id and point_id in seen_point_ids:
+                            continue
+                        points.append(point)
+                        if point_id:
+                            seen_point_ids.add(point_id)
         else:
             vector = await aembed_text(question)
             result = await client.query_points(
@@ -2493,6 +2521,129 @@ class KnowledgeSpaceService:
             limit=max(3, min(8, int(limit) + 2)),
         )
 
+    def _build_fallback_operational_plan(
+        self,
+        *,
+        selected_sections: list[dict[str, Any]],
+    ) -> list[dict[str, str]]:
+        steps: list[dict[str, str]] = []
+        seen_queries: set[str] = set()
+        for section in selected_sections:
+            title = str(section.get("title") or "").strip()
+            concepts = [str(item).strip() for item in (section.get("concepts") or []) if str(item).strip()]
+            query = " ".join(concepts[:4]).strip() or title
+            if not query:
+                continue
+            normalized = self._normalize_search_text(query)
+            if normalized in seen_queries:
+                continue
+            seen_queries.add(normalized)
+            steps.append(
+                {
+                    "label": title or "Passo operacional",
+                    "query": query,
+                    "doc_role_hint": str(section.get("doc_role") or "either").strip().lower() or "either",
+                }
+            )
+        return steps
+
+    def _build_operational_plan_prompt(
+        self,
+        *,
+        question: str,
+        selected: list[dict[str, Any]],
+        knowledge_space: dict[str, Any],
+    ) -> str:
+        canonical_evidence: list[str] = []
+        for index, item in enumerate(selected[:6], start=1):
+            concepts = ", ".join(str(concept) for concept in (item.get("concepts") or [])[:6]) or "nenhum"
+            canonical_evidence.append(
+                (
+                    f"[{index}] role={item.get('doc_role') or 'base'} "
+                    f"title={item.get('title') or 'Sem título'} "
+                    f"applies_to={','.join(item.get('applies_to') or []) or 'general_rules'} "
+                    f"concepts={concepts} "
+                    f"content={self._trim_text(str(item.get('content') or ''), max_chars=420)}"
+                )
+            )
+        return (
+            "Você está planejando uma execução grounded a partir de conhecimento documental.\n"
+            "Responda APENAS com JSON válido.\n\n"
+            f"Knowledge space: {knowledge_space.get('name') or 'Knowledge Space'}\n"
+            f"Pergunta do usuário: {question}\n\n"
+            "Seções canônicas disponíveis:\n"
+            f"{chr(10).join(canonical_evidence) or 'Nenhuma'}\n\n"
+            "Gere um plano compacto para buscar evidências suficientes para executar a tarefa.\n"
+            "Diferencie:\n"
+            "- user_decisions: escolhas que o usuário precisa fazer entre opções válidas.\n"
+            "- source_gaps: informação realmente ausente nas evidências disponíveis.\n"
+            "Não trate listas completas como ausentes se a tarefa só exige que o usuário escolha uma opção.\n"
+            "Prefira consultas curtas e específicas por etapa/decisão. Não invente fatos nem regras.\n\n"
+            "Formato:\n"
+            "{\n"
+            '  "steps": [\n'
+            '    {"label": "nome curto da etapa", "query": "consulta objetiva para recuperar evidência", "doc_role_hint": "base|supplement|either"}\n'
+            "  ],\n"
+            '  "user_decisions": ["decisão pendente 1"],\n'
+            '  "source_gaps": ["lacuna documental real 1"]\n'
+            "}\n"
+        )
+
+    async def _plan_operational_support(
+        self,
+        *,
+        question: str,
+        selected: list[dict[str, Any]],
+        knowledge_space: dict[str, Any],
+    ) -> dict[str, Any]:
+        fallback = {
+            "steps": self._build_fallback_operational_plan(selected_sections=selected),
+            "user_decisions": [],
+            "source_gaps": [],
+        }
+        if self._llm is None or not selected:
+            return fallback
+        prompt = self._build_operational_plan_prompt(
+            question=question,
+            selected=selected,
+            knowledge_space=knowledge_space,
+        )
+        try:
+            result = await self._llm.invoke_llm(
+                prompt=prompt,
+                role=ModelRole.ORCHESTRATOR,
+                priority=ModelPriority.LOCAL_ONLY,
+                timeout_seconds=35,
+                task_type="knowledge_space_task_planning",
+                complexity="medium",
+                policy_overrides=self._build_ollama_only_policy(
+                    model=getattr(settings, "OLLAMA_ORCHESTRATOR_MODEL", "gpt-oss:20b")
+                ),
+            )
+            parsed = parse_json_lenient(str(result.get("response") or ""))
+        except Exception:
+            return fallback
+        if not isinstance(parsed, dict):
+            return fallback
+        steps = [
+            {
+                "label": str(item.get("label") or "").strip(),
+                "query": str(item.get("query") or "").strip(),
+                "doc_role_hint": str(item.get("doc_role_hint") or "either").strip().lower() or "either",
+            }
+            for item in (parsed.get("steps") or [])
+            if isinstance(item, dict) and str(item.get("query") or "").strip()
+        ]
+        if not steps:
+            steps = fallback["steps"]
+        return {
+            "steps": steps,
+            "user_decisions": [
+                str(item).strip() for item in (parsed.get("user_decisions") or []) if str(item).strip()
+            ],
+            "source_gaps": [str(item).strip() for item in (parsed.get("source_gaps") or []) if str(item).strip()],
+        }
+
     def _build_operational_prompt(
         self,
         *,
@@ -2501,6 +2652,7 @@ class KnowledgeSpaceService:
         selected: list[dict[str, Any]],
         support_points: list[Any],
         knowledge_space: dict[str, Any],
+        support_plan: dict[str, Any] | None = None,
     ) -> str:
         canonical_evidence: list[str] = []
         for index, item in enumerate(selected, start=1):
@@ -2513,7 +2665,7 @@ class KnowledgeSpaceService:
                 )
             )
         support_evidence: list[str] = []
-        for index, point in enumerate(support_points[:6], start=1):
+        for index, point in enumerate(support_points[:10], start=1):
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
             support_evidence.append(
@@ -2524,6 +2676,16 @@ class KnowledgeSpaceService:
                     f"content={self._trim_text(str(payload.get('content') or ''), max_chars=420)}"
                 )
             )
+        plan_lines: list[str] = []
+        for index, step in enumerate((support_plan or {}).get("steps") or [], start=1):
+            plan_lines.append(
+                f"[{index}] role_hint={step.get('doc_role_hint') or 'either'} "
+                f"label={step.get('label') or 'passo'} query={step.get('query') or ''}"
+            )
+        pending_user_decisions = [
+            str(item).strip() for item in ((support_plan or {}).get("user_decisions") or []) if str(item).strip()
+        ]
+        source_gaps = [str(item).strip() for item in ((support_plan or {}).get("source_gaps") or []) if str(item).strip()]
         return (
             "Você é um executor de tarefas ancorado em evidências.\n"
             "Use somente as evidências fornecidas abaixo para executar a tarefa do usuário.\n"
@@ -2535,12 +2697,20 @@ class KnowledgeSpaceService:
             f"Pergunta do usuário: {question}\n\n"
             "Evidências canônicas:\n"
             f"{chr(10).join(canonical_evidence) or 'Nenhuma'}\n\n"
+            "Plano de apoio:\n"
+            f"{chr(10).join(plan_lines) or 'Nenhum'}\n\n"
             "Evidências de apoio:\n"
             f"{chr(10).join(support_evidence) or 'Nenhuma'}\n\n"
+            "Decisões do usuário ainda pendentes:\n"
+            f"{chr(10).join(f'- {item}' for item in pending_user_decisions) or 'Nenhuma previamente detectada'}\n\n"
+            "Lacunas documentais detectadas:\n"
+            f"{chr(10).join(f'- {item}' for item in source_gaps) or 'Nenhuma previamente detectada'}\n\n"
             "Resposta esperada:\n"
-            "1. Execute a tarefa de forma direta.\n"
-            "2. Explique as escolhas ou passos usando somente a evidência disponível.\n"
-            "3. Se houver lacunas, finalize com 'Informações faltando:' seguido da lista objetiva.\n"
+            "1. Execute a tarefa de forma direta sempre que a evidência permitir.\n"
+            "2. Diferencie claramente 'Decisões pendentes do usuário' de 'Lacunas da fonte'.\n"
+            "3. Não diga que listas inteiras estão faltando se a evidência já mostra opções válidas; nesse caso, peça apenas a escolha necessária.\n"
+            "4. Explique as escolhas ou passos usando somente a evidência disponível.\n"
+            "5. Se houver lacunas, finalize com as seções 'Decisões pendentes do usuário:' e/ou 'Lacunas da fonte:' seguidas de listas objetivas.\n"
         )
 
     async def _render_operational_answer(
@@ -2557,6 +2727,11 @@ class KnowledgeSpaceService:
         fallback = self._render_canonical_answer(selected, answer_strategy=retrieval_strategy)
         if self._llm is None:
             return fallback
+        support_plan = await self._plan_operational_support(
+            question=question,
+            selected=selected,
+            knowledge_space=knowledge_space,
+        )
         support_points = await self._collect_operational_support_points(
             knowledge_space=knowledge_space,
             user_id=user_id,
@@ -2564,6 +2739,7 @@ class KnowledgeSpaceService:
             limit=limit,
             active_doc_ids=active_doc_ids,
             selected_sections=selected,
+            support_plan=support_plan,
         )
         prompt = self._build_operational_prompt(
             question=question,
@@ -2571,6 +2747,7 @@ class KnowledgeSpaceService:
             selected=selected,
             support_points=support_points,
             knowledge_space=knowledge_space,
+            support_plan=support_plan,
         )
         try:
             result = await self._llm.invoke_llm(

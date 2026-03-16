@@ -1082,6 +1082,60 @@ def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
     assert captured["policy_overrides"]["disable_response_cache"] is True
 
 
+def test_plan_operational_support_uses_ollama_and_distinguishes_decisions_from_gaps():
+    captured = {}
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_invoke_llm(**kwargs):
+        captured.update(kwargs)
+        return {
+            "response": (
+                '{'
+                '"steps":['
+                '{"label":"atributos","query":"atributos criacao personagem","doc_role_hint":"base"},'
+                '{"label":"opcoes extras","query":"novas racas origens classes variantes","doc_role_hint":"supplement"}'
+                '],'
+                '"user_decisions":["Escolher raça e classe entre as opções válidas."],'
+                '"source_gaps":["Nenhuma lacuna documental forte detectada."]'
+                '}'
+            )
+        }
+
+    service._llm.invoke_llm = fake_invoke_llm
+
+    result = asyncio.run(
+        service._plan_operational_support(
+            question="Crie uma ficha completa usando o livro base e o suplemento.",
+            selected=[
+                {
+                    "doc_role": "base",
+                    "title": "Capítulo Um",
+                    "content": "Criação de personagem, atributos, raça, classe e origem.",
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "applies_to": ["workflow", "base_creation"],
+                },
+                {
+                    "doc_role": "supplement",
+                    "title": "Capítulo 1: Campeões de Arton",
+                    "content": "Novas raças, origens e classes variantes.",
+                    "concepts": ["novas raças", "origens", "classes variantes"],
+                    "applies_to": ["workflow", "character_options"],
+                },
+            ],
+            knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+        )
+    )
+
+    assert [step["label"] for step in result["steps"]] == ["atributos", "opcoes extras"]
+    assert result["user_decisions"] == ["Escolher raça e classe entre as opções válidas."]
+    assert result["source_gaps"] == ["Nenhuma lacuna documental forte detectada."]
+    assert captured["priority"].value == "local_only"
+    assert captured["policy_overrides"]["provider"] == "ollama"
+    assert captured["policy_overrides"]["strict_provider"] is True
+    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["policy_overrides"]["disable_response_cache"] is True
+
+
 def test_query_canonical_returns_task_strategy_for_execution_queries():
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 
