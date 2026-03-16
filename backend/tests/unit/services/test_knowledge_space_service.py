@@ -289,6 +289,19 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     assert all(item.id != "supp-noisy" for item in selected[:1])
 
 
+def test_build_query_profile_separates_source_and_topic_terms():
+    service = KnowledgeSpaceService()
+
+    profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
+
+    assert "herois" in profile["source_terms"]
+    assert "arton" in profile["source_terms"]
+    assert "novas" in profile["topic_terms"]
+    assert "racas" in profile["topic_terms"]
+    assert "herois de arton" not in profile["topic_phrases"]
+    assert "novas racas" in profile["topic_phrases"]
+
+
 def test_phrase_overlap_handles_ocr_split_tokens():
     service = KnowledgeSpaceService()
 
@@ -306,6 +319,15 @@ def test_low_trust_sequence_title_penalizes_marketing_blocks():
 
     assert service._is_low_trust_sequence_title("35 ORIGENS. Decida o passado de") is True
     assert service._is_low_trust_sequence_title("Capítulo Um") is False
+
+
+def test_editorial_content_is_detected_as_noise():
+    service = KnowledgeSpaceService()
+
+    assert service._looks_like_editorial_content(
+        title="America em 2008) e Tormenta",
+        body="É editor executivo da revista Dragão Brasil e editor sênior da Jambô Editora. Leonel Caldela romancista e RPGista.",
+    ) is True
 
 
 def test_sequence_anchor_identifies_base_and_supplement_chapters():
@@ -330,6 +352,118 @@ def test_looks_like_specific_option_chunk_identifies_itemized_rules():
         title="Equipamento Real",
         content="Pré-requisito: Int 3. • Engenhoqueiro. • Farmacêutico.",
     ) is True
+
+
+def test_creation_foundation_signal_rejects_editorial_and_accepts_character_creation():
+    service = KnowledgeSpaceService()
+
+    assert service._has_creation_foundation_signal(
+        title="Capítulo Um",
+        content="Este capítulo traz a criação de personagem com atributos, raça, classe e origem.",
+        doc_role="base",
+    ) is True
+    assert service._has_creation_foundation_signal(
+        title="America em 2008) e Tormenta",
+        content="Leonel Caldela é editor executivo da revista Dragão Brasil e editor sênior da Jambô Editora.",
+        doc_role="base",
+    ) is False
+
+
+def test_filter_points_by_doc_ids_drops_stale_space_points():
+    service = KnowledgeSpaceService()
+    points = [
+        SimpleNamespace(payload={"metadata": {"doc_id": "doc-current"}}),
+        SimpleNamespace(payload={"metadata": {"doc_id": "doc-stale"}}),
+    ]
+
+    filtered = service._filter_points_by_doc_ids(points, active_doc_ids={"doc-current"})
+
+    assert len(filtered) == 1
+    assert filtered[0].payload["metadata"]["doc_id"] == "doc-current"
+
+
+def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequence():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+    )
+    points = [
+        SimpleNamespace(
+            id="base-editorial",
+            score=0.92,
+            payload={
+                "content": "O Despertar Rubro (2023), a primeira produção audiovisual do cenário. É editor executivo da revista Dragão Brasil e editor sênior da Jambô Editora. Leonel Caldela romancista e RPGista.",
+                "metadata": {
+                    "section_id": "base-editorial",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "optional_rules",
+                    "section_order": 1,
+                    "section_title": "America em 2008) e Tormenta",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["personagem"],
+                    "usefulness_score": 0.82,
+                    "heading_quality_score": 0.62,
+                    "content_density_score": 0.71,
+                    "noise_score": 0.12,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="base-good",
+            score=0.71,
+            payload={
+                "content": "Capítulo de criação de personagem: primeiro defina atributos, depois escolha raça, classe e origem.",
+                "metadata": {
+                    "section_id": "base-good",
+                    "doc_id": "base-doc",
+                    "doc_role": "base",
+                    "section_role": "core_rules",
+                    "section_order": 2,
+                    "section_title": "Capítulo Um",
+                    "applies_to": ["workflow", "base_creation"],
+                    "concepts": ["atributos", "raça", "classe", "origem"],
+                    "usefulness_score": 0.86,
+                    "heading_quality_score": 0.82,
+                    "content_density_score": 0.79,
+                    "noise_score": 0.08,
+                },
+            },
+        ),
+        SimpleNamespace(
+            id="supp-good",
+            score=0.65,
+            payload={
+                "content": "Heróis de Arton acrescenta novas opções para construir o personagem, com novas raças e classes variantes.",
+                "metadata": {
+                    "section_id": "supp-good",
+                    "doc_id": "supp-doc",
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_order": 1,
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "concepts": ["novas opções", "raças"],
+                    "usefulness_score": 0.84,
+                    "heading_quality_score": 0.86,
+                    "content_density_score": 0.76,
+                    "noise_score": 0.07,
+                },
+            },
+        ),
+    ]
+
+    selected = service._select_canonical_candidates(
+        points=points,
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=2,
+    )
+
+    assert len(selected) == 2
+    assert selected[0]["section_id"] == "base-good"
+    assert all(item["section_id"] != "base-editorial" for item in selected)
 
 
 def test_upsert_points_resilient_splits_large_batches_on_failure():
