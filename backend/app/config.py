@@ -184,9 +184,9 @@ class AppSettings(BaseSettings):
     GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
     GEMINI_MODELS: list[str] = ["gemini-2.5-flash"]
     OLLAMA_HOST: str = "http://ollama:11434"
-    OLLAMA_ORCHESTRATOR_MODEL: str = "qwen2.5:14b"
-    OLLAMA_CODER_MODEL: str = "qwen2.5-coder:14b"
-    OLLAMA_CURATOR_MODEL: str = "qwen2.5:14b"
+    OLLAMA_ORCHESTRATOR_MODEL: str = "gpt-oss:20b"
+    OLLAMA_CODER_MODEL: str = "deepseek-coder:6.7b"
+    OLLAMA_CURATOR_MODEL: str = "ministral-3:14b"
     DEEPSEEK_API_KEY: SecretStr | None = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL_NAME: str = "deepseek-chat"
