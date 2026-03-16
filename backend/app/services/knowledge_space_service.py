@@ -569,7 +569,7 @@ class KnowledgeSpaceService:
         if query_profile.get("asks_for_task_execution"):
             canonical_timeout_seconds = max(
                 canonical_timeout_seconds,
-                float(os.getenv("KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS", "75") or 75),
+                float(os.getenv("KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS", "120") or 120),
             )
         has_canonical_metrics = bool(
             int(space.get("canonical_frames_total") or 0) > 0
@@ -2651,13 +2651,13 @@ class KnowledgeSpaceService:
         try:
             result = await self._llm.invoke_llm(
                 prompt=prompt,
-                role=ModelRole.ORCHESTRATOR,
+                role=ModelRole.KNOWLEDGE_CURATOR,
                 priority=ModelPriority.LOCAL_ONLY,
-                timeout_seconds=35,
+                timeout_seconds=24,
                 task_type="knowledge_space_task_planning",
-                complexity="medium",
+                complexity="low",
                 policy_overrides=self._build_ollama_only_policy(
-                    model=getattr(settings, "OLLAMA_ORCHESTRATOR_MODEL", "gpt-oss:20b")
+                    model=getattr(settings, "OLLAMA_CURATOR_MODEL", "ministral-3:14b")
                 ),
             )
             parsed = parse_json_lenient(str(result.get("response") or ""))
