@@ -2898,6 +2898,11 @@ class KnowledgeSpaceService:
             answer_strategy=retrieval_strategy,
             limit=limit,
         )
+        selected = self._prune_target_constrained_task_sections(
+            selected=selected,
+            query_profile=query_profile,
+            limit=limit,
+        )
         citations = [self._map_citation(item["point"], snippet_limit=320) for item in selected]
         confidence = self._average_score([item["point"] for item in selected])
         if query_profile.get("asks_for_task_execution") and selected:
@@ -3663,6 +3668,13 @@ class KnowledgeSpaceService:
                 target_terms=target_terms,
                 target_phrases=target_phrases,
             )
+            text_target_term_overlap, text_target_phrase_overlap = self._target_overlap(
+                text=content,
+                title=title,
+                concepts=[],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
             matched_entities, conflicting_entities = self._count_conflicting_entities(
                 entities=entities,
                 target_terms=target_terms,
@@ -3828,6 +3840,8 @@ class KnowledgeSpaceService:
                     "topic_phrase_overlap": topic_phrase_overlap,
                     "target_term_overlap": target_term_overlap,
                     "target_phrase_overlap": target_phrase_overlap,
+                    "text_target_term_overlap": text_target_term_overlap,
+                    "text_target_phrase_overlap": text_target_phrase_overlap,
                     "matched_entities": matched_entities,
                     "conflicting_entities": conflicting_entities,
                     "rerank_score": rerank_score,
@@ -4041,6 +4055,76 @@ class KnowledgeSpaceService:
                         selected = selected[: max(1, int(limit)) - 1] + [item]
                     break
         return selected
+
+    def _prune_target_constrained_task_sections(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        query_profile: dict[str, Any],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not query_profile.get("asks_for_task_execution") or not query_profile.get("has_explicit_target"):
+            return selected[: max(1, int(limit))]
+        pruned: list[dict[str, Any]] = []
+        for item in selected:
+            doc_role = str(item.get("doc_role") or "base").strip().lower() or "base"
+            title = str(item.get("title") or "")
+            content = str(item.get("content") or "")
+            applies_to = {str(value).strip().lower() for value in (item.get("applies_to") or []) if str(value).strip()}
+            direct_text_match = bool(
+                int(item.get("text_target_term_overlap") or 0) > 0
+                or int(item.get("text_target_phrase_overlap") or 0) > 0
+            )
+            direct_entity_match = bool(int(item.get("matched_entities") or 0) > 0)
+            structural_base = bool(
+                doc_role == "base"
+                and (
+                    bool(item.get("is_base_creation_foundation"))
+                    or {"workflow", "base_creation"} & applies_to
+                )
+            )
+            structural_supplement = bool(
+                doc_role == "supplement"
+                and (
+                    bool(item.get("is_supplement_creation_extension"))
+                    or self._is_sequence_anchor(title=title, content=content, doc_role="supplement")
+                )
+            )
+            if doc_role == "supplement":
+                if self._looks_like_specific_option_chunk(title=title, content=content) and not direct_text_match:
+                    continue
+                if not direct_text_match and not structural_supplement:
+                    continue
+            elif doc_role == "base":
+                if not direct_text_match and not structural_base and int(item.get("conflicting_entities") or 0) > 0:
+                    continue
+            if direct_text_match or direct_entity_match or structural_base or structural_supplement:
+                pruned.append(item)
+        if not pruned:
+            return selected[: max(1, int(limit))]
+        if query_profile.get("asks_for_supplement"):
+            chosen_supplement: list[dict[str, Any]] = []
+            for item in pruned:
+                if str(item.get("doc_role") or "") != "supplement":
+                    continue
+                if bool(
+                    int(item.get("text_target_term_overlap") or 0) > 0
+                    or int(item.get("text_target_phrase_overlap") or 0) > 0
+                ):
+                    chosen_supplement = [item]
+                    break
+            if not chosen_supplement:
+                for item in pruned:
+                    if str(item.get("doc_role") or "") != "supplement":
+                        continue
+                    chosen_supplement = [item]
+                    break
+            pruned = [
+                item
+                for item in pruned
+                if str(item.get("doc_role") or "") != "supplement" or item in chosen_supplement
+            ]
+        return pruned[: max(1, int(limit))]
 
     def _build_canonical_gaps(
         self,

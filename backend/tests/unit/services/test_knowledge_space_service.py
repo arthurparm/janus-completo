@@ -1474,6 +1474,61 @@ def test_select_canonical_candidates_skips_off_target_task_sections():
     assert not any("Manto de Batalha" in content for content in contents)
 
 
+def test_prune_target_constrained_task_sections_keeps_only_structural_supplement_when_target_is_explicit():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton."
+    )
+
+    selected = [
+        {
+            "doc_role": "base",
+            "title": "Capítulo Um",
+            "content": "Construção de personagens com atributos, raça, classe e origem.",
+            "applies_to": ["workflow", "base_creation"],
+            "is_base_creation_foundation": True,
+            "is_supplement_creation_extension": False,
+            "conflicting_entities": 0,
+            "matched_entities": 0,
+            "text_target_term_overlap": 0,
+            "text_target_phrase_overlap": 0,
+        },
+        {
+            "doc_role": "supplement",
+            "title": "Capítulo 1: Campeões de Arton",
+            "content": "Novas opções para construir seu personagem, com variantes e poderes adicionais.",
+            "applies_to": ["workflow", "character_options"],
+            "is_base_creation_foundation": False,
+            "is_supplement_creation_extension": True,
+            "conflicting_entities": 1,
+            "matched_entities": 0,
+            "text_target_term_overlap": 0,
+            "text_target_phrase_overlap": 0,
+        },
+        {
+            "doc_role": "supplement",
+            "title": "10 pontos de redução de dano do alvo. e",
+            "content": "Manto de Batalha você aprende e pode lançar Vestimenta da Fé. Pré-requisito: 5º nível de paladino.",
+            "applies_to": ["character_options"],
+            "is_base_creation_foundation": False,
+            "is_supplement_creation_extension": False,
+            "conflicting_entities": 2,
+            "matched_entities": 1,
+            "text_target_term_overlap": 0,
+            "text_target_phrase_overlap": 0,
+        },
+    ]
+
+    result = service._prune_target_constrained_task_sections(
+        selected=selected,
+        query_profile=query_profile,
+        limit=6,
+    )
+
+    titles = [item["title"] for item in result]
+    assert titles == ["Capítulo Um", "Capítulo 1: Campeões de Arton"]
+
+
 def test_render_operational_answer_falls_back_when_llm_response_is_low_information():
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 
