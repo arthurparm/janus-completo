@@ -2950,6 +2950,17 @@ class KnowledgeSpaceService:
     ) -> bool:
         if query_profile.get("expects_exact_evidence"):
             return point_type == "knowledge_evidence_anchor"
+        if (
+            answer_strategy == "sequence"
+            and query_profile.get("asks_for_task_execution")
+            and query_profile.get("asks_for_supplement")
+            and query_profile.get("has_explicit_target")
+        ):
+            return point_type in {
+                "knowledge_canonical_summary",
+                "knowledge_flow_step",
+                "knowledge_comparison_frame",
+            }
         if answer_strategy == "sequence":
             return point_type == "knowledge_flow_step"
         if answer_strategy == "comparative" and query_profile.get("asks_for_supplement"):
