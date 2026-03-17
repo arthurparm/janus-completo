@@ -215,6 +215,202 @@ class MessageOrchestrationService:
         return None
 
     @staticmethod
+    def _tokenize_source_title(value: str | None) -> set[str]:
+        text = re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower())
+        return {
+            token
+            for token in text.split()
+            if len(token) >= 4 and token not in {"guide", "manual", "book", "livro", "guia"}
+        }
+
+    @staticmethod
+    def _infer_manifest_source_role(row: dict[str, Any]) -> str:
+        explicit = str(row.get("doc_role") or "").strip().lower()
+        if explicit in {"base", "supplement", "reference", "appendix"}:
+            return explicit
+        title = " ".join(
+            filter(
+                None,
+                [
+                    str(row.get("file_name") or "").strip(),
+                    str(row.get("semantic_summary") or "").strip(),
+                ],
+            )
+        ).lower()
+        primary_patterns = (
+            r"\bcore\b",
+            r"\bbase\b",
+            r"\bbasic\b",
+            r"\bbasico\b",
+            r"\bbásico\b",
+            r"\bmain\b",
+            r"\bprincipal\b",
+            r"\bprimary\b",
+            r"\bprimary source\b",
+            r"\bhandbook\b",
+            r"\bmanual\b",
+            r"\blivro base\b",
+        )
+        secondary_patterns = (
+            r"\bsupplement\b",
+            r"\bsuplement",
+            r"\bcompanion\b",
+            r"\bappendix\b",
+            r"\bap[eê]ndice\b",
+            r"\baddendum\b",
+            r"\baddon\b",
+            r"\bextra\b",
+            r"\bbonus\b",
+            r"\bcomplement",
+            r"\boptional\b",
+            r"\bopcional\b",
+            r"\badvanced\b",
+            r"\bavancad",
+            r"\bextension\b",
+            r"\bexpansion\b",
+        )
+        if any(re.search(pattern, title) for pattern in primary_patterns):
+            return "base"
+        if any(re.search(pattern, title) for pattern in secondary_patterns):
+            return "supplement"
+        return "base"
+
+    @classmethod
+    def _manifest_primary_rank(cls, row: dict[str, Any]) -> tuple[int, int]:
+        role = cls._infer_manifest_source_role(row)
+        explicit = str(row.get("doc_role") or "").strip().lower()
+        role_score = {
+            "base": 3,
+            "reference": 2,
+            "appendix": 1,
+            "supplement": 0,
+        }.get(explicit or role, 1)
+        chunks = int(row.get("chunks_total") or row.get("chunks_indexed") or row.get("chunks") or 0)
+        return role_score, chunks
+
+    @classmethod
+    def _message_explicitly_requests_secondary_sources(
+        cls,
+        *,
+        message: str,
+        manifests: list[dict[str, Any]],
+        understanding: dict[str, Any] | None,
+    ) -> bool:
+        lowered = str(message or "").lower()
+        secondary_patterns = (
+            r"\bsuplement",
+            r"\bsupplement\b",
+            r"\bappendix\b",
+            r"\bap[eê]ndice\b",
+            r"\bcompanion\b",
+            r"\baddendum\b",
+            r"\bcomplement",
+            r"\bextra\b",
+            r"\bbonus\b",
+            r"\boptional\b",
+            r"\bopcional\b",
+            r"\badvanced\b",
+            r"\bavancad",
+            r"\bexpansion\b",
+        )
+        if any(re.search(pattern, lowered) for pattern in secondary_patterns):
+            return True
+        for row in manifests:
+            if cls._infer_manifest_source_role(row) != "supplement":
+                continue
+            tokens = cls._tokenize_source_title(str(row.get("file_name") or ""))
+            if tokens and sum(1 for token in tokens if token in lowered) >= 2:
+                return True
+        intent = str((understanding or {}).get("intent") or "").strip().lower()
+        return intent in {"comparison", "comparative"}
+
+    @staticmethod
+    def _message_prefers_primary_only(
+        *,
+        message: str,
+        understanding: dict[str, Any] | None,
+    ) -> bool:
+        intent = str((understanding or {}).get("intent") or "").strip().lower()
+        if intent in {"comparison", "comparative"}:
+            return False
+        lowered = str(message or "").lower()
+        operational_patterns = (
+            r"\bcrie\b",
+            r"\bcriar\b",
+            r"\bmonte\b",
+            r"\bmontar\b",
+            r"\bfa[cç]a\b",
+            r"\bfazer\b",
+            r"\bprepare\b",
+            r"\bpreparar\b",
+            r"\bresolva\b",
+            r"\bresolver\b",
+            r"\bcalcule\b",
+            r"\bcalcular\b",
+            r"\bexecute\b",
+            r"\bexecutar\b",
+            r"\bpreencha\b",
+            r"\bpreencher\b",
+            r"\bpasso a passo\b",
+            r"\bworkflow\b",
+            r"\bsequ[eê]ncia\b",
+            r"\bprocesso\b",
+            r"\bdo que precisa\b",
+        )
+        return any(re.search(pattern, lowered) for pattern in operational_patterns)
+
+    @classmethod
+    def _apply_document_source_policy(
+        cls,
+        *,
+        citations: list[dict[str, Any]],
+        manifests: list[dict[str, Any]],
+        message: str,
+        understanding: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        indexed = [
+            row
+            for row in manifests
+            if str(row.get("status") or "") == "indexed" and int(row.get("chunks_indexed") or 0) > 0
+        ]
+        if len(indexed) <= 1 or not citations:
+            return citations
+        explicit_secondary = cls._message_explicitly_requests_secondary_sources(
+            message=message,
+            manifests=indexed,
+            understanding=understanding,
+        )
+        prefer_primary_only = cls._message_prefers_primary_only(
+            message=message,
+            understanding=understanding,
+        )
+        manifest_by_doc_id = {
+            str(row.get("doc_id") or "").strip(): row
+            for row in indexed
+            if str(row.get("doc_id") or "").strip()
+        }
+        ordered_primary_docs = [
+            str(row.get("doc_id") or "").strip()
+            for row in sorted(indexed, key=cls._manifest_primary_rank, reverse=True)
+            if str(row.get("doc_id") or "").strip()
+        ]
+        if not ordered_primary_docs:
+            return citations
+        primary_doc_id = ordered_primary_docs[0]
+        if explicit_secondary:
+            return citations
+        if not prefer_primary_only:
+            return citations
+        primary_citations = [
+            citation for citation in citations if str(citation.get("doc_id") or "").strip() == primary_doc_id
+        ]
+        if primary_citations:
+            return primary_citations
+        # If there is no evidence in the primary source, keep the original ranking
+        # so the assistant can still answer from a secondary source instead of failing silently.
+        return citations
+
+    @staticmethod
     def _prefer_canonical_answer(message: str, understanding: dict[str, Any] | None) -> bool:
         intent = str((understanding or {}).get("intent") or "").strip().lower()
         if intent in {"file_reference", "study", "analysis"}:
@@ -870,6 +1066,12 @@ class MessageOrchestrationService:
                 conversation_id=conversation_id,
                 limit=6,
             )
+            citations = self._apply_document_source_policy(
+                citations=citations,
+                manifests=indexed_manifests,
+                message=message,
+                understanding=understanding,
+            )
             if indexed_doc_ids:
                 citations = [
                     citation
@@ -882,6 +1084,12 @@ class MessageOrchestrationService:
                         user_id=str(user_id) if user_id is not None else None,
                         conversation_id=conversation_id,
                         limit=6,
+                    )
+                    fallback_citations = self._apply_document_source_policy(
+                        citations=fallback_citations,
+                        manifests=indexed_manifests,
+                        message=message,
+                        understanding=understanding,
                     )
                     citations = [
                         citation

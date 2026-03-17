@@ -586,6 +586,134 @@ async def test_send_message_document_grounding_negative_omits_irrelevant_snippet
 
 
 @pytest.mark.asyncio
+async def test_send_message_document_grounding_prefers_primary_source_for_operational_requests(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"answer":"O manual principal descreve o procedimento.",'
+            '"supported_points":[{"statement":"O manual principal descreve a etapa central.","citation_ids":[1]}],'
+            '"missing_information":[]}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-core",
+                "status": "indexed",
+                "chunks_indexed": 50,
+                "chunks_total": 50,
+                "file_name": "Core Handbook.pdf",
+            },
+            {
+                "doc_id": "doc-companion",
+                "status": "indexed",
+                "chunks_indexed": 20,
+                "chunks_total": 20,
+                "file_name": "Companion Guide.pdf",
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-companion",
+                    "title": "Companion Guide.pdf",
+                    "file_path": "Companion Guide.pdf",
+                    "source_type": "document",
+                    "snippet": "Companion material with extra options.",
+                },
+                {
+                    "doc_id": "doc-core",
+                    "title": "Core Handbook.pdf",
+                    "file_path": "Core Handbook.pdf",
+                    "source_type": "document",
+                    "snippet": "Core handbook with the canonical step-by-step procedure.",
+                },
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Crie o procedimento passo a passo usando os documentos enviados",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert result["citations"]
+    assert {citation["doc_id"] for citation in result["citations"]} == {"doc-core"}
+    assert "manual principal" in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_send_message_document_grounding_allows_secondary_when_user_requests_it(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"answer":"O manual principal cobre a base e o Companion Guide adiciona opcoes extras.",'
+            '"supported_points":[{"statement":"O manual principal cobre a base.","citation_ids":[1]},'
+            '{"statement":"O Companion Guide adiciona opcoes extras.","citation_ids":[2]}],'
+            '"missing_information":[]}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-core",
+                "status": "indexed",
+                "chunks_indexed": 50,
+                "chunks_total": 50,
+                "file_name": "Core Handbook.pdf",
+            },
+            {
+                "doc_id": "doc-companion",
+                "status": "indexed",
+                "chunks_indexed": 20,
+                "chunks_total": 20,
+                "file_name": "Companion Guide.pdf",
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-companion",
+                    "title": "Companion Guide.pdf",
+                    "file_path": "Companion Guide.pdf",
+                    "source_type": "document",
+                    "snippet": "Companion material with extra options.",
+                },
+                {
+                    "doc_id": "doc-core",
+                    "title": "Core Handbook.pdf",
+                    "file_path": "Core Handbook.pdf",
+                    "source_type": "document",
+                    "snippet": "Core handbook with the canonical step-by-step procedure.",
+                },
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Crie o procedimento usando o Core Handbook e tambem o Companion Guide",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert result["citations"]
+    assert {citation["doc_id"] for citation in result["citations"]} == {"doc-core", "doc-companion"}
+
+
+@pytest.mark.asyncio
 async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkeypatch):
     repo = _FakeRepo()
     manifest_repo = _FakeManifestRepo(
