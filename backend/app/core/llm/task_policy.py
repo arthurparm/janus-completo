@@ -17,6 +17,85 @@ def _merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
+def infer_llm_task_profile(prompt: str | None) -> dict[str, Any]:
+    text = str(prompt or "").strip().lower()
+    if not text:
+        return {}
+
+    complexity = "low"
+    if len(text) > 2500 or any(
+        token in text
+        for token in (
+            "arquitetura",
+            "refator",
+            "migra",
+            "root cause",
+            "deep dive",
+            "step by step",
+            "passo a passo",
+            "incidente",
+            "debug",
+        )
+    ):
+        complexity = "high"
+    elif len(text) > 900 or any(
+        token in text
+        for token in ("analise", "compare", "comparar", "planej", "estrateg", "investig")
+    ):
+        complexity = "medium"
+
+    if any(
+        token in text
+        for token in ("security", "seguranca", "vulnerab", "threat", "exploit", "red team")
+    ):
+        return {
+            "task_type": "security_review",
+            "complexity": complexity,
+            "role": "security_auditor",
+            "priority": "high_quality",
+        }
+
+    if any(
+        token in text
+        for token in ("code", "codigo", "refactor", "bug", "stack trace", "typescript", "python", "sql")
+    ):
+        return {
+            "task_type": "code_task",
+            "complexity": complexity,
+            "role": "code_generator",
+            "priority": "high_quality" if complexity != "low" else "fast_and_cheap",
+        }
+
+    if any(
+        token in text
+        for token in ("document", "docs", "citation", "fonte", "knowledge", "manual", "pesquisa")
+    ):
+        return {
+            "task_type": "knowledge_task",
+            "complexity": complexity,
+            "role": "knowledge_curator",
+            "priority": "fast_and_cheap" if complexity == "low" else "high_quality",
+        }
+
+    if any(
+        token in text
+        for token in ("why", "por que", "analise", "compare", "comparar", "planeje", "plan")
+    ):
+        return {
+            "task_type": "reasoning_task",
+            "complexity": complexity,
+            "role": "reasoner",
+            "priority": "high_quality" if complexity != "low" else "fast_and_cheap",
+        }
+
+    return {
+        "task_type": "general_task",
+        "complexity": complexity,
+        "role": "orchestrator",
+        "priority": "fast_and_cheap" if complexity == "low" else "high_quality",
+    }
+
+
 def resolve_llm_task_policy(
     task_type: str | None = None,
     complexity: str | None = None,

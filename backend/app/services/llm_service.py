@@ -5,7 +5,7 @@ from fastapi import Request
 
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
-from app.core.llm.task_policy import resolve_llm_task_policy
+from app.core.llm.task_policy import infer_llm_task_profile, resolve_llm_task_policy
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_router_health
 from app.services.prompt_service import PromptService
@@ -68,7 +68,24 @@ class LLMService:
         project_id: str | None = None,
         objective_id: str | None = None,
     ) -> dict[str, Any]:
-        policy = resolve_llm_task_policy(task_type, complexity, policy_overrides)
+        inferred_profile = infer_llm_task_profile(prompt)
+        effective_task_type = task_type or inferred_profile.get("task_type")
+        effective_complexity = complexity or inferred_profile.get("complexity")
+        effective_overrides: dict[str, Any] | None = None
+        inferred_overrides = {
+            key: inferred_profile[key]
+            for key in ("role", "priority")
+            if inferred_profile.get(key) is not None
+        }
+        if inferred_overrides or policy_overrides:
+            effective_overrides = {}
+            effective_overrides.update(inferred_overrides)
+            if isinstance(policy_overrides, dict):
+                effective_overrides.update(policy_overrides)
+
+        policy = resolve_llm_task_policy(
+            effective_task_type, effective_complexity, effective_overrides
+        )
         llm_config: dict[str, Any] | None = None
 
         if isinstance(policy, dict) and policy:

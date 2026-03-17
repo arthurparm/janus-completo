@@ -48,3 +48,41 @@ def test_invoke_llm_preserves_strict_ollama_policy_overrides():
     assert call["llm_config"]["strict_provider"] is True
     assert call["llm_config"]["disable_failover"] is True
     assert call["llm_config"]["disable_response_cache"] is True
+
+
+def test_invoke_llm_infers_code_routing_when_task_metadata_missing():
+    repo = _FakeRepo()
+    service = LLMService(repo=repo)
+
+    asyncio.run(
+        service.invoke_llm(
+            prompt="Mostre um exemplo simples de codigo Python para ordenar uma lista",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.LOCAL_ONLY,
+            timeout_seconds=20,
+        )
+    )
+
+    assert len(repo.calls) == 1
+    call = repo.calls[0]
+    assert call["role"] == ModelRole.CODE_GENERATOR
+    assert call["priority"] == ModelPriority.FAST_AND_CHEAP
+
+
+def test_invoke_llm_infers_security_routing_when_task_metadata_missing():
+    repo = _FakeRepo()
+    service = LLMService(repo=repo)
+
+    asyncio.run(
+        service.invoke_llm(
+            prompt="Faça uma revisao de seguranca e procure vulnerabilidades",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.LOCAL_ONLY,
+            timeout_seconds=20,
+        )
+    )
+
+    assert len(repo.calls) == 1
+    call = repo.calls[0]
+    assert call["role"] == ModelRole.SECURITY_AUDITOR
+    assert call["priority"] == ModelPriority.HIGH_QUALITY
