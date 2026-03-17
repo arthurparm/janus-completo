@@ -7,6 +7,8 @@ from typing import Literal
 
 from fastapi import HTTPException, Request, status
 
+from app.core.security.chat_unlimited import is_chat_unlimited_user
+
 _SSE_SLOT_LOCK = asyncio.Lock()
 _SSE_SLOTS_BY_USER_CHANNEL: dict[tuple[str, str], int] = defaultdict(int)
 _SSE_SLOTS_TOTAL = 0
@@ -313,6 +315,8 @@ async def acquire_sse_slot(user_id: str | None, *, channel: SSEChannel) -> str:
     max_per_user_channel = _channel_limit(channel)
     max_global = max(1, int(os.getenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "250")))
     slot_user = str(user_id or "anonymous")
+    if is_chat_unlimited_user(slot_user):
+        return f"unlimited:{slot_user}"
 
     global _SSE_SLOTS_TOTAL
     async with _SSE_SLOT_LOCK:
@@ -348,6 +352,8 @@ async def acquire_sse_slot(user_id: str | None, *, channel: SSEChannel) -> str:
 
 
 async def release_sse_slot(slot_user: str, *, channel: SSEChannel) -> None:
+    if str(slot_user).startswith("unlimited:"):
+        return
     global _SSE_SLOTS_TOTAL
     async with _SSE_SLOT_LOCK:
         slot_key = (slot_user, channel)

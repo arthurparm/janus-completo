@@ -9,6 +9,7 @@ from starlette.types import ASGIApp
 
 from app.config import settings
 from app.core.infrastructure.redis_manager import redis_manager
+from app.core.security.chat_unlimited import is_chat_unlimited_request
 
 try:
     from prometheus_client import Counter
@@ -116,6 +117,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Health check bypass
         path = request.url.path
         if path.startswith("/metrics") or path in ("/healthz", "/livez", "/readyz"):
+            return await call_next(request)
+        if path.startswith("/api/v1/chat") and is_chat_unlimited_request(request):
             return await call_next(request)
 
         # Redis unavailable handling

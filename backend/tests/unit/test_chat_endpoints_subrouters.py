@@ -51,3 +51,20 @@ async def test_sse_slot_limit_global_across_channels(monkeypatch):
         assert exc.value.status_code == 429
     finally:
         await release_sse_slot(slot, channel="agent_events")
+
+
+@pytest.mark.asyncio
+async def test_sse_slot_bypasses_unlimited_user(monkeypatch):
+    monkeypatch.setenv("CHAT_SSE_MAX_CHAT_STREAMS_PER_USER", "1")
+    monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "1")
+    monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "1")
+    monkeypatch.setattr("app.api.v1.endpoints.chat.deps.is_chat_unlimited_user", lambda user_id: str(user_id) == "2")
+
+    first_slot = await acquire_sse_slot("2", channel="chat_stream")
+    second_slot = await acquire_sse_slot("2", channel="chat_stream")
+    try:
+        assert first_slot == "unlimited:2"
+        assert second_slot == "unlimited:2"
+    finally:
+        await release_sse_slot(second_slot, channel="chat_stream")
+        await release_sse_slot(first_slot, channel="chat_stream")

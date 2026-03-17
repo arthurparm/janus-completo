@@ -376,6 +376,7 @@ class AppSettings(BaseSettings):
     AUTH_RESET_RETURN_TOKEN: bool = False
     AUTH_TRUST_X_USER_ID_HEADER: bool = False
     AUTH_ADMIN_CPF_ALLOWLIST: list[str] = []
+    CHAT_UNLIMITED_USERS: list[str] = []
     AUTH_RATE_LIMIT_ENABLED: bool = True
     AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {
         "auth.token": {"max_attempts": 20, "window_seconds": 60},
@@ -662,7 +663,7 @@ class AppSettings(BaseSettings):
         normalized = [normalize_cpf(item) for item in items]
         return [cpf for cpf in normalized if is_valid_cpf(cpf)]
 
-    @field_validator("CHAT_TOOL_ALLOWLIST", "CHAT_TOOL_BLOCKLIST", mode="before")
+    @field_validator("CHAT_UNLIMITED_USERS", "CHAT_TOOL_ALLOWLIST", "CHAT_TOOL_BLOCKLIST", mode="before")
     def _parse_chat_tool_lists(cls, v: Any):
         if isinstance(v, str):
             s = v.strip()
