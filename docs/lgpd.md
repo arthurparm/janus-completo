@@ -46,3 +46,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-17)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz diretos da interface nos logs de sistema (`janus.log`). Isso se qualifica como dado de natureza indiretamente biométrica/comportamental, sem minimização (PII scrubbing) prévia antes do salvamento em texto plano, quebrando o princípio de minimização da LGPD.
+- **Capturas de Tela sem Consentimento ou Ofuscação (Windows Agent):** A API do Windows agent continua expondo via endpoints (como `/screenshot`) imagens capturadas diretamente do SO. Como mencionado no Achado anterior, além de faltar Auth, falta o scrub visual de áreas contendo senhas, e-mails ou conteúdo bancário.
+
+### Próximos Passos
+1. **Mascarar Textos do Daemon:** Aplicar a camada de regex `_PII_PATTERNS` em `memory/security.py` antes de encaminhar transcrições de áudio ao logger no `daemon.py`.
+2. **Revisar Consentimento Local:** Exigir uma configuração de `OPT_IN` com flag persistente antes de autorizar a primeira chamada a endpoints que realizam captura de input do SO host no `windows_agent.py`.

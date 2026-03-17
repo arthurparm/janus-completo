@@ -749,3 +749,57 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-023] Vazamento Biométrico em logs do Daemon
+- Problema atual: O `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz (dados possivelmente sensíveis) nos logs do sistema sem minimização.
+- Solucao proposta: Aplicar a camada de _PII scrubbing_ da aplicação antes do dump para texto ou remover esse log em produção.
+- Impacto esperado: Conformidade com LGPD / minimização de dados.
+- Riscos: Redução de utilidade em debugging de áudio local.
+- Dependencias: `app.core.memory.security`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Fuga de observabilidade em falha do RabbitMQ
+- Problema atual: `backend/app/core/infrastructure/message_broker.py` apresenta falha silenciosa (Silent fail-open) ao falhar a conexão com RabbitMQ, omitindo o problema para ferramentas de alerta e deixando a aplicação em estado degradado escondido.
+- Solucao proposta: Implementar uma camada de Circuit Breaker com alertas imediatos nos logs/métricas antes do fallback para offline.
+- Impacto esperado: Melhor tempo de resposta em incidentes de rede e broker down.
+- Riscos: Overhead temporário na tentativa de reconexão.
+- Dependencias: Modificação do message broker.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade de XML Parsing em DOCX (Bandit B314)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` que é vulnerável a ataques de XML External Entity (XXE) / Billion Laughs.
+- Solucao proposta: Migrar para `defusedxml.ElementTree` ou garantir a chamada de `defusedxml.defuse_stdlib()` global.
+- Impacto esperado: Proteção ativa contra injeções no parsers de documentos.
+- Riscos: Quebra do parse de alguns documentos caso o pacote `defusedxml` não esteja na venv.
+- Dependencias: Instalação do pacote `defusedxml`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Agente Windows binding a 0.0.0.0 (Bandit B104)
+- Problema atual: O `backend/windows_agent.py` sobe seu servidor no host configurando binding global `0.0.0.0` sem autenticação.
+- Solucao proposta: Restringir o host inicial para `127.0.0.1` ou exigir tokens fortes se exposição for esperada.
+- Impacto esperado: Prevenção de acesso indevido da rede local aos comandos OS.
+- Riscos: Quebra de acesso caso existam clientes locais em outros IPs conectando via LAN.
+- Dependencias: Ajuste de flags da cli do Uvicorn no script.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Requisição sem timeout em scripts de evolução (Bandit B113)
+- Problema atual: Em `backend/scripts/test_tool_evolution_chat.py`, `requests` é usado sem o parâmetro opcional `timeout`.
+- Solucao proposta: Definir `timeout=10` ou equivalente nas chamadas web para evitar resource starvation (Hanging requests).
+- Impacto esperado: Prevenção contra stalls na execução de CI ou evolução.
+- Riscos: Timeout errors para redes muito lentas, que antes apenas paravam esperando eternamente.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto

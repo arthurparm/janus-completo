@@ -125,3 +125,42 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-17)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, requisitos python version não batem e falta de lockfile).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 17. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit`:
+  - `@angular/core`, `flatted`, `hono`, `immutable`, `tar` (Alta) - XSS, Prototype Pollution, Hardlink Path Traversal, Unbounded Recursion DoS.
+  - `dompurify` (Moderada) - Cross-site Scripting.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 18. XML Parsing Vulnerável a Ataques (XML External Entity)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média (Bandit B314)
+- **Descrição:** O serviço utiliza `xml.etree.ElementTree.fromstring` para parsear o conteúdo de arquivos DOCX, o que é conhecido por ser vulnerável a ataques XML (XXE/Billion Laughs).
+- **Ação Recomendada:** Substituir o uso da biblioteca padrão por `defusedxml.ElementTree` ou invocar `defusedxml.defuse_stdlib()`.
+
+### 19. Interface Binding Potencialmente Inseguro (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média (Bandit B104)
+- **Descrição:** O script do agente Windows expõe a API (FastAPI) vinculando-a a todas as interfaces de rede (`0.0.0.0`) na porta 5001 sem autenticação (AuthZ bypass).
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar um mecanismo robusto de autenticação (API Keys/JWT) nos endpoints OS (ex: `/screenshot`).
+
+### 20. Requisições HTTP sem Timeout
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py`
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** O script realiza chamadas usando a biblioteca `requests` sem definir um limite de tempo (timeout), o que pode causar travamentos caso o servidor não responda.
+- **Ação Recomendada:** Adicionar explicitamente o parâmetro `timeout=10` (ou valor adequado) em todas as chamadas `requests.post()` ou `requests.get()`.
+
+### 21. Falha Silenciosa de Conexão com Message Broker (Fail-Open)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média
+- **Descrição:** Ocorrem falhas de conexão com RabbitMQ (`[Errno 111] Connection refused`) que não disparam alertas claros, resultando em modo offline silencioso (Silent fail-open) na aplicação.
+- **Ação Recomendada:** Implementar um circuit breaker com alertas e reentativas configuráveis, emitindo logs críticos antes do fallback silencioso.
