@@ -563,6 +563,12 @@ class AppSettings(BaseSettings):
     CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER: int = 2
     CHAT_SSE_MAX_CONNECTIONS_PER_USER: int = 4
     CHAT_SSE_MAX_GLOBAL_CONNECTIONS: int = 250
+    CHAT_TOOL_RISK_PROFILE: str = "balanced"
+    CHAT_TOOL_AUTO_CONFIRM: bool = False
+    CHAT_TOOL_ALLOWLIST: list[str] = Field(default_factory=list)
+    CHAT_TOOL_BLOCKLIST: list[str] = Field(default_factory=list)
+    CHAT_TOOL_MAX_ACTIONS: int = 20
+    CHAT_TOOL_MAX_SECONDS: int = 60
 
     # Tailscale Serve Configuration
     TAILSCALE_SERVE_ENABLED: bool = False
@@ -655,6 +661,23 @@ class AppSettings(BaseSettings):
 
         normalized = [normalize_cpf(item) for item in items]
         return [cpf for cpf in normalized if is_valid_cpf(cpf)]
+
+    @field_validator("CHAT_TOOL_ALLOWLIST", "CHAT_TOOL_BLOCKLIST", mode="before")
+    def _parse_chat_tool_lists(cls, v: Any):
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return []
+            if s.startswith("["):
+                try:
+                    arr = json.loads(s)
+                    return [str(x).strip() for x in arr if str(x).strip()]
+                except Exception:
+                    pass
+            return [x.strip() for x in s.split(",") if x.strip()]
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        return []
 
     # ======= Validadores para variáveis de ambiente complexas =======
 
