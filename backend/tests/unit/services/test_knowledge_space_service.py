@@ -1529,6 +1529,76 @@ def test_prune_target_constrained_task_sections_keeps_only_structural_supplement
     assert titles == ["Capítulo Um", "Capítulo 1: Campeões de Arton"]
 
 
+def test_replace_with_structural_supplement_anchor_swaps_specific_option_chunk():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton."
+    )
+
+    selected = [
+        {
+            "point": SimpleNamespace(id="base-point", payload={"content": "Criação base.", "metadata": {}}),
+            "doc_role": "base",
+            "title": "Capítulo Um",
+            "content": "Construção de personagens com atributos, raça, classe e origem.",
+            "text_target_term_overlap": 0,
+            "text_target_phrase_overlap": 0,
+        },
+        {
+            "point": SimpleNamespace(id="bad-supp-point", payload={"content": "Manto.", "metadata": {}}),
+            "doc_role": "supplement",
+            "title": "10 pontos de redução de dano do alvo. e",
+            "content": "Manto de Batalha Você aprende e pode lançar Vestimenta da Fé. Pré-requisito: 5º nível de paladino.",
+            "text_target_term_overlap": 0,
+            "text_target_phrase_overlap": 0,
+        },
+    ]
+
+    structural_point = SimpleNamespace(
+        id="supp-anchor",
+        score=0.61,
+        payload={
+            "content": "Este capítulo apresenta diversas novas opções para construir seu personagem, incluindo classes variantes.",
+            "metadata": {
+                "section_id": "supp-anchor",
+                "doc_id": "supp-doc",
+                "doc_role": "supplement",
+                "section_role": "supplement_rules",
+                "section_order": 1,
+                "section_title": "Capítulo 1: Campeões de Arton",
+                "applies_to": ["workflow", "character_options"],
+                "usefulness_score": 0.8,
+            },
+        },
+    )
+
+    result = service._replace_with_structural_supplement_anchor(
+        selected=selected,
+        candidate_points=[
+            SimpleNamespace(
+                id="bad-supp-point",
+                score=0.9,
+                payload={
+                    "content": "Manto de Batalha Você aprende e pode lançar Vestimenta da Fé. Pré-requisito: 5º nível de paladino.",
+                    "metadata": {
+                        "section_id": "bad-supp-point",
+                        "doc_id": "supp-doc",
+                        "doc_role": "supplement",
+                        "section_role": "supplement_rules",
+                        "section_order": 10,
+                        "section_title": "10 pontos de redução de dano do alvo. e",
+                        "applies_to": ["character_options"],
+                    },
+                },
+            ),
+            structural_point,
+        ],
+        query_profile=query_profile,
+    )
+
+    assert [item["title"] for item in result] == ["Capítulo Um", "Capítulo 1: Campeões de Arton"]
+
+
 def test_render_operational_answer_falls_back_when_llm_response_is_low_information():
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 

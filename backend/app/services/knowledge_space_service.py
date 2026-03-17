@@ -2898,6 +2898,11 @@ class KnowledgeSpaceService:
             answer_strategy=retrieval_strategy,
             limit=limit,
         )
+        selected = self._replace_with_structural_supplement_anchor(
+            selected=selected,
+            candidate_points=candidate_points,
+            query_profile=query_profile,
+        )
         selected = self._prune_target_constrained_task_sections(
             selected=selected,
             query_profile=query_profile,
@@ -4125,6 +4130,109 @@ class KnowledgeSpaceService:
                 if str(item.get("doc_role") or "") != "supplement" or item in chosen_supplement
             ]
         return pruned[: max(1, int(limit))]
+
+    def _replace_with_structural_supplement_anchor(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        candidate_points: list[Any],
+        query_profile: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        if not (
+            query_profile.get("asks_for_task_execution")
+            and query_profile.get("asks_for_supplement")
+            and query_profile.get("has_explicit_target")
+        ):
+            return selected
+        supplement_index = next(
+            (index for index, item in enumerate(selected) if str(item.get("doc_role") or "") == "supplement"),
+            None,
+        )
+        if supplement_index is None:
+            return selected
+        current = selected[supplement_index]
+        current_title = str(current.get("title") or "")
+        current_content = str(current.get("content") or "")
+        current_is_specific = self._looks_like_specific_option_chunk(title=current_title, content=current_content)
+        current_direct_text = bool(
+            int(current.get("text_target_term_overlap") or 0) > 0
+            or int(current.get("text_target_phrase_overlap") or 0) > 0
+        )
+        if not current_is_specific or current_direct_text:
+            return selected
+        structural_candidates: list[dict[str, Any]] = []
+        target_terms = set(query_profile.get("target_terms") or [])
+        target_phrases = set(query_profile.get("target_phrases") or [])
+        for point in candidate_points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            if str(metadata.get("doc_role") or "").strip().lower() != "supplement":
+                continue
+            title = str(metadata.get("section_title") or "").strip()
+            content = str(payload.get("content") or "").strip()
+            section_role = str(metadata.get("section_role") or "supplement_rules").strip().lower() or "supplement_rules"
+            applies_to = metadata.get("applies_to") or []
+            if self._looks_like_specific_option_chunk(title=title, content=content):
+                continue
+            if not self._is_supplement_creation_extension_section(
+                title=title,
+                content=content,
+                section_role=section_role,
+                applies_to=applies_to,
+            ) and not self._is_sequence_anchor(title=title, content=content, doc_role="supplement"):
+                continue
+            text_target_term_overlap, text_target_phrase_overlap = self._target_overlap(
+                text=content,
+                title=title,
+                concepts=[],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
+            structural_candidates.append(
+                {
+                    "point": point,
+                    "section_id": str(metadata.get("section_id") or getattr(point, "id", "")),
+                    "doc_id": str(metadata.get("doc_id") or ""),
+                    "doc_role": "supplement",
+                    "section_role": section_role,
+                    "section_order": int(metadata.get("section_order") or 0),
+                    "title": title,
+                    "content": content,
+                    "applies_to": applies_to,
+                    "is_base_creation_foundation": False,
+                    "is_supplement_creation_extension": self._is_supplement_creation_extension_section(
+                        title=title,
+                        content=content,
+                        section_role=section_role,
+                        applies_to=applies_to,
+                    ),
+                    "usefulness_score": float(metadata.get("usefulness_score") or 0.0),
+                    "lexical_overlap": 0,
+                    "topic_lexical_overlap": 0,
+                    "phrase_overlap": 0,
+                    "topic_phrase_overlap": 0,
+                    "target_term_overlap": 0,
+                    "target_phrase_overlap": 0,
+                    "text_target_term_overlap": text_target_term_overlap,
+                    "text_target_phrase_overlap": text_target_phrase_overlap,
+                    "matched_entities": 0,
+                    "conflicting_entities": 0,
+                    "rerank_score": float(getattr(point, "score", 0.0) or 0.0),
+                }
+            )
+        if not structural_candidates:
+            return selected
+        structural_candidates.sort(
+            key=lambda item: (
+                0 if self._is_sequence_anchor(title=str(item.get("title") or ""), content=str(item.get("content") or ""), doc_role="supplement") else 1,
+                item.get("section_order") or 999999,
+                -float(item.get("rerank_score") or 0.0),
+            )
+        )
+        replacement = structural_candidates[0]
+        updated = list(selected)
+        updated[supplement_index] = replacement
+        return updated
 
     def _build_canonical_gaps(
         self,
