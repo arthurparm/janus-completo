@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-02-23T21:08:03.188218+00:00",
+    "generated_at": "2026-03-17T21:28:00.210793+00:00",
     "source": "api_inventory_fallback",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
@@ -40,7 +40,7 @@
         "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "Auto Analysis": {
         "total": 1,
@@ -52,7 +52,7 @@
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "AutonomyHistory": {
         "total": 3,
@@ -64,7 +64,7 @@
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 4
+        "in_tests": 5
       },
       "Collaboration": {
         "total": 11,
@@ -224,7 +224,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 54
+    "test_path_refs": 59
   },
   "endpoints": [
     {
@@ -280,7 +280,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -456,7 +456,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -566,7 +566,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "DELETE",

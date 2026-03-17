@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "generated_at": "2026-02-23T21:08:03.155511+00:00",
-    "source_matrix_generated_at": "2026-02-23T21:05:41.317111+00:00",
+    "generated_at": "2026-03-17T21:28:13.508880+00:00",
+    "source_matrix_generated_at": "2026-03-17T21:28:00.210793+00:00",
     "source_matrix_mode": "api_inventory_fallback",
     "issue_id": "OQ-011"
   },
@@ -13,12 +13,12 @@
   },
   "summary": {
     "total_endpoints": 226,
-    "covered_endpoints": 24,
-    "uncovered_endpoints": 202,
-    "coverage_percent": 10.62,
+    "covered_endpoints": 27,
+    "uncovered_endpoints": 199,
+    "coverage_percent": 11.95,
     "runtime_validated_endpoints": 6,
     "runtime_failed_endpoints": 0,
-    "test_referenced_endpoints": 18
+    "test_referenced_endpoints": 21
   },
   "by_module": [
     {
@@ -54,12 +54,12 @@
     {
       "module": "Auth",
       "total": 8,
-      "covered": 0,
-      "not_covered": 8,
+      "covered": 1,
+      "not_covered": 7,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 0,
-      "coverage_percent": 0.0
+      "test_referenced": 1,
+      "coverage_percent": 12.5
     },
     {
       "module": "Auto Analysis",
@@ -74,12 +74,12 @@
     {
       "module": "Autonomy",
       "total": 11,
-      "covered": 0,
-      "not_covered": 11,
+      "covered": 1,
+      "not_covered": 10,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 0,
-      "coverage_percent": 0.0
+      "test_referenced": 1,
+      "coverage_percent": 9.09
     },
     {
       "module": "AutonomyHistory",
@@ -94,12 +94,12 @@
     {
       "module": "Chat",
       "total": 11,
-      "covered": 4,
-      "not_covered": 7,
+      "covered": 5,
+      "not_covered": 6,
       "runtime_validated": 0,
       "runtime_failed": 0,
-      "test_referenced": 4,
-      "coverage_percent": 36.36
+      "test_referenced": 5,
+      "coverage_percent": 45.45
     },
     {
       "module": "Collaboration",
@@ -416,19 +416,6 @@
       "smoke_error": null
     },
     {
-      "method": "POST",
-      "path": "/api/v1/auth/local/login",
-      "module": "Auth",
-      "operation_id": "local_login_api_v1_auth_local_login_post",
-      "summary": "Local Login",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
       "method": "GET",
       "path": "/api/v1/auth/local/me",
       "module": "Auth",
@@ -624,19 +611,6 @@
       "smoke_error": null
     },
     {
-      "method": "POST",
-      "path": "/api/v1/autonomy/start",
-      "module": "Autonomy",
-      "operation_id": "start_autonomy_api_v1_autonomy_start_post",
-      "summary": "Inicia o AutonomyLoop contínuo",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
       "method": "GET",
       "path": "/api/v1/autonomy/status",
       "module": "Autonomy",
@@ -707,19 +681,6 @@
       "module": "Chat",
       "operation_id": "list_conversations_api_v1_chat_conversations_get",
       "summary": "Lista conversas com filtros de RBAC",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/chat/stream/{conversation_id}",
-      "module": "Chat",
-      "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
-      "summary": "Streaming de resposta via SSE",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -3050,9 +3011,9 @@
       "module": "Auth",
       "operation_id": "local_login_api_v1_auth_local_login_post",
       "summary": "Local Login",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null
@@ -3258,9 +3219,9 @@
       "module": "Autonomy",
       "operation_id": "start_autonomy_api_v1_autonomy_start_post",
       "summary": "Inicia o AutonomyLoop contínuo",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null
@@ -3388,9 +3349,9 @@
       "module": "Chat",
       "operation_id": "stream_message_api_v1_chat_stream__conversation_id__get",
       "summary": "Streaming de resposta via SSE",
-      "coverage_status": "not_covered",
-      "covered": false,
-      "referenced_in_tests": false,
+      "coverage_status": "test_referenced",
+      "covered": true,
+      "referenced_in_tests": true,
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null

@@ -113,3 +113,36 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-17)
+
+### 11. Quebra de Isolamento em Testes e Tooling (Processos CI)
+**Descrição:** Observou-se que scripts na pasta `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam em ambientes isolados ao invés de utilizarem os pipelines unificados do pytest configurados no diretório `qa/`. Isso gera falhas na validação automática em ambientes de CI.
+**Evidências:**
+- Scripts criados como stand-alone tools na pasta `tooling/` que importam dependências do backend sem passar pelos harnesses de teste do CI (issue DX-013).
+
+**Próximos passos:**
+- Mover scripts de testes e validações pontuais para dentro da pasta `qa/` e registrá-los como fixtures ou testes integrados do Pytest.
+- Documentar a issue DX-013 no backlog.
+
+### 12. Vulnerabilidades de XML Parsing (Bandit)
+**Descrição:** A biblioteca padrão `xml.etree.ElementTree` está sendo utilizada para ler arquivos DOCX. Essa lib é conhecida por ser vulnerável a ataques de entidades XML (XXE) e bombardeios.
+**Evidências:**
+- `backend/app/services/document_parser_service.py`: Utiliza `xml.etree.ElementTree.fromstring` para parsear o XML das referências em DOCX.
+
+**Próximos passos:**
+- Substituir o módulo padrão por `defusedxml` que previne ataques XXE.
+- Documentar SG-031 no backlog.
+
+### 13. Exposição de Segredos e Hardcodes em Ferramentas e Configurações de Redes
+**Descrição:** Os scripts auxiliares mantêm senhas expostas, bem como diretórios temporários construídos com `hardcodes` absolutos, criando riscos em esteiras automatizadas. O Daemon também foi configurado em interface aberta (0.0.0.0) de maneira insegura e sem AuthN.
+**Evidências:**
+- Criação insegura de arquivos no `/tmp` do Linux dentro de `backend/app/core/memory/log_aware_reflector.py` (issue SG-027).
+- Impressão e log explícito de senhas e secrets nos scripts `tooling/run_api_e2e_all.py`, `benchmark_complex_process.py`, e `chaos_harness.py` (issue SG-029).
+- Exposição perigosa de RabbitMQ Connection Errors caindo silenciosamente sem alertamento próprio (`app.core.infrastructure.message_broker`) (issue SG-030).
+- Windows Agent e Daemon abertos sem restrição no `0.0.0.0` (issue SG-032).
+
+**Próximos passos:**
+- Refatorar criação de arquivos temporários para utilizar o módulo `tempfile`.
+- Substituir senhas exibidas em clear text por variáveis ofuscadas.
+- Limitar os serviços Windows aos adaptadores seguros de localhost ou via VPN (Tailscale) e incluir alertas consistentes.

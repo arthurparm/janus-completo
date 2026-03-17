@@ -749,3 +749,68 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [DX-013] Scripts de Testes Isolados
+- **Problema atual**: Testes na pasta `tooling/` (ex: `test_debate_system.py`) executam de maneira isolada (scripts soltos) e burlam os pipelines do pytest definidos no CI, o que quebra a integração contínua (CI).
+- **Solucao proposta**: Mover scripts standalone de teste e fixtures da pasta `tooling/` para o suite unificado `qa/` e registrá-los corretamente.
+- **Impacto esperado**: Menos pontos cegos de testes e unificação de CI.
+- **Riscos**: Falta de cobertura automatizada por não rodarem no build.
+- **Dependencias**: Configuração Pytest.
+- **Prioridade**: P1
+- **Esforco**: S
+- **Dono**: Time QA / Backend
+- **Status**: aberto
+
+### [SG-030] Falha Silenciosa no Message Broker
+- **Problema atual**: O backend `app.core.infrastructure.message_broker` exibe falhas de conexão RabbitMQ (`[Errno 111] Connection refused`) e cai para modo offline sem alertar proativamente os monitores de saúde.
+- **Solucao proposta**: Criar circuit breakers ou health endpoints estritos que registrem anomalias ativas via ObservabilityService.
+- **Impacto esperado**: Identificação rápida de quedas do broker.
+- **Riscos**: Indisponibilidade de mensageria assíncrona imperceptível.
+- **Dependencias**: Nenhuma.
+- **Prioridade**: P0
+- **Esforco**: M
+- **Dono**: Time Sec
+- **Status**: aberto
+
+### [SG-031] Vulnerabilidades de XML Parsing
+- **Problema atual**: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para parsear arquivos DOCX, o que é suscetível a ataques de entidades externas (XXE) e expansões de bilhões de risos.
+- **Solucao proposta**: Substituir o parsing nativo pelo pacote `defusedxml` nas importações do `document_parser_service`.
+- **Impacto esperado**: Prevenção de ataques de negação de serviço ou vazamento de arquivos por XXE.
+- **Riscos**: Arquivos maliciosos corrompendo o container backend.
+- **Dependencias**: Adicionar pacote `defusedxml` no Poetry.
+- **Prioridade**: P1
+- **Esforco**: S
+- **Dono**: Time Sec
+- **Status**: aberto
+
+### [SG-032] Serviços e Daemons Expostos Inseguramente
+- **Problema atual**: O script `backend/windows_agent.py` sobe ouvindo em todas as interfaces (`0.0.0.0`) na porta 5001 sem controle de acessos (falta de AuthN).
+- **Solucao proposta**: Restringir bind a adaptadores locais (localhost) ou aplicar middleware de autenticação obrigatório.
+- **Impacto esperado**: Evitar acessos indevidos à API de sistema do Windows hospedado.
+- **Riscos**: Exposição direta de execução de códigos e manipulação de interface do hospedeiro por scripts não autorizados.
+- **Dependencias**: Mapeamento de adaptadores na rede host ou implementações JWT local.
+- **Prioridade**: P0
+- **Esforco**: M
+- **Dono**: Time Sec
+- **Status**: aberto
+
+### [SG-027] Insecure temporary file creation
+- **Problema atual**: Insecure temporary file creation (hardcoded `/tmp` paths) is present in `backend/app/core/memory/log_aware_reflector.py` (identified via Bandit, tracked as SG-027).
+- **Solucao proposta**: Use `tempfile` module.
+- **Impacto esperado**: Security improvement.
+- **Riscos**: N/A
+- **Dependencias**: N/A
+- **Prioridade**: P1
+- **Esforco**: S
+- **Dono**: Time Sec
+- **Status**: aberto
+
+### [SG-029] Credentials Leak Risk in CI/CD pipelines
+- **Problema atual**: Test and tooling scripts (e.g., `tooling/run_api_e2e_all.py`, `benchmark_complex_process.py`, `chaos_harness.py`) explicitly print or log hardcoded passwords and secrets, posing a credentials leak risk in CI/CD pipelines (tracked as SG-029).
+- **Solucao proposta**: Remove hardcoded secrets from code and logs.
+- **Impacto esperado**: Security improvement.
+- **Riscos**: N/A
+- **Dependencias**: N/A
+- **Prioridade**: P1
+- **Esforco**: S
+- **Dono**: Time Sec
+- **Status**: aberto
