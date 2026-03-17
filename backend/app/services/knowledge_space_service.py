@@ -2991,7 +2991,10 @@ class KnowledgeSpaceService:
                     role_to_doc_ids[doc_role].append(doc_id)
             planned_steps = list((support_plan or {}).get("steps") or [])
             if not planned_steps:
-                planned_steps = self._build_fallback_operational_plan(selected_sections=selected_sections)
+                planned_steps = self._build_fallback_operational_plan(
+                    selected_sections=selected_sections,
+                    query_profile=query_profile,
+                )
             for step in planned_steps[: max(3, min(8, int(limit) + 2))]:
                 role_hint = str(step.get("doc_role_hint") or "either").strip().lower() or "either"
                 label = str(step.get("label") or "").strip()
@@ -3051,10 +3054,32 @@ class KnowledgeSpaceService:
                             for item in (metadata.get("entities") or [])
                             if str(item).strip()
                         ]
+                        if not concepts:
+                            concepts = [
+                                str(item).strip().casefold()
+                                for item in self._extract_concepts(content, title=title, limit=6)
+                                if str(item).strip()
+                            ]
+                        support_entities = [
+                            str(item).strip().casefold()
+                            for item in (metadata.get("entities") or [])
+                            if str(item).strip()
+                        ]
+                        if not support_entities:
+                            support_entities = [
+                                str(item).strip().casefold()
+                                for item in self._extract_entities(content, title=title, limit=6)
+                                if str(item).strip()
+                            ]
                         target_term_overlap, target_phrase_overlap = self._target_overlap(
                             text=content,
                             title=title,
-                            concepts=concepts,
+                            concepts=concepts + support_entities,
+                            target_terms=set(query_profile.get("target_terms") or []),
+                            target_phrases=set(query_profile.get("target_phrases") or []),
+                        )
+                        matched_entities, conflicting_entities = self._count_conflicting_entities(
+                            entities=support_entities,
                             target_terms=set(query_profile.get("target_terms") or []),
                             target_phrases=set(query_profile.get("target_phrases") or []),
                         )
@@ -3072,10 +3097,19 @@ class KnowledgeSpaceService:
                         )
                         local_score += min(0.24, target_term_overlap * 0.12)
                         local_score += min(0.30, target_phrase_overlap * 0.18)
+                        local_score += min(0.18, matched_entities * 0.12)
+                        local_score -= min(0.42, conflicting_entities * 0.14)
                         local_score += 0.05 if role_hint == doc_role else 0.0
                         local_score += 0.02 if "workflow" in (metadata.get("applies_to") or []) else 0.0
                         if query_profile.get("has_explicit_target") and target_term_overlap == 0 and target_phrase_overlap == 0:
                             local_score -= 0.38
+                        if (
+                            query_profile.get("has_explicit_target")
+                            and matched_entities <= 0
+                            and conflicting_entities > 0
+                        ):
+                            if doc_role == "supplement" or self._looks_like_specific_option_chunk(title=title, content=content):
+                                continue
                         existing = scored_points.get(point_id)
                         if existing is not None and float(getattr(existing, "score", 0.0) or 0.0) >= local_score:
                             continue
@@ -3083,6 +3117,9 @@ class KnowledgeSpaceService:
                         metadata_copy = dict(metadata)
                         metadata_copy["_janus_support_label"] = label
                         metadata_copy["_janus_support_query"] = step_query
+                        metadata_copy["_janus_support_entities"] = support_entities
+                        metadata_copy["_janus_support_matched_entities"] = matched_entities
+                        metadata_copy["_janus_support_conflicting_entities"] = conflicting_entities
                         payload_copy["metadata"] = metadata_copy
                         scored_points[point_id] = SimpleNamespace(
                             id=point_id or getattr(point, "id", ""),
@@ -3139,13 +3176,64 @@ class KnowledgeSpaceService:
             limit=max(3, min(8, int(limit) + 2)),
         )
 
+    def _build_target_constrained_support_steps(
+        self,
+        *,
+        query_profile: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        target_label = ", ".join(query_profile.get("target_phrases") or query_profile.get("target_terms") or []).strip()
+        if not target_label:
+            return []
+        steps: list[dict[str, str]] = [
+            {
+                "label": "alvo principal",
+                "query": target_label,
+                "doc_role_hint": "base",
+            },
+            {
+                "label": "regras e requisitos",
+                "query": f"{target_label} requisitos habilidades regras",
+                "doc_role_hint": "base",
+            },
+            {
+                "label": "recursos e opcoes",
+                "query": f"{target_label} poderes itens equipamentos recursos opcoes",
+                "doc_role_hint": "either",
+            },
+        ]
+        if query_profile.get("asks_for_creation"):
+            steps.append(
+                {
+                    "label": "montagem e escolha",
+                    "query": f"{target_label} criacao montagem passos escolhas",
+                    "doc_role_hint": "base",
+                }
+            )
+        if query_profile.get("asks_for_supplement"):
+            steps.append(
+                {
+                    "label": "extensoes do suplemento",
+                    "query": f"{target_label} variantes extensoes suplemento opcoes adicionais",
+                    "doc_role_hint": "supplement",
+                }
+            )
+        return steps
+
     def _build_fallback_operational_plan(
         self,
         *,
         selected_sections: list[dict[str, Any]],
+        query_profile: dict[str, Any] | None = None,
     ) -> list[dict[str, str]]:
+        query_profile = query_profile or {}
         steps: list[dict[str, str]] = []
         seen_queries: set[str] = set()
+        for step in self._build_target_constrained_support_steps(query_profile=query_profile):
+            normalized = self._normalize_search_text(str(step.get("query") or ""))
+            if not normalized or normalized in seen_queries:
+                continue
+            seen_queries.add(normalized)
+            steps.append(step)
         for section in selected_sections:
             title = str(section.get("title") or "").strip()
             concepts = [str(item).strip() for item in (section.get("concepts") or []) if str(item).strip()]
@@ -3219,7 +3307,10 @@ class KnowledgeSpaceService:
     ) -> dict[str, Any]:
         query_profile = self._build_query_profile(question)
         fallback = {
-            "steps": self._build_fallback_operational_plan(selected_sections=selected),
+            "steps": self._build_fallback_operational_plan(
+                selected_sections=selected,
+                query_profile=query_profile,
+            ),
             "user_decisions": [],
             "source_gaps": [],
         }
@@ -3334,8 +3425,10 @@ class KnowledgeSpaceService:
             "1. Execute a tarefa de forma direta sempre que a evidência permitir.\n"
             "2. Diferencie claramente 'Decisões pendentes do usuário' de 'Lacunas da fonte'.\n"
             "3. Não diga que listas inteiras estão faltando se a evidência já mostra opções válidas; nesse caso, peça apenas a escolha necessária.\n"
-            "4. Explique as escolhas ou passos usando somente a evidência disponível.\n"
-            "5. Se houver lacunas, finalize com as seções 'Decisões pendentes do usuário:' e/ou 'Lacunas da fonte:' seguidas de listas objetivas.\n"
+            "4. Ignore evidências que pareçam pertencer a outro alvo principal, mesmo que semanticamente parecidas.\n"
+            "5. Não devolva tabelas com células vazias ou campos em branco; prefira uma resposta natural e compacta.\n"
+            "6. Explique as escolhas ou passos usando somente a evidência disponível.\n"
+            "7. Se houver lacunas, finalize com as seções 'Decisões pendentes do usuário:' e/ou 'Lacunas da fonte:' seguidas de listas objetivas.\n"
         )
 
     async def _render_operational_answer(
@@ -3389,7 +3482,23 @@ class KnowledgeSpaceService:
         except Exception:
             return fallback
         response = str(result.get("response") or "").strip()
-        return response or fallback
+        if not response:
+            return fallback
+        query_profile = self._build_query_profile(question)
+        if not self._should_accept_operational_response(
+            response=response,
+            selected=selected,
+            support_points=support_points,
+            query_profile=query_profile,
+            support_plan=support_plan,
+        ):
+            return self._render_grounded_task_fallback(
+                selected=selected,
+                support_points=support_points,
+                query_profile=query_profile,
+                support_plan=support_plan,
+            )
+        return response
 
     def _prefer_locator(self, question: str) -> bool:
         lowered = str(question or "").casefold()
@@ -3422,6 +3531,12 @@ class KnowledgeSpaceService:
             file_name = str(metadata.get("file_name") or "").strip()
             concepts = [str(item).strip().casefold() for item in (metadata.get("concepts") or []) if str(item).strip()]
             entities = [str(item).strip().casefold() for item in (metadata.get("entities") or []) if str(item).strip()]
+            if not entities:
+                entities = [
+                    item.casefold()
+                    for item in self._extract_entities(content, title=title, limit=6)
+                    if str(item).strip()
+                ]
             overlap_terms = concepts + entities
             lexical_overlap = self._lexical_overlap(
                 text=content,
@@ -3724,9 +3839,19 @@ class KnowledgeSpaceService:
                         continue
                     if (
                         query_profile.get("has_explicit_target")
-                        and item["doc_role"] == "supplement"
                         and int(item.get("matched_entities") or 0) <= 0
                         and int(item.get("conflicting_entities") or 0) > 0
+                    ):
+                        continue
+                    if (
+                        query_profile.get("has_explicit_target")
+                        and int(item.get("target_term_overlap") or 0) <= 0
+                        and int(item.get("target_phrase_overlap") or 0) <= 0
+                        and int(item.get("conflicting_entities") or 0) > 0
+                        and self._looks_like_specific_option_chunk(
+                            title=str(item.get("title") or ""),
+                            content=str(item.get("content") or ""),
+                        )
                     ):
                         continue
                 sequence_selected.append(item)
@@ -4230,6 +4355,157 @@ class KnowledgeSpaceService:
             "section_role": metadata.get("section_role"),
             "snippet": snippet,
         }
+
+    def _collect_conflicting_support_entities(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        support_points: list[Any],
+        query_profile: dict[str, Any],
+    ) -> set[str]:
+        if not query_profile.get("has_explicit_target"):
+            return set()
+        target_terms = set(query_profile.get("target_terms") or [])
+        target_phrases = set(query_profile.get("target_phrases") or [])
+        conflicting: set[str] = set()
+        for item in selected:
+            entities = [str(entity).strip() for entity in (item.get("entities") or []) if str(entity).strip()]
+            if not entities:
+                entities = self._extract_entities(
+                    str(item.get("content") or ""),
+                    title=str(item.get("title") or ""),
+                    limit=6,
+                )
+            matched, conflicts = self._count_conflicting_entities(
+                entities=[entity.casefold() for entity in entities],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
+            if matched <= 0 and conflicts > 0:
+                conflicting.update(self._normalize_search_text(entity) for entity in entities if entity)
+        for point in support_points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            entities = [str(entity).strip() for entity in (metadata.get("_janus_support_entities") or []) if str(entity).strip()]
+            if not entities:
+                entities = self._extract_entities(
+                    str(payload.get("content") or ""),
+                    title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
+                    limit=6,
+                )
+            matched, conflicts = self._count_conflicting_entities(
+                entities=[entity.casefold() for entity in entities],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
+            if matched <= 0 and conflicts > 0:
+                conflicting.update(self._normalize_search_text(entity) for entity in entities if entity)
+        return {item for item in conflicting if item}
+
+    def _looks_low_information_operational_answer(self, response: str) -> bool:
+        normalized = self._normalize_search_text(response)
+        weak_markers = (
+            "evidencia nao indica",
+            "evidencia nao especifica",
+            "nao detalhada",
+            "nao fornecida",
+            "espacos em branco",
+            "espaços em branco",
+            "campos em branco",
+        )
+        marker_hits = sum(1 for marker in weak_markers if marker in normalized)
+        return marker_hits >= 3 or response.count("|  |") >= 3
+
+    def _should_accept_operational_response(
+        self,
+        *,
+        response: str,
+        selected: list[dict[str, Any]],
+        support_points: list[Any],
+        query_profile: dict[str, Any],
+        support_plan: dict[str, Any] | None,
+    ) -> bool:
+        normalized = self._normalize_search_text(response)
+        if not normalized:
+            return False
+        conflicting_entities = self._collect_conflicting_support_entities(
+            selected=selected,
+            support_points=support_points,
+            query_profile=query_profile,
+        )
+        if conflicting_entities and any(entity in normalized for entity in conflicting_entities):
+            return False
+        if not query_profile.get("has_explicit_target"):
+            return True
+        strong_target_support = 0
+        for item in selected:
+            strong_target_support += int(item.get("matched_entities") or 0)
+            strong_target_support += int(item.get("target_term_overlap") or 0)
+            strong_target_support += int(item.get("target_phrase_overlap") or 0)
+        for point in support_points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            strong_target_support += int(metadata.get("_janus_support_matched_entities") or 0)
+        if strong_target_support >= 2 and self._looks_low_information_operational_answer(response):
+            return False
+        planned_user_decisions = [str(item).strip() for item in ((support_plan or {}).get("user_decisions") or []) if str(item).strip()]
+        if planned_user_decisions and "decisoes pendentes do usuario" not in normalized and "decisões pendentes do usuário" not in normalized:
+            return False
+        return True
+
+    def _render_grounded_task_fallback(
+        self,
+        *,
+        selected: list[dict[str, Any]],
+        support_points: list[Any],
+        query_profile: dict[str, Any],
+        support_plan: dict[str, Any] | None,
+    ) -> str:
+        lines = ["Execução grounded baseada nas evidências recuperadas:"]
+        target_label = ", ".join(query_profile.get("target_phrases") or query_profile.get("target_terms") or []).strip()
+        if target_label:
+            lines.append(f"Alvo principal: {target_label}.")
+        base_sections = [item for item in selected if str(item.get("doc_role") or "") == "base"]
+        supplement_sections = [item for item in selected if str(item.get("doc_role") or "") == "supplement"]
+        if base_sections:
+            primary_base = base_sections[0]
+            lines.append(
+                f"Base: {primary_base.get('title') or 'Seção base'} - "
+                f"{self._trim_text(str(primary_base.get('content') or ''), max_chars=220)}"
+            )
+        if supplement_sections:
+            primary_supplement = supplement_sections[0]
+            lines.append(
+                f"Suplemento: {primary_supplement.get('title') or 'Seção do suplemento'} - "
+                f"{self._trim_text(str(primary_supplement.get('content') or ''), max_chars=220)}"
+            )
+        factual_snippets: list[str] = []
+        for point in support_points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            content = self._trim_text(str(payload.get("content") or ""), max_chars=220)
+            if not content:
+                continue
+            if self._looks_like_editorial_content(
+                title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
+                body=str(payload.get("content") or ""),
+            ):
+                continue
+            factual_snippets.append(f"- [{str(metadata.get('doc_role') or 'base')}] {content}")
+            if len(factual_snippets) >= 4:
+                break
+        if factual_snippets:
+            lines.append("Evidências úteis:")
+            lines.extend(factual_snippets)
+        user_decisions = [str(item).strip() for item in ((support_plan or {}).get("user_decisions") or []) if str(item).strip()]
+        if user_decisions:
+            lines.append("Decisões pendentes do usuário:")
+            lines.extend(f"- {item}" for item in user_decisions[:6])
+        source_gaps = [str(item).strip() for item in ((support_plan or {}).get("source_gaps") or []) if str(item).strip()]
+        if source_gaps:
+            lines.append("Lacunas da fonte:")
+            lines.extend(f"- {item}" for item in source_gaps[:6])
+        return "\n".join(lines)
 
     def _average_score(self, points: list[Any]) -> float:
         if not points:

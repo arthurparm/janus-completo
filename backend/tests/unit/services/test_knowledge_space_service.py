@@ -1256,6 +1256,193 @@ def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
     assert captured["policy_overrides"]["disable_response_cache"] is True
 
 
+def test_build_fallback_operational_plan_adds_target_constrained_steps():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e o suplemento."
+    )
+
+    result = service._build_fallback_operational_plan(
+        selected_sections=[
+            {
+                "doc_role": "base",
+                "title": "Capítulo Um",
+                "content": "Criação de personagem, atributos, raça, classe e origem.",
+                "concepts": ["atributos", "raça", "classe", "origem"],
+            }
+        ],
+        query_profile=query_profile,
+    )
+
+    queries = [step["query"] for step in result]
+    assert any("cavaleiro" in query for query in queries)
+    assert any("requisitos habilidades regras" in query for query in queries)
+    assert any(step["doc_role_hint"] == "supplement" for step in result)
+
+
+def test_collect_operational_support_points_skips_conflicting_specific_option_for_target():
+    service = KnowledgeSpaceService()
+
+    class FakeClient:
+        async def query_points(self, **kwargs):
+            doc_id = None
+            for condition in kwargs["query_filter"].must:
+                if getattr(condition, "key", "") == "metadata.doc_id":
+                    doc_id = condition.match.value
+            return SimpleNamespace(
+                points=[
+                    SimpleNamespace(
+                        id=f"{doc_id}-cavaleiro",
+                        payload={
+                            "content": "Cavaleiro Místico é uma variante de cavaleiro com poderes próprios.",
+                            "metadata": {
+                                "doc_id": doc_id,
+                                "doc_role": "supplement",
+                                "file_name": "suplemento.pdf",
+                                "chunk_index": 1,
+                                "section_title": "Classes Variantes",
+                            },
+                        },
+                        score=0.82,
+                    ),
+                    SimpleNamespace(
+                        id=f"{doc_id}-bardo",
+                        payload={
+                            "content": "Bardo Marcial é uma variante de bardo com magia performática.",
+                            "metadata": {
+                                "doc_id": doc_id,
+                                "doc_role": "supplement",
+                                "file_name": "suplemento.pdf",
+                                "chunk_index": 2,
+                                "section_title": "Classes Variantes",
+                            },
+                        },
+                        score=0.86,
+                    ),
+                ]
+            )
+
+    import app.services.knowledge_space_service as module
+
+    original_get_client = module.get_async_qdrant_client
+    original_get_collection = module.aget_or_create_collection
+    original_embed = module.aembed_text
+    try:
+        module.get_async_qdrant_client = lambda: FakeClient()
+
+        async def fake_get_collection(name):
+            return "col"
+
+        async def fake_embed(text):
+            return [0.0] * 3
+
+        module.aget_or_create_collection = fake_get_collection
+        module.aembed_text = fake_embed
+
+        result = asyncio.run(
+            service._collect_operational_support_points(
+                knowledge_space={"knowledge_space_id": "ks-1"},
+                user_id="user-1",
+                question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o suplemento.",
+                limit=4,
+                active_doc_ids={"supp-doc"},
+                selected_sections=[
+                    {
+                        "doc_id": "supp-doc",
+                        "doc_role": "supplement",
+                        "title": "Capítulo 1: Campeões de Arton",
+                        "content": "Novas classes variantes.",
+                    }
+                ],
+                support_plan={
+                    "steps": [
+                        {
+                            "label": "extensoes do suplemento",
+                            "query": "cavaleiro variantes extensoes suplemento opcoes adicionais",
+                            "doc_role_hint": "supplement",
+                        }
+                    ]
+                },
+            )
+        )
+    finally:
+        module.get_async_qdrant_client = original_get_client
+        module.aget_or_create_collection = original_get_collection
+        module.aembed_text = original_embed
+
+    assert [point.id for point in result] == ["supp-doc-cavaleiro"]
+
+
+def test_render_operational_answer_falls_back_when_llm_response_is_low_information():
+    service = KnowledgeSpaceService(llm_service=SimpleNamespace())
+
+    async def fake_invoke_llm(**kwargs):
+        return {
+            "response": (
+                "| Seção | Conteúdo |\n"
+                "|---|---|\n"
+                "| Nome |  |\n"
+                "| Poderes |  |\n"
+                "A evidência não indica. Não detalhada. Não fornecida."
+            )
+        }
+
+    async def fake_collect_support_points(**kwargs):
+        return [
+            SimpleNamespace(
+                payload={
+                    "content": "Cavaleiro possui poderes e equipamentos específicos para o papel marcial.",
+                    "metadata": {
+                        "doc_role": "base",
+                        "file_name": "livro.pdf",
+                        "chunk_index": 12,
+                        "_janus_support_entities": ["cavaleiro"],
+                        "_janus_support_matched_entities": 1,
+                        "_janus_support_conflicting_entities": 0,
+                    },
+                }
+            )
+        ]
+
+    async def fake_plan_support(**kwargs):
+        return {
+            "steps": [{"label": "alvo principal", "query": "cavaleiro", "doc_role_hint": "base"}],
+            "user_decisions": ["Escolher raça e origem válidas."],
+            "source_gaps": [],
+        }
+
+    service._llm.invoke_llm = fake_invoke_llm
+    service._collect_operational_support_points = fake_collect_support_points  # type: ignore[method-assign]
+    service._plan_operational_support = fake_plan_support  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        service._render_operational_answer(
+            selected=[
+                {
+                    "doc_role": "base",
+                    "title": "Capítulo Um",
+                    "section_role": "core_rules",
+                    "content": "Criação de personagem e classe cavaleiro.",
+                    "section_order": 1,
+                    "rerank_score": 0.8,
+                    "matched_entities": 1,
+                    "target_term_overlap": 1,
+                    "target_phrase_overlap": 1,
+                }
+            ],
+            retrieval_strategy="sequence",
+            knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
+            user_id="user-1",
+            question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro.",
+            limit=4,
+            active_doc_ids={"doc-1"},
+        )
+    )
+
+    assert result.startswith("Execução grounded baseada nas evidências recuperadas:")
+    assert "Decisões pendentes do usuário:" in result
+
+
 def test_plan_operational_support_uses_ollama_and_distinguishes_decisions_from_gaps():
     captured = {}
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
@@ -1454,8 +1641,15 @@ def test_collect_operational_support_points_targets_selected_docs_without_scroll
         module.aget_or_create_collection = original_get_collection
         module.aembed_text = original_embed
 
-    assert [point.id for point in result] == ["p-base-doc", "p-supp-doc"]
-    assert len(fake_client.calls) == 2
+    assert all(point.id in {"p-base-doc", "p-supp-doc"} for point in result)
+    assert any(point.id == "p-base-doc" for point in result)
+    queried_doc_ids = []
+    for call in fake_client.calls:
+        for condition in call["query_filter"].must:
+            if getattr(condition, "key", "") == "metadata.doc_id":
+                queried_doc_ids.append(condition.match.value)
+                break
+    assert set(queried_doc_ids) == {"base-doc", "supp-doc"}
 
 
 def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metrics():
