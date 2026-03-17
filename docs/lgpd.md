@@ -46,3 +46,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Logs em Tools:** Extender a aplicação das regex e máscaras de PII (`_PII_PATTERNS` em `memory/security.py`) diretamente às chamadas do logger nas tools, filtrando destinatários e assuntos antes da formatação em texto limpo.
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` das variáves estáticas para uma camada de persistência vinculada ao DB e usuário, aplicando controles severos de ACL (Access Control Lists).
+
+## Achados do dia (2026-03-17)
+
+### Lacunas e Impacto
+- **Novas Falhas Relacionadas à Privacidade:** Não foram mapeadas novas inserções de código envolvendo PII flagrantes nas últimas 24h a 7 dias (foco das atualizações esteve em correções de segurança no parser de XML, binds do agente Windows e vulnerabilidades do NPM).
+- **Riscos Subjacentes Persistentes:** O `windows_agent.py` mantêm-se como o maior ofensor ao ligar-se em modo `0.0.0.0` sem autenticação. Uma vez aberto indiscriminadamente na rede, o endpoint de _screen capture_ viola as proteções de dados mínimos, vazando as telas do operador (ou conversas privadas) para qualquer _port-scanner_ da rede corporativa ou local.
+
+### Próximos Passos
+1. **Remediação do Binding do Windows Agent:** Mudar para `127.0.0.1` de forma urgente para mitigar acessos indevidos e prevenir que atores adjacentes capturem sessões de vídeo/screenshots da tela.

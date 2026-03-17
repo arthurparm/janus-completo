@@ -125,3 +125,40 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Alta
 - **Descrição:** Os scripts de testes explicitamente imprimem ou efetuam log de senhas hardcoded e secrets durante sua execução, correndo sérios riscos de vazamento (Credentials Leak) nos pipelines de CI/CD.
 - **Ação Recomendada:** Modificar a execução dos testes e benchmarks para ofuscar, remover do standard out ou substituir senhas reais por mock-passwords seguras (ex: `SecretStr`).
+
+## Achados do dia (2026-03-17)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, falta de lockfile/dependência em sandbox sem network acesso total).
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas).
+
+### 17. Vulnerabilidade XML Parsing (Billion Laughs / XXE)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Alta
+- **Descrição:** O parser de DOCX utiliza `xml.etree.ElementTree.fromstring` para analisar o conteúdo do documento, o qual é vulnerável a ataques XML (como Billion Laughs ou injeção de entidades externas).
+- **Ação Recomendada:** Substituir `xml.etree.ElementTree` pela biblioteca `defusedxml` para analisar XML de fontes não confiáveis com segurança.
+
+### 18. Exposição Insegura do Windows Agent
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Crítica
+- **Descrição:** O script vincula-se a `0.0.0.0` (todas as interfaces de rede) na inicialização, expondo o serviço a qualquer dispositivo na rede local, sem mecanismos de autenticação.
+- **Ação Recomendada:** Alterar o binding padrão para `127.0.0.1` (localhost) e/ou implementar autenticação robusta nos endpoints.
+
+### 19. Chamadas HTTP sem Timeout
+- **Caminho:** Scripts de teste no backend
+- **Gravidade:** Média
+- **Descrição:** Scripts de teste utilizam a biblioteca `requests` para realizar chamadas sem definir um tempo limite (timeout), o que pode causar travamentos (hangs) no pipeline e é classificado como um risco de segurança/confiabilidade.
+- **Ação Recomendada:** Adicionar parâmetros de `timeout` explícitos em todas as chamadas HTTP (ex: `requests.get(url, timeout=10)`).
+
+### 20. Vulnerabilidades em Dependências do Frontend (@angular/core, @angular/compiler)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas dependências do Angular (`@angular/core`, `@angular/compiler`) foram identificadas como vulneráveis pelo `npm audit` (GHSA-g93w-mfhg-p222) - vulnerabilidade de XSS em i18n attribute bindings.
+- **Ação Recomendada:** Atualizar as dependências afetadas para versões corrigidas (>=20.3.18) utilizando `npm update` ou alterando o `package.json` diretamente.
+
+### 21. Falha Silenciosa no Message Broker (Fail-Open)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média/Alta
+- **Descrição:** Falhas na conexão com o RabbitMQ (`[Errno 111] Connection refused`) causam a queda silenciosa do sistema para modo offline, sem que ocorra um alerta claro sobre a indisponibilidade do broker de mensagens.
+- **Ação Recomendada:** Implementar alertas explícitos, logging estruturado com nível de alerta (ex: ERROR/CRITICAL) e métricas de conectividade que acionem pagers em caso de queda do broker.

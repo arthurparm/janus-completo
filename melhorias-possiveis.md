@@ -749,3 +749,57 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-030] Falha Silenciosa no RabbitMQ (Fail-Open)
+- Problema atual: A infraestrutura do message broker (`backend/app/core/infrastructure/message_broker.py`) cai para modo offline silenciosamente caso haja recusa de conexão pelo RabbitMQ.
+- Solucao proposta: Emitir logs CRITICAL/ERROR e acionar alertas adequados para evitar interrupções sistêmicas silenciosas.
+- Impacto esperado: Resiliência operacional aumentada e MTTR menor para falhas de fila.
+- Riscos: Nenhum substancial no fluxo principal.
+- Dependencias: Stack de observabilidade.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-031] Vulnerabilidade de XML Parsing em DOCX
+- Problema atual: O parser de Word usa `xml.etree.ElementTree.fromstring` para extrair texto (`backend/app/services/document_parser_service.py`), abrindo risco para Billion Laughs.
+- Solucao proposta: Implementar o uso da biblioteca `defusedxml` ou desabilitar features de expansão de entidade.
+- Impacto esperado: Proteção de infraestrutura contra esgotamento de CPU/Memória por documentos envenenados.
+- Riscos: Requer validação das quebras de compatibilidade do parseamento de schemas pesados da MS, dependência nova no poetry.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-032] Exposição Insegura do Windows Agent em 0.0.0.0
+- Problema atual: O `windows_agent.py` sobe ouvindo em todas as interfaces da máquina (porta 5001), sem qualquer camada de Autenticação/CORS, expondo gravação de tela, leitura de áreas sensíveis e síntese de voz à rede.
+- Solucao proposta: Bind `127.0.0.1` como default absoluto para o agente de proxy do OS ou exigir chaves Preshared Key obrigatórias.
+- Impacto esperado: Evitar capturas massivas (AuthZ Bypass, PII Leak) de dados via ataques laterais simples.
+- Riscos: Redirecionamentos de rede em clientes WSL2.
+- Dependencias: Frontend/Agentes da LAN.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Ausência de Timeout nas chamadas "requests" dos Testes
+- Problema atual: Scripts do backend baseados em `requests` chamam endpoints do servidor sem definir o parâmetro de `timeout`, permitindo travamentos perigosos no backend de integração (denial-of-test-service / unclosed sockets).
+- Solucao proposta: Adicionar um wrapper global para requests ou preencher o kwarg em toda request explícita.
+- Impacto esperado: Pipelines de QA (e possivelmente serviços em produção acoplados) tornam-se menos quebradiços ao reagirem rapidamente às redes congeladas.
+- Riscos: Necessidade de tuning no tempo em rotas lentas/agentes em reflexão profunda.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-034] Vulnerabilidade de XSS Crítica em @angular/core
+- Problema atual: `npm audit` acusa `GHSA-g93w-mfhg-p222` em `@angular/core` e `@angular/compiler` devido ao tratamento de XSS via bindings i18n em propriedades.
+- Solucao proposta: Rodar `npm update @angular/core @angular/compiler` ou fixar a dependência nas versões mitigadas (20.3.18).
+- Impacto esperado: Proteção em runtime de scripts injetáveis pelo DOM em sites servidos.
+- Riscos: Minor versions nas quebras do Angular CLI se conflituar.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
