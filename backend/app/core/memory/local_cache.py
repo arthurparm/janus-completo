@@ -149,6 +149,53 @@ class MemoryLocalCache:
 
         return results
 
+    async def list_entries(self, *, origin: str | None = None) -> list[dict[str, Any]]:
+        """Retorna um snapshot dos itens atuais do cache, opcionalmente filtrados por origem."""
+        try:
+            async with self._lock:
+                now_s = time.time()
+                expired_keys = [
+                    k for k, v in self._cache.items() if float(v.get("expires_at", 0)) <= now_s
+                ]
+                for k in expired_keys:
+                    self._cache.pop(k, None)
+                if expired_keys:
+                    self._update_size_metric()
+
+                entries = []
+                for item in self._cache.values():
+                    metadata = item.get("metadata") or {}
+                    if origin and str(metadata.get("origin") or "unknown") != origin:
+                        continue
+                    entries.append(
+                        {
+                            "id": item.get("id"),
+                            "content": item.get("content"),
+                            "metadata": dict(metadata),
+                            "ts_ms": item.get("ts_ms"),
+                        }
+                    )
+                return entries
+        except Exception:
+            logger.debug("Falha ao listar itens do cache local", exc_info=True)
+            return []
+
+    async def remove_many(self, experience_ids: list[str]) -> int:
+        """Remove um conjunto de itens do cache local."""
+        removed = 0
+        if not experience_ids:
+            return removed
+        try:
+            async with self._lock:
+                for experience_id in experience_ids:
+                    if self._cache.pop(str(experience_id), None) is not None:
+                        removed += 1
+                if removed:
+                    self._update_size_metric()
+        except Exception:
+            logger.debug("Falha ao remover itens do cache local", exc_info=True)
+        return removed
+
     def _update_size_metric(self):
         try:
             self._metric_size.set(len(self._cache))

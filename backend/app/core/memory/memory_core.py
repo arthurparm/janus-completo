@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import math
 import time
 import uuid
 from typing import Any
@@ -73,6 +74,7 @@ class MemoryCore:
         self._self_study_quota_max_bytes = int(
             getattr(self.settings, "MEMORY_QUOTA_MAX_BYTES_SELF_STUDY", 25_000_000)
         )
+        self._smart_eviction_policies = self._load_smart_eviction_policies()
 
         # Metrics
         self._quota_rejections = memory_quota_rejections_total
@@ -96,6 +98,17 @@ class MemoryCore:
         """
         # 1. Validation & Quotas
         self._check_content_size(experience.content)
+        ts_ms = self._get_timestamp_ms(experience.timestamp)
+        incoming_metadata = self._coerce_metadata_dict(experience.metadata)
+        self._normalize_metadata_contract(
+            incoming_metadata,
+            payload_type=str(experience.type or ""),
+            ts_ms=ts_ms,
+        )
+        incoming_metadata.setdefault(
+            "content_bytes", len(str(experience.content or "").encode("utf-8"))
+        )
+        await self._ensure_quota_capacity(experience, incoming_metadata)
         self._check_quota(experience)
 
         # 2. PII & Security
@@ -115,7 +128,6 @@ class MemoryCore:
         encrypted_content, enc_method = encrypt_text(str(final_content))
 
         # 5. Prepare Payload
-        ts_ms = self._get_timestamp_ms(experience.timestamp)
         payload = (
             experience.model_dump()
             if hasattr(experience, "model_dump")
@@ -148,6 +160,7 @@ class MemoryCore:
         # Preserve type for filtering
         if payload.get("type"):
             meta["type"] = payload["type"]
+        meta.setdefault("content_bytes", len(str(final_content or "").encode("utf-8")))
 
         # 6. Upsert (Provider + Cache)
         clean_id = self._ensure_valid_point_id(experience.id)
@@ -364,6 +377,214 @@ class MemoryCore:
         if str(origin or "").strip().lower() == "self_study":
             return self._self_study_quota_max_items, self._self_study_quota_max_bytes
         return self._quota_max_items, self._quota_max_bytes
+
+    def _load_smart_eviction_policies(self) -> dict[str, dict[str, Any]]:
+        raw = getattr(self.settings, "MEMORY_SMART_EVICTION_POLICIES", None)
+        if not isinstance(raw, dict):
+            raw = {}
+
+        policies: dict[str, dict[str, Any]] = {
+            "default": {
+                "enabled": True,
+                "protected_retention": {"persistent"},
+                "protect_strong_memory": False,
+                "protect_stability_score_gte": 0.92,
+                "prefer_retention": {"rolling_window", "default"},
+            },
+            "chat.index_interaction": {
+                "enabled": True,
+                "protected_retention": {"persistent"},
+                "protect_strong_memory": False,
+                "protect_stability_score_gte": 0.85,
+                "prefer_retention": {"rolling_window", "default"},
+            },
+            "self_study": {
+                "enabled": True,
+                "protected_retention": {"persistent"},
+                "protect_strong_memory": True,
+                "protect_stability_score_gte": 0.8,
+                "prefer_retention": {"rolling_window", "default"},
+            },
+        }
+
+        for origin, policy in raw.items():
+            if not isinstance(policy, dict):
+                continue
+            merged = dict(policies.get(str(origin), policies["default"]))
+            if "enabled" in policy:
+                merged["enabled"] = bool(policy.get("enabled"))
+            if "protected_retention" in policy:
+                merged["protected_retention"] = {
+                    str(item).strip().lower()
+                    for item in (policy.get("protected_retention") or [])
+                    if str(item).strip()
+                }
+            if "protect_strong_memory" in policy:
+                merged["protect_strong_memory"] = bool(policy.get("protect_strong_memory"))
+            if "protect_stability_score_gte" in policy:
+                try:
+                    merged["protect_stability_score_gte"] = float(
+                        policy.get("protect_stability_score_gte")
+                    )
+                except Exception:
+                    pass
+            if "prefer_retention" in policy:
+                merged["prefer_retention"] = {
+                    str(item).strip().lower()
+                    for item in (policy.get("prefer_retention") or [])
+                    if str(item).strip()
+                }
+            policies[str(origin)] = merged
+
+        return policies
+
+    def _get_eviction_policy(self, origin: str) -> dict[str, Any]:
+        return dict(self._smart_eviction_policies.get(origin) or self._smart_eviction_policies["default"])
+
+    async def _ensure_quota_capacity(
+        self,
+        experience: Experience,
+        incoming_metadata: dict[str, Any],
+    ) -> None:
+        if self._quota_max_items <= 0 and self._quota_max_bytes <= 0:
+            return
+
+        origin = str(incoming_metadata.get("origin") or "unknown")
+        quota_max_items, quota_max_bytes = self._get_quota_limits(origin)
+        now = time.time()
+        entry = self._quota.get(origin)
+        if entry is None or now - float(entry.get("window_start", 0.0)) >= self._quota_window_s:
+            entry = {"window_start": now, "items": 0, "bytes": 0}
+            self._quota[origin] = entry
+
+        content_bytes = int(incoming_metadata.get("content_bytes") or 0)
+        projected_items = int(entry.get("items", 0)) + 1
+        projected_bytes = int(entry.get("bytes", 0)) + content_bytes
+
+        over_items = max(0, projected_items - quota_max_items) if quota_max_items > 0 else 0
+        over_bytes = max(0, projected_bytes - quota_max_bytes) if quota_max_bytes > 0 else 0
+        if over_items <= 0 and over_bytes <= 0:
+            return
+
+        await self._evict_for_origin(origin, over_items=over_items, over_bytes=over_bytes)
+
+    async def _evict_for_origin(self, origin: str, *, over_items: int, over_bytes: int) -> None:
+        policy = self._get_eviction_policy(origin)
+        if not bool(policy.get("enabled", False)):
+            return
+
+        candidates = await self.cache.list_entries(origin=origin)
+        ranked_candidates = [
+            candidate
+            for candidate in sorted(candidates, key=lambda item: self._eviction_sort_key(item, policy))
+            if not self._is_eviction_protected(item=candidate, policy=policy)
+        ]
+        if not ranked_candidates:
+            return
+
+        selected_ids: list[str] = []
+        freed_items = 0
+        freed_bytes = 0
+        for candidate in ranked_candidates:
+            candidate_id = str(candidate.get("id") or "").strip()
+            if not candidate_id:
+                continue
+            selected_ids.append(candidate_id)
+            freed_items += 1
+            freed_bytes += self._candidate_content_bytes(candidate)
+            if freed_items >= over_items and freed_bytes >= over_bytes:
+                break
+
+        if not selected_ids:
+            return
+
+        point_ids = [self._ensure_valid_point_id(item_id) for item_id in selected_ids]
+        await self.provider.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.PointIdsList(points=point_ids),
+        )
+        await self.cache.remove_many(selected_ids)
+
+        entry = self._quota.get(origin)
+        if entry is not None:
+            entry["items"] = max(0, int(entry.get("items", 0)) - freed_items)
+            entry["bytes"] = max(0, int(entry.get("bytes", 0)) - freed_bytes)
+
+        logger.info(
+            "memory_smart_eviction_applied",
+            origin=origin,
+            evicted=len(selected_ids),
+            freed_items=freed_items,
+            freed_bytes=freed_bytes,
+            quota_window_seconds=self._quota_window_s,
+        )
+
+    def _coerce_metadata_dict(self, metadata: Any) -> dict[str, Any]:
+        if metadata is None:
+            return {}
+        if hasattr(metadata, "model_dump"):
+            try:
+                return dict(metadata.model_dump())
+            except Exception:
+                return {}
+        if isinstance(metadata, dict):
+            return dict(metadata)
+        return {}
+
+    def _candidate_content_bytes(self, candidate: dict[str, Any]) -> int:
+        metadata = candidate.get("metadata") or {}
+        try:
+            value = int(metadata.get("content_bytes") or 0)
+            if value > 0:
+                return value
+        except Exception:
+            pass
+        return len(str(candidate.get("content") or "").encode("utf-8"))
+
+    def _is_eviction_protected(self, *, item: dict[str, Any], policy: dict[str, Any]) -> bool:
+        metadata = item.get("metadata") or {}
+        retention = str(metadata.get("retention_policy") or "default").strip().lower()
+        if retention in set(policy.get("protected_retention") or set()):
+            return True
+        if bool(policy.get("protect_strong_memory")) and bool(metadata.get("strong_memory")):
+            return True
+        try:
+            stability = float(metadata.get("stability_score") or 0.0)
+        except Exception:
+            stability = 0.0
+        return stability >= float(policy.get("protect_stability_score_gte") or math.inf)
+
+    def _eviction_sort_key(self, item: dict[str, Any], policy: dict[str, Any]) -> tuple[Any, ...]:
+        metadata = item.get("metadata") or {}
+        retention = str(metadata.get("retention_policy") or "default").strip().lower()
+        strong_memory = bool(metadata.get("strong_memory"))
+        try:
+            stability = float(metadata.get("stability_score") or 0.0)
+        except Exception:
+            stability = 0.0
+        try:
+            access_count = int(metadata.get("access_count") or 0)
+        except Exception:
+            access_count = 0
+        try:
+            last_accessed_at = int(metadata.get("last_accessed_at") or 0)
+        except Exception:
+            last_accessed_at = 0
+        try:
+            ts_ms = int(item.get("ts_ms") or metadata.get("captured_at") or 0)
+        except Exception:
+            ts_ms = 0
+
+        preferred_retention = set(policy.get("prefer_retention") or set())
+        return (
+            0 if retention in preferred_retention else 1,
+            0 if metadata.get("local_only") else 1,
+            0 if not strong_memory else 1,
+            stability,
+            access_count,
+            last_accessed_at,
+            ts_ms,
+        )
 
     def _get_timestamp_ms(self, ts_str):
         try:
