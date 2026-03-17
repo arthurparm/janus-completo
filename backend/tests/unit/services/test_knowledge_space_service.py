@@ -1599,6 +1599,96 @@ def test_replace_with_structural_supplement_anchor_swaps_specific_option_chunk()
     assert [item["title"] for item in result] == ["Capítulo Um", "Capítulo 1: Campeões de Arton"]
 
 
+def test_select_best_operational_support_section_prefers_targeted_structural_supplement():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton."
+    )
+
+    support_points = [
+        SimpleNamespace(
+            score=0.82,
+            payload={
+                "content": "Manto de Batalha concede redução de dano ao alvo e efeitos mágicos adicionais.",
+                "metadata": {
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_title": "Manto de Batalha",
+                    "applies_to": ["character_options"],
+                    "usefulness_score": 0.71,
+                },
+            },
+        ),
+        SimpleNamespace(
+            score=0.71,
+            payload={
+                "content": "Capítulo 1 apresenta novas opções para criação de personagem, incluindo variantes ligadas a cavaleiro.",
+                "metadata": {
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "usefulness_score": 0.88,
+                },
+            },
+        ),
+    ]
+
+    result = service._select_best_operational_support_section(
+        support_points=support_points,
+        doc_role="supplement",
+        query_profile=query_profile,
+    )
+
+    assert result is not None
+    assert result["title"] == "Capítulo 1: Campeões de Arton"
+
+
+def test_render_grounded_task_fallback_prefers_support_section_over_bad_selected_supplement():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton."
+    )
+
+    selected = [
+        {
+            "doc_role": "base",
+            "title": "Capítulo Um",
+            "content": "A criação base define atributos, raça, classe e origem.",
+        },
+        {
+            "doc_role": "supplement",
+            "title": "10 pontos de redução de dano do alvo. e",
+            "content": "Manto de Batalha oferece proteção mágica e outras propriedades.",
+        },
+    ]
+    support_points = [
+        SimpleNamespace(
+            score=0.76,
+            payload={
+                "content": "Capítulo 1 apresenta novas opções para criação de personagem, inclusive opções ligadas a cavaleiro.",
+                "metadata": {
+                    "doc_role": "supplement",
+                    "section_role": "supplement_rules",
+                    "section_title": "Capítulo 1: Campeões de Arton",
+                    "applies_to": ["workflow", "character_options"],
+                    "usefulness_score": 0.87,
+                },
+            },
+        )
+    ]
+
+    answer = service._render_grounded_task_fallback(
+        selected=selected,
+        support_points=support_points,
+        query_profile=query_profile,
+        support_plan=None,
+    )
+
+    assert "Suplemento: Capítulo 1: Campeões de Arton" in answer
+    assert "Manto de Batalha" not in answer
+
+
 def test_render_operational_answer_falls_back_when_llm_response_is_low_information():
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 

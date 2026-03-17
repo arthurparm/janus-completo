@@ -4818,14 +4818,22 @@ class KnowledgeSpaceService:
             lines.append(f"Alvo principal: {target_label}.")
         base_sections = [item for item in selected if str(item.get("doc_role") or "") == "base"]
         supplement_sections = [item for item in selected if str(item.get("doc_role") or "") == "supplement"]
-        if base_sections:
-            primary_base = base_sections[0]
+        primary_base = self._select_best_operational_support_section(
+            support_points=support_points,
+            doc_role="base",
+            query_profile=query_profile,
+        ) or (base_sections[0] if base_sections else None)
+        primary_supplement = self._select_best_operational_support_section(
+            support_points=support_points,
+            doc_role="supplement",
+            query_profile=query_profile,
+        ) or (supplement_sections[0] if supplement_sections else None)
+        if primary_base:
             lines.append(
                 f"Base: {primary_base.get('title') or 'Seção base'} - "
                 f"{self._trim_text(str(primary_base.get('content') or ''), max_chars=220)}"
             )
-        if supplement_sections:
-            primary_supplement = supplement_sections[0]
+        if primary_supplement:
             lines.append(
                 f"Suplemento: {primary_supplement.get('title') or 'Seção do suplemento'} - "
                 f"{self._trim_text(str(primary_supplement.get('content') or ''), max_chars=220)}"
@@ -4871,6 +4879,113 @@ class KnowledgeSpaceService:
             lines.append("Lacunas da fonte:")
             lines.extend(f"- {item}" for item in source_gaps[:6])
         return "\n".join(lines)
+
+    def _select_best_operational_support_section(
+        self,
+        *,
+        support_points: list[Any],
+        doc_role: str,
+        query_profile: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        normalized_doc_role = str(doc_role or "").strip().lower()
+        if normalized_doc_role not in {"base", "supplement"}:
+            return None
+        target_terms = set(query_profile.get("target_terms") or [])
+        target_phrases = set(query_profile.get("target_phrases") or [])
+        candidates: list[dict[str, Any]] = []
+        for point in support_points:
+            payload = getattr(point, "payload", {}) or {}
+            metadata = payload.get("metadata") or {}
+            point_doc_role = str(metadata.get("doc_role") or "base").strip().lower() or "base"
+            if point_doc_role != normalized_doc_role:
+                continue
+            title = str(metadata.get("section_title") or metadata.get("file_name") or "").strip()
+            content = str(payload.get("content") or "").strip()
+            section_role = str(metadata.get("section_role") or "core_rules").strip().lower() or "core_rules"
+            applies_to = metadata.get("applies_to") or []
+            if not content:
+                continue
+            if self._looks_like_editorial_content(title=title, body=content):
+                continue
+            text_target_term_overlap, text_target_phrase_overlap = self._target_overlap(
+                text=content,
+                title=title,
+                concepts=[],
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
+            entities = [str(item).strip().casefold() for item in (metadata.get("_janus_support_entities") or []) if str(item).strip()]
+            if not entities:
+                entities = [
+                    item.casefold()
+                    for item in self._extract_entities(content, title=title, limit=6)
+                    if str(item).strip()
+                ]
+            matched_entities, conflicting_entities = self._count_conflicting_entities(
+                entities=entities,
+                target_terms=target_terms,
+                target_phrases=target_phrases,
+            )
+            if not self._is_target_constrained_task_candidate(
+                title=title,
+                content=content,
+                doc_role=point_doc_role,
+                section_role=section_role,
+                applies_to=applies_to,
+                target_term_overlap=text_target_term_overlap,
+                target_phrase_overlap=text_target_phrase_overlap,
+                matched_entities=matched_entities,
+                conflicting_entities=conflicting_entities,
+                query_profile=query_profile,
+            ):
+                continue
+            if normalized_doc_role == "supplement":
+                is_structural = self._is_supplement_creation_extension_section(
+                    title=title,
+                    content=content,
+                    section_role=section_role,
+                    applies_to=applies_to,
+                ) or self._is_sequence_anchor(title=title, content=content, doc_role="supplement")
+                is_specific = self._looks_like_specific_option_chunk(title=title, content=content)
+                if is_specific and text_target_term_overlap <= 0 and text_target_phrase_overlap <= 0 and matched_entities <= 0:
+                    continue
+            else:
+                is_structural = self._is_base_creation_foundation_section(
+                    title=title,
+                    content=content,
+                    section_role=section_role,
+                    applies_to=applies_to,
+                )
+                is_specific = False
+            candidates.append(
+                {
+                    "title": title,
+                    "content": content,
+                    "doc_role": point_doc_role,
+                    "section_role": section_role,
+                    "matched_entities": matched_entities,
+                    "text_target_term_overlap": text_target_term_overlap,
+                    "text_target_phrase_overlap": text_target_phrase_overlap,
+                    "is_structural": bool(is_structural),
+                    "is_specific": bool(is_specific),
+                    "usefulness_score": float(metadata.get("usefulness_score") or 0.0),
+                    "score": float(getattr(point, "score", 0.0) or 0.0),
+                }
+            )
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda item: (
+                -int(item.get("text_target_phrase_overlap") or 0),
+                -int(item.get("matched_entities") or 0),
+                -int(item.get("text_target_term_overlap") or 0),
+                0 if bool(item.get("is_structural")) else 1,
+                1 if bool(item.get("is_specific")) else 0,
+                -float(item.get("usefulness_score") or 0.0),
+                -float(item.get("score") or 0.0),
+            )
+        )
+        return candidates[0]
 
     def _average_score(self, points: list[Any]) -> float:
         if not points:
