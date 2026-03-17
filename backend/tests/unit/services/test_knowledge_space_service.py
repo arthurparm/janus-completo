@@ -1373,6 +1373,107 @@ def test_collect_operational_support_points_skips_conflicting_specific_option_fo
     assert [point.id for point in result] == ["supp-doc-cavaleiro"]
 
 
+def test_select_canonical_candidates_skips_off_target_task_sections():
+    service = KnowledgeSpaceService()
+    query_profile = service._build_query_profile(
+        "Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton."
+    )
+
+    def build_point(
+        *,
+        point_id: str,
+        title: str,
+        content: str,
+        doc_role: str,
+        section_role: str,
+        applies_to: list[str],
+        entities: list[str] | None = None,
+        score: float = 0.7,
+        order: int = 1,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=point_id,
+            payload={
+                "content": content,
+                "metadata": {
+                    "doc_id": f"{point_id}-doc",
+                    "file_name": f"{point_id}.pdf",
+                    "section_id": point_id,
+                    "section_title": title,
+                    "doc_role": doc_role,
+                    "section_role": section_role,
+                    "applies_to": applies_to,
+                    "section_order": order,
+                    "entities": entities or [],
+                    "usefulness_score": 0.8,
+                    "heading_quality_score": 0.8,
+                    "content_density_score": 0.8,
+                    "noise_score": 0.0,
+                },
+            },
+            score=score,
+        )
+
+    points = [
+        build_point(
+            point_id="base-foundation",
+            title="Capítulo Um",
+            content="Construção de personagens com atributos, raça, classe e origem.",
+            doc_role="base",
+            section_role="core_rules",
+            applies_to=["workflow", "base_creation"],
+            order=1,
+        ),
+        build_point(
+            point_id="supp-overview",
+            title="Capítulo 1: Campeões de Arton",
+            content="Novas opções para construir seu personagem, com variantes e poderes adicionais.",
+            doc_role="supplement",
+            section_role="supplement_rules",
+            applies_to=["workflow", "character_options"],
+            order=1,
+        ),
+        build_point(
+            point_id="off-target-base",
+            title="Capítulo Um",
+            content="Bucaneiro usa técnicas marciais e truques ligados aos mares.",
+            doc_role="base",
+            section_role="core_rules",
+            applies_to=["character_options"],
+            entities=["bucaneiro"],
+            score=0.95,
+            order=2,
+        ),
+        build_point(
+            point_id="off-target-supp",
+            title="Classes Variantes",
+            content="Manto de Batalha é uma opção ligada a paladino e Vestimenta da Fé.",
+            doc_role="supplement",
+            section_role="supplement_rules",
+            applies_to=["character_options"],
+            entities=["paladino", "manto de batalha"],
+            score=0.96,
+            order=2,
+        ),
+    ]
+
+    result = service._select_canonical_candidates(
+        points=points,
+        question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o livro base e Heróis de Arton.",
+        query_profile=query_profile,
+        answer_strategy="sequence",
+        limit=4,
+    )
+
+    titles = [item["title"] for item in result]
+    contents = [item["content"] for item in result]
+
+    assert "Capítulo Um" in titles
+    assert "Capítulo 1: Campeões de Arton" in titles
+    assert not any("Bucaneiro" in content for content in contents)
+    assert not any("Manto de Batalha" in content for content in contents)
+
+
 def test_render_operational_answer_falls_back_when_llm_response_is_low_information():
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 

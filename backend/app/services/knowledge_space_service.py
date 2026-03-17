@@ -97,11 +97,19 @@ _TASK_TARGET_STOPWORDS = {
     "classe",
     "classes",
     "completo",
+    "completa",
+    "crie",
     "criar",
     "criacao",
     "criação",
+    "gere",
+    "gerar",
+    "qual",
+    "quais",
     "defina",
     "definir",
+    "elabore",
+    "elaborar",
     "entregue",
     "equipamento",
     "equipamentos",
@@ -127,6 +135,8 @@ _TASK_TARGET_STOPWORDS = {
     "opcao",
     "opcional",
     "opcoes",
+    "monte",
+    "montar",
     "origem",
     "origens",
     "passo",
@@ -138,6 +148,10 @@ _TASK_TARGET_STOPWORDS = {
     "raça",
     "raca",
     "regras",
+    "resolva",
+    "resolver",
+    "sequencia",
+    "sequência",
     "somente",
     "suplemento",
     "tabela",
@@ -1709,19 +1723,30 @@ class KnowledgeSpaceService:
         source_terms: set[str],
     ) -> set[str]:
         normalized = self._normalize_search_text(question)
-        candidates: set[str] = set()
-        patterns = (
+        priority_candidates: set[str] = set()
+        secondary_candidates: set[str] = set()
+        priority_patterns = (
             r"\bpara\s+(?:um|uma|o|a)\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
             r"\bsobre\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
+        )
+        secondary_patterns = (
             r"\b(?:receita|parecer|analise|análise|resumo|modelo|ficha|plano|roteiro|guia|explicacao|explicação)\s+de\s+([a-zà-ÿ0-9_-]{3,}(?:\s+[a-zà-ÿ0-9_-]{3,}){0,2})",
         )
-        for pattern in patterns:
+        for pattern in priority_patterns:
             for match in re.finditer(pattern, normalized):
                 candidate = self._sanitize_task_target_phrase(match.group(1))
                 if candidate:
-                    candidates.add(candidate)
-        if candidates:
-            return candidates
+                    priority_candidates.add(candidate)
+        if priority_candidates:
+            return priority_candidates
+        for pattern in secondary_patterns:
+            for match in re.finditer(pattern, normalized):
+                candidate = self._sanitize_task_target_phrase(match.group(1))
+                if candidate:
+                    secondary_candidates.add(candidate)
+        if secondary_candidates:
+            return secondary_candidates
+        candidates: set[str] = set()
         for phrase in topic_phrases:
             phrase_terms = {
                 token
@@ -2966,6 +2991,64 @@ class KnowledgeSpaceService:
             "disable_response_cache": True,
         }
 
+    def _is_target_constrained_task_candidate(
+        self,
+        *,
+        title: str,
+        content: str,
+        doc_role: str,
+        section_role: str,
+        applies_to: list[str] | None,
+        target_term_overlap: int,
+        target_phrase_overlap: int,
+        matched_entities: int,
+        conflicting_entities: int,
+        query_profile: dict[str, Any],
+    ) -> bool:
+        if not query_profile.get("asks_for_task_execution") or not query_profile.get("has_explicit_target"):
+            return True
+        applies_to = [str(item).strip().lower() for item in (applies_to or []) if str(item).strip()]
+        direct_target_match = (
+            int(target_term_overlap) > 0
+            or int(target_phrase_overlap) > 0
+            or int(matched_entities) > 0
+        )
+        if direct_target_match:
+            return True
+        contextual_creation = False
+        if doc_role == "base":
+            contextual_creation = bool(
+                self._is_base_creation_foundation_section(
+                    title=title,
+                    content=content,
+                    section_role=section_role,
+                    applies_to=applies_to,
+                )
+                or self._has_creation_foundation_signal(
+                    title=title,
+                    content=content,
+                    doc_role=doc_role,
+                )
+            )
+        elif doc_role == "supplement":
+            contextual_creation = bool(
+                self._is_supplement_creation_extension_section(
+                    title=title,
+                    content=content,
+                    section_role=section_role,
+                    applies_to=applies_to,
+                )
+            )
+        contextual_workflow = bool("workflow" in applies_to and not self._looks_like_editorial_content(title=title, body=content))
+        contextual_anchor = bool(self._is_sequence_anchor(title=title, content=content, doc_role=doc_role))
+        if self._looks_like_specific_option_chunk(title=title, content=content):
+            return False
+        if int(conflicting_entities) > 0 and not (contextual_creation or contextual_workflow or contextual_anchor):
+            return False
+        if query_profile.get("asks_for_creation"):
+            return contextual_creation or contextual_workflow or contextual_anchor
+        return contextual_workflow or contextual_anchor
+
     async def _collect_operational_support_points(
         self,
         *,
@@ -3083,6 +3166,19 @@ class KnowledgeSpaceService:
                             target_terms=set(query_profile.get("target_terms") or []),
                             target_phrases=set(query_profile.get("target_phrases") or []),
                         )
+                        if not self._is_target_constrained_task_candidate(
+                            title=title,
+                            content=content,
+                            doc_role=doc_role,
+                            section_role=str(metadata.get("section_role") or "core_rules").strip().lower() or "core_rules",
+                            applies_to=metadata.get("applies_to") or [],
+                            target_term_overlap=target_term_overlap,
+                            target_phrase_overlap=target_phrase_overlap,
+                            matched_entities=matched_entities,
+                            conflicting_entities=conflicting_entities,
+                            query_profile=query_profile,
+                        ):
+                            continue
                         local_score = float(getattr(point, "score", 0.0) or 0.0)
                         local_score += 0.12 * self._lexical_overlap(
                             text=content,
@@ -3581,6 +3677,19 @@ class KnowledgeSpaceService:
             content_density_score = float(metadata.get("content_density_score") or 0.0)
             noise_score = float(metadata.get("noise_score") or 0.0)
             applies_to = metadata.get("applies_to") or []
+            if not self._is_target_constrained_task_candidate(
+                title=title,
+                content=content,
+                doc_role=doc_role,
+                section_role=section_role,
+                applies_to=applies_to,
+                target_term_overlap=target_term_overlap,
+                target_phrase_overlap=target_phrase_overlap,
+                matched_entities=matched_entities,
+                conflicting_entities=conflicting_entities,
+                query_profile=query_profile,
+            ):
+                continue
             searchable_title = self._normalize_search_text(title)
             searchable_file_name = self._normalize_search_text(file_name)
             is_base_creation_foundation = self._is_base_creation_foundation_section(
@@ -4483,12 +4592,26 @@ class KnowledgeSpaceService:
         for point in support_points:
             payload = getattr(point, "payload", {}) or {}
             metadata = payload.get("metadata") or {}
-            content = self._trim_text(str(payload.get("content") or ""), max_chars=220)
+            raw_content = str(payload.get("content") or "")
+            if not self._is_target_constrained_task_candidate(
+                title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
+                content=raw_content,
+                doc_role=str(metadata.get("doc_role") or "base").strip().lower() or "base",
+                section_role=str(metadata.get("section_role") or "core_rules").strip().lower() or "core_rules",
+                applies_to=metadata.get("applies_to") or [],
+                target_term_overlap=0,
+                target_phrase_overlap=0,
+                matched_entities=int(metadata.get("_janus_support_matched_entities") or 0),
+                conflicting_entities=int(metadata.get("_janus_support_conflicting_entities") or 0),
+                query_profile=query_profile,
+            ):
+                continue
+            content = self._trim_text(raw_content, max_chars=220)
             if not content:
                 continue
             if self._looks_like_editorial_content(
                 title=str(metadata.get("section_title") or metadata.get("file_name") or ""),
-                body=str(payload.get("content") or ""),
+                body=raw_content,
             ):
                 continue
             factual_snippets.append(f"- [{str(metadata.get('doc_role') or 'base')}] {content}")
