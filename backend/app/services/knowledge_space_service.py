@@ -3914,6 +3914,34 @@ class KnowledgeSpaceService:
                     )
                 ]
                 if supplement_candidates:
+                    if query_profile.get("has_explicit_target") and query_profile.get("asks_for_task_execution"):
+                        direct_target_supplement_candidates = [
+                            item
+                            for item in supplement_candidates
+                            if int(item.get("target_term_overlap") or 0) > 0
+                            or int(item.get("target_phrase_overlap") or 0) > 0
+                            or int(item.get("matched_entities") or 0) > 0
+                        ]
+                        if direct_target_supplement_candidates:
+                            supplement_candidates = direct_target_supplement_candidates
+                        else:
+                            supplement_candidates = sorted(
+                                supplement_candidates,
+                                key=lambda item: (
+                                    0
+                                    if (
+                                        bool(item.get("is_supplement_creation_extension"))
+                                        or self._is_sequence_anchor(
+                                            title=str(item.get("title") or ""),
+                                            content=str(item.get("content") or ""),
+                                            doc_role="supplement",
+                                        )
+                                    )
+                                    else 1,
+                                    item["section_order"] or 999999,
+                                    -item["rerank_score"],
+                                ),
+                            )
                     supplement = supplement_candidates[0]
                     sequence_selected.append(supplement)
                     selected_ids.add(supplement["section_id"])
@@ -3926,8 +3954,8 @@ class KnowledgeSpaceService:
                     not query_profile.get("asks_for_task_execution")
                     and item["doc_role"] in {"base", "supplement"}
                     and item["doc_id"] in {row["doc_id"] for row in sequence_selected}
-                ):
-                    continue
+                    ):
+                        continue
                 if query_profile.get("asks_for_task_execution") and item["doc_role"] in {"base", "supplement"}:
                     if item["doc_role"] == "base" and not (
                         item.get("is_base_creation_foundation")
@@ -3960,6 +3988,17 @@ class KnowledgeSpaceService:
                         and self._looks_like_specific_option_chunk(
                             title=str(item.get("title") or ""),
                             content=str(item.get("content") or ""),
+                        )
+                    ):
+                        continue
+                    if (
+                        query_profile.get("has_explicit_target")
+                        and item["doc_role"] == "supplement"
+                        and any(row.get("doc_role") == "supplement" for row in sequence_selected)
+                        and not (
+                            int(item.get("target_term_overlap") or 0) > 0
+                            or int(item.get("target_phrase_overlap") or 0) > 0
+                            or int(item.get("matched_entities") or 0) > 0
                         )
                     ):
                         continue
