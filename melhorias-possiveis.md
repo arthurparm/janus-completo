@@ -109,6 +109,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-030 | Corrigir fail-open silencioso no message_broker.py adicionando alertas/circuit breaker | P1 | M | aberto |
+| SG-031 | Substituir `xml.etree.ElementTree` por `defusedxml` em document_parser_service.py | P0 | S | aberto |
+| SG-032 | Alterar bind de host de `0.0.0.0` para interface local (ou adicionar AuthN) em windows_agent.py | P0 | S | aberto |
+| SG-033 | Definir timeouts nas chamadas http `requests` em scripts de teste e tooling | P1 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -186,6 +190,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | DX-010 | Bot de release notes tecnicas por commit semantico | P3 | S | ideia |
 | DX-011 | Matriz viva de endpoints + playbook de execucao dos testes de API (local/CI) | P1 | S | feito (2026-02-21) |
 | DX-012 | Remover código duplicado e morto (ex: tool_service_improved) | P1 | S | concluido (2026-03-03) |
+| DX-013 | Integrar scripts de tooling (`tooling/`) ao pipeline de Pytest e CI | P1 | S | aberto |
 
 ---
 
@@ -713,6 +718,61 @@ Copiar e preencher:
 - Riscos: Falhas de funcionalidade em ferramentas que dependam do Shell global ou de injeção dinâmica intencional.
 - Dependencias: Nenhuma.
 - Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-030] Fail-Open Silencioso no Message Broker
+- Problema atual: O `message_broker.py` sofre fail-open silencioso sem alertas claros quando a conexão ao RabbitMQ cai (`[Errno 111] Connection refused`), tornando-se offline.
+- Solucao proposta: Adicionar circuit breaker e logs de alerta proativos para monitorar queda da conexão.
+- Impacto esperado: Resiliência visível, facilitando detecção e resposta rápida a indisponibilidades do broker.
+- Riscos: Aumento de complexidade no código de broker.
+- Dependencias: Sistema de observabilidade/alertas configurado.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-031] Vulnerabilidade de Injeção XML em Parse de DOCX
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza `xml.etree.ElementTree.fromstring` para realizar o parsing, sendo suscetível a XML Bomb/XXE.
+- Solucao proposta: Substituir por `defusedxml` ou desabilitar features inseguras.
+- Impacto esperado: Mitigação de negação de serviço via injeção XML.
+- Riscos: Impacto potencial se `defusedxml` não for totalmente compatível ou demandar nova dependência.
+- Dependencias: Instalação do pacote `defusedxml`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-032] Configuração Insegura de Bind (0.0.0.0) no Windows Agent
+- Problema atual: `windows_agent.py` sobe o FastAPI no host `0.0.0.0` porta 5001 sem AuthN, expondo endpoints sensíveis de controle de SO para toda a rede.
+- Solucao proposta: Alterar para `127.0.0.1` ou exigir token de autenticação robusto nos endpoints (ex: OS screen capture).
+- Impacto esperado: Redução da superfície de ataque limitando a conexão ao localhost ou tráfego autenticado.
+- Riscos: Falhas de conectividade com outros containers do projeto caso dependam da porta exposta.
+- Dependencias: SG-021 (Endpoint de Auth).
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-033] Timeouts Ausentes em Scripts de Teste
+- Problema atual: Diversos scripts de automação/teste executam requisições HTTP (usando `requests`) sem impor `timeout`.
+- Solucao proposta: Definir `timeout=...` default para todas as chamadas http `requests`.
+- Impacto esperado: Previne travamento de processos em CI por hangs de rede, liberando threads.
+- Riscos: Timeouts curtos demais podem falhar tarefas demoradas.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Execução Isolada de Testes de Tooling
+- Problema atual: Scripts dentro de `tooling/` estão fora do escopo principal do pipeline `qa/` de pytest.
+- Solucao proposta: Mover os arquivos de teste aplicáveis para `qa/` ou rodar uma suíte própria no CI.
+- Impacto esperado: Maior garantia de não-regressão e cobertura contínua dos utilitários da plataforma.
+- Riscos: Aumento no tempo do pipeline.
+- Dependencias: Nenhuma.
+- Prioridade: P1
 - Esforco: S
 - Dono: a definir
 - Status: aberto

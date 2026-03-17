@@ -113,3 +113,50 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-17)
+
+### 11. Resiliência do Message Broker (Fail-Open Silencioso)
+**Descrição:** Observou-se que falhas de conexão com o RabbitMQ (`[Errno 111] Connection refused`) causam um silent fail-open, onde o sistema cai para modo offline sem emitir alertas claros na camada de resiliência.
+**Evidências:**
+- `backend/app/core/infrastructure/message_broker`: Ausência de um circuit breaker ou alertas proativos quando a conexão ao RabbitMQ cai.
+
+**Próximos passos:**
+- Implementar alertas e gerenciar estado explícito de offline.
+- Documentar SG-030 no backlog de melhorias.
+
+### 12. Vulnerabilidade de XML Injection (Bandit B405/B314)
+**Descrição:** O parser de arquivos DOCX faz uso do pacote padrão `xml.etree.ElementTree` que é vulnerável a ataques de injeção de XML (Billion Laughs, XXE).
+**Evidências:**
+- `backend/app/services/document_parser_service.py`: Uso de `xml.etree.ElementTree.fromstring` para parsear conteúdos DOCX.
+
+**Próximos passos:**
+- Substituir a importação de `xml.etree.ElementTree` pelo pacote `defusedxml`.
+- Documentar SG-031 no backlog de segurança.
+
+### 13. Exposição de Bind no Windows Agent
+**Descrição:** O script do agente Windows expõe seus endpoints FastAPI, que interagem diretamente com o OS (como captura de tela), na interface de rede global `0.0.0.0`, aumentando a superfície de ataque em redes locais.
+**Evidências:**
+- `backend/windows_agent.py`: Bind configurado para `0.0.0.0` e porta 5001.
+
+**Próximos passos:**
+- Modificar o bind para interface local (`127.0.0.1`) ou adicionar controle de acesso (AuthN/AuthZ) se acesso externo for imprescindível.
+- Documentar SG-032 no backlog de segurança.
+
+### 14. Scripts de Teste com Requests sem Timeout
+**Descrição:** Verificou-se que scripts de teste e de tooling que usam a biblioteca `requests` não definem valores de `timeout`. Isso pode causar congelamento de conexões, travamento da pipeline de testes e exaustão de recursos.
+**Evidências:**
+- Ocorrências esporádicas de execuções suspensas em scripts de teste de integração do backend.
+
+**Próximos passos:**
+- Configurar timeouts default para chamadas http via `requests`.
+- Documentar SG-033 no backlog técnico.
+
+### 15. Execução Isolada de Testes de Tooling
+**Descrição:** Scripts de teste em `tooling/` (ex. `test_debate_system.py`, `seed-repro-scenarios.ps1`) rodam de forma isolada, não integrando à suíte global `qa/` do Pytest em pipelines de CI, limitando validação contínua de regressões.
+**Evidências:**
+- Ausência de testes de `tooling/` na rodada padrão de pytest (pipeline CI).
+
+**Próximos passos:**
+- Migrar scripts de testes para `qa/` ou criar step no CI/CD para execução do tooling automatizado.
+- Documentar DX-013 no backlog técnico.
