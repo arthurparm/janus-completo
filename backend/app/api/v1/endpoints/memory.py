@@ -158,9 +158,36 @@ def _timeline_user_collections(user_id: str) -> list[str]:
     ]
 
 
+def _matches_conversation_scope(point: Any, conversation_id: str) -> bool:
+    payload = getattr(point, "payload", None) or {}
+    metadata = payload.get("metadata") or {}
+    target = str(conversation_id or "").strip()
+    if not target:
+        return True
+    candidates = [
+        metadata.get("conversation_id"),
+        metadata.get("session_id"),
+        metadata.get("thread_id"),
+        metadata.get("task_id"),
+        payload.get("composite_id"),
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        value = str(candidate).strip()
+        if value == target:
+            return True
+        if candidate == payload.get("composite_id"):
+            parts = [part.strip() for part in value.replace("/", ":").replace("|", ":").split(":")]
+            if target in [part for part in parts if part]:
+                return True
+    return False
+
+
 async def _load_user_timeline_points(
     *,
     user_id: str,
+    conversation_id: str | None,
     query: str | None,
     start_ts: int | None,
     end_ts: int | None,
@@ -192,6 +219,10 @@ async def _load_user_timeline_points(
                 limit=limit,
                 with_payload=True,
             )
+        if conversation_id:
+            coll_points = [
+                point for point in coll_points if _matches_conversation_scope(point, conversation_id)
+            ]
         points.extend(coll_points)
     return points
 
@@ -221,6 +252,7 @@ async def get_memories_timeline(
     limit: int = Query(10, ge=1, le=100),
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     user_id: str | None = Query(None, description="User ID for active memory scope"),
+    conversation_id: str | None = Query(None, description="Conversation ID for scoped timeline"),
     service: MemoryService = Depends(get_memory_service),
 ):
     """
@@ -250,6 +282,7 @@ async def get_memories_timeline(
             fetch_limit = min(500, max(limit * 5, limit))
             points = await _load_user_timeline_points(
                 user_id=str(resolved_user_id),
+                conversation_id=conversation_id,
                 query=query,
                 start_ts=start_ts,
                 end_ts=end_ts,

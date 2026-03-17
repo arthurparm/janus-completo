@@ -1,5 +1,12 @@
 import { Injectable, signal } from '@angular/core';
-import { BackendApiService, SystemStatus, ServiceHealthItem, WorkerStatusResponse, SystemOverviewResponse } from '../../services/backend-api.service';
+import {
+  BackendApiService,
+  OrchestratorWorkerTaskStatus,
+  ServiceHealthItem,
+  SystemOverviewResponse,
+  SystemStatus,
+  WorkerStatusResponse,
+} from '../../services/backend-api.service';
 import { take, timeout, retry } from 'rxjs/operators';
 import { Subscription, timer } from 'rxjs';
 import { switchMap } from 'rxjs';
@@ -12,7 +19,7 @@ export class GlobalStateStore {
   readonly apiHealthy = signal<'unknown' | 'ok'>('unknown');
   readonly systemStatus = signal<SystemStatus | undefined>(undefined);
   readonly services = signal<ServiceHealthItem[]>([]);
-  readonly workers = signal<WorkerStatusResponse[]>([]);
+  readonly workers = signal<Array<WorkerStatusResponse | OrchestratorWorkerTaskStatus>>([]);
 
   // Controle interno
   private initialized = false;

@@ -17,6 +17,7 @@ from app.core.autonomy.policy_engine import (
     RiskProfile,
     SimulationResult,
 )
+from app.core.infrastructure.redis_usage_tracker import get_redis_usage_tracker
 from app.core.security.redaction import redact_sensitive_payload
 from app.core.tools import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
@@ -273,6 +274,45 @@ class ToolExecutorService:
         }
         return json.dumps(payload, ensure_ascii=False), str(simulation.simulation_version or "v1")
 
+    def _build_scope_metadata(self, args: dict[str, Any] | Any) -> tuple[str | None, list[str]]:
+        if not isinstance(args, dict) or not args:
+            return None, []
+
+        interesting_keys = (
+            "conversation_id",
+            "project_id",
+            "session_id",
+            "thread_id",
+            "path",
+            "file_path",
+            "url",
+            "host",
+            "container",
+            "service_name",
+            "collection",
+            "collection_name",
+            "doc_id",
+            "resource_id",
+            "target",
+            "targets",
+        )
+        targets: list[str] = []
+        for key in interesting_keys:
+            value = args.get(key)
+            if isinstance(value, (str, int, float)) and str(value).strip():
+                targets.append(f"{key}={value}")
+            elif isinstance(value, list):
+                for item in value[:3]:
+                    if isinstance(item, (str, int, float)) and str(item).strip():
+                        targets.append(f"{key}={item}")
+        unique_targets = list(dict.fromkeys(targets))
+        if not unique_targets:
+            return None, []
+        summary = ", ".join(unique_targets[:3])
+        if len(unique_targets) > 3:
+            summary += f" (+{len(unique_targets) - 3} alvo(s))"
+        return summary, unique_targets[:10]
+
     def _create_pending_action(
         self,
         *,
@@ -312,6 +352,7 @@ class ToolExecutorService:
         strict: bool = True,
         policy: PolicyEngine | None = None,
         user_id: str | None = None,
+        project_id: str | None = None,
         timeout_seconds: float | None = None,
     ) -> list[dict[str, str]]:
         effective_policy = policy or self._build_default_policy()
@@ -321,6 +362,7 @@ class ToolExecutorService:
 
         outputs = []
         daily_limits = getattr(settings, "TOOL_DAILY_QUOTAS", {}) or {}
+        sliding_limits = getattr(settings, "TOOL_SLIDING_WINDOW_QUOTAS", {}) or {}
         for call in calls:
             name = call["name"]
             args = call["args"]
@@ -394,6 +436,12 @@ class ToolExecutorService:
                 continue
             args = normalized_args
             safe_args = redact_sensitive_payload(args)
+            scope_summary, scope_targets = self._build_scope_metadata(safe_args)
+            if isinstance(safe_args, dict):
+                if scope_summary:
+                    safe_args.setdefault("scope_summary", scope_summary)
+                if scope_targets:
+                    safe_args.setdefault("scope_targets", scope_targets)
             simulation: SimulationResult | None = None
             simulate_tool = getattr(effective_policy, "simulate_tool_call", None)
             if callable(simulate_tool):
@@ -500,6 +548,54 @@ class ToolExecutorService:
                             user_id=str(user_id),
                             error=str(e),
                         )
+
+            sliding_rule = sliding_limits.get(name)
+            if isinstance(sliding_rule, dict):
+                tracker = get_redis_usage_tracker()
+                window_seconds = int(sliding_rule.get("window_seconds", 0) or 0)
+                if tracker is not None and window_seconds > 0:
+                    quota_specs = (
+                        ("user", user_id, int(sliding_rule.get("user_limit", 0) or 0)),
+                        ("project", project_id, int(sliding_rule.get("project_limit", 0) or 0)),
+                    )
+                    quota_blocked = False
+                    for quota_kind, quota_id, quota_limit in quota_specs:
+                        if not quota_id or quota_limit <= 0:
+                            continue
+                        allowed, count, max_limit, window = await tracker.sliding_window_check_and_increment(
+                            kind=quota_kind,
+                            tool_name=name,
+                            id_=str(quota_id),
+                            limit=quota_limit,
+                            window_seconds=window_seconds,
+                        )
+                        if allowed:
+                            continue
+                        self._audit_pre_execution_event(
+                            tool_name=name,
+                            status="quota_exceeded",
+                            reason="sliding_window_quota",
+                            user_id=user_id,
+                            detail={
+                                "quota_kind": quota_kind,
+                                "count": count,
+                                "limit": max_limit,
+                                "window_seconds": window,
+                            },
+                        )
+                        outputs.append(
+                            {
+                                "name": name,
+                                "result": (
+                                    f"Cota temporária atingida para '{name}' em escopo {quota_kind}. "
+                                    f"Uso: {count}/{max_limit} em {window}s."
+                                ),
+                            }
+                        )
+                        quota_blocked = True
+                        break
+                    if quota_blocked:
+                        continue
 
             start = time.perf_counter()
             success = False

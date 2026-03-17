@@ -361,6 +361,7 @@ def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):
     safe_args = str(data[0]["args_json"])
     assert "super-secret-password" not in safe_args
     assert "person@example.com" not in safe_args
+    assert data[0]["scope_summary"] is None
 
 
 def test_pending_actions_approve_sql_action(client, monkeypatch):
@@ -453,6 +454,7 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
     patch = updated_payloads[0]["patch"]
     assert updated_payloads[0]["conversation_id"] == "77"
     assert updated_payloads[0]["message_id"] == 501
+    assert data["scope_summary"] is None
     assert patch["confirmation"]["required"] is False
     assert patch["confirmation"]["status"] == "approved"
     assert "approve_endpoint" not in patch["confirmation"]

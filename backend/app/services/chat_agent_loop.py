@@ -185,6 +185,7 @@ class ChatAgentLoop:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
+                    conversation_id=conversation_id,
                     user_id=user_id,
                     project_id=project_id,
                 )
@@ -259,7 +260,10 @@ class ChatAgentLoop:
 
             # Execute tools
             tool_outputs = await self._execute_tools_with_fallback(
-                tool_calls, policy=policy, user_id=user_id
+                tool_calls,
+                policy=policy,
+                user_id=user_id,
+                project_id=project_id,
             )
 
             # Add tool results to prompt
@@ -327,6 +331,7 @@ class ChatAgentLoop:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
+        conversation_id: str,
         user_id: str | None,
         project_id: str | None,
     ) -> dict[str, Any]:
@@ -338,6 +343,7 @@ class ChatAgentLoop:
                 role=role,
                 priority=priority,
                 timeout_seconds=timeout_seconds,
+                objective_id=conversation_id,
                 user_id=user_id,
                 project_id=project_id,
             )
@@ -349,6 +355,7 @@ class ChatAgentLoop:
                 role=role,
                 priority=ModelPriority.FAST_AND_CHEAP,
                 timeout_seconds=timeout_seconds,
+                objective_id=conversation_id,
                 user_id=user_id,
                 project_id=project_id,
             )
@@ -361,20 +368,31 @@ class ChatAgentLoop:
         return await chain.execute()
 
     async def _execute_tools_with_fallback(
-        self, tool_calls: list[dict], policy: PolicyEngine | None, user_id: str | None
+        self,
+        tool_calls: list[dict],
+        policy: PolicyEngine | None,
+        user_id: str | None,
+        project_id: str | None,
     ) -> list[dict]:
         """Execute tools with fallback strategies."""
 
         async def primary():
             return await self.tool_executor.execute_tool_calls(
-                tool_calls, policy=policy, user_id=user_id
+                tool_calls,
+                policy=policy,
+                user_id=user_id,
+                project_id=project_id,
             )
 
         async def fallback_permissive():
             # Try with relaxed parameters if primary fails
             logger.info("tool_execution_fallback_permissive")
             return await self.tool_executor.execute_tool_calls(
-                tool_calls, strict=False, policy=policy, user_id=user_id
+                tool_calls,
+                strict=False,
+                policy=policy,
+                user_id=user_id,
+                project_id=project_id,
             )
 
         async def minimal_fallback():

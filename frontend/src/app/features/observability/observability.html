@@ -17,6 +17,53 @@
     </div>
   </header>
 
+  <section class="operator-panel">
+    <div class="operator-panel__header">
+      <div>
+        <p class="operator-panel__eyebrow">Modo Operador</p>
+        <h2>Workers e filas críticas</h2>
+      </div>
+      <div class="operator-panel__meta">
+        <span *ngIf="operatorLoading()">Atualizando...</span>
+        <span *ngIf="!operatorLoading() && lastRefreshAt()">Ultima coleta: {{ lastRefreshAt() }}</span>
+      </div>
+    </div>
+
+    <p class="operator-panel__error" *ngIf="operatorError()">{{ operatorError() }}</p>
+
+    <div class="operator-grid">
+      <article class="operator-card">
+        <div class="operator-card__title">Workers</div>
+        <div class="operator-list" *ngIf="workers().length; else emptyWorkers">
+          <div class="operator-list__item" *ngFor="let worker of workers()">
+            <div>
+              <strong>{{ worker.name }}</strong>
+              <p>{{ worker.state }}</p>
+            </div>
+            <span class="operator-badge" [class.is-running]="worker.running" [class.is-stopped]="!worker.running">
+              {{ worker.running ? 'running' : worker.state }}
+            </span>
+          </div>
+        </div>
+      </article>
+
+      <article class="operator-card">
+        <div class="operator-card__title">Filas</div>
+        <div class="operator-list" *ngIf="queues().length; else emptyQueues">
+          <div class="operator-list__item" *ngFor="let queue of queues()">
+            <div>
+              <strong>{{ queue.name }}</strong>
+              <p>{{ queue.consumers }} consumer(s)</p>
+            </div>
+            <span class="operator-badge" [class.is-alert]="queue.messages > 0 || queue.messages < 0">
+              {{ queue.messages < 0 ? 'indisponivel' : (queue.messages + ' msg') }}
+            </span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
   <!-- Dashboard Grid -->
   <div class="obs-grid">
     <!-- System Status Widget (FE1-001) -->
@@ -29,3 +76,11 @@
     <app-knowledge-health-widget />
   </div>
 </div>
+
+<ng-template #emptyWorkers>
+  <p class="operator-card__empty">Nenhum worker rastreado no momento.</p>
+</ng-template>
+
+<ng-template #emptyQueues>
+  <p class="operator-card__empty">Nenhuma fila monitorada no momento.</p>
+</ng-template>

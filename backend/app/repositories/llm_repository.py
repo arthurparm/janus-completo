@@ -57,6 +57,7 @@ class LLMRepository:
         timeout_seconds: int | None,
         user_id: str | None = None,
         project_id: str | None = None,
+        objective_id: str | None = None,
         llm_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         logger.debug("Invocando LLM via repositório", role=role.value, priority=priority.value)
@@ -156,6 +157,7 @@ class LLMRepository:
                                 f"ab_{provider}_{model}_{role.value}",
                                 user_id=user_id,
                                 project_id=project_id,
+                                objective_id=objective_id,
                             )
                     finally:
                         if not abr._session:
@@ -168,6 +170,7 @@ class LLMRepository:
                     priority=priority,
                     user_id=user_id,
                     project_id=project_id,
+                    objective_id=objective_id,
                     config=llm_config,
                 )
             if _OTEL and span is not None:
@@ -247,6 +250,7 @@ class LLMRepository:
                     priority=priority,
                     user_id=user_id,
                     project_id=project_id,
+                    objective_id=objective_id,
                     exclude_providers=exclude,
                     config=fb_config,
                 )

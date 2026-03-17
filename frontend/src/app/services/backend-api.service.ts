@@ -39,6 +39,25 @@ export interface WorkerStatusResponse {
   tasks_processed: number;
 }
 
+export interface OrchestratorWorkerTaskStatus {
+  name: string;
+  running: boolean;
+  done: boolean;
+  cancelled: boolean;
+  exception?: string | null;
+  state: string;
+  reason?: string;
+  detail?: string;
+  composite?: boolean;
+  children?: OrchestratorWorkerTaskStatus[];
+}
+
+export interface QueueInfoResponse {
+  name: string;
+  messages: number;
+  consumers: number;
+}
+
 export interface SystemOverviewResponse {
   system_status: SystemStatus;
   services_status: ServiceHealthItem[];
@@ -178,6 +197,8 @@ export interface PendingAction {
   created_at?: string;
   risk_level?: 'low' | 'medium' | 'high' | string;
   risk_summary?: string;
+  scope_summary?: string;
+  scope_targets?: string[];
   simulation?: Record<string, unknown> | null;
 }
 
@@ -619,7 +640,10 @@ export interface GoalCreateRequest {
   deadline_ts?: number
 }
 
-export interface WorkersStatusResponse { workers: WorkerStatusResponse[] }
+export interface WorkersStatusResponse {
+  tracked: number;
+  workers: OrchestratorWorkerTaskStatus[];
+}
 
 // Autonomy
 export interface AutonomyStartRequest {
@@ -803,6 +827,7 @@ export interface MemoryItem {
   metadata?: {
     type?: string;
     user_id?: string;
+    conversation_id?: string;
     session_id?: string;
     role?: string;
     timestamp?: number;
@@ -945,6 +970,12 @@ export class BackendApiService {
   // Workers orchestration
   getWorkersStatus(): Observable<WorkersStatusResponse> {
     return this.http.get<WorkersStatusResponse>(this.buildUrl(`/api/v1/workers/status`));
+  }
+
+  getQueueInfo(queueName: string): Observable<QueueInfoResponse> {
+    return this.http.get<QueueInfoResponse>(
+      this.buildUrl(`/api/v1/tasks/queue/${encodeURIComponent(queueName)}`)
+    );
   }
 
   // Consolidated System Overview
@@ -1737,6 +1768,7 @@ export class BackendApiService {
     limit?: number
     min_score?: number
     user_id?: string
+    conversation_id?: string
   } = {}): Observable<MemoryItem[]> {
     const qs = new URLSearchParams()
     if (params.start_date) qs.set('start_date', params.start_date)
@@ -1745,6 +1777,7 @@ export class BackendApiService {
     if (params.limit) qs.set('limit', String(params.limit))
     if (params.min_score !== undefined) qs.set('min_score', String(params.min_score))
     if (params.user_id) qs.set('user_id', params.user_id)
+    if (params.conversation_id) qs.set('conversation_id', params.conversation_id)
     const headers = params.user_id ? this.headersFor(params.user_id) : undefined
     return this.http.get<MemoryItem[]>(
       this.buildUrl(`/api/v1/memory/timeline${qs.toString() ? '?' + qs.toString() : ''}`),

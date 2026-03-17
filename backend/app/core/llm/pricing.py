@@ -125,10 +125,12 @@ _tenant_user_daily_budget_usd: float = getattr(settings, "TENANT_USER_DAILY_BUDG
 _tenant_project_daily_budget_usd: float = (
     getattr(settings, "TENANT_PROJECT_DAILY_BUDGET_USD", 0.0) or 0.0
 )
+_objective_daily_budget_usd: float = getattr(settings, "LLM_OBJECTIVE_MAX_BUDGET_USD", 0.0) or 0.0
 
 # Rastreamento de gastos por usuário/projeto (reset diário)
 _tenant_user_spend_usd: dict[str, dict[str, Any]] = {}
 _tenant_project_spend_usd: dict[str, dict[str, Any]] = {}
+_objective_spend_usd: dict[str, dict[str, Any]] = {}
 
 
 def _today_str() -> str:
@@ -320,6 +322,36 @@ async def _tenant_budget_remaining(kind: str, id_: str | None) -> float:
         )
 
 
+async def _objective_budget_remaining(objective_id: str | None) -> float:
+    if not objective_id:
+        return float("inf")
+    budget = _objective_daily_budget_usd
+    today = _today_str()
+    entry = _objective_spend_usd.get(objective_id)
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
+    if tracker is not None:
+        try:
+            spent = await tracker.get_objective_spend(objective_id, today)
+            entry = {"date": today, "usd": spent}
+            _objective_spend_usd[objective_id] = entry
+        except Exception:
+            if not entry or entry.get("date") != today:
+                _objective_spend_usd[objective_id] = {"date": today, "usd": 0.0}
+                entry = _objective_spend_usd[objective_id]
+    elif not entry or entry.get("date") != today:
+        _objective_spend_usd[objective_id] = {"date": today, "usd": 0.0}
+        entry = _objective_spend_usd[objective_id]
+    return (
+        max(0.0, (budget or 0.0) - (entry.get("usd", 0.0) or 0.0))
+        if budget > 0
+        else float("inf")
+    )
+
+
 def _run_async(coro):
     try:
         loop = asyncio.get_running_loop()
@@ -403,8 +435,48 @@ def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             pass
 
 
+def _register_objective_spend(objective_id: str | None, cost_usd: float):
+    if not objective_id:
+        return
+    today = _today_str()
+    cost_usd = max(0.0, float(cost_usd))
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
+    entry = _objective_spend_usd.get(objective_id)
+    if not entry or entry.get("date") != today:
+        _objective_spend_usd[objective_id] = {"date": today, "usd": 0.0}
+    if tracker is not None:
+        try:
+            total = _run_async(tracker.increment_objective_spend(objective_id, cost_usd, today))
+            if total is not None:
+                _objective_spend_usd[objective_id]["usd"] = total
+            else:
+                _objective_spend_usd[objective_id]["usd"] = (
+                    _objective_spend_usd[objective_id]["usd"] or 0.0
+                ) + cost_usd
+        except Exception:
+            _objective_spend_usd[objective_id]["usd"] = (
+                _objective_spend_usd[objective_id]["usd"] or 0.0
+            ) + cost_usd
+    else:
+        _objective_spend_usd[objective_id]["usd"] = (
+            _objective_spend_usd[objective_id]["usd"] or 0.0
+        ) + cost_usd
+    try:
+        LLM_TENANT_SPEND_USD.labels(kind="objective", id=objective_id).inc(cost_usd)
+    except Exception:
+        pass
+
+
 def register_usage(
-    provider: str, user_id: str | None, project_id: str | None, cost_usd: float
+    provider: str,
+    user_id: str | None,
+    project_id: str | None,
+    cost_usd: float,
+    objective_id: str | None = None,
 ):
     cost = max(0.0, float(cost_usd))
     if cost == 0.0:
@@ -436,3 +508,5 @@ def register_usage(
         _register_tenant_spend("user", user_id, cost)
     if project_id:
         _register_tenant_spend("project", project_id, cost)
+    if objective_id:
+        _register_objective_spend(objective_id, cost)

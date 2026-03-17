@@ -66,6 +66,7 @@ class LLMService:
         policy_overrides: dict[str, Any] | None = None,
         user_id: str | None = None,
         project_id: str | None = None,
+        objective_id: str | None = None,
     ) -> dict[str, Any]:
         policy = resolve_llm_task_policy(task_type, complexity, policy_overrides)
         llm_config: dict[str, Any] | None = None
@@ -163,6 +164,7 @@ class LLMService:
                 timeout_seconds,
                 user_id=user_id,
                 project_id=project_id,
+                objective_id=objective_id,
                 llm_config=llm_config,
             )
         except TimeoutError as e:

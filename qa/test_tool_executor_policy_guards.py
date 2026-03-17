@@ -266,6 +266,7 @@ async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persiste
     assert "super-secret-password" not in stored
     assert "person@example.com" not in stored
     assert "[REDACTED_EMAIL]" in stored
+    assert "scope_summary" not in stored
 
 
 @pytest.mark.asyncio
@@ -424,3 +425,104 @@ async def test_execute_tool_calls_requires_confirmation_for_destructive_simulati
     assert created.get("simulation_summary_json")
     assert created.get("simulation_version") == "v1"
     assert any(ev.get("status") == "pending_confirmation" for ev in events)
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_persists_scope_metadata_for_pending_actions(monkeypatch):
+    created = {}
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            return "must-not-run"
+
+    class DummyPendingRepo:
+        def create(self, **kwargs):
+            created.update(kwargs)
+            return SimpleNamespace(id=123)
+
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy(require_confirmation=True, tool_allowed=True)
+
+    await service.execute_tool_calls(
+        calls=[
+            {
+                "name": "deploy_stack",
+                "args": {
+                    "conversation_id": "conv-9",
+                    "project_id": "proj-1",
+                    "path": "/srv/janus",
+                },
+            }
+        ],
+        policy=policy,
+        user_id="u-11",
+    )
+
+    stored = created.get("args_json", "")
+    assert "scope_summary" in stored
+    assert "conversation_id=conv-9" in stored
+    assert "project_id=proj-1" in stored
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_calls_enforces_sliding_window_quota(monkeypatch):
+    events = []
+
+    class DummyTracker:
+        async def sliding_window_check_and_increment(self, **kwargs):
+            return False, 2, kwargs["limit"], kwargs["window_seconds"]
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            raise AssertionError("tool should not execute when quota is blocked")
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "get_redis_usage_tracker", lambda: DummyTracker())
+    monkeypatch.setattr(
+        tool_module,
+        "settings",
+        SimpleNamespace(
+            TOOL_DAILY_QUOTAS={},
+            TOOL_SLIDING_WINDOW_QUOTAS={"schema_tool": {"window_seconds": 60, "user_limit": 2}},
+        ),
+    )
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService()
+    policy = DummyPolicy()
+
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "schema_tool", "args": {"value": 1}}],
+        policy=policy,
+        user_id="u-window",
+    )
+
+    assert "Cota temporária atingida" in outputs[0]["result"]
+    assert events[0]["status"] == "quota_exceeded"
+    assert events[0]["detail"]["reason"] == "sliding_window_quota"

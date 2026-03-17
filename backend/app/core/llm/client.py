@@ -15,7 +15,13 @@ from . import response_cache  # Import cache module
 # New Modules
 from .adapters import get_adapter
 from .factory import _health_check_ollama, _infer_model_name, _infer_provider
-from .pricing import _budget_remaining, _get_model_pricing, _tenant_budget_remaining, register_usage
+from .pricing import (
+    _budget_remaining,
+    _get_model_pricing,
+    _objective_budget_remaining,
+    _tenant_budget_remaining,
+    register_usage,
+)
 from .rate_limiter import get_rate_limiter
 from .resilience import _llm_pool, _pool_key, _provider_circuit_breakers
 from .router import get_llm
@@ -65,6 +71,7 @@ class LLMClient:
         cache_key: str,
         user_id: str | None = None,
         project_id: str | None = None,
+        objective_id: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         config: Any = None,
     ):
@@ -75,6 +82,7 @@ class LLMClient:
         self.cache_key = cache_key
         self.user_id = user_id
         self.project_id = project_id
+        self.objective_id = objective_id
         self.settings = config if config is not None else settings
         self.circuit_breaker = circuit_breaker
         self._last_provider = provider
@@ -117,6 +125,7 @@ class LLMClient:
         remaining_provider_usd = await _budget_remaining(self.provider)
         remaining_user_usd = await _tenant_budget_remaining("user", self.user_id)
         remaining_project_usd = await _tenant_budget_remaining("project", self.project_id)
+        remaining_objective_usd = await _objective_budget_remaining(self.objective_id)
 
         def usd_to_out_tokens(usd: float) -> int:
             if usd == float("inf"):
@@ -131,6 +140,7 @@ class LLMClient:
             usd_to_out_tokens(remaining_provider_usd),
             usd_to_out_tokens(remaining_user_usd),
             usd_to_out_tokens(remaining_project_usd),
+            usd_to_out_tokens(remaining_objective_usd),
         ]
 
         allowed = min([a for a in allowances if a >= 0]) if allowances else 0
@@ -356,7 +366,13 @@ class LLMClient:
                 tokens_in_est = input_tokens
                 tokens_out_est = output_tokens
                 try:
-                    register_usage(self.provider, self.user_id, self.project_id, cost)
+                    register_usage(
+                        self.provider,
+                        self.user_id,
+                        self.project_id,
+                        cost,
+                        objective_id=self.objective_id,
+                    )
                 except Exception as e:
                     logger.warning("log_warning", message=f"Failed to register LLM usage cost: {e}")
             except Exception as e:
@@ -502,6 +518,7 @@ async def get_llm_client(
     priority: ModelPriority = ModelPriority.LOCAL_ONLY,
     user_id: str | None = None,
     project_id: str | None = None,
+    objective_id: str | None = None,
     exclude_providers: list[str] | None = None,
     config: dict[str, Any] | None = None,
 ) -> LLMClient:
@@ -517,5 +534,12 @@ async def get_llm_client(
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
     return LLMClient(
-        llm, provider, model_name, role, cache_key, user_id=user_id, project_id=project_id
+        llm,
+        provider,
+        model_name,
+        role,
+        cache_key,
+        user_id=user_id,
+        project_id=project_id,
+        objective_id=objective_id,
     )

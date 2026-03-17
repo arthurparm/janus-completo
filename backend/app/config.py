@@ -516,8 +516,10 @@ class AppSettings(BaseSettings):
         "jules_new": 5,
         "jules_pull": 10,
     }
+    TOOL_SLIDING_WINDOW_QUOTAS: dict[str, dict[str, int]] = {}
     MIN_DEPLOY_ACCURACY: float = 0.7
     LLM_AB_EXPERIMENT_ID: int | None = None
+    LLM_OBJECTIVE_MAX_BUDGET_USD: float = 0.0
 
     # Sprint 3: Web Search
     TAVILY_API_KEY: SecretStr | None = None
@@ -726,6 +728,37 @@ class AppSettings(BaseSettings):
                     parsed[str(k)] = 0
             return parsed
         return {}
+
+    @field_validator("TOOL_SLIDING_WINDOW_QUOTAS", mode="before")
+    def _parse_tool_sliding_window_quotas(cls, v: Any):
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return {}
+            try:
+                v = json.loads(s)
+            except Exception:
+                return {}
+        if not isinstance(v, dict):
+            return {}
+
+        parsed: dict[str, dict[str, int]] = {}
+        for tool_name, raw_rule in v.items():
+            if not isinstance(raw_rule, dict):
+                continue
+            rule: dict[str, int] = {}
+            for key in ("window_seconds", "user_limit", "project_limit"):
+                try:
+                    value = int(raw_rule.get(key, 0) or 0)
+                except Exception:
+                    value = 0
+                if value > 0:
+                    rule[key] = value
+            if rule.get("window_seconds", 0) > 0 and (
+                rule.get("user_limit", 0) > 0 or rule.get("project_limit", 0) > 0
+            ):
+                parsed[str(tool_name)] = rule
+        return parsed
 
     @field_validator("LLM_TASK_POLICY", mode="before")
     def _parse_llm_task_policy(cls, v: Any):

@@ -26,8 +26,20 @@ class DummyPoint:
 class DummyClient:
     async def scroll(self, *args, **kwargs):
         points = [
-            DummyPoint({"content": "older", "ts_ms": 1000, "metadata": {"timestamp": 1000}}),
-            DummyPoint({"content": "newer", "ts_ms": 2000, "metadata": {"timestamp": 2000}}),
+            DummyPoint(
+                {
+                    "content": "older",
+                    "ts_ms": 1000,
+                    "metadata": {"timestamp": 1000, "conversation_id": "c-1"},
+                }
+            ),
+            DummyPoint(
+                {
+                    "content": "newer",
+                    "ts_ms": 2000,
+                    "metadata": {"timestamp": 2000, "conversation_id": "c-2"},
+                }
+            ),
         ]
         return points, None
 
@@ -59,3 +71,11 @@ def test_user_memory_timeline_sorted(client):
     assert len(data) == 2
     assert data[0]["content"] == "newer"
     assert data[0]["ts_ms"] == 2000
+
+
+def test_user_memory_timeline_filters_by_conversation_id(client):
+    resp = client.get("/api/v1/memory/timeline?user_id=u1&conversation_id=c-1&limit=5")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["content"] == "older"

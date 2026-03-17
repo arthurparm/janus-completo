@@ -27,6 +27,8 @@ class PendingActionDTO(BaseModel):
     created_at: str | None = None
     risk_level: str | None = None
     risk_summary: str | None = None
+    scope_summary: str | None = None
+    scope_targets: list[str] | None = None
     simulation: dict[str, Any] | None = None
 
 
@@ -104,6 +106,27 @@ def _sanitize_pending_args_json(args_json: str | None) -> str | None:
         return json.dumps(redact_sensitive_payload(parsed), ensure_ascii=False)
     except Exception:
         return str(redact_sensitive_payload(raw_text))
+
+
+def _extract_pending_scope(args_json: str | None) -> tuple[str | None, list[str] | None]:
+    if not args_json:
+        return None, None
+    try:
+        parsed = json.loads(args_json)
+    except Exception:
+        return None, None
+    if not isinstance(parsed, dict):
+        return None, None
+    scope_summary = parsed.get("scope_summary")
+    scope_targets = parsed.get("scope_targets")
+    if isinstance(scope_targets, list):
+        safe_targets = [str(item) for item in scope_targets if str(item).strip()]
+    else:
+        safe_targets = []
+    return (
+        str(scope_summary).strip() if isinstance(scope_summary, str) and scope_summary.strip() else None,
+        safe_targets or None,
+    )
 
 
 def _build_simulation_payload(item: Any) -> dict[str, Any] | None:
@@ -423,6 +446,7 @@ async def list_pending(
             sql_pending = repo.list(user_id=user_id, status=pending_status, limit=limit)
             for item in sql_pending:
                 safe_args_json = _sanitize_pending_args_json(getattr(item, "args_json", None))
+                scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
                 risk_level, risk_summary = _summarize_action_risk(
                     getattr(item, "tool_name", None), safe_args_json
                 )
@@ -442,6 +466,8 @@ async def list_pending(
                         ),
                         risk_level=risk_level,
                         risk_summary=risk_summary,
+                        scope_summary=scope_summary,
+                        scope_targets=scope_targets,
                         simulation=_build_simulation_payload(item),
                     )
                 )
@@ -566,6 +592,7 @@ async def approve_sql_action(action_id: int):
         _sync_chat_confirmation_for_action(updated, status_value="approved")
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
+        scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
         risk_level, risk_summary = _summarize_action_risk(
             getattr(updated, "tool_name", None), safe_args_json
         )
@@ -584,6 +611,8 @@ async def approve_sql_action(action_id: int):
             ),
             risk_level=risk_level,
             risk_summary=risk_summary,
+            scope_summary=scope_summary,
+            scope_targets=scope_targets,
             simulation=_build_simulation_payload(updated),
         )
     except HTTPException:
@@ -620,6 +649,7 @@ async def reject_sql_action(action_id: int):
         _sync_chat_confirmation_for_action(updated, status_value="rejected")
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
+        scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
         risk_level, risk_summary = _summarize_action_risk(
             getattr(updated, "tool_name", None), safe_args_json
         )
@@ -638,6 +668,8 @@ async def reject_sql_action(action_id: int):
             ),
             risk_level=risk_level,
             risk_summary=risk_summary,
+            scope_summary=scope_summary,
+            scope_targets=scope_targets,
             simulation=_build_simulation_payload(updated),
         )
     except HTTPException:

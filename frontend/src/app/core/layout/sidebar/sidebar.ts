@@ -21,6 +21,9 @@ export class Sidebar {
   readonly workers = this.store.workers;
   readonly isAdmin = this.auth.isAdmin;
   readonly runningWorkers = computed(() =>
-    this.workers().filter((worker) => (worker.status || '').toLowerCase() === 'running').length
+    this.workers().filter((worker) => {
+      const status = 'state' in worker ? worker.state : worker.status;
+      return String(status || '').toLowerCase() === 'running';
+    }).length
   );
 }
