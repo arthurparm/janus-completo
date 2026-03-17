@@ -362,6 +362,24 @@ class MessageOrchestrationService:
             mode="auto",
         )
 
+    def resolve_active_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        if not user_id:
+            return str(requested_knowledge_space_id or "").strip() or None
+        manifests = self._list_document_manifests(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return self._resolve_knowledge_space_id(
+            manifests=manifests,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+
     def _should_use_document_grounding(
         self,
         *,

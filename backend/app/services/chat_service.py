@@ -181,6 +181,19 @@ class ChatService:
             identity_source=identity_source,
         )
 
+    def resolve_active_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        return self._message_orchestration_service.resolve_active_knowledge_space_id(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+
     def get_history(
         self,
         conversation_id: str,

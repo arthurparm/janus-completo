@@ -2,7 +2,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.core.llm import ModelPriority
+from app.core.llm import ModelPriority, ModelRole
 from app.services.chat_service import (
     ChatService,
     ConversationNotFoundError,
@@ -105,6 +105,15 @@ async def stream_message(
                     http_status=status.HTTP_401_UNAUTHORIZED,
                 ),
             )
+        active_knowledge_space_id = service.resolve_active_knowledge_space_id(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            requested_knowledge_space_id=knowledge_space_id,
+        )
+        if active_knowledge_space_id:
+            knowledge_space_id = active_knowledge_space_id
+            role_enum = ModelRole.ORCHESTRATOR
+            route_applied = False
         if not project_id:
             project_id = actor_project_id(http)
         get_history = getattr(service, "get_history", None)

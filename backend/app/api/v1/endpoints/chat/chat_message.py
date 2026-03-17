@@ -4,7 +4,7 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.core.llm import ModelPriority
+from app.core.llm import ModelPriority, ModelRole
 from app.services.chat_service import (
     ChatService,
     ChatServiceError,
@@ -100,24 +100,6 @@ async def send_message(
     http: Request = None,
     memory: MemoryService = Depends(get_memory_service),
 ):
-    routing_service = get_intent_routing_service()
-    try:
-        role, routing_decision, route_applied = routing_service.resolve_role(
-            payload.role, payload.message
-        )
-        priority = ModelPriority(payload.priority)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=chat_http_error_detail(
-                code="CHAT_INVALID_ROLE_OR_PRIORITY",
-                message="Invalid role or priority",
-                category="validation",
-                retryable=False,
-                http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            ),
-        )
-
     identity_ctx = resolve_authenticated_user_context(
         http,
         payload.user_id,
@@ -136,6 +118,31 @@ async def send_message(
                 http_status=status.HTTP_401_UNAUTHORIZED,
             ),
         )
+    active_knowledge_space_id = service.resolve_active_knowledge_space_id(
+        conversation_id=payload.conversation_id,
+        user_id=user_id,
+        requested_knowledge_space_id=payload.knowledge_space_id,
+    )
+    routing_service = get_intent_routing_service()
+    try:
+        role, routing_decision, route_applied = routing_service.resolve_role(
+            payload.role, payload.message
+        )
+        priority = ModelPriority(payload.priority)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=chat_http_error_detail(
+                code="CHAT_INVALID_ROLE_OR_PRIORITY",
+                message="Invalid role or priority",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ),
+        )
+    if active_knowledge_space_id:
+        role = ModelRole.ORCHESTRATOR
+        route_applied = False
     if routing_decision:
         logger.info(
             "chat.intent_routing",
@@ -156,7 +163,7 @@ async def send_message(
             timeout_seconds=payload.timeout_seconds,
             user_id=user_id,
             project_id=payload.project_id,
-            knowledge_space_id=payload.knowledge_space_id,
+            knowledge_space_id=active_knowledge_space_id,
             identity_source=identity_ctx.identity_source,
         )
     except ConversationNotFoundError:
@@ -262,6 +269,61 @@ async def send_message(
 
     last_assistant_message: dict[str, Any] | None = None
     if result.get("citation_status", {}).get("status") == "missing_required":
+        result["knowledge_space_id"] = result.get("knowledge_space_id") or active_knowledge_space_id
+        if active_knowledge_space_id:
+            placeholder_text = (
+                "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. "
+                "Isso pode demorar um pouco, mas não vou recorrer ao código do Janus para responder sobre o livro."
+            )
+            result["response"] = placeholder_text
+            result["delivery_status"] = "pending_knowledge_space"
+            result["study_notice"] = placeholder_text
+            result["failure_classification"] = (
+                "infra_transient"
+                if result.get("citation_status", {}).get("reason") == "retrieval_error"
+                else "knowledge_space_pending"
+            )
+            if hasattr(service, "get_last_assistant_message"):
+                try:
+                    last_assistant_message = await service.get_last_assistant_message(
+                        conversation_id=payload.conversation_id,
+                        user_id=user_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "chat_message_get_last_assistant_failed",
+                        conversation_id=payload.conversation_id,
+                        error=str(e),
+                    )
+            if last_assistant_message and hasattr(service, "update_message_payload"):
+                try:
+                    await service.update_message_payload(
+                        conversation_id=payload.conversation_id,
+                        message_id=int(last_assistant_message.get("id")),
+                        patch={
+                            "text": placeholder_text,
+                            "knowledge_space_id": active_knowledge_space_id,
+                            "citations": result.get("citations") or [],
+                            "citation_status": result.get("citation_status"),
+                            "delivery_status": "pending_knowledge_space",
+                            "failure_classification": result.get("failure_classification"),
+                            "provider": result.get("provider"),
+                            "model": result.get("model"),
+                        },
+                        user_id=user_id,
+                    )
+                    result["message_id"] = str(last_assistant_message.get("id"))
+                except Exception as e:
+                    logger.warning(
+                        "chat_message_persist_pending_knowledge_space_failed",
+                        conversation_id=payload.conversation_id,
+                        error=str(e),
+                    )
+            result["study_job"] = None
+            result["source_scope"] = result.get("source_scope") or {
+                "knowledge_space_id": active_knowledge_space_id
+            }
+            return ChatMessageResponse(**result)
         placeholder_text = (
             "Estou estudando a base para responder com segurança. "
             "Isso pode demorar um pouco porque preciso localizar evidências rastreáveis."

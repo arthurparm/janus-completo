@@ -78,6 +78,40 @@ class _FakeMessageOrchestration:
     async def generate_document_grounded_reply(self, **kwargs):
         return self.grounded_result
 
+    def schedule_active_memory_capture(self, *, message: str, user_id: str | None, conversation_id: str) -> None:
+        return None
+
+    def build_knowledge_space_runtime_notice(
+        self,
+        *,
+        conversation_id: str,
+        message: str,
+        user_id: str | None,
+        requested_knowledge_space_id: str | None = None,
+    ):
+        return None
+
+    async def generate_secret_recall_reply(self, **kwargs):
+        return None
+
+    async def apply_response_memory_policies(
+        self,
+        assistant_text: str,
+        user_message: str,
+        user_id: str | None,
+        conversation_id: str,
+    ) -> str:
+        return assistant_text
+
+    def resolve_active_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None,
+        requested_knowledge_space_id: str | None = None,
+    ):
+        return requested_knowledge_space_id
+
     def trigger_post_response_events(
         self, conversation_id, user_message, assistant_text, result, user_id, project_id
     ):
@@ -302,6 +336,68 @@ async def test_streaming_service_missing_required_citations_emits_and_persists_g
     assert token_text
     assert token_text != MANDATORY_CITATION_GUARD_TEXT
     assert repo.messages[-1][0:3] == ("conv-1", "assistant", token_text)
+
+
+@pytest.mark.asyncio
+async def test_streaming_service_missing_required_citations_with_knowledge_space_skips_repo_study(monkeypatch):
+    repo = _FakeRepo()
+    convo_service = ConversationService(repo)
+    msg_orch = _FakeMessageOrchestration()
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=_FakeLLM(),
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=None,
+        conversation_service=convo_service,
+        message_orchestration_service=msg_orch,
+    )
+
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.build_citation_status",
+        lambda **kwargs: {
+            "mode": "required",
+            "status": "missing_required",
+            "count": 0,
+            "reason": "no_retrievable_sources",
+        },
+    )
+
+    async def _explode(*args, **kwargs):
+        raise AssertionError("repo study fallback should not run when knowledge space is active")
+
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.ChatStudyService.answer_with_study",
+        _explode,
+    )
+
+    chunks = [
+        line
+        async for line in streaming.stream_message(
+            conversation_id="conv-1",
+            message="Monte uma ficha usando o livro",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+            user_id="1",
+            knowledge_space_id="ks-1",
+        )
+    ]
+    events = _parse_sse_chunks(chunks)
+
+    reviewing_events = [
+        p
+        for e, p in events
+        if e == "cognitive_status"
+        and isinstance(p, dict)
+        and p.get("state") == "reviewing_knowledge_space"
+    ]
+    assert reviewing_events, events
+    token_text = "".join(
+        str(payload.get("text") or "")
+        for event, payload in events
+        if event == "token" and isinstance(payload, dict)
+    )
+    assert "não vou estudar o código do janus" in token_text.lower()
 
 
 @pytest.mark.asyncio

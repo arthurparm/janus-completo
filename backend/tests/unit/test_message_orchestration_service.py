@@ -822,3 +822,25 @@ def test_build_knowledge_space_runtime_notice_returns_estimate_for_resolved_spac
     assert result is not None
     assert result["processing_profile"] == "deep_task"
     assert result["estimated_wait_range_seconds"] == [35, 60]
+
+
+def test_resolve_active_knowledge_space_id_prefers_single_manifest_scope():
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "knowledge_space_id": "ks-1",
+                "status": "indexed",
+                "chunks_indexed": 10,
+            }
+        ]
+    )
+    service = _build_service(manifest_repo=manifest_repo)
+
+    result = service.resolve_active_knowledge_space_id(
+        conversation_id="conv-1",
+        user_id="user-1",
+        requested_knowledge_space_id=None,
+    )
+
+    assert result == "ks-1"

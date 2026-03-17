@@ -739,54 +739,85 @@ class StreamingService:
                 conversation_id=conversation_id,
             )
             if citation_status.get("status") == "missing_required":
-                yield (
-                    "event: cognitive_status\ndata: "
-                    + json.dumps(
-                        {
-                            "state": "studying_codebase",
-                            "reason": "Estudando a base para responder com seguranca; isso pode demorar.",
+                active_knowledge_space_id = (
+                    knowledge_space_id
+                    or self._message_orchestration_service.resolve_active_knowledge_space_id(
+                        conversation_id=conversation_id,
+                        user_id=str(user_id) if user_id is not None else None,
+                        requested_knowledge_space_id=knowledge_space_id,
+                    )
+                )
+                if active_knowledge_space_id:
+                    assistant_text = (
+                        "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. "
+                        "Isso pode demorar um pouco, mas não vou estudar o código do Janus para responder sobre esse conteúdo."
+                    )
+                    result["response"] = assistant_text
+                    result["provider"] = "janus"
+                    result["model"] = "knowledge_space_pending"
+                    result["knowledge_space_id"] = active_knowledge_space_id
+                    citations = []
+                    yield (
+                        "event: cognitive_status\ndata: "
+                        + json.dumps(
+                            {
+                                "state": "reviewing_knowledge_space",
+                                "reason": "Revisando o material vinculado para responder com seguranca.",
+                                "timestamp": int(_time.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
+                else:
+                    yield (
+                        "event: cognitive_status\ndata: "
+                        + json.dumps(
+                            {
+                                "state": "studying_codebase",
+                                "reason": "Estudando a base para responder com seguranca; isso pode demorar.",
+                                "timestamp": int(_time.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
+                    study_service = ChatStudyService(
+                        llm_service=self._llm,
+                        knowledge_service=None,
+                        autonomy_admin_service=None,
+                    )
+                    pending_progress_events: list[str] = []
+
+                    async def _progress(value: int, stage: str, reason: str) -> None:
+                        state = "study_progress" if stage != "synthesis" else "resuming_answer_generation"
+                        payload = {
+                            "state": state,
+                            "reason": reason,
+                            "progress": value,
                             "timestamp": int(_time.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n\n"
-                )
-                study_service = ChatStudyService(
-                    llm_service=self._llm,
-                    knowledge_service=None,
-                    autonomy_admin_service=None,
-                )
-                pending_progress_events: list[str] = []
+                        }
+                        yield_data = json.dumps(payload, ensure_ascii=False)
+                        pending_progress_events.append(
+                            f"event: cognitive_status\ndata: {yield_data}\n\n"
+                        )
 
-                async def _progress(value: int, stage: str, reason: str) -> None:
-                    state = "study_progress" if stage != "synthesis" else "resuming_answer_generation"
-                    payload = {
-                        "state": state,
-                        "reason": reason,
-                        "progress": value,
-                        "timestamp": int(_time.time() * 1000),
-                    }
-                    yield_data = json.dumps(payload, ensure_ascii=False)
-                    pending_progress_events.append(
-                        f"event: cognitive_status\ndata: {yield_data}\n\n"
+                    study_result = await study_service.answer_with_study(
+                        question=message,
+                        role=role,
+                        priority=priority,
+                        user_id=str(user_id) if user_id is not None else None,
+                        conversation_id=conversation_id,
+                        progress_cb=_progress,
                     )
-
-                study_result = await study_service.answer_with_study(
-                    question=message,
-                    role=role,
-                    priority=priority,
-                    user_id=str(user_id) if user_id is not None else None,
-                    conversation_id=conversation_id,
-                    progress_cb=_progress,
-                )
-                for progress_event in pending_progress_events:
-                    yield progress_event
-                assistant_text = str(study_result.get("response") or MANDATORY_CITATION_GUARD_TEXT)
-                result["response"] = assistant_text
-                result["provider"] = study_result.get("provider") or result.get("provider")
-                result["model"] = study_result.get("model") or result.get("model")
-                citations = study_result.get("citations") or []
-                citation_status = study_result.get("citation_status") or citation_status
+                    for progress_event in pending_progress_events:
+                        yield progress_event
+                    assistant_text = str(study_result.get("response") or MANDATORY_CITATION_GUARD_TEXT)
+                    result["response"] = assistant_text
+                    result["provider"] = study_result.get("provider") or result.get("provider")
+                    result["model"] = study_result.get("model") or result.get("model")
+                    citations = study_result.get("citations") or []
+                    citation_status = study_result.get("citation_status") or citation_status
             _, ui = split_ui(assistant_text)
 
             for i in range(0, len(assistant_text), 256):
