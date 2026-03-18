@@ -239,4 +239,4 @@ O script `backend/scripts/sync_prompts.py` varre recursivamente todos os
 subdiretorios de `backend/app/prompts/` e sincroniza cada `.txt` com o
 banco de dados. Executado automaticamente antes do start da API.
 
-**Total: 84 prompts em 17 subsistemas**
+**Total: 84 prompts em 16 subsistemas**
