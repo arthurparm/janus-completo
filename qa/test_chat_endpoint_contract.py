@@ -1,10 +1,6 @@
-import os
-import sys
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings

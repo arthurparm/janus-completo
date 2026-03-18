@@ -1,18 +1,18 @@
 # API Coverage Report (OQ-011)
 
-- Generated at: `2026-02-23T21:08:03.155511+00:00`
+- Generated at: `2026-03-18T21:25:17.609508+00:00`
 - Source matrix mode: `api_inventory_fallback`
-- Source matrix generated at: `2026-02-23T21:05:41.317111+00:00`
+- Source matrix generated at: `2026-03-18T21:23:10.439990+00:00`
 
 ## Summary
 
 - Total endpoints: `226`
-- Covered endpoints: `24`
-- Uncovered endpoints: `202`
-- Coverage percent: `10.62%`
+- Covered endpoints: `27`
+- Uncovered endpoints: `199`
+- Coverage percent: `11.95%`
 - Runtime validated endpoints: `6`
 - Runtime failed endpoints: `0`
-- Test referenced endpoints (no runtime smoke): `18`
+- Test referenced endpoints (no runtime smoke): `21`
 
 ## Target Tracking
 
@@ -28,11 +28,11 @@
 | Admin | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
 | Agent | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
 | Assistant | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
-| Auth | 8 | 0 | 8 | 0 | 0 | 0 | 0.0% |
+| Auth | 8 | 1 | 7 | 0 | 0 | 1 | 12.5% |
 | Auto Analysis | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
-| Autonomy | 11 | 0 | 11 | 0 | 0 | 0 | 0.0% |
+| Autonomy | 11 | 1 | 10 | 0 | 0 | 1 | 9.09% |
 | AutonomyHistory | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
-| Chat | 11 | 4 | 7 | 0 | 0 | 4 | 36.36% |
+| Chat | 11 | 5 | 6 | 0 | 0 | 5 | 45.45% |
 | Collaboration | 11 | 0 | 11 | 0 | 0 | 0 | 0.0% |
 | Collaboration - Workspace | 5 | 0 | 5 | 0 | 0 | 0 | 0.0% |
 | Consents | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
@@ -72,7 +72,6 @@
 | POST | `/api/v1/agent/execute` | Agent | agent_execute_api_v1_agent_execute_post |
 | POST | `/api/v1/assistant/execute` | Assistant | assistant_execute_api_v1_assistant_execute_post |
 | POST | `/api/v1/auth/firebase/exchange` | Auth | firebase_exchange_api_v1_auth_firebase_exchange_post |
-| POST | `/api/v1/auth/local/login` | Auth | local_login_api_v1_auth_local_login_post |
 | GET | `/api/v1/auth/local/me` | Auth | local_me_api_v1_auth_local_me_get |
 | POST | `/api/v1/auth/local/register` | Auth | local_register_api_v1_auth_local_register_post |
 | POST | `/api/v1/auth/local/request-reset` | Auth | local_request_reset_api_v1_auth_local_request_reset_post |
@@ -88,14 +87,12 @@
 | GET | `/api/v1/autonomy/plan` | Autonomy | get_autonomy_plan_api_v1_autonomy_plan_get |
 | PUT | `/api/v1/autonomy/plan` | Autonomy | update_autonomy_plan_api_v1_autonomy_plan_put |
 | PUT | `/api/v1/autonomy/policy` | Autonomy | update_policy_api_v1_autonomy_policy_put |
-| POST | `/api/v1/autonomy/start` | Autonomy | start_autonomy_api_v1_autonomy_start_post |
 | GET | `/api/v1/autonomy/status` | Autonomy | autonomy_status_api_v1_autonomy_status_get |
 | POST | `/api/v1/autonomy/stop` | Autonomy | stop_autonomy_api_v1_autonomy_stop_post |
 | GET | `/api/v1/autonomy/history/runs` | AutonomyHistory | list_runs_api_v1_autonomy_history_runs_get |
 | GET | `/api/v1/autonomy/history/runs/{run_id}` | AutonomyHistory | get_run_api_v1_autonomy_history_runs__run_id__get |
 | GET | `/api/v1/autonomy/history/runs/{run_id}/steps` | AutonomyHistory | list_steps_api_v1_autonomy_history_runs__run_id__steps_get |
 | GET | `/api/v1/chat/conversations` | Chat | list_conversations_api_v1_chat_conversations_get |
-| GET | `/api/v1/chat/stream/{conversation_id}` | Chat | stream_message_api_v1_chat_stream__conversation_id__get |
 | GET | `/api/v1/chat/{conversation_id}/events` | Chat | stream_agent_events_api_v1_chat__conversation_id__events_get |
 | GET | `/api/v1/chat/{conversation_id}/history` | Chat | chat_history_api_v1_chat__conversation_id__history_get |
 | GET | `/api/v1/chat/{conversation_id}/history/paginated` | Chat | chat_history_paginated_api_v1_chat__conversation_id__history_paginated_get |
@@ -218,5 +215,8 @@
 | GET | `/api/v1/observability/user_summary` | Observability | user_summary_api_v1_observability_user_summary_get |
 | POST | `/api/v1/optimization/analyze` | Optimization | analyze_system_api_v1_optimization_analyze_post |
 | GET | `/api/v1/optimization/health` | Optimization | get_system_health_api_v1_optimization_health_get |
+| GET | `/api/v1/optimization/issues` | Optimization | get_detected_issues_api_v1_optimization_issues_get |
+| GET | `/api/v1/optimization/metrics/history` | Optimization | get_metrics_history_api_v1_optimization_metrics_history_get |
+| POST | `/api/v1/optimization/run-cycle` | Optimization | run_optimization_cycle_api_v1_optimization_run_cycle_post |
 
-_Truncated: 52 additional uncovered endpoints not shown._
+_Truncated: 49 additional uncovered endpoints not shown._

@@ -1,6 +1,6 @@
 # API Endpoint Matrix (Live)
 
-- Generated at: `2026-02-23T21:08:03.188218+00:00`
+- Generated at: `2026-03-18T21:23:10.439990+00:00`
 - Source: `api_inventory_fallback`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
@@ -8,7 +8,7 @@
 
 - Total endpoints: `226`
 - Smoke results loaded: `6`
-- Test path references: `54`
+- Test path references: `59`
 
 ### By Method
 
@@ -27,11 +27,11 @@
 | Admin | 1 | 0 | 0 | 0 |
 | Agent | 1 | 0 | 0 | 0 |
 | Assistant | 1 | 0 | 0 | 0 |
-| Auth | 8 | 0 | 0 | 0 |
+| Auth | 8 | 0 | 0 | 1 |
 | Auto Analysis | 1 | 0 | 0 | 0 |
-| Autonomy | 11 | 0 | 0 | 0 |
+| Autonomy | 11 | 0 | 0 | 1 |
 | AutonomyHistory | 3 | 0 | 0 | 0 |
-| Chat | 11 | 0 | 0 | 4 |
+| Chat | 11 | 0 | 0 | 5 |
 | Collaboration | 11 | 0 | 0 | 0 |
 | Collaboration - Workspace | 5 | 0 | 0 | 0 |
 | Consents | 3 | 0 | 0 | 0 |
@@ -67,7 +67,7 @@
 | POST | `/api/v1/agent/execute` | Agent | N/A | no |
 | POST | `/api/v1/assistant/execute` | Assistant | N/A | no |
 | POST | `/api/v1/auth/firebase/exchange` | Auth | N/A | no |
-| POST | `/api/v1/auth/local/login` | Auth | N/A | no |
+| POST | `/api/v1/auth/local/login` | Auth | N/A | yes |
 | GET | `/api/v1/auth/local/me` | Auth | N/A | no |
 | POST | `/api/v1/auth/local/register` | Auth | N/A | no |
 | POST | `/api/v1/auth/local/request-reset` | Auth | N/A | no |
@@ -83,7 +83,7 @@
 | GET | `/api/v1/autonomy/plan` | Autonomy | N/A | no |
 | PUT | `/api/v1/autonomy/plan` | Autonomy | N/A | no |
 | PUT | `/api/v1/autonomy/policy` | Autonomy | N/A | no |
-| POST | `/api/v1/autonomy/start` | Autonomy | N/A | no |
+| POST | `/api/v1/autonomy/start` | Autonomy | N/A | yes |
 | GET | `/api/v1/autonomy/status` | Autonomy | N/A | no |
 | POST | `/api/v1/autonomy/stop` | Autonomy | N/A | no |
 | GET | `/api/v1/autonomy/history/runs` | AutonomyHistory | N/A | no |
@@ -93,7 +93,7 @@
 | GET | `/api/v1/chat/health` | Chat | N/A | yes |
 | POST | `/api/v1/chat/message` | Chat | N/A | yes |
 | POST | `/api/v1/chat/start` | Chat | N/A | yes |
-| GET | `/api/v1/chat/stream/{conversation_id}` | Chat | N/A | no |
+| GET | `/api/v1/chat/stream/{conversation_id}` | Chat | N/A | yes |
 | DELETE | `/api/v1/chat/{conversation_id}` | Chat | N/A | yes |
 | GET | `/api/v1/chat/{conversation_id}/events` | Chat | N/A | no |
 | GET | `/api/v1/chat/{conversation_id}/history` | Chat | N/A | no |

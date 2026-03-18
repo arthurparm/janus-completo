@@ -1,8 +1,4 @@
-import os
-import sys
 from types import SimpleNamespace
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.services.db_migration_service import DBMigrationService
 

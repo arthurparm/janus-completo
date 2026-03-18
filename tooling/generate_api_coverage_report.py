@@ -435,8 +435,8 @@ def main() -> int:
     report_json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     report_md_path.write_text(render_markdown(report), encoding="utf-8")
 
-    print(f"[ok] wrote {report_json_path.relative_to(ROOT)}")
-    print(f"[ok] wrote {report_md_path.relative_to(ROOT)}")
+    print(f"[ok] wrote {report_json_path}")
+    print(f"[ok] wrote {report_md_path}")
     print(
         f"[summary] endpoints={report['summary']['total_endpoints']} coverage={report['summary']['coverage_percent']}% uncovered={report['summary']['uncovered_endpoints']}"
     )

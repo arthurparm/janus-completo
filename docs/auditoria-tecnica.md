@@ -113,3 +113,33 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-18)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, requisitos python version não batem e falta de lockfile).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+- [x] Extração de API inventory e Coverage Report.
+
+### 22. Drift de contratos API e endpoints sem cobertura
+**Descrição:** Foi gerado um novo relatório de cobertura de endpoints de API e foi constatado que de 226 endpoints, 199 encontram-se descobertos, representando apenas 11.95% de cobertura de testes.
+**Evidências:**
+- `outputs/qa/api_coverage_report.json`
+- `outputs/qa/api_coverage_report.md`
+
+**Próximos passos:**
+- Adicionar ou atualizar testes para contemplar os endpoints que estão com "coverage_status": "not_covered".
+- Integrar a execução das ferramentas de API inventory e Coverage no CI.
+
+### 23. Importação do sys sem os depois do Python em arquivos de Teste
+**Descrição:** Os imports nos testes estavam causando erro E402 (Module level import not at top of file) ao serem executados com o ruff.
+**Evidências:**
+- `qa/test_api_visibility_endpoints.py`
+- `qa/test_chat_endpoint_contract.py`
+- `qa/test_db_migration_service_contract.py`
+- `qa/test_observability_request_dashboard.py`
+- `qa/test_tool_executor_policy_guards.py`
+
+**Próximos passos:**
+- Importação do `sys` foi removida, uma vez que o PYTHONPATH está sendo configurado na chamada do poetry.

@@ -803,3 +803,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-015] Baixa Cobertura de Endpoints da API
+- Problema atual: Apenas 11.95% dos endpoints da API (27/226) possuem cobertura de testes.
+- Solucao proposta: Desenvolver testes E2E e de integração para aumentar a cobertura e incluir a ferramenta de `generate_api_coverage_report` no pipeline de CI para rejeitar PRs que diminuem a cobertura.
+- Impacto esperado: Maior estabilidade e segurança nos contratos de API.
+- Riscos: Overhead temporário para desenvolvimento dos testes.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: aberto
