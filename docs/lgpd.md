@@ -56,3 +56,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Textos do Daemon:** Aplicar a camada de regex `_PII_PATTERNS` em `memory/security.py` antes de encaminhar transcrições de áudio ao logger no `daemon.py`.
 2. **Revisar Consentimento Local:** Exigir uma configuração de `OPT_IN` com flag persistente antes de autorizar a primeira chamada a endpoints que realizam captura de input do SO host no `windows_agent.py`.
+
+## Achados do dia (2026-03-18)
+
+### Lacunas e Impacto
+- **Risco de Acesso Não Autorizado a PII via `X-User-Id` Spoofing:** A injeção e aceitação incondicional do cabeçalho `X-User-Id` em rotas como `productivity.py` (emails, calendário, notas) e `documents.py` constitui um grave risco de vazamento de dados pessoais se explorado para personificar (impersonate) outro usuário. Esse bypass viola o princípio de Confidencialidade e Segurança da LGPD, pois dados sensíveis de um titular podem ser acessados indiscriminadamente.
+- **Risco de Acesso a Artefatos e Mensagens via Workspace API sem Autenticação:** A falta de validadores de sessão nos endpoints de `workspace.py` permite que qualquer pessoa com acesso de rede manipule e leia mensagens trocadas entre agentes que possam conter conteúdo pessoal/PII, quebrando os requisitos de proteção técnica da LGPD contra acessos acidentais ou ilícitos.
+
+### Próximos Passos
+1. **Remover Trust em Headers Simples:** Desativar `AUTH_TRUST_X_USER_ID_HEADER` em produção e refatorar qualquer local que dependa de injetar o User-Id por headers (como os middlewares de produtividade e RAG).
+2. **Blindar Workspaces Compartilhados:** Aplicar checagens de acesso baseadas em Token JWT autênticos e testar se apenas os membros e criadores do workspace podem ler seus artefatos ou mensagens.

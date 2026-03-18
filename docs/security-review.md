@@ -164,3 +164,48 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média
 - **Descrição:** Ocorrem falhas de conexão com RabbitMQ (`[Errno 111] Connection refused`) que não disparam alertas claros, resultando em modo offline silencioso (Silent fail-open) na aplicação.
 - **Ação Recomendada:** Implementar um circuit breaker com alertas e reentativas configuráveis, emitindo logs críticos antes do fallback silencioso.
+
+## Achados do dia (2026-03-18)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Passou** (Nenhuma vulnerabilidade reportada)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 22. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 vulnerabilidades: 16 altas, 1 moderada):
+  - `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, etc. (Alta) - XSS in i18n attribute bindings.
+  - `@hono/node-server` (Alta) - Authorization bypass for protected static paths.
+  - `dompurify` (Moderada) - Cross-site Scripting.
+  - `express-rate-limit` (Alta) - IPv4-mapped IPv6 addresses bypass per-client rate limiting.
+  - `flatted` (Alta) - Unbounded recursion DoS em revive phase.
+  - `hono` (Alta) - Cookie Attribute Injection, SSE Control Field Injection, arbitrary file access via serveStatic.
+  - `immutable` (Alta) - Prototype Pollution.
+  - `tar` (Alta) - Hardlink Path Traversal via Drive-Relative Linkpath.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 23. Bypass de Autenticação - Shared Workspaces
+- **Caminho:** `backend/app/api/v1/endpoints/workspace.py`
+- **Gravidade:** Alta
+- **Descrição:** Requisições via API que injetam novos artefatos (`add_artifact`), leem artefatos (`get_artifact`), mandam mensagens (`send_message`), leem mensagens (`get_messages_for`), ou disparam eventos de Desligamento do Sistema (`shutdown_system`) estão usando as injeções simples de dependência do FastAPI como `Depends(get_collaboration_service)` sem qualquer validador de sessão na camada de roteamento (ex: `Depends(get_current_user)`).
+- **Ação Recomendada:** Implementar checagem de Token/Access Control nas rotas do workspace, proibindo acessos anônimos.
+
+### 24. Ausência de Rate-Limiter e Fail-Closed Inesperado
+- **Caminho:** `backend/app/api/v1/endpoints/auth.py` e `backend/app/core/infrastructure/rate_limit_middleware.py`
+- **Gravidade:** Média/Alta
+- **Descrição:** Endpoints críticos de Autenticação (`login`, `refresh_token`, etc) carecem do decorador de segurança de tráfego (`@limiter.limit`). Além disso, o middleware bloqueia requisições caso o Redis falhe, criando uma falha de disponibilidade.
+- **Ação Recomendada:** Adicionar rate limit à rota de login e garantir que o Fail-Open do Rate Limit funcione quando o Redis cair (corrigir a flag Fail-Closed em produção).
+
+### 25. Header `X-User-Id` Exploit (Impersonation)
+- **Caminho:** `backend/app/core/infrastructure/auth.py` e uso espalhado em `documents.py`, `productivity.py`, `resources.py`
+- **Gravidade:** Crítica
+- **Descrição:** O sistema lê diretamente a injeção do cabeçalho `X-User-Id` permitindo manipulação irrestrita da identidade do usuário, bypassando o JWT. `AUTH_TRUST_X_USER_ID_HEADER=True` por padrão piora o risco.
+- **Ação Recomendada:** Configurar o flag como falso nos defaults de produção e remover ou restringir o parse via X-User-Id em produção.
+
+### 26. Uso inseguro de `urllib.urlopen` (SSRF)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** O uso do `urlopen` pode permitir o acesso a esquemas não previstos como `file://`, facilitando Server-Side Request Forgery ou a leitura de arquivos locais indesejados.
+- **Ação Recomendada:** Checar estritamente os esquemas (`http://` ou `https://`) antes de despachar chamadas ou migrar para `httpx`.

@@ -717,6 +717,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-034] Rate Limiting Fail-Closed Bloqueando Requisições
+- Problema atual: O middleware `backend/app/core/infrastructure/rate_limit_middleware.py` bloqueia requisições (503 Service Unavailable) se o Redis estiver fora do ar em produção (fail-closed), o que prejudica a disponibilidade.
+- Solucao proposta: Assegurar que a política do Rate Limit atue em modo `fail-open`, permitindo que o tráfego prossiga sem Redis (ou aplicar isso corretamente em produção).
+- Impacto esperado: Aumento de resiliência e disponibilidade (Availability) do sistema quando a camada de cache cai.
+- Riscos: Pico de uso (DDoS) atingindo o banco de dados principal sem a proteção do rate limiter.
+- Dependencias: Avaliar injeção do rate limiter.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-035] Fuga de Autenticação na API de Workspaces Compartilhados
+- Problema atual: Os endpoints do arquivo `backend/app/api/v1/endpoints/workspace.py` usam a injeção simples de dependência `Depends(get_collaboration_service)` sem decorador para checar autenticação de usuário na rota, permitindo Bypass.
+- Solucao proposta: Adicionar dependência explícita de autenticação JWT/Access Control (ex: `Depends(get_current_user)`) aos endpoints do workspace para blindar contra acessos anônimos mal-intencionados.
+- Impacto esperado: Prevenção efetiva contra injeção e leitura anônima de artefatos e encerramento desautorizado do sistema.
+- Riscos: Nenhuma falha esperada, desde que as origens cliente injetem o token adequadamente.
+- Dependencias: Serviço de authn.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
