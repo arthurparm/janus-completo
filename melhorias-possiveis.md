@@ -749,6 +749,7 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
 ### [SG-030] Falha Silenciosa no RabbitMQ (Fail-Open)
 - Problema atual: A infraestrutura do message broker (`backend/app/core/infrastructure/message_broker.py`) cai para modo offline silenciosamente caso haja recusa de conexão pelo RabbitMQ.
 - Solucao proposta: Emitir logs CRITICAL/ERROR e acionar alertas adequados para evitar interrupções sistêmicas silenciosas.
