@@ -56,3 +56,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Mascarar Textos do Daemon:** Aplicar a camada de regex `_PII_PATTERNS` em `memory/security.py` antes de encaminhar transcrições de áudio ao logger no `daemon.py`.
 2. **Revisar Consentimento Local:** Exigir uma configuração de `OPT_IN` com flag persistente antes de autorizar a primeira chamada a endpoints que realizam captura de input do SO host no `windows_agent.py`.
+
+## Achados do dia (2026-03-18)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O arquivo `backend/app/interfaces/daemon/daemon.py` (e o loop principal nele) continua realizando o log (`logger.info("log_info", message=f"Command received: {command}")`) de comandos de voz transcritos diretamente. Essa ação grava dados de natureza indiretamente biométrica e comportamental em logs estáticos (`janus.log`), quebrando o princípio de minimização da LGPD por não realizar prévio PII scrubbing antes de gravar em disco ou no fluxo do console.
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** As listas na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` permanecem no estado global como vazamento em In-Memory, de modo que os dados temporários de sessão podem ser lidos entre requests em concorrência se houver comprometimento de agentes ou usuários, sem isolamento claro nem controle de AuthZ.
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** Na função `send_email` de `backend/app/core/tools/productivity_tools.py`, metadados essenciais e potencialmente rastreáveis a pessoas (como o remetente `user_id`, destinatário `to` e o `subject`) ainda são passados ao `logger.info()` limpos, falhando no mascaramento preventivo de PII.
+- **Captura de Tela Indiscriminada e sem Autorização (Windows Agent):** Os endpoints expostos sem autenticação pelo `backend/windows_agent.py` (`/screenshot`) mantêm os riscos críticos de vazamento LGPD por capturar a tela ativa do usuário (possivelmente abrigando e-mails, acessos bancários, comunicações sigilosas) de forma indiscriminada, sem data minimisation visual (blur/redaction em certas janelas) ou registro de auditoria local (logs no agent não identificam quem/qual request realizou a captura).
+
+### Próximos Passos
+1. **Mascarar Textos do Daemon:** Importar e utilizar o helper `redact_pii_text_only` (de `app.core.memory.security`) sobre o `command` no loop do `daemon.py` antes de passá-lo para os métodos de log, garantindo que CPFs, e-mails ou senhas vocalizadas não sejam arquivados.
+2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
+3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
+4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.

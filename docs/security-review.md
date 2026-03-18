@@ -164,3 +164,55 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média
 - **Descrição:** Ocorrem falhas de conexão com RabbitMQ (`[Errno 111] Connection refused`) que não disparam alertas claros, resultando em modo offline silencioso (Silent fail-open) na aplicação.
 - **Ação Recomendada:** Implementar um circuit breaker com alertas e reentativas configuráveis, emitindo logs críticos antes do fallback silencioso.
+
+## Achados do dia (2026-03-18)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 22. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 no total, sendo 16 altas e 1 moderada). Incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono`
+  - `dompurify`, `express-rate-limit`, `flatted`, `immutable`, `tar`
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 23. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` (linha 775 e 865) e `backend/app/core/tools/agent_tools.py` (linha 719)
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de rotinas de abertura de URL (como `urlopen`) que permitem abrir esquemas arbitrários (como `file://`), propiciando leitura local de arquivos indesejados (SSRF / Arbitrary File Read).
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir qualquer requisição externa.
+
+### 24. XML Parsing Vulnerável a Ataques (XML External Entity)
+- **Caminho:** `backend/app/services/document_parser_service.py` (linha 111)
+- **Gravidade:** Média (Bandit B314)
+- **Descrição:** O serviço utiliza `xml.etree.ElementTree.fromstring` para parsear o conteúdo de arquivos DOCX, vulnerável a ataques XML (XXE/Billion Laughs).
+- **Ação Recomendada:** Substituir por `defusedxml.ElementTree.fromstring`.
+
+### 25. Interface Binding Potencialmente Inseguro (0.0.0.0) e Falta de Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média/Alta (Bandit B104)
+- **Descrição:** O script expõe a API vinculando a todas as interfaces (`0.0.0.0`) na porta 5001 sem autenticação (AuthZ bypass), permitindo acesso da rede local aos endpoints de SO (ex: `/screenshot`, `/notify`, `/speak`).
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar um mecanismo de autenticação robusto nos endpoints.
+
+### 26. Requisições HTTP sem Timeout
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py` (linhas 12, 29, 47, 120, 166)
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** O script realiza chamadas usando a biblioteca `requests` sem definir timeout (`requests.get()` e `requests.post()`), podendo causar travamentos.
+- **Ação Recomendada:** Adicionar parâmetro explícito `timeout=10` nas chamadas.
+
+### 27. Uso de exec() Inseguro
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py` (linha 449)
+- **Gravidade:** Média (Bandit B102)
+- **Descrição:** Uso de função `exec()` detectada. Pode permitir injeção de código se a entrada não for perfeitamente validada.
+- **Ação Recomendada:** Avaliar alternativas seguras ou implementar sandboxing robusto no entorno da chamada.
+
+### 28. Criação Insegura de Arquivos Temporários
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py` (linha 217)
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
+- **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
