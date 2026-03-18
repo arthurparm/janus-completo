@@ -824,6 +824,89 @@ class MessageOrchestrationService:
         ).strip()
 
     @staticmethod
+    def _is_document_operational_task(
+        *,
+        message: str,
+        understanding: dict[str, Any] | None,
+    ) -> bool:
+        intent = str((understanding or {}).get("intent") or "").strip().lower()
+        if intent == "action_request":
+            return True
+        lowered = str(message or "").lower()
+        patterns = (
+            r"\bcrie\b",
+            r"\bcriar\b",
+            r"\bmonte\b",
+            r"\bmontar\b",
+            r"\bfa[cç]a\b",
+            r"\bfazer\b",
+            r"\bprepare\b",
+            r"\bpreparar\b",
+            r"\bresolva\b",
+            r"\bresolver\b",
+            r"\bcalcule\b",
+            r"\bcalcular\b",
+            r"\bpreencha\b",
+            r"\bpreencher\b",
+            r"\bgere\b",
+            r"\bgerar\b",
+            r"\bescolha por mim\b",
+            r"\bdo que precisa\b",
+            r"\bpasso a passo\b",
+        )
+        return any(re.search(pattern, lowered) for pattern in patterns)
+
+    def _build_document_operational_prompt(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+    ) -> str:
+        grouped: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        for index, citation in enumerate(citations, start=1):
+            source = str(citation.get("title") or citation.get("file_path") or citation.get("doc_id") or "Fonte").strip()
+            grouped.setdefault(source, []).append((index, citation))
+        evidence_blocks: list[str] = []
+        for source, entries in grouped.items():
+            evidence_blocks.append(f"Fonte: {source}")
+            for index, citation in entries[:4]:
+                snippet = self._trim_document_snippet(citation.get("snippet"))
+                if not snippet:
+                    continue
+                evidence_blocks.append(f"[{index}] {snippet}")
+            evidence_blocks.append("")
+        sources_text = "\n".join(block for block in evidence_blocks if block is not None).strip()
+        return textwrap.dedent(
+            f"""
+            Você está executando uma tarefa do usuário com base SOMENTE nas evidências documentais abaixo.
+
+            Tarefa do usuário:
+            {message}
+
+            Fontes recuperadas:
+            {sources_text}
+
+            Regras obrigatórias:
+            - Nao resuma o livro nem diga apenas "o documento fala sobre".
+            - Use as evidências para PRODUZIR o artefato pedido pelo usuário.
+            - Se a tarefa for montar algo, monte de forma direta e útil.
+            - Se faltarem decisões do usuário, liste apenas as decisões realmente pendentes.
+            - Se a fonte não trouxer algum detalhe necessário, liste isso como lacuna da fonte.
+            - Nao invente fatos que nao estejam sustentados pelas evidencias.
+            - Quando houver varias fontes, trate a fonte principal recuperada como canônica e as demais como apoio.
+
+            Responda SOMENTE em JSON válido:
+            {{
+              "response": "artefato final ou execução direta da tarefa",
+              "used_citation_ids": [1,2],
+              "missing_user_decisions": ["decisão realmente pendente"],
+              "source_gaps": ["lacuna real da fonte"],
+              "artifact_type": "tipo curto do artefato"
+            }}
+            """
+        ).strip()
+
+    @staticmethod
     def _normalize_document_text(value: str | None) -> str:
         return " ".join(str(value or "").strip().split()).casefold()
 
@@ -884,6 +967,43 @@ class MessageOrchestrationService:
             sanitized["answered"] = answered
         return sanitized
 
+    def _sanitize_document_operational_extraction(
+        self,
+        *,
+        extraction: dict[str, Any] | None,
+        citations: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if not isinstance(extraction, dict):
+            return None
+        response = str(extraction.get("response") or "").strip()
+        if not response:
+            return None
+        used_ids: list[int] = []
+        for value in extraction.get("used_citation_ids") or []:
+            try:
+                idx = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= idx <= len(citations):
+                used_ids.append(idx)
+        missing_user_decisions = [
+            str(item).strip()
+            for item in (extraction.get("missing_user_decisions") or [])
+            if str(item or "").strip()
+        ]
+        source_gaps = [
+            str(item).strip()
+            for item in (extraction.get("source_gaps") or [])
+            if str(item or "").strip()
+        ]
+        return {
+            "response": response,
+            "used_citation_ids": sorted(set(used_ids)),
+            "missing_user_decisions": missing_user_decisions,
+            "source_gaps": source_gaps,
+            "artifact_type": str(extraction.get("artifact_type") or "").strip(),
+        }
+
     async def _recheck_document_grounding(
         self,
         *,
@@ -937,6 +1057,33 @@ class MessageOrchestrationService:
         raw_response = str(extraction.get("response") or "")
         parsed = parse_json_lenient(raw_response)
         return self._sanitize_document_grounding_extraction(
+            extraction=parsed if isinstance(parsed, dict) else None,
+            citations=citations,
+        )
+
+    async def _extract_document_operational_grounding(
+        self,
+        *,
+        message: str,
+        citations: list[dict[str, Any]],
+        role: ModelRole,
+        priority: ModelPriority,
+        timeout_seconds: int | None,
+        user_id: str | None,
+        project_id: str | None,
+    ) -> dict[str, Any] | None:
+        prompt = self._build_document_operational_prompt(message=message, citations=citations)
+        extraction = await self._llm.invoke_llm(
+            prompt=prompt,
+            role=role,
+            priority=priority,
+            timeout_seconds=min(int(timeout_seconds or 45), 45),
+            user_id=user_id,
+            project_id=project_id,
+        )
+        raw_response = str(extraction.get("response") or "")
+        parsed = parse_json_lenient(raw_response)
+        return self._sanitize_document_operational_extraction(
             extraction=parsed if isinstance(parsed, dict) else None,
             citations=citations,
         )
@@ -999,6 +1146,38 @@ class MessageOrchestrationService:
 
         return "\n".join(line for line in lines if line is not None).strip()
 
+    def _format_document_operational_response(
+        self,
+        *,
+        extraction: dict[str, Any] | None,
+        citations: list[dict[str, Any]],
+    ) -> str:
+        if not extraction:
+            top_snippets = [
+                self._trim_document_snippet(citation.get("snippet"))
+                for citation in citations[:4]
+                if self._trim_document_snippet(citation.get("snippet"))
+            ]
+            if not top_snippets:
+                return "Nao encontrei no documento evidências suficientes para executar essa tarefa com segurança."
+            lines = [
+                "Ainda não consegui executar a tarefa inteira com segurança, mas estas evidências são as mais úteis:",
+            ]
+            lines.extend(f"- {snippet}" for snippet in top_snippets)
+            return "\n".join(lines)
+        lines = [str(extraction.get("response") or "").strip()]
+        missing_user_decisions = extraction.get("missing_user_decisions") or []
+        if missing_user_decisions:
+            lines.append("")
+            lines.append("Decisões pendentes do usuário:")
+            lines.extend(f"- {item}" for item in missing_user_decisions[:6])
+        source_gaps = extraction.get("source_gaps") or []
+        if source_gaps:
+            lines.append("")
+            lines.append("Lacunas da fonte:")
+            lines.extend(f"- {item}" for item in source_gaps[:6])
+        return "\n".join(line for line in lines if line is not None).strip()
+
     async def generate_document_grounded_reply(
         self,
         *,
@@ -1059,12 +1238,17 @@ class MessageOrchestrationService:
 
         citations: list[dict[str, Any]] = []
         retrieval_failed = False
+        is_operational_task = self._is_document_operational_task(
+            message=message,
+            understanding=understanding,
+        )
+        retrieval_limit = 10 if is_operational_task else 6
         try:
             citations = await collect_document_citations(
                 message=message,
                 user_id=str(user_id) if user_id is not None else None,
                 conversation_id=conversation_id,
-                limit=6,
+                limit=retrieval_limit,
             )
             citations = self._apply_document_source_policy(
                 citations=citations,
@@ -1083,7 +1267,7 @@ class MessageOrchestrationService:
                         message="documento enviado",
                         user_id=str(user_id) if user_id is not None else None,
                         conversation_id=conversation_id,
-                        limit=6,
+                        limit=retrieval_limit,
                     )
                     fallback_citations = self._apply_document_source_policy(
                         citations=fallback_citations,
@@ -1133,15 +1317,26 @@ class MessageOrchestrationService:
         provider = "janus"
         model = "document_grounding"
         try:
-            extraction = await self._extract_document_grounding(
-                message=message,
-                citations=citations,
-                role=role,
-                priority=priority,
-                timeout_seconds=timeout_seconds,
-                user_id=user_id,
-                project_id=project_id,
-            )
+            if is_operational_task:
+                extraction = await self._extract_document_operational_grounding(
+                    message=message,
+                    citations=citations,
+                    role=role,
+                    priority=priority,
+                    timeout_seconds=timeout_seconds,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
+            else:
+                extraction = await self._extract_document_grounding(
+                    message=message,
+                    citations=citations,
+                    role=role,
+                    priority=priority,
+                    timeout_seconds=timeout_seconds,
+                    user_id=user_id,
+                    project_id=project_id,
+                )
         except Exception as exc:
             logger.warning(
                 "document_grounding_extraction_failed",
@@ -1151,7 +1346,7 @@ class MessageOrchestrationService:
                 error=str(exc),
             )
 
-        if citations and (not extraction or not (extraction.get("supported_points") or [])):
+        if citations and not is_operational_task and (not extraction or not (extraction.get("supported_points") or [])):
             try:
                 rechecked = await self._recheck_document_grounding(
                     message=message,
@@ -1173,10 +1368,16 @@ class MessageOrchestrationService:
                     error=str(exc),
                 )
 
-        response = self._format_document_grounded_response(
-            extraction=extraction,
-            citations=citations,
-        )
+        if is_operational_task:
+            response = self._format_document_operational_response(
+                extraction=extraction,
+                citations=citations,
+            )
+        else:
+            response = self._format_document_grounded_response(
+                extraction=extraction,
+                citations=citations,
+            )
         return {
             "response": response,
             "provider": provider,

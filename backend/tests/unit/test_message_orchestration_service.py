@@ -590,9 +590,11 @@ async def test_send_message_document_grounding_prefers_primary_source_for_operat
     repo = _FakeRepo()
     llm = _FakeLLMService(
         response=(
-            '{"answer":"O manual principal descreve o procedimento.",'
-            '"supported_points":[{"statement":"O manual principal descreve a etapa central.","citation_ids":[1]}],'
-            '"missing_information":[]}'
+            '{"response":"O manual principal descreve o procedimento passo a passo.",'
+            '"used_citation_ids":[1],'
+            '"missing_user_decisions":[],'
+            '"source_gaps":[],'
+            '"artifact_type":"procedure"}'
         )
     )
     manifest_repo = _FakeManifestRepo(
@@ -654,10 +656,11 @@ async def test_send_message_document_grounding_allows_secondary_when_user_reques
     repo = _FakeRepo()
     llm = _FakeLLMService(
         response=(
-            '{"answer":"O manual principal cobre a base e o Companion Guide adiciona opcoes extras.",'
-            '"supported_points":[{"statement":"O manual principal cobre a base.","citation_ids":[1]},'
-            '{"statement":"O Companion Guide adiciona opcoes extras.","citation_ids":[2]}],'
-            '"missing_information":[]}'
+            '{"response":"O manual principal cobre a base e o Companion Guide adiciona opções extras.",'
+            '"used_citation_ids":[1,2],'
+            '"missing_user_decisions":[],'
+            '"source_gaps":[],'
+            '"artifact_type":"procedure"}'
         )
     )
     manifest_repo = _FakeManifestRepo(
@@ -711,6 +714,60 @@ async def test_send_message_document_grounding_allows_secondary_when_user_reques
 
     assert result["citations"]
     assert {citation["doc_id"] for citation in result["citations"]} == {"doc-core", "doc-companion"}
+
+
+@pytest.mark.asyncio
+async def test_send_message_document_grounding_operational_task_returns_direct_artifact(monkeypatch):
+    repo = _FakeRepo()
+    llm = _FakeLLMService(
+        response=(
+            '{"response":"Ficha sugerida\\n- Classe: Cavaleiro\\n- Origem: Nobre\\n- Atributos priorizados: Força, Constituição e Carisma",'
+            '"used_citation_ids":[1],'
+            '"missing_user_decisions":["nome do personagem"],'
+            '"source_gaps":["a fonte nao detalha o equipamento inicial completo neste trecho"],'
+            '"artifact_type":"character_sheet"}'
+        )
+    )
+    manifest_repo = _FakeManifestRepo(
+        rows=[
+            {
+                "doc_id": "doc-1",
+                "status": "indexed",
+                "chunks_indexed": 5,
+                "chunks_total": 5,
+                "file_name": "Livro Base.pdf",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.collect_document_citations",
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "doc-1",
+                    "title": "Livro Base.pdf",
+                    "file_path": "Livro Base.pdf",
+                    "source_type": "document",
+                    "snippet": "Cavaleiros nobres priorizam força, constituição e carisma para defender o reino.",
+                }
+            ]
+        ),
+    )
+    service = _build_service(repo=repo, llm_service=llm, manifest_repo=manifest_repo)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Crie uma ficha de cavaleiro com base no livro enviado",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
+    )
+
+    assert result["response"].startswith("Ficha sugerida")
+    assert "Do documento:" not in result["response"]
+    assert "Decisões pendentes do usuário:" in result["response"]
+    assert "Lacunas da fonte:" in result["response"]
+    assert result["citation_status"]["status"] == "present"
 
 
 @pytest.mark.asyncio
