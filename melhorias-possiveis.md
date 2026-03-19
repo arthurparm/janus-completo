@@ -836,3 +836,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-039] Criação Insegura de Arquivos Temporários em Testes (Bandit B108)
+- Problema atual: Criação de diretório temporário detectada como possivelmente insegura no arquivo de teste `backend/tests/unit/core/test_logging_config_legacy_normalization.py`.
+- Solucao proposta: Utilizar o módulo `tempfile` de forma correta (ex: `tempfile.TemporaryDirectory`) para os testes unitários garantirem proteção contra exploits.
+- Impacto esperado: Menor risco e eliminação de avisos de linters no fluxo de CI.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-040] Abertura de URL com Esquemas Arbitrários em Scripts/Testes (Bandit B310)
+- Problema atual: Uso de funções para abrir urls que podem aceitar esquemas arbitrários (como `file://`) em `backend/scripts/eval_technical_qa.py` e `backend/tests/smoke/run_repo_smoke_test.py`.
+- Solucao proposta: Substituir por chamadas HTTP estritas (ex: `requests.get()`) com timeout em vez de bibliotecas padrão nativas para abertura de esquemas.
+- Impacto esperado: Blindagem contra SSRF e Arbitrary File Read, mesmo em ambientes de script ou teste.
+- Riscos: Redirecionamento e alteração mínima de script behavior.
+- Dependencias: Biblioteca requests.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-041] Requisições sem timeout em múltiplos scripts e testes (Bandit B113)
+- Problema atual: Em `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/conftest.py`, e `backend/tests/e2e/test_api_endpoints.py`, métodos http como `requests.get` ou `requests.post` estão sendo usados sem especificar o parâmetro timeout, sujeitos a stalls eternos se a rede/API travar.
+- Solucao proposta: Definir um parâmetro de `timeout` (ex: `timeout=10` ou `timeout=30`) em todas as invocações.
+- Impacto esperado: Maior resiliência de CI, evitando que execuções prendam eternamente pipelines ou consumam recursos do runner.
+- Riscos: Alguns testes e2e poderão estourar timeout falsamente se o ambiente estiver sob carga e responder lentamente.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-042] Uso de eval possivelmente inseguro em ferramentas (Bandit B307)
+- Problema atual: Uso da função `eval()` ou similares no script de ferramenta `backend/app/core/tools/faulty_tools.py`, configurando vetor para execução arbitrária de código durante processamento por agentes.
+- Solucao proposta: Substituir `eval()` pela alternativa segura `ast.literal_eval()` onde possível.
+- Impacto esperado: Supressão da ameaça de code injection.
+- Riscos: Se os inputs exigirem execução dinâmica de código funcional e não apenas de estrutura de dados (literais), a conversão causará regressão na utilidade da ferramenta (exigindo possivelmente sandboxing verdadeiro em vez disso).
+- Dependencias: Importação do `ast`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia

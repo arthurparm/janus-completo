@@ -216,3 +216,67 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-19)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitações de resolução de dependências, ambiente, falta de lockfile compatível)
+- [x] Revisão manual de código via `bandit` (arquivos / dependências analisadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 no total, sendo 16 altas e 1 moderada). Algumas bibliotecas afetadas incluem:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono`
+  - `dompurify`, `express-rate-limit`, `flatted`, `immutable`, `tar`
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de rotinas de abertura de URL (como `urlopen`) que permitem abrir esquemas arbitrários (como `file://`), propiciando leitura local de arquivos indesejados (SSRF / Arbitrary File Read).
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir qualquer requisição externa.
+
+### 31. Uso de exec() Inseguro
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py`
+- **Gravidade:** Média (Bandit B102)
+- **Descrição:** Uso de função `exec()` detectada. Pode permitir injeção de código se a entrada não for perfeitamente validada.
+- **Ação Recomendada:** Avaliar alternativas seguras ou implementar sandboxing robusto no entorno da chamada.
+
+### 32. Criação Insegura de Arquivos Temporários
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py`
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
+- **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+### 33. Uso de eval() Inseguro
+- **Caminho:** `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Média (Bandit B307)
+- **Descrição:** Uso possivelmente inseguro de `eval()` ou equivalente para executar código não-confiável.
+- **Ação Recomendada:** Substituir o `eval()` por abordagens seguras ou `ast.literal_eval`.
+
+### 34. Vulnerabilidade de Execução Arbitrária de Comandos (OS Command Injection)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Alta (Bandit B602)
+- **Descrição:** Chamada insegura do `subprocess.Popen` com `shell=True`.
+- **Ação Recomendada:** Remover `shell=True` e repassar os parâmetros por uma lista de strings.
+
+### 35. Possível SQL Injection via Construção de String
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Média (Bandit B608)
+- **Descrição:** Utilização de f-strings ou formatações textuais puras para estruturar comandos SQL (`text()`), apontando vulnerabilidade de injeção.
+- **Ação Recomendada:** Substituir a construção dinâmica de queries por parametrização adequada.
+
+### 36. XML Parsing Vulnerável a Ataques (XML External Entity)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média (Bandit B314)
+- **Descrição:** O serviço utiliza `xml.etree.ElementTree.fromstring` para parsear o conteúdo, vulnerável a ataques XML (XXE/Billion Laughs).
+- **Ação Recomendada:** Substituir por `defusedxml.ElementTree.fromstring`.
+
+### 37. Interface Binding Potencialmente Inseguro (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média (Bandit B104)
+- **Descrição:** O script expõe a API vinculando a todas as interfaces (`0.0.0.0`) na porta 5001.
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar mecanismos robustos de autenticação.

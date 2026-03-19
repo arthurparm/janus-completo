@@ -70,3 +70,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-19)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz diretos da interface nos logs de sistema (`janus.log`). Isso se qualifica como dado de natureza indiretamente biométrica/comportamental, sem minimização (PII scrubbing) prévia antes do salvamento em texto plano, quebrando o princípio de minimização da LGPD.
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** As listas na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` permanecem no estado global como vazamento em In-Memory, de modo que os dados temporários de sessão podem ser lidos entre requests em concorrência se houver comprometimento de agentes ou usuários, sem isolamento claro nem controle de AuthZ.
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** Na função de enviar e-mails de `backend/app/core/tools/productivity_tools.py`, metadados essenciais e potencialmente rastreáveis a pessoas (como o remetente `user_id`, destinatário `to` e o `subject`) continuam passando ao `logger.info()` limpos, falhando no mascaramento preventivo de PII.
+- **Capturas de Tela sem Consentimento ou Ofuscação (Windows Agent):** A API do Windows agent continua expondo via endpoints (como `/screenshot`) imagens capturadas diretamente do SO sem consentimento, falhando novamente no scrub visual de áreas contendo senhas, e-mails ou conteúdo bancário.
+
+### Próximos Passos
+1. **Mascarar Textos do Daemon:** Aplicar a camada de regex `_PII_PATTERNS` em `memory/security.py` antes de encaminhar transcrições de áudio ao logger no `daemon.py`.
+2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
+3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
+4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
