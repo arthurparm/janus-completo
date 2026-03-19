@@ -1,6 +1,6 @@
-import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
@@ -33,12 +33,18 @@ PROMPTS_TO_UPDATE = [
 
 
 def load_prompt_content(prompt_name: str) -> Optional[str]:
-    file_path = f"app/prompts/{prompt_name}.txt"
-    if not os.path.exists(file_path):
-        print(f"  [WARN] File not found: {file_path}")
-        return None
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+    prompts_dir = Path(__file__).resolve().parents[1] / "app" / "prompts"
+    # Try flat path first (backwards compatibility)
+    flat = prompts_dir / f"{prompt_name}.txt"
+    if flat.exists():
+        return flat.read_text(encoding="utf-8")
+    # Fall back to recursive search in subdirectories
+    if prompts_dir.exists():
+        matches = list(prompts_dir.rglob(f"{prompt_name}.txt"))
+        if matches:
+            return matches[0].read_text(encoding="utf-8")
+    print(f"  [WARN] File not found for prompt: {prompt_name}")
+    return None
 
 
 def update_prompts():

@@ -156,6 +156,9 @@ class PromptLoader:
         return None
 
     def _get_prompt_from_file(self, name: str) -> str | None:
+        if name in _file_prompts_cache:
+            return _file_prompts_cache[name]
+
         if not PROMPTS_DIR.exists():
             return None
 
@@ -169,9 +172,6 @@ class PromptLoader:
             file_path = matches[0]
 
         try:
-            if name in _file_prompts_cache:
-                return _file_prompts_cache[name]
-
             content = file_path.read_text(encoding="utf-8")
             _file_prompts_cache[name] = content
             self._logger.debug(
