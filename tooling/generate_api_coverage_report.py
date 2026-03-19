@@ -452,8 +452,8 @@ def main() -> int:
             encoding="utf-8",
         )
         docker_log_tail_path.write_text(log_tail, encoding="utf-8")
-        print(f"[ok] wrote {docker_evidence_path.relative_to(ROOT)}")
-        print(f"[ok] wrote {docker_log_tail_path.relative_to(ROOT)}")
+        print(f"[ok] wrote {docker_evidence_path}")
+        print(f"[ok] wrote {docker_log_tail_path}")
 
     if args.fail_on_target_gap and not report["target"]["target_met"]:
         print("[fail] target endpoint count not met.")

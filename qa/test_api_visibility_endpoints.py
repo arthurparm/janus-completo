@@ -7,7 +7,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# Ensure "app" package is discoverable when running from repo root
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
 from app.services.knowledge_service import get_knowledge_service
 from app.services.llm_service import get_llm_service

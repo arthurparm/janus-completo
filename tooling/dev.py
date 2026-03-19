@@ -81,9 +81,17 @@ def cmd_up() -> None:
 
 
 def cmd_qa() -> None:
-    run(
+    import os
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(BACKEND_DIR)
+    printable = " ".join([sys.executable, "-m", "pytest", "-q", *BACKEND_CRITICAL_TESTS])
+    print(f"$ {printable}")
+    subprocess.run(
         [sys.executable, "-m", "pytest", "-q", *BACKEND_CRITICAL_TESTS],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
+        check=True,
+        env=env,
     )
     run(["npm", "run", "lint"], cwd=FRONTEND_DIR)
     run(["npm", "run", "test"], cwd=FRONTEND_DIR)
