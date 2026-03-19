@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Bypass de Autenticação via Cabeçalho (AuthZ)
+- Problema atual: A configuração padrão `AUTH_TRUST_X_USER_ID_HEADER=True` em `backend/app/config.py` e avaliada no middleware (`backend/app/core/infrastructure/auth.py`) possibilita burla das verificações de token JWT através da injeção direta do header `X-User-Id` por atacantes.
+- Solucao proposta: Alterar o valor padrão para `False` em código, e se ativado em produção, forçar validações extras garantindo que a injeção do cabeçalho ocorreu em proxy/gateway confiável da rede interna.
+- Impacto esperado: Proteção ativa contra escalonamento de privilégio de usuários e requests forjados.
+- Riscos: Redirecionamento de tráfego de devs e microsserviços internos que dependem do fallback podem apresentar 401 ou 403 temporário.
+- Dependencias: API Gateway definitions (Kong/Nginx).
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Risco de Vazamento de Token via LocalResetResponse
+- Problema atual: O `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` expõe perigosamente uma via (mesmo que restrita por flag config default=False) capaz de vazar o token de autenticação via endpoint público.
+- Solucao proposta: Remover o retorno do token no response body de resets ou mascarar dados em saídas abertas de depuração do `LocalResetResponse`.
+- Impacto esperado: Remoção imediata da superfície potencial de ataque para roubo de tokens.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [ARQ-011] Monolitos Arquiteturais (God Objects) no Frontend e Backend
+- Problema atual: Arquivos excessivamente complexos e centralizadores, como o `frontend/src/app/services/backend-api.service.ts` (~1638 linhas), `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas) e `backend/app/services/observability_service.py` (~1200 linhas).
+- Solucao proposta: Adotar Padrão Façade, refatorando serviços extensos em domínios específicos menores e desacoplados, implementando stores ou DI distribuído.
+- Impacto esperado: Manutenção do código facilitada, redução de "Merge Conflicts" constantes e maior clareza em Testes Unitários.
+- Riscos: Refatoração grande pode causar quebra temporal de rotas no Frontend se referências de injetor não baterem.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: aberto
