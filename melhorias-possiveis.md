@@ -619,7 +619,7 @@ Copiar e preencher:
 - Status: ideia
 
 ### [OQ-013] Rate Limiting Fail-Closed
-- Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open.
+- Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open. Nota: o rate limiter já é aplicado globalmente via `RateLimitMiddleware` em `main.py`; não há ausência de rate limiting por rota.
 - Solucao proposta: Configurar a política do Rate Limit para modo `fail-open`, permitindo a requisição prosseguir com degradação graciosa caso o Redis caia.
 - Impacto esperado: Maior disponibilidade do sistema (Availability > 99.9%) caso o serviço de cache fique indisponível temporariamente.
 - Riscos: Possível sobrecarga da API durante interrupção do Redis.
@@ -628,9 +628,10 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: ideia
+- Ref: Achado #24 da revisão de segurança de 2026-03-18
 
 ### [SG-015] Fuga de Autenticação em Workspaces API
-- Problema atual: Endpoints em `backend/app/api/v1/endpoints/workspace.py` usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ.
+- Problema atual: Endpoints em `backend/app/api/v1/endpoints/workspace.py` usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ. Afeta `add_artifact`, `get_artifact`, `send_message`, `get_messages_for` e `shutdown_system`.
 - Solucao proposta: Adicionar dependência de autenticação (ex: `Depends(get_current_user)`) aos endpoints do workspace.
 - Impacto esperado: Prevenir que usuários anônimos manipulem workspaces e desliguem o sistema.
 - Riscos: Nenhum.
@@ -639,17 +640,19 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: ideia
+- Ref: Achado #23 da revisão de segurança de 2026-03-18
 
 ### [SG-016] Vulnerabilidade do Header X-User-Id
-- Problema atual: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` por padrão, possibilitando Bypass/Impersonation.
-- Solucao proposta: Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção e validar JWT/Token robusto.
+- Problema atual: `backend/app/core/infrastructure/auth.py` confia no header `X-User-Id` por padrão, possibilitando Bypass/Impersonation. Além disso, múltiplas rotas (`productivity.py`, `documents.py`, `memory.py`, `deployment.py`, `users.py`, `consents.py`, `rag.py`, `chat/deps.py`) leem `X-User-Id` diretamente do request sem passar por `get_actor_user_id`, tornando o flag insuficiente como correção isolada.
+- Solucao proposta: (1) Desabilitar o `AUTH_TRUST_X_USER_ID_HEADER` em produção. (2) Refatorar todas as rotas que leem `X-User-Id` diretamente para usar exclusivamente `request.state.actor_user_id` resolvido pelo middleware de autenticação.
 - Impacto esperado: Correção de vulnerabilidade crítica de spoofing de usuário.
 - Riscos: Quebra de compatibilidade em ambientes internos que confiam no header sem token.
-- Dependencias: Ajuste de configuração em `config.py`.
+- Dependencias: Ajuste de configuração em `config.py` e refatoração das rotas afetadas.
 - Prioridade: P0
-- Esforco: S
+- Esforco: M
 - Dono: a definir
 - Status: ideia
+- Ref: Achado #25 da revisão de segurança de 2026-03-18
 
 ### [PX-013] Refatoração de God Objects e Componentes Complexos
 - Problema atual: `observability_service.py` (~1200 linhas) e `frontend/src/app/services/backend-api.service.ts` (~1638 linhas) e `conversations.ts` (~1700 linhas) concentram lógica excessiva.
@@ -663,8 +666,8 @@ Copiar e preencher:
 - Status: ideia
 
 ### [SG-017] Endpoint de Auth exposto a brute-force
-- Problema atual: `backend/app/api/v1/endpoints/auth.py` (login/refresh) não possuem rate limiter.
-- Solucao proposta: Decorar a rota de login com `@limiter.limit("5/minute")` para prevenir ataques de dicionário e brute-force.
+- Problema atual: Embora o `RateLimitMiddleware` global já cubra todas as rotas (incluindo auth), o limite por IP é genérico (60 req/min por padrão). Endpoints de autenticação (`login`, `refresh_token`) mereceriam limites mais restritivos para prevenir ataques de dicionário e brute-force.
+- Solucao proposta: Implementar rate limiting mais restritivo para rotas de autenticação (ex: 5 req/min por IP para `/login`), seja via configuração diferenciada no middleware global ou via decorador adicional.
 - Impacto esperado: Maior resiliência contra ataques de força bruta.
 - Riscos: Bloqueio acidental de IPs em caso de NAT/Proxy (necessário extrair IP real).
 - Dependencias: O Rate Limit com Redis.
@@ -712,28 +715,6 @@ Copiar e preencher:
 - Impacto esperado: Remoção da possibilidade de escalonamento de privilégio e execução indevida no host/container da API.
 - Riscos: Falhas de funcionalidade em ferramentas que dependam do Shell global ou de injeção dinâmica intencional.
 - Dependencias: Nenhuma.
-- Prioridade: P0
-- Esforco: S
-- Dono: a definir
-- Status: aberto
-
-### [SG-034] Rate Limiting Fail-Closed Bloqueando Requisições
-- Problema atual: O middleware `backend/app/core/infrastructure/rate_limit_middleware.py` bloqueia requisições (503 Service Unavailable) se o Redis estiver fora do ar em produção (fail-closed), o que prejudica a disponibilidade.
-- Solucao proposta: Assegurar que a política do Rate Limit atue em modo `fail-open`, permitindo que o tráfego prossiga sem Redis (ou aplicar isso corretamente em produção).
-- Impacto esperado: Aumento de resiliência e disponibilidade (Availability) do sistema quando a camada de cache cai.
-- Riscos: Pico de uso (DDoS) atingindo o banco de dados principal sem a proteção do rate limiter.
-- Dependencias: Avaliar injeção do rate limiter.
-- Prioridade: P1
-- Esforco: S
-- Dono: a definir
-- Status: aberto
-
-### [SG-035] Fuga de Autenticação na API de Workspaces Compartilhados
-- Problema atual: Os endpoints do arquivo `backend/app/api/v1/endpoints/workspace.py` usam a injeção simples de dependência `Depends(get_collaboration_service)` sem decorador para checar autenticação de usuário na rota, permitindo Bypass.
-- Solucao proposta: Adicionar dependência explícita de autenticação JWT/Access Control (ex: `Depends(get_current_user)`) aos endpoints do workspace para blindar contra acessos anônimos mal-intencionados.
-- Impacto esperado: Prevenção efetiva contra injeção e leitura anônima de artefatos e encerramento desautorizado do sistema.
-- Riscos: Nenhuma falha esperada, desde que as origens cliente injetem o token adequadamente.
-- Dependencias: Serviço de authn.
 - Prioridade: P0
 - Esforco: S
 - Dono: a definir

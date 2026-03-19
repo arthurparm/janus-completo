@@ -192,20 +192,20 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Descrição:** Requisições via API que injetam novos artefatos (`add_artifact`), leem artefatos (`get_artifact`), mandam mensagens (`send_message`), leem mensagens (`get_messages_for`), ou disparam eventos de Desligamento do Sistema (`shutdown_system`) estão usando as injeções simples de dependência do FastAPI como `Depends(get_collaboration_service)` sem qualquer validador de sessão na camada de roteamento (ex: `Depends(get_current_user)`).
 - **Ação Recomendada:** Implementar checagem de Token/Access Control nas rotas do workspace, proibindo acessos anônimos.
 
-### 24. Ausência de Rate-Limiter e Fail-Closed Inesperado
-- **Caminho:** `backend/app/api/v1/endpoints/auth.py` e `backend/app/core/infrastructure/rate_limit_middleware.py`
+### 24. Rate-Limiter Fail-Closed Inesperado em Produção
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`
 - **Gravidade:** Média/Alta
-- **Descrição:** Endpoints críticos de Autenticação (`login`, `refresh_token`, etc) carecem do decorador de segurança de tráfego (`@limiter.limit`). Além disso, o middleware bloqueia requisições caso o Redis falhe, criando uma falha de disponibilidade.
-- **Ação Recomendada:** Adicionar rate limit à rota de login e garantir que o Fail-Open do Rate Limit funcione quando o Redis cair (corrigir a flag Fail-Closed em produção).
+- **Descrição:** O `RateLimitMiddleware` já é aplicado globalmente a todas as rotas (incluindo auth) via `backend/app/main.py`, portanto não há ausência de rate limiting por rota. Contudo, o middleware força `fail_closed=True` quando `ENVIRONMENT=production` (linha 26), bloqueando todas as requisições com 503 se o Redis estiver indisponível, criando uma falha de disponibilidade severa.
+- **Ação Recomendada:** Corrigir a lógica de fail-closed em produção para operar em modo fail-open quando o Redis cair, garantindo disponibilidade degradada em vez de indisponibilidade total.
 
 ### 25. Header `X-User-Id` Exploit (Impersonation)
-- **Caminho:** `backend/app/core/infrastructure/auth.py` e uso espalhado em `documents.py`, `productivity.py`, `resources.py`
+- **Caminho:** `backend/app/core/infrastructure/auth.py` e uso espalhado em `documents.py`, `productivity.py`, `resources.py`, `memory.py`, `deployment.py`, `users.py`, `consents.py`, `rag.py`, `chat/deps.py`
 - **Gravidade:** Crítica
-- **Descrição:** O sistema lê diretamente a injeção do cabeçalho `X-User-Id` permitindo manipulação irrestrita da identidade do usuário, bypassando o JWT. `AUTH_TRUST_X_USER_ID_HEADER=True` por padrão piora o risco.
-- **Ação Recomendada:** Configurar o flag como falso nos defaults de produção e remover ou restringir o parse via X-User-Id em produção.
+- **Descrição:** O sistema lê diretamente a injeção do cabeçalho `X-User-Id` permitindo manipulação irrestrita da identidade do usuário, bypassando o JWT. `AUTH_TRUST_X_USER_ID_HEADER=True` por padrão piora o risco. **Nota importante:** desabilitar o flag `AUTH_TRUST_X_USER_ID_HEADER` apenas fecha o caminho em `auth.py:83-86` (`get_actor_user_id`), mas **não é suficiente** para mitigar o problema por completo. Múltiplas rotas leem `X-User-Id` diretamente do request (ex: `productivity.py:125`, `documents.py:98`, `memory.py:127`, `deployment.py:28`, `users.py:51`, `consents.py:35`, `rag.py:467`), sem passar por `get_actor_user_id`. Essas rotas continuarão vulneráveis a spoofing mesmo com o flag desativado.
+- **Ação Recomendada:** (1) Configurar o flag como falso nos defaults de produção. (2) **Refatorar todas as rotas** que leem `X-User-Id` diretamente do header para usar exclusivamente o `actor_user_id` resolvido pelo middleware de autenticação (via `request.state.actor_user_id`), eliminando qualquer fallback direto ao header `X-User-Id`.
 
-### 26. Uso inseguro de `urllib.urlopen` (SSRF)
+### 26. Uso de `urllib.urlopen` — Alerta Bandit B310 (Falso Positivo Nestes Call Sites)
 - **Caminho:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
-- **Gravidade:** Média (Bandit B310)
-- **Descrição:** O uso do `urlopen` pode permitir o acesso a esquemas não previstos como `file://`, facilitando Server-Side Request Forgery ou a leitura de arquivos locais indesejados.
-- **Ação Recomendada:** Checar estritamente os esquemas (`http://` ou `https://`) antes de despachar chamadas ou migrar para `httpx`.
+- **Gravidade:** Informativa (Bandit B310 — **não explorável nestes call sites**)
+- **Descrição:** O Bandit reporta B310 para qualquer uso de `urlopen`. Contudo, nos call sites atuais o risco é inexistente: (1) `browse_url()` em `agent_tools.py:708` já rejeita URLs que não começam com `http` antes de chamar `urlopen`; (2) `message_broker.py:759` e `message_broker.py:855` constroem a URL internamente a partir de configurações do RabbitMQ (`RABBITMQ_HOST`/`RABBITMQ_MANAGEMENT_PORT`), sem aceitar input do usuário. Portanto, nem SSRF nem leitura de `file://` são alcançáveis por um atacante externo.
+- **Ação Recomendada:** Manter o achado como informativo. Para defesa em profundidade, considerar migrar para `httpx` em futuras refatorações, mas não tratar como vulnerabilidade ativa. Referência cruzada: achado anterior #15 mantém o alerta genérico do Bandit.
