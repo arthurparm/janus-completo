@@ -1,10 +1,10 @@
-import structlog
 import string
 import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable
 
+import structlog
 from prometheus_client import Counter
 
 from app.repositories.prompt_repository import PromptRepository
@@ -68,7 +68,9 @@ class PromptLoader:
                     "PromptLoader inicializado com suporte a banco de dados Relacional"
                 )
             except Exception as e:
-                self._logger.warning("log_warning", message=f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória."
+                self._logger.warning(
+                    "log_warning",
+                    message=f"Falha ao inicializar repositório de prompts: {e}. Usando fallback em memória.",
                 )
                 self.use_database = False
 
@@ -124,7 +126,7 @@ class PromptLoader:
 
         try:
             from app.db import get_db_session
-            
+
             # Usar gerenciador de sessão para injetar sessão no repositório
             async for session in get_db_session():
                 # Injetar sessão temporariamente
@@ -133,7 +135,7 @@ class PromptLoader:
                     if version:
                         # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
                         # prompt = await self._prompt_repo.get_prompt_version_by_id(int(version))
-                        pass 
+                        pass
                     else:
                         # Buscar versão ativa
                         prompt = await self._prompt_repo.get_active_prompt(
@@ -146,31 +148,40 @@ class PromptLoader:
                             return prompt.prompt_text
                 finally:
                     self._prompt_repo._async_session = None
-                break # Apenas uma sessão necessária
-                
+                break  # Apenas uma sessão necessária
+
         except Exception as e:
             self._logger.error("log_error", message=f"Erro ao buscar prompt '{name}' do banco: {e}")
 
         return None
 
     def _get_prompt_from_file(self, name: str) -> str | None:
+        if name in _file_prompts_cache:
+            return _file_prompts_cache[name]
+
         if not PROMPTS_DIR.exists():
             return None
 
+        # Buscar primeiro no diretório raiz (compatibilidade), depois em subdiretórios
         file_path = PROMPTS_DIR / f"{name}.txt"
         if not file_path.exists():
-            return None
+            # Busca recursiva em subdiretórios organizados por subsistema
+            matches = list(PROMPTS_DIR.rglob(f"{name}.txt"))
+            if not matches:
+                return None
+            file_path = matches[0]
 
         try:
-            if name in _file_prompts_cache:
-                return _file_prompts_cache[name]
-
             content = file_path.read_text(encoding="utf-8")
             _file_prompts_cache[name] = content
-            self._logger.debug("log_debug", message=f"Prompt '{name}' carregado de arquivo local: {file_path}")
+            self._logger.debug(
+                "log_debug", message=f"Prompt '{name}' carregado de arquivo local: {file_path}"
+            )
             return content
         except Exception as e:
-            self._logger.warning("log_warning", message=f"Erro ao ler arquivo de prompt '{name}': {e}")
+            self._logger.warning(
+                "log_warning", message=f"Erro ao ler arquivo de prompt '{name}': {e}"
+            )
             return None
 
     async def get(
@@ -211,7 +222,9 @@ class PromptLoader:
                 name, version=version, namespace=namespace, lang=lang, model=model
             )
             if template:
-                self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do banco de dados")
+                self._logger.debug(
+                    "log_debug", message=f"Prompt '{name}' carregado do banco de dados"
+                )
 
         # 2. Tentar provider externo se banco falhou
         if template is None and self._external_provider is not None:
@@ -220,9 +233,13 @@ class PromptLoader:
                 candidate = self._external_provider(name)
                 if isinstance(candidate, str) and candidate:
                     template = candidate
-                    self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do provider externo")
+                    self._logger.debug(
+                        "log_debug", message=f"Prompt '{name}' carregado do provider externo"
+                    )
             except Exception as e:
-                self._logger.warning("log_warning", message=f"Provider externo falhou para '{name}': {e}")
+                self._logger.warning(
+                    "log_warning", message=f"Provider externo falhou para '{name}': {e}"
+                )
                 template = None
 
         # 3. Fallback para arquivo local
@@ -233,7 +250,9 @@ class PromptLoader:
         if template is None:
             try:
                 template = self._store[name]
-                self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do fallback em memória")
+                self._logger.debug(
+                    "log_debug", message=f"Prompt '{name}' carregado do fallback em memória"
+                )
             except KeyError:
                 raise KeyError(
                     f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, arquivo)."

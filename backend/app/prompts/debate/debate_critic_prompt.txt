@@ -23,10 +23,10 @@ APPROVAL RULES
 - Use 1-based line numbers; use 0 only when a location cannot be determined.
 
 OUTPUT FORMAT (STRICT JSON ONLY)
-{{ 
+{{
   "approved": true|false,
   "issues": [
-    {{ 
+    {{
       "severity": "critical|warning|info",
       "line": 0,
       "description": "Clear, specific issue",

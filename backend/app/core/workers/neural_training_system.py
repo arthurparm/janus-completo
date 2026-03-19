@@ -88,7 +88,11 @@ def _load_prompt_template(prompt_name: str) -> str:
 
     prompt_path = PROMPTS_DIR / f"{prompt_name}.txt"
     if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        # Busca recursiva em subdiretórios organizados por subsistema
+        matches = list(PROMPTS_DIR.rglob(f"{prompt_name}.txt"))
+        if not matches:
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        prompt_path = matches[0]
 
     content = prompt_path.read_text(encoding="utf-8")
     _PROMPT_CACHE[prompt_name] = content

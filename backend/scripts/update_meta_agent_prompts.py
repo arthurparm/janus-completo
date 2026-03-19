@@ -24,14 +24,21 @@ PROMPTS_TO_UPDATE = [
 
 
 def load_prompt_content(prompt_name: str) -> Optional[str]:
-    candidates = [
-        BACKEND_ROOT / "app" / "prompts" / f"{prompt_name}.txt",
-        Path("/app/app/prompts") / f"{prompt_name}.txt",
+    prompts_dirs = [
+        BACKEND_ROOT / "app" / "prompts",
+        Path("/app/app/prompts"),
     ]
-    for file_path in candidates:
-        if file_path.exists():
-            return file_path.read_text(encoding="utf-8")
-    print(f"  [WARN] File not found in candidates: {[str(path) for path in candidates]}")
+    for prompts_dir in prompts_dirs:
+        # Try flat path first (backwards compatibility)
+        flat = prompts_dir / f"{prompt_name}.txt"
+        if flat.exists():
+            return flat.read_text(encoding="utf-8")
+        # Fall back to recursive search in subdirectories
+        if prompts_dir.exists():
+            matches = list(prompts_dir.rglob(f"{prompt_name}.txt"))
+            if matches:
+                return matches[0].read_text(encoding="utf-8")
+    print(f"  [WARN] File not found for prompt: {prompt_name}")
     return None
 
 
