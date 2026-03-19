@@ -113,3 +113,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-19)
+
+### 11. Cobertura de API deficiente e endpoints expostos em Swagger sem autenticação validada no nível do AuthZ
+**Descrição:** O API Coverage Report acusou grande volume de endpoints não cobertos por testes unitários e com drift em relação ao que é implementado.
+**Evidências:**
+- `outputs/qa/api_coverage_report.json`: Apenas ~11.64% de endpoints cobertos.
+
+**Próximos passos:**
+- Criar plano de ação de cobertura para os módulos essenciais (Observability e Knowledge)
+- Registrar OQ-018 no backlog.

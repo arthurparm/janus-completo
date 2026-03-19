@@ -836,3 +836,4 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+| OQ-018 | Aumentar cobertura de testes E2E/API para endpoints de Observability e Knowledge | P1 | M | ideia |
