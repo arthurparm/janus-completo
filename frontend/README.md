@@ -19,3 +19,4 @@ npm start
 
 The application will be available at `http://localhost:4200/`.
 Proxy is configured to forward `/api` requests to `http://localhost:8000`.
+In Docker (compose PC1), the frontend runs at `http://localhost:4300/`.

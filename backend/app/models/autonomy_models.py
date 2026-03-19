@@ -135,7 +135,7 @@ class AutonomySprint(Base):
     sprint_type = relationship("AutonomySprintType", back_populates="sprints")
     tasks = relationship("AutonomyGoal", back_populates="sprint")
     __table_args__ = (
-        Index("idx_autonomy_sprint_type_status", "sprint_type_id", "status"),
+        Index("idx_autonomy_sprint_fk_status", "sprint_type_id", "status"),
         Index("idx_autonomy_sprint_time", "start_ts", "end_ts"),
     )
 

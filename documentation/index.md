@@ -83,7 +83,13 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 
 ## Getting Started
 
-### Full stack (recommended)
+### Bootstrap local (recommended)
+
+```bash
+python tooling/dev.py up
+```
+
+### Full stack (Docker alternative)
 
 ```bash
 docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
@@ -111,6 +117,25 @@ pytest
 - **API/backend features:** priorizar `architecture-backend.md`, `api-contracts-backend.md`, `data-models-backend.md`
 - **Full-stack changes:** usar ambos + `integration-architecture.md`
 - **Deploy/infra changes:** usar `deployment-guide.md`
+
+---
+
+## New Documentation Structure
+
+### Getting Started
+- [New Developer Onboarding](getting-started/onboarding.md) - Complete setup guide for new developers
+- [Quick Start Guide](getting-started/quickstart.md) - First steps to get the project running
+- [Troubleshooting Guide](getting-started/troubleshooting.md) - Common problems and solutions
+
+### Development
+- [Contribution Guidelines](development/contribution-guide.md) - How to contribute to the project
+- [Frontend Development](development-guide-frontend.md) - Frontend-specific development guide
+- [Backend Development](development-guide-backend.md) - Backend-specific development guide
+
+### Architecture & Operations
+- [Project Overview](project-overview.md) - High-level architecture overview
+- [Deployment Guide](deployment-guide.md) - Deployment procedures
+- [API Test Playbook](qa/api-test-playbook.md) - Testing procedures and QA workflows
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Pre-requisitos
 
-- Python 3.11
+- Python 3.11+ (CI em Python 3.12)
 - Docker + Docker Compose
 
 ## Setup Recomendado (PC1 + PC2)

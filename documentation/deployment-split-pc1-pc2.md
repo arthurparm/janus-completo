@@ -24,7 +24,7 @@
 
 ## Politica de Rede (PC2)
 
-Qdrant esta sem API key por politica operacional.
+Qdrant usa API key obrigatoria por politica operacional (`QDRANT_API_KEY`).
 Protecao obrigatoria: portas expostas apenas na interface Tailscale (`tailscale0`).
 
 Exemplo `ufw`:

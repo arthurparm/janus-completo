@@ -27,7 +27,7 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 
 - **Tipo:** backend
 - **Papel:** API, roteamento de agentes, memoria, RAG, observabilidade e integracoes
-- **Stack:** Python 3.11, FastAPI, SQLAlchemy, LangChain, Redis, RabbitMQ, Neo4j, Qdrant, PostgreSQL
+- **Stack:** Python 3.11+, FastAPI, SQLAlchemy, LangChain, Redis, RabbitMQ, Neo4j, Qdrant, PostgreSQL
 
 ### Integracao entre Partes
 
@@ -63,9 +63,10 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 
 ## Visao de Desenvolvimento
 
+- **Bootstrap recomendado:** `python tooling/dev.py up`
 - **Frontend:** `cd frontend && npm install && npm start`
 - **Backend (container, PC2 + PC1):** `docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d && docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d`
-- **Backend (local):** `cd backend && uvicorn app.main:app --reload`
+- **Backend (local):** `cd backend && pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 - **Testes principais:** `cd frontend && npm run test` e `cd backend && pytest`
 
 ## Mapa de Documentacao

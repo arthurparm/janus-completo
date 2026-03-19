@@ -53,7 +53,8 @@ cd frontend
 npm install
 npm start
 ```
-Access at: `http://localhost:4200`
+Access at: `http://localhost:4200` (npm start local)
+Docker UI: `http://localhost:4300` (compose PC1)
 
 ### Backend (Local Development)
 

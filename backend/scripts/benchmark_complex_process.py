@@ -366,7 +366,7 @@ def main() -> int:
     db_host = args.db_host or _get_setting(env_values, "POSTGRES_HOST", "localhost")
     db_port = args.db_port or int(_get_setting(env_values, "POSTGRES_PORT", "5432") or 5432)
     db_user = args.db_user or _get_setting(env_values, "POSTGRES_USER", "janus")
-    db_password = args.db_password or _get_setting(env_values, "POSTGRES_PASSWORD", "janus_pass")
+    db_password = args.db_password or _get_setting(env_values, "POSTGRES_PASSWORD", None)
     db_name = args.db_name or _get_setting(env_values, "POSTGRES_DB", "janus_db")
 
     conn = None

@@ -153,7 +153,7 @@ Workflow manual dedicado:
 - `.github/workflows/frontend-e2e-real.yml`
 - Trigger: `workflow_dispatch`
 - Secrets obrigatorios: `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`
-- Variaveis operacionais: `E2E_BASE_URL` (default `http://localhost:4300`)
+- Variaveis operacionais: `E2E_BASE_URL` (default `http://localhost:4300` em Docker; use `http://localhost:4200` com `npm start`)
 
 Checklist de validacao por release:
 1. Login com conta admin tecnica no frontend.

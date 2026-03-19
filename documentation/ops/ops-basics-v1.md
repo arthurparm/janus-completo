@@ -14,34 +14,37 @@ Escopo v1: operacao local/dev-ops. Nao e um plano de DR de producao.
 ## Pre-requisitos
 
 - Docker + Docker Compose
-- Repo clonado em `/Users/arthurparaiso/Desktop/janus-completo`
+- Repo clonado localmente (qualquer diretorio)
 
 ## Bootstrap rapido
 
-1. Criar arquivo de ambiente local:
+1. Criar arquivos de ambiente:
 
 ```bash
-cp backend/app/.env.example backend/app/.env
+cp .env.pc1.example .env.pc1
+cp .env.pc2.example .env.pc2
 ```
 
-2. Ajustar segredos minimos no `backend/app/.env`:
+2. Ajustar segredos minimos nos arquivos `.env.pc1` e `.env.pc2`:
 
 - `AUTH_JWT_SECRET`
 - `POSTGRES_PASSWORD`
 - `RABBITMQ_PASSWORD`
 - `NEO4J_PASSWORD`
-- `GRAFANA_ADMIN_PASSWORD`
+- `QDRANT_API_KEY`
 
 3. Subir stack:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
 4. Verificar saude:
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 ps
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 ps
 curl -sf http://localhost:8000/health
 curl -sf http://localhost:8000/healthz
 curl -sf http://localhost:8000/api/v1/system/status
@@ -50,24 +53,10 @@ curl -sf http://localhost:8000/api/v1/workers/status
 
 ## Observabilidade (v1)
 
-Servicos locais:
+Evidencias basicas de observabilidade no baseline atual:
 
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`
-- Alertmanager: `http://localhost:9093`
-
-### Alertmanager
-
-O Alertmanager v1 e configurado com receiver padrao `null`:
-
-- o pipeline de alerta fica funcional (Prometheus envia alertas)
-- nenhum alerta e enviado para canal externo por padrao
-
-Para integrar webhook/Slack em ambiente local:
-
-- crie um arquivo local (nao versionado) com override de configuracao, por exemplo:
-  - `backend/observability/alertmanager/alertmanager.local.yml`
-- ajuste o compose localmente conforme sua necessidade
+- API health/status (`/health`, `/healthz`, `/api/v1/system/status`, `/api/v1/workers/status`)
+- Logs dos servicos de runtime (`janus-api`, `rabbitmq`, bancos e vetores conforme compose)
 
 ## Backup (cold backup v1)
 
@@ -151,6 +140,7 @@ Se nao usar essas integracoes, o arquivo pode permanecer ausente.
 ## Validacao pos-restore
 
 ```bash
+<<<<<<< Updated upstream
 docker compose ps
 curl -sf http://100.89.17.105:8000/health
 curl -sf http://100.89.17.105:8000/healthz
@@ -160,11 +150,22 @@ docker compose logs --since=2m janus-api
 docker compose logs --since=2m rabbitmq
 docker compose logs --since=2m prometheus
 docker compose logs --since=2m alertmanager
+=======
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 ps
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 ps
+curl -sf http://localhost:8000/health
+curl -sf http://localhost:8000/healthz
+curl -sf http://localhost:8000/api/v1/system/status
+curl -sf http://localhost:8000/api/v1/workers/status
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 logs --since=2m janus-api
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 logs --since=2m rabbitmq
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 logs --since=2m neo4j
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 logs --since=2m qdrant
+>>>>>>> Stashed changes
 ```
 
 ## Limitacoes conhecidas (v1)
 
 - Backup e restore sao `cold` (stack parado), nao online/hot backup.
-- Receiver de Alertmanager e `null` por padrao (sem entrega externa).
 - Nao ha DR automatizado em cloud.
 - Loki/Tempo podem existir como configuracao/provisioning, mas nao fazem parte deste baseline v1.

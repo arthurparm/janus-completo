@@ -1,0 +1,68 @@
+name: Documentation Quality Check
+
+on:
+  pull_request:
+    paths:
+      - 'documentation/**/*.md'
+      - '*.md'
+      - '.github/workflows/docs-quality.yml'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'documentation/**/*.md'
+      - '*.md'
+
+jobs:
+  docs-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aspell aspell-en aspell-pt
+          
+      - name: Run documentation quality check
+        run: |
+          chmod +x scripts/docs-check.sh
+          ./scripts/docs-check.sh
+          
+      - name: Check for broken links
+        run: |
+          # Verificar links externos com curl
+          find documentation -name "*.md" -exec grep -o 'http[s]*://[^)]*' {} \; | while read -r url; do
+            if ! curl -sf "$url" > /dev/null; then
+              echo "Link externo quebrado: $url"
+              exit 1
+            fi
+          done
+          
+      - name: Validate markdown syntax
+        run: |
+          # Verificar sintaxe básica do markdown
+          find documentation -name "*.md" -exec echo "Validando {}" \; -exec head -1 {} \;
+          
+      - name: Generate documentation report
+        if: always()
+        run: |
+          echo "📊 Documentation Quality Report" > docs-report.md
+          echo "================================" >> docs-report.md
+          echo "" >> docs-report.md
+          echo "Files checked: $(find documentation -name '*.md' | wc -l)" >> docs-report.md
+          echo "Last updated: $(date)" >> docs-report.md
+          echo "" >> docs-report.md
+          echo "## Files" >> docs-report.md
+          find documentation -name "*.md" -exec echo "- {}" \; >> docs-report.md
+          
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-quality-report
+          path: docs-report.md
+          retention-days: 30
