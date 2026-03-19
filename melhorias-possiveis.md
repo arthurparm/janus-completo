@@ -803,3 +803,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-034] Atualizar vulnerabilidades do Frontend via `npm audit`
+- Problema atual: Diversas dependências do frontend possuem vulnerabilidades de segurança severas (ex: `@angular/core`, `@hono/node-server`, `dompurify`, `tar`).
+- Solucao proposta: Executar `npm audit fix` ou atualizar as dependências manualmente `package.json` para as versões corrigidas mais recentes e recompilar.
+- Impacto esperado: Prevenção contra vulnerabilidades XSS, Prototype Pollution e Hardlink Path Traversal.
+- Riscos: Quebras em build caso ocorram atualizações majoritárias.
+- Dependencias: Testes da pipeline de frontend `npm run test`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-035] Uso do exec() Inseguro no Sandbox (Bandit B102)
+- Problema atual: A função `backend/app/core/infrastructure/python_sandbox.py` utiliza o comando built-in `exec()` que possibilita execução de código arbitrário e pode escapar facilmente se a validação/sanitização não for robusta.
+- Solucao proposta: Substituir por um modelo de containerização/isolamento estrito (como gVisor ou seccomp) em vez de executar `exec()` com strings do usuário nativamente.
+- Impacto esperado: Evitar bypass do sandbox nativo que leve a RCE crítico no backend.
+- Riscos: Redução de flexibilidade para o desenvolvedor ou agente usando a ferramenta e sobrecarga caso opte por virtualização.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
+### [SG-036] Criação Insegura de Arquivos Temporários (Bandit B108)
+- Problema atual: Criação manual ou com caminhos previsíveis hardcoded (ex: `/tmp/`) na classe `backend/app/core/memory/log_aware_reflector.py`, possibilitando vulnerabilidades como TOCTOU.
+- Solucao proposta: Usar sempre a biblioteca segura `tempfile` (como `tempfile.NamedTemporaryFile`) ou o serviço local unificado do sistema.
+- Impacto esperado: Prevenção de ataques de Symlink/Colisão locais.
+- Riscos: Nenhum risco funcional grave; refatoração simples.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
