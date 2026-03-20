@@ -113,3 +113,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-20)
+
+### 11. Drift de Contrato de API Identificado
+**Descrição:** O número de endpoints reportado pelas rotinas de inventário (`tooling/extract_api_inventory.py`) foi de 226 para 232 (e na matriz para 232 endpoints válidos reportados pelo FastAPI). Além disso, os endpoints recém identificados ou expostos sem documentação explícita de teste prévio alteram o percentual de cobertura do projeto (Coverage=11.64%, Uncovered=205).
+**Evidências:**
+- `outputs/qa/api_coverage_report.json`: 232 endpoints detectados, com cobertura de 11.64%.
+
+**Próximos passos:**
+- Documentar e criar testes de fumaça (smoke) ou contrato para os novos endpoints listados.
+- Adicionar issue OQ-017 no backlog para melhoria contínua dos testes da API.

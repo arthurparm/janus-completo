@@ -836,3 +836,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-017] Drift de API detectado - Novas Rotas Sem Testes
+- Problema atual: A rotina diária encontrou uma diferença de 6 novos endpoints identificados em `api_inventory.json` (total = 232) em comparação ao baseline anterior (226), reduzindo a cobertura total proporcional.
+- Solucao proposta: Criar testes unitários e de integração para as rotas detectadas e atualizar a especificação OpenAPI oficial para garantir que todos os endpoints obedeçam ao contrato e passem por CI.
+- Impacto esperado: Prevenir regressões e falhas não documentadas nas APIs recém adicionadas (ex: `observability/anomalies/predictive`, `tasks/outbox/reconcile`).
+- Riscos: Redução momentânea na cobertura do projeto até os testes serem escritos.
+- Dependencias: Pytest.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
