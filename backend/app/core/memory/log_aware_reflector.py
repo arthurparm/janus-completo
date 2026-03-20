@@ -209,12 +209,13 @@ class LogAwareReflector:
     this version reads actual logs where errors are recorded.
     """
 
+    import tempfile
     # Check multiple possible log locations - /app/app/ is the actual location!
     LOG_FILE_PATHS = [
         "/app/app/janus.log",  # Primary - this is where it actually is!
         "/app/janus.log",
         "/var/log/janus.log",
-        "/tmp/janus.log",
+        os.path.join(tempfile.gettempdir(), "janus.log"),
     ]
     MAX_LOG_LINES = 5000  # Last N lines to analyze
 

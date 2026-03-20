@@ -717,6 +717,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-037] Falso-Positivo/Baixo Risco em Pseudo-Random Generators (Bandit B311)
+- Problema atual: O `backend/app/core/tools/faulty_tools.py` e bibliotecas de telemetria continuam reportando usos da standard pseudo-random generator do Python (`random`) pela análise do SAST (Bandit). Isso é inerentemente inseguro apenas em contexto criptográfico, sendo que nessas instâncias estão sendo usados meramente para gerenciar métricas estatísticas e simulações na sandbox de agentes.
+- Solucao proposta: Substituir por `secrets.choice()` em implementações de falhas simuladas ou adicionar comentários `nosec B311` apropriados nas funções estatísticas e de delays que não possuem natureza transacional de Auth ou geradora de tokens.
+- Impacto esperado: Redução na geração de ruídos no fluxo de relatórios do CI.
+- Riscos: Adicionar delays desnecessários na runtime devido a um gerador criptográfico caro onde uma roleta simples é exigida.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-038] Tratamento de Exceptions Inseguro "Try/Except/Pass" (Bandit B110)
+- Problema atual: Múltiplos serviços críticos e endpoints reportaram "Try, Except, Pass" (vulnerabilidade B110 do linter). Isso permite que exceções ocorram de forma silenciosa ou camuflem comportamentos inadequados sem log, particularmente em endpoints sensíveis e em workers.
+- Solucao proposta: Registrar (log) ao invés de descartar silenciamente na captura genérica de erros (`except Exception: logger.error(...)`) de tal forma que rastreamentos OTel não deixem a operação sem visibilidade de um problema encoberto, mantendo a falha em estado seguro.
+- Impacto esperado: Menor degradação silenciosa em módulos (como na ingestão de eventos e telemetria de workers).
+- Riscos: Possível poluição em logs caso exceptions irrelevantes fossem capturadas deliberadamente em blocos mudos.
+- Dependencias: Observabilidade unificada e structlog.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

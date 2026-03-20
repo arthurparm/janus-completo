@@ -216,3 +216,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados da Revisão Semanal (2026-03-20)
+
+### Checklist executado
+- [x] npm audit (frontend) - **17 vulnerabilidades encontradas (16 Altas, 1 Moderada)** (Resolvido via `npm audit fix`)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: dependências faltantes/incompatíveis para `tflite-runtime`).
+- [x] Revisão manual de código via `bandit` e correção proativa das ocorrências pendentes.
+
+### Ações Corretivas Executadas
+1. **Frontend (npm audit):** Executado `npm audit fix` para corrigir vulnerabilidades de alta severidade envolvendo dompurify, express-rate-limit, hono, flatted, immutable, e tar. Foram auditados e atualizados 817 pacotes com zero vulnerabilidades ativas relatadas ao final.
+2. **Bandit B104 (Hardcoded Bind All Interfaces):** O arquivo `backend/windows_agent.py` teve o host binding alterado de `0.0.0.0` para `127.0.0.1` de modo a fechar o escopo de exposição de rede que permitia AuthZ bypass nas rotas do Sistema Operacional.
+3. **Bandit B602/B603/B607 (OS Command Injection):** O uso de `shell=True` foi removido do arquivo `backend/app/core/tools/launcher_tools.py` na plataforma Windows e convertido para um array de argumentos robusto com `subprocess.Popen` (bem como refatorado via `shlex` no Linux).
+4. **Bandit B108 (Criação Insegura de Arquivos Temp):** Eliminado path hardcoded `/tmp/janus.log` no `backend/app/core/memory/log_aware_reflector.py` mediante o uso da biblioteca segura `tempfile.gettempdir()`.
+5. **Bandit B310 (Abertura de URL com Arbitrary Schemes):** Enforced a restrição e validação ativa de strings de URL em `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py` requerendo que o scheme comece exclusivamente com `http://` ou `https://`.
+
+### Limitação de Auditoria
+- **Componente:** `pip-audit`
+- **Descrição:** Ainda falhando devido ao pacote `tflite-runtime` que requer ABI compatível para Python 3.12 (e pip não conseguiu achar versões para a runtime sem lockfile). A correção do pipeline/lockfile do poetry permanece como débito técnico priorizado.

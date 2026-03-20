@@ -760,6 +760,8 @@ class MessageBroker:
 
         def _fetch() -> dict[str, Any] | None:
             try:
+                if not url.startswith(("http://", "https://")):
+                    raise ValueError("URL has an invalid scheme.")
                 req = Request(url)
                 token = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
                 req.add_header("Authorization", f"Basic {token}")
@@ -859,6 +861,8 @@ class MessageBroker:
 
         def _delete() -> bool:
             try:
+                if not url.startswith(("http://", "https://")):
+                    raise ValueError("URL has an invalid scheme.")
                 req = Request(url, method="DELETE")
                 token = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
                 req.add_header("Authorization", f"Basic {token}")

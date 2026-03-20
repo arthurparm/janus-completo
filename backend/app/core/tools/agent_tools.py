@@ -705,7 +705,7 @@ def browse_url(url: str) -> str:
     Returns:
         O texto extraído da página (HTML limpo) ou mensagem de erro.
     """
-    if not url.startswith("http"):
+    if not url.startswith(("http://", "https://")):
         return "Erro: A URL deve começar com http:// ou https://"
 
     logger.info("log_info", message=f"Browsing URL: {url}")

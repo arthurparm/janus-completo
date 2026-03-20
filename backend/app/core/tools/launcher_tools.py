@@ -28,15 +28,15 @@ def launch_app(app_name: str) -> str:
 
     try:
         if system == "Windows":
-            # 'start' é um comando interno do shell cmd.exe
-            # start "" "app_name" é a sintaxe segura
-            subprocess.Popen(f'start "" "{app_name}"', shell=True)
+            # Usando uma lista e chamando o cmd.exe para evitar shell=True com string formatada
+            subprocess.Popen(["cmd.exe", "/c", "start", '""', app_name])
         elif system == "Darwin":  # macOS
             subprocess.Popen(["open", "-a", app_name])
         elif system == "Linux":
-            # Tenta encontrar no path ou usar gtk-launch se disponível
-            # Fallback genérico: executa direto em background
-            subprocess.Popen([app_name], start_new_session=True)
+            # Fallback genérico: executa direto em background usando shlex para particionar, mas sem shell=True
+            import shlex
+            cmd = shlex.split(app_name)
+            subprocess.Popen(cmd, start_new_session=True)
         else:
             return f"Erro: Sistema operacional '{system}' não suportado para lançamento de apps."
 
