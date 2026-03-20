@@ -113,3 +113,42 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-20)
+
+### 11. Bypass de Autenticação via Cabeçalho (AuthZ)
+**Descrição:** O sistema possui uma configuração (`AUTH_TRUST_X_USER_ID_HEADER=True`) em `backend/app/config.py` e avaliada em `backend/app/core/infrastructure/auth.py` que permite ignorar verificações complexas de token se o cabeçalho `X-User-Id` for fornecido. Isso representa um risco altíssimo de AuthZ bypass caso o tráfego não esteja estritamente bloqueado/filtrado no API Gateway.
+**Evidências:**
+- `backend/app/config.py`: `AUTH_TRUST_X_USER_ID_HEADER: bool = True` é o valor padrão.
+- `backend/app/core/infrastructure/auth.py`: A lógica de dependência prioriza o trust_header antes de verificar a assinatura do token.
+
+**Próximos passos:**
+- Adicionar issue SG-037 no backlog e mudar o padrão para `False`.
+- Forçar validação de token JWT completa em todos os requests de borda (bypasses só permitidos em redes internas devidamente autenticadas).
+
+### 12. Risco de Exposição de Token no LocalResetResponse
+**Descrição:** A classe `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` suporta retornar o token de autenticação se `AUTH_RESET_RETURN_TOKEN` for habilitado na configuração. Embora esteja desligado por padrão, é um vazamento em potencial.
+**Evidências:**
+- Memory rules indicam que o "LocalResetResponse in backend/app/api/v1/endpoints/auth.py defaults to NOT returning the token ... but remains a potential leak risk se habilitado".
+
+**Próximos passos:**
+- Remover completamente a capacidade de retornar tokens via endpoints de reset para eliminar a superfície de ataque.
+- Registrar no `melhorias-possiveis.md` (SG-038).
+
+### 13. Complexidade Ciclomática e Componentes Monolíticos (God Objects)
+**Descrição:** Continua o padrão de dependência excessiva em objetos gigantescos que centralizam regras de múltiplos domínios. A fragilidade aumenta e testes se tornam complexos.
+**Evidências:**
+- Frontend: `frontend/src/app/services/backend-api.service.ts` com ~1638 linhas e `frontend/src/app/features/conversations/conversations.ts` com ~1700 linhas.
+- Backend: `backend/app/services/observability_service.py` possui ~1200 linhas misturando métricas, anomalias e health.
+
+**Próximos passos:**
+- Aplicar o padrão Façade ou dividir em múltiplos serviços por domínio estrito (Ex: `MetricsService`, `HealthService`). Registrar como débito técnico (ARQ-011).
+
+### 14. Isolamento em Ferramentas e SAST
+**Descrição:** Ferramentas customizadas operam fora do radar da CI tradicional e scripts antigos carregam vetores apontados em análise estática.
+**Evidências:**
+- `tooling/` scripts soltos como `test_debate_system.py` operam fora do ecossistema central `qa/`, reduzindo cobertura da pipeline de CI.
+- `eval_technical_qa.py` e testes associados relataram falhas Bandit (B108, B310, B113) apontando URL file scheme (`file://`), Missing timeouts de `requests` e Temp Files Inseguros.
+
+**Próximos passos:**
+- Deslocar toolings isolados para suite pytest. Refatorar chamadas urllib por requests explícitas com restrições e timeouts. (Issues DX-013, SG-039, SG-040, SG-041).

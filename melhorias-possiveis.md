@@ -836,3 +836,80 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Bypass de Autenticação via Cabeçalho (AuthZ)
+- Problema atual: A configuração padrão `AUTH_TRUST_X_USER_ID_HEADER=True` em `backend/app/config.py` e avaliada no middleware (`backend/app/core/infrastructure/auth.py`) possibilita burla das verificações de token JWT através da injeção direta do header `X-User-Id` por atacantes.
+- Solucao proposta: Alterar o valor padrão para `False` em código, e se ativado em produção, forçar validações extras garantindo que a injeção do cabeçalho ocorreu em proxy/gateway confiável da rede interna.
+- Impacto esperado: Proteção ativa contra escalonamento de privilégio de usuários e requests forjados.
+- Riscos: Redirecionamento de tráfego de devs e microsserviços internos que dependem do fallback podem apresentar 401 ou 403 temporário.
+- Dependencias: API Gateway definitions (Kong/Nginx).
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Risco de Vazamento de Token via LocalResetResponse
+- Problema atual: O `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` expõe perigosamente uma via (mesmo que restrita por flag config default=False) capaz de vazar o token de autenticação via endpoint público se `AUTH_RESET_RETURN_TOKEN=True`.
+- Solucao proposta: Remover o retorno do token no response body de resets ou mascarar dados em saídas abertas de depuração do `LocalResetResponse`.
+- Impacto esperado: Remoção imediata da superfície potencial de ataque para roubo de tokens.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [ARQ-011] Monolitos Arquiteturais (God Objects) no Frontend e Backend
+- Problema atual: Arquivos excessivamente complexos e centralizadores, como o `frontend/src/app/services/backend-api.service.ts` (~1638 linhas), `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas) e `backend/app/services/observability_service.py` (~1200 linhas).
+- Solucao proposta: Adotar Padrão Façade, refatorando serviços extensos em domínios específicos menores e desacoplados, implementando stores ou DI distribuído.
+- Impacto esperado: Manutenção do código facilitada, redução de "Merge Conflicts" constantes e maior clareza em Testes Unitários.
+- Riscos: Refatoração grande pode causar quebra temporal de rotas no Frontend se referências de injetor não baterem.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Scripts de Teste Tooling Bypassam Pipeline CI
+- Problema atual: Test scripts em `tooling/` (e.g., `test_debate_system.py`, `seed-repro-scenarios.ps1`) bypassam standard Pytest CI pipelines por rodar via execução isolada fora de `qa/`.
+- Solucao proposta: Mover esses testes unitários e de integração para a pasta de testes oficiais `qa/` e registrá-los no pipeline do Pytest.
+- Impacto esperado: Maior cobertura visível e regressão automatizada de scripts soltos.
+- Riscos: Quebra de caminhos relativos em scripts shell.
+- Dependencias: CI GitHub Actions/Gitlab CI.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] SAST (Bandit B108) Insecure Temp File em Testes
+- Problema atual: Insecure temporary file creation no `test_logging_config_legacy_normalization.py`.
+- Solucao proposta: Utilizar `tempfile.NamedTemporaryFile` em vez de criar arquivos estáticos inseguros.
+- Impacto esperado: Eliminar risco de TOCTOU / colisão de nomes.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] SAST (Bandit B310) Unsafe URL Opening
+- Problema atual: Unsafe URL openings apontados via Bandit no `eval_technical_qa.py` e `run_repo_smoke_test.py`.
+- Solucao proposta: Restringir `urllib.urlopen` ou `requests` validando esquemas restritos a HTTP/HTTPS e bloqueando `file://`.
+- Impacto esperado: Prevenção de local file read (SSRF local).
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] SAST (Bandit B113) Missing Timeouts em Scripts/QA
+- Problema atual: Scripts como `eval_technical_qa.py` e outros executam `requests` sem o parâmetro opcional `timeout`.
+- Solucao proposta: Adicionar `timeout=10` ou um valor configurável em todas as invocações http externas.
+- Impacto esperado: Estabilidade da pipeline e recursos locais.
+- Riscos: Timeouts expostos precocemente caso as dependências estejam lentas.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
