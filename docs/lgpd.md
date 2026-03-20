@@ -70,3 +70,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-20)
+
+### Lacunas e Impacto
+- **Nenhuma nova vulnerabilidade de privacidade ou exposição não minimizada de PII (Personally Identificable Information) foi encontrada na varredura incremental de arquivos desde a última execução.** Os testes não levantaram novas dependências expostas, os scripts inseridos nos diretórios `qa/` e `tooling/` também não operam com PII em claro para fora do ambiente de mock.
+
+### Próximos Passos
+1. Continuar trabalhando na mitigação dos achados passados (Redação de transcrições de áudio do daemon e metadados de logs de e-mail e produtividade).

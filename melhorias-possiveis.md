@@ -836,3 +836,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-039] Criação Insegura de Arquivos Temporários em Testes (Bandit B108)
+- Problema atual: Possível uso inseguro de arquivo temporário (paths hardcoded em `/tmp`) no `backend/tests/unit/core/test_logging_config_legacy_normalization.py` (B108).
+- Solucao proposta: Utilizar `tempfile.NamedTemporaryFile` e refatorar testes para injetar paths.
+- Impacto esperado: Prevenção de ataques locais de TOCTOU na rodada de testes CI/CD.
+- Riscos: Quebra do arquivo de teste.
+- Dependencias: Pytest.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] URL Opening Inseguro com Arbitrary Schemes em Scripts (Bandit B310)
+- Problema atual: Funções de fetch permitem uso do esquema `file://` ou não tratam de fato o HTTP scheme em `backend/scripts/eval_technical_qa.py` e `backend/tests/smoke/run_repo_smoke_test.py` (B310).
+- Solucao proposta: Usar requests estrito com verificação e impedir requisições que não iniciem com `http`/`https`.
+- Impacto esperado: Impedir exploração de SSRF/Arbitrary File Read em scripts automatizados.
+- Riscos: Scripts de smoke test podem quebrar caso dependessem silenciosamente de recursos locais.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Requisições HTTP sem Timeout em Testes (Bandit B113)
+- Problema atual: Uso da biblioteca `requests` para get/post sem um argumento de `timeout` definido. Pode gerar travamento das pipelines se o host de testes não responder (`verify_arch_knowledge.py`, `test_api_endpoints.py`, `conftest.py`).
+- Solucao proposta: Definir o parâmetro `timeout=10` na assinatura de `requests`.
+- Impacto esperado: Prevenção contra stalls e timeout global na CI.
+- Riscos: Timeout errors para redes lentas que antes finalizavam depois de minutos.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Atualizar vulnerabilidades do Frontend via `npm audit` (Recorrente)
+- Problema atual: Múltiplas dependências do frontend seguem vulneráveis para XSS, Prototype Pollution e Hardlink Path Traversal, exigindo intervenção no `package.json`.
+- Solucao proposta: Intervir e validar um `npm audit fix` testando todo o ambiente ou atualizações modulares.
+- Impacto esperado: Bloqueio de injeções via dependência.
+- Riscos: Crash da UI.
+- Dependencias: Vitest pipeline.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

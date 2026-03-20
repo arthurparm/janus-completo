@@ -216,3 +216,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-20)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Criação Insegura de Arquivos Temporários em Testes
+- **Caminho:** `backend/tests/unit/core/test_logging_config_legacy_normalization.py`
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
+- **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+### 30. URL Opening Inseguro com Arbitrary Schemes em Scripts
+- **Caminho:** `backend/scripts/eval_technical_qa.py` e `backend/tests/smoke/run_repo_smoke_test.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de rotinas de abertura de URL que permitem abrir esquemas arbitrários (como `file://`), propiciando leitura local de arquivos indesejados (SSRF / Arbitrary File Read).
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir qualquer requisição externa.
+
+### 31. Requisições HTTP sem Timeout em Scripts
+- **Caminho:** `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/test_api_endpoints.py` e `backend/tests/e2e/conftest.py`
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** Scripts realizam chamadas usando a biblioteca `requests` sem definir timeout, podendo causar travamentos.
+- **Ação Recomendada:** Adicionar parâmetro explícito `timeout=10` nas chamadas.
