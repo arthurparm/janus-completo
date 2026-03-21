@@ -836,3 +836,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Requisições HTTP sem Timeout em scripts de teste/verificação
+- Problema atual: Em diversos scripts de teste (`test_tool_evolution_chat.py`, `verify_arch_knowledge.py`, `test_api_endpoints.py`, `conftest.py`), `requests` é usado sem o parâmetro opcional `timeout`.
+- Solucao proposta: Definir `timeout=10` ou equivalente em todas as chamadas HTTP dos scripts de teste.
+- Impacto esperado: Prevenção contra stalls infinitos no CI se a API destino não responder.
+- Riscos: Timeout errors inesperados no CI se as APIs estiverem temporariamente lentas.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Vulnerabilidade em Dependência do Frontend (@angular/*, etc)
+- Problema atual: A dependência do frontend possui 17 vulnerabilidades (sendo 16 altas) identificadas via `npm audit` (ex: `@angular/*`, `@hono/node-server`, `dompurify`, `tar`).
+- Solucao proposta: Atualizar as dependências afetadas rodando `npm audit fix` ou manualmente.
+- Impacto esperado: Remoção de vulnerabilidades de alto risco no frontend (XSS, Prototype Pollution).
+- Riscos: Incompatibilidade (breaking changes) nas atualizações de pacotes.
+- Dependencias: Testes E2E e unitários de UI para regressão.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Senhas e Segredos Hardcoded (Bandit B105)
+- Problema atual: Constantes e credenciais de simulação/testes (ex: chaves do RabbitMQ, tokens falsos de OpenAI) em scripts de teste (`verify_secret_management.py`, `chaos_harness.py`, `seed_repro_scenarios.py`) estão hardcoded no código fonte.
+- Solucao proposta: Remover senhas sensíveis ou mock-secrets usando variáveis de ambiente ou configuração injetada.
+- Impacto esperado: Prevenir acidentes que façam upload de secrets reais no repositório.
+- Riscos: Falhas temporárias nos scripts de teste até ajuste de ambiente.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Vulnerabilidade de XML External Entity (XXE) em DOCX (Bandit B314)
+- Problema atual: `backend/app/services/document_parser_service.py` utiliza o módulo padrão `xml.etree.ElementTree` que é suscetível a ataques de injeção XML (XXE).
+- Solucao proposta: Substituir por bibliotecas seguras (como `defusedxml`).
+- Impacto esperado: Blindagem do parser contra injeção maliciosa em documentos.
+- Riscos: Quebra de parser se `defusedxml` não for incluído no ambiente.
+- Dependencias: Adição de `defusedxml` no requirements.txt.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

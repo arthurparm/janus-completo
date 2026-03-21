@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+
+## Achados do dia (2026-03-21)
+
+### Lacunas e Impacto
+- **Metadados Sensíveis em Scripts de Testes (Logging PII):** Observado que scripts e testes novos continuam logando ou incluindo dados de teste explícitos.
+- **Vazamentos Atuais Persistentes:** O PII leak de dados biométricos (áudio em `daemon.py`), telas de SO sem consentimento (`windows_agent.py`), emails em log (`productivity_tools.py`) e estado global de notes, permanecem no sistema apesar de identificados anteriormente. Nenhum novo vetor exclusivo de LGPD foi detectado nesta semana, mas as deficiências conhecidas continuam não resolvidas.
+
+### Próximos Passos
+1. **Mitigação Ativa:** Priorizar PRs que foquem nos achados de segurança anteriores de LGPD que continuam pendentes (implementar mascaramento `redact_pii_text_only` em logs, opt-in no `windows_agent.py` e refatorar estado global de tools de produtividade).

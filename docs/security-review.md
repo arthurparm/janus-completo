@@ -216,3 +216,43 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-21)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 no total, sendo 16 altas e 1 moderada). Incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono`
+  - `dompurify`, `express-rate-limit`, `flatted`, `immutable`, `tar`
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. Vulnerabilidade de XML Parsing em DOCX (XML External Entity)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média (Bandit B314, B405)
+- **Descrição:** O serviço utiliza `xml.etree.ElementTree.fromstring` para parsear o conteúdo de arquivos DOCX, vulnerável a ataques XML (XXE/Billion Laughs).
+- **Ação Recomendada:** Substituir por `defusedxml.ElementTree.fromstring`.
+
+### 31. Interface Binding Potencialmente Inseguro (0.0.0.0) e Falta de Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média/Alta (Bandit B104)
+- **Descrição:** O script expõe a API vinculando a todas as interfaces (`0.0.0.0`) na porta 5001 sem autenticação (AuthZ bypass), permitindo acesso da rede local aos endpoints de SO (ex: `/screenshot`, `/notify`, `/speak`).
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar um mecanismo de autenticação robusto nos endpoints.
+
+### 32. Requisições HTTP sem Timeout em Scripts e Testes
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py`, `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/conftest.py`, `backend/tests/e2e/test_api_endpoints.py`
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** Scripts de teste e verificação realizam chamadas usando a biblioteca `requests` sem definir timeout (`requests.get()` e `requests.post()`), podendo causar travamentos no CI.
+- **Ação Recomendada:** Adicionar parâmetro explícito `timeout=10` nas chamadas `requests`.
+
+### 33. Potencial SQL Injection em F-Strings
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta (Bandit B608)
+- **Descrição:** Uso de f-strings para injeção de nomes de tabela em comandos SQL brutos, o que constitui um padrão inseguro.
+- **Ação Recomendada:** Utilizar parametrização estrita ou validação exaustiva (allowlist) dos nomes de tabelas.
