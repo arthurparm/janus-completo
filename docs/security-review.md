@@ -216,3 +216,40 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-21)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: dependências que requerem versões python antigas, ex: tflite-runtime).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 no total, sendo 16 altas e 1 moderada). As vulnerabilidades persistem sem atualização.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` (linha 775 e 865) e `backend/app/core/tools/agent_tools.py` (linha 719)
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Persiste o uso de rotinas de abertura de URL (como `urlopen`) permitindo esquemas arbitrários (`file://`), sujeito a SSRF.
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir requisição externa.
+
+### 31. OS Command Injection via shell=True
+- **Caminho:** `backend/app/core/tools/launcher_tools.py` (linha 33)
+- **Gravidade:** Alta (Bandit B602)
+- **Descrição:** Identificação prévia reiterada. Uso inseguro de `subprocess.Popen` com `shell=True` permitindo Command Injection e RCE.
+- **Ação Recomendada:** Remover `shell=True` e usar lista de argumentos.
+
+### 32. Uso de exec() Inseguro e ast.literal_eval Inseguro
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py` (linha 449) e `backend/app/core/tools/faulty_tools.py` (linhas 41 e 67)
+- **Gravidade:** Alta / Média (Bandit B102)
+- **Descrição:** Uso de função `exec()` no sandbox, e funções possivelmente inseguras no `faulty_tools.py`. Pode permitir injeção de código arbitrário e escape do sandbox.
+- **Ação Recomendada:** Remover `exec()` em favor de containerização estrita e substituir avaliações dinâmicas inseguras por opções seguras (ex: `ast.literal_eval`).
+
+### 33. Potencial SQL Injection em f-strings
+- **Caminho:** `backend/app/services/dedupe_service.py` (linhas 94, 101, 137)
+- **Gravidade:** Alta (Bandit B608)
+- **Descrição:** Persiste o uso de f-strings para injeção de nomes de tabela em comandos SQL brutos.
+- **Ação Recomendada:** Parametrizar a consulta via abstrações estritas em vez de string-formatting.

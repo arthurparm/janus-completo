@@ -836,3 +836,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Tratamento de Exceções Sensíveis e Log em Texto Limpo
+- Problema atual: A revisão local via Bandit identificou novos usos inseguros de parsing e tratamento (como ast.literal_eval falho ou xml parsing inseguro em document_parser_service.py). Além disso, não houve mitigação da gravação de senhas em logs apontada em auditorias passadas.
+- Solucao proposta: Substituir funções propensas a injeção via Bandit (ex: eval, random) por alternativas confiáveis (ast.literal_eval, secrets) e aplicar ofuscação (`redact_pii_text_only`) universal nas funções dos serviços afetados.
+- Impacto esperado: Remoção de vulnerabilidades de alto impacto no SAST diário e adequação imediata aos controles LGPD.
+- Riscos: Quebra de compatibilidade nas lógicas dependentes dos parses legados.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
