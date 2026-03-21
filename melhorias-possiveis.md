@@ -222,7 +222,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Prioridade: P1
 - Esforco: M
 - Dono: a definir
-- Status: feito (2026-02-21)
+- Status: aberto (não comprovada)
 
 ---
 
@@ -235,7 +235,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Prioridade: P1
 - Esforco: M
 - Dono: a definir
-- Status: feito (2026-02-21, refinado v2)
+- Status: aberto (não comprovada)
 
 ---
 
@@ -316,7 +316,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Prioridade: P1
 - Esforco: M
 - Dono: a definir
-- Status: feito (2026-02-21)
+- Status: aberto (não comprovada)
 
 ---
 
@@ -342,7 +342,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Prioridade: P1
 - Esforco: M
 - Dono: a definir
-- Status: feito (2026-02-21, refinado v2)
+- Status: aberto (não comprovada)
 
 ---
 
@@ -511,7 +511,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ### [SPR-001] Sprint de prioridades - Fundacao ML + Confiabilidade
 - Janela: 2026-02-23 a 2026-03-06
 - Objetivo: executar o menor conjunto de alto impacto para destravar ML no produto sem perder seguranca/estabilidade.
-- Status: concluido (2026-02-21)
+- Status: aberto (não comprovada)
 
 **Backlog priorizado (ordem de execucao):**
 
@@ -833,6 +833,32 @@ Copiar e preencher:
 - Riscos: Nenhum risco funcional grave; refatoração simples.
 - Dependencias: Nenhuma.
 - Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+---
+
+### [OQ-018] Aumentar a cobertura de testes (vitest) para os novos componentes de UI (`ui-card`, `ui-table`, `toast`)
+- Problema atual: Foram introduzidos vários componentes de UI no frontend sem cobertura de testes e com imports não utilizados (ex: `UiBadgeComponent`).
+- Solucao proposta: Limpar imports não utilizados e escrever testes para os novos componentes em `frontend/src/app/shared/components/ui/`.
+- Impacto esperado: Maior confiabilidade e menor quebra da UI.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+---
+
+### [AI-017] Validação estática de template variables (`{{ var }}`) para os arquivos de prompt
+- Problema atual: Dezenas de arquivos de prompt foram adicionados e podem conter referências a variáveis inexistentes, gerando falhas em runtime.
+- Solucao proposta: Implementar um linter ou passo no CI de prompts para validar variáveis.
+- Impacto esperado: Maior resiliência nos injetores de prompts dos agentes.
+- Riscos: Complexidade no parsing dependendo da sintaxe usada.
+- Dependencias: script de CI.
+- Prioridade: P1
 - Esforco: S
 - Dono: a definir
 - Status: aberto

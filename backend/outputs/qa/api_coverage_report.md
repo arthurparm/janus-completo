@@ -1,6 +1,6 @@
 # API Coverage Report (OQ-011)
 
-- Generated at: `2026-03-21T21:26:49.440503+00:00`
+- Generated at: `2026-03-21T21:26:42.408307+00:00`
 - Source matrix mode: `openapi_live`
 - Source matrix generated at: `2026-03-21T21:26:36.925467+00:00`
 
