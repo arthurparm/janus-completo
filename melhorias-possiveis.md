@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Geração pseudo-aleatória insegura (B311) e Parsing Inseguro em ferramentas
+- Problema atual: Constatado via `bandit` o uso do built-in de geração de números pseudo-aleatórios e avaliações inseguras sem `ast.literal_eval` em `auto_analysis.py` e `faulty_tools.py`, o que compromete implementações futuras que exijam entropia ou sandboxing estrito (Bandit B311, B307).
+- Solucao proposta: Padronizar o uso de `secrets` em vez de `random` e `ast.literal_eval` nas chamadas `eval` para remover vetores de ataque.
+- Impacto esperado: Menor nível de risco e prevenção contra RCE ou previsibilidade no backend.
+- Riscos: Funcionalidade pode parar caso haja limitação específica no `ast`.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Vazamento de Token em LocalResetResponse
+- Problema atual: A flag `AUTH_RESET_RETURN_TOKEN` no endpoint de auth e config permite expor tokens de acesso na API após a redefinição, caso setada incorretamente no fallback ou defaults (ex: LocalResetResponse).
+- Solucao proposta: Remover completamente o retorno do token nesta chamada, ou travar sua flag estritamente a ambientes de teste não produtivos (sem fallback).
+- Impacto esperado: Garantia de não exposição de Token sem processo completo de handshake OAuth.
+- Riscos: Scripts de testes end-to-end que esperem a key após reset devem ser ajustados.
+- Dependencias: QA/E2E Tests Refactoring.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Credenciais Hardcoded em Scripts de Testes/QA
+- Problema atual: O script `tooling/qa_request_support.py` contém senhas fixas inseridas como strings simples (ex: `password = "JanusE2E123!"`).
+- Solucao proposta: Importar a senha a partir do env (`os.environ`) ou mockar o input na infraestrutura (via `SecretStr`) em vez de deixar hardcoded.
+- Impacto esperado: Prevenir credenciais vazadas ou reaproveitadas do ambiente de testes num repo/SCM.
+- Riscos: Nenhuma.
+- Dependencias: Test environment variables update.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

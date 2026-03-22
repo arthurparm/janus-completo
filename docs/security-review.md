@@ -216,3 +216,61 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-22)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, dependências conflitantes/faltantes).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (17 no total, sendo 16 altas e 1 moderada). Incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono`
+  - `dompurify`, `express-rate-limit`, `flatted`, `immutable`, `tar`
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Alta (Bandit B310)
+- **Descrição:** Uso contínuo de rotinas de abertura de URL (como `urlopen`) que permitem abrir esquemas arbitrários (como `file://`), propiciando leitura local de arquivos indesejados (SSRF / Arbitrary File Read).
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir qualquer requisição externa.
+
+### 31. XML Parsing Vulnerável a Ataques (XML External Entity)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média (Bandit B314)
+- **Descrição:** O serviço continua utilizando `xml.etree.ElementTree.fromstring` para parsear o conteúdo de arquivos DOCX, vulnerável a ataques XML (XXE/Billion Laughs).
+- **Ação Recomendada:** Substituir por `defusedxml.ElementTree.fromstring`.
+
+### 32. Interface Binding Potencialmente Inseguro (0.0.0.0) e Falta de Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média/Alta (Bandit B104)
+- **Descrição:** O script expõe a API vinculando a todas as interfaces (`0.0.0.0`) na porta 5001 sem autenticação (AuthZ bypass).
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar um mecanismo de autenticação robusto nos endpoints.
+
+### 33. Requisições HTTP sem Timeout
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py`
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** O script realiza chamadas usando a biblioteca `requests` sem definir timeout (`requests.get()` e `requests.post()`), podendo causar travamentos.
+- **Ação Recomendada:** Adicionar parâmetro explícito `timeout=10` nas chamadas.
+
+### 34. Uso de exec() Inseguro e ast.literal_eval ausente
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py` (linha 449), `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Média/Alta (Bandit B102, B307)
+- **Descrição:** Uso de função `exec()` detectada e possível uso inseguro ao invés de `ast.literal_eval`. Pode permitir injeção de código/RCE.
+- **Ação Recomendada:** Avaliar alternativas seguras, utilizar `ast.literal_eval` para objetos seguros, ou implementar sandboxing robusto no entorno da chamada.
+
+### 35. Criação Insegura de Arquivos Temporários
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py`
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** Possível uso inseguro de arquivo/diretório temporário, propício a TOCTOU.
+- **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+### 36. Execução Insegura de Subprocesso (shell=True)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Crítica (Bandit B602)
+- **Descrição:** Uso inseguro de `subprocess.Popen` com `shell=True` permitindo Command Injection.
+- **Ação Recomendada:** Remover `shell=True` e refatorar as chamadas para array/lista de argumentos.
