@@ -45,7 +45,7 @@ describe('LoadingStateService', () => {
   })
 
   describe('stopLoading', () => {
-    it('should stop loading and update state', (done) => {
+    it('should stop loading and update state', async () => {
       service.startLoading('test-key')
       expect(service.isKeyLoading('test-key')).toBe(true)
       
@@ -55,14 +55,12 @@ describe('LoadingStateService', () => {
       expect(service.isKeyLoading('test-key')).toBe(false)
       
       // State should be removed after delay
-      setTimeout(() => {
-        expect(service.getLoadingState('test-key')).toBeUndefined()
-        expect(service.isLoading()).toBe(false)
-        done()
-      }, 400)
+      await new Promise(resolve => setTimeout(resolve, 400))
+      expect(service.getLoadingState('test-key')).toBeUndefined()
+      expect(service.isLoading()).toBe(false)
     })
 
-    it('should update global loading state', (done) => {
+    it('should update global loading state', async () => {
       service.startLoading('key1', { global: true })
       service.startLoading('key2', { global: true })
       
@@ -73,10 +71,8 @@ describe('LoadingStateService', () => {
       
       service.stopLoading('key2')
       
-      setTimeout(() => {
-        expect(service.isGlobalLoading()).toBe(false)
-        done()
-      }, 400)
+      await new Promise(resolve => setTimeout(resolve, 400))
+      expect(service.isGlobalLoading()).toBe(false)
     })
   })
 
@@ -134,7 +130,7 @@ describe('LoadingStateService', () => {
   })
 
   describe('forceStopAll', () => {
-    it('should force stop all active loadings', (done) => {
+    it('should force stop all active loadings', async () => {
       service.startLoading('key1')
       service.startLoading('key2')
       
@@ -142,11 +138,9 @@ describe('LoadingStateService', () => {
       
       service.forceStopAll()
       
-      setTimeout(() => {
-        expect(service.isLoading()).toBe(false)
-        expect(service.loadingKeys()).toEqual([])
-        done()
-      }, 400)
+      await new Promise(resolve => setTimeout(resolve, 400))
+      expect(service.isLoading()).toBe(false)
+      expect(service.loadingKeys()).toEqual([])
     })
   })
 

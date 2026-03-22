@@ -74,6 +74,26 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
 
+## Achados do dia (2026-03-22)
+
+### 11. Fragilidade em Testes Unitários do Frontend (Unhandled Rejections)
+**Descrição:** Os testes do `frontend/src/app/core/services/loading-state.service.spec.ts` apresentavam exceções não tratadas durante a execução ("Unhandled Rejections"), devido ao uso obsoleto do callback `done()` para assincronismo, gerando falsos positivos e instabilidade no Vitest.
+**Evidências:**
+- `frontend/src/app/core/services/loading-state.service.spec.ts`: Callbacks `done()` foram substituídos por Promises explícitas e `async/await` nativos (commit pendente).
+
+**Próximos passos:**
+- Garantir que todos os novos testes de estado assíncrono no frontend utilizem puramente `async/await` com vitest.
+- Adicionada a issue OQ-017 como P1/S e resolvida no mesmo ciclo.
+
+### 12. Fragilidade na Dependência de Conexão Ativa no script API Inventory
+**Descrição:** O script `tooling/extract_api_inventory.py` demanda o serviço local FastAPI na porta 8000. Porém, o backend pode cair com uma falha de conexão caso o RabbitMQ/Broker esteja offline, causando `Connection refused` imediato e paralisando as auditorias de API Drift da torre de controle (relacionado a SG-030).
+**Evidências:**
+- Logs de erro no script `extract_api_inventory.py`: `Max retries exceeded with url: /openapi.json (Caused by NewConnectionError)`.
+- Contorno aplicado gerando um mock server com o FastAPI instanciado via script no-op.
+
+**Próximos passos:**
+- Tornar os scripts de tooling de auditoria resilientes e capazes de importar `app.main:app` para exportar a OpenApi spec offline caso o servidor local não responda.
+
 ## Achados do dia (2026-03-08)
 
 ### 7. Segurança de Host e Endpoints Expostos

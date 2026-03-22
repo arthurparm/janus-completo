@@ -129,6 +129,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-012 | Corrigir execucao assincrona fragil no DataRetentionService (SQLAlchemy events) | P1 | M | feito (2026-02-20) |
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
+| OQ-017 | Refatorar callbacks de testes antigos (ex: loading-state.service.spec.ts) para async/await para evitar Vitest Unhandled Rejections | P1 | S | feito (2026-03-22) |
 
 ---
 
@@ -672,6 +673,17 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: ideia
+
+### [OQ-017] Falhas assíncronas não tratadas no Vitest (Frontend)
+- Problema atual: O uso de callbacks `done()` deprecados no `frontend/src/app/core/services/loading-state.service.spec.ts` causa `Unhandled Rejections` ocultas no log do Vitest.
+- Solucao proposta: Refatorar o encadeamento assíncrono desses testes, removendo o `done()` e adotando `async/await` com `Promise`.
+- Impacto esperado: Menos falso-positivos em pipelines de CI, logs mais limpos e maior confiabilidade nos testes do Frontend.
+- Riscos: Nenhum.
+- Dependencias: Vitest test runner.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: feito (2026-03-22)
 
 ### [OQ-014] Hardcoded Paths e Criação Precoce de Diretórios
 - Problema atual: Trabalhadores assíncronos e testes quebram por `PermissionError` em caminhos como `/app/workspace` e `.mkdir()` fora de contexto em `NeuralTrainer`.

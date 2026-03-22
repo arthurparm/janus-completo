@@ -1,0 +1,7 @@
+from app.main import app
+from fastapi.openapi.utils import get_openapi
+import json
+
+spec = get_openapi(title=app.title, version=app.version, openapi_version=app.openapi_version, description=app.description, routes=app.routes)
+with open('openapi.json', 'w') as f:
+    json.dump(spec, f)
