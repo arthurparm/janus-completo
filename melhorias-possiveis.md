@@ -836,3 +836,80 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Bypass de Autenticação via Cabeçalho (AuthZ)
+- Problema atual: A configuração `AUTH_TRUST_X_USER_ID_HEADER=True` permite bypass de autenticação JWT injetando o cabeçalho `X-User-Id`.
+- Solucao proposta: Modificar o padrão para `False` em `config.py` e forçar validação estrita em todas as bordas expostas.
+- Impacto esperado: Prevenção crítica contra AuthZ bypass (Spoofing).
+- Riscos: Quebra de comunicação interna caso serviços não repassem tokens.
+- Dependencias: Revisão da configuração do API Gateway interno.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Risco de Vazamento de Token no LocalResetResponse
+- Problema atual: A configuração opcional `AUTH_RESET_RETURN_TOKEN` em `LocalResetResponse` permite que um endpoint de reset devolva um token de autenticação válido.
+- Solucao proposta: Remover o suporte a essa flag e assegurar que o endpoint não retorne material sensível.
+- Impacto esperado: Menor superfície de ataque durante recuperações de conta.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [ARQ-011] Refatoração de God Objects e Componentes Monolíticos
+- Problema atual: Serviços como `observability_service.py` (~1200 linhas) e componentes Frontend (`backend-api.service.ts` com ~1638 linhas e `conversations.ts` com ~1700 linhas) concentram lógica de múltiplos domínios.
+- Solucao proposta: Aplicar o padrão Façade ou dividir os arquivos monolíticos em serviços de domínio (Ex: `HealthService`, `MetricsService`) e componentes menores orientados a estado/NgRx.
+- Impacto esperado: Melhoria da manutenibilidade, testabilidade e redução de complexidade ciclomática.
+- Riscos: Regressões funcionais e de importação em larga escala.
+- Dependencias: Cobertura de testes unitários para os serviços afetados.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Isolamento de Ferramentas e Scripts Fora da CI
+- Problema atual: Scripts como `test_debate_system.py` no diretório `tooling/` operam fora do radar da pipeline central de testes (Pytest no diretório `qa/`).
+- Solucao proposta: Migrar os testes e scripts de validação críticos para dentro do ecossistema `qa/` e adicioná-los à execução automatizada de CI.
+- Impacto esperado: Validação automática de regressão em toda a suíte de ferramentas.
+- Riscos: Quebra do pipeline de CI se os testes forem instáveis.
+- Dependencias: Ajuste no `pytest.ini` ou CI/CD pipeline.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] URLs Abertas de Forma Insegura (Bandit B310)
+- Problema atual: `eval_technical_qa.py` possui usos inseguros de URLLib abrindo brechas para File URI scheme exploração (SSRF).
+- Solucao proposta: Refatorar e restringir os esquemas aceitos apenas para HTTP/HTTPS.
+- Impacto esperado: Prevenção contra vulnerabilidade de SSRF ou File Access.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Arquivos Temporários Inseguros em Ferramentas (Bandit B108)
+- Problema atual: Múltiplas ferramentas utilizam criação de arquivos temporários inseguros (`/tmp` hardcoded ou `tempfile` não seguro).
+- Solucao proposta: Substituir por `tempfile.NamedTemporaryFile` restrito.
+- Impacto esperado: Prevenção contra TOCTOU attack vectors em máquinas de teste.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Chamadas HTTP sem Timeout em Scripts de Teste (Bandit B113)
+- Problema atual: Scripts dentro do `eval_technical_qa.py` (e afins) utilizam o `requests` sem os limites de `timeout`.
+- Solucao proposta: Impor paramêtros `timeout=10` nas requisições explícitas.
+- Impacto esperado: Maior resiliência de CI contra testes travando infinitamente.
+- Riscos: Timeout errors para redes lentas.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
