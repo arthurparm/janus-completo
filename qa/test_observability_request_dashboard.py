@@ -3,7 +3,7 @@ import sys
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
-from app.services.observability_service import ObservabilityService
+from app.services.observability_service import ObservabilityService  # noqa: E402
 
 
 class DummyRepo:
