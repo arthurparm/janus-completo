@@ -216,3 +216,13 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-22)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de dependências em sandbox e falta de comando/lockfile).
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas).
+
+### Gaps e Severidade
+- **Nenhum achado de segurança novo identificado** na janela de análise em arquivos modificados. Vulnerabilidades ativas já listadas anteriormente.
