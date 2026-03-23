@@ -113,3 +113,15 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-23)
+
+### 11. Testes e scripts isolados bypassando o pipeline CI (Developer Experience/Testes)
+**Descrição:** Observou-se que scripts de testes recentes e utilitários foram criados na pasta `tooling/` em vez de integrar a suíte `qa/`. Isso evita a execução padronizada no pipeline CI via pytest, reduzindo a cobertura automatizada e abrindo espaço para regressões não detectadas de contratos de API.
+**Evidências:**
+- Commit `ed4d2d2` adicionou `tooling/test_debate_system.py` como um teste isolado e não integrado na esteira.
+- Adição de `tooling/seed-repro-scenarios.ps1` sem equivalente automatizado na suíte E2E do pytest.
+
+**Próximos passos:**
+- Mover testes aplicáveis para a pasta `qa/` e registrá-los como fixtures do pytest.
+- Adicionar issue DX-013 no `melhorias-possiveis.md` visando integração de ferramentas de teste e scripts reproduzíveis na esteira principal.

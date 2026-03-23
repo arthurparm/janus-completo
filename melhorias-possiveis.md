@@ -836,3 +836,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### DX-013: Integração de Testes e Scripts Isolados do Tooling na CI
+- **Problema atual**: O script `tooling/test_debate_system.py` e utilitários (ex: `seed-repro-scenarios.ps1`) operam à parte da suíte `qa/`, não sendo rodados pelo Pytest no CI.
+- **Solução proposta**: Refatorar os testes existentes como fixtures e suítes do `pytest` dentro de `qa/`. Para scripts auxiliares, criar equivalentes de setup/teardown automatizados acessíveis ao ambiente Pytest.
+- **Impacto esperado**: Aumentar cobertura e prevenção de regressão contínua em cada PR, garantindo validação total das refatorações e lógicas testáveis.
+- **Riscos**: Dependências locais ou ambiente Docker precisariam de mocks aprimorados durante execução do Pytest no GitHub Actions.
+- **Dependências**: Nenhuma.
+- **Prioridade**: P1
+- **Esforço**: M
+- **Dono**: Time de Qualidade / DevOps
+- **Status**: não comprovada
