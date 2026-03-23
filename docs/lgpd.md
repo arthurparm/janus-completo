@@ -70,3 +70,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-23)
+
+### Lacunas e Impacto
+- **Vazamento de PII em Reflector Aware Logging:** O recém-modificado `backend/app/core/memory/log_aware_reflector.py` lê logs reais da aplicação (`janus.log` e outros caminhos via `LOG_FILE_PATHS`). Estes arquivos podem conter PII (nomes, e-mails, tokens, dados corporativos logados sem ofuscação de outras camadas do sistema). Ao extrair, processar em texto claro, e passar como objetos de erro (`LogError`) para os relatórios (`EnhancedReflectionReport`) em memória ou banco de dados durante uma sessão `SafeEvolutionSession`, o agente reflete, mas a arquitetura propaga e duplica dados não ofuscados.
+
+### Próximos Passos
+1. **Mascarar Logs antes de Refletir:** É imperativo que `log_aware_reflector.py` chame a função de scrub de PII (como `redact_pii_text_only`) ao parsear cada linha de log de `_parse_log_line`, antes de truncar e armazenar a mensagem em uma estrutura de dados (ex. no construtor `LogError` ou na string retornada de log).
+2. **Revisar Limpeza de Arquivos Temporários de Sessão:** Certificar de que sessões do `SafeEvolutionManager` expurgam de memória os relatórios que possam abrigar restos de texto dos arquivos de logs originais quando o Lab é encerrado.

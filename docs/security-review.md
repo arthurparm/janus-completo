@@ -216,3 +216,25 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-23)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, dependência tflite-runtime sem wheel disponível para o ambiente).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend continuam vulneráveis (26 no total, sendo 10 high e 5 moderate). As dependências afetadas incluem as suítes `@angular/*`, `dompurify`, `express-rate-limit`, `flatted`, `hono`, `immutable` e `tar`.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. Reincidência de Issues Estáticas (Bandit)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`, `backend/app/core/infrastructure/message_broker.py`, `backend/app/core/infrastructure/python_sandbox.py`
+- **Gravidade:** Alta / Média
+- **Descrição:** Verificou-se que issues relatados anteriormente pelo Bandit permanecem no código-fonte, notadamente:
+  - Uso de `subprocess.call` com `shell=True` (B602 - High) em `launcher_tools.py`.
+  - Abertura insegura de URLs permitindo esquemas customizados (B310 - Medium) em `message_broker.py` e `agent_tools.py`.
+  - Uso de `exec`/`eval` sem sandboxing forte (B102 - Medium) em `python_sandbox.py` e `faulty_tools.py`.
+- **Ação Recomendada:** Tratar as issues pendentes em conformidade com as tasks já mapeadas no backlog (ex. SG-026, SG-037).

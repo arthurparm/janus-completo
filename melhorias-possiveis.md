@@ -836,3 +836,13 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+- **Problema atual**: O `backend/app/core/memory/log_aware_reflector.py` carrega trechos diretos de arquivos de log em plain-text para a memória de processamento e os armazena como strings (ex. no `message` de `LogError`) sem processamento ou remoção prévia de PII antes de realizar a reflexão.
+- **Solução proposta**: Incluir validações e ofuscação (`redact_pii_text_only` de `memory/security.py`) em `_parse_log_line` no `log_aware_reflector.py` antes de salvar, evitando duplicar dados confidenciais nos relatórios e sessões de evolução do sistema.
+- **Impacto esperado**: Garantia de não vazamento ou duplicação de PII contidos no `janus.log` ou logs legados, conformidade com a minimização de dados LGPD.
+- **Riscos**: Perda de contexto de erro se o PII for a única causa do problema refletido, mas superado pela segurança.
+- **Dependências**: Integração do `memory/security.py` no ciclo de reflexão de logs.
+- **Prioridade**: P1
+- **Esforço**: S
+- **Dono**: Squad de AppSec / LGPD
+- **Status**: Não iniciada / Identificada (SG-043)
