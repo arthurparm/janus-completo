@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-039] Bypass de Autenticação em Endpoints do Agente e Assistente
+- Problema atual: Os endpoints `/execute` (em `backend/app/api/v1/endpoints/agent.py`) e `/assistant/execute` (em `backend/app/api/v1/endpoints/assistant.py`) não exigem autenticação (`Depends(get_current_user)` ou equivalente), permitindo execução não autorizada.
+- Solucao proposta: Adicionar dependência de autenticação (AuthN/AuthZ) nos endpoints ou injetar nas rotas principais do router.
+- Impacto esperado: Evita que usuários não autenticados enviem prompts para o LLM via API e consumam quota/abusem do sistema.
+- Riscos: Requer que os clientes e scripts de teste passem tokens corretamente.
+- Dependencias: Módulo de autenticação (`app.core.infrastructure.auth`).
+- Prioridade: P1
+- Esforco: S
+- Dono: Equipe de Segurança
+- Status: aberto
+
+### [OQ-017] Hot-Reload de Configuração em Memória
+- Problema atual: O endpoint `/admin/config` (`backend/app/api/v1/endpoints/admin_config.py`) aplica mudanças apenas em memória, perdendo as alterações após o restart do contêiner, o que pode causar inconsistência de estado e confusão de deployment.
+- Solucao proposta: Persistir as alterações em um banco de dados (ex: Postgres/Redis permanente) e carregar a configuração dinâmica no startup, combinando com env vars.
+- Impacto esperado: Configurações consistentes após restarts e melhor auditabilidade.
+- Riscos: Conflito com variáveis de ambiente.
+- Dependencias: Banco de dados.
+- Prioridade: P2
+- Esforco: M
+- Dono: Equipe de Arquitetura
+- Status: aberto
+
+### [SG-040] Lógica Perigosa/Insegura no Cleanup de Threads do Graph
+- Problema atual: A função `purge_incompatible_threads` em `backend/app/api/v1/endpoints/admin_graph.py` tem comentários sobre "nuclear option" e executa soft deletes não rastreados que apagam threads em massa sem validação profunda ou log detalhado por thread.
+- Solucao proposta: Implementar uma migração de schema de estado formal ou validações rígidas de ID/tenant antes de executar operações de purga, registrando um audit log para cada thread deletada.
+- Impacto esperado: Menor risco de perda acidental de dados de usuários e estado de agentes.
+- Riscos: Pode deixar threads órfãs ocupando espaço se não for bem desenhado.
+- Dependencias: `LangGraph` Checkpointer.
+- Prioridade: P1
+- Esforco: M
+- Dono: Equipe de Dados/Graph
+- Status: aberto

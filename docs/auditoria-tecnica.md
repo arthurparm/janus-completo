@@ -113,3 +113,33 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-23)
+
+### 11. Bypass de Autenticação em Endpoints Core (Agent e Assistant)
+**Descrição:** Foi identificado que as rotas recém-refatoradas `/execute` (`backend/app/api/v1/endpoints/agent.py`) e `/assistant/execute` (`backend/app/api/v1/endpoints/assistant.py`) recebem requisições diretamente pela API pública sem validar a identidade do chamador. Elas não injetam os Middlewares/Depends de `get_current_user` ou `request.state.actor_user_id`.
+**Evidências:**
+- Assinatura da rota em `agent.py`: `async def agent_execute(request: AgentExecutionRequest, http_request: Request, service: AgentService = Depends(get_agent_service)):`
+- Assinatura da rota em `assistant.py`: `async def assistant_execute(body: AssistantExecuteRequest, assistant: AssistantService = Depends(get_assistant_service)):`
+
+**Próximos passos:**
+- Adicionar o middleware de autenticação nas rotas ou a nível do router em `backend/app/api/v1/endpoints/__init__.py`.
+- Registrada issue `SG-039` no backlog de melhorias.
+
+### 12. Hot-Reload Frágil em Memória
+**Descrição:** O endpoint `/admin/config` recebe atualizações de configuração e as propaga em memória usando pub/sub. Porém, se os serviços reiniciarem (ex: auto-healing de Kubernetes), as configurações voltam ao default hardcoded nas env vars, causando inconsistências na plataforma e dificultando auditoria.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: Comentário explícito `Atenção: As mudanças são aplicadas em memória e perdidas no restart se não forem persistidas externamente.`
+
+**Próximos passos:**
+- Evoluir o `ConfigService` para persistir estado em um banco de dados persistente atrelado a um versionamento e integrá-lo com o carregamento do `AppSettings`.
+- Registrada issue `OQ-017` no backlog.
+
+### 13. Lógica de Purge Insegura no Graph
+**Descrição:** A operação `/admin/graph/purge_incompatible` é um endpoint "Nuclear" para deletar threads incompatíveis com o schema do LangGraph de forma bruta, sem logs formais atrelados a usuário. A execução não auditada e silenciosa no banco de dados abre precedentes para destruição não autorizada e perda de contexto crítico se chamada incorretamente.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: Função `_purge_incompatible_threads_task()` possui comentários sobre purgar threads em massa baseadas em ausência de campos de esquema e executa queries cruas de banco (embora marcadas com "pass" no MVP, o endopint aceita o verbo e a flag `force`).
+
+**Próximos passos:**
+- Remover operações "nuclear" e implementar uma interface administrativa onde threads deletadas sejam loggadas detalhadamente na trilha de auditoria e com permissão controlada via RBAC de admin estrito.
+- Registrada issue `SG-040` no backlog.
