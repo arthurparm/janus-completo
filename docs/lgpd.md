@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-23)
+
+### Lacunas e Impacto
+- **Persistência de Vazamentos Conhecidos:** Não foram aplicadas as correções de ofuscação (`redact_pii_text_only`) nas ferramentas de produtividade (`productivity_tools.py`), mantendo a exposição de metadados de e-mails em logs em texto limpo.
+- **Biometria Não-Sanitizada:** A transcrição de comandos de voz continua sendo enviada ao log sem minimização e sanitização por parte do `backend/app/interfaces/daemon/daemon.py`.
+- **Nenhuma Nova Violação Identificada:** As rotinas de varredura automatizada (`npm audit` e `bandit`) não revelaram novos fluxos de manipulação de dados que afetassem negativamente as diretrizes LGPD existentes, contudo a dívida técnica acumulada pelas resoluções não implementadas acima agrava o risco ao longo do tempo.
+
+### Próximos Passos
+1. **Priorizar Fechamento de Débito:** Elevar a urgência de resolução de isolamento In-Memory de notas de calendário e a aplicação rigorosa do `_PII_PATTERNS` nos métodos de log em andamento.

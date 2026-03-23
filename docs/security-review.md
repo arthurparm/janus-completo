@@ -216,3 +216,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-23)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend continuam vulneráveis (17 no total, 16 altas e 1 moderada), as mesmas identificadas previamente (ex: `@angular/core`, `hono`, `dompurify`, `tar`).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### 30. Persistência de Vulnerabilidades Mapeadas (Bandit)
+- **Caminho:** Múltiplos caminhos no backend (`python_sandbox.py`, `log_aware_reflector.py`, `message_broker.py`, `document_parser_service.py`, `launcher_tools.py`, `dedupe_service.py`)
+- **Gravidade:** Média a Alta (Bandit B102, B108, B310, B314, B602, B608)
+- **Descrição:** Nenhuma das falhas estruturais médias/altas mapeadas nos achados anteriores foi corrigida (execução insegura via `exec`/`shell=True`, uso inseguro de temp files, falha de parse XML e SQL Injection).
+- **Ação Recomendada:** Priorizar a resolução destas flags na próxima sprint.
+
+### 31. Uso de Função ast.literal_eval como possível Risco
+- **Caminho:** `backend/app/core/tools/faulty_tools.py` (linhas 41 e 67)
+- **Gravidade:** Média (Bandit B307)
+- **Descrição:** Identificação de uso possivelmente inseguro de avaliação de string no contexto do `faulty_tools.py` que não estava devidamente catalogado.
+- **Ação Recomendada:** Revisar se o uso de `ast.literal_eval` é apropriado e seguro para o contexto de execução ou implementar validações estritas antes de sua chamada.

@@ -717,6 +717,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-037] Avaliação insegura de strings e uso de módulos pseudo-aleatórios (ast.literal_eval, random)
+- Problema atual: Uso possivelmente inseguro de `ast.literal_eval` em `faulty_tools.py` e geradores pseudo-aleatórios da biblioteca padrão (`random` em vez de `secrets`) não restritos aos casos documentados.
+- Solucao proposta: Aplicar isolamento ou validação estrita antes do uso de `literal_eval`. Substituir `random` pelo módulo de segurança `secrets` onde imprevisibilidade e não-determinismo criptográfico forem requisitos.
+- Impacto esperado: Proteção ativa contra parse malicioso e ataques focados na entropia.
+- Riscos: Quebra de determinismo em ferramentas de testes se estas dependerem de seeds de `random`.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-038] Potencial Vazamento de Token de Reset Local
+- Problema atual: O endpoint em `backend/app/api/v1/endpoints/auth.py` utiliza a configuração `AUTH_RESET_RETURN_TOKEN` que, se ativada indevidamente em produção, retorna tokens sensíveis no response (LocalResetResponse).
+- Solucao proposta: Remover completamente o retorno do token nesta rota (forçando fallback a um log local seguro) ou garantir bloqueio assertivo a nível de rota para que o ambiente "production" force retorno nulo indiferente à flag.
+- Impacto esperado: Mitigação preventiva de Account Takeover via reset bypass.
+- Riscos: Retrabalho em testes locais de desenvolvimento que dependem de ver a senha ou token no corpo da resposta.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
